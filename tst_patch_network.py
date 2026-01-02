@@ -1,5 +1,9 @@
+import logging
+
 from fake_tools import Fake_tools
 from langgraph_codeagent.sandboxes.guard_socket import Guard_socket, DENY_LOCALHOST
+
+logging.basicConfig(level=logging.DEBUG)
 
 # This line sets default rules when the module is imported.
 # Tests will override this using reset_guard_socket_rules().

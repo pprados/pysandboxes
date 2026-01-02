@@ -42,9 +42,11 @@ import ipaddress
 import logging
 from random import choice
 from string import ascii_uppercase
-from typing import Tuple, Optional, Union, List
+from typing import Tuple, Optional, Union, List, Dict
 
 import socket
+
+logger = logging.getLogger(__name__)
 
 # Address format details can be found in the Python socket library documentation:
 # https://docs.python.org/3/library/socket.html#address-families
@@ -64,19 +66,85 @@ ALLOW = "ALLOW"  # Action to allow a connection
 IN = "IN"  # Direction for incoming connections (e.g., server-side bind)
 OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 
-# Rule format: (action, network_spec_str, direction_str)
-# action: str (DENY or ALLOW)
-# network_spec_str: str (e.g., "192.168.1.0/24:80,443" or "0.0.0.0/0:*")
-# direction_str: str (IN or OUT)
-Rule = Tuple[str, str, str]
+# Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
+# Example: "--net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
+# SOCKET_SPECS: comma-separated list of "tcp", "udp", "any".
 
-# Parsed rule format used internally: (action_str, (ipaddress.ip_network, Union[List[int], range]), direction_str)
-ParsedRule = Tuple[str, Tuple[ipaddress.ip_network, Union[List[int], range]], str]
+# Parsed rule format used internally:
+# (action_str,
+#  (parsed_families: List[int], parsed_types: List[int], network_obj, ports_list_or_range),
+#  direction_str)
+ParsedRule = Tuple[str,
+Tuple[List[int], ipaddress.ip_network, Union[List[int], range]],
+str]
+
+SPEC_TO_TYPE_MAP: Dict[str, int] = {
+    "tcp": socket.SOCK_STREAM,
+    "udp": socket.SOCK_DGRAM,
+}
 
 
-logger = logging.getLogger(__name__)
+def _parse_rule(i:int, rule:str)-> ParsedRule:
+    if not rule.startswith("--net="):
+        raise ValueError(
+            f"Rule {i} ('{rule}') must start with '--net='.")
+    # Remove prefix "--net="
+    value_part = rule[len("--net="):]
+    # Split by '|' expecting 5 parts: ACTION | SOCKET_SPECS | NETWORK_STR | PORT_SPEC_STR | DIRECTION_STR
+    rule_components = value_part.split('|', 4)  # Maxsplit is 4 for 5 parts
+    if len(rule_components) != 5:
+        raise ValueError(
+            f"Rule {i} ('{rule}') has incorrect number of parts separated by '|'. "
+            f"Expected 5, got {len(rule_components)}. "
+            f"Format: ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR")
+    action, socket_specs_str, network_str, port_spec_str, direction = rule_components
+    if action not in (DENY, ALLOW):
+        raise ValueError(
+            f"Rule {i} action '{action}' is not '{ALLOW}' or '{DENY}'. Rule: {rule}")
+    # Parse SOCKET_SPECS
+    parsed_rule_families: List[int] = []
+    parsed_rule_types: List[int] = []
+    specs_input = [s.strip().lower() for s in socket_specs_str.split(',') if
+                   s.strip()]
+    if not specs_input:
+        raise ValueError(f"Rule {i} ('{rule}') has empty SOCKET_SPECS.")
+    if "any" in specs_input:
+        if len(specs_input) > 1:
+            raise ValueError(
+                f"Rule {i} ('{rule}'): 'any' in SOCKET_SPECS must be used alone, not combined with other specifiers like '{socket_specs_str}'.")
+        # 'any' means parsed_rule_families and parsed_rule_types remain empty (wildcard for both)
+    else:
+        for spec_part in specs_input:
+            if spec_part in SPEC_TO_TYPE_MAP:
+                parsed_rule_types.append(SPEC_TO_TYPE_MAP[spec_part])
+            else:
+                raise ValueError(
+                    f"Rule {i} has unknown socket specifier '{spec_part}' in '{socket_specs_str}'. "
+                    f"Valid specifiers: 'any', 'ipv4', 'ipv6', 'tcp', 'udp'. Rule: {rule}")
 
-_get_rules = lambda: []  # Placeholder for initial state, returns an empty list of rules
+        # Remove duplicates and sort for consistency
+        parsed_rule_families = sorted(list(set(parsed_rule_families)))
+        parsed_rule_types = sorted(list(set(parsed_rule_types)))
+    if not isinstance(network_str, str) or not network_str.strip():
+        raise ValueError(
+            f"Rule {i} network part '{network_str}' is not a non-empty string. Rule: {rule}")
+    if not isinstance(port_spec_str, str):
+        raise ValueError(
+            f"Rule {i} port spec part '{port_spec_str}' is not a string. Rule: {rule}")
+    if direction not in (IN, OUT):
+        raise ValueError(
+            f"Rule {i} direction '{direction}' is not '{IN}' or '{OUT}'. Rule: {rule}")
+    try:
+        network = ipaddress.ip_network(network_str, strict=False)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid network specification '{network_str}' in rule {i} ('{rule}'): {e}")
+    ports_list_or_range = _convert_ports_range(port_spec_str)
+    if not ports_list_or_range and port_spec_str.strip() not in ('',
+                                                                 '*'):
+        raise ValueError(
+            f"Invalid or empty port specification '{port_spec_str}' in rule {i} ('{rule}') that does not resolve to any ports (and is not '*' or empty string for 'any port' if applicable).")
+    return action, (parsed_rule_types, network, ports_list_or_range), direction
 
 
 def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
@@ -107,93 +175,61 @@ def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
             if len(limites) == 2:
                 debut_str, end_str = limites[0].strip(), limites[1].strip()
                 if not debut_str:
-                    logger.warning(
+                    raise ValueError(
                         f"Invalid range format: '{element}'. Range start cannot be empty.")
-                    return []  # Invalid format
                 try:
                     start = int(debut_str)
                 except ValueError:
-                    logger.warning(
+                    raise ValueError(
                         f"Invalid start port number '{debut_str}' in range '{element}'.")
-                    return []  # Invalid start port
                 if not (0 <= start <= max_port):
-                    logger.warning(
+                    raise ValueError(
                         f"Start port {start} in range '{element}' is out of valid range (0-{max_port}).")
-                    return []  # Start port out of range
 
-                if end_str == '': # Handles open-ended ranges like "8000-"
+                if end_str == '':  # Handles open-ended ranges like "8000-"
                     end = max_port
                 else:
                     try:
                         end = int(end_str)
                     except ValueError:
-                        logger.warning(
+                        raise ValueError(
                             f"Invalid end port number '{end_str}' in range '{element}'.")
-                        return []  # Invalid end port
                     if not (0 <= end <= max_port):
-                        logger.warning(
+                        raise ValueError(
                             f"End port {end} in range '{element}' is out of valid range (0-{max_port}).")
-                        return []  # End port out of range
                 if start <= end:
                     ports.update(range(start, end + 1))
                 else:
-                    logger.warning(
+                    raise ValueError(
                         f"Invalid range: start port {start} is greater than end port {end} in '{element}'.")
-                    return []  # Invalid range order
             else:
-                logger.warning(
+                raise ValueError(
                     f"Invalid range format: '{element}'. Unexpected hyphen usage.")
-                return []  # Malformed range
         else:
             try:
                 port = int(element)
                 if not (0 <= port <= max_port):
-                    logger.warning(
+                    raise ValueError(
                         f"Port number {port} in '{element}' is out of valid range (0-{max_port}).")
-                    return []  # Port out of range
                 ports.add(port)
             except ValueError:
-                logger.warning(f"Invalid port number '{element}'.")
-                return []  # Invalid port number
+                raise ValueError(f"Invalid port number '{element}'.")
     return sorted(list(ports))
+
 
 def _check_address_with_rules(
         rules: List[ParsedRule],
-        address: Tuple[str, int], # Expect (hostname_or_ip_str, port_int)
-        conn_direction: str): # Expect IN or OUT constants
+        socket_instance_type: int,
+        address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
+        conn_direction: str):  # Expect IN or OUT constants
     """
     Checks if a given address and port are allowed for the specified connection direction
     based on the configured rules and the derived implicit default policy.
-
-    The rule evaluation logic is as follows:
-    1. If `rules` is empty, all connections are ALLOWED.
-    2. Determine the implicit default action:
-       - If the first rule in `rules` is ALLOW, the implicit default is DENY.
-       - If the first rule in `rules` is DENY, the implicit default is ALLOW.
-    3. Determine the order of rule application (`order_apply`):
-       - If implicit default is DENY (first rule ALLOW), check DENY rules then ALLOW rules.
-       - If implicit default is ALLOW (first rule DENY), check ALLOW rules then DENY rules.
-    4. Iterate through resolved IP addresses for the given hostname:
-       - For each IP, iterate through rules in the `order_apply` sequence:
-         - If a DENY rule matches (IP, port, direction), raise RuntimeError (DENIED).
-         - If an ALLOW rule matches (IP, port, direction), raise RuntimeError (ALLOWED).
-           (Note: Both explicit ALLOW and DENY raise exceptions to halt further processing
-            and clearly state the outcome based on the matched rule.)
-    5. If no explicit rule caused an exception:
-       - If the implicit default is DENY, raise RuntimeError (DENIED by implicit default).
-       - If the implicit default is ALLOW, return (implicitly ALLOWED).
-
-    Args:
-        rules: A list of parsed rule tuples.
-        address: A tuple containing the hostname/IP string and port number.
-        conn_direction: The direction of the connection, either IN or OUT.
-    Raises:
-        ValueError: If hostname resolution fails, no valid IPs are found, or the port is invalid.
-        RuntimeError: If the connection is disallowed by an explicit rule or the implicit default,
-                      or if it's explicitly allowed by a rule.
+    (Docstring needs update for new socket_instance_family, socket_instance_proto args)
     """
-    logger.debug("_check_address_with_rules(address=%s, conn_direction=%s)",
-                 address, conn_direction)
+    logger.debug(
+        "_check_address_with_rules(address=%s, conn_direction=%s, type=%s)",
+        address, conn_direction, socket_instance_type)
     hostname, destination_port = address
 
     if not isinstance(destination_port, int) or not (
@@ -201,333 +237,262 @@ def _check_address_with_rules(
         raise ValueError(f"Invalid port number: {destination_port}")
 
     try:
-        # Resolve hostname to IP addresses. Using proto=socket.IPPROTO_TCP to be specific.
-        infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+        # Resolve hostname to IP addresses using the socket instance's family, type, and proto
+        infos = socket.getaddrinfo(hostname, None,
+                                   type=socket_instance_type)
     except socket.gaierror:
-        raise ValueError(
-            f"Invalid hostname or IP address (resolution failed): {hostname}")
+        # Fallback if the specific proto causes issues, try with proto=0 (OS default for family/type)
+        # This might happen if self.proto is something specific but getaddrinfo needs a more general hint
+        try:
+            logger.debug(
+                "getaddrinfo failed with specific proto %s, retrying with proto=0")
+            infos = socket.getaddrinfo(hostname, None,
+                                       type=socket_instance_type, proto=0)
+        except socket.gaierror:
+            raise ValueError(
+                f"Invalid hostname or IP address (resolution failed): {hostname}")
 
+    # %% Analyse ips
     ip_objects = []
-    for family, _, _, _, sockaddr in infos:
+    for res_family, _, _, _, sockaddr in infos:
         # sockaddr[0] is the IP address string
         addr_str = sockaddr[0]
-        try:
-            ip_objects.append(ipaddress.ip_address(addr_str))
-        except ValueError:
-            # Log and skip if an address from getaddrinfo is not a valid IP
-            # (e.g., could happen with link-local IPv6 zone IDs if not handled properly,
-            # though ipaddress module usually handles common cases)
-            logger.warning(
-                f"Could not parse IP address '{addr_str}' from getaddrinfo result "
-                f"for '{hostname}'.")
-            continue
+        ip_objects.append(ipaddress.ip_address(addr_str))
 
-    # Use dict.fromkeys to get unique IP objects while preserving order (though order isn't critical here)
     unique_ips = list(dict.fromkeys(ip_objects))
     if not unique_ips:
         raise ValueError(
-            f"Could not resolve {hostname} to any valid IP address for "
-            f"rule checking.")
-
-    if not rules:  # Case 1: No rules set
+                f"Invalid hostname or IP address (resolution failed): {hostname}")
+    if not rules:
         logger.info(
-            f"Connection to {hostname} (resolved to {unique_ips}) "
-            f"port {destination_port} ALLOWED because no rules are set "
-            f"(fallback to allow by default)."
+            "Connection to %s port %s ALLOWED because no rules are set.",
+            hostname, unique_ips, destination_port
         )
-        return  # ALLOWED
+        return
 
-    # Case 2: Determine implicit default based on the first rule
-    first_rule_action = rules[0][0]  # action is the first element of the parsed rule tuple
-
-    # Determine the order of applying DENY/ALLOW checks based on the first rule's action.
-    # If the first rule is ALLOW, implicit default is DENY. We check DENY rules first.
-    # If the first rule is DENY, implicit default is ALLOW. We check ALLOW rules first.
+    # %% Analyse rules
+    first_rule_action = rules[0][0]
     order_apply = (DENY, ALLOW) if first_rule_action == ALLOW else (ALLOW, DENY)
     implicit_default_is_deny = (first_rule_action == ALLOW)
 
     logger.debug(
-        f"First rule is {first_rule_action}, so rule check order is {order_apply}, "
-        f"and implicit default for non-matching connections is {'DENY' if implicit_default_is_deny else 'ALLOW'}.")
+        "First rule is %s, so rule check order is %s, and implicit default for non-matching connections is %s.",
+        first_rule_action, order_apply,
+        ('DENY' if implicit_default_is_deny else 'ALLOW'))
 
-    # Iterate through DENY/ALLOW based on determined order
     for rule_type_to_check in order_apply:
-        for ip_host in unique_ips: # Check each resolved IP
-            for rule_idx, (action, (network_obj, rule_ports_list),
+        for ip_host in unique_ips:
+            for rule_idx, (action,
+                           (rule_types, network_obj, rule_ports_list),
                            rule_direction_from_rule) in enumerate(rules):
-                # Only consider rules of the current type being checked (DENY or ALLOW)
                 if action == rule_type_to_check:
-                    if rule_direction_from_rule == conn_direction: # Match direction
-                        if ip_host in network_obj and destination_port in rule_ports_list: # Match network and port
-                            # Explicit rule matched
-                            log_message = (
-                                f"Connection to {hostname} ({ip_host}:{destination_port}) "
-                                f"{action} by explicit rule #{rule_idx}: "
-                                f"{action} net={network_obj} ports={rule_ports_list} "
-                                f"dir={conn_direction}"
-                            )
-                            logger.info(log_message)
-                            # Both explicit ALLOW and DENY raise an exception to stop processing
-                            # and clearly indicate the decision.
-                            raise RuntimeError(
-                                f"Guard network connection to "
-                                f"{ip_host}:{destination_port} (from {hostname}) "
-                                f"explicitly {action} by rule #{rule_idx} "
-                                f"({action} {network_obj}:{rule_ports_list} "
-                                f"{conn_direction})."
-                            )
+                    type_match = (not rule_types) or (
+                                socket_instance_type in rule_types)
 
-    # Case 5: No explicit rule matched (neither DENY nor ALLOW caused an exception)
-    # Apply the implicit default.
+                    if type_match:
+                        if rule_direction_from_rule == conn_direction:
+                            if ip_host in network_obj and destination_port in rule_ports_list:
+                                rule_types_str = [socket.SocketKind(t).name for t in
+                                                  rule_types] if rule_types else ["any"]
+                                rule_spec_str = f"types={','.join(rule_types_str)}, net={network_obj}, ports={rule_ports_list}, dir={conn_direction}"
+
+                                logger.info(
+                                    "Connection to %s (%s:%s) %s by explicit rule #%s: %s (%s)",
+                                    hostname, ip_host, destination_port, action,
+                                    rule_idx,
+                                    action, rule_spec_str
+                                )
+                                if action == DENY:
+                                    raise RuntimeError(
+                                        f"Guard network connection to "
+                                        f"{ip_host}:{destination_port} (from {hostname}) "
+                                        f"explicitly {action} by rule #{rule_idx} "
+                                        f"({action} {rule_spec_str})."
+                                    )
+                                elif action == ALLOW:
+                                    raise RuntimeError(
+                                        f"Guard network connection to "
+                                        f"{ip_host}:{destination_port} (from {hostname}) "
+                                        f"explicitly {action} by rule #{rule_idx} "
+                                        f"({action} {rule_spec_str})."
+                                    )
     if implicit_default_is_deny:
         logger.info(
-            f"Connection to {hostname} (resolved to {unique_ips}) port {destination_port} "
-            f"DENIED by implicit default policy (first rule was {first_rule_action}, "
-            f"no other rule explicitly matched)."
+            "Connection to %s (resolved to %s) port %s DENIED by implicit default policy (first rule was %s, no other rule explicitly matched).",
+            hostname, unique_ips, destination_port, first_rule_action
         )
         raise RuntimeError(
             f"Guard network connection to {hostname} (port {destination_port}) "
             f"DENIED by implicit default (first rule: {first_rule_action}). Resolved IPs: {unique_ips}"
         )
-    else:  # implicit_default_is_allow
+    else:
         logger.info(
-            f"Connection to {hostname} (resolved to {unique_ips}) port {destination_port} "
-            f"ALLOWED by implicit default policy (first rule was {first_rule_action}, "
-            f"no other rule explicitly matched)."
+            "Connection to %s (resolved to %s) port %s ALLOWED by implicit default policy (first rule was %s, no other rule explicitly matched).",
+            hostname, unique_ips, destination_port, first_rule_action
         )
-        return  # ALLOWED
+        return
 
-_get_rules = lambda: []  # Re-initialize placeholder for Guard_socket class context
+
+_get_rules = lambda: []
+
 
 class Guard_socket(socket.socket):
     """
     A custom socket class that enforces network rules to restrict connections.
-
-    Rule Evaluation Logic:
-    1. If no rules are configured, all connections are ALLOWED (fallback behavior).
-    2. If rules are configured:
-       a. The implicit default action is determined by the first rule:
-          - If the first rule is ALLOW, the implicit default for non-matching connections is DENY.
-          - If the first rule is DENY, the implicit default for non-matching connections is ALLOW.
-       b. Rule checking order depends on the implicit default:
-          - If implicit default is DENY (first rule ALLOW): DENY rules are checked first, then ALLOW rules.
-          - If implicit default is ALLOW (first rule DENY): ALLOW rules are checked first, then DENY rules.
-       c. For any connection attempt (to a specific hostname and port):
-          i. The hostname is resolved to one or more IP addresses.
-         ii. Each IP address is checked against the rules in the determined order.
-        iii. If a DENY rule matches any resolved IP, port, and direction, the connection is
-             immediately DENIED (RuntimeError is raised).
-         iv. If an ALLOW rule matches any resolved IP, port, and direction (and no preceding DENY
-             rule matched in its check phase), the connection is immediately ALLOWED (RuntimeError
-             is raised to indicate explicit allowance).
-          v. If no rule explicitly DENIES or ALLOWS the connection after checking all resolved IPs
-             against all relevant rules, the implicit default action (determined in step 2a) is applied.
-             If implicitly DENIED, a RuntimeError is raised. If implicitly ALLOWED, the operation proceeds.
+    Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
+    Example: "--net=ALLOW|tcp|192.168.1.0/24|80,443|OUT"
+    SOCKET_SPECS: "any", "tcp", "udp", or comma-separated combinations.
     """
 
     @classmethod
-    def set_rules(cls, rules: List[Rule]):
+    def set_rules(cls, rules_str_list: List[str]):
         """
-        Sets the network rules for the Guard_socket.
-        This method is designed to be called once to prevent rule tampering during runtime.
+        Sets the network rules for the Guard_socket from a list of rule strings.
+        Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
+        Example: "--net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
 
         Args:
-            rules: A list of Rule tuples. Each rule is (action_str, network_spec_str, direction_str).
-                   action_str: DENY or ALLOW (string constants).
-                   network_spec_str: A string like "ip_network/prefix:port_spec"
-                                     (e.g., "192.168.1.0/24:80,443" or "0.0.0.0/0:*").
-                   direction_str: IN or OUT (string constants).
+            rules_str_list: A list of rule strings.
         Raises:
-            ValueError: If rules have already been set or if any rule is malformed
-                        (invalid format, action, direction, network, or port specification).
+            ValueError: If rules have already been set or if any rule string is malformed.
         """
-        # Generate a random internal name to store parsed rules, making it harder to access directly.
-        random_rules_name = "_rules_storage_" + ''.join(choice(ascii_uppercase) for _ in range(12))
-        if cls.__dict__.get("get_rules", _get_rules) == _get_rules: # Check if it's the initial placeholder
-            parsed_rules: List[ParsedRule] = []
-            for i, rule_tuple in enumerate(rules):
-                if not (isinstance(rule_tuple, tuple) and len(rule_tuple) == 3):
-                    raise ValueError(f"Rule {i} is not a valid 3-tuple: {rule_tuple}")
+        random_rules_name = "_ " + ''.join(choice(ascii_uppercase) for _ in range(12))
+        if cls.__dict__.get("get_rules", _get_rules) == _get_rules:
+            parsed_rules_list: List[ParsedRule] = []
+            for i, rule_str in enumerate(rules_str_list):
+                parsed_rule=_parse_rule(i, rule_str)
 
-                action, rule_spec, direction = rule_tuple
+                parsed_rules_list.append(parsed_rule)
 
-                if action not in (DENY, ALLOW):
-                    raise ValueError(
-                        f"Rule {i} action '{action}' is not '{ALLOW}' or '{DENY}'. Rule: {rule_tuple}")
-                if not isinstance(rule_spec, str):
-                    raise ValueError(
-                        f"Rule {i} network_spec '{rule_spec}' is not a string. Rule: {rule_tuple}")
-                if direction not in (IN, OUT):
-                    raise ValueError(
-                        f"Rule {i} direction '{direction}' is not '{IN}' or '{OUT}'. Rule: {rule_tuple}")
-
-                if ':' not in rule_spec:
-                    raise ValueError(
-                        f"Invalid rule format for rule {i} ('{rule_spec}'): must contain ':' separating network and port spec.")
-                network_str, port_spec = rule_spec.rsplit(':', 1)
-
-                try:
-                    network = ipaddress.ip_network(network_str, strict=False)
-                except ValueError as e:
-                    raise ValueError(
-                        f"Invalid network specification '{network_str}' in rule {i} ('{rule_spec}'): {e}")
-
-                ports_list_or_range = _convert_ports_range(port_spec)
-                # _convert_ports_range returns [] for errors or empty valid spec;
-                # only raise if original spec was non-empty, non-'*', and resulted in empty.
-                if not ports_list_or_range and port_spec.strip() not in ('', '*'):
-                    raise ValueError(
-                        f"Invalid or empty port specification '{port_spec}' in rule {i} ('{rule_spec}').")
-
-                parsed_rules.append((action, (network, ports_list_or_range), direction))
-
-            setattr(cls, random_rules_name, parsed_rules)
-            # Update get_rules to retrieve from the new storage attribute
+            setattr(cls, random_rules_name, parsed_rules_list)
             setattr(cls, "get_rules", lambda: getattr(cls, random_rules_name))
             logger.info(
-                f"Guard_socket rules set successfully with {len(parsed_rules)} rules.")
+                "Guard_socket rules set successfully with %s rules.",
+                len(parsed_rules_list))
         else:
             raise ValueError("Rules can only be set once for Guard_socket.")
 
-    get_rules = _get_rules # Class attribute pointing to the rule retrieval function
+
+    get_rules = _get_rules
 
     def _check_address(self, address: Tuple[str, int], conn_direction: str):
-        """
-        Internal helper to invoke the rule checking logic.
-
-        Args:
-            address: A tuple containing the hostname/IP string and port number.
-            conn_direction: The direction of the connection (IN or OUT).
-        Raises:
-            ValueError: Propagated from _check_address_with_rules.
-            RuntimeError: Propagated from _check_address_with_rules.
-        """
         rules = Guard_socket.get_rules()
-        _check_address_with_rules(rules, address, conn_direction)
+        _check_address_with_rules(rules, self.type, self.proto, address,
+                                  conn_direction)
 
     def __init__(self,
-                 family: int = socket.AF_INET, # Default to AF_INET if not specified
-                 type: int = socket.SOCK_STREAM, # Default to SOCK_STREAM
-                 proto: int = 0, # Default protocol
+                 family: int = socket.AF_INET,
+                 type: int = socket.SOCK_STREAM,
+                 proto: int = 0,
                  fileno: Optional[int] = None):
-        """
-        Initializes the Guard_socket instance.
-        Defaults are similar to standard socket.socket.
-        """
-        super().__init__(family, type, proto, fileno)
+        # Ensure family and type are resolved if passed as enum members
+        actual_family = family.value if isinstance(family,
+                                                   socket.AddressFamily) else family
+        actual_type = type.value if isinstance(type, socket.SocketKind) else type
+
+        super().__init__(actual_family, actual_type, proto, fileno)
+        # Note: self.family, self.type, self.proto are now available from the superclass
 
     def bind(self, address: Adresse_Type) -> None:
-        """
-        Binds the socket to an address.
-        For IP-based sockets (AF_INET, AF_INET6), performs rule checking for IN direction.
-        AF_UNIX sockets are not subject to IP-based rules and are allowed.
-        """
-        # Check if address is for AF_INET or AF_INET6 (tuple with host string and port int)
-        if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0], str) and isinstance(address[1], int):
-            # Ensure address[0] is a string (hostname or IP) and address[1] is an int (port)
+        if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0],
+                                                                           str) and isinstance(
+                address[1], int):
             self._check_address((address[0], address[1]), conn_direction=IN)
-        elif isinstance(address, str):  # Likely AF_UNIX
+        elif isinstance(address, str):  # AF_UNIX
             logger.debug(
-                f"Allowing bind to AF_UNIX address (not subject to IP rules): {address}")
-            pass # AF_UNIX sockets are not checked by these IP rules
+                "Allowing bind to AF_UNIX address (not subject to IP rules): %s",
+                address)
         else:
-            # Log a warning for unexpected address formats but allow bind to proceed,
-            # as rules are IP-focused.
             logger.warning(
-                f"Unexpected address format for bind: {address}. Skipping IP rule check.")
-            pass
+                "Unexpected address format for bind: %s. Skipping IP rule check.",
+                address)
         super().bind(address)
 
     def connect(self, address: Adresse_Type) -> None:
-        """
-        Connects to a remote socket at address.
-        For IP-based sockets (AF_INET, AF_INET6), performs rule checking for OUT direction.
-        AF_UNIX sockets are not subject to IP-based rules and are allowed.
-        """
-        if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0], str) and isinstance(address[1], int):
+        if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0],
+                                                                           str) and isinstance(
+                address[1], int):
             self._check_address((address[0], address[1]), conn_direction=OUT)
-        elif isinstance(address, str):  # Likely AF_UNIX
+        elif isinstance(address, str):  # AF_UNIX
             logger.debug(
-                f"Allowing connect to AF_UNIX address (not subject to IP rules): {address}")
-            pass
+                "Allowing connect to AF_UNIX address (not subject to IP rules): %s",
+                address)
         else:
             logger.warning(
-                f"Unexpected address format for connect: {address}. Skipping IP rule check.")
-            pass
+                "Unexpected address format for connect: %s. Skipping IP rule check.",
+                address)
         super().connect(address)
 
     def connect_ex(self, address: Adresse_Type) -> int:
-        """
-        Like connect(address), but returns an error indicator instead of raising an exception
-        for errors returned by the C-level connect() call (other problems, such as “host not found,”
-        can still raise exceptions).
-        Performs rule checking for OUT direction before attempting connection for IP-based sockets.
-        If rules disallow connection, a RuntimeError is raised.
-        """
         try:
-            if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0], str) and isinstance(address[1], int):
+            if isinstance(address, tuple) and len(address) >= 2 and isinstance(
+                    address[0], str) and isinstance(address[1], int):
                 self._check_address((address[0], address[1]), conn_direction=OUT)
-            elif isinstance(address, str):  # Likely AF_UNIX
+            elif isinstance(address, str):  # AF_UNIX
                 logger.debug(
-                    f"Allowing connect_ex to AF_UNIX address (not subject to IP rules): {address}")
-                pass
+                    "Allowing connect_ex to AF_UNIX address (not subject to IP rules): %s",
+                    address)
             else:
                 logger.warning(
-                    f"Unexpected address format for connect_ex: {address}. Skipping IP rule check.")
-                pass
+                    "Unexpected address format for connect_ex: %s. Skipping IP rule check.",
+                    address)
         except RuntimeError as e:
-            # If _check_address raises RuntimeError due to rule violation,
-            # this should be propagated as it's a guard failure, not a connect_ex style error code.
-            logger.error(f"Rule violation during connect_ex pre-check: {e}")
+            logger.error("Rule violation during connect_ex pre-check: %s", e)
+            # Reraise to ensure connect_ex reflects the block, or map to an error code if preferred.
+            # For now, reraising the RuntimeError is consistent with connect().
             raise
         return super().connect_ex(address)
 
 
-# --- Predefined Rule Sets ---
-# Rules to deny connections to localhost.
-DENY_LOCALHOST: List[Rule] = [
-    (DENY, '127.0.0.1:*', OUT),  # Deny IPv4 loopback
-    (DENY, '::1:*', OUT)         # Deny IPv6 loopback
-]
-# Rules to deny connections to common private/intranet IP ranges.
-DENY_INTRANET: List[Rule] = [
-    (DENY, '10.0.0.0/8:*', OUT),      # Private-Use Networks (RFC 1918)
-    (DENY, '169.254.0.0/16:*', OUT),  # Link-Local Addresses (APIPA)
-    (DENY, '172.16.0.0/12:*', OUT),   # Private-Use Networks (RFC 1918)
-    (DENY, '192.168.0.0/16:*', OUT),  # Private-Use Networks (RFC 1918)
-    (DENY, 'fc00::/7:*', OUT)         # Unique Local Addresses (IPv6 RFC 4193)
-]
-# Rules to deny connections to multicast addresses.
-DENY_CAST: List[Rule] = [
-    (DENY, '224.0.0.0/4:*', OUT),  # IPv4 Multicast (RFC 5771)
-    (DENY, 'ff00::/8:*', OUT),     # IPv6 Multicast (RFC 4291)
-]
-# Combines DENY_CAST, DENY_LOCALHOST and DENY_INTRANET.
-DENY_LOCAL: List[Rule] = DENY_CAST + DENY_LOCALHOST + DENY_INTRANET
+# --- Predefined Rule Sets (using new string format) ---
+# Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
+# SOCKET_SPECS: "any", "ipv4", "ipv6", "tcp", "udp", or comma-separated combinations.
+# e.g., "ipv4,tcp" means AF_INET and SOCK_STREAM
+# e.g., "any" means any family, any type.
 
-# Rules to deny all outgoing internet connections.
-DENY_INTERNET: List[Rule] = [
-    (ALLOW, '10.0.0.0/8:*', OUT),      # Private-Use Networks (RFC 1918)
-    (ALLOW, '169.254.0.0/16:*', OUT),  # Link-Local Addresses (APIPA)
-    (ALLOW, '172.16.0.0/12:*', OUT),   # Private-Use Networks (RFC 1918)
-    (ALLOW, '192.168.0.0/16:*', OUT),  # Private-Use Networks (RFC 1918)
-    (ALLOW, 'fc00::/7:*', OUT)         # Unique Local Addresses (IPv6 RFC 4193)
+DENY_LOCALHOST: List[str] = [
+    "--net=DENY|any|127.0.0.1|*|OUT",
+    "--net=DENY|any|::1|*|OUT"  # For IPv6 localhost
 ]
-# Rules to allow only standard web ports (HTTP, HTTPS) to any IP.
-# Note: This implies a DENY by default if it's the first rule, or needs other DENY rules.
-ALLOW_WEB: List[Rule] = [
-    (ALLOW, '0.0.0.0/0:80,443', OUT), # Allow IPv4 HTTP/HTTPS
-    (ALLOW, '::/0:80,443', OUT),      # Allow IPv6 HTTP/HTTPS
+DENY_INTRANET: List[str] = [
+    "--net=DENY|any|10.0.0.0/8|*|OUT",
+    "--net=DENY|any|169.254.0.0/16|*|OUT",  # Link-local
+    "--net=DENY|any|172.16.0.0/12|*|OUT",
+    "--net=DENY|any|192.168.0.0/16|*|OUT",
+    "--net=DENY|any|fc00::/7|*|OUT"  # IPv6 Unique Local Addresses
 ]
+DENY_CAST: List[str] = [
+    "--net=DENY|any|224.0.0.0/4|*|OUT",  # IPv4 Multicast
+    "--net=DENY|any|ff00::/8|*|OUT",  # IPv6 Multicast
+]
+DENY_LOCAL: List[str] = DENY_CAST + DENY_LOCALHOST + DENY_INTRANET
 
+# Deny all internet, allow local RFC1918, link-local, unique local.
+# If these ALLOW rules are first, implicit default is DENY for everything else.
+DENY_INTERNET: List[str] = [
+    "--net=ALLOW|any|10.0.0.0/8|*|OUT",
+    "--net=ALLOW|any|169.254.0.0/16|*|OUT",
+    "--net=ALLOW|any|172.16.0.0/12|*|OUT",
+    "--net=ALLOW|any|192.168.0.0/16|*|OUT",
+    "--net=ALLOW|any|fc00::/7|*|OUT",
+    # To be absolutely explicit about denying all else if these are not the only rules
+    # or if the first rule might be a DENY, one could add:
+    # "--net=DENY|any|0.0.0.0/0|*|OUT",
+    # "--net=DENY|any|::/0|*|OUT" # Corrected from ::0 to ::/0 for all IPv6
+    # However, with the current logic, the above ALLOWs imply DENY for others if they are the first rules.
+]
+ALLOW_WEB: List[str] = [
+    "--net=ALLOW|any|0.0.0.0/0|80,443|OUT",  # Allows HTTP/HTTPS to any IPv4
+    "--net=ALLOW|any|::/0|80,443|OUT",      # Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
+]
 
 # --- Activation & Patching ---
-# This block replaces the standard socket.socket with Guard_socket globally
-# when this module is imported.
 if socket.socket is not Guard_socket:
+    # Ensure that the original socket class is stored if not already.
+    # This is important if the module can be reloaded or patched multiple times.
+    if not hasattr(socket, '_original_socket_class'):
+        socket._original_socket_class = socket.socket  # type: ignore
     socket.socket = Guard_socket
     logger.info("Guard_socket activated. Standard socket.socket has been replaced.")
 else:
-    # This case would typically not be hit on first import unless the module is reloaded
-    # or manipulated in unusual ways.
     logger.info("Guard_socket was already activated.")
