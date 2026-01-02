@@ -1,4 +1,10 @@
-link = "https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html"
+import asyncio
+import urllib
+
+from google.auth.aio.transport import aiohttp
+
+# link = "https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html"
+link = "https://localhost:8080/"
 
 
 class Fake_tools():
@@ -19,8 +25,9 @@ class Fake_tools():
     def load_socket(self):
         import socket
 
-        HOST = 'docs.scipy.org'  # The remote host
-        PORT = 80  # The same port as used by the server
+        parsed=urllib.parse.urlparse(link)
+        HOST = parsed.hostname
+        PORT = parsed.port or 80  # The same port as used by the server
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((HOST, PORT))
             s.sendall(b'GET /doc/numpy/user/basics.broadcasting.html HTTM/1.0\n'
@@ -28,6 +35,21 @@ class Fake_tools():
                       b'\n')
             data = s.recv(1024)
         # print('Received', repr(data))
+
+    def load_urllib3(self):
+        from urllib3.connection import HTTPConnection
+
+        # Création d'une connexion HTTP à un hôte
+        conn = HTTPConnection(host='httpbin.org', port=80)
+
+        # Établir la connexion
+        conn.connect()
+
+        # Envoyer une requête GET vers l'endpoint /get
+        conn.request('GET', '/get')
+
+        # Obtenir la réponse
+        response = conn.getresponse()
 
     def listen_port(self):
         # Informations du serveur
@@ -57,3 +79,15 @@ class Fake_tools():
                     # Renvoyer une réponse au client
                     response = "Message reçu !"
                     conn.sendall(response.encode('utf-8'))
+
+    async def async_connect(self):
+        import asyncio
+        import aiohttp
+
+        async with aiohttp.ClientSession() as session:
+
+            async with session.get(link) as response:
+                await response.text()
+
+    def load_async_connet(self):
+        asyncio.run(self.async_connect())
