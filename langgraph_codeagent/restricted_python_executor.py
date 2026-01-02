@@ -100,7 +100,7 @@ def _run_in_sandbox(code_action: str, tools: dict[str, Callable]) -> str:
             copy_locations(node.func, node.args[0])
             return node
 
-    loc = {}
+    loc = {}  # TODO: utiliser loc pour les tools
     encapsuled_code = f"""
 from {_GUARD_IMPORT_MARKER}final_answer import final_answer
 {code_action}
