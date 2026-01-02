@@ -20,6 +20,7 @@ dependencies = [
   "interpreters-pep-734; python_version < '3.15'",
 ]
 
+
 [tool.poetry.group.dev]
 optional = true
 

@@ -5,6 +5,7 @@ from langgraph_codeagent.BasePythonExecutor import code_to_fn, capture_last_expr
     async_code_to_fn, async_code_to_async_fn, \
     BasePythonExecutor
 from langgraph_codeagent.python_direct_executor import PythonDirectExecutor
+from langgraph_codeagent.python_interpreter_executor import PythonInterpreterExecutor
 from langgraph_codeagent.python_thread_executor import PythonThreadExecutor
 
 
@@ -33,6 +34,7 @@ async def test_async_code_to_async_fn():
 list_implementations=[
     PythonDirectExecutor(),
     PythonThreadExecutor(),
+    # PythonInterpreterExecutor(),  # HS
 ]
 @pytest.mark.parametrize(
     "implementation",

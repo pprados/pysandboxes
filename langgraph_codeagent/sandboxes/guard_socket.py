@@ -486,13 +486,15 @@ ALLOW_WEB: List[str] = [
     "--net=ALLOW|any|::/0|80,443|OUT",      # Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
 ]
 
-# --- Activation & Patching ---
-if socket.socket is not Guard_socket:
-    # Ensure that the original socket class is stored if not already.
-    # This is important if the module can be reloaded or patched multiple times.
-    if not hasattr(socket, '_original_socket_class'):
-        socket._original_socket_class = socket.socket  # type: ignore
-    socket.socket = Guard_socket
-    logger.info("Guard_socket activated. Standard socket.socket has been replaced.")
-else:
-    logger.info("Guard_socket was already activated.")
+def activate_guard_socket():
+    import socket
+    # --- Activation & Patching ---
+    if socket.socket is not Guard_socket:
+        # Ensure that the original socket class is stored if not already.
+        # This is important if the module can be reloaded or patched multiple times.
+        if not hasattr(socket, '_original_socket_class'):
+            socket._original_socket_class = socket.socket  # type: ignore
+        socket.socket = Guard_socket
+        logger.info("Guard_socket activated. Standard socket.socket has been replaced.")
+    else:
+        logger.info("Guard_socket was already activated.")

@@ -95,7 +95,7 @@ def async_code_to_async_fn(code_action: str) -> Awaitable[Any]:
 async def {wrapper_function_name}():
 {_code_indent(capture_last_expression(code_action), "  ")}
   return _
-"""
+"""  # FIXME: return direct sans le _
     loc = {}
     exec(encapsuled_code, {}, loc)
     return loc[wrapper_function_name]
