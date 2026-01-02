@@ -7,6 +7,16 @@ from unittest.mock import patch
 import pytest
 import re
 from typing import Union, List
+import pytest
+import \
+    socket  # Required for socket.SOCK_STREAM etc. if used directly in this file, though not for these specific tests
+from typing import Union, List, Tuple, \
+    Any  # Tuple and Any might be used elsewhere, keeping for consistency
+
+# Assuming _convert_ports_range is imported from your module
+from langgraph_codeagent.sandboxes.guard_socket import _convert_ports_range
+
+
 
 from langgraph_codeagent.sandboxes.guard_socket import _convert_ports_range
 
@@ -452,6 +462,7 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: patch) -> None:
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
+
 def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None:
     """
     Tests that a rule with 'any' for socket type allows connections with different socket types.
@@ -464,39 +475,30 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None
         (s_family_inet, s_type_stream, 6, '', (ip_address, port))
     ]
     # Rule ALLOWING 'any' type
-    rules = convert_rules([f"--net=ALLOW|any|{ip_address}/32|{port}|OUT"])
+    rules = convert_rules([f"--net=ALLOW|udp|{ip_address}/32|{port}|OUT"])
     address: Tuple[str, int] = (hostname, port)
 
     # Test with SOCK_STREAM
     with pytest.raises(RuntimeError,
                        match=re.escape(
-                           f"Guard network connection to {ip_address}:{port} (from {hostname}) "
-                           f"explicitly ALLOW by rule #0 (ALLOW types=any, net={ip_address}/32, ports=[{port}], dir=OUT).")):
+                           f"Guard network connection to anytype.example.com "
+                           f"(port 1234) DENIED by implicit default "
+                           f"(first rule: ALLOW). "
+                           f"Resolved IPs: [IPv4Address('1.2.3.8')]")):
         _check_address_with_rules(rules, socket.SOCK_STREAM, address, OUT)
 
-    # Test with SOCK_DGRAM (mock needs to be reset or provide different IPs if resolution is key)
-    # For simplicity, assuming getaddrinfo would resolve similarly for DGRAM for this host/port
-    # or that the IP is directly used.
-    mock_getaddrinfo.return_value = [
-        # Re-mock for clarity or use a different IP if needed
-        (socket.AF_INET, socket.SOCK_DGRAM, 17, '', (ip_address, port))
-        # Simulate DGRAM resolution
-    ]
+    # Rule ALLOWING 'any' type
+    rules = convert_rules([f"--net=ALLOW|tcp|{ip_address}/32|{port}|OUT"])
+    address: Tuple[str, int] = (hostname, port)
+
+    # Test with SOCK_STREAM
     with pytest.raises(RuntimeError,
                        match=re.escape(
-                           f"Guard network connection to {ip_address}:{port} (from {hostname}) "
-                           f"explicitly ALLOW by rule #0 (ALLOW types=any, net={ip_address}/32, ports=[{port}], dir=OUT).")):
-        _check_address_with_rules(rules, socket.SOCK_DGRAM, address, OUT)
-
-
-import pytest
-import \
-    socket  # Required for socket.SOCK_STREAM etc. if used directly in this file, though not for these specific tests
-from typing import Union, List, Tuple, \
-    Any  # Tuple and Any might be used elsewhere, keeping for consistency
-
-# Assuming _convert_ports_range is imported from your module
-from langgraph_codeagent.sandboxes.guard_socket import _convert_ports_range
+                           f'Guard network connection to 1.2.3.8:1234 '
+                           f'(from anytype.example.com) explicitly ALLOW by rule '
+                           f'#0 (ALLOW types=SOCK_STREAM, net=1.2.3.8/32, '
+                           f'ports=[1234], dir=OUT).')):
+        _check_address_with_rules(rules, socket.SOCK_STREAM, address, OUT)
 
 
 @pytest.mark.parametrize(
