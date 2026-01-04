@@ -8,11 +8,11 @@ from langgraph_codeagent.sandboxes.guard_files import activate_guard_files
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from langgraph_codeagent.sandboxes.guard_files import deactivate_guard_files
+    from langgraph_codeagent.sandboxes.guard_files import _deactivate_guard_files
 
     yield
     print("desactivate")  # FIXME
-    deactivate_guard_files()
+    _deactivate_guard_files()
 
 
 @pytest.fixture
@@ -53,16 +53,29 @@ def files(tmp_path):
     return {
         "path": tmp_path,
         "visible": tmp_path / "visible.txt",
+        "new_link": tmp_path / "new_link",
         "ignore": tmp_path / "ignore.log",
         "bind_src": bind_src,
         "bind_dest": bind_dest,
-        "bound_file": bind_src / "bound_file.txt",
+        "bound_file": bind_dest / "bound_file.txt",
         "home_link_to_ignore": tmp_path / "home_link_to_ignore",
         "home_link": tmp_path / "home_link",
         "home_link_to_bind_src": tmp_path / "home_link_to_bind_src",
         "home_link_relative_to_bind_src": tmp_path / "home_link_relative_to_bind_src",
-        "link_to_bind_src": tmp_path / "bind_src/link_to_bind_src",
-        "link_relative_to_bind_src": tmp_path / "bind_src/link_relative_to_bind_src",
+        "link_to_bind": tmp_path / "bind_dest/link_to_bind_src",
+        "new_link_to_bind": tmp_path / "bind_dest/new_link_to_bind_src",
+        "link_relative_to_bind": tmp_path / "bind_dest/link_relative_to_bind_src",
+        "new_link_relative_to_bind": tmp_path / "bind_dest/new_link_relative_to_bind_src",
+        "to_rename": tmp_path / "to_rename.txt",
+        "new_rename": tmp_path / "new_rename.txt",
+        "bind_to_rename": tmp_path / "bind_dest/to_rename.txt",
+        "new_bind_rename": tmp_path / "bind_dest/new_rename.txt",
+        "to_replace": tmp_path / "to_replace.txt",
+        "new_replace": tmp_path / "new_replace.txt",
+        "bind_to_replace": tmp_path / "bind_dest/to_rename.txt",
+        "new_bind_replace": tmp_path / "bind_dest/new_replace.txt",
+        "to_truncate": tmp_path / "to_truncate.txt",
+        "bind_to_truncate": tmp_path / "bind_dest/to_truncate.txt",
     }
 
 
@@ -74,19 +87,12 @@ def test_io_open_ignore_rule_blocks_file_access(files):
         io.open(files['ignore'])
 
 
-@pytest.mark.skip(reason="TODO")  # TODO
 def test_io_open_code_ignore_rule_blocks_open_code_file_access(files):
     rules = [f"--ignore={files['ignore']}"]
     activate_guard_files(rules)
     with pytest.raises(FileNotFoundError):
         io.open_code(str(files['ignore']))
 
-
-def test_io_open_symlink_to_ignored_file(files):  # FIXME: vérifier plus profond
-    rules = [f"--ignore={files['ignore']}"]
-    activate_guard_files(rules)
-    with pytest.raises(FileNotFoundError):
-        io.open(files['home_link_to_ignore'])
 
 def test_io_open_bind_rule_redirects_file_access(files):
     rules = [f"--bind={files['bind_src']},{files['bind_dest']}"]

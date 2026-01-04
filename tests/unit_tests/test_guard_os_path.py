@@ -7,11 +7,11 @@ from test_guard_io import files
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from langgraph_codeagent.sandboxes.guard_files import deactivate_guard_files
+    from langgraph_codeagent.sandboxes.guard_files import _deactivate_guard_files
 
     yield
     print("desactivate")  # FIXME
-    deactivate_guard_files()
+    _deactivate_guard_files()
 
 
 def test_os_path_abspath(files):

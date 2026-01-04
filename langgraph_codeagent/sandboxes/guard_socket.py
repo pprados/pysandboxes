@@ -495,6 +495,6 @@ def activate_guard_socket():
         if not hasattr(socket, '_original_socket_class'):
             socket._original_socket_class = socket.socket  # type: ignore
         socket.socket = Guard_socket
-        logger.info("Guard_socket activated. Standard socket.socket has been replaced.")
+        logger.warning("Guard_socket activated. Standard socket.socket has been replaced.")
     else:
         logger.info("Guard_socket was already activated.")

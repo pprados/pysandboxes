@@ -1,14 +1,10 @@
-import sys
-
-import inspect
-import io
-
-import logging
-
 import builtins
 import fnmatch
 import functools
+import io
+import logging
 import os
+import sys
 import typing
 from types import TracebackType
 from typing import Iterator
@@ -18,14 +14,19 @@ logger = logging.getLogger(__name__)
 
 # TODO: injecter les mappings dans les filtres de répertoires si c'est présent ? n'accepte pas mapping phantome ?
 
-_white_list =['<frozen posixpath>', '<frozen genericpath>', "pathlib/_local.py"]
+_white_list = [
+    '<frozen posixpath>',
+    '<frozen genericpath>',
+    # FIXME "pathlib/_local.py",
+]
+
 
 # Internal representation of a rule
 class ParserRule:
     def __init__(self, rule_type: str, pattern: str, replacement: Optional[str] = None):
         self.rule_type = rule_type  # 'bind' or 'ignore'
-        self.pattern = pattern
-        self.replacement = replacement
+        self.source = pattern
+        self.dest = replacement
 
 
 def _parse_rule(arguments: List[str]) -> List[ParserRule]:
@@ -53,33 +54,40 @@ def _parse_rule(arguments: List[str]) -> List[ParserRule]:
 # Internal state for the file filter
 _rules: List[ParserRule] = []
 
-_os_path_realpath=os.path.realpath
-_os_path_abspath=os.path.abspath
+_os_path_realpath = os.path.realpath
+_os_path_abspath = os.path.abspath
+
+
 # Helper to resolve symlinks and apply rules
-def _apply_rules(path: str) -> Optional[str]:
+def _apply_src_to_dest_rules(path: str, accept_src:bool=False) -> Optional[str]:
     """
     Applies the rules to a file path.
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
-    real_path = _os_path_realpath(path,strict=True)
+    real_path = _os_path_abspath(os.path.normpath(path))
     original_path = path
 
     for rule in _rules:
-        if rule.rule_type == "ignore":
-            if fnmatch.fnmatch(original_path, rule.pattern) or fnmatch.fnmatch(
-                    real_path, rule.pattern):
-                return None
-        elif rule.rule_type == "bind":
-            if real_path.startswith(rule.pattern):
-                relative = os.path.relpath(real_path, rule.pattern)
-                new_path = os.path.join(rule.replacement, relative)
+        if rule.rule_type == "bind":
+            if real_path.startswith(rule.source):
+                if not accept_src and real_path == rule.source:  # and real_path.startswith(rule.dest):
+                    return None
+                relative = os.path.relpath(real_path, rule.source)
+                if relative != ".":
+                    new_path = os.path.join(rule.dest, relative)
+                else:
+                    new_path = rule.dest
                 return new_path
+        elif rule.rule_type == "ignore":
+            if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
+                    real_path, rule.source):
+                return None
     return path
 
 
 # Helper to resolve symlinks and apply rules
-def _apply_inverse_rules(path: str) -> Optional[str]:
+def _apply_dest_to_src_rules(path: str, accept_source:bool=False) -> Optional[str]:
     """
     Applies the rules to a file path.
     Returns None if the file should be ignored.
@@ -89,15 +97,20 @@ def _apply_inverse_rules(path: str) -> Optional[str]:
     original_path = path
 
     for rule in _rules:
-        if rule.rule_type == "ignore":
-            if fnmatch.fnmatch(original_path, rule.pattern) or fnmatch.fnmatch(
-                    fake_path, rule.pattern):
-                return None
-        elif rule.rule_type == "bind":
-            if fake_path.startswith(rule.replacement):
-                relative = os.path.relpath(fake_path, rule.replacement)
-                new_path = os.path.join(rule.pattern, relative)
+        if rule.rule_type == "bind":
+            if fake_path.startswith(rule.source):
+                if not accept_source:
+                    return None
+            if fake_path.startswith(rule.dest):
+                if accept_source:
+                    return original_path
+                relative = os.path.relpath(fake_path, rule.dest)
+                new_path = os.path.join(rule.source, relative)
                 return new_path
+        elif rule.rule_type == "ignore":
+            if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
+                    fake_path, rule.source):
+                return None
     return path
 
 
@@ -109,80 +122,20 @@ def _wrap_filename(func: Callable) -> Callable:
     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
         # Detect call from posixpath
         frame = sys._getframe(1)
-        filename=None
+        filename = None
         if inspect.isframe(frame):
             code = frame.f_code
             filename = code.co_filename
         for wl in _white_list:
             if filename.endswith(wl):
                 return func(file, *args, **kwargs)
-        print(f"{filename=}")  # FIXME
+        print(f"wrapper {filename=}")  # FIXME
         if isinstance(file, int):
             return func(file, *args, **kwargs)
-        remapped = _apply_inverse_rules(os.fspath(file))
+        remapped = _apply_dest_to_src_rules(os.fspath(file))
         if remapped is None:
             raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
         return func(remapped, *args, **kwargs)
-
-    return wrapper
-
-
-def _wrap_getcwd(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # Detect call from posixpath
-        frame = sys._getframe(1)
-        filename=None
-        if inspect.isframe(frame):
-            code = frame.f_code
-            filename = code.co_filename
-        for wl in _white_list:
-            if filename.endswith(wl):
-                return func(*args, **kwargs)
-        file= func(*args, **kwargs)
-        remapped = _apply_rules(os.fspath(file))
-        if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
-        if remapped.endswith(os.path.sep+"."):
-            remapped=remapped[:-2]
-        return str(remapped)
-
-    return wrapper
-
-def _wrap_realpath(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
-        # Detect call from posixpath
-        frame = sys._getframe(1)
-        filename=None
-        if inspect.isframe(frame):
-            code = frame.f_code
-            filename = code.co_filename
-        for wl in _white_list:
-            if filename.endswith(wl):
-                return func(*args, **kwargs)
-        remapped = _apply_inverse_rules(os.fspath(file))
-        file= func(remapped,*args, **kwargs)
-        remapped = _apply_rules(os.fspath(file))
-        if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
-        return remapped
-
-    return wrapper
-
-def _wrap_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]:
-    @functools.wraps(func)
-    def wrapper(path: Union[str, bytes, os.PathLike] = '.') -> List[str]:
-        if new_path := _apply_inverse_rules(path):
-            entries = func(new_path)
-            filtered: List[str] = []
-            for entry in entries:
-                full_path = os.path.join(path, entry)
-                if _apply_inverse_rules(full_path) is not None:
-                    filtered.append(entry)
-            return filtered
-        else:
-            raise FileNotFoundError(f"Access to '{path}' is ignored by rule")
 
     return wrapper
 
@@ -193,43 +146,147 @@ def _wrap_two_filenames(func: Callable) -> Callable:
                 *args, **kwargs):
         # Detect call from posixpath
         frame = sys._getframe(1)
-        filename=None
+        filename = None
         if inspect.isframe(frame):
             code = frame.f_code
             filename = code.co_filename
         for wl in _white_list:
             if filename.endswith(wl):
-                return func(src,dest, *args, **kwargs)
-        remapped_src = _apply_inverse_rules(os.fspath(src))
-        remapped_dest = _apply_inverse_rules(os.fspath(dest))
-        return func(remapped_src,remapped_dest, *args, **kwargs)
+                return func(src, dest, *args, **kwargs)
+        remapped_src = _apply_dest_to_src_rules(os.fspath(src))
+        remapped_dest = _apply_dest_to_src_rules(os.fspath(dest))
+        if remapped_src is None:
+            raise FileNotFoundError(f"Access to '{src}' is ignored by rule")
+        return func(str(remapped_src), str(remapped_dest), *args, **kwargs)
 
     return wrapper
-def _wrap_readlink(func: Callable) -> Callable:
+
+
+def _wrap_os_getcwd(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Detect call from posixpath
+        frame = sys._getframe(1)
+        filename = None
+        if inspect.isframe(frame):
+            code = frame.f_code
+            filename = code.co_filename
+        for wl in _white_list:
+            if filename.endswith(wl):
+                return func(*args, **kwargs)
+        file = func(*args, **kwargs)
+        remapped = _apply_src_to_dest_rules(os.fspath(file),accept_src=True)
+        if remapped is None:
+            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+        if remapped.endswith(os.path.sep + "."):
+            remapped = remapped[:-2]
+        return str(remapped)
+
+    return wrapper
+
+
+def _wrap_realpath(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
         # Detect call from posixpath
         frame = sys._getframe(1)
-        filename=None
+        filename = None
+        if inspect.isframe(frame):
+            code = frame.f_code
+            filename = code.co_filename
+        for wl in _white_list:
+            if filename.endswith(wl):
+                return func(*args, **kwargs)
+        remapped = _apply_dest_to_src_rules(os.fspath(file))
+        file = func(remapped, *args, **kwargs)
+        remapped = _apply_src_to_dest_rules(os.fspath(file))
+        if remapped is None:
+            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+        return remapped
+
+    return wrapper
+
+
+def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]:
+    @functools.wraps(func)
+    def wrapper(path: Union[str, bytes, os.PathLike] = '.') -> List[str]:
+        if new_path := _apply_dest_to_src_rules(path):
+            entries = func(new_path)
+            filtered: List[str] = []
+            for entry in entries:
+                full_path = os.path.join(path, entry)
+                if _apply_dest_to_src_rules(full_path) is not None:
+                    filtered.append(entry)
+            return filtered
+        else:
+            return []
+
+    return wrapper
+
+
+
+def _wrap_os_readlink(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
+        # Detect call from posixpath
+        frame = sys._getframe(1)
+        filename = None
         if inspect.isframe(frame):
             code = frame.f_code
             filename = code.co_filename
         for wl in _white_list:
             if filename.endswith(wl):
                 return func(file, *args, **kwargs)
-        remapped_first = _apply_inverse_rules(os.fspath(file))
+        remapped_first = _apply_dest_to_src_rules(os.fspath(file))
         remapped = func(remapped_first, *args, **kwargs)
         if not remapped.startswith(os.path.sep):
-            remapped =os.path.dirname(remapped_first)+"/"+remapped
-        remapped = _apply_rules(remapped)
+            remapped = os.path.dirname(remapped_first) + "/" + remapped
+        remapped = _apply_src_to_dest_rules(remapped)
         if not remapped:
             raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
         return remapped
 
     return wrapper
 
+# def _wrap_walk(func: Callable) -> Callable:
+#     @functools.wraps(func)
+#     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
+#         # Detect call from posixpath
+#         frame = sys._getframe(1)
+#         filename = None
+#         if inspect.isframe(frame):
+#             code = frame.f_code
+#             filename = code.co_filename
+#         for wl in _white_list:
+#             if filename.endswith(wl):
+#                 return func(file, *args, **kwargs)
+#         print(f"wrapper {filename=}")  # FIXME
+#         if isinstance(file, int):
+#             return func(file, *args, **kwargs)
+#         remapped = _apply_dest_to_src_rules(os.fspath(file))
+#         if remapped is None:
+#             raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+#         not_showed=[]
+#         for (rep,dirs,files) in func(remapped, *args, **kwargs):
+#             inv_rep=_apply_dest_to_src_rules(rep)
+#             # Change subdir with rules
+#             new_dirs=[]
+#             for d in dirs:
+#                 new_d=_apply_src_to_dest_rules(rep+os.sep+d)
+#                 if new_d is None:
+#                     continue
+#                 new_dir=os.path.split(new_d)[1]
+#                 if new_dir not in new_dirs:
+#                     new_dirs.append(new_dir)
+#             if inv_rep != rep:
+#                 rep=inv_rep
+#             yield (rep,new_dirs,files)
+#
+#     return wrapper
+
 # %%
 from os import scandir as _scandir
+
 
 class _ScanDirContextManager:
     """
@@ -242,7 +299,7 @@ class _ScanDirContextManager:
 
     def __init__(self, directory: str):
         self.directory = directory
-        self.real_directory = _apply_inverse_rules(directory)
+        self.real_directory = _apply_dest_to_src_rules(directory)
         self.scanner = None
 
     def __enter__(self) -> 'ScanDirContextManager':
@@ -283,18 +340,38 @@ class _ScanDirContextManager:
         if self.scanner is None:
             raise StopIteration
 
+        if not self.real_directory:
+            raise StopIteration
+
         while True:
             try:
                 while True:
                     entry = next(self.scanner)
-                    real_path = _apply_rules(entry.path)
-                    if real_path:
+                    dest_path = _apply_src_to_dest_rules(entry.path, accept_src=False)
+                    if dest_path is not None:
                         class _DirEntry:
-                            pass
+                            def __init__(self,
+                                         target: typing.Any,
+                                         path:str) -> None:
+                                self._target = target
+                                self.path = path
 
-                        _entry = _DirEntry()
-                        _entry.name = entry.name
-                        _entry.path = real_path
+                            def __getattr__(self, name: str) -> typing.Any:
+                                print("_DirEntry.__get")
+                                # Called only if attribute not found the usual way
+                                if name == "path":
+                                    return super().__getattr__(name)
+                                return getattr(self._target, name)
+
+                            def __setattr__(self, name: str, value: typing.Any) -> None:
+                                print("_DirEntry.__set")
+                                if name in ("_target","path"):
+                                    # Assign _target to self, not to target
+                                    super().__setattr__(name, value)
+                                else:
+                                    setattr(self._target, name, value)
+
+                        _entry = _DirEntry(entry,dest_path)
                         return _entry
             except StopIteration:
                 raise
@@ -303,7 +380,7 @@ class _ScanDirContextManager:
                 raise StopIteration
 
 
-def _wrap_scandir(func: Callable) -> Callable:
+def _wrap_os_scandir(func: Callable) -> Callable:
     """
     Wrap os.scandir to handle exceptions and return an iterator or None.
     """
@@ -315,35 +392,40 @@ def _wrap_scandir(func: Callable) -> Callable:
     return wrapper
 
 
-from pathlib import Path as _Path, Path
+from pathlib import Path
 from pathlib import Path as _Path
+
 _Path_glob = _Path.glob
+_Path_rglob = _Path.rglob
+
 
 def _wrap_pathlib(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
         # Detect call from posixpath
         frame = sys._getframe(1)
-        filename=None
+        filename = None
         if inspect.isframe(frame):
             code = frame.f_code
             filename = code.co_filename
         for wl in _white_list:
             if filename.endswith(wl):
                 return func(file, *args, **kwargs)
-        remapped = _apply_inverse_rules(os.fspath(file))
+        remapped = _apply_dest_to_src_rules(os.fspath(file))
         if remapped is None:
             raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
         return func(Path(remapped), *args, **kwargs)
 
     return wrapper
 
+
 def _wrap_pathlib_glob(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(self, glob: str) -> Iterator:
-        if new_path := _apply_inverse_rules(self):
-            return [_apply_rules(os.path.dirname(p)) +os.path.sep+ os.path.basename(p) for p in
-                     _Path_glob(_Path(new_path), glob) if _apply_rules(p) is not None]
+    def wrapper(self, glob: str, *args, **kwargs) -> Iterator:
+        if new_path := _apply_dest_to_src_rules(self):
+            return (Path(_apply_src_to_dest_rules(p)) for p in
+                    func(_Path(new_path), glob, *args, **kwargs)
+                    if _apply_src_to_dest_rules(p) is not None)
         else:
             raise FileNotFoundError(f"Access to '{self}' is ignored by rule")
 
@@ -351,48 +433,48 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:
-    _remember={
-        "builtins.open":builtins.open,
+    _remember = {
+        "builtins.open": builtins.open,
         # -----------------
-        "io.open":io.open,
+        "io.open": io.open,
         # -----------------
-        "os.chdir":os.chdir,
-        "os.getcwd":os.getcwd,
-        "os.getcwdb":os.getcwdb,
-        "os.open":os.open,
-        "os.access":os.access,
-        "os.chroot":os.chroot,
-        "os.chmod":os.chmod,
-        "os.link":os.link,
-        "os.listdir":os.listdir,
-        "os.mkdir":os.mkdir,
-        "os.readlink":os.readlink,
-        "os.remove":os.remove,
-        "os.rename":os.rename,
-        "os.replace":os.replace,
-        "os.rmdir":os.rmdir,
-        "os.scandir":os.scandir,
-        "os.stat":os.stat,
-        "os.lstat":os.lstat,
-        "os.symlink":os.symlink,
-        "os.truncate":os.truncate,
-        "os.unlink":os.unlink,
-        "os.utime":os.utime,
+        "os.chdir": os.chdir,
+        "os.getcwd": os.getcwd,
+        "os.getcwdb": os.getcwdb,
+        "os.open": os.open,
+        "os.access": os.access,
+        "os.chroot": os.chroot,
+        "os.chmod": os.chmod,
+        "os.link": os.link,
+        "os.listdir": os.listdir,
+        "os.mkdir": os.mkdir,
+        "os.readlink": os.readlink,
+        "os.remove": os.remove,
+        "os.rename": os.rename,
+        "os.replace": os.replace,
+        "os.rmdir": os.rmdir,
+        "os.scandir": os.scandir,
+        "os.stat": os.stat,
+        "os.lstat": os.lstat,
+        "os.symlink": os.symlink,
+        "os.truncate": os.truncate,
+        "os.unlink": os.unlink,
+        "os.utime": os.utime,
         # -----------------
-        "os.path.exists":os.path.exists,
-        "os.path.lexists":os.path.lexists,
-        "os.path.getatime":os.path.getatime,
-        "os.path.getmtime":os.path.getmtime,
-        "os.path.getctime":os.path.getctime,
-        "os.path.getsize":os.path.getsize,
-        "os.path.isfile":os.path.isfile,
-        "os.path.isdir":os.path.isdir,
-        "os.path.islink":os.path.islink,
-        "os.path.realpath":os.path.realpath,
-        "os.path.samefile":os.path.samefile,
+        "os.path.exists": os.path.exists,
+        "os.path.lexists": os.path.lexists,
+        "os.path.getatime": os.path.getatime,
+        "os.path.getmtime": os.path.getmtime,
+        "os.path.getctime": os.path.getctime,
+        "os.path.getsize": os.path.getsize,
+        "os.path.isfile": os.path.isfile,
+        "os.path.isdir": os.path.isdir,
+        "os.path.islink": os.path.islink,
+        "os.path.realpath": os.path.realpath,
+        "os.path.samefile": os.path.samefile,
         # -----------------
-        "pathlib.Path.glob":_Path.glob, # TODO: ajouter reste
-        }
+        "pathlib.Path.glob": _Path.glob,  # TODO: ajouter reste
+    }
     if sys.platform != "win32" and sys.platform != "linux":
         _remember |= {
             "os.chflags": os.chflags,
@@ -405,7 +487,8 @@ if "PYTEST_RUN_CONFIG" in os.environ:
             "os.lchown": os.lchown,
         }
 
-    def deactivate_guard_files():
+
+    def _deactivate_guard_files():
         builtins.open = _remember["builtins.open"]
         io.open = _remember["io.open"]
         os.chdir = _remember["os.chdir"]
@@ -450,11 +533,11 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         os.path.realpath = _remember["os.path.realpath"]
         os.path.samefile = _remember["os.path.samefile"]
 
-
         _Path.glob = _remember["pathlib.Path.glob"]
 
         global _rules
         _rules = []
+
 
 def activate_guard_files(rules: List[str]) -> None:
     """
@@ -469,101 +552,115 @@ def activate_guard_files(rules: List[str]) -> None:
     _rules = _parse_rule(rules)
 
     if install_wrapper:
-        builtins.open = _wrap_filename(builtins.open)  # type: ignore
+        builtins.open = _wrap_filename(builtins.open)
 
         import io
-        io.open = _wrap_filename(io.open)  # type: ignore
-        # FIXME io.open_code = _wrap_filename(io.open_code)  # type: ignore
-        # io.FileIO = _wrap_filename(io.FileIO)  # type: ignore
+        io.open = _wrap_filename(io.open)
+        io.open_code = _wrap_filename(io.open_code)
 
+        # %%
         import os
         os.chdir = _wrap_filename(os.chdir)
-        # NO os.fchdir
-        os.getcwd = _wrap_getcwd(os.getcwd)
-        os.getcwdb = _wrap_getcwd(os.getcwdb)
-        # NO os.fdopen
-        # NO os.tmpfile
+        # ALLOW os.fchdir
+        os.getcwd = _wrap_os_getcwd(os.getcwd)
+        os.getcwdb = _wrap_os_getcwd(os.getcwdb)
+        # ALLOW os.fdopen
+        # ALLOW os.tmpfile
         os.open = _wrap_filename(os.open)
-        os.access= _wrap_filename(os.access)
+        os.access = _wrap_filename(os.access)
         if sys.platform != "win32" and sys.platform != "linux":
             os.chflags = _wrap_filename(os.chflags)
-            os.lchflags= _wrap_filename(os.lchflags)
-            os.lchmod= _wrap_filename(os.lchmod)
-        os.chroot= _wrap_filename(os.chroot)
-        os.chmod= _wrap_filename(os.chmod)
+            os.lchflags = _wrap_filename(os.lchflags)
+            os.lchmod = _wrap_filename(os.lchmod)
+        os.chroot = _wrap_filename(os.chroot)
+        os.chmod = _wrap_filename(os.chmod)
         if sys.platform != "win32":
             os.chown = _wrap_filename(os.chown)
             os.lchown = _wrap_filename(os.lchown)
-        os.link = _wrap_filename(os.link)
-        os.listdir = _wrap_listdir(os.listdir)
+        os.link = _wrap_two_filenames(os.link)  # TODO VERIF id = int
+        os.listdir = _wrap_os_listdir(os.listdir)
         os.mkdir = _wrap_filename(os.mkdir)
         # DENY os.mkfifo
         # DENY os.mknod
-        os.readlink = _wrap_readlink(os.readlink)
+        os.readlink = _wrap_os_readlink(os.readlink)
         os.remove = _wrap_filename(os.remove)
-        # NO os.removedirs= _wrap_filename(os.removedirs)
+        # ALLOW os.removedirs= _wrap_filename(os.removedirs)
         os.rename = _wrap_two_filenames(os.rename)
-        # NO os.renames = _wrap_two_filenames(os.renames)
+        # ALLOW os.renames = _wrap_two_filenames(os.renames)
         os.replace = _wrap_two_filenames(os.replace)
         os.rmdir = _wrap_filename(os.rmdir)
-        os.scandir = _wrap_scandir(os.scandir)
+        os.scandir = _wrap_os_scandir(os.scandir)
         os.stat = _wrap_filename(os.stat)
         os.lstat = _wrap_filename(os.lstat)
-        # NO os.stat_float_times
-        os.symlink = _wrap_filename(os.symlink)
+        # ALLOW os.stat_float_times
+        os.symlink = _wrap_two_filenames(os.symlink)
         os.truncate = _wrap_filename(os.truncate)
         os.unlink = _wrap_filename(os.unlink)
         os.utime = _wrap_filename(os.utime)
-        # NO os.walk = _wrap_filename(os.walk)
+        # ALLOW os.walk = _wrap_walk(os.walk)
 
         # %%
-        # NO os.path.abspath= _wrap_filename(os.path.abspath)
-        # NO os.path.basename
-        # NO os.path.dirname= _wrap_filename(os.path.dirname)
-        os.path.exists= _wrap_filename(os.path.exists)
-        os.path.lexists= _wrap_filename(os.path.lexists)
-        # NO os.path.expanduser
-        # NO os.path.expandvars
-        os.path.getatime= _wrap_filename(os.path.getatime)
-        os.path.getmtime= _wrap_filename(os.path.getmtime)
-        os.path.getctime= _wrap_filename(os.path.getctime)
-        os.path.getsize= _wrap_filename(os.path.getsize)
-        # NO os.path.isabs
-        os.path.isfile= _wrap_filename(os.path.isfile)
-        os.path.isdir= _wrap_filename(os.path.isdir)
-        os.path.islink= _wrap_filename(os.path.islink)
-        # NO os.path.ismount= _wrap_filename(os.path.ismount)
-        # NO os.path.join
-        # NO os.path.normcase
-        # NO os.path.normpath
-        os.path.realpath= _wrap_realpath(os.path.realpath)
-        # NO os.path.relpath
-        os.path.samefile= _wrap_two_filenames(os.path.samefile)
-        # NO os.path.expanduser(path) → transforme ~ en /home/...
-        # NO os.path.walk (obsolette)
+        # ALLOW os.path.abspath= _wrap_filename(os.path.abspath)
+        # ALLOW os.path.basename
+        # ALLOW os.path.dirname= _wrap_filename(os.path.dirname)
+        os.path.exists = _wrap_filename(os.path.exists)
+        os.path.lexists = _wrap_filename(os.path.lexists)
+        # ALLOW os.path.expanduser
+        # ALLOW os.path.expandvars
+        os.path.getatime = _wrap_filename(os.path.getatime)
+        os.path.getmtime = _wrap_filename(os.path.getmtime)
+        os.path.getctime = _wrap_filename(os.path.getctime)
+        os.path.getsize = _wrap_filename(os.path.getsize)
+        # ALLOW os.path.isabs
+        os.path.isfile = _wrap_filename(os.path.isfile)
+        os.path.isdir = _wrap_filename(os.path.isdir)
+        os.path.islink = _wrap_filename(os.path.islink)
+        # ALLOW os.path.ismount= _wrap_filename(os.path.ismount)
+        # ALLOW os.path.join
+        # ALLOW os.path.normcase
+        # ALLOW os.path.normpath
+        os.path.realpath = _wrap_realpath(os.path.realpath)
+        # ALLOW os.path.relpath
+        os.path.samefile = _wrap_two_filenames(os.path.samefile)
+        # ALLOW os.path.expanduser(path) → transforme ~ en /home/...
+        # ALLOW os.path.walk (obsolette)
 
+        # %%
         import pathlib
-        # OK pathlib.Path.open = _wrap_filename(pathlib.Path.open)  # type: ignore
-        pathlib.Path.read_text = _wrap_pathlib(pathlib.Path.read_text)  # type: ignore
-        # OK pathlib.Path.read_bytes = _wrap_filename(pathlib.Path.read_bytes)  # type: ignore
-        pathlib.Path.write_text = _wrap_pathlib(pathlib.Path.write_text)  # type: ignore
-        # OK pathlib.Path.write_bytes = _wrap_filename(pathlib.Path.write_bytes)  # type: ignore
-        # OK pathlib.Path.iterdir = _wrap_filename(pathlib.Path.iterdir)  # type: ignore
-        pathlib.Path.glob = _wrap_pathlib_glob(pathlib.Path.glob)  # type: ignore
-        # pathlib.Path.rglob = _wrap_filename(pathlib.Path.rglob)  # type: ignore
-        # pathlib.Path.walk = _wrap_filename(pathlib.Path.walk)  # type: ignore
-        # pathlib.Path.isPath =
-        # pathlib.Path.exists =
-        # pathlib.Path.is_file =
-        # pathlib.Path.is_dir =
-        # pathlib.Path.is_symlink =
-        #
+        # ALLOW pathlib.Path.stat
+        # ALLOW pathlib.Path.lstat
+        # ALLOW pathlib.Path.exists
+        # ALLOW pathlib.Path.is_dir
+        # ALLOW pathlib.Path.is_file
+        # ALLOW pathlib.Path.is_mount
+        # ALLOW pathlib.Path.is_symlink
+        # ALLOW pathlib.Path.is_junction
+        # ALLOW pathlib.Path.is_block_device
+        # ALLOW pathlib.Path.is_char_device
+        # ALLOW pathlib.Path.is_fifo
+        # ALLOW pathlib.Path.is_socket
+        # ALLOW pathlib.Path.samefile
+        # ALLOW pathlib.Path.open = _wrap_filename(pathlib.Path.open)
+        # ALLOW pathlib.Path.read_bytes = _wrap_filename(pathlib.Path.read_bytes)
+        # ALLOW pathlib.Path.read_text = _wrap_pathlib(pathlib.Path.read_text)
+        # ALLOW pathlib.Path.write_bytes = _wrap_filename(pathlib.Path.write_bytes)
+        # ALLOW pathlib.Path.write_text = _wrap_pathlib(pathlib.Path.write_text)
+        # ALLOW pathlib.Path.iterdir = _wrap_pathlib_iterdir(pathlib.Path.iterdir)
+        pathlib.Path.glob = _wrap_pathlib_glob(pathlib.Path.glob)
+        # ALLOW pathlib.Path.rglob = _wrap_pathlib_glob(pathlib.Path.rglob)
+        # pathlib.Path.walk = _wrap_filename(pathlib.Path.walk)
+        # ALLOW pathlib.Path.relative_to
+        # ALLOW pathlib.Path.is_relative_to
+        # ALLOW pathlib.Path.is_absolute
+        # ALLOW pathlib.Path.is_reserved
+        # pathlib.Path.match
+        # %%
         # gzip.open = _wrap_filename(gzip.open)
         # configparser.ConfigParser.read = _wrap_filename(configparser.ConfigParser.read)
-        #
+        # %%
         # import fileinput
         # fileinput.input = _wrap_filename(fileinput.input)
-        #
+        # %%
         # import shutil
         # shutil.copyfileobj = _wrap_filename(shutil.copyfileobj)
         # shutil.copyfile = _wrap_filename(shutil.copyfile)
@@ -578,7 +675,7 @@ def activate_guard_files(rules: List[str]) -> None:
         # shutil.chown = _wrap_filename(shutil.chown)
         # shutil.which = _wrap_filename(shutil.which)
 
-        logger.error("Guard_filed activated. Standard socket.socket has been replaced.")
+        logger.warning(
+            "Guard_filed activated. Standard socket.socket has been replaced.")
     else:
-        logger.error("Guard_files was already activated.")
-
+        logger.info("Guard_files was already activated.")
