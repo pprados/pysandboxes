@@ -16,7 +16,7 @@ def reset_rules():
 
 
 @pytest.fixture
-def temp_files(tmp_path):
+def files(tmp_path):
     # Create test files and symlinks
     tmp_path = pathlib.Path("/tmp/ppr");
     tmp_path.mkdir(exist_ok=True)  # FIXME: remove this line
@@ -66,41 +66,41 @@ def temp_files(tmp_path):
     }
 
 
-def test_io_open_ignore_rule_blocks_file_access(temp_files):
-    rules = [f"--ignore={temp_files['ignore']}"]
+def test_io_open_ignore_rule_blocks_file_access(files):
+    rules = [f"--ignore={files['ignore']}"]
     activate_guard_files(rules)
 
     with pytest.raises(FileNotFoundError):
-        io.open(temp_files['ignore'])
+        io.open(files['ignore'])
 
 
 @pytest.mark.skip(reason="TODO")  # TODO
-def test_io_open_code_ignore_rule_blocks_open_code_file_access(temp_files):
-    rules = [f"--ignore={temp_files['ignore']}"]
+def test_io_open_code_ignore_rule_blocks_open_code_file_access(files):
+    rules = [f"--ignore={files['ignore']}"]
     activate_guard_files(rules)
     with pytest.raises(FileNotFoundError):
-        io.open_code(str(temp_files['ignore']))
+        io.open_code(str(files['ignore']))
 
 
-def test_io_open_symlink_to_ignored_file(temp_files):  # FIXME: vérifier plus profond
-    rules = [f"--ignore={temp_files['ignore']}"]
+def test_io_open_symlink_to_ignored_file(files):  # FIXME: vérifier plus profond
+    rules = [f"--ignore={files['ignore']}"]
     activate_guard_files(rules)
     with pytest.raises(FileNotFoundError):
-        io.open(temp_files['home_link_to_ignore'])
+        io.open(files['home_link_to_ignore'])
 
-def test_io_open_bind_rule_redirects_file_access(temp_files):
-    rules = [f"--bind={temp_files['bind_src']},{temp_files['bind_dest']}"]
+def test_io_open_bind_rule_redirects_file_access(files):
+    rules = [f"--bind={files['bind_src']},{files['bind_dest']}"]
     activate_guard_files(rules)
     # Access using the dest path should redirect to src
-    target_path = temp_files['bind_dest'] / "bound_file.txt"
+    target_path = files['bind_dest'] / "bound_file.txt"
     with io.open(target_path) as f:
         content = f.read()
     assert content == "Content"
 
-def test_io_open_visible_file_is_accessible(temp_files):
+def test_io_open_visible_file_is_accessible(files):
     rules = ["--ignore=*.log"]
     activate_guard_files(rules)
-    with open(temp_files['visible']) as f:
+    with open(files['visible']) as f:
         assert f.read() == "Visible"
 
 

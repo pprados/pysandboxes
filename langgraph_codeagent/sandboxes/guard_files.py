@@ -54,6 +54,7 @@ def _parse_rule(arguments: List[str]) -> List[ParserRule]:
 _rules: List[ParserRule] = []
 
 _os_path_realpath=os.path.realpath
+_os_path_abspath=os.path.abspath
 # Helper to resolve symlinks and apply rules
 def _apply_rules(path: str) -> Optional[str]:
     """
@@ -84,7 +85,7 @@ def _apply_inverse_rules(path: str) -> Optional[str]:
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
-    fake_path = os.path.abspath(path)
+    fake_path = _os_path_abspath(path)
     original_path = path
 
     for rule in _rules:
@@ -148,6 +149,27 @@ def _wrap_getcwd(func: Callable) -> Callable:
 
     return wrapper
 
+def _wrap_realpath(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
+        # Detect call from posixpath
+        frame = sys._getframe(1)
+        filename=None
+        if inspect.isframe(frame):
+            code = frame.f_code
+            filename = code.co_filename
+        for wl in _white_list:
+            if filename.endswith(wl):
+                return func(*args, **kwargs)
+        remapped = _apply_inverse_rules(os.fspath(file))
+        file= func(remapped,*args, **kwargs)
+        remapped = _apply_rules(os.fspath(file))
+        if remapped is None:
+            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+        return remapped
+
+    return wrapper
+
 def _wrap_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]:
     @functools.wraps(func)
     def wrapper(path: Union[str, bytes, os.PathLike] = '.') -> List[str]:
@@ -180,7 +202,7 @@ def _wrap_two_filenames(func: Callable) -> Callable:
                 return func(src,dest, *args, **kwargs)
         remapped_src = _apply_inverse_rules(os.fspath(src))
         remapped_dest = _apply_inverse_rules(os.fspath(dest))
-        func(remapped_src,remapped_dest, *args, **kwargs)
+        return func(remapped_src,remapped_dest, *args, **kwargs)
 
     return wrapper
 def _wrap_readlink(func: Callable) -> Callable:
@@ -331,7 +353,9 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
 if "PYTEST_RUN_CONFIG" in os.environ:
     _remember={
         "builtins.open":builtins.open,
+        # -----------------
         "io.open":io.open,
+        # -----------------
         "os.chdir":os.chdir,
         "os.getcwd":os.getcwd,
         "os.getcwdb":os.getcwdb,
@@ -354,7 +378,19 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         "os.truncate":os.truncate,
         "os.unlink":os.unlink,
         "os.utime":os.utime,
-
+        # -----------------
+        "os.path.exists":os.path.exists,
+        "os.path.lexists":os.path.lexists,
+        "os.path.getatime":os.path.getatime,
+        "os.path.getmtime":os.path.getmtime,
+        "os.path.getctime":os.path.getctime,
+        "os.path.getsize":os.path.getsize,
+        "os.path.isfile":os.path.isfile,
+        "os.path.isdir":os.path.isdir,
+        "os.path.islink":os.path.islink,
+        "os.path.realpath":os.path.realpath,
+        "os.path.samefile":os.path.samefile,
+        # -----------------
         "pathlib.Path.glob":_Path.glob, # TODO: ajouter reste
         }
     if sys.platform != "win32" and sys.platform != "linux":
@@ -401,6 +437,19 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         if sys.platform != "win32":
             os.chown = _remember["os.chown"]
             os.lchown = _remember["os.lchown"]
+
+        os.path.exists = _remember["os.path.exists"]
+        os.path.lexists = _remember["os.path.lexists"]
+        os.path.getatime = _remember["os.path.getatime"]
+        os.path.getmtime = _remember["os.path.getmtime"]
+        os.path.getctime = _remember["os.path.getctime"]
+        os.path.getsize = _remember["os.path.getsize"]
+        os.path.isfile = _remember["os.path.isfile"]
+        os.path.isdir = _remember["os.path.isdir"]
+        os.path.islink = _remember["os.path.islink"]
+        os.path.realpath = _remember["os.path.realpath"]
+        os.path.samefile = _remember["os.path.samefile"]
+
 
         _Path.glob = _remember["pathlib.Path.glob"]
 
@@ -468,16 +517,30 @@ def activate_guard_files(rules: List[str]) -> None:
         # NO os.walk = _wrap_filename(os.walk)
 
         # %%
-        # os.path.basename(path)
-        # os.path.abspath(path)
-        # os.path.exists(path)
-        # os.path.islink(path)
-        # os.path.isdir(path)
-        # os.path.isfile(path)
-        # os.path.samefile(path1, path2)
-        # os.path.realpath(path)
-        # os.path.expanduser(path) → transforme ~ en /home/...
-        # os.path.normpath(path)
+        # NO os.path.abspath= _wrap_filename(os.path.abspath)
+        # NO os.path.basename
+        # NO os.path.dirname= _wrap_filename(os.path.dirname)
+        os.path.exists= _wrap_filename(os.path.exists)
+        os.path.lexists= _wrap_filename(os.path.lexists)
+        # NO os.path.expanduser
+        # NO os.path.expandvars
+        os.path.getatime= _wrap_filename(os.path.getatime)
+        os.path.getmtime= _wrap_filename(os.path.getmtime)
+        os.path.getctime= _wrap_filename(os.path.getctime)
+        os.path.getsize= _wrap_filename(os.path.getsize)
+        # NO os.path.isabs
+        os.path.isfile= _wrap_filename(os.path.isfile)
+        os.path.isdir= _wrap_filename(os.path.isdir)
+        os.path.islink= _wrap_filename(os.path.islink)
+        # NO os.path.ismount= _wrap_filename(os.path.ismount)
+        # NO os.path.join
+        # NO os.path.normcase
+        # NO os.path.normpath
+        os.path.realpath= _wrap_realpath(os.path.realpath)
+        # NO os.path.relpath
+        os.path.samefile= _wrap_two_filenames(os.path.samefile)
+        # NO os.path.expanduser(path) → transforme ~ en /home/...
+        # NO os.path.walk (obsolette)
 
         import pathlib
         # OK pathlib.Path.open = _wrap_filename(pathlib.Path.open)  # type: ignore
