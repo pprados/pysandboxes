@@ -132,6 +132,8 @@ def _wrap_filename(func: Callable) -> Callable:
         print(f"wrapper {filename=}")  # FIXME
         if isinstance(file, int):
             return func(file, *args, **kwargs)
+        if isinstance(file,_DirEntry):
+            file=file.path
         remapped = _apply_dest_to_src_rules(os.fspath(file))
         if remapped is None:
             raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
@@ -153,6 +155,10 @@ def _wrap_two_filenames(func: Callable) -> Callable:
         for wl in _white_list:
             if filename.endswith(wl):
                 return func(src, dest, *args, **kwargs)
+        if isinstance(src,_DirEntry):
+            src=src.path
+        if isinstance(dest,_DirEntry):
+            dest=dest.path
         remapped_src = _apply_dest_to_src_rules(os.fspath(src))
         remapped_dest = _apply_dest_to_src_rules(os.fspath(dest))
         if remapped_src is None:
@@ -288,6 +294,29 @@ def _wrap_os_readlink(func: Callable) -> Callable:
 from os import scandir as _scandir
 
 
+class _DirEntry:
+    def __init__(self,
+                 target: typing.Any,
+                 path: str) -> None:
+        self._target = target
+        self.path = path
+
+    def __getattr__(self, name: str) -> typing.Any:
+        print("_DirEntry.__get")
+        # Called only if attribute not found the usual way
+        if name == "path":
+            return super().__getattr__(name)
+        return getattr(self._target, name)
+
+    def __setattr__(self, name: str, value: typing.Any) -> None:
+        print("_DirEntry.__set")
+        if name in ("_target", "path"):
+            # Assign _target to self, not to target
+            super().__setattr__(name, value)
+        else:
+            setattr(self._target, name, value)
+
+
 class _ScanDirContextManager:
     """
     A context manager that wraps os.scandir and implements the context manager protocol.
@@ -349,28 +378,6 @@ class _ScanDirContextManager:
                     entry = next(self.scanner)
                     dest_path = _apply_src_to_dest_rules(entry.path, accept_src=False)
                     if dest_path is not None:
-                        class _DirEntry:
-                            def __init__(self,
-                                         target: typing.Any,
-                                         path:str) -> None:
-                                self._target = target
-                                self.path = path
-
-                            def __getattr__(self, name: str) -> typing.Any:
-                                print("_DirEntry.__get")
-                                # Called only if attribute not found the usual way
-                                if name == "path":
-                                    return super().__getattr__(name)
-                                return getattr(self._target, name)
-
-                            def __setattr__(self, name: str, value: typing.Any) -> None:
-                                print("_DirEntry.__set")
-                                if name in ("_target","path"):
-                                    # Assign _target to self, not to target
-                                    super().__setattr__(name, value)
-                                else:
-                                    setattr(self._target, name, value)
-
                         _entry = _DirEntry(entry,dest_path)
                         return _entry
             except StopIteration:
@@ -386,7 +393,9 @@ def _wrap_os_scandir(func: Callable) -> Callable:
     """
 
     @functools.wraps(func)
-    def wrapper(path: Union[str, bytes, os.PathLike] = '.') -> Iterator:
+    def wrapper(path: Union[str, bytes, os.PathLike, int] = '.') -> Iterator:
+        if isinstance(path,int):
+            return func(path)
         return _ScanDirContextManager(path)
 
     return wrapper
@@ -572,11 +581,11 @@ def activate_guard_files(rules: List[str]) -> None:
             os.chflags = _wrap_filename(os.chflags)
             os.lchflags = _wrap_filename(os.lchflags)
             os.lchmod = _wrap_filename(os.lchmod)
-        os.chroot = _wrap_filename(os.chroot)
         os.chmod = _wrap_filename(os.chmod)
         if sys.platform != "win32":
             os.chown = _wrap_filename(os.chown)
             os.lchown = _wrap_filename(os.lchown)
+        os.chroot = _wrap_filename(os.chroot)
         os.link = _wrap_two_filenames(os.link)  # TODO VERIF id = int
         os.listdir = _wrap_os_listdir(os.listdir)
         os.mkdir = _wrap_filename(os.mkdir)
@@ -591,6 +600,7 @@ def activate_guard_files(rules: List[str]) -> None:
         os.rmdir = _wrap_filename(os.rmdir)
         os.scandir = _wrap_os_scandir(os.scandir)
         os.stat = _wrap_filename(os.stat)
+        # ALLOW os.statvfs = _wrap_filename(os.statvfs)
         os.lstat = _wrap_filename(os.lstat)
         # ALLOW os.stat_float_times
         os.symlink = _wrap_two_filenames(os.symlink)
@@ -598,6 +608,25 @@ def activate_guard_files(rules: List[str]) -> None:
         os.unlink = _wrap_filename(os.unlink)
         os.utime = _wrap_filename(os.utime)
         # ALLOW os.walk = _wrap_walk(os.walk)
+
+        # Posix
+        os.listxattr = _wrap_filename(os.listxattr)
+        os.removexattr = _wrap_filename(os.removexattr)
+        os.setxattr = _wrap_filename(os.setxattr)
+        os.getxattr = _wrap_filename(os.getxattr)
+        # TODO: revoir toutes les fonctions
+        # DENY os.execv
+        # DENY os.execve
+        # DENY os.fork
+        # DENY os.forkpty
+        # DENY os.kill
+        # DENY os.killpg
+        # DENY os.nice
+        # DENY os.posix_spawn
+        # DENY os.posix_spawnp
+        # DENY os.putenv
+        # DENY os.unsetenv
+        # DENY os.system
 
         # %%
         # ALLOW os.path.abspath= _wrap_filename(os.path.abspath)
@@ -655,25 +684,25 @@ def activate_guard_files(rules: List[str]) -> None:
         # ALLOW pathlib.Path.is_reserved
         # pathlib.Path.match
         # %%
-        # gzip.open = _wrap_filename(gzip.open)
-        # configparser.ConfigParser.read = _wrap_filename(configparser.ConfigParser.read)
+        # ALLOW gzip.open = _wrap_filename(gzip.open)
         # %%
         # import fileinput
-        # fileinput.input = _wrap_filename(fileinput.input)
+        # ALLOW fileinput.input = _wrap_filename(fileinput.input)
         # %%
         # import shutil
-        # shutil.copyfileobj = _wrap_filename(shutil.copyfileobj)
-        # shutil.copyfile = _wrap_filename(shutil.copyfile)
-        # shutil.copymode = _wrap_filename(shutil.copymode)
-        # shutil.copystat = _wrap_filename(shutil.copystat)
-        # shutil.copy = _wrap_filename(shutil.copy)
-        # shutil.copy2 = _wrap_filename(shutil.copy2)
-        # shutil.copytree = _wrap_filename(shutil.copytree)
-        # shutil.rmtree = _wrap_filename(shutil.rmtree)
-        # shutil.move = _wrap_filename(shutil.move)
-        # shutil.disk_usage = _wrap_filename(shutil.disk_usage)
-        # shutil.chown = _wrap_filename(shutil.chown)
-        # shutil.which = _wrap_filename(shutil.which)
+        # ALLOW shutil.chown
+        # ALLOW shutil.copy
+        # ALLOW shutil.copy2
+        # ALLOW shutil.copyfile
+        # ALLOW shutil.copyfileobj
+        # ALLOW shutil.copymode
+        # ALLOW shutil.copystat
+        # ALLOW shutil.copytree
+        # ALLOW shutil.disk_usage
+        # ALLOW shutil.make_archive
+        # ALLOW shutil.move
+        # ALLOW shutil.rmtree
+        # ALLOW shutil.which
 
         logger.warning(
             "Guard_filed activated. Standard socket.socket has been replaced.")
