@@ -103,6 +103,8 @@ async def {wrapper_function_name}():
 
 class BasePythonExecutor:
     # TODO: capture des stdout
+    # TODO: clearenv ? setenv
+    # TODO: tmpfs
     @abstractmethod
     def call(self,
              code_action: str,
