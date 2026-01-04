@@ -2,7 +2,7 @@ import os
 import pytest
 
 from langgraph_codeagent.sandboxes.guard_files import activate_guard_files
-from test_guard_io import files
+from .test_guard_io import files
 
 
 @pytest.fixture(autouse=True)

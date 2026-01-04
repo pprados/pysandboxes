@@ -9,11 +9,13 @@ import logging
 import os
 import sys
 import typing
-from pathlib import Path
+import pathlib
 from pathlib import Path as _Path
 from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
+
+from unit_tests import save_default_values, restore_default_values
 
 _Path_glob = _Path.glob
 _Path_rglob = _Path.rglob
@@ -425,7 +427,7 @@ def _wrap_pathlib(func: Callable) -> Callable:
         remapped = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if remapped is None:
             raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
-        return func(Path(remapped), *args, **kwargs)
+        return func(pathlib.Path(remapped), *args, **kwargs)
 
     return wrapper
 
@@ -434,7 +436,7 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self, glob: str, *args, **kwargs) -> Iterator:
         if new_path := _apply_dest_to_src_rules(self, write=False):
-            return (Path(_apply_src_to_dest_rules(p)) for p in
+            return (pathlib.Path(_apply_src_to_dest_rules(p)) for p in
                     func(_Path(new_path), glob, *args, **kwargs)
                     if _apply_src_to_dest_rules(p) is not None)
         else:
@@ -443,127 +445,73 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
     return wrapper
 
 
-# %% TODO
+# %%
 if "PYTEST_RUN_CONFIG" in os.environ:
-    _remember = {
-        "builtins.open": builtins.open,
+    
+    _key_to_remember = {
+        "builtins.open",
         # -----------------
-        "os.chdir": os.chdir,
-        "os.getcwd": os.getcwd,
-        "os.getcwdb": os.getcwdb,
-        "os.open": os.open,
-        "os.access": os.access,
-        "os.chmod": os.chmod,
-        "os.chroot": os.chroot,
-        "os.link": os.link,
-        "os.listdir": os.listdir,
-        "os.mkdir": os.mkdir,
-        "os.readlink": os.readlink,
-        "os.remove": os.remove,
-        "os.rename": os.rename,
-        "os.replace": os.replace,
-        "os.rmdir": os.rmdir,
-        "os.scandir": os.scandir,
-        "os.stat": os.stat,
-        "os.lstat": os.lstat,
-        "os.symlink": os.symlink,
-        "os.truncate": os.truncate,
-        "os.unlink": os.unlink,
-        "os.utime": os.utime,
+        "os.chdir",
+        "os.getcwd",
+        "os.getcwdb",
+        "os.open",
+        "os.access",
+        "os.chmod",
+        "os.chroot",
+        "os.link",
+        "os.listdir",
+        "os.mkdir",
+        "os.readlink",
+        "os.remove",
+        "os.rename",
+        "os.replace",
+        "os.rmdir",
+        "os.scandir",
+        "os.stat",
+        "os.lstat",
+        "os.symlink",
+        "os.truncate",
+        "os.unlink",
+        "os.utime",
         # -----------------
-        "os.listxattr": os.listxattr,
-        "os.removexattr": os.removexattr,
-        "os.setxattr": os.setxattr,
-        "os.getxattr": os.getxattr,
+        "os.listxattr",
+        "os.removexattr",
+        "os.setxattr",
+        "os.getxattr",
+        "os.chflags",
+        "os.lchflags",
+        "os.lchmod",
+        "os.chown",
+        "os.lchown",
         # -----------------
-        "io.open": io.open,
-        "io.open_code": io.open_code,
+        "io.open",
+        "io.open_code",
         # -----------------
-        "os.path.exists": os.path.exists,
-        "os.path.lexists": os.path.lexists,
-        "os.path.getatime": os.path.getatime,
-        "os.path.getmtime": os.path.getmtime,
-        "os.path.getctime": os.path.getctime,
-        "os.path.getsize": os.path.getsize,
-        "os.path.isfile": os.path.isfile,
-        "os.path.isdir": os.path.isdir,
-        "os.path.islink": os.path.islink,
-        "os.path.realpath": os.path.realpath,
-        "os.path.samefile": os.path.samefile,
+        "os.path.exists",
+        "os.path.lexists",
+        "os.path.getatime",
+        "os.path.getmtime",
+        "os.path.getctime",
+        "os.path.getsize",
+        "os.path.isfile",
+        "os.path.isdir",
+        "os.path.islink",
+        "os.path.realpath",
+        "os.path.samefile",
         # -----------------
-        "pathlib.Path.glob": _Path.glob,  # TODO: ajouter reste
+        "pathlib.Path.glob",  # TODO: ajouter reste
     }
-    if sys.platform != "win32" and sys.platform != "linux":
-        _remember |= {
-            "os.chflags": os.chflags,
-            "os.lchflags": os.lchflags,
-            "os.lchmod": os.lchmod,
-        }
-    if sys.platform != "win32":
-        _remember |= {
-            "os.chown": os.chown,
-            "os.lchown": os.lchown,
-        }
-
+    _memory=dict()
+    save_default_values(_memory,
+                        _key_to_remember,
+                        sys.modules[__name__],
+                        )
 
     def _deactivate_guard_files():
-        builtins.open = _remember["builtins.open"]
-        os.chdir = _remember["os.chdir"]
-        os.getcwd = _remember["os.getcwd"]
-        os.getcwdb = _remember["os.getcwdb"]
-        os.open = _remember["os.open"]
-        os.access = _remember["os.access"]
-        os.chmod = _remember["os.chmod"]
-        os.chroot = _remember["os.chroot"]
-        os.link = _remember["os.link"]
-        os.listdir = _remember["os.listdir"]
-        os.mkdir = _remember["os.mkdir"]
-        os.readlink = _remember["os.readlink"]
-        os.remove = _remember["os.remove"]
-        os.rename = _remember["os.rename"]
-        os.replace = _remember["os.replace"]
-        os.rmdir = _remember["os.rmdir"]
-        os.scandir = _remember["os.scandir"]
-        os.stat = _remember["os.stat"]
-        os.lstat = _remember["os.lstat"]
-        os.symlink = _remember["os.symlink"]
-        os.truncate = _remember["os.truncate"]
-        os.unlink = _remember["os.unlink"]
-        os.utime = _remember["os.utime"]
-        # -----------------
-        os.listxattr = _remember["os.listxattr"]
-        os.removexattr = _remember["os.removexattr"]
-        os.setxattr = _remember["os.setxattr"]
-        os.getxattr = _remember["os.getxattr"]
-        # -----------------
-        if sys.platform != "win32" and sys.platform != "linux":
-            os.chflags = _remember["os.chflags"]
-            os.lchflags = _remember["os.lchflags"]
-            os.lchmod = _remember["os.lchmod"]
-        if sys.platform != "win32":
-            os.chown = _remember["os.chown"]
-            os.lchown = _remember["os.lchown"]
-        # -----------------
-        io.open = _remember["io.open"]
-        io.open_code = _remember["io.open_code"]
-        # -----------------
-        os.path.exists = _remember["os.path.exists"]
-        os.path.lexists = _remember["os.path.lexists"]
-        os.path.getatime = _remember["os.path.getatime"]
-        os.path.getmtime = _remember["os.path.getmtime"]
-        os.path.getctime = _remember["os.path.getctime"]
-        os.path.getsize = _remember["os.path.getsize"]
-        os.path.isfile = _remember["os.path.isfile"]
-        os.path.isdir = _remember["os.path.isdir"]
-        os.path.islink = _remember["os.path.islink"]
-        os.path.realpath = _remember["os.path.realpath"]
-        os.path.samefile = _remember["os.path.samefile"]
-        # -----------------
-        _Path.glob = _remember["pathlib.Path.glob"]
-
+        restore_default_values(_memory,
+                               sys.modules[__name__])
         global _rules
         _rules = []
-
 
 def activate_guard_files(rules: List[str]) -> None:
     """

@@ -37,6 +37,9 @@
 # import requests
 # import urllib.request
 # # ... rest of your application code ...
+import os
+
+import sys
 
 import ipaddress
 import logging
@@ -45,6 +48,8 @@ from string import ascii_uppercase
 from typing import Tuple, Optional, Union, List, Dict
 
 import socket
+
+from unit_tests import save_default_values, restore_default_values
 
 logger = logging.getLogger(__name__)
 
@@ -485,6 +490,24 @@ ALLOW_WEB: List[str] = [
     "--net=ALLOW|any|0.0.0.0/0|80,443|OUT",  # Allows HTTP/HTTPS to any IPv4
     "--net=ALLOW|any|::/0|80,443|OUT",      # Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
 ]
+
+# %%
+if "PYTEST_RUN_CONFIG" in os.environ:
+    _key_to_remember={
+        "socket.socket",
+    }
+    _memory = dict()
+    save_default_values(_memory,
+                        _key_to_remember,
+                        sys.modules[__name__],
+                        )
+
+
+    def _deactivate_guard_files():
+        restore_default_values(_memory,
+                               sys.modules[__name__])
+        global _rules
+        _rules = []
 
 def activate_guard_socket():
     import socket
