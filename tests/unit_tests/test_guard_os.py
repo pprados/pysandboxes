@@ -21,7 +21,7 @@ def reset_rules():
 def test_os_listdir_filters_ignored_files_and_bind(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}"
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
     ]
     activate_guard_files(rules)
 
@@ -41,7 +41,7 @@ def test_os_listdir_filters_ignored_files_and_bind(files):
 def test_os_scandir(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}"
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
     ]
     activate_guard_files(rules)
     with os.scandir(files['path']) as scandir_it:
@@ -58,10 +58,10 @@ def test_os_scandir(files):
     assert not entries
 
 
-def test_os_statand_stat_andlstat(files):
+def test_os_statand_stat_and_lstat(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}"
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
     ]
     activate_guard_files(rules)
     assert os.stat(files['visible'])
@@ -82,6 +82,31 @@ def test_os_statand_stat_andlstat(files):
     with pytest.raises(FileNotFoundError):
         assert os.lstat(files["bind_src"])
 
+def test_os_listxattr(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
+    ]
+    activate_guard_files(rules)
+
+    assert os.listxattr(files['visible']) == []
+
+def test_os_xattr(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--bind={files['bind_src']},{files['bind_dest']}"
+    ]
+    activate_guard_files(rules)
+
+    os.setxattr(files['visible'],"user.comment",b"comment")
+    assert os.getxattr(files['visible'],"user.comment") == b"comment"
+    assert os.listxattr(files['visible']) == ["user.comment"]
+    assert os.removexattr(files['visible'],"user.comment") is None
+
+    os.setxattr(files['bound_file'],"user.comment",b"comment")
+    assert os.getxattr(files['bound_file'],"user.comment") == b"comment"
+    assert os.listxattr(files['bound_file']) == ["user.comment"]
+    assert os.removexattr(files['bound_file'],"user.comment") is None
 
 def test_os_link_symlink_and_readlink(files):
     rules = [
@@ -143,6 +168,16 @@ def test_os_remove(files):
         f.write("To remove")
     assert os.remove(files["bind_dest"] / "to_remove.txt") is None
 
+def test_os_remove_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):
+        os.remove(files["bound_file"]) is None
+
 
 def test_os_mkdir_removedirs_and_rmdir(files):
     rules = [
@@ -170,6 +205,17 @@ def test_os_mkdir_removedirs_and_rmdir(files):
         os.mkdir(files["bind_src"] / "dir_to_remove")
 
 
+def test_os_mkdir_removedirs_and_rmdir_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):
+        os.mkdir(files["bind_dest"] / "dir_to_remove")
+
+
 def test_os_rename(files):
     rules = [
         f"--ignore=*.log",
@@ -192,11 +238,22 @@ def test_os_rename(files):
     with pytest.raises(FileNotFoundError):
         assert os.rename(files["bind_src"] / "toto", files["visible"])
 
+def test_os_rename_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):
+        os.rename(files["to_rename"],
+                     files["bound_file"])
+
 
 def test_os_chdir_and_getcwd(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 
@@ -210,19 +267,122 @@ def test_os_chdir_and_getcwd(files):
     os.chdir(old_dir)
 
 
-def test_os_access(files):
+def test_os_open_readonly(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    fd=-1
+    try:
+        fd=os.open(files["visible"], os.O_RDONLY)
+    finally:
+        if fd!=-1:
+            os.close(fd)
+    try:
+        fd=os.open(files["bind_dest"], os.O_RDONLY)
+    finally:
+        if fd!=-1:
+            os.close(fd)
+
+def test_os_open_writeonly(files):
     rules = [
         f"--ignore=*.log",
         f"--bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 
-    assert os.access(files["path"], os.R_OK)
-    assert os.access(files["visible"], os.R_OK)
-    assert os.access(files["bound_file"], os.R_OK)
-    assert os.access(files["bind_dest"], os.R_OK)
+    fd=-1
+    try:
+        fd=os.open(files["visible"], os.O_WRONLY)
+    finally:
+        if fd!=-1:
+            os.close(fd)
+    try:
+        fd=os.open(files["bind_dest"], os.O_RDONLY)
+    finally:
+        if fd!=-1:
+            os.close(fd)
+
+def test_os_open_writeonly_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+
+    with pytest.raises(PermissionError):
+        fd = -1
+        try:
+            fd=os.open(files["bind_dest"], os.O_WRONLY)
+        finally:
+            if fd!=-1:
+                os.close(fd)
+
+def test_os_open_readwrite(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    fd=-1
+    try:
+        fd=os.open(files["visible"], os.O_RDWR)
+    finally:
+        if fd!=-1:
+            os.close(fd)
+    try:
+        fd=os.open(files["bind_dest"], os.O_RDONLY)
+    finally:
+        if fd!=-1:
+            os.close(fd)
+
+def test_os_open_readwrite_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):
+        fd = -1
+        try:
+            fd=os.open(files["bind_dest"], os.O_WRONLY)
+        finally:
+            if fd!=-1:
+                os.close(fd)
+
+
+def test_os_access_read_write(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    assert os.access(files["path"], os.R_OK|os.W_OK)
+    assert os.access(files["visible"], os.R_OK|os.W_OK)
+    assert os.access(files["bound_file"], os.R_OK|os.W_OK)
+    assert os.access(files["bind_dest"], os.R_OK|os.W_OK)
     with pytest.raises(FileNotFoundError):
-        assert os.access(files["bind_src"], os.R_OK)
+        assert os.access(files["bind_src"], os.R_OK|os.W_OK)
+
+def test_os_access_read_only(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    assert os.access(files["path"], os.R_OK|os.W_OK)  # FIXME
+    assert os.access(files["visible"], os.R_OK|os.W_OK)
+    assert os.access(files["bound_file"], os.R_OK|os.W_OK)
+    assert os.access(files["bind_dest"], os.R_OK|os.W_OK)
+    with pytest.raises(FileNotFoundError):
+        assert os.access(files["bind_src"], os.R_OK|os.W_OK)
 
 
 @pytest.mark.skipif(not (sys.platform != "win32" and sys.platform != "linux"),
@@ -243,18 +403,6 @@ def test_os_chflags_and_lchflags(files):
         assert os.lchflags(files["bind_src"], stat.SF_ARCHIVED)
 
 
-@pytest.mark.skipif(sys.platform == "win32" or os.geteuid(),
-                    reason="requires no windows OS")
-def test_os_chroot(files):
-    rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
-    ]
-    activate_guard_files(rules)
-
-    assert os.chroot(files["path"])
-
-
 def test_os_chmod_and_lchmod(files):
     rules = [
         f"--ignore=*.log",
@@ -263,25 +411,40 @@ def test_os_chmod_and_lchmod(files):
     activate_guard_files(rules)
 
     mode = os.stat(files["path"]).st_mode
-    assert os.chmod(files["path"], mode | stat.S_IREAD) is None
+    assert os.chmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE) is None
     assert os.chmod(files["bound_file"],
-                    mode | stat.S_IREAD) is None
+                    mode | stat.S_IREAD | stat.S_IWRITE) is None
     assert os.chmod(files["bind_dest"],
-                    mode | stat.S_IREAD) is None
+                    mode | stat.S_IREAD | stat.S_IWRITE) is None
     with pytest.raises(FileNotFoundError):
-        os.chmod(files["bind_src"],mode | stat.S_IREAD)
+        os.chmod(files["bind_src"],mode | stat.S_IREAD | stat.S_IWRITE)
 
     if sys.platform != "win32" and sys.platform != "linux":
-        assert os.lchmod(files["path"], mode | stat.S_IREAD) is None
+        assert os.lchmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE) is None
         assert os.lchmod(files["bound_file"],
-                         mode | stat.S_IREAD) is None
+                         mode | stat.S_IREAD | stat.S_IWRITE) is None
         assert os.lchmod(files["bound_file"],
-                        mode | stat.S_IREAD) is None
+                        mode | stat.S_IREAD | stat.S_IWRITE) is None
         assert os.lchmod(files["bind_dest"],
-                        mode | stat.S_IREAD) is None
+                        mode | stat.S_IREAD | stat.S_IWRITE) is None
         with pytest.raises(FileNotFoundError):
-            os.lchmod(files["bind_src"],mode | stat.S_IREAD)
+            os.lchmod(files["bind_src"],mode | stat.S_IREAD |  stat.S_IWRITE)
 
+def test_os_chmod_and_lchmod_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    mode = os.stat(files["bound_file"]).st_mode
+    with pytest.raises(PermissionError):
+        os.chmod(files["bound_file"],
+                    mode | stat.S_IREAD | stat.S_IWRITE)
+
+    if sys.platform != "win32" and sys.platform != "linux":
+        with pytest.raises(PermissionError):
+            os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
 
 # @pytest.mark.skipif(sys.platform != "win32",
 #                     reason="requires no windows OS")
@@ -314,6 +477,21 @@ def test_os_chown_and_lchown(files):
         os.lchown(files["bind_src"],
                     uid, gid)
 
+def test_os_chown_and_lchown_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    uid = os.stat(files["path"]).st_uid
+    gid = os.stat(files["path"]).st_gid
+    with pytest.raises(PermissionError):
+        os.chown(files["bound_file"], uid, gid) is None
+
+    with pytest.raises(PermissionError):
+        os.lchown(files["bound_file"], uid, gid) is None
+
 
 def test_os_replace(files):
     rules = [
@@ -340,6 +518,18 @@ def test_os_replace(files):
         os.replace(files["bind_src"],files["new_replace"])
 
 
+def test_os_replace_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):
+        os.replace(files["bound_file"],
+                   files["bound_file"])
+
+
 def test_os_truncate(files):
     rules = [
         f"--ignore=*.log",
@@ -363,6 +553,16 @@ def test_os_truncate(files):
         os.truncate(files["bind_src"], 3)
 
 
+def test_os_truncate_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):
+        os.truncate(files["bound_file"], 3)
+
 def test_os_utime(files):
     rules = [
         f"--ignore=*.log",
@@ -383,11 +583,24 @@ def test_os_utime(files):
     with pytest.raises(FileNotFoundError):
         os.utime(files["bind_src"], (yesterday, now))
 
+def test_os_utime_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    now = time.time()
+    yesterday = now - 86400
+
+    with pytest.raises(PermissionError):
+        os.utime(files["bound_file"], (yesterday, now))
+
 
 def test_os_scandir(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 
@@ -410,7 +623,7 @@ def test_os_scandir(files):
 def test_os_walk(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 

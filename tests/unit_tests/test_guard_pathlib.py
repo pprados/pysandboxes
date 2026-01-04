@@ -17,7 +17,7 @@ def reset_rules():
 def test_pathlib_open(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
 
     activate_guard_files(rules)
@@ -58,7 +58,7 @@ def test_pathlib_read_write_bytes(files):
 def test_pathlib_is(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
 
     activate_guard_files(rules)
@@ -92,7 +92,7 @@ def test_pathlib_is(files):
 def test_pathlib_info(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
 
     activate_guard_files(rules)
@@ -105,7 +105,7 @@ def test_pathlib_info(files):
 def test_pathlib_glob(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
 
     activate_guard_files(rules)
@@ -122,7 +122,7 @@ def test_pathlib_glob(files):
 def test_pathlib_rglob(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
 
     activate_guard_files(rules)
@@ -135,7 +135,7 @@ def test_pathlib_rglob(files):
 def test_pathlib_iterdir(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 
@@ -165,10 +165,10 @@ def test_pathlib_chmod_and_lchmod(files):
         mode | stat.S_IREAD) is None
 
 
-def test_pathlib_statand_stat_andlstat(files):
+def test_pathlib_statand_stat_and_lstat(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}"
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
     ]
     activate_guard_files(rules)
     assert files['visible'].stat()
@@ -242,7 +242,15 @@ def test_pathlib_link_symlink_and_readlink(files):
     with pytest.raises(FileNotFoundError):
         (files["new_link"]).symlink_to(files['bind_src'] / "toto")
 
+def test_pathlib_link_symlink_and_readlink_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
+    ]
+    activate_guard_files(rules)
 
+    with pytest.raises(PermissionError):
+        files['bound_file'].hardlink_to(files['visible'])
 
 def test_pathlib_touch(files):
     rules = [
@@ -257,6 +265,16 @@ def test_pathlib_touch(files):
         files["ignore"].touch()
     with pytest.raises(FileNotFoundError):
         files["bind_src"].touch()
+
+def test_pathlib_touch_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):
+        files["bound_file"].touch() is None
 
 def test_pathlib_rename(files):
     rules = [
@@ -279,6 +297,16 @@ def test_pathlib_rename(files):
     with pytest.raises(FileNotFoundError):
         files["bind_src"].rename(files["bind_src"])
 
+def test_pathlib_rename_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError): # TODO: refuse in et out
+        files["bound_file"].rename(files["bind_dest"] / "new_rename")
+
 def test_pathlib_replace(files):
     rules = [
         f"--ignore=*.log",
@@ -300,10 +328,20 @@ def test_pathlib_replace(files):
     with pytest.raises(FileNotFoundError):
         files["bind_src"].replace(files["new_replace"])
 
+def test_pathlib_replace_refused(files):
+    rules = [
+        f"--ignore=*.log",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+    ]
+    activate_guard_files(rules)
+
+    with pytest.raises(PermissionError):  # TODO: refuse in et out
+        files["bound_file"].replace(files["bind_dest"] / "new_replace")
+
 def test_pathlib_resolve(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 
@@ -313,7 +351,7 @@ def test_pathlib_resolve(files):
 def test_pathlib_samefile(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 
@@ -326,7 +364,7 @@ def test_pathlib_samefile(files):
 def test_pathlib_walk(files):
     rules = [
         f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
     ]
     activate_guard_files(rules)
 

@@ -32,6 +32,18 @@ from langgraph_codeagent.sandboxes.guard_socket import (
     _convert_ports_range, ParsedRule, _parse_rule
 )
 
+# TODO: dns
+# pip install dnspython
+# import dns.resolver
+#
+# # Create a custom resolver using a specific DNS server (e.g. Cloudflare)
+# resolver = dns.resolver.Resolver()
+# resolver.nameservers = ['1.1.1.1']  # Cloudflare DNS
+#
+# # Resolve a domain
+# answer = resolver.resolve('example.com')
+# for rdata in answer:
+#     print(rdata.address)
 
 def convert_rules(rules: List[str]) -> List[ParsedRule]:
     return [_parse_rule(i, r) for i, r in enumerate(rules)]

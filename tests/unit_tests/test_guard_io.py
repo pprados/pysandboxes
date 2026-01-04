@@ -103,6 +103,22 @@ def test_io_open_bind_rule_redirects_file_access(files):
         content = f.read()
     assert content == "Content"
 
+def test_io_open_write(files):
+    rules = [f"--bind={files['bind_src']},{files['bind_dest']}"]
+    activate_guard_files(rules)
+    target_path = files['bind_dest'] / "write.txt"
+    with io.open(target_path,"w") as f:
+        f.write("sample")
+    os.remove(str(target_path))
+
+def test_io_open_refuse_write(files):
+    rules = [f"--ro-bind={files['bind_src']},{files['bind_dest']}"]
+    activate_guard_files(rules)
+    target_path = files['bind_dest'] / "write.txt"
+    with pytest.raises(PermissionError):
+        with io.open(target_path,"w") as f:
+            f.write("sample")
+
 def test_io_open_visible_file_is_accessible(files):
     rules = ["--ignore=*.log"]
     activate_guard_files(rules)
