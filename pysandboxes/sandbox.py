@@ -2,6 +2,7 @@ import inspect
 import logging
 import os
 import re
+import sys
 import types
 from importlib.resources import files, as_file
 from pathlib import Path
@@ -98,13 +99,18 @@ def _read_config(
     return processed_lines
 
 
-def activate_sandboxes(envs: Dict[str, str] = os.environ):
+def activate_sandboxes(
+        envs: Dict[str, str] = os.environ,
+        args_rules:Optional[List[str]]=None) -> None:
     # 1. try to find .pysandboxes in the caller module
+    if args_rules is None:
+        args_rules = []
     body_from_ressource = []
     caller_module = get_caller_module()
     if caller_module:
         # resource = files(caller_module.__name__).joinpath(".pysandboxes")
         resource = files(caller_module.__package__).joinpath(".pysandboxes")
+        print(f"{resource=}")
         if resource.exists():
             with as_file(resource) as path:
                 body_from_ressource = _read_config(path,envs)
@@ -121,10 +127,11 @@ def activate_sandboxes(envs: Dict[str, str] = os.environ):
     body_from_users_or_os = []
     for path in known_paths:
         if path.exists():
+            print(f"{path=}")
             body_from_users_or_os = _read_config(path,envs)
             break
     # 3. Merge all files
-    rules = body_from_ressource + body_from_users_or_os
+    rules = body_from_ressource + args_rules + body_from_users_or_os
 
     # 4. Parse the rules, step by step
     socket_rules, others = guard_socket.parse_rules(rules)
@@ -137,4 +144,6 @@ def activate_sandboxes(envs: Dict[str, str] = os.environ):
 
     # 6. Apply the rules
     guard_socket.activate_guard_socket(socket_rules)
-    guard_socket.activate_guard_socket(files_rules)
+    guard_files.activate_guard_files(files_rules)
+
+

@@ -15,7 +15,6 @@ from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
 
-from unit_tests import save_default_values, restore_default_values
 
 _Path_glob = _Path.glob
 _Path_rglob = _Path.rglob
@@ -74,7 +73,8 @@ def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules],List[str
             value = line[len("--ro-bind="):]
             try:
                 src, dest = value.split(",", 1)
-                rules.append(BindRule(src, dest, write=False))
+                # TODO: assert exist
+                rules.append(BindRule(src.strip(), dest.strip(), write=False))
             except ValueError:
                 raise ValueError(f"Invalid bind rule: {line}")
         elif line.startswith("--ignore="):
@@ -455,7 +455,8 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
 
 # %%
 if "PYTEST_RUN_CONFIG" in os.environ:
-    
+    from unit_tests import save_default_values, restore_default_values
+
     _key_to_remember = {
         "builtins.open",
         # -----------------

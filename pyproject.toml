@@ -21,6 +21,9 @@ dependencies = [
   "dnspython>=2.7.0",
 ]
 
+[tool.poetry.scripts]
+python-sandbox = "pysandboxes.cli:main"
+python3-sandbox = "pysandboxes.cli:main"
 
 [tool.poetry.group.dev]
 optional = true

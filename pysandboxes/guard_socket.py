@@ -44,8 +44,6 @@ import socket
 import sys
 from typing import Tuple, Optional, Union, List, Dict
 
-from unit_tests import save_default_values, restore_default_values
-
 logger = logging.getLogger(__name__)
 
 # Address format details can be found in the Python socket library documentation:
@@ -441,6 +439,8 @@ class Guard_socket(socket.socket):
 
 # %%
 if "PYTEST_RUN_CONFIG" in os.environ:
+    from unit_tests import save_default_values, restore_default_values
+
     _key_to_remember = {
         "socket.socket",
     }

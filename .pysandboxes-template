@@ -4,6 +4,7 @@
 
 # Binds the current directory to the root of the container
 --ro-bind=${PWD},/
+--ro-bind=/tmp,/TOTO
 
 # Select some variables for the sandbox
 #--set-env=HOME=/
