@@ -32,49 +32,57 @@ _white_list = [
 
 
 # Internal representation of a rule
-class ParserRule:
-    def __init__(self, rule_type: str, source: str, dest: Optional[str] = None,
+class BindRule:
+    def __init__(self,
+                 source: str,
+                 dest: Optional[str] = None,
                  write: bool = True):
-        self.rule_type = rule_type  # 'bind' or 'ignore'
         self.source = source
         self.dest = dest
         self.write = write
 
 
+class IgnoreRule:
+    def __init__(self, pattern: str):
+        self.source = pattern
+
+
+Files_Rules=Union[BindRule, IgnoreRule]
 # Internal state for the file filter
-_rules: List[ParserRule] = []
+_rules: List[Files_Rules] = []
 
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 
 
-def _parse_rule(arguments: List[str]) -> List[ParserRule]:
+def _parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules],List[str]]:
     """
     Parses rule strings into internal ParserRule objects.
     Supports --bind=src,dest and --ignore=glob_pattern.
     """
-    rules: List[ParserRule] = []
-    for arg in arguments:
-        if arg.startswith("--bind="):
-            value = arg[len("--bind="):]
+    rules: List[Files_Rules] = []
+    ignore_rules: List[str] = []
+    for line in arguments:
+        if line.startswith("--bind="):
+            value = line[len("--bind="):]
             try:
                 src, dest = value.split(",", 1)
-                rules.append(ParserRule("bind", src, dest, write=True))
+                rules.append(BindRule( src, dest, write=True))
             except ValueError:
-                raise ValueError(f"Invalid bind rule: {arg}")
-        elif arg.startswith("--ro-bind="):  # TODO: --ro-bind
-            value = arg[len("--ro-bind="):]
+                raise ValueError(f"Invalid bind rule: {line}")
+        elif line.startswith("--ro-bind="):  # TODO: --ro-bind
+            value = line[len("--ro-bind="):]
             try:
                 src, dest = value.split(",", 1)
-                rules.append(ParserRule("bind", src, dest, write=False))
+                rules.append(BindRule(src, dest, write=False))
             except ValueError:
-                raise ValueError(f"Invalid bind rule: {arg}")
-        elif arg.startswith("--ignore="):
-            pattern = arg[len("--ignore="):]
-            rules.append(ParserRule("ignore", pattern))
+                raise ValueError(f"Invalid bind rule: {line}")
+        elif line.startswith("--ignore="):
+            pattern = line[len("--ignore="):]
+            rules.append(IgnoreRule(pattern))
         else:
-            raise ValueError(f"Unknown rule: {arg}")
-    return rules
+            ignore_rules.append(line)
+    return rules,ignore_rules
 
 
 # Helper to resolve symlinks and apply rules
@@ -88,7 +96,7 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[st
     original_path = path
 
     for rule in _rules:
-        if rule.rule_type == "bind":
+        if isinstance(rule, BindRule):
             if real_path.startswith(rule.source):
                 if not accept_src and real_path == rule.source:  # and real_path.startswith(rule.dest):
                     return None
@@ -98,7 +106,7 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[st
                 else:
                     new_path = rule.dest
                 return new_path
-        elif rule.rule_type == "ignore":
+        elif isinstance(rule, IgnoreRule):
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
                     real_path, rule.source):
                 return None
@@ -120,7 +128,7 @@ def _apply_dest_to_src_rules(path: str,
     original_path = path
 
     for rule in _rules:
-        if rule.rule_type == "bind":
+        if isinstance(rule, BindRule):
             if fake_path.startswith(rule.source):
                 if not accept_source:
                     return None
@@ -133,7 +141,7 @@ def _apply_dest_to_src_rules(path: str,
                 relative = os.path.relpath(fake_path, rule.dest)
                 new_path = os.path.join(rule.source, relative)
                 return new_path
-        elif rule.rule_type == "ignore":
+        elif isinstance(rule, IgnoreRule):
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
                     fake_path, rule.source):
                 return None
@@ -518,12 +526,9 @@ def activate_guard_files(rules: List[str]) -> None:
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.
     """
-    import sys
-    sys.setrecursionlimit(2000)  # FIXME
-
     global _rules
     install_wrapper = not _rules
-    _rules = _parse_rule(rules)
+    _rules, _ = _parse_rules(rules)
 
     if install_wrapper:
         builtins.open = _wrap_filename(builtins.open, write=True)
@@ -671,6 +676,6 @@ def activate_guard_files(rules: List[str]) -> None:
         # ALLOW shutil.which
 
         logger.warning(
-            "Guard_filed activated. Standard socket.socket has been replaced.")
+            "Guard_files activated.")
     else:
         logger.info("Guard_files was already activated.")

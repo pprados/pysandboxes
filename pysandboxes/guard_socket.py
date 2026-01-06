@@ -37,17 +37,14 @@
 # import requests
 # import urllib.request
 # # ... rest of your application code ...
-import os
-
-import sys
-
 import ipaddress
 import logging
+import os
+import socket
+import sys
 from random import choice
 from string import ascii_uppercase
 from typing import Tuple, Optional, Union, List, Dict
-
-import socket
 
 from unit_tests import save_default_values, restore_default_values
 
@@ -79,9 +76,24 @@ OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 # (action_str,
 #  (parsed_families: List[int], parsed_types: List[int], network_obj, ports_list_or_range),
 #  direction_str)
-ParsedRule = Tuple[str,
+SocketRule = Tuple[str,
 Tuple[List[int], ipaddress.ip_network, Union[List[int], range]],
 str]
+
+class RulesException(RuntimeError):
+    pass
+
+# FIXME: valider et propager
+def _rule_to_str(rule: SocketRule)  -> str:
+    (action,
+     (rule_types, network_obj, rule_ports_list),
+     rule_direction_from_rule)  = rule
+    rule_types_str = [socket.SocketKind(t).name for t in
+                      rule_types] if rule_types else ["any"]
+    return f"types={','.join(rule_types_str)}, net={network_obj}, ports={rule_ports_list}, dir={conn_direction}"
+
+
+_rules: List[SocketRule] = []
 
 SPEC_TO_TYPE_MAP: Dict[str, int] = {
     "tcp": socket.SOCK_STREAM,
@@ -89,34 +101,33 @@ SPEC_TO_TYPE_MAP: Dict[str, int] = {
 }
 
 
-def _parse_rule(i:int, rule:str)-> ParsedRule:
+def _parse_rule(rule: str) -> Optional[SocketRule]:
     if not rule.startswith("--net="):
-        raise ValueError(
-            f"Rule {i} ('{rule}') must start with '--net='.")
+        return None
     # Remove prefix "--net="
     value_part = rule[len("--net="):]
     # Split by '|' expecting 5 parts: ACTION | SOCKET_SPECS | NETWORK_STR | PORT_SPEC_STR | DIRECTION_STR
     rule_components = value_part.split('|', 4)  # Maxsplit is 4 for 5 parts
     if len(rule_components) != 5:
         raise ValueError(
-            f"Rule {i} ('{rule}') has incorrect number of parts separated by '|'. "
+            f"Rule '{rule}') has incorrect number of parts separated by '|'. "
             f"Expected 5, got {len(rule_components)}. "
             f"Format: ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR")
     action, socket_specs_str, network_str, port_spec_str, direction = rule_components
     if action not in (DENY, ALLOW):
         raise ValueError(
-            f"Rule {i} action '{action}' is not '{ALLOW}' or '{DENY}'. Rule: {rule}")
+            f"Action '{action}' is not '{ALLOW}' or '{DENY}'. Rule: {rule}")
     # Parse SOCKET_SPECS
     parsed_rule_families: List[int] = []
     parsed_rule_types: List[int] = []
     specs_input = [s.strip().lower() for s in socket_specs_str.split(',') if
                    s.strip()]
     if not specs_input:
-        raise ValueError(f"Rule {i} ('{rule}') has empty SOCKET_SPECS.")
+        raise ValueError(f"'{rule}' has empty SOCKET_SPECS.")
     if "any" in specs_input:
         if len(specs_input) > 1:
             raise ValueError(
-                f"Rule {i} ('{rule}'): 'any' in SOCKET_SPECS must be used alone, not combined with other specifiers like '{socket_specs_str}'.")
+                f"'{rule}': 'any' in SOCKET_SPECS must be used alone, not combined with other specifiers like '{socket_specs_str}'.")
         # 'any' means parsed_rule_families and parsed_rule_types remain empty (wildcard for both)
     else:
         for spec_part in specs_input:
@@ -124,7 +135,7 @@ def _parse_rule(i:int, rule:str)-> ParsedRule:
                 parsed_rule_types.append(SPEC_TO_TYPE_MAP[spec_part])
             else:
                 raise ValueError(
-                    f"Rule {i} has unknown socket specifier '{spec_part}' in '{socket_specs_str}'. "
+                    f"Rule has unknown socket specifier '{spec_part}' in '{socket_specs_str}'. "
                     f"Valid specifiers: 'any', 'ipv4', 'ipv6', 'tcp', 'udp'. Rule: {rule}")
 
         # Remove duplicates and sort for consistency
@@ -132,24 +143,36 @@ def _parse_rule(i:int, rule:str)-> ParsedRule:
         parsed_rule_types = sorted(list(set(parsed_rule_types)))
     if not isinstance(network_str, str) or not network_str.strip():
         raise ValueError(
-            f"Rule {i} network part '{network_str}' is not a non-empty string. Rule: {rule}")
+            f"Network part '{network_str}' is not a non-empty string. Rule: {rule}")
     if not isinstance(port_spec_str, str):
         raise ValueError(
-            f"Rule {i} port spec part '{port_spec_str}' is not a string. Rule: {rule}")
+            f"Port spec part '{port_spec_str}' is not a string. Rule: {rule}")
     if direction not in (IN, OUT):
         raise ValueError(
-            f"Rule {i} direction '{direction}' is not '{IN}' or '{OUT}'. Rule: {rule}")
+            f"Direction '{direction}' is not '{IN}' or '{OUT}'. Rule: {rule}")
     try:
         network = ipaddress.ip_network(network_str, strict=False)
     except ValueError as e:
         raise ValueError(
-            f"Invalid network specification '{network_str}' in rule {i} ('{rule}'): {e}")
+            f"Invalid network specification '{network_str}' ('{rule}'): {e}")
     ports_list_or_range = _convert_ports_range(port_spec_str)
     if not ports_list_or_range and port_spec_str.strip() not in ('',
                                                                  '*'):
         raise ValueError(
-            f"Invalid or empty port specification '{port_spec_str}' in rule {i} ('{rule}') that does not resolve to any ports (and is not '*' or empty string for 'any port' if applicable).")
+            f"Invalid or empty port specification '{port_spec_str}' ('{rule}') that does not resolve to any ports (and is not '*' or empty string for 'any port' if applicable).")
     return action, (parsed_rule_types, network, ports_list_or_range), direction
+
+
+def _parse_rules(rules: List[str]) -> Tuple[List[SocketRule], List[str]]:
+    socket_rules = []
+    ignore_rules = []
+    for rule_str in rules:
+        parsed_rule = _parse_rule(rule_str)
+        if parsed_rule:
+            socket_rules.append(parsed_rule)
+        else:
+            ignore_rules.append(rule_str)
+    return socket_rules, ignore_rules
 
 
 def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
@@ -223,7 +246,7 @@ def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
 
 
 def _check_address_with_rules(
-        rules: List[ParsedRule],
+        rules: List[SocketRule],
         socket_instance_type: int,
         address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
         conn_direction: str):  # Expect IN or OUT constants
@@ -267,7 +290,7 @@ def _check_address_with_rules(
     unique_ips = list(dict.fromkeys(ip_objects))
     if not unique_ips:
         raise ValueError(
-                f"Invalid hostname or IP address (resolution failed): {hostname}")
+            f"Invalid hostname or IP address (resolution failed): {hostname}")
     if not rules:
         logger.info(
             "Connection to %s port %s ALLOWED because no rules are set.",
@@ -287,12 +310,12 @@ def _check_address_with_rules(
 
     for rule_type_to_check in order_apply:
         for ip_host in unique_ips:
-            for rule_idx, (action,
+            for (action,
                            (rule_types, network_obj, rule_ports_list),
-                           rule_direction_from_rule) in enumerate(rules):
+                           rule_direction_from_rule) in rules:
                 if action == rule_type_to_check:
                     type_match = (not rule_types) or (
-                                socket_instance_type in rule_types)
+                            socket_instance_type in rule_types)
 
                     if type_match:
                         if rule_direction_from_rule == conn_direction:
@@ -302,23 +325,22 @@ def _check_address_with_rules(
                                 rule_spec_str = f"types={','.join(rule_types_str)}, net={network_obj}, ports={rule_ports_list}, dir={conn_direction}"
 
                                 logger.info(
-                                    "Connection to %s (%s:%s) %s by explicit rule #%s: %s (%s)",
+                                    "Connection to %s (%s:%s) %s by explicit rule: %s (%s)",
                                     hostname, ip_host, destination_port, action,
-                                    rule_idx,
                                     action, rule_spec_str
                                 )
                                 if action == DENY:
-                                    raise RuntimeError(
+                                    raise RulesException(
                                         f"Guard network connection to "
                                         f"{ip_host}:{destination_port} (from {hostname}) "
-                                        f"explicitly {action} by rule #{rule_idx} "
+                                        f"explicitly {action} by rule "
                                         f"({action} {rule_spec_str})."
                                     )
                                 elif action == ALLOW:
-                                    raise RuntimeError(
+                                    raise RulesException(
                                         f"Guard network connection to "
                                         f"{ip_host}:{destination_port} (from {hostname}) "
-                                        f"explicitly {action} by rule #{rule_idx} "
+                                        f"explicitly {action} by rule "
                                         f"({action} {rule_spec_str})."
                                     )
     if implicit_default_is_deny:
@@ -326,7 +348,7 @@ def _check_address_with_rules(
             "Connection to %s (resolved to %s) port %s DENIED by implicit default policy (first rule was %s, no other rule explicitly matched).",
             hostname, unique_ips, destination_port, first_rule_action
         )
-        raise RuntimeError(
+        raise RulesException(
             f"Guard network connection to {hostname} (port {destination_port}) "
             f"DENIED by implicit default (first rule: {first_rule_action}). Resolved IPs: {unique_ips}"
         )
@@ -349,36 +371,6 @@ class Guard_socket(socket.socket):
     SOCKET_SPECS: "any", "tcp", "udp", or comma-separated combinations.
     """
 
-    @classmethod
-    def set_rules(cls, rules_str_list: List[str]):
-        """
-        Sets the network rules for the Guard_socket from a list of rule strings.
-        Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
-        Example: "--net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
-
-        Args:
-            rules_str_list: A list of rule strings.
-        Raises:
-            ValueError: If rules have already been set or if any rule string is malformed.
-        """
-        random_rules_name = "_ " + ''.join(choice(ascii_uppercase) for _ in range(12))
-        if cls.__dict__.get("get_rules", _get_rules) == _get_rules:
-            parsed_rules_list: List[ParsedRule] = []
-            for i, rule_str in enumerate(rules_str_list):
-                parsed_rule=_parse_rule(i, rule_str)
-
-                parsed_rules_list.append(parsed_rule)
-
-            setattr(cls, random_rules_name, parsed_rules_list)
-            setattr(cls, "get_rules", lambda: getattr(cls, random_rules_name))
-            logger.info(
-                "Guard_socket rules set successfully with %s rules.",
-                len(parsed_rules_list))
-        else:
-            raise ValueError("Rules can only be set once for Guard_socket.")
-
-
-    get_rules = _get_rules
 
     def _check_address(self, address: Tuple[str, int], conn_direction: str):
         rules = Guard_socket.get_rules()
@@ -401,7 +393,7 @@ class Guard_socket(socket.socket):
     def bind(self, address: Adresse_Type) -> None:
         if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0],
                                                                            str) and isinstance(
-                address[1], int):
+            address[1], int):
             self._check_address((address[0], address[1]), conn_direction=IN)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
@@ -416,7 +408,7 @@ class Guard_socket(socket.socket):
     def connect(self, address: Adresse_Type) -> None:
         if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0],
                                                                            str) and isinstance(
-                address[1], int):
+            address[1], int):
             self._check_address((address[0], address[1]), conn_direction=OUT)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
@@ -441,59 +433,17 @@ class Guard_socket(socket.socket):
                 logger.warning(
                     "Unexpected address format for connect_ex: %s. Skipping IP rule check.",
                     address)
-        except RuntimeError as e:
+        except RulesException as e:
             logger.error("Rule violation during connect_ex pre-check: %s", e)
             # Reraise to ensure connect_ex reflects the block, or map to an error code if preferred.
-            # For now, reraising the RuntimeError is consistent with connect().
+            # For now, reraising the RulesException is consistent with connect().
             raise
         return super().connect_ex(address)
 
 
-# --- Predefined Rule Sets (using new string format) ---
-# Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
-# SOCKET_SPECS: "any", "ipv4", "ipv6", "tcp", "udp", or comma-separated combinations.
-# e.g., "ipv4,tcp" means AF_INET and SOCK_STREAM
-# e.g., "any" means any family, any type.
-
-DENY_LOCALHOST: List[str] = [
-    "--net=DENY|any|127.0.0.1|*|OUT",
-    "--net=DENY|any|::1|*|OUT"  # For IPv6 localhost
-]
-DENY_INTRANET: List[str] = [
-    "--net=DENY|any|10.0.0.0/8|*|OUT",
-    "--net=DENY|any|169.254.0.0/16|*|OUT",  # Link-local
-    "--net=DENY|any|172.16.0.0/12|*|OUT",
-    "--net=DENY|any|192.168.0.0/16|*|OUT",
-    "--net=DENY|any|fc00::/7|*|OUT"  # IPv6 Unique Local Addresses
-]
-DENY_CAST: List[str] = [
-    "--net=DENY|any|224.0.0.0/4|*|OUT",  # IPv4 Multicast
-    "--net=DENY|any|ff00::/8|*|OUT",  # IPv6 Multicast
-]
-DENY_LOCAL: List[str] = DENY_CAST + DENY_LOCALHOST + DENY_INTRANET
-
-# Deny all internet, allow local RFC1918, link-local, unique local.
-# If these ALLOW rules are first, implicit default is DENY for everything else.
-DENY_INTERNET: List[str] = [
-    "--net=ALLOW|any|10.0.0.0/8|*|OUT",
-    "--net=ALLOW|any|169.254.0.0/16|*|OUT",
-    "--net=ALLOW|any|172.16.0.0/12|*|OUT",
-    "--net=ALLOW|any|192.168.0.0/16|*|OUT",
-    "--net=ALLOW|any|fc00::/7|*|OUT",
-    # To be absolutely explicit about denying all else if these are not the only rules
-    # or if the first rule might be a DENY, one could add:
-    # "--net=DENY|any|0.0.0.0/0|*|OUT",
-    # "--net=DENY|any|::/0|*|OUT" # Corrected from ::0 to ::/0 for all IPv6
-    # However, with the current logic, the above ALLOWs imply DENY for others if they are the first rules.
-]
-ALLOW_WEB: List[str] = [
-    "--net=ALLOW|any|0.0.0.0/0|80,443|OUT",  # Allows HTTP/HTTPS to any IPv4
-    "--net=ALLOW|any|::/0|80,443|OUT",      # Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
-]
-
 # %%
 if "PYTEST_RUN_CONFIG" in os.environ:
-    _key_to_remember={
+    _key_to_remember = {
         "socket.socket",
     }
     _memory = dict()
@@ -503,21 +453,28 @@ if "PYTEST_RUN_CONFIG" in os.environ:
                         )
 
 
-    def _deactivate_guard_files():
+    def _deactivate_guard_sockets():
         restore_default_values(_memory,
                                sys.modules[__name__])
         global _rules
         _rules = []
 
-def activate_guard_socket():
-    import socket
-    # --- Activation & Patching ---
-    if socket.socket is not Guard_socket:
-        # Ensure that the original socket class is stored if not already.
-        # This is important if the module can be reloaded or patched multiple times.
-        if not hasattr(socket, '_original_socket_class'):
-            socket._original_socket_class = socket.socket  # type: ignore
-        socket.socket = Guard_socket
-        logger.warning("Guard_socket activated. Standard socket.socket has been replaced.")
+
+def activate_guard_socket(rules: List[str]):
+    global _rules
+    install_wrapper = not _rules
+    _rules, _ = _parse_rules(rules)
+
+    if install_wrapper:
+        import socket
+        # --- Activation & Patching ---
+        if socket.socket is not Guard_socket:
+            # Ensure that the original socket class is stored if not already.
+            # This is important if the module can be reloaded or patched multiple times.
+            if not hasattr(socket, '_original_socket_class'):
+                socket._original_socket_class = socket.socket  # type: ignore
+            socket.socket = Guard_socket
+        logger.warning(
+            "Guard_socket activated.")
     else:
         logger.info("Guard_socket was already activated.")

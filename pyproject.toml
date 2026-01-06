@@ -1,5 +1,5 @@
 [project]
-name = "pysandbox"
+name = "pysandboxes"
 version = "0.0.0"  # Set with git tag
 description = "Lite sandbox for python code execution"
 authors = [ {name="Philippe PRADOS", email="github@prados.fr"}]
@@ -10,7 +10,7 @@ homepage = "https://www.github.com/pprados/langgraph-codeagent"
 #requires-python = ">=3.12,<4.0"
 requires-python = ">=3.13"
 packages = [
-  { include = "langgraph_codeagent" },
+  { include = "pysandboxes" },
 ]
 
 dependencies = [

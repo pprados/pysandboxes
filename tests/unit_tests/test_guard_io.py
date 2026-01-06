@@ -11,7 +11,6 @@ def reset_rules():
     from pysandboxes.guard_files import _deactivate_guard_files
 
     yield
-    print("desactivate")  # FIXME
     _deactivate_guard_files()
 
 

@@ -9,7 +9,7 @@ all: help
 # Define a variable for the test file path.
 TEST_FILE ?= tests/unit_tests/
 
-integration_tests:.make-rag_vectorstore.ipynb
+integration_tests:
 	poetry run pytest tests/integration_tests
 
 test tests:
