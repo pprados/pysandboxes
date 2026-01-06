@@ -42,8 +42,6 @@ import logging
 import os
 import socket
 import sys
-from random import choice
-from string import ascii_uppercase
 from typing import Tuple, Optional, Union, List, Dict
 
 from unit_tests import save_default_values, restore_default_values
@@ -163,7 +161,7 @@ def _parse_rule(rule: str) -> Optional[SocketRule]:
     return action, (parsed_rule_types, network, ports_list_or_range), direction
 
 
-def _parse_rules(rules: List[str]) -> Tuple[List[SocketRule], List[str]]:
+def parse_rules(rules: List[str]) -> Tuple[List[SocketRule], List[str]]:
     socket_rules = []
     ignore_rules = []
     for rule_str in rules:
@@ -460,10 +458,12 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard_socket(rules: List[str]):
+def activate_guard_socket(rules: List[SocketRule]) -> None:
+    if not rules:
+        return
     global _rules
+    _rules = rules
     install_wrapper = not _rules
-    _rules, _ = _parse_rules(rules)
 
     if install_wrapper:
         import socket

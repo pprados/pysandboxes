@@ -55,7 +55,7 @@ _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 
 
-def _parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules],List[str]]:
+def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules],List[str]]:
     """
     Parses rule strings into internal ParserRule objects.
     Supports --bind=src,dest and --ignore=glob_pattern.
@@ -526,9 +526,11 @@ def activate_guard_files(rules: List[str]) -> None:
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.
     """
+    if not rules:
+        return
     global _rules
     install_wrapper = not _rules
-    _rules, _ = _parse_rules(rules)
+    _rules = rules
 
     if install_wrapper:
         builtins.open = _wrap_filename(builtins.open, write=True)

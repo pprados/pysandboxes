@@ -1,0 +1,70 @@
+# Ignores all hidden files and .log files
+--ignore=.*
+--ignore=*.log
+
+# Binds the current directory to the root of the container
+--ro-bind=${PWD},/
+
+# Select some variables for the sandbox
+#--set-env=HOME=/
+#--set-env=OPENAI_API_KEY=${OPENAI_API_KEY}
+#--set-env=MISTRAL_API_KEY=${MISTRAL_API_KEY}
+#--set-env=CODESTRAL_API_KEY=${CODESTRAL_API_KEY}
+#--set-env=ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+#--set-env=GROQ_API_KEY=${GROQ_API_KEY}
+#--set-env=GOOGLE_API_KEY=${GOOGLE_API_KEY}
+#--set-env=GEMINI_API_KEY=${GEMINI_API_KEY}
+#--set-env=COHERE_API_KEY=${COHERE_API_KEY}
+#--set-env=PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
+#--set-env=CLAUDE_API_KEY=${CLAUDE_API_KEY}
+#--set-env=LLAMA_API_KEY=${LLAMA_API_KEY}
+#--set-env=LLAMA_CLOUD_API_KEY=${LLAMA_CLOUD_API_KEY}
+
+
+
+# Network rules management strategy:
+# There are two strategies: "allow" and "deny".
+# The first network rule indicates the default behavior.
+#
+# It is recommended to operate in a whitelist mode, allowing specific connections
+# and denying all others. This approach enhances security by explicitly specifying
+# permitted connections.
+#
+# However, it is also possible to operate in a blacklist mode, denying specific connections
+# and allowing all others. This approach can be useful in scenarios where most connections
+# are trusted, and only a few need to be blocked.
+#
+# Example:
+# - In whitelist mode (allow), the first rule might be "deny".
+# - In blacklist mode (deny), the first rule might be "allow".
+
+################## Whitelist strategy ##################
+# Allow web access
+--net=ALLOW|any|0.0.0.0/0|80,443|OUT
+--net=ALLOW|any|::/0|80,443|OUT
+# TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
+
+
+################## Blacklist strategy ##################
+# (not recommanded)
+## Deny localhost
+#--net=DENY|any|127.0.0.1|*|OUT
+#--net=DENY|any|::1|*|OUT
+#
+## Deny intranet
+#--net=DENY|any|10.0.0.0/8|*|OUT
+#--net=DENY|any|169.254.0.0/16|*|OUT
+#--net=DENY|any|172.16.0.0/12|*|OUT
+#--net=DENY|any|192.168.0.0/16|*|OUT
+#--net=DENY|any|fc00::/7|*|OUT
+#
+## Deny broadcast
+#--net=DENY|any|224.0.0.0/4|*|OUT
+#--net=DENY|any|ff00::/8|*|OUT
+#
+## Deny Intranet
+#--net=ALLOW|any|10.0.0.0/8|*|OUT
+#--net=ALLOW|any|169.254.0.0/16|*|OUT
+#--net=ALLOW|any|172.16.0.0/12|*|OUT
+#--net=ALLOW|any|192.168.0.0/16|*|OUT
+#--net=ALLOW|any|fc00::/7|*|OUT
