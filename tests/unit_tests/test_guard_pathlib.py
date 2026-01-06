@@ -1,13 +1,13 @@
 import pytest
 import stat
 
-from langgraph_codeagent.sandboxes.guard_files import activate_guard_files
+from pysandboxes.guard_files import activate_guard_files
 from .test_guard_io import files
 
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from langgraph_codeagent.sandboxes.guard_files import _deactivate_guard_files
+    from pysandboxes.guard_files import _deactivate_guard_files
 
     yield
     print("desactivate")  # FIXME

@@ -1,7 +1,7 @@
 [project]
-name = "langgraph-codeagent"
+name = "pysandbox"
 version = "0.0.0"  # Set with git tag
-description = "CodeAgent stategy for langgraph"
+description = "Lite sandbox for python code execution"
 authors = [ {name="Philippe PRADOS", email="github@prados.fr"}]
 license = "Apache 2.0"
 readme = "README.md"

@@ -14,16 +14,16 @@ from typing import Union, List, Tuple, \
     Any  # Tuple and Any might be used elsewhere, keeping for consistency
 
 # Assuming _convert_ports_range is imported from your module
-from langgraph_codeagent.sandboxes.guard_socket import _convert_ports_range
+from pysandboxes.guard_socket import _convert_ports_range
 
 
 
-from langgraph_codeagent.sandboxes.guard_socket import _convert_ports_range
+from pysandboxes.guard_socket import _convert_ports_range
 
 from typing import Union, List, Tuple, \
     Any  # Added Tuple and Any for mock_getaddrinfo clarity
 
-from langgraph_codeagent.sandboxes.guard_socket import (
+from pysandboxes.guard_socket import (
     _check_address_with_rules,
     DENY,
     ALLOW,

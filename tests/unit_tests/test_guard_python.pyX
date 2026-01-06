@@ -1,4 +1,4 @@
-from langgraph_codeagent.sandboxes.guard_python import restricted_python
+from pysandboxes.guard_python import restricted_python
 
 
 def test_guard_python():
