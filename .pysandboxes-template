@@ -74,6 +74,7 @@
 --net=ALLOW|any|0.0.0.0/0|80,443|OUT
 --net=ALLOW|any|::/0|80,443|OUT
 # TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
+# TODO: valider le DENY + ALLOW|any|0.0.0.0/0|80,443|OUT
 ## Allow Intranet
 #--net=ALLOW|any|10.0.0.0/8|*|OUT
 #--net=ALLOW|any|169.254.0.0/16|*|OUT
@@ -110,3 +111,6 @@
 #--python-exec-import=ALLOW:threads
 #--python-exec=ALLOW:annotations,async,class,def
 
+
+
+# TODO: --dns=1.1.1.1,4,4,4,4

@@ -1,37 +1,94 @@
-import builtins
+import sys
+import logging
 import os
+import sysconfig
 from types import ModuleType
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Literal, Set
 from typing import Optional
 
-from pip._internal.metadata import importlib
-
 from unit_tests import save_default_values, restore_default_values
+
+logger = logging.getLogger(__name__)
 
 _valide_features = {
     "importlib",
 }
 
+
+def _is_system_module(module:ModuleType) -> bool:
+    # Cas 1: Module intégré (pas de fichier associé)
+    if module.__name__ in sys.builtin_module_names:
+        return True
+
+    # Cas 2: Vérifier via sys.modules et le chemin du module
+    if module and hasattr(module, '__file__') and module.__file__:
+        module_path = os.path.abspath(module.__file__)
+
+        # 2a: Vérifier les chemins de la bibliothèque standard
+        stdlib_paths = [
+            sysconfig.get_path("stdlib"),
+            sysconfig.get_path("platstdlib"),
+            os.path.join(sysconfig.get_path("data"), "DLLs")  # Pour Windows
+        ]
+
+        # 2b: Vérifier les site-packages système
+        system_site_packages = [
+            sysconfig.get_path("purelib"),
+            sysconfig.get_path("platlib")
+        ]
+
+        # 2c: Vérifier les chemins de base du système
+        all_system_paths = stdlib_paths + system_site_packages
+        all_system_paths = [os.path.abspath(p) for p in all_system_paths if p]
+
+        for system_path in all_system_paths:
+            if module_path.startswith(system_path):
+                return True
+
+    return False
+
+def _loaded_sys_modules() -> List[ModuleType]:
+    print(sys.modules.keys())
+    dict(sys.modules.items())
+    return [module for _,module in dict(sys.modules).items() if not _is_system_module(module)]
+
+class RuleImportError(ImportError):
+    pass
+
+
 class Imports_Rule:
-    def __init__(self,valid_imports:List[str]):
+    def __init__(self, valid_imports: Set[str], mode: Literal["allow", "learn"]):
         self.valid_import = valid_imports
+        self.learn_import = set()
+        self.mode = mode
+
+    def __del__(self):
+        if self.mode == "learn":
+            with open("learned_imports.txt", "w") as f:  # FIXME
+                f.write("--python-api-import=ALLOW:" + ",".join(self.learn_import))
+
 
 class Feature_Rule:
-    def __init__(self,valid_imports:List[str]):
+    def __init__(self, valid_imports: Set[str]):
         self.valid_import = valid_imports
 
-PythonAPI = Union[Imports_Rule,Feature_Rule]
 
-def parse_rules(arguments: List[str]) -> Tuple[List[PythonAPI], List[str]]:
-    python_api_rules=[]
+PythonAPIRules = Union[Imports_Rule, Feature_Rule]
+
+_rules: List[PythonAPIRules] = []
+
+
+def parse_rules(arguments: List[str]) -> Tuple[List[PythonAPIRules], List[str]]:
+    python_api_rules = []
+    import_mode: Literal["allow", "learn"] = "allow"
     ignore_rules = []
-    features = []
-    modules = []
+    features = set()
+    modules = set()
     for line in arguments:
         if line.startswith("--python-api=ALLOW:"):
             value = line[len("--python-api=ALLOW:"):]
             for feature in value.split(","):
-                feature=feature.strip()
+                feature = feature.strip()
                 if feature in _valide_features:
                     features.append(feature)
                 else:
@@ -39,15 +96,21 @@ def parse_rules(arguments: List[str]) -> Tuple[List[PythonAPI], List[str]]:
                     break
             else:
                 python_api_rules.append(Feature_Rule(features))
-        elif line.startswith("--python-api-import=ALLOW:"):
-            value = line[len("--python-api-import=ALLOW:"):]
-            for module in value.split(","):
-                module=module.strip()
-                modules.append(module)
+        elif line.startswith("--python-api-import="):
+            if line.startswith("--python-api-import=ALLOW:"):
+                value = line[len("--python-api-import=ALLOW:"):]
+                for module in value.split(","):
+                    module = module.strip()
+                    if module:  # Remove empty modules
+                        modules.add(module)
+            elif line == "--python-api-import=LEARN":
+                import_mode = "learn"
+            else:
+                pass  # TODO
     if features:
         python_api_rules.append(Feature_Rule(features))
-    if modules:
-        python_api_rules.append(Imports_Rule(modules))
+    if modules or import_mode == "learn":
+        python_api_rules.append(Imports_Rule(modules, mode=import_mode))
     return python_api_rules, ignore_rules
 
 
@@ -70,7 +133,6 @@ def guard_invalidate_caches():
 
 
 # %% TODO: pas protégé pour le moment.
-import sys
 
 
 class Guard_sys_module:
@@ -111,14 +173,53 @@ class Guard_sys_module:
         # return self.sys_modules.get(key,*args,**kwargs)
         return self.sys_modules.get(key, *args)
 
+_import_blocker=None
+def _activate_guard_import(rules: List[PythonAPIRules]):
+    import_rules = None
+    for rule in _rules:
+        if isinstance(rule, Imports_Rule):
+            import_rules = rule
+            break
+    if not import_rules:
+        raise ValueError("No import rules found")
 
-class ImportBlocker(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname: str, path: Optional[str],
-                  target: Optional[ModuleType] = None):
-        blocked_modules = {"os", "socket"}  # Add your blocked modules here
-        if fullname in blocked_modules:
-            raise ImportError(f"Import of '{fullname}' is blocked by policy.")
-        return None  # Allow other finders to try
+    class ImportBlocker:
+        def find_spec(self, fullname: str, path: Optional[str],
+                      target: Optional[ModuleType] = None):
+            global _rules
+            for import_name in import_rules.valid_import:
+                if import_name[-1] == "*":
+                    if fullname.startswith(import_name[:-1]) :
+                        break
+                    if fullname == import_name[:-2] :
+                        break
+                else:
+                    if fullname == import_name:
+                        break
+            else:
+                if import_rules.mode == "learn":
+                    import_rules.learn_import.add(fullname)
+                    print(f"*** LEARN {fullname=}")
+                    return None
+                raise RuleImportError(f"Import of '{fullname}' is forbidden.")
+
+            return None  # Allow other finders to try
+
+    # importlib.invalidate_caches()
+    loaded_sys_modules = _loaded_sys_modules()
+    for key,module in dict(sys.modules).items():
+        if module not in loaded_sys_modules:
+            sys.modules.pop(key)
+        else:
+            print(f"garde module {key=}")
+    # for name in _loaded_sys_modules():
+    #     if (name not in sys.builtin_module_names
+    #             # and name[0] != "_"
+    #     ):
+    #         sys.modules.pop(name)
+    #     else:
+    #         print(f"garde module {name=}")
+    sys.meta_path.insert(0, _import_blocker:=ImportBlocker())  # Add to the front of the meta path
 
 
 # #%%
@@ -143,48 +244,68 @@ if "PYTEST_RUN_CONFIG" in os.environ:
 
 
     def _deactivate_guard_python_api():
-        restore_default_values(_memory,
-                               sys.modules[__name__])
-        global _rules
+        if __name__ in sys.modules:
+            restore_default_values(_memory,
+                                   sys.modules[__name__])
+        global _rules,_import_blocker
         _rules = []
+        # if sys.meta_path[0]
+        # sys.meta_path.remove(_import_blocker)  # Add to the front of the meta path
+        sys.meta_path.pop(0)  # FIXME: préférable par instrance
+        # FIXME: desactive les modules déjà chargés ?
+        # for name in list(sys.modules):
+        #     if name not in ('sys', "builtins", 'importlib', "pytest",
+        #     #         # and name[0] != "_"
+        #     ):
+        #         sys.modules.pop(name)
+        #     # else:
+        #     #     print(f"garde module {name=}")
+        print("************ PURGE DONE",flush=True)
 
 
-def activate_guard_python_api(rules: List[str]) -> None:
+def activate_guard_python_api(rules: List[PythonAPIRules]) -> None:
     """
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.
     """
-    import sys
-    if True:
-        sys.setrecursionlimit(2000)  # FIXME
-    if True:
-        guard_sys_module = Guard_sys_module()
-        setattr(sys, "modules", guard_sys_module)
+    if not rules:
+        return
+    global _rules
+    install_wrapper = not _rules
+    _rules = rules
 
-    if True:  # Import
-        sys.meta_path.insert(0, ImportBlocker())  # Add to the front of the meta path
+    _activate_guard_import(rules)
+    # import sys
+    # if True:
+    #     sys.setrecursionlimit(2000)  # FIXME
+    # if True:
+    #     guard_sys_module = Guard_sys_module()
+    #     setattr(sys, "modules", guard_sys_module)
+    #
+    # if True:  # Import
+    #     sys.meta_path.insert(0, ImportBlocker())  # Add to the front of the meta path
+    #
+    # original_import = builtins.__import__
+    #
+    # def custom_import(name, globals=None, locals=None, fromlist=(), level=0):
+    #     blocked = {"os", "socket"}
+    #     if name in blocked:
+    #         raise ImportError(f"Import of '{name}' is forbidden.")
+    #     return original_import(name, globals, locals, fromlist, level)
+    #
+    # builtins.__import__ = custom_import
+    #
+    # def disabled_reload(module):
+    #     raise RuntimeError("Module reloading is disabled.")
+    #
+    # def disabled_import_module(name, package=None):
+    #     raise ImportError(f"Dynamic import of {name} is disabled.")
+    #
+    # importlib.reload = disabled_reload
+    # importlib.import_module = disabled_import_module
 
-    original_import = builtins.__import__
-
-    def custom_import(name, globals=None, locals=None, fromlist=(), level=0):
-        blocked = {"os", "socket"}
-        if name in blocked:
-            raise ImportError(f"Import of '{name}' is forbidden.")
-        return original_import(name, globals, locals, fromlist, level)
-
-    builtins.__import__ = custom_import
-
-    def disabled_reload(module):
-        raise RuntimeError("Module reloading is disabled.")
-
-    def disabled_import_module(name, package=None):
-        raise ImportError(f"Dynamic import of {name} is disabled.")
-
-    importlib.reload = disabled_reload
-    importlib.import_module = disabled_import_module
-
-    class ProtectedModules(dict):
-        def __delitem__(self, key):
-            raise RuntimeError(f"Cannot delete module '{key}' from sys.modules")
-
-    sys.modules = ProtectedModules(sys.modules)
+    # class ProtectedModules(dict):
+    #     def __delitem__(self, key):
+    #         raise RuntimeError(f"Cannot delete module '{key}' from sys.modules")
+    #
+    # sys.modules = ProtectedModules(sys.modules)
