@@ -110,7 +110,6 @@ def activate_sandboxes(
     if caller_module:
         # resource = files(caller_module.__name__).joinpath(".pysandboxes")
         resource = files(caller_module.__package__).joinpath(".pysandboxes")
-        print(f"{resource=}")
         if resource.exists():
             with as_file(resource) as path:
                 body_from_ressource = _read_config(path,envs)
@@ -127,7 +126,6 @@ def activate_sandboxes(
     body_from_users_or_os = []
     for path in known_paths:
         if path.exists():
-            print(f"{path=}")
             body_from_users_or_os = _read_config(path,envs)
             break
     # 3. Merge all files

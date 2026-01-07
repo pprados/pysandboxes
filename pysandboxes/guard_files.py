@@ -1,20 +1,17 @@
-from os import scandir as _scandir
-
 import builtins
 import fnmatch
 import functools
 import inspect
-import io
 import logging
 import os
+import pathlib
 import sys
 import typing
-import pathlib
+from os import scandir as _scandir
 from pathlib import Path as _Path
 from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
-
 
 _Path_glob = _Path.glob
 _Path_rglob = _Path.rglob
@@ -46,7 +43,7 @@ class IgnoreRule:
         self.source = pattern
 
 
-Files_Rules=Union[BindRule, IgnoreRule]
+Files_Rules = Union[BindRule, IgnoreRule]
 # Internal state for the file filter
 _rules: List[Files_Rules] = []
 
@@ -54,19 +51,20 @@ _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 
 
-def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules],List[str]]:
+def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules], List[str]]:
     """
     Parses rule strings into internal ParserRule objects.
     Supports --bind=src,dest and --ignore=glob_pattern.
     """
-    rules: List[Files_Rules] = []
+    rules_ignore: List[Files_Rules] = []
+    rules_bind: List[Files_Rules] = []
     ignore_rules: List[str] = []
     for line in arguments:
         if line.startswith("--bind="):
             value = line[len("--bind="):]
             try:
                 src, dest = value.split(",", 1)
-                rules.append(BindRule( src, dest, write=True))
+                rules_bind.append(BindRule(src, dest, write=True))
             except ValueError:
                 raise ValueError(f"Invalid bind rule: {line}")
         elif line.startswith("--ro-bind="):  # TODO: --ro-bind
@@ -74,15 +72,17 @@ def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules],List[str
             try:
                 src, dest = value.split(",", 1)
                 # TODO: assert exist
-                rules.append(BindRule(src.strip(), dest.strip(), write=False))
+                rules_bind.append(BindRule(src.strip(), dest.strip(), write=False))
             except ValueError:
                 raise ValueError(f"Invalid bind rule: {line}")
         elif line.startswith("--ignore="):
             pattern = line[len("--ignore="):]
-            rules.append(IgnoreRule(pattern))
+            rules_ignore.append(IgnoreRule(pattern))
         else:
             ignore_rules.append(line)
-    return rules,ignore_rules
+    rules_bind = sorted(rules_bind, key=lambda r: len(r.dest), reverse=True)
+
+    return rules_ignore + rules_bind, ignore_rules
 
 
 # Helper to resolve symlinks and apply rules
@@ -510,17 +510,19 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         # -----------------
         "pathlib.Path.glob",  # TODO: ajouter reste
     }
-    _memory=dict()
+    _memory = dict()
     save_default_values(_memory,
                         _key_to_remember,
                         sys.modules[__name__],
                         )
+
 
     def _deactivate_guard_files():
         restore_default_values(_memory,
                                sys.modules[__name__])
         global _rules
         _rules = []
+
 
 def activate_guard_files(rules: List[str]) -> None:
     """
