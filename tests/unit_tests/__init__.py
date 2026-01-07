@@ -1,3 +1,4 @@
+import logging
 import sys
 from types import ModuleType
 from typing import Dict, Any, Set
@@ -14,6 +15,7 @@ def save_default_values(
                 val = getattr(val, m)
             else:
                 val = None
+                logging.warning("Could not find %s",name)
                 break
         if val:
             memory[name] = val

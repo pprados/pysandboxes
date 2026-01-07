@@ -5,7 +5,7 @@ try:
 except ImportError:
     from interpreters_backport.concurrent.futures import InterpreterPoolExecutor
 
-from pysandboxes.BasePythonExecutor import BaseThreadPoolPythonExecutor
+from .BasePythonExecutor import BaseThreadPoolPythonExecutor
 
 # TODO:
 # Force le config, pour interdire les sous-threads !

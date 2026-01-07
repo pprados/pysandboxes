@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 
-from pysandboxes.BasePythonExecutor import BaseThreadPoolPythonExecutor
+from .BasePythonExecutor import BaseThreadPoolPythonExecutor
 
 
 class PythonThreadExecutor(BaseThreadPoolPythonExecutor):

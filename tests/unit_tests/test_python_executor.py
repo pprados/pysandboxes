@@ -1,12 +1,12 @@
 import pytest
 import textwrap
 
-from pysandboxes.BasePythonExecutor import code_to_fn, capture_last_expression, \
+from pysandboxes.executors.BasePythonExecutor import code_to_fn, capture_last_expression, \
     async_code_to_fn, async_code_to_async_fn, \
     BasePythonExecutor
-from pysandboxes.python_direct_executor import PythonDirectExecutor
-from pysandboxes.python_interpreter_executor import PythonInterpreterExecutor
-from pysandboxes.python_thread_executor import PythonThreadExecutor
+from pysandboxes.executors.python_direct_executor import PythonDirectExecutor
+from pysandboxes.executors.python_interpreter_executor import PythonInterpreterExecutor
+from pysandboxes.executors.python_thread_executor import PythonThreadExecutor
 
 
 def test_capture_last_expression():

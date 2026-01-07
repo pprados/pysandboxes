@@ -15,7 +15,7 @@ from typing import Union, List, Tuple, \
 
 # Assuming _convert_ports_range is imported from your module
 from pysandboxes.guard_socket import _convert_ports_range, _deactivate_guard_sockets, \
-    parse_rules, RulesException
+    parse_rules, SocketRulesException
 
 from pysandboxes.guard_socket import _convert_ports_range
 
@@ -129,7 +129,7 @@ def test_explicit_deny_rule_blocks_connection(mock_getaddrinfo: patch) -> None:
         (s_family, s_type, s_proto, '', ('192.168.1.100', 8080))]  # Used s_family
     rules,_ = parse_rules(["--net=DENY|any|192.168.1.0/24|8080|OUT"])
     address: Tuple[str, int] = ("blocked.host.local", 8080)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -142,7 +142,7 @@ def test_explicit_deny_rule_any_port_blocks_connection(mock_getaddrinfo: patch) 
         (s_family, s_type, s_proto, '', ('10.0.0.5', 1234))]  # Used s_family
     rules,_ = parse_rules(["--net=DENY|any|10.0.0.0/8|*|OUT"])
     address: Tuple[str, int] = ("internal.service", 1234)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -155,7 +155,7 @@ def test_explicit_deny_ipv6_rule_blocks_connection(mock_getaddrinfo: patch) -> N
         (s_family, s_type, s_proto, '', ('::1', 443, 0, 0))]  # Used s_family
     rules,_ = parse_rules(["--net=DENY|any|::1/128|443|OUT"])
     address: Tuple[str, int] = ("localhost_v6", 443)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -173,7 +173,7 @@ def test_no_deny_match_first_rule_allow_implicitly_denies(
     rules,_ = parse_rules(["--net=ALLOW|any|0.0.0.0/0|80,443|OUT"])
     address: Tuple[str, int] = ("example.com",
                                 9090)  # Port 9090 is not in the ALLOW rule
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -189,7 +189,7 @@ def test_no_deny_match_first_rule_allow_network_mismatch_implicitly_denies(
     rules,_ = parse_rules(
         ["--net=ALLOW|any|1.1.1.1/32|80|OUT"])
     address: Tuple[str, int] = ("example.com", 80)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -241,7 +241,7 @@ def test_deny_rule_direction_mismatch_first_rule_allow_implicitly_denies(
         # Corrected double ==, DENY rule for IN (doesn't match direction)
     ])
     address: Tuple[str, int] = ("example.com", 80)  # Connection is OUT
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -258,7 +258,7 @@ def test_multiple_ips_one_matches_deny_blocks(mock_getaddrinfo: patch) -> None:
     ]
     rules,_ = parse_rules(["--net=DENY|any|192.168.1.10/32|80|OUT"])
     address: Tuple[str, int] = ("multihomed.host", 80)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -276,7 +276,7 @@ def test_multiple_rules_first_matching_deny_blocks(mock_getaddrinfo: patch) -> N
         # Also matches but earlier one takes precedence
     ])
     address: Tuple[str, int] = ("server.internal", 443)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -295,7 +295,7 @@ def test_explicit_allow_rule_triggers_allow_exception(mock_getaddrinfo: patch) -
     ])
     address: Tuple[str, int] = ("google.dns", 53)
     # Expecting an "explicitly ALLOW by rule #1" exception due to current function behavior.
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -343,7 +343,7 @@ def test_bind_direction_check_explicit_deny(mock_getaddrinfo: patch) -> None:
         "--net=DENY|any|0.0.0.0/0|8080|IN"
     ])
     address: Tuple[str, int] = ("0.0.0.0", 8080)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, IN)
 
 
@@ -372,7 +372,7 @@ def test_bind_direction_check_first_rule_allow_implicitly_denies(
     rules,_ = parse_rules([
         "--net=ALLOW|any|0.0.0.0/0|80|IN"])  # ALLOW rule for different port
     address: Tuple[str, int] = ("127.0.0.1", 5000)
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, IN)
 
 
@@ -402,7 +402,7 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: patch) -> None:
     ])
     address: Tuple[str, int] = (hostname, port)
 
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -423,7 +423,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None
     address: Tuple[str, int] = (hostname, port)
 
     # Test with SOCK_STREAM
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, socket.SOCK_STREAM, address, OUT)
 
     # Rule ALLOWING 'any' type
@@ -431,7 +431,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None
     address: Tuple[str, int] = (hostname, port)
 
     # Test with SOCK_STREAM
-    with pytest.raises(RulesException):
+    with pytest.raises(SocketRulesException):
         _check_address_with_rules(rules, socket.SOCK_STREAM, address, OUT)
 
 

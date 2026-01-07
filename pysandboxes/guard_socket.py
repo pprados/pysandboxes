@@ -76,7 +76,7 @@ SocketRule = Tuple[str,
 Tuple[List[int], ipaddress.ip_network, Union[List[int], range]],
 str]
 
-class RulesException(RuntimeError):
+class SocketRulesException(RuntimeError):
     pass
 
 # FIXME: valider et propager
@@ -326,14 +326,14 @@ def _check_address_with_rules(
                                     action, rule_spec_str
                                 )
                                 if action == DENY:
-                                    raise RulesException(
+                                    raise SocketRulesException(
                                         f"Guard network connection to "
                                         f"{ip_host}:{destination_port} (from {hostname}) "
                                         f"explicitly {action} by rule "
                                         f"({action} {rule_spec_str})."
                                     )
                                 elif action == ALLOW:
-                                    raise RulesException(
+                                    raise SocketRulesException(
                                         f"Guard network connection to "
                                         f"{ip_host}:{destination_port} (from {hostname}) "
                                         f"explicitly {action} by rule "
@@ -344,7 +344,7 @@ def _check_address_with_rules(
             "Connection to %s (resolved to %s) port %s DENIED by implicit default policy (first rule was %s, no other rule explicitly matched).",
             hostname, unique_ips, destination_port, first_rule_action
         )
-        raise RulesException(
+        raise SocketRulesException(
             f"Guard network connection to {hostname} (port {destination_port}) "
             f"DENIED by implicit default (first rule: {first_rule_action}). Resolved IPs: {unique_ips}"
         )
@@ -429,10 +429,10 @@ class Guard_socket(socket.socket):
                 logger.warning(
                     "Unexpected address format for connect_ex: %s. Skipping IP rule check.",
                     address)
-        except RulesException as e:
+        except SocketRulesException as e:
             logger.error("Rule violation during connect_ex pre-check: %s", e)
             # Reraise to ensure connect_ex reflects the block, or map to an error code if preferred.
-            # For now, reraising the RulesException is consistent with connect().
+            # For now, reraising the SocketRulesException is consistent with connect().
             raise
         return super().connect_ex(address)
 

@@ -6,7 +6,7 @@ import pytest
 import gzip
 
 from pysandboxes.guard_files import activate_guard_files
-from .test_guard_io import files
+from .test_guard_io import files, str_activate_guard_files
 
 
 @pytest.fixture(autouse=True)
@@ -24,7 +24,7 @@ def test_gzip(files):
         f"--bind={files['bind_src']},{files['bind_dest']}",
     ]
 
-    activate_guard_files(rules)
+    str_activate_guard_files(rules)
 
     source = files["bound_file"]
     compressed = files["bound_file"].with_suffix(".gz")

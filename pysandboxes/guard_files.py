@@ -4,6 +4,7 @@ import functools
 import inspect
 import logging
 import os
+import io
 import pathlib
 import sys
 import typing
@@ -12,6 +13,9 @@ from pathlib import Path as _Path
 from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
+
+if io or os:
+    pass
 
 _Path_glob = _Path.glob
 _Path_rglob = _Path.rglob
@@ -25,6 +29,12 @@ _white_list = [
     '<frozen genericpath>',
     # FIXME "pathlib/_local.py",
 ]
+
+class RuleFileNotFoundError(FileNotFoundError):
+    pass
+
+class RulePermissionError(PermissionError):
+    pass
 
 
 # Internal representation of a rule
@@ -110,6 +120,8 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[st
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
                     real_path, rule.source):
                 return None
+        else:
+            assert ("Invalide rules")
     return path
 
 
@@ -134,7 +146,7 @@ def _apply_dest_to_src_rules(path: str,
                     return None
             if fake_path.startswith(rule.dest):
                 if not rule.write and write:
-                    raise PermissionError(f"Cannot write to {rule.dest}")  # FIXME: msg
+                    raise RulePermissionError(f"Cannot write to {rule.dest}")  # FIXME: msg
                 # FIXME: a supprimer ?
                 # if accept_source:
                 #     return original_path
@@ -145,6 +157,8 @@ def _apply_dest_to_src_rules(path: str,
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
                     fake_path, rule.source):
                 return None
+        else:
+            assert("Invalide rules")
     return path
 
 
@@ -173,7 +187,7 @@ def _wrap_filename(func: Callable, *, write: bool) -> Callable:
             file = file.path
         remapped = _apply_dest_to_src_rules(os.fspath(file), write=write)
         if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
         return func(remapped, *args, **kwargs)
 
     return wrapper
@@ -196,7 +210,7 @@ def _wrap_two_filenames(func: Callable, *,
         remapped_src = _apply_dest_to_src_rules(os.fspath(src), write=in_write)
         remapped_dest = _apply_dest_to_src_rules(os.fspath(dest), write=out_write)
         if remapped_src is None:
-            raise FileNotFoundError(f"Access to '{src}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{src}' is ignored by rule")
         return func(str(remapped_src), str(remapped_dest), *args, **kwargs)
 
     return wrapper
@@ -219,7 +233,7 @@ def _wrap_os_open(func: Callable) -> Callable:
                 flags & os.O_APPEND)
         remapped = _apply_dest_to_src_rules(os.fspath(file), write=need_to_write != 0)
         if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
         return func(remapped, flags, *args, **kwargs)
 
     return wrapper
@@ -232,7 +246,7 @@ def _wrap_os_getcwd(func: Callable) -> Callable:
         file = func(*args, **kwargs)
         remapped = _apply_src_to_dest_rules(os.fspath(file), accept_src=True)
         if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
         return str(remapped)
@@ -269,7 +283,7 @@ def _wrap_os_readlink(func: Callable) -> Callable:
             remapped = os.path.dirname(remapped_first) + "/" + remapped
         remapped = _apply_src_to_dest_rules(remapped)
         if not remapped:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
         return remapped
 
     return wrapper
@@ -399,7 +413,7 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
         file = func(remapped, *args, **kwargs)
         remapped = _apply_src_to_dest_rules(os.fspath(file))
         if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
         return remapped
 
     return wrapper
@@ -422,7 +436,7 @@ def _wrap_io_open(func: Callable) -> Callable:
                 "w" in mode or "a" in mode or "x" in mode or "+" in mode)
         remapped = _apply_dest_to_src_rules(os.fspath(file), write=need_to_write)
         if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
         return func(remapped, mode, *args, **kwargs)
 
     return wrapper
@@ -434,7 +448,7 @@ def _wrap_pathlib(func: Callable) -> Callable:
     def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
         remapped = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if remapped is None:
-            raise FileNotFoundError(f"Access to '{file}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
         return func(pathlib.Path(remapped), *args, **kwargs)
 
     return wrapper
@@ -448,7 +462,7 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
                     func(_Path(new_path), glob, *args, **kwargs)
                     if _apply_src_to_dest_rules(p) is not None)
         else:
-            raise FileNotFoundError(f"Access to '{self}' is ignored by rule")
+            raise RuleFileNotFoundError(f"Access to '{self}' is ignored by rule")
 
     return wrapper
 
@@ -487,9 +501,9 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         "os.removexattr",
         "os.setxattr",
         "os.getxattr",
-        "os.chflags",
-        "os.lchflags",
-        "os.lchmod",
+        # "os.chflags",
+        # "os.lchflags",
+        # "os.lchmod",
         "os.chown",
         "os.lchown",
         # -----------------
@@ -516,7 +530,6 @@ if "PYTEST_RUN_CONFIG" in os.environ:
                         sys.modules[__name__],
                         )
 
-
     def _deactivate_guard_files():
         restore_default_values(_memory,
                                sys.modules[__name__])
@@ -524,7 +537,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard_files(rules: List[str]) -> None:
+def activate_guard_files(rules: List[Files_Rules]) -> None:
     """
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.

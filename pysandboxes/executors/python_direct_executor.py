@@ -1,7 +1,7 @@
 import concurrent
 from concurrent.futures import Executor
 
-from pysandboxes.BasePythonExecutor import BaseThreadPoolPythonExecutor
+from .BasePythonExecutor import BaseThreadPoolPythonExecutor
 
 
 class DirectExecutor(Executor):
