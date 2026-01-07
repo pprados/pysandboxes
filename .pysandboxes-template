@@ -1,28 +1,58 @@
+# Why a python sandbox ?
+# =======================
+# Using a tool by an LLM is equivalent to making a Remote Procedure Call (RPC).
+# This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
+# environment helps limit accesses to minimal privileges.
+
+#######################################################################################
+# Select some variables for the sandbox
+# The --set-env option is used to set environment variables that will be visible within
+# the sandbox.
+# The syntax allows you to:
+#
+# 1. Assign a fixed value to an environment variable:
+#    --set-env VAR_NAME=value
+#    This sets VAR_NAME to value within the sandbox.
+#
+# 2. Assign a value based on the environment outside the sandbox, with an optional
+#    default value if needed,
+#    using a syntax similar to bash:
+#    --set-env VAR_NAME=${OUTSIDE_VAR:-default_value}
+#    This sets VAR_NAME to the value of OUTSIDE_VAR from the environment outside the
+#    sandbox. If OUTSIDE_VAR is not set, it uses default_value.
+#
+# 3. Replicate the values of variables that match a specific naming pattern:
+#    --set-env VAR_*=${VAR_*}
+#    This replicates all environment variables from outside the sandbox that match the
+#    pattern VAR_* into the sandbox.
+#
+# By using --set-env, you can control and manage the environment variables available
+# within your sandbox, ensuring that your applications have the necessary configuration.
+
+--set-env=HOME=/
+--set-env=USER=sandbox
+--set-env=*_API_KEY=${*_API_KEY}
+--unset-env=OPENAI_API_KEY
+
+
+#######################################################################################
+# In a sandbox, it is crucial to prohibit access to certain file patterns
+# that contain confidential data (e.g., .*). Additionally, it is important to
+# limit write access to specific directories or to mount a restricted number
+# of directories that are accessible within the sandbox.
+# The syntax --ignore=<glob_pattern> allows excluding certain files when using
+# Python file APIs. The syntax --bind=<src_dir>:<target_dir> maps a directory outside
+# the sandbox to a directory visible inside the sandbox (which must exist).
+# Additionally, --bind-ro does the same but limits access to the sandbox as read-only.
+#
 # Ignores all hidden files and .log files
 --ignore=.*
 --ignore=*.log
 
-# Binds the current directory to the root of the container
+# Binds the current directory to the root of the sandbox
 --ro-bind=${PWD},/
---ro-bind=/tmp,/TOTO
 
-# Select some variables for the sandbox
-#--set-env=HOME=/
-#--set-env=OPENAI_API_KEY=${OPENAI_API_KEY}
-#--set-env=MISTRAL_API_KEY=${MISTRAL_API_KEY}
-#--set-env=CODESTRAL_API_KEY=${CODESTRAL_API_KEY}
-#--set-env=ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-#--set-env=GROQ_API_KEY=${GROQ_API_KEY}
-#--set-env=GOOGLE_API_KEY=${GOOGLE_API_KEY}
-#--set-env=GEMINI_API_KEY=${GEMINI_API_KEY}
-#--set-env=COHERE_API_KEY=${COHERE_API_KEY}
-#--set-env=PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
-#--set-env=CLAUDE_API_KEY=${CLAUDE_API_KEY}
-#--set-env=LLAMA_API_KEY=${LLAMA_API_KEY}
-#--set-env=LLAMA_CLOUD_API_KEY=${LLAMA_CLOUD_API_KEY}
-
-
-
+#######################################################################################
 # Network rules management strategy:
 # There are two strategies: "allow" and "deny".
 # The first network rule indicates the default behavior.
@@ -39,15 +69,20 @@
 # - In whitelist mode (allow), the first rule might be "deny".
 # - In blacklist mode (deny), the first rule might be "allow".
 
-################## Whitelist strategy ##################
+# *** Whitelist strategy (recommanded) ***
 # Allow web access
 --net=ALLOW|any|0.0.0.0/0|80,443|OUT
 --net=ALLOW|any|::/0|80,443|OUT
 # TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
+## Allow Intranet
+#--net=ALLOW|any|10.0.0.0/8|*|OUT
+#--net=ALLOW|any|169.254.0.0/16|*|OUT
+#--net=ALLOW|any|172.16.0.0/12|*|OUT
+#--net=ALLOW|any|192.168.0.0/16|*|OUT
+#--net=ALLOW|any|fc00::/7|*|OUT
 
-
-################## Blacklist strategy ##################
-# (not recommanded)
+# *** Blacklist strategy  (not recommanded) ***
+# It's not recommanded to use this strategy, but it's a help to debug the rules.
 ## Deny localhost
 #--net=DENY|any|127.0.0.1|*|OUT
 #--net=DENY|any|::1|*|OUT
@@ -62,10 +97,16 @@
 ## Deny broadcast
 #--net=DENY|any|224.0.0.0/4|*|OUT
 #--net=DENY|any|ff00::/8|*|OUT
-#
-## Deny Intranet
-#--net=ALLOW|any|10.0.0.0/8|*|OUT
-#--net=ALLOW|any|169.254.0.0/16|*|OUT
-#--net=ALLOW|any|172.16.0.0/12|*|OUT
-#--net=ALLOW|any|192.168.0.0/16|*|OUT
-#--net=ALLOW|any|fc00::/7|*|OUT
+
+#######################################################################################
+# Limit python features in the sandbox
+--python-api=ALLOW:threads
+--python-api-import=ALLOW:numpy.*,pandas.*
+
+#######################################################################################
+# Limit syntax and features when executing python code (very useful for controlling
+# LLM-generated code)
+#--python-exec-provider=interpreter
+#--python-exec-import=ALLOW:threads
+#--python-exec=ALLOW:annotations,async,class,def
+

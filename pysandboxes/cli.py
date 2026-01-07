@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import List
 
 from pysandboxes.sandbox import activate_sandboxes
-
+from dotenv import load_dotenv
+load_dotenv()  # FIXME: a garder avec main ?
 
 def main() -> None:
     """
