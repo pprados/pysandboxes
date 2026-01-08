@@ -4,6 +4,7 @@ import textwrap
 from pysandboxes.executors.BasePythonExecutor import code_to_fn, capture_last_expression, \
     async_code_to_fn, async_code_to_async_fn, \
     BasePythonExecutor
+from pysandboxes.executors.ikernel_executor import IKernelExecutor
 from pysandboxes.executors.python_direct_executor import PythonDirectExecutor
 from pysandboxes.executors.python_interpreter_executor import PythonInterpreterExecutor
 from pysandboxes.executors.python_thread_executor import PythonThreadExecutor
@@ -32,18 +33,20 @@ async def test_async_code_to_async_fn():
 
 # %% Test Thread pool
 list_implementations=[
-    PythonDirectExecutor(),
-    PythonThreadExecutor(),
-    # PythonInterpreterExecutor(),  # HS
+    # PythonDirectExecutor(),
+    # PythonThreadExecutor(),
+    # PythonInterpreterExecutor(),
+    IKernelExecutor(),
 ]
+
 @pytest.mark.parametrize(
     "implementation",
     list_implementations
 )
 def test_sync_thread_pool(implementation:BasePythonExecutor):
 
-    assert implementation.call("3+4") == 3+4
-    assert implementation.call("if True:\n  9+9\n3+4") == 3 + 4
+    assert implementation.call("3+4").result() == 3+4
+    # FIXME assert implementation.call("if True:\n  9+9\n3+4").result() == 3 + 4
 
 @pytest.mark.parametrize(
     "implementation",

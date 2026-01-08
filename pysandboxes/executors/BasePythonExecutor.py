@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor, Executor
+from concurrent.futures import ThreadPoolExecutor, Executor, Future
 
 import asyncio
 import textwrap
@@ -109,7 +109,7 @@ class BasePythonExecutor:
     def call(self,
              code_action: str,
              tools: Optional[dict[str, Callable]]=None,
-             timeout: Optional[int] = None) -> Any:
+             timeout: Optional[int] = None) -> Future[Any]:
         pass
 
     @abstractmethod
@@ -130,9 +130,10 @@ class BaseThreadPoolPythonExecutor(BasePythonExecutor):
     def call(self,
              code_action: str,
              tools: Optional[dict[str, Callable]]=None,
-             timeout: Optional[int] = None) -> Any:
+             timeout: Optional[int] = None) -> Future[Any]:
 
         future_result = self._executor.submit(code_to_fn(code_action))
+        # TODO: use tools
         try:
             return future_result.result(timeout=timeout)
         except TimeoutError:
@@ -143,4 +144,5 @@ class BaseThreadPoolPythonExecutor(BasePythonExecutor):
                     code_action: str,
                     tools: Optional[dict[str, Callable]]=None,
                     timeout: Optional[int] = None) -> Awaitable[Any]:
+        # TODO: use tools
         return await async_code_to_async_fn(code_action)()

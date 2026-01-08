@@ -274,6 +274,11 @@ def activate_guard_python_api(rules: List[PythonAPIRules]) -> None:
     install_wrapper = not _rules
     _rules = rules
 
+    # TODO: voir sys.displayhook
+    # TODO:  if async_:
+    #                     await eval(code_obj, self.user_global_ns, self.user_ns)
+    #                 else:
+    #                     exec(code_obj, self.user_global_ns, self.user_ns)
     _activate_guard_import(rules)
     # import sys
     # if True:
