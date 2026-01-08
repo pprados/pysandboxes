@@ -1,15 +1,18 @@
 import base64
+import contextvars
 from typing import Any, Optional
 import pickle
 
 _is_in_sandbox=False
 
+_sandboxed=contextvars.ContextVar(
+    'sanboxed', default=False)
+
 def is_in_sandbox():
-    return _is_in_sandbox
+    return _sandboxed.get()
 
 def set_is_in_sandbox(value: bool):
-    global _is_in_sandbox
-    _is_in_sandbox = value
+    _sandboxed.set(value)
 
 def _to_b85(obj: Any) -> str:
     return base64.b85encode(

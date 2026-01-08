@@ -1,5 +1,4 @@
 import functools
-import functools
 import inspect
 import json
 import logging
@@ -10,18 +9,19 @@ from typing import Callable, Optional, Tuple
 import httpx
 
 from pysandboxes.remote.tools import _to_b85, _from_b85, is_in_sandbox
+from .daemon import HOST, PORT, PATH_RPC
 
 logger = logging.getLogger(__name__)
 
 # URL de votre serveur SSE
-SSE_SERVER_URL: str = "http://127.0.0.1:8000/sse/rpc"
+SSE_SERVER_URL: str = f"http://{HOST}:{PORT}{PATH_RPC}"
 
-token = "abc123"  # FIXME
+token = "abc123"  # FIXME: a gerer via un context dans l'appelant ?
 
 
-def _reraise(remove:int,tp, value, tb=None):
+def _reraise(remove: int, tp, value, tb=None):
     while remove:
-        remove -=1
+        remove -= 1
         if tb.tb_next:
             tb = tb.tb_next
     raise value.with_traceback(tb)
@@ -73,7 +73,10 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
     return module_name, callable_name
 
 
-def _sync_rpc(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+def _sync_rpc(func: Callable[..., Any],
+              timeout: float,
+              *args: Any,
+              **kwargs: Any) -> Any:
     global token
     # Use async context manager for httpx client
     with httpx.Client() as client:
@@ -82,6 +85,7 @@ def _sync_rpc(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         params = {
             "token": token,
             "session_id": "123",  # TODO
+            "timeout": timeout,
             "function": f"{module_name}:{callable_name}",
             "args": _to_b85(args),
             "kwargs": _to_b85(kwargs),
@@ -101,14 +105,17 @@ def _sync_rpc(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
                 if "result" in msg:
                     return _from_b85(msg["result"])
                 if "exception" in msg:
-                    _reraise(2,*_from_b85(msg["exception"]))
+                    _reraise(2, *_from_b85(msg["exception"]))
                 if "stdout" in msg:
                     print(msg["stdout"], end="")
                 if "stderr" in msg:
                     print(msg["stderr"], end="", file=sys.stderr)
 
 
-async def _async_rpc(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+async def _async_rpc(func: Callable[..., Any],
+                     timeout: float,
+                     *args: Any,
+                     **kwargs: Any) -> Any:
     global token
     # Use async context manager for httpx client
     async with httpx.AsyncClient() as client:
@@ -117,6 +124,7 @@ async def _async_rpc(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any
         params = {
             "token": token,
             "session_id": "123",  # TODO
+            "timeout": timeout,  # TODO
             "function": f"{module_name}:{callable_name}",
             "args": _to_b85(args),
             "kwargs": _to_b85(kwargs),
@@ -135,32 +143,34 @@ async def _async_rpc(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any
                 if "result" in msg:
                     return _from_b85(msg["result"])
                 if "exception" in msg:
-                    _reraise(1,*_from_b85(msg["exception"]))
+                    _reraise(1, *_from_b85(msg["exception"]))
                 if "stdout" in msg:
                     print(msg["stdout"], end="")
                 if "stderr" in msg:
                     print(msg["stderr"], end="", file=sys.stderr)
 
 
-def sandbox(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
-    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-        if not is_in_sandbox():
-            # Call original function with captured parameters
-            return await _async_rpc(func,*args, **kwargs)
+def sandbox(timeout: float = 0) -> Callable[..., Any]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            if not is_in_sandbox():
+                # Call original function with captured parameters
+                return await _async_rpc(func, timeout, *args, **kwargs)
+            else:
+                return await func(*args, **kwargs)
+
+        @functools.wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            if not is_in_sandbox():
+                # Call original function with captured parameters
+                return _sync_rpc(func, timeout, *args, **kwargs)
+            else:
+                return func(*args, **kwargs)
+
+        if inspect.iscoroutinefunction(func):
+            return async_wrapper
         else:
-            return await func(*args, **kwargs)
+            return sync_wrapper
 
-
-    @functools.wraps(func)
-    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-        if not is_in_sandbox():
-            # Call original function with captured parameters
-            return _sync_rpc(func,*args, **kwargs)
-        else:
-            return func(*args, **kwargs)
-
-    if inspect.iscoroutinefunction(func):
-        return async_wrapper
-    else:
-        return sync_wrapper
+    return decorator

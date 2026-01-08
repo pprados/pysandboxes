@@ -185,7 +185,7 @@ async def acatch_stdio(  # FIXME
 
     # Run the function within the new context.
     # The contextvars are automatically restored after this call.
-    # result: Dict[str, Any] = ctx.run(run_in_context)
+    # FIXME: bien dans le context ? result: Dict[str, Any] = ctx.run(run_in_context)
     result: Dict[str, Any] =await asyncio.create_task(run_in_context())
     result["stdout"] = captured_stdout.getvalue()
     result["stderr"] = captured_stderr.getvalue()

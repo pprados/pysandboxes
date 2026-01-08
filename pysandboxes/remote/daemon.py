@@ -3,9 +3,8 @@ import importlib
 import inspect
 import json
 import logging
-import sys
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Any, Tuple
+from typing import AsyncGenerator, List, Any
 from typing import Dict
 
 import uvicorn
@@ -13,7 +12,7 @@ from fastapi import FastAPI, Request, Body
 from fastapi.responses import StreamingResponse
 
 from pysandboxes.remote.catch_stdio import catch_stdio, acatch_stdio
-from pysandboxes.remote.tools import _from_b85, _to_b85, set_is_in_sandbox
+from pysandboxes.remote.tools import _from_b85, _to_b85
 
 logger = logging.getLogger(__name__)
 
@@ -21,93 +20,102 @@ from tblib import pickling_support
 
 pickling_support.install()
 
-HOST="127.0.0.1"
-PORT=8000
+HOST = "127.0.0.1"
+PORT = 8000
+PATH_RPC = "/rpc"
 
 @dataclass
 class RPCPayload(object):
     token: str
     session_id: str
+    timeout: float
     function: str
     args: str
     kwargs: str
 
 
+async def sandbox_daemon(
+        token: str,  # TODO: token
+        session_id: str,
+        function_id: str,
+        timeout: float, # TODO
+        args: List[Any],
+        kwargs: Dict[str, Any],
+) -> AsyncGenerator[str, None]:
+    module_name, function_name = function_id.split(':', 1)
+    module = importlib.import_module(module_name)
+    try:
+        function = getattr(module, function_name)
+    except AttributeError:
+        logger.warning("Function %s.%s() not found")
+        return
+    use_async = inspect.iscoroutinefunction(function)
+    logger.info(f"(%s) calling %s%s.%s(%s,%s)...",
+                session_id,
+                "async " if use_async else "",
+                module_name, function_name,
+                ",".join(map(repr, args)),
+                ",".join([f"{k}={repr(v)}" for k, v in kwargs.items()]))
+
+    stdio_queue = asyncio.Queue()
+
+    if use_async:
+        task = asyncio.create_task(
+            acatch_stdio(
+                stdio_queue,
+                function, kwargs, *args))
+    else:
+        task = asyncio.get_running_loop().run_in_executor(None,
+                                                          catch_stdio,
+                                                          stdio_queue,
+                                                          function,
+                                                          kwargs,
+                                                          *args,
+                                                          )
+    while stdio_queue:
+        # msg = stream_queue.get()  # sync mode
+        # msg = await loop.run_in_executor(None, stdio_queue.get)  # async mode
+        msg = await stdio_queue.get()
+        if "result" in msg:
+            eval_result = msg["result"]
+            break
+        elif "exception" in msg:
+            break
+        elif "stdout" in msg:
+            yield json.dumps(msg)
+        elif "stderr" in msg:
+            yield json.dumps(msg)
+    await task
+    result = task.result()
+    if "result" in result:
+        logger.info("(%s) ... return %s", session_id, repr(result["result"]))
+        result["result"] = _to_b85(result["result"])
+    if "exception" in result:
+        logger.info("(%s) ... raise %s", session_id,
+                    repr(result["exception"][1]))
+        result["exception"] = _to_b85(result["exception"])
+    result["session_id"] = session_id
+    yield json.dumps(result)
+
+
+# %%
+
+
 # TODO: def prepare_main(self, ns=None, /, **kwargs):
+# TODO: def prepare_sandbox(self, ns=None, /, **kwargs):
+# TODO: def after_sandbox(self, ns=None, /, **kwargs):
+
 def create_daemon() -> uvicorn.Server:
+
     app = FastAPI()
 
-    # A very basic "database" or configuration store for demonstration
-    # In a real app, this would come from a secure source (DB, config file, etc.)
-    VALID_AUTH_TOKENS: Dict[str, str] = {
-        "mysecrettoken123": "user_alpha",
-        "anothersecurekey": "user_beta"
-    }
+    @app.get("/")
+    async def ping(
+    ):
+        return {"message": "OK"}
 
-    async def sandbox_daemon(
-            token: str,  # TODO: token
-            session_id: str,
-            function_id: str,
-            args: List[Any],
-            kwargs: Dict[str, Any],
-    ) -> AsyncGenerator[str, None]:
-        module_name, function_name = function_id.split(':', 1)
-        module = importlib.import_module(module_name)
-        try:
-            function = getattr(module, function_name)
-        except AttributeError:
-            logger.warning("Function %s.%s() not found")
-            return
-        use_async = inspect.iscoroutinefunction(function)
-        logger.error(f"(%s) calling %s%s.%s(%s,%s)...",
-                     session_id,
-                     "async " if use_async else "",
-                     module_name, function_name,
-                     ",".join(map(repr, args)),
-                     ",".join([f"{k}={repr(v)}" for k, v in kwargs.items()]))
-
-        stdio_queue = asyncio.Queue()
-
-        if use_async:
-            task = asyncio.create_task(
-                acatch_stdio(
-                    stdio_queue,
-                    function, kwargs, *args))
-        else:
-            task = asyncio.get_running_loop().run_in_executor(None,
-                                                              catch_stdio,
-                                                              stdio_queue,
-                                                              function,
-                                                              kwargs,
-                                                              *args,
-                                                              )
-        while stdio_queue:
-            # msg = stream_queue.get()  # sync mode
-            # msg = await loop.run_in_executor(None, stdio_queue.get)  # async mode
-            msg = await stdio_queue.get()
-            if "result" in msg:
-                eval_result = msg["result"]
-                break
-            elif "exception" in msg:
-                break
-            elif "stdout" in msg:
-                yield json.dumps(msg)
-            elif "stderr" in msg:
-                yield json.dumps(msg)
-        await task
-        result = task.result()
-        if "result" in result:
-            logger.error("(%s) ... return %s", session_id, repr(result["result"]))
-            result["result"] = _to_b85(result["result"])
-        if "exception" in result:
-            logger.error("(%s) ... raise %s", session_id,
-                         repr(result["exception"][1]))
-            result["exception"] = _to_b85(result["exception"])
-        result["session_id"] = session_id
-        yield json.dumps(result)
-
-    @app.post("/sse/rpc")
-    async def sse_process_endpoint(
+    @app.post(PATH_RPC)
+    async def rpc_endpoint(
             request: Request,
             payload: RPCPayload = Body(...,
                                        description="Payload containing code and authentication token.")
@@ -122,6 +130,7 @@ def create_daemon() -> uvicorn.Server:
                 payload.token,
                 payload.session_id,
                 payload.function,
+                payload.timeout,
                 _from_b85(payload.args),
                 _from_b85(payload.kwargs),
             ),

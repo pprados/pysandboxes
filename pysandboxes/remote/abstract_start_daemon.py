@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pysandboxes.remote.tools import set_is_in_sandbox
+from pysandboxes.remote.tools import set_is_in_sandbox, is_in_sandbox
 
 
 class BaseStartDaemon(ABC):
     async def start(self) -> Any:
         set_is_in_sandbox(True)
-        return await self._start()
+        rc= await self._start()
+        assert is_in_sandbox()
 
     @abstractmethod
     async def _start(self) -> Any:
