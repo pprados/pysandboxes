@@ -1,19 +1,24 @@
+import asyncio
 from typing import Iterator
 
 import pytest
 
 from pysandboxes import sandbox
-from pysandboxes.remote.daemon import start_daemon, stop_daemon
+from pysandboxes.remote.providers import start_daemon, close_daemon
 
 
-# FIXME
+# See https://github.com/tortoise/tortoise-orm/issues/638
+@pytest.fixture(scope="session")
+def event_loop():
+    return asyncio.get_event_loop()
+
+
 @pytest.fixture(scope="module", autouse=True)
-def before_start_daemon() -> Iterator[None]:
-    import time
-    daemon, _ = start_daemon()
-    time.sleep(0.5)
+async def before_start_daemon() -> Iterator[None]:
+    await start_daemon("task")
+    await asyncio.sleep(0.5)
     yield
-    stop_daemon(daemon)
+    await close_daemon("task")
 
 
 @sandbox

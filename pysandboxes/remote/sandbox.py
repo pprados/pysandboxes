@@ -90,6 +90,7 @@ def _sync_rpc(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
                 "POST", SSE_SERVER_URL,
                 headers={"Accept": "text/event-stream"},
                 json=params,
+                follow_redirects=False,
                 timeout=None) as response:
             response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
 

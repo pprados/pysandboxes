@@ -1,6 +1,6 @@
 from importlib import metadata
 from .remote.sandbox import sandbox
-from .sandbox import activate_sandboxes
+from .guard_sandbox import activate_sandboxes
 
 try:
     __version__ = metadata.version(__package__)

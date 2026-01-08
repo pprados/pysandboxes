@@ -4,9 +4,8 @@ import inspect
 import json
 import logging
 import sys
-import threading
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Any
+from typing import AsyncGenerator, List, Any, Tuple
 from typing import Dict
 
 import uvicorn
@@ -34,7 +33,8 @@ class RPCPayload(object):
     kwargs: str
 
 
-def _create_daemon() -> uvicorn.Server:
+# TODO: def prepare_main(self, ns=None, /, **kwargs):
+def create_daemon() -> uvicorn.Server:
     app = FastAPI()
 
     # A very basic "database" or configuration store for demonstration
@@ -127,28 +127,8 @@ def _create_daemon() -> uvicorn.Server:
             ),
             media_type="text/event-stream"
         )
-
+    # TODO: https
     return uvicorn.Server(uvicorn.Config(app, host=HOST, port=PORT))
-
-
-def start_daemon(in_thread: bool = True) -> uvicorn.Server:
-    daemon = _create_daemon()
-
-    daemon_thread = threading.Thread(
-        target=asyncio.run,
-        args=(daemon.serve(),),
-        name="Sandbox Daemon",
-        daemon=True)
-    daemon_thread.start()
-    return daemon,daemon_thread
-
-
-def stop_daemon(daemon: uvicorn.Server) -> None:
-    daemon.shutdown()
-    # assert thread == _daemon_thread
-    # os.kill(os.getpid(), signal.SIGINT)
-    # thread.join()
-    # _daemon_thread=None
 
 
 def main():
@@ -156,8 +136,9 @@ def main():
     sys.stdin.close()
 
     set_is_in_sandbox(True)
-    _,thread=start_daemon(False)
-    thread.join()
+
+    server=create_daemon()
+    server.run()
 
 if __name__ == "__main__":
     # TODO: command line parameters

