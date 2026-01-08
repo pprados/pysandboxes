@@ -22,8 +22,6 @@ def test_eval_stream_with_error():
 
 
 def test_exec_stream():
-    import sys
-    assert sys.stdout
     assert (exec_stream(
         "import sys;print('hello');print('error',file=sys.stderr)",
         globals_dict=globals(),
@@ -34,8 +32,6 @@ def test_exec_stream():
 
 
 def test_exec_stream_with_error():
-    import sys
-    assert sys.stdout
     result = exec_stream(
         "import sys;print('hello');print('error',file=sys.stderr);10/0",
         globals_dict=globals(),

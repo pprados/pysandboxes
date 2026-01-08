@@ -108,6 +108,9 @@ def activate_sandboxes(
         envs: Dict[str, str] = os.environ,
         args_rules:Optional[List[str]]=None) -> None:
 
+    # 0. Close stdin
+    sys.stdin.close()
+
     # 1. try to find .pysandboxes in the caller module
     if args_rules is None:
         args_rules = []

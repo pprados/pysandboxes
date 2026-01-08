@@ -1,14 +1,17 @@
+import asyncio
 import contextvars
+import inspect
 import io
 import logging
-import sys
-from concurrent.futures import ThreadPoolExecutor, Executor
-from functools import partial
-import asyncio
 import queue
+import sys
+from concurrent.futures import Executor
+from functools import partial
 from typing import Any, Dict, Optional, Callable, Union
 
 logger = logging.getLogger(__name__)
+
+TQueue=Union[queue.Queue, asyncio.Queue]
 
 # TODO: put_nowait
 class QueueStringIO(io.StringIO):
@@ -19,10 +22,10 @@ class QueueStringIO(io.StringIO):
 
     def __init__(self,
                  type: str,
-                 queue: Optional[Union[queue.Queue,asyncio.Queue]]):
+                 queue: Optional[TQueue]):
         super().__init__()
         self.type = type
-        self._message_queue: Optional[Union[queue.Queue,asyncio.Queue]] = queue
+        self._message_queue: Optional[TQueue] = queue
         self._buffer: io.StringIO = io.StringIO()  # Underlying buffer for aggregated content
 
     def write(self, s: str) -> int:
@@ -32,7 +35,7 @@ class QueueStringIO(io.StringIO):
         """
         # Put the message in the queue, associated with the thread ID
         if self._message_queue:
-            if isinstance(asyncio.Queue):
+            if isinstance(self._message_queue,asyncio.Queue):
                 self._message_queue.put_nowait({self.type: s})
             else:
                 self._message_queue.put({self.type: s})
@@ -78,22 +81,69 @@ sys.stderr = WrapperIO(contextvars.ContextVar(
     'current_stderr', default=sys.stderr))
 
 
-def _catch_stream(
-        fn: Callable,
-        code_string: str,
-        # *,
-        globals_dict: Dict[str, Any] = None,
-        locals_dict: Dict[str, Any] = None,
-        queue: Optional[queue.Queue] = None,
-) -> Dict[str, Any]:
-    if globals_dict is None:
-        globals_dict = {}
-    if locals_dict is None:
-        locals_dict = {}
+# def cfatch_stdio(
+#         queue: Optional[TQueue],
+#         fn: Callable,
+#         kwargs:Dict[str,Any],
+#         *args: Any,
+# ) -> Dict[str, Any]:
+#     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=queue)
+#     captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=queue)
+#     eval_result: Any = None
+#
+#     # Create a new context for this operation
+#     # This ensures that contextvars changes are isolated to this specific call
+#     # and not visible to other parts of the thread that are not within this context.
+#     # This is particularly important for asynchronous code, but good practice here too.
+#     ctx = contextvars.copy_context()
+#
+#     def run_in_context():
+#         # Allows modification of eval_result from outer scope
+#         nonlocal eval_result
+#         # Set the context variables for the current context
+#         sys.stdout.set_context(captured_stdout)
+#         sys.stderr.set_context(captured_stderr)
+#         result:Dict[str,Any]
+#
+#         try:
+#             eval_result = fn(*args, **kwargs)
+#             result = {"result": eval_result}
+#             if queue:
+#                 queue.put(result)
+#             return result
+#         except Exception:
+#             # If an error occurs during eval, print it to stderr
+#             result = {"exception": sys.exc_info()}
+#             if queue:
+#                 queue.put(result)
+#             return result
+#
+#     # Run the function within the new context.
+#     # The contextvars are automatically restored after this call.
+#     result: Dict[str, Any] = ctx.run(run_in_context)
+#     result["stdout"] = captured_stdout.getvalue()
+#     result["stderr"] = captured_stderr.getvalue()
+#
+#     return result
+#
 
+def catch_stdio(  # FIXME
+        queue: Optional[TQueue],
+        fn: Callable,
+        kwargs: Dict[str, Any],
+        *args: Any,
+) -> Dict[str, Any]:
+    return asyncio.run(acatch_stdio(queue, fn, kwargs, *args)
+                )
+async def acatch_stdio(  # FIXME
+        queue: Optional[TQueue],
+        fn: Callable,
+        kwargs: Dict[str, Any],
+        *args: Any,
+) -> Dict[str, Any]:
     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=queue)
     captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=queue)
-    eval_result: Any = None
+    fn_result: Any = None
 
     # Create a new context for this operation
     # This ensures that contextvars changes are isolated to this specific call
@@ -101,31 +151,42 @@ def _catch_stream(
     # This is particularly important for asynchronous code, but good practice here too.
     ctx = contextvars.copy_context()
 
-    def run_in_context():
+    async def run_in_context():
         # Allows modification of eval_result from outer scope
-        nonlocal eval_result
+        nonlocal fn_result
         # Set the context variables for the current context
         sys.stdout.set_context(captured_stdout)
         sys.stderr.set_context(captured_stderr)
+        result:Dict[str,Any]
 
         try:
-            logger.error(f"Running code: {code_string}")  # FIXME
-            eval_result = fn(code_string, globals_dict, locals_dict)
-            result = {"result": eval_result}
+            use_async = inspect.iscoroutinefunction(fn)
+            if use_async:
+                fn_result = await fn(*args, **kwargs)
+            else:
+                fn_result= fn(*args, **kwargs)
+            result = {"result": fn_result}
             if queue:
-                queue.put(result)
+                if isinstance(queue, asyncio.Queue):
+                    queue.put_nowait(result)
+                else:
+                    queue.put(result)
             return result
         except Exception as e:
-            # If an error occurs during eval, print it to stderr
-            result = {"exception": e}
-            if queue:
-                print(f"PUT exception")
+            result = {
+                "exception": sys.exc_info(),
+            }
+
+            if isinstance(queue, asyncio.Queue):
+                queue.put_nowait(result)
+            else:
                 queue.put(result)
             return result
 
     # Run the function within the new context.
     # The contextvars are automatically restored after this call.
-    result: Dict[str, Any] = ctx.run(run_in_context)
+    # result: Dict[str, Any] = ctx.run(run_in_context)
+    result: Dict[str, Any] =await asyncio.create_task(run_in_context())
     result["stdout"] = captured_stdout.getvalue()
     result["stderr"] = captured_stderr.getvalue()
 
@@ -166,7 +227,7 @@ def _thread_catch_stream(
         raise result["exception"]
 
 
-eval_stream = partial(_catch_stream, eval)
-exec_stream = partial(_catch_stream, exec)
+eval_stream = partial(catch_stdio, eval)
+exec_stream = partial(catch_stdio, exec)
 thread_eval_stream = partial(_thread_catch_stream, eval_stream)
 thread_exec_stream = partial(_thread_catch_stream, exec_stream)
