@@ -129,17 +129,3 @@ def create_daemon() -> uvicorn.Server:
         )
     # TODO: https
     return uvicorn.Server(uvicorn.Config(app, host=HOST, port=PORT))
-
-
-def main():
-    # TODO: activate sandbox
-    sys.stdin.close()
-
-    set_is_in_sandbox(True)
-
-    server=create_daemon()
-    server.run()
-
-if __name__ == "__main__":
-    # TODO: command line parameters
-    main()

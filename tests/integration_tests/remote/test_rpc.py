@@ -16,7 +16,6 @@ def event_loop():
 @pytest.fixture(scope="module", autouse=True)
 async def before_start_daemon() -> Iterator[None]:
     await start_daemon("task")
-    await asyncio.sleep(0.5)
     yield
     await close_daemon("task")
 

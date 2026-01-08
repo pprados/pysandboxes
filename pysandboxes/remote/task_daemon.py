@@ -13,6 +13,7 @@ class TaskDaemon(BaseStartDaemon):
 
         logger.info("Sandbox Daemon in async task")
         self.task=asyncio.create_task(self.daemon.serve())
+        await asyncio.sleep(0.5)
 
     async def close(self) -> None:
         await self.daemon.shutdown()
