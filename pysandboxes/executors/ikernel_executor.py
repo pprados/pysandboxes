@@ -82,6 +82,7 @@ def _check_kernel_exists(kernel_name: str) -> bool:
 
 def _start_new_kernel(
         in_process: bool,
+        *,
         # FIXME: rendre paramétrable, S'assurer du stop des kernels
         startup_timeout: float = 2,
         shutdown_wait_time: float = 2,
@@ -92,6 +93,7 @@ def _start_new_kernel(
 ) -> Tuple[KernelManager, BlockingKernelClient]:
     """Start a new kernel, and return its Manager and Client"""
     # InProcessKernelManager est une piste pour forcer le sandbox
+    assert "kernel_name" in kwargs, "kernel_name must be specified"
     if not _check_kernel_exists(kwargs["kernel_name"]):
         if not display_name:
             display_name = kwargs["kernel_name"]
@@ -99,22 +101,25 @@ def _start_new_kernel(
             kwargs["kernel_name"],
             display_name=display_name)
 
-    km = InProcessKernelManager(**kwargs) if in_process else KernelManager(**kwargs)
+    # km = InProcessKernelManager(**kwargs) if in_process else KernelManager(**kwargs)
+    km = InProcessKernelManager(**kwargs) if in_process else KernelManager()
     # TODO: le provisioner semble être le ctr des kernels
     km.shutdown_wait_time = shutdown_wait_time
     km.ip = ip
     km.autorestart = autorestart
+    km.session.debug = True  # FIXME
     km.start_kernel()
     kc = km.client()
     kc.start_channels()
     try:
-        if not in_process:
-            kc.wait_for_ready(timeout=startup_timeout)
-    except RuntimeError:
-        kc.stop_channels()
+        # if not in_process:
+        #     kc.wait_for_ready(timeout=startup_timeout)
+        #     print("kernel ready")  # FIXME
+        pass
+    except RuntimeError as e:
+        kc.shutdown()
         km.shutdown_kernel()
         raise
-
     return km, kc
 
 
@@ -129,6 +134,7 @@ def _run_kernel(**kwargs: Any) -> Iterator[KernelClient]:
     kernel_client: connected KernelClient instance
     """
     km, kc = _start_new_kernel(**kwargs)
+    kc.session.debug = True
     try:
         yield kc
     finally:
@@ -145,6 +151,7 @@ class IKernelExecutor(BasePythonExecutor):
                  thread_name_prefix='',
                  initargs=(),
                  kernel_name='sandbox',
+                 # kernel_name='python3',
                  ):
         super().__init__()
         self._tp = ThreadPoolExecutor(
@@ -152,28 +159,31 @@ class IKernelExecutor(BasePythonExecutor):
             thread_name_prefix=thread_name_prefix,
             initargs=initargs)
         self.kernel_name = kernel_name
-        # TODO: in_process = True entraine que c'est dans le flux d'execution, pas de kill possible
+        # TODO: in_process = True entraine que pas de kill possible
         self.in_process = True  # TODO: faire une sous-classe avec in_process=True
 
-    def shutdown(self):
-        if self._km and self._km.is_alive():
-            self._km.shutdown_kernel(now=True)
-        self._km = None
-
-    def __del__(self):
-        self.shutdown()
-
+    # def shutdown(self):
+    #     if self._km and self._km.is_alive():
+    #         self._km.shutdown_kernel(now=True)
+    #     self._km = None
+    #
+    # def __del__(self):
+    #     self.shutdown()
+    #
+    # WARNING: Implémentation ou un kernel est lancé à chaque job.
     def call(self,
              code_action: str,
              tools: Optional[dict[str, Callable]] = None,
              timeout: Optional[int] = None) -> Any:
         def run():  # TODO: ajoute run timeout d'execution
-            timeout = 30  # FIXME
+            timeout = 120  # FIXME
+            # TODO: faire une sériat
             json_code_action = f"""
-from IPython.display import JSON
-JSON({{"result":{code_action}}})
+import pickle
+import base64
+{code_action}
 """
-
+            # json_code_action=code_action
             with _run_kernel(
                     in_process=self.in_process,  # FIXME
                     startup_timeout=timeout,
@@ -184,9 +194,14 @@ JSON({{"result":{code_action}}})
             ) as kc:
 
                 msg_id = kc.execute(json_code_action,
-                                    store_history=False,
-                                    allow_stdin=False,
-                                    silent=True,
+                                    # allow_stdin=False,
+                                    # silent=True,  # BUG: silent=True ne fonctionne pas
+                                    # C'est invoqué, mais cela ne remonte pas dans les messages
+                                    # Je n'ai pas trouvé pourquoi. C'est pourtant envoyé
+                                    user_expressions={
+                                        "result":
+                                            "base64.b64encode(pickle.dumps(_))"
+                                    },
                                     )
 
                 # 6. Boucle pour écouter les messages sur le canal iopub
@@ -198,7 +213,6 @@ JSON({{"result":{code_action}}})
 
                         # On vérifie que le message reçu est bien une réponse à notre requête
                         if msg['parent_header'].get('msg_id') == msg_id:
-                            # if True:
                             msg_type = msg['header']['msg_type']
                             content = msg['content']
 
@@ -216,8 +230,11 @@ JSON({{"result":{code_action}}})
                             elif msg_type == 'error':
                                 print(
                                     f"[ERROR] : {content['ename']} {content['evalue']}")
+                                return None  # FIXME
                             elif msg_type == 'execute_result':
                                 result = None
+                                if "user_expressions" in content:
+                                    print(f"********************* {content['user_expressions']}")
                                 if "application/json" in content["data"]:
                                     result = content["data"]["application/json"][
                                         "result"]
@@ -233,8 +250,8 @@ JSON({{"result":{code_action}}})
                                     "[Status] : Kernel inactif, l'exécution est terminée.")
 
                     except Empty:
-                        print("EMPRY LOOP")  # Ignore
-                        pass
+                        print("EMPTY LOOP")  # Ignore
+                        # return None  # FIXME
             return None  # FIXME: erreur
 
         return self._tp.submit(run)

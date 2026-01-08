@@ -1,17 +1,20 @@
+from typing import Iterator
+
 import pytest
 
 from pysandboxes import sandbox
+from pysandboxes.remote.daemon import start_daemon, stop_daemon
 
 
 # FIXME
-# @pytest.fixture(scope="module",autouse=True)
-# def before_start_daemon() -> Iterator[None]:
-#     print("Start Sandbox daemon")
-#     t=start_daemon()
-#     time.sleep(0.5)
-#     yield
-#     stop_daemon(t)
-#     print("Stop Sandbox daemon")
+@pytest.fixture(scope="module", autouse=True)
+def before_start_daemon() -> Iterator[None]:
+    import time
+    daemon, _ = start_daemon()
+    time.sleep(0.5)
+    yield
+    stop_daemon(daemon)
+
 
 @sandbox
 def sync_function(a: int, b: str) -> str:
@@ -34,21 +37,22 @@ async def test_async_function():
     result_async = await async_function("a", b="b")
     assert result_async == 'a b'
 
+
 @sandbox
 def sync_function_with_error(a: int, b: str) -> str:
-    return a/b
+    return a / b
 
 
 def test_sync_function_with_error():
     with pytest.raises(ZeroDivisionError):
-        sync_function_with_error(10,0)
+        sync_function_with_error(10, 0)
+
 
 @sandbox
 async def async_function_with_error(a: int, b: str) -> str:
-    return a/b
+    return a / b
 
 
 async def test_async_function_with_error():
     with pytest.raises(ZeroDivisionError):
-        sync_function_with_error(10,0)
-
+        sync_function_with_error(10, 0)

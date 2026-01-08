@@ -3,14 +3,13 @@ import importlib
 import inspect
 import json
 import logging
-import os
-import signal
 import sys
 import threading
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Any, Optional
+from typing import AsyncGenerator, List, Any
 from typing import Dict
 
+import uvicorn
 from fastapi import FastAPI, Request, Body
 from fastapi.responses import StreamingResponse
 
@@ -23,6 +22,8 @@ from tblib import pickling_support
 
 pickling_support.install()
 
+HOST="127.0.0.1"
+PORT=8000
 
 @dataclass
 class RPCPayload(object):
@@ -33,7 +34,7 @@ class RPCPayload(object):
     kwargs: str
 
 
-def _start_daemon():
+def _create_daemon() -> uvicorn.Server:
     app = FastAPI()
 
     # A very basic "database" or configuration store for demonstration
@@ -127,34 +128,37 @@ def _start_daemon():
             media_type="text/event-stream"
         )
 
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    return uvicorn.Server(uvicorn.Config(app, host=HOST, port=PORT))
 
-_daemon_thread: Optional[threading.Thread] = None
-def start_daemon(in_thread:bool=True) -> Optional[threading.Thread]:
-    if in_thread:
-        global _daemon_thread
-        _daemon_thread = threading.Thread(target=_start_daemon,
-                             name="Sandbox Daemon",
-                             daemon=True)
-        _daemon_thread.start()
-        return _daemon_thread
-    else:
-        _start_daemon()
-        return None
 
-def stop_daemon(thread: threading.Thread) -> None:
-    global _daemon_thread
-    assert thread == _daemon_thread
-    os.kill(os.getpid(), signal.SIGINT)
-    thread.join()
-    _daemon_thread=None
-    print("daemon stopped")
+def start_daemon(in_thread: bool = True) -> uvicorn.Server:
+    daemon = _create_daemon()
 
-if __name__ == "__main__":
+    daemon_thread = threading.Thread(
+        target=asyncio.run,
+        args=(daemon.serve(),),
+        name="Sandbox Daemon",
+        daemon=True)
+    daemon_thread.start()
+    return daemon,daemon_thread
 
+
+def stop_daemon(daemon: uvicorn.Server) -> None:
+    daemon.shutdown()
+    # assert thread == _daemon_thread
+    # os.kill(os.getpid(), signal.SIGINT)
+    # thread.join()
+    # _daemon_thread=None
+
+
+def main():
     # TODO: activate sandbox
     sys.stdin.close()
 
     set_is_in_sandbox(True)
-    start_daemon(False)
+    _,thread=start_daemon(False)
+    thread.join()
+
+if __name__ == "__main__":
+    # TODO: command line parameters
+    main()
