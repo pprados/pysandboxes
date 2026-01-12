@@ -96,7 +96,7 @@ def parse_guard_envs(
                 new_vars[key_pattern] = substitute_value(value_pattern)
         elif rule.startswith("--unset-env="):
             rule = rule[len("--unset-env="):]
-            del new_vars[rule]
+            new_vars.pop(rule,None)
         else:
             ignore_rules.append(rule.strip())
 

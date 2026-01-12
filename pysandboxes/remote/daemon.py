@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import importlib
 import inspect
@@ -7,7 +8,7 @@ import os
 import signal
 import sys
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Any
+from typing import AsyncGenerator, List, Any, Optional
 from typing import Dict
 
 import uvicorn
@@ -16,7 +17,6 @@ from fastapi.responses import StreamingResponse
 
 from . import PATH_RPC, HOST, PORT
 from .abstract_start_daemon import BaseStartDaemon
-from .catch_stdio import catch_stdio, acatch_stdio
 from .tools import _from_b85, _to_b85, is_in_sandbox, \
     set_is_in_sandbox
 
@@ -46,6 +46,8 @@ async def sandbox_daemon(
         args: List[Any],
         kwargs: Dict[str, Any],
 ) -> AsyncGenerator[str, None]:
+    from .catch_stdio import catch_stdio, acatch_stdio
+
     module_name, function_name = function_id.split(':', 1)
     module = importlib.import_module(module_name)
     try:
@@ -179,6 +181,27 @@ class _TaskDaemon(BaseStartDaemon):
 
 
 async def main():
+    parser = argparse.ArgumentParser(
+        description="Stard a Python-sandbox daemon inside --outer-sandbox argument."
+    )
+
+    # Add the --sandbox-provider argument
+    # type=str: Specifies that the argument's value should be treated as a string.
+    # help: Provides a description for the argument in the help message.
+    # default=None: Sets a default value if the argument is not provided.
+    parser.add_argument(
+        "--outer-sandbox",
+        type=str,
+        help="Specifies the \"outer\" sandbox provider (e.g., 'firejail', 'docker').",
+        default=None
+    )
+
+    # Parse the arguments provided by the user
+    args = parser.parse_args()
+
+    # Access the value of --sandbox-provider
+    outer_sandbox: Optional[str] = args.outer_sandbox
+    assert outer_sandbox,"--outer-sandbox is required"
     logging.basicConfig(level=logging.INFO)
 
     task_daemon = _TaskDaemon()

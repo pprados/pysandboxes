@@ -1,25 +1,27 @@
 import asyncio
 import logging
-import os
 import sys
 
-from pysandboxes.remote.process_daemon import ProcessDaemon
+from pysandboxes.remote.bwrap_daemon import BWrapDaemon
 from .abstract_start_daemon import BaseStartDaemon
+from .subprocess_daemon import SubProcessDaemon
 from .task_daemon import TaskDaemon
 
-_providers = {
+providers = {
     "task": TaskDaemon(),  # For debug. Impossible to activate sandbox in this mode.
-    "process": ProcessDaemon(),
+    "subprocess": SubProcessDaemon(),
+    "bwrap": BWrapDaemon(),
+    # "firejail": FireJailDaemon(),
 }
 
-DEFAULT_PROVIDER = "process"
+DEFAULT_PROVIDER = "subprocess"
 
 
 async def start_daemon(name: str = DEFAULT_PROVIDER) -> BaseStartDaemon:
-    if name not in _providers:
+    if name not in providers:
         raise ValueError(f"Unknown daemon name: {name}")
-    await _providers[name].start()
-    return _providers[name]
+    await providers[name].start()
+    return providers[name]
 
 
 async def main():
@@ -37,6 +39,8 @@ async def main():
 
 if __name__ == "__main__":
     try:
+        # import dotenv
+        # dotenv.load_dotenv()  # FIXME
         sys.exit(asyncio.run(main()))
     except SystemExit as e:
         sys.exit(e.code)

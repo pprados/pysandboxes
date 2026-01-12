@@ -5,10 +5,13 @@ import re
 import sys
 import types
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 from . import guard_files, guard_env
 from . import guard_socket
+from .guard_files import Files_Rules
+from .guard_socket import SocketRule
+from .tools import read_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,35 +37,6 @@ def get_caller_module(skip: int = 2) -> Optional[types.ModuleType]:
         module = inspect.getmodule(frame)
         return module
     return None
-
-
-def _read_config(
-        path: Path,
-) -> List[str]:
-    """
-    Reads a file, filters out empty lines and comments, and performs variable
-    substitution on the remaining lines.
-
-    Args:
-        path: The Path object pointing to the file to be read.
-        env_vars: A dictionary containing the environment-like variables
-                  for substitution.
-
-    Returns:
-        A list of strings, where each string is a processed and substituted
-        line from the file.
-    """
-
-    processed_lines: List[str] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            # We filter out empty lines and lines that are comments (start with #)
-            if stripped and not stripped.lstrip().startswith("#"):
-                # Apply the substitution to the valid line before appending it
-                processed_lines.append(line)
-
-    return processed_lines
 
 
 def _substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]:
@@ -102,14 +76,17 @@ def _substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str
 
     return [pattern.sub(substitute, line) for line in lines]
 
+AllRules=Tuple[
+    Dict[str,str],
+    str,
+    List[SocketRule],
+    List[Files_Rules]
+]
 
-def activate_sandboxes(
+def read_and_parse_config(
         envs: Dict[str, str] = os.environ,
-        args_rules:Optional[List[str]]=None) -> None:
-
-    # 0. Close stdin
-    sys.stdin.close()
-
+        args_rules:Optional[List[str]]=None
+) -> AllRules:
     # 1. try to find .pysandboxes in the caller module
     if args_rules is None:
         args_rules = []
@@ -135,7 +112,7 @@ def activate_sandboxes(
     body_from_users_or_os = []
     for path in known_paths:
         if path.exists():
-            body_from_users_or_os = _read_config(path)
+            body_from_users_or_os = read_config(path)
             break
     # 3. Merge all files
     rules = body_from_ressource + args_rules + body_from_users_or_os
@@ -143,6 +120,8 @@ def activate_sandboxes(
     # 4. Parse the rules, step by step
     sandbox_env, others =guard_env.parse_guard_envs(rules, envs)
     others = _substitute_env_vars(others, envs)
+    from pysandboxes import guard_provider
+    provider, others = guard_provider.parse_rules(others)
     socket_rules, others = guard_socket.parse_rules(others)
     files_rules, others = guard_files.parse_rules(others)
 
@@ -150,8 +129,28 @@ def activate_sandboxes(
     if others:
         for invalide_rule in others:
             logger.warning(f"Ignore invalid rule: {invalide_rule}")
+    return sandbox_env, provider, socket_rules,files_rules
 
-    # 6. Apply the rules
+
+known_paths = [
+    Path(".pysandboxes"),  # Current directory
+    Path("~/.config/pysandboxes/pysandboxes").expanduser(),
+    Path("~/.local/share/pysandboxes/pysandboxes").expanduser(),
+    Path("/etc/pysandboxes/pysandboxes"),
+    Path("/usr/share/pysandboxes/pysandboxes"),
+    Path("/var/lib/pysandboxes/pysandboxes"),
+]
+
+
+def activate_sandboxes(
+        envs: Dict[str, str] = os.environ,
+        args_rules:Optional[List[str]]=None,
+) -> None:
+
+    sandbox_env,provider,socket_rules,files_rules = read_and_parse_config(envs,args_rules)
+
+    # Apply the rules
+    sys.stdin.close()
     os.environ=sandbox_env
     guard_socket.activate_guard_socket(socket_rules)
     guard_files.activate_guard_files(files_rules)

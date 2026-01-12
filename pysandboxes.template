@@ -4,6 +4,8 @@
 # This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
 # environment helps limit accesses to minimal privileges.
 
+--sandbox-provider=firejail
+
 #######################################################################################
 # Select some variables for the sandbox
 # The --set-env option is used to set environment variables that will be visible within
@@ -41,7 +43,7 @@
 # limit write access to specific directories or to mount a restricted number
 # of directories that are accessible within the sandbox.
 # The syntax --ignore=<glob_pattern> allows excluding certain files when using
-# Python file APIs. The syntax --bind=<src_dir>:<target_dir> maps a directory outside
+# Python file APIs. The syntax --bind=<target_dir>:<src_dir> maps a directory outside
 # the sandbox to a directory visible inside the sandbox (which must exist).
 # Additionally, --bind-ro does the same but limits access to the sandbox as read-only.
 #
@@ -50,7 +52,8 @@
 --ignore=*.log
 
 # Binds the current directory to the root of the sandbox
---ro-bind=${PWD},/
+--ro-bind=${PWD},${PWD}
+--ro-bind=dist,/toto
 
 #######################################################################################
 # Network rules management strategy:

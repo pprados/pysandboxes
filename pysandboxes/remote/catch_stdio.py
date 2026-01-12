@@ -64,6 +64,19 @@ class WrapperIO(io.TextIOBase):
             self._old = self._context.get()
             self._context.set(new_textio)
 
+    def __getattr__(self, name: str) -> Any:
+        # Called only if attribute not found the usual way
+        if name in ["write","flush"]:
+            return super().__getattr__(name)
+        return getattr(self._target, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in ("write", "flush"):
+            # Assign _target to self, not to target
+            super().__setattr__(name, value)
+        else:
+            setattr(self._target, name, value)
+
     def __del__(self):
         if self._old:
             self._context.set(self._old)
