@@ -3,6 +3,7 @@ import logging
 import sys
 
 from pysandboxes.remote.bwrap_daemon import BWrapDaemon
+from pysandboxes.remote.firejail_daemon import FireJailDaemon
 from .abstract_start_daemon import BaseStartDaemon
 from .subprocess_daemon import SubProcessDaemon
 from .task_daemon import TaskDaemon
@@ -11,13 +12,16 @@ providers = {
     "task": TaskDaemon(),  # For debug. Impossible to activate sandbox in this mode.
     "subprocess": SubProcessDaemon(),
     "bwrap": BWrapDaemon(),
-    # "firejail": FireJailDaemon(),
+    "firejail": FireJailDaemon(),
+    # TODO: podman, https://www.redhat.com/en/blog/podman-inside-container https://www.redhat.com/en/blog/podman-inside-kubernetes
+    #  docker, lxc, ...
+    # docker alternative
 }
 
-DEFAULT_PROVIDER = "subprocess"
+DEFAULT_OS_SANDBOX = "firejail"
 
 
-async def start_daemon(name: str = DEFAULT_PROVIDER) -> BaseStartDaemon:
+async def start_daemon(name: str = DEFAULT_OS_SANDBOX) -> BaseStartDaemon:
     if name not in providers:
         raise ValueError(f"Unknown daemon name: {name}")
     await providers[name].start()

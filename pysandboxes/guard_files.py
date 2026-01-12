@@ -74,16 +74,20 @@ def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules], List[st
             value = line[len("--bind="):]
             try:
                 src, dest = value.split(",", 1)
+                if not src or not dest:
+                    raise ValueError(f"Invalid bind rule: {line}")
                 rules_bind.append(BindRule(source=src,
                                            dest=src,
                                            write=True))
             except ValueError:
                 raise ValueError(f"Invalid bind rule: {line}")
-        elif line.startswith("--ro-bind="):  # TODO: --ro-bind
+        elif line.startswith("--ro-bind="):
             value = line[len("--ro-bind="):]
             try:
                 src, dest = value.split(",", 1)
                 # TODO: assert exist
+                if not src or not dest:
+                    raise ValueError(f"Invalid bind rule: {line}")
                 rules_bind.append(BindRule(source=src.strip(),
                                            dest=dest.strip(),
                                            write=False))

@@ -1,10 +1,13 @@
+# TODO: --build=file  pour apprentissage
+
 # Why a python sandbox ?
 # =======================
 # Using a tool by an LLM is equivalent to making a Remote Procedure Call (RPC).
 # This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
 # environment helps limit accesses to minimal privileges.
 
---sandbox-provider=bwrap
+--os-sandbox=bwrap
+# TODO: --no-dotenv
 
 #######################################################################################
 # Select some variables for the sandbox
@@ -31,8 +34,13 @@
 # By using --set-env, you can control and manage the environment variables available
 # within your sandbox, ensuring that your applications have the necessary configuration.
 
---set-env=HOME=/
---set-env=USER=${USER:=sandbox}
+--set-env=HOME=${HOME}
+--set-env=USER=${USER}
+--set-env=LC_*=${LC_*}
+--set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+--set-env=LANG=${LANG}
+--set-env=TMP=/tmp
+--set-env=TEMP=/tmp
 --set-env=*_API_KEY=${*_API_KEY}
 --unset-env=OPENAI_API_KEY
 
@@ -53,8 +61,8 @@
 
 # Binds the current directory to the root of the sandbox
 --ro-bind=${PWD},${PWD}
---ro-bind=/dev/null,/dev/null
---ro-bind=dist,/toto
+#--ro-bind=/dev/null,/dev/null
+#--ro-bind=dist,/toto
 
 #######################################################################################
 # Network rules management strategy:

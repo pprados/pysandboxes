@@ -185,7 +185,7 @@ async def main():
         description="Stard a Python-sandbox daemon inside --outer-sandbox argument."
     )
 
-    # Add the --sandbox-provider argument
+    # Add the --outer-sandbox argument
     # type=str: Specifies that the argument's value should be treated as a string.
     # help: Provides a description for the argument in the help message.
     # default=None: Sets a default value if the argument is not provided.

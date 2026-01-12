@@ -17,3 +17,30 @@ Key security risks (based on the OWASP Top 10 for LLM Applications):
 - LLM05: Supply Chain Vulnerabilities — Malicious packages can be introduced via unverified MCP servers/tools.
 - LLM06: Information Disclosure — Revealing server details can aid attackers.
 - LLM09: Overreliance on AI — Unreviewed automation can lead to dangerous outcomes.
+
+
+# FAQ
+
+## Comment propager un token à une api dans la sandbox ?
+Remplacer:
+```python
+def call_llm():
+  ...
+```
+par
+
+```python
+import os
+from functools import partial
+
+def _call_llm(token: str):
+    ...
+
+
+call_llm = partial(_call_llm,token=os.environ["LLM_TOKEN"])
+```
+
+
+## Debug
+Pour connaitre précisément les paramètres utilisés pour lancer une os-sandbox, et tester le comportement,
+utilisez `python -m pysandboxes.remote.bash -v --os-sandbox=firejail`

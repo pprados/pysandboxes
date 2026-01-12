@@ -113,7 +113,7 @@ class BaseSubProcessDaemon(BaseStartDaemon):
         ]
 
     @abstractmethod
-    def bash_args(self) -> Tuple[str, Dict[str,Any]]:
+    def bash_args(self,envs:Dict[str,str]) -> Tuple[str, Dict[str,Any]]:
         pass
 
     async def _re_start(self) -> None:
@@ -206,11 +206,9 @@ class BaseSubProcessDaemon(BaseStartDaemon):
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
-    def bash_args(self) -> Tuple[str, Dict[str,Any]]:
-# '-c', 'PS1="$ "; export PS1; exec /bin/bash -i'
+    def bash_args(self,envs:Dict[str,str]) -> Tuple[str, Dict[str,Any]]:
         return ["/bin/bash",
-                # "--norc","--noprofile",
                 "-c",
-                "PS1='[sandbox-subprocess] $ '; "
+                "PS1='[os-sandbox-subprocess] $ '; "
                 "export PS1; "
                 "exec /bin/bash --norc --noprofile -i"],{}

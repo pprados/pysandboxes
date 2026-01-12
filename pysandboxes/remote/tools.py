@@ -5,8 +5,11 @@ import os
 import pickle
 import shutil
 import sys
+import textwrap
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Dict, Tuple
+
+import netifaces
 
 _is_in_sandbox=False
 
@@ -37,14 +40,14 @@ known_paths = [
     Path("/usr/local/bin/"),
 ]
 
-def which_command(command: Path) -> Path:
+def which_command(command: str) -> Optional[Path]:
 
     for path in known_paths:
         if (path / command).exists():
             return path / command
     full_path=shutil.which(command)
     if not full_path:
-        raise FileNotFoundError(f"Command {command} not found")
+        return None
     return Path(full_path)
 
 def get_venv() -> str | None:
@@ -80,3 +83,102 @@ def configure_logging_level(verbose_count: int) -> None:
         log_level = logging.NOTSET
 
     logging.getLogger().setLevel(log_level)
+
+def get_default_gateway_info() -> Optional[Tuple[str,str]]:
+    gws: Dict[str, Any] = netifaces.gateways()
+
+    # Retrieve default IPv4 gateway
+    try:
+        if netifaces.AF_INET in gws['default']:
+            # The structure for default gateway is (gateway_ip, interface_name, is_primary)
+            ipv4_gateway_data = gws['default'][netifaces.AF_INET]
+            return ipv4_gateway_data
+
+        # Retrieve default IPv6 gateway
+        if netifaces.AF_INET6 in gws['default']:
+            # The structure for default gateway is (gateway_ip, interface_name, is_primary)
+            ipv6_gateway_data = gws['default'][
+                netifaces.AF_INET6]
+            return ipv6_gateway_data
+    except KeyError:
+        # No default gateway found for the specified address family
+        pass
+    return None
+
+
+import sys # Import the sys module to access system-specific parameters and functions
+import subprocess # Import the subprocess module to run external commands
+
+def suggest_package_installation(package_name: str) -> str:
+    """
+    Suggests how to install a given package based on the detected operating system and Linux distribution.
+
+    Args:
+        package_name (str): The name of the package to suggest installation for.
+    """
+    system: str = sys.platform # Get the operating system name (e.g., 'linux', 'darwin', 'win32')
+
+    if system.startswith('linux'):
+        # Try to identify the specific Linux distribution
+        distro_info: dict[str, str] = {}
+        try:
+            # Read /etc/os-release for detailed distribution information
+            with open('/etc/os-release', 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        distro_info[key] = value.strip('"')
+        except FileNotFoundError:
+            # Fallback for older systems that might use /etc/lsb-release
+            try:
+                with open('/etc/lsb-release', 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            distro_info[key] = value.strip('"')
+            except FileNotFoundError:
+                pass # No specific distro info found
+
+        distro_id: str = distro_info.get('ID', '').lower() # Get the ID of the distribution
+
+        if distro_id == 'ubuntu' or distro_id == 'debian':
+            return f"sudo apt update && sudo apt install {package_name}"
+        elif distro_id == 'fedora':
+            return f"sudo dnf install {package_name}"
+        elif distro_id == 'centos' or distro_id == 'rhel':
+            return f"sudo yum install {package_name}"
+        elif distro_id == 'arch':
+            return f"sudo pacman -S {package_name}"
+        else:
+            # Fallback for unknown or other Linux distributions
+            return textwrap.dedent(f"""
+                You can try installing '{package_name}' using common package managers like:
+                sudo apt update && sudo apt install {package_name}  (Debian/Ubuntu based systems)
+                sudo yum install {package_name}          (CentOS/RHEL based systems)
+                sudo dnf install {package_name}          (Fedora based systems)
+                sudo pacman -S {package_name}            (Arch Linux based systems)
+                Please refer to your distribution's documentation for the correct command.
+                """).trim()
+
+    elif system == 'darwin':
+        # For macOS, suggest Homebrew
+        return textwrap.dedent(f"""
+            /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
+            brew install {package_name}
+            """).strip()
+    elif system == 'win32':
+        # For Windows, suggest Winget or Chocolatey
+        return textwrap.dedent(f"""
+            You can try installing '{package_name}' using:")
+              winget install {package_name}            (Windows Package Manager)
+              choco install {package_name}             (Chocolatey - if installed)
+            You might need to install Winget or Chocolatey first if you don't have them.
+            """).strip()
+    else:
+        # For other or unknown systems
+        return textwrap.dedent(f"""
+            Your operating system ({system}) is not explicitly supported.
+            Please refer to the documentation for '{package_name}' to find installation instructions for your system.
+            """).strip()

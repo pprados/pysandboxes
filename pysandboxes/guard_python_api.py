@@ -14,6 +14,16 @@ _valide_features = {
     "importlib",
 }
 
+# TODO: inspiration https://man7.org/linux/man-pages/man1/firejail.1.html
+# To help creating useful seccomp filters more easily, the
+#               following system call groups are defined: @aio, @basic-io,
+#               @chown, @clock, @cpu-emulation, @debug, @default, @default-
+#               nodebuggers, @default-keep, @file-system, @io-event, @ipc,
+#               @keyring, @memlock, @module, @mount, @network-io,
+#               @obsolete, @privileged, @process, @raw-io, @reboot,
+#               @resources, @setuid, @swap, @sync, @system-service and
+#               @timer.  More information about groups can be found in
+#               /usr/share/doc/firejail/syscalls.txt
 # TODO Lors de la désérialisation d'un flux pickle, Python exécute les instructions
 #  contenues dans le flux pour reconstruire l'objet. Si un attaquant peut modifier ou
 #  injecter un flux pickle malveillant, il peut inclure des instructions qui appellent

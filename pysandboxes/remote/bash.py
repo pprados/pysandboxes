@@ -7,9 +7,10 @@ import pty
 import sys
 import tty
 
+import dotenv
 import termios
 
-from pysandboxes.remote.providers import DEFAULT_PROVIDER
+from pysandboxes.remote.os_sandbox import DEFAULT_OS_SANDBOX
 from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon
 from pysandboxes.remote.tools import configure_logging_level
 
@@ -165,9 +166,9 @@ async def run_bash_in_pty(*args, **kwargs) -> None:
         )
 
         print(
-            "bash launched, you can interact with it in conditions similar to "
+            "Bash launched, you can interact with it in conditions similar to "
             "the sandbox.\r"
-            "Type 'exit' to quit bash.\r")
+            "Type 'exit' to quit bash.\r\n\r")
         # Wait for the bash subprocess to terminate
         return_code: int = await process.wait()
         logger.debug(f"bash terminated with exit code: {return_code}\r")
@@ -209,7 +210,7 @@ async def run_bash_in_pty(*args, **kwargs) -> None:
 
 
 async def main():
-    from pysandboxes.remote.providers import providers
+    from pysandboxes.remote.os_sandbox import providers
 
     parser = argparse.ArgumentParser(
         description="A script demonstrating command-line argument parsing for log verbosity.",
@@ -228,20 +229,29 @@ async def main():
 
     # Add the --sandbox-provider argument
     parser.add_argument(
-        '--sandbox-provider',
+        '--os-sandbox', "-p",
         type=str,
         default=None,
-        help='Specify the sandbox provider (e.g., "docker", "gvisor", "firecracker").'
+        help='Specify the os-sandbox provider (e.g., "subprocess","firejail", "bwrap", "TODO").',
+        metavar="<PROVIDER>",
     )
     args = parser.parse_args()
 
     configure_logging_level(args.verbose)
 
-    provider = providers.get(args.sandbox_provider or DEFAULT_PROVIDER)
+    provider = providers.get(args.os_sandbox or DEFAULT_OS_SANDBOX)
     assert isinstance(provider,
-                      BaseSubProcessDaemon), "The provider must be a BaseSubProcessDaemon"
-    args, kwargs = provider.bash_args()
-    await run_bash_in_pty(*args, **kwargs)
+                      BaseSubProcessDaemon), "The os-sandbox provider must be a BaseSubProcessDaemon"
+    envs=dotenv.dotenv_values()
+    envs={"PWD":"/home/pprados/workspace.bda/langgraph-codeagent"}  # FIXME
+    sandbox_args, kwargs = provider.bash_args(envs)
+    if args.verbose >0:
+        print("#!/bin/bash\n"+
+            sandbox_args[0]+" "+
+              " \\\n  ".join(param if " " not in param else repr(param)for param in sandbox_args[1:])+
+              "\n",
+              file=sys.stderr)
+    await run_bash_in_pty(*sandbox_args, **kwargs)
 
 
 if __name__ == "__main__":

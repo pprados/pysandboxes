@@ -11,7 +11,7 @@ from . import guard_files, guard_env
 from . import guard_socket
 from .guard_files import Files_Rules
 from .guard_socket import SocketRule
-from .tools import read_config
+from .tools import read_config, substitute_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -38,43 +38,6 @@ def get_caller_module(skip: int = 2) -> Optional[types.ModuleType]:
         return module
     return None
 
-
-def _substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]:
-    """
-    The function supports two substitution formats:
-    1. ${VAR_NAME}: Replaces the placeholder with the value of VAR_NAME from
-       the env_vars dictionary. If the variable is not found, it's replaced
-       with an empty string.
-    2. ${VAR_NAME:-default_value}: Replaces the placeholder with the value of
-       VAR_NAME if it exists in env_vars. Otherwise, it uses the provided
-       default_value.
-
-    """
-    # This regular expression is designed to find all occurrences of the
-    # ${...} pattern.
-    # - Group 1 ([a-zA-Z0-9_]+): Captures the variable name. It consists of
-    #   one or more alphanumeric characters or underscores.
-    # - Group 2 (?:-...): Is an optional non-capturing group for the default value.
-    # - Group 3 (.*?): Captures the default value itself, if present.
-    #   The '?' makes the default value group optional.
-    pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::\-(.*?))?\}")
-
-    def substitute(match: re.Match) -> str:
-        """
-        This nested function is called by re.sub for each match found.
-        It performs the actual replacement logic.
-        """
-        var_name = match.group(1)
-        default_value = match.group(2)  # This will be None if no default is provided
-
-        # Use the variable from env_vars if it exists.
-        # Otherwise, use the captured default_value.
-        # If default_value is also None (the :- part was absent),
-        # this expression results in an empty string.
-        return env_vars.get(var_name,
-                            default_value if default_value is not None else "")
-
-    return [pattern.sub(substitute, line) for line in lines]
 
 AllRules=Tuple[
     Dict[str,str],
@@ -119,7 +82,7 @@ def read_and_parse_config(
 
     # 4. Parse the rules, step by step
     sandbox_env, others =guard_env.parse_guard_envs(rules, envs)
-    others = _substitute_env_vars(others, envs)
+    others = substitute_env_vars(others, envs)
     from pysandboxes import guard_provider
     provider, others = guard_provider.parse_rules(others)
     socket_rules, others = guard_socket.parse_rules(others)
