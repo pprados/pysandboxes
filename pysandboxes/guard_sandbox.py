@@ -65,12 +65,12 @@ def read_and_parse_config(
 
     # 2. try to find .pysandboxes in special directories
     known_paths = [
-        Path(".pysandboxes"),  # Current directory
-        Path("~/.config/pysandboxes/pysandboxes").expanduser(),
-        Path("~/.local/share/pysandboxes/pysandboxes").expanduser(),
-        Path("/etc/pysandboxes/pysandboxes"),
-        Path("/usr/share/pysandboxes/pysandboxes"),
-        Path("/var/lib/pysandboxes/pysandboxes"),
+        Path(".py-sandbox"),  # Current directory
+        Path("~/.config/pysandboxes/py-sandbox").expanduser(),
+        Path("~/.local/share/pysandboxes/py-sandbox").expanduser(),
+        Path("/etc/pysandboxes/py-sandbox"),
+        Path("/usr/share/pysandboxes/py-sandbox"),
+        Path("/var/lib/pysandboxes/py-sandbox"),
     ]
     body_from_users_or_os = []
     for path in known_paths:

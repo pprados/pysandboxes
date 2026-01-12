@@ -42,6 +42,7 @@ import logging
 import os
 import socket
 import sys
+from ipaddress import IPv4Network
 from typing import Tuple, Optional, Union, List, Dict
 
 logger = logging.getLogger(__name__)
@@ -76,14 +77,16 @@ SocketRule = Tuple[str,
 Tuple[List[int], ipaddress.ip_network, Union[List[int], range]],
 str]
 
+
 class SocketRulesException(RuntimeError):
     pass
 
+
 # FIXME: valider et propager
-def _rule_to_str(rule: SocketRule)  -> str:
+def _rule_to_str(rule: SocketRule) -> str:
     (action,
      (rule_types, network_obj, rule_ports_list),
-     rule_direction_from_rule)  = rule
+     rule_direction_from_rule) = rule
     rule_types_str = [socket.SocketKind(t).name for t in
                       rule_types] if rule_types else ["any"]
     return f"types={','.join(rule_types_str)}, net={network_obj}, ports={rule_ports_list}, dir={conn_direction}"
@@ -92,15 +95,20 @@ def _rule_to_str(rule: SocketRule)  -> str:
 _rules: List[SocketRule] = []
 
 SPEC_TO_TYPE_MAP: Dict[str, int] = {
-    "tcp": socket.SOCK_STREAM,
-    "udp": socket.SOCK_DGRAM,
+    "tcp": socket.IPPROTO_TCP,
+    "udp": socket.IPPROTO_UDP,
+    # "icmp": socket.IPPROTO_ICMP,
+    # "icmpv6": socket.IPPROTO_ICMPV6,
+    # "any": -1,
+    # "*": -1,
 }
 
 
-def _parse_rule(rule: str) -> Optional[SocketRule]:
+def _parse_rule(rule: str) -> Optional[List[SocketRule]]:
     if not rule.startswith("--net="):
-        return None
+        return []
     # Remove prefix "--net="
+    socket_rules=[]
     value_part = rule[len("--net="):]
     # Split by '|' expecting 5 parts: ACTION | SOCKET_SPECS | NETWORK_STR | PORT_SPEC_STR | DIRECTION_STR
     rule_components = value_part.split('|', 4)  # Maxsplit is 4 for 5 parts
@@ -127,15 +135,17 @@ def _parse_rule(rule: str) -> Optional[SocketRule]:
         # 'any' means parsed_rule_families and parsed_rule_types remain empty (wildcard for both)
     else:
         for spec_part in specs_input:
-            if spec_part in SPEC_TO_TYPE_MAP:
+            if spec_part in ["any", "*"]:
+                parsed_rule_types = []
+            elif spec_part in SPEC_TO_TYPE_MAP:
                 parsed_rule_types.append(SPEC_TO_TYPE_MAP[spec_part])
             else:
                 raise ValueError(
                     f"Rule has unknown socket specifier '{spec_part}' in '{socket_specs_str}'. "
-                    f"Valid specifiers: 'any', 'ipv4', 'ipv6', 'tcp', 'udp'. Rule: {rule}")
+                    f"Valid specifiers: {', '.join(SPEC_TO_TYPE_MAP.keys())}. Rule: {rule}")
 
         # Remove duplicates and sort for consistency
-        parsed_rule_families = sorted(list(set(parsed_rule_families)))
+        parsed_rule_families = sorted(list(set(parsed_rule_families)))  # FIXME
         parsed_rule_types = sorted(list(set(parsed_rule_types)))
     if not isinstance(network_str, str) or not network_str.strip():
         raise ValueError(
@@ -146,26 +156,36 @@ def _parse_rule(rule: str) -> Optional[SocketRule]:
     if direction not in (IN, OUT):
         raise ValueError(
             f"Direction '{direction}' is not '{IN}' or '{OUT}'. Rule: {rule}")
+    def _finish_rule(network):
+        ports_list_or_range = _convert_ports_range(port_spec_str)
+        if not ports_list_or_range and port_spec_str.strip() not in ('',
+                                                                     '*'):
+            raise ValueError(
+                f"Invalid or empty port specification '{port_spec_str}' ('{rule}') "
+                f"that does not resolve to any ports (and is not '*' or empty string "
+                f"for 'any port' if applicable).")
+        return action, (parsed_rule_types, network, ports_list_or_range), direction
+
     try:
-        network = ipaddress.ip_network(network_str, strict=False)
+        return [_finish_rule(ipaddress.ip_network(network_str, strict=False))]
     except ValueError as e:
-        raise ValueError(
-            f"Invalid network specification '{network_str}' ('{rule}'): {e}")
-    ports_list_or_range = _convert_ports_range(port_spec_str)
-    if not ports_list_or_range and port_spec_str.strip() not in ('',
-                                                                 '*'):
-        raise ValueError(
-            f"Invalid or empty port specification '{port_spec_str}' ('{rule}') that does not resolve to any ports (and is not '*' or empty string for 'any port' if applicable).")
-    return action, (parsed_rule_types, network, ports_list_or_range), direction
+        try:
+            _,_,networks = socket.gethostbyname_ex(network_str)
+            return [_finish_rule(ipaddress.ip_network(network, strict=False))  for network in networks]
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid network specification '{network_str}' ('{rule}') "
+                f"that does not resolve to any network.") from e
+
 
 
 def parse_rules(rules: List[str]) -> Tuple[List[SocketRule], List[str]]:
     socket_rules = []
     ignore_rules = []
     for rule_str in rules:
-        parsed_rule = _parse_rule(rule_str)
-        if parsed_rule:
-            socket_rules.append(parsed_rule)
+        parsed_rules = _parse_rule(rule_str)
+        if parsed_rules:
+            socket_rules.extend(parsed_rules)
         else:
             ignore_rules.append(rule_str)
     return socket_rules, ignore_rules
@@ -181,12 +201,12 @@ def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
 
     Returns:
         A sorted list of integers representing individual ports and expanded ranges,
-        or a range(0, 65536) if '*' is specified. Returns an empty list for invalid syntax.
+        or a range(0, 65535) if '*' is specified. Returns an empty list for invalid syntax.
     """
     if not syntaxe:
         return []
     if syntaxe.strip() == '*':
-        return range(65536)  # Represents all ports
+        return range(65535)  # Represents all ports
     ports = set()
     max_port = 65535  # Maximum valid port number
     elements = syntaxe.split(',')
@@ -222,7 +242,7 @@ def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
                         raise ValueError(
                             f"End port {end} in range '{element}' is out of valid range (0-{max_port}).")
                 if start <= end:
-                    ports.update(range(start, end + 1))
+                    ports.add(range(start, end + 1))
                 else:
                     raise ValueError(
                         f"Invalid range: start port {start} is greater than end port {end} in '{element}'.")
@@ -238,7 +258,17 @@ def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
                 ports.add(port)
             except ValueError:
                 raise ValueError(f"Invalid port number '{element}'.")
-    return sorted(list(ports))
+    if len(ports) == 1:
+        first = next(iter(ports))
+        if isinstance(first, range):
+            return first
+    list_port = set()
+    for port in ports:
+        if isinstance(port, range):
+            list_port.update(list(port))
+        else:
+            list_port.add(port)
+    return sorted(list_port)
 
 
 def _check_address_with_rules(
@@ -307,8 +337,8 @@ def _check_address_with_rules(
     for rule_type_to_check in order_apply:
         for ip_host in unique_ips:
             for (action,
-                           (rule_types, network_obj, rule_ports_list),
-                           rule_direction_from_rule) in rules:
+                 (rule_types, network_obj, rule_ports_list),
+                 rule_direction_from_rule) in rules:
                 if action == rule_type_to_check:
                     type_match = (not rule_types) or (
                             socket_instance_type in rule_types)
@@ -356,6 +386,195 @@ def _check_address_with_rules(
         return
 
 
+# %%
+_map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
+_map_netfilter_direction = {"OUT": "OUTPUT", "IN": "INPUT"}
+_map_netfilter_type = {
+    socket.IPPROTO_TCP: "tcp",
+    socket.IPPROTO_UDP: "udp",
+    socket.IPPROTO_ICMP: "icmp",
+    socket.IPPROTO_IPV6: "icmp",
+    socket.IPPROTO_ICMPV6: "icmpv6",
+    # -1: "any",  # 0 means "any
+}
+
+
+def _build_netfilter(rule_type,
+                     network_obj, rule_direction_from_rule, rule_ports_list,
+                     dest: str,
+                     ipv6: bool = False) -> str:
+    if rule_type in [socket.IPPROTO_ICMP, socket.IPPROTO_ICMPV6]:
+        sdport = ''
+    elif isinstance(rule_ports_list, range):
+        if rule_ports_list != range(65535):
+            sdport = f'-m multiport --{dest}ports {rule_ports_list.start}:{rule_ports_list.stop - 1} '
+        else:
+            sdport = ''
+    else:
+        sdport = f'-m multiport --{dest}ports ' + ','.join(
+            map(str, rule_ports_list)) + ' '
+
+    network = ''
+    if not ipv6:
+        if not isinstance(network_obj, ipaddress.IPv4Network):
+            return ""
+        if network_obj.compressed != '0.0.0.0/0':
+            network = f'-d {network_obj.compressed} '
+    else:
+        if not isinstance(network_obj, ipaddress.IPv6Network):
+            return ""
+        if network_obj.compressed != '::/0':
+            network = f'-d {network_obj.compressed} '
+    if rule_type in [socket.IPPROTO_TCP]:
+        if dest == "d":
+            cstate = "-m conntrack --ctstate NEW,ESTABLISHED "
+        else:
+            cstate = "-m conntrack --ctstate ESTABLISHED "
+    else:
+        cstate = ""
+    ip_rule = (
+        f"{network}"
+        f"{sdport}"
+        f"{cstate}"
+    )
+    return ip_rule
+
+
+def _build_port(rule_ports_list):
+    if isinstance(rule_ports_list, range):
+        if rule_ports_list != range(65535):
+            s_port = f'{rule_ports_list.start}:{rule_ports_list.stop - 1} '
+        else:
+            s_port = None
+    else:
+        s_port = ','.join(map(str, rule_ports_list))
+    return s_port
+
+
+def _build_network(network_obj, ipv6: bool):
+    network = ''
+    if not ipv6:
+        if not isinstance(network_obj, ipaddress.IPv4Network):
+            return ""
+        if network_obj.compressed != '0.0.0.0/0':
+            network = f'-d {network_obj.compressed} '
+    else:
+        if not isinstance(network_obj, ipaddress.IPv6Network):
+            return ""
+        if network_obj.compressed != '::/0':
+            network = f'-d {network_obj.compressed} '
+    return network
+
+def rule_to_netfilter(socket_rules: List[SocketRule],
+                      is_ipv6: bool) -> List[str]:
+    # TODO: ajouter -A INPUT -i lo -j ACCEPT pour l'input du daemon ?
+    netfilter = [
+        "*filter",
+        ":INPUT DROP [0:0]",
+        ":FORWARD DROP [0:0]",
+        ":OUTPUT DROP [0:0]",
+    ]
+    if is_ipv6:
+        exclude = [socket.AF_INET, socket.IPPROTO_ICMP]
+    else:
+        exclude = [socket.AF_INET6, socket.IPPROTO_ICMPV6]
+    for (action,
+         (rule_types, network_obj, rule_ports_list),
+         rule_direction_from_rule) in socket_rules:
+
+        if not rule_types:
+            rule_types = set(SPEC_TO_TYPE_MAP.values())
+        for rule_type in rule_types:
+
+            if is_ipv6 and isinstance(network_obj,IPv4Network):
+                continue
+            elif not is_ipv6 and isinstance(network_obj, ipaddress.IPv6Network):
+                continue
+            if rule_type in [socket.IPPROTO_TCP]:
+                if rule_direction_from_rule == "OUT":
+                    s_ports = _build_port(rule_ports_list)
+                    if s_ports:
+                        multiport=f"-m multiport --dports {s_ports} "
+                    else:
+                        multiport=''
+                    network = _build_network(network_obj, is_ipv6)
+                    ip_rule = (
+                            f"-A INPUT "
+                            f"-p tcp "
+                            f"{network}"
+                            f"{multiport}"
+                            f"-m conntrack --ctstate NEW,ESTABLISHED "
+                            f"-j {_map_netfilter_action[action]} "
+                    )
+                    netfilter.append(ip_rule)
+                    if s_ports:
+                        multiport=f"-m multiport --sports {s_ports} "
+                    else:
+                        multiport=''
+                    ip_rule = (
+                            f"-A OUTPUT "
+                            f"-p tcp "
+                            f"{network}"
+                            f"{multiport}"
+                            f"-m conntrack --ctstate ESTABLISHED "
+                            f"-j {_map_netfilter_action[action]} "
+                    )
+                    netfilter.append(ip_rule)
+                else:
+                    s_ports = _build_port(rule_ports_list)
+                    if s_ports:
+                        multiport=f"-m multiport --sports {s_ports} "
+                    else:
+                        multiport=''
+                    network = _build_network(network_obj, is_ipv6)
+                    ip_rule = (
+                            f"-A INPUT "
+                            f"-p tcp "
+                            f"{network}"
+                            f"{multiport}"
+                            f"-m conntrack --ctstate NEW,ESTABLISHED "
+                            f"-j {_map_netfilter_action[action]} "
+                    )
+                    netfilter.append(ip_rule)
+                    if s_ports:
+                        multiport=f"-m multiport --dports {s_ports} "
+                    else:
+                        multiport=''
+                    ip_rule = (
+                            f"-A OUTPUT "
+                            f"-p tcp "
+                            f"{network}"
+                            f"{multiport}"
+                            f"-m conntrack --ctstate ESTABLISHED "
+                            f"-j {_map_netfilter_action[action]} "
+                    )
+                    netfilter.append(ip_rule)
+            elif rule_type in [socket.IPPROTO_UDP]:
+                #-A OUTPUT -p udp --dport 53 -j ACCEPT
+                #-A INPUT -p udp --sport 53 -j ACCEPT
+                s_ports = _build_port(rule_ports_list)
+                if rule_direction_from_rule == "IN":
+                    sd="s"
+                else:
+                    sd="d"
+                if s_ports:
+                    multiport = f"-m multiport --{sd}ports {s_ports} "
+                else:
+                    multiport = ''
+                ip_rule = (
+                    f"-A {_map_netfilter_direction[rule_direction_from_rule]} "
+                    f"-p udp "
+                    f"{multiport}"
+                    f"-j {_map_netfilter_action[action]} "
+                )
+                netfilter.append(ip_rule)
+            else:
+                pass  # TODO
+
+    netfilter.append("COMMIT")
+    return netfilter
+
+
 _get_rules = lambda: []
 
 
@@ -366,7 +585,6 @@ class Guard_socket(socket.socket):
     Example: "--net=ALLOW|tcp|192.168.1.0/24|80,443|OUT"
     SOCKET_SPECS: "any", "tcp", "udp", or comma-separated combinations.
     """
-
 
     def _check_address(self, address: Tuple[str, int], conn_direction: str):
         rules = Guard_socket.get_rules()

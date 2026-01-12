@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]:
@@ -41,32 +41,71 @@ def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]
     return [pattern.sub(substitute, line) for line in lines]
 
 
-def read_config(
-        path: Path,
-) -> List[str]:
+def read_config(path: Path) -> List[str]:
     """
-    Reads a file, filters out empty lines and comments, and performs variable
-    substitution on the remaining lines.
+    Reads a file, filters out empty lines and comments, and handles end-of-line comments
+    while respecting quotes.
 
     Args:
         path: The Path object pointing to the file to be read.
-        env_vars: A dictionary containing the environment-like variables
-                  for substitution.
 
     Returns:
-        A list of strings, where each string is a processed and substituted
-        line from the file.
+        A list of strings, where each string is a processed line from the file
+        with comments removed and empty lines filtered out.
     """
-
     processed_lines: List[str] = []
+
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            stripped = line.strip()
-            # We filter out empty lines and lines that are comments (start with #)
-            if stripped and not stripped.lstrip().startswith("#"):
-                # Apply the substitution to the valid line before appending it
-                processed_lines.append(line.strip())
+            # Remove end-of-line comments while respecting quotes
+            cleaned_line: str = _remove_comment(line.strip())
+
+            # Filter out empty lines and lines that are full comments
+            if cleaned_line and not cleaned_line.lstrip().startswith("#"):
+                processed_lines.append(cleaned_line)
 
     return processed_lines
 
 
+def _remove_comment(line: str) -> str:
+    """
+    Removes comments from a line while respecting quotes.
+
+    Args:
+        line: The line to process
+
+    Returns:
+        Line without comment
+    """
+    result: List[str] = []
+    in_quotes: bool = False
+    quote_char: Optional[str] = None
+    i: int = 0
+
+    while i < len(line):
+        char: str = line[i]
+
+        # Handle quotes (single or double)
+        if char in ['"', "'"] and not in_quotes:
+            in_quotes = True
+            quote_char = char
+            result.append(char)
+        elif char == quote_char and in_quotes:
+            # Check if the quote is escaped
+            if i > 0 and line[i - 1] == '\\':
+                result.append(char)
+            else:
+                in_quotes = False
+                quote_char = None
+                result.append(char)
+        # If we find a # and we're not inside quotes
+        elif char == '#' and not in_quotes:
+            # Stop here, this is the start of the comment
+            break
+        else:
+            result.append(char)
+
+        i += 1
+
+    # Remove trailing whitespace
+    return ''.join(result).rstrip()

@@ -167,8 +167,8 @@ async def run_bash_in_pty(*args, **kwargs) -> None:
 
         print(
             "Bash launched, you can interact with it in conditions similar to "
-            "the sandbox.\r"
-            "Type 'exit' to quit bash.\r\n\r")
+            "the sandbox. \r"
+            "Type 'exit' to quit bash.\r\n\r",flush=True)
         # Wait for the bash subprocess to terminate
         return_code: int = await process.wait()
         logger.debug(f"bash terminated with exit code: {return_code}\r")

@@ -60,6 +60,7 @@
 --ignore=*.log
 
 # Binds the current directory to the root of the sandbox
+# TODO: vérifier les impacts écritures. Est-ce bien visible ?
 --ro-bind=${PWD},${PWD}
 #--ro-bind=/dev/null,/dev/null
 #--ro-bind=dist,/toto
@@ -83,8 +84,17 @@
 
 # *** Whitelist strategy (recommanded) ***
 # Allow web access
---net=ALLOW|any|0.0.0.0/0|80,443|OUT
---net=ALLOW|any|::/0|80,443|OUT
+--net=ALLOW|tcp|0.0.0.0/0|80,443|OUT
+--net=ALLOW|tcp|127.0.0.1/32|8080|IN
+--net=ALLOW|tcp|localhost|80,443|OUT
+
+# FIXME: devrait n'etre qu'en TLS
+--net=ALLOW|tcp|0.0.0.0/0|443|OUT
+--net=ALLOW|udp|0.0.0.0/0|53|OUT
+--net=ALLOW|udp|0.0.0.0/0|53|IN
+
+
+
 # TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
 # TODO: valider le DENY + ALLOW|any|0.0.0.0/0|80,443|OUT
 ## Allow Intranet

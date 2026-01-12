@@ -1,40 +1,25 @@
 import re
-
-import pytest
-import socket
-import ipaddress
-from unittest.mock import patch
-import pytest
-import re
-from typing import Union, List
-import pytest
 import \
     socket  # Required for socket.SOCK_STREAM etc. if used directly in this file, though not for these specific tests
-from typing import Union, List, Tuple, \
-    Any  # Tuple and Any might be used elsewhere, keeping for consistency
+from typing import Union, List, \
+    Tuple  # Added Tuple and Any for mock_getaddrinfo clarity
+from unittest.mock import patch
 
-# Assuming _convert_ports_range is imported from your module
-from pysandboxes.guard_socket import _convert_ports_range, _deactivate_guard_sockets, \
-    parse_rules, SocketRulesException
-
-from pysandboxes.guard_socket import _convert_ports_range
-
-from typing import Union, List, Tuple, \
-    Any  # Added Tuple and Any for mock_getaddrinfo clarity
+import pytest
 
 from pysandboxes.guard_socket import (
     _check_address_with_rules,
-    DENY,
-    ALLOW,
     IN,
     OUT,
-    _convert_ports_range, SocketRule, _parse_rule
+    _convert_ports_range, SocketRule
 )
+# Assuming _convert_ports_range is imported from your module
+from pysandboxes.guard_socket import _deactivate_guard_sockets, \
+    parse_rules, SocketRulesException
+
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from pysandboxes.guard_files import _deactivate_guard_files
-
     yield
     _deactivate_guard_sockets()
 

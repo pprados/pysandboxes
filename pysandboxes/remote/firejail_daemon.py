@@ -2,11 +2,13 @@ import logging
 import os
 import shlex
 import sys
+import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict
 
 from pysandboxes.guard_files import BindRule, IgnoreRule
 from pysandboxes.guard_sandbox import read_and_parse_config
+from pysandboxes.guard_socket import rule_to_netfilter
 from pysandboxes.remote import daemon
 from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon
 from pysandboxes.remote.tools import which_command, get_venv, get_default_gateway_info, \
@@ -15,22 +17,9 @@ from pysandboxes.tools import read_config, substitute_env_vars
 
 logger = logging.getLogger(__name__)
 
+DEBUG = False
 
-#   "--env=PYTHONSTARTUP="
-#   --rlimit-as=${RLIMIT} \
-#   --rlimit-cpu=${TIME_OUT} \
-#   --rlimit-fsize=${FSIZE} \
-#   --rlimit-nproc=${NPROC} \
-#   --rlimit-nofile=${NOFILE} \
-#   --rlimit-sigpending=1 \
-#   --machine-id \
-#   --nice=${NICE} \
-# 	--profile=python.profile \
-# 	--hostname=python-sandbox \
-# 	--whitelist=${PWD} \
-# 	--whitelist=${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages \
-# 	--whitelist=${VIRTUAL_ENV}/include/* \
-# 	--bind=${VIRTUAL_ENV}/lib/python${PYTHON_VERSION}/site-packages,/usr/local/lib/python${PYTHON_VERSION}/site-packages \
+
 class FireJailDaemon(BaseSubProcessDaemon):
     def _firejail_args(self, envs: Dict[str, str]) -> List[str]:
 
@@ -94,11 +83,31 @@ class FireJailDaemon(BaseSubProcessDaemon):
         if socket_rules:
             gw = get_default_gateway_info()
             if gw:
-                args.append(f"--defaultgw={gw[0]}")
-                args.append(f"--net={gw[1]}")
-            for rule in socket_rules:
+                # FIXME: pour le dns, j'ai besoin de la gateway localhost
+                # C'est bon si le dns est externe et non localhost
+                # args.append(f"--defaultgw={gw[0]}")
+                # args.append(f"--net={gw[1]}")
                 pass
 
+            net_filter4 = rule_to_netfilter(socket_rules, is_ipv6=False)
+            netfilter_file = tempfile.NamedTemporaryFile(mode='w+t',
+                                                         delete=False,  # TODO: manager tmp file?
+                                                         encoding='utf-8').name
+            if DEBUG:
+                netfilter_file = "netfilter.net"  # FIXME: en mode debug ?
+            Path(netfilter_file).write_text("\n".join(net_filter4))
+            args.append(f"--netfilter={netfilter_file}")
+
+            net_filter6 = rule_to_netfilter(socket_rules, is_ipv6=True)
+            netfilter6_file = tempfile.NamedTemporaryFile(mode='w+t',
+                                                          delete=False,  # TODO: manager tmp file?
+                                                          encoding='utf-8').name
+            if DEBUG:
+                netfilter6_file = "netfilter6.net"  # FIXME: en mode debug ?
+            Path(netfilter_file).write_text("\n".join(net_filter4))
+            args.append(f"--netfilter6={netfilter6_file}")
+
+        # TODO: nefilter6
         # TODO: Add tmp rules
         # --tmpfs DEST
 
@@ -122,5 +131,6 @@ class FireJailDaemon(BaseSubProcessDaemon):
         args.extend([
             "PS1=[os-sandbox-firejail] $ ",
             "/bin/bash", "--norc", "--noprofile", "-i",
+            # "wget", "-T", "1", "http://octo.com",  # FIXME
         ])
         return args, {}
