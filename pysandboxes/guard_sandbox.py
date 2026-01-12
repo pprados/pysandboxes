@@ -1,8 +1,6 @@
 import inspect
 import logging
 import os
-import re
-import sys
 import types
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
@@ -39,16 +37,17 @@ def get_caller_module(skip: int = 2) -> Optional[types.ModuleType]:
     return None
 
 
-AllRules=Tuple[
-    Dict[str,str],
+AllRules = Tuple[
+    Dict[str, str],
     str,
     List[SocketRule],
     List[Files_Rules]
 ]
 
+
 def read_and_parse_config(
         envs: Dict[str, str] = os.environ,
-        args_rules:Optional[List[str]]=None
+        args_rules: Optional[List[str]] = None
 ) -> AllRules:
     # 1. try to find .pysandboxes in the caller module
     if args_rules is None:
@@ -81,7 +80,7 @@ def read_and_parse_config(
     rules = body_from_ressource + args_rules + body_from_users_or_os
 
     # 4. Parse the rules, step by step
-    sandbox_env, others =guard_env.parse_guard_envs(rules, envs)
+    sandbox_env, others = guard_env.parse_guard_envs(rules, envs)  # TODO: a virer lors outer !
     others = substitute_env_vars(others, envs)
     from pysandboxes import guard_provider
     provider, others = guard_provider.parse_rules(others)
@@ -92,7 +91,7 @@ def read_and_parse_config(
     if others:
         for invalide_rule in others:
             logger.warning(f"Ignore invalid rule: {invalide_rule}")
-    return sandbox_env, provider, socket_rules,files_rules
+    return sandbox_env, provider, socket_rules, files_rules
 
 
 known_paths = [
@@ -107,15 +106,25 @@ known_paths = [
 
 def activate_sandboxes(
         envs: Dict[str, str] = os.environ,
-        args_rules:Optional[List[str]]=None,
+        args_rules: Optional[List[str]] = None,
+        *,
+        outer_sandbox: str = None
 ) -> None:
+    from .remote.subprocess_daemon import BaseSubProcessDaemon
 
-    sandbox_env,provider,socket_rules,files_rules = read_and_parse_config(envs,args_rules)
+    sandbox_env, os_sandbox, socket_rules, files_rules = read_and_parse_config(envs,
+                                                                             args_rules)
+
+    if outer_sandbox:
+        from .remote.os_sandbox import providers
+        if outer_sandbox not in providers:
+            raise ValueError(f"Unknown os-sandbox name: {outer_sandbox}")
+        provider = providers[outer_sandbox]
+        sandbox_env, os_sandbox, socket_rules, files_rules = provider.update_rules(envs)
+        assert isinstance(provider, BaseSubProcessDaemon)
 
     # Apply the rules
-    sys.stdin.close()
-    os.environ=sandbox_env
+    # sys.stdin.close()  # FIXME
+    os.environ = sandbox_env
     guard_socket.activate_guard_socket(socket_rules)
     guard_files.activate_guard_files(files_rules)
-
-

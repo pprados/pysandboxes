@@ -1,15 +1,21 @@
+import asyncio
 import functools
 import inspect
 import json
 import logging
 import sys
-from typing import Any
+from multiprocessing import Lock
+from time import sleep
+from typing import Any, TypeVar
 from typing import Callable, Optional, Tuple
 
 import httpx
 
+from . import HOST, PORT, PATH_RPC, DELAY_FOR_START_DAEMON
+from .abstract_start_daemon import BaseStartDaemon
+from .os_sandbox import start_daemon, async_start_daemon
 from .tools import _to_b85, _from_b85, is_in_sandbox
-from . import HOST, PORT, PATH_RPC
+from ..guard_sandbox import read_and_parse_config
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +24,31 @@ SSE_SERVER_URL: str = f"http://{HOST}:{PORT}{PATH_RPC}"
 
 token = "abc123"  # FIXME: a gerer via un context dans l'appelant ?
 
+_daemon_started: bool = False
+_lock = Lock()
+def _lazy_start_daemon() -> None:
+    global _daemon_started, _lock
+    with _lock:
+        if not _daemon_started:
+            log_level = logging.root.getEffectiveLevel()
+            _, os_sandbox, *_ = read_and_parse_config()
+            if os_sandbox != "prestarted": # FIXME
+                start_daemon(os_sandbox, log_level)
+                _daemon_started=True
+    sleep(DELAY_FOR_START_DAEMON)
+    pass
+
+_alock = asyncio.Lock()
+async def _async_lazy_start_daemon() -> None:
+    global _daemon_started, _alock
+    async with _alock:
+        if not _daemon_started:
+            log_level = logging.root.getEffectiveLevel()
+            _, os_sandbox, *_ = read_and_parse_config()
+            await async_start_daemon(os_sandbox,log_level)
+            _daemon_started=True
+    await asyncio.sleep(DELAY_FOR_START_DAEMON)
+    pass
 
 def _reraise(remove: int, tp, value, tb=None):
     while remove:
@@ -78,10 +109,13 @@ def _sync_rpc(func: Callable[..., Any],
               *args: Any,
               **kwargs: Any) -> Any:
     global token
+    _lazy_start_daemon()
     # Use async context manager for httpx client
     with httpx.Client() as client:
         # Stream the response from the SSE endpoint
         module_name, callable_name = get_callable_info(func)
+        if module_name == "__main__":
+            raise ValueError("Cannot call functions defined in __main__ module")
         params = {
             "token": token,
             "session_id": "123",  # TODO
@@ -117,6 +151,7 @@ async def _async_rpc(func: Callable[..., Any],
                      *args: Any,
                      **kwargs: Any) -> Any:
     global token
+    _lazy_start_daemon()
     # Use async context manager for httpx client
     async with httpx.AsyncClient() as client:
         # Stream the response from the SSE endpoint
@@ -150,7 +185,10 @@ async def _async_rpc(func: Callable[..., Any],
                     print(msg["stderr"], end="", file=sys.stderr)
 
 
-def sandbox(timeout: float = 0) -> Callable[..., Any]:
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., Any]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -173,4 +211,7 @@ def sandbox(timeout: float = 0) -> Callable[..., Any]:
         else:
             return sync_wrapper
 
-    return decorator
+    if _func is None:
+        return decorator
+    else:
+        return decorator(_func)

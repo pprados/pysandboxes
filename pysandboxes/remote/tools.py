@@ -4,23 +4,26 @@ import logging
 import os
 import pickle
 import shutil
-import sys
+import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
 from pathlib import Path
 from typing import Any, Optional, Dict, Tuple
 
 import netifaces
 
-_is_in_sandbox=False
+_is_in_sandbox = False
 
-_sandboxed=contextvars.ContextVar(
+_sandboxed = contextvars.ContextVar(
     'sanboxed', default=False)
+
 
 def is_in_sandbox():
     return _sandboxed.get()
 
+
 def set_is_in_sandbox(value: bool):
     _sandboxed.set(value)
+
 
 def _to_b85(obj: Any) -> str:
     return base64.b85encode(
@@ -34,21 +37,23 @@ def _from_b85(b85: str) -> Any:
         base64.b85decode(b85.encode("utf-8")),
     )
 
+
 known_paths = [
     Path("/bin/"),
     Path("/usr/bin/"),
     Path("/usr/local/bin/"),
 ]
 
-def which_command(command: str) -> Optional[Path]:
 
+def which_command(command: str) -> Optional[Path]:
     for path in known_paths:
         if (path / command).exists():
             return path / command
-    full_path=shutil.which(command)
+    full_path = shutil.which(command)
     if not full_path:
         return None
     return Path(full_path)
+
 
 def get_venv() -> str | None:
     """
@@ -84,7 +89,8 @@ def configure_logging_level(verbose_count: int) -> None:
 
     logging.getLogger().setLevel(log_level)
 
-def get_default_gateway_info() -> Optional[Tuple[str,str]]:
+
+def get_default_gateway_info() -> Optional[Tuple[str, str]]:
     gws: Dict[str, Any] = netifaces.gateways()
 
     # Retrieve default IPv4 gateway
@@ -106,9 +112,6 @@ def get_default_gateway_info() -> Optional[Tuple[str,str]]:
     return None
 
 
-import sys # Import the sys module to access system-specific parameters and functions
-import subprocess # Import the subprocess module to run external commands
-
 def suggest_package_installation(package_name: str) -> str:
     """
     Suggests how to install a given package based on the detected operating system and Linux distribution.
@@ -116,7 +119,7 @@ def suggest_package_installation(package_name: str) -> str:
     Args:
         package_name (str): The name of the package to suggest installation for.
     """
-    system: str = sys.platform # Get the operating system name (e.g., 'linux', 'darwin', 'win32')
+    system: str = sys.platform  # Get the operating system name (e.g., 'linux', 'darwin', 'win32')
 
     if system.startswith('linux'):
         # Try to identify the specific Linux distribution
@@ -139,9 +142,10 @@ def suggest_package_installation(package_name: str) -> str:
                             key, value = line.split('=', 1)
                             distro_info[key] = value.strip('"')
             except FileNotFoundError:
-                pass # No specific distro info found
+                pass  # No specific distro info found
 
-        distro_id: str = distro_info.get('ID', '').lower() # Get the ID of the distribution
+        distro_id: str = distro_info.get('ID',
+                                         '').lower()  # Get the ID of the distribution
 
         if distro_id == 'ubuntu' or distro_id == 'debian':
             return f"sudo apt update && sudo apt install {package_name}"
@@ -182,3 +186,38 @@ def suggest_package_installation(package_name: str) -> str:
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for '{package_name}' to find installation instructions for your system.
             """).strip()
+
+
+def configure_logging_level(verbose_count: int) -> int:
+    """
+    Configures the logging level based on the number of verbose flags.
+
+    Args:
+        verbose_count (int): The number of '-v' flags provided by the user.
+                             - 0: WARNING
+                             - 1: INFO
+                             - 2: DEBUG
+                             - 3+: NOTSET (all messages, including custom trace levels if defined)
+    """
+    if verbose_count == 0:
+        log_level = logging.WARNING
+    elif verbose_count == 1:
+        log_level = logging.INFO
+    elif verbose_count == 2:
+        log_level = logging.DEBUG
+    else:  # verbose_count >= 3
+        # NOTSET will log all messages, allowing custom levels below DEBUG if implemented
+        log_level = logging.NOTSET
+
+    logging.basicConfig(level=log_level)
+    return log_level
+
+
+def return_level_parameter(log_level:int) -> str:
+    _map = {
+        logging.WARN: "",
+        logging.INFO: "-v",
+        logging.DEBUG: "-vv",
+        logging.NOTSET: "-vvv",
+    }
+    return _map.get(log_level, logging.NOTSET)

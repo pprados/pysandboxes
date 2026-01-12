@@ -680,6 +680,8 @@ def activate_guard_socket(rules: List[SocketRule]) -> None:
     if not rules:
         return
     global _rules
+    if _rules:
+        raise RuntimeError("Guard_socket already activated.")
     _rules = rules
     install_wrapper = not _rules
 
@@ -694,5 +696,3 @@ def activate_guard_socket(rules: List[SocketRule]) -> None:
             socket.socket = Guard_socket
         logger.warning(
             "Guard_socket activated.")
-    else:
-        logger.info("Guard_socket was already activated.")

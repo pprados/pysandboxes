@@ -66,16 +66,16 @@ class WrapperIO(io.TextIOBase):
 
     def __getattr__(self, name: str) -> Any:
         # Called only if attribute not found the usual way
-        if name in ["write","flush"]:
+        if name in ("write", "flush","_context","_old"):
             return super().__getattr__(name)
-        return getattr(self._target, name)
+        return getattr(self, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if name in ("write", "flush"):
+        if name in ("write", "flush","_context","_old"):
             # Assign _target to self, not to target
             super().__setattr__(name, value)
         else:
-            setattr(self._target, name, value)
+            setattr(self, name, value)
 
     def __del__(self):
         if self._old:
@@ -100,8 +100,10 @@ def catch_stdio(
         kwargs: Dict[str, Any],
         *args: Any,
 ) -> Dict[str, Any]:
-    return asyncio.run(acatch_stdio(queue, fn, kwargs, *args)
+    assert asyncio.get_event_loop(),"asyncio loop is not running"
+    result =asyncio.get_event_loop().run_until_complete(acatch_stdio(queue, fn, kwargs, *args)
                 )
+    return result
 async def acatch_stdio(
         queue: Optional[TQueue],
         fn: Callable,
@@ -116,7 +118,7 @@ async def acatch_stdio(
     # This ensures that contextvars changes are isolated to this specific call
     # and not visible to other parts of the thread that are not within this context.
     # This is particularly important for asynchronous code, but good practice here too.
-    ctx = contextvars.copy_context()
+    ctx = contextvars.copy_context()  # FIXME: pourquoi cela ?
 
     async def run_in_context():
         # Allows modification of eval_result from outer scope

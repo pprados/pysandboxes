@@ -4,8 +4,6 @@ import importlib
 import inspect
 import json
 import logging
-import os
-import signal
 import sys
 from dataclasses import dataclass
 from typing import AsyncGenerator, List, Any, Optional
@@ -15,17 +13,16 @@ import uvicorn
 from fastapi import FastAPI, Request, Body
 from fastapi.responses import StreamingResponse
 
-from . import PATH_RPC, HOST, PORT
+from .parameters import HOST, PORT, PATH_RPC
 from .abstract_start_daemon import BaseStartDaemon
 from .tools import _from_b85, _to_b85, is_in_sandbox, \
-    set_is_in_sandbox
+    set_is_in_sandbox, configure_logging_level
 
 logger = logging.getLogger(__name__)
 
 from tblib import pickling_support
 
 pickling_support.install()
-
 
 
 @dataclass
@@ -53,7 +50,7 @@ async def sandbox_daemon(
     try:
         function = getattr(module, function_name)
     except AttributeError:
-        logger.warning("Function %s.%s() not found")
+        logger.warning("Function %s.%s() not found", module, function_name)
         return
     use_async = inspect.iscoroutinefunction(function)
     logger.info(f"(%s) calling %s%s.%s(%s,%s)...",
@@ -128,7 +125,7 @@ async def sandbox_daemon(
 # TODO: def prepare_sandbox(self, ns=None, /, **kwargs):
 # TODO: def after_sandbox(self, ns=None, /, **kwargs):
 
-def create_daemon() -> uvicorn.Server:
+def create_uvicorn_daemon(log_level: int) -> uvicorn.Server:
     app = FastAPI()
 
     @app.get("/")
@@ -161,14 +158,19 @@ def create_daemon() -> uvicorn.Server:
         )
 
     # TODO: https
-    return uvicorn.Server(uvicorn.Config(app, host=HOST, port=PORT))
+    return uvicorn.Server(uvicorn.Config(
+        app,
+        host=HOST,
+        port=PORT,
+        log_level=log_level))
 
 
-class _TaskDaemon(BaseStartDaemon):
+class _LocalTaskDaemon(BaseStartDaemon):
 
-    async def _start(self) -> None:
+    async def _start(self, envs: Dict[str, str],
+                     log_level: int) -> None:  # FIXME: use envs ?
         set_is_in_sandbox(True)
-        self.daemon = create_daemon()
+        self.daemon = create_uvicorn_daemon(log_level)
 
         self.task = asyncio.create_task(self.daemon.serve())
 
@@ -180,9 +182,18 @@ class _TaskDaemon(BaseStartDaemon):
         return await self.task
 
 
-async def main():
+async def main() -> int:
     parser = argparse.ArgumentParser(
         description="Stard a Python-sandbox daemon inside --outer-sandbox argument."
+    )
+
+    # Add the verbose argument.
+    # action='count' is key here: it counts how many times the argument is present.
+    parser.add_argument(
+        '-v', '--verbose',
+        action='count',
+        default=0,  # Default value if no -v is provided
+        help='Increase output verbosity. Use -v for INFO, -vv for DEBUG, -vvv for all messages.'
     )
 
     # Add the --outer-sandbox argument
@@ -201,22 +212,29 @@ async def main():
 
     # Access the value of --sandbox-provider
     outer_sandbox: Optional[str] = args.outer_sandbox
-    assert outer_sandbox,"--outer-sandbox is required"
-    logging.basicConfig(level=logging.INFO)
+    assert outer_sandbox, "--outer-sandbox is required"
+    log_level = configure_logging_level(args.verbose)
 
-    task_daemon = _TaskDaemon()
+    logging.info(
+        f"Start a py-sandbox encapsulated in an os-sandox of type '{outer_sandbox}'")
+    # FIXME activate_sandboxes(dict(os.environ), args_rules=None, outer_sandbox=outer_sandbox)
+    task_daemon = _LocalTaskDaemon()
     try:
-        await task_daemon.start()
+        await task_daemon.start(log_level)
         return await task_daemon.join()
     finally:
         await task_daemon.close()
 
 
 if __name__ == "__main__":
+    rc = 0
     try:
-        sys.exit(asyncio.run(main()))
+        rc = asyncio.run(main())
     except SystemExit as e:
-        print("capturé par daemon")
-        sys.exit(e.code)
+        rc = int(e.code)
     except KeyboardInterrupt:
-        sys.exit(0)
+        rc = 0
+    except Exception as e:
+        logger.error(f"Exception: {e}", exc_info=True)
+        rc = -1
+    sys.exit(rc)

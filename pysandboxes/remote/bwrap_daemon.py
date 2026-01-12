@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class BWrapDaemon(BaseSubProcessDaemon):
+    def update_rules(self,envs: Dict[str, str]):
+        raise NotImplementedError() # TODO
+
     def _bwrap_args(self,envs:Dict[str,str]) -> List[str]:
 
         if not which_command("bwrap"):

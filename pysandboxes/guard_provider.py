@@ -10,8 +10,9 @@ def parse_rules(rules: List[str]) -> Tuple[str, List[str]]:
     for rule in rules:
         if rule.startswith("--os-sandbox="):
             provider = rule[len("--os-sandbox="):].strip()
-            if provider not in providers:
-                raise ValueError(f"Invalid os-sandbox: {provider}")
+            # FIXME: desactivé pour prestarted
+            # if provider not in providers:
+            #     raise ValueError(f"Invalid os-sandbox: {provider}")
         else:
             other_rules.append(rule)
     return provider, other_rules

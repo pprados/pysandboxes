@@ -18,6 +18,31 @@ Key security risks (based on the OWASP Top 10 for LLM Applications):
 - LLM06: Information Disclosure — Revealing server details can aid attackers.
 - LLM09: Overreliance on AI — Unreviewed automation can lead to dangerous outcomes.
 
+TODO: https://xxradar.medium.com/the-security-risks-of-model-context-protocol-mcp-c50c4817e80e
+
+Practical Exploitation: Real-World Risks
+Security testing has already uncovered concrete, dangerous vulnerabilities in existing MCP implementations, including:
+
+**Path Traversal**: Reading arbitrary files on the server (e.g., /etc/passwd) is possible through poorly controlled access.
+
+**Remote Code Execution (RCE)**: Tricking an LLM into running system commands (like whoami) can give attackers control over the machine.
+
+**Reverse Shells**: An LLM can be manipulated into executing commands that open a remote shell to the attacker’s machine.
+
+**SQL Injection**: MCP tools that interact with databases can be exploited to return unauthorized data.
+
+**Lateral Movement**: If a public-facing MCP server is compromised, it can act as a proxy to access internal MCP servers, allowing attackers to bridge isolated systems.
+
+
+Prompt Injection: Modifying model behavior through inputs.
+Tool Poisoning: Hidden malicious instructions in tool descriptions.
+Excessive Permissions: Overly powerful tools without proper checks.
+Rug Pull Attacks: Tool definitions that change silently after approval.
+Tool Shadowing: Malicious servers intercepting or overriding trusted tool calls.
+Indirect Prompt Injection: Injected malicious data from external sources.
+Token Theft: Weak storage leading to stolen authentication credentials.
+Remote Access: Gaining control of host systems through misused tools.
+Multi-Vector Attacks: Chaining several vulnerabilities for complex exploits.
 
 # FAQ
 

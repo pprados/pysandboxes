@@ -6,7 +6,7 @@
 # This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
 # environment helps limit accesses to minimal privileges.
 
---os-sandbox=bwrap
+--os-sandbox=subprocess
 # TODO: --no-dotenv
 
 #######################################################################################
@@ -62,13 +62,14 @@
 # Binds the current directory to the root of the sandbox
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
 --ro-bind=${PWD},${PWD}
+#--ro-bind=${PWD},/usr/src/myapp  # FIXME
 #--ro-bind=/dev/null,/dev/null
-#--ro-bind=dist,/toto
+#--ro-bind=dist,/toto  # TODO: a vérifier sous firejail
 
 #######################################################################################
 # Network rules management strategy:
 # There are two strategies: "allow" and "deny".
-# The first network rule indicates the default behavior.
+# TODO The first network rule indicates the default behavior.
 #
 # It is recommended to operate in a whitelist mode, allowing specific connections
 # and denying all others. This approach enhances security by explicitly specifying
@@ -84,15 +85,11 @@
 
 # *** Whitelist strategy (recommanded) ***
 # Allow web access
---net=ALLOW|tcp|0.0.0.0/0|80,443|OUT
---net=ALLOW|tcp|127.0.0.1/32|8080|IN
---net=ALLOW|tcp|localhost|80,443|OUT
-
-# FIXME: devrait n'etre qu'en TLS
---net=ALLOW|tcp|0.0.0.0/0|443|OUT
+--net=ALLOW|tcp|127.0.0.1/32|8080|OUT # FIXME: auto injection
+--net=ALLOW|tcp|0.0.0.0/0|80,443|OUT # FIXME: may be only 443
+--net=ALLOW|tcp|127.0.0.1/32|8080|IN  # FIXME: implicite sur lo ?
 --net=ALLOW|udp|0.0.0.0/0|53|OUT
 --net=ALLOW|udp|0.0.0.0/0|53|IN
-
 
 
 # TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
@@ -104,27 +101,10 @@
 #--net=ALLOW|any|192.168.0.0/16|*|OUT
 #--net=ALLOW|any|fc00::/7|*|OUT
 
-# *** Blacklist strategy  (not recommanded) ***
-# It's not recommanded to use this strategy, but it's a help to debug the rules.
-## Deny localhost
-#--net=DENY|any|127.0.0.1|*|OUT
-#--net=DENY|any|::1|*|OUT
-#
-## Deny intranet
-#--net=DENY|any|10.0.0.0/8|*|OUT
-#--net=DENY|any|169.254.0.0/16|*|OUT
-#--net=DENY|any|172.16.0.0/12|*|OUT
-#--net=DENY|any|192.168.0.0/16|*|OUT
-#--net=DENY|any|fc00::/7|*|OUT
-#
-## Deny broadcast
-#--net=DENY|any|224.0.0.0/4|*|OUT
-#--net=DENY|any|ff00::/8|*|OUT
-
 #######################################################################################
 # Limit python features in the sandbox
---python-api=ALLOW:threads
---python-api-import=ALLOW:numpy.*,pandas.*
+#--python-api=ALLOW:threads
+#--python-api-import=ALLOW:numpy.*,pandas.*
 
 #######################################################################################
 # Limit syntax and features when executing python code (very useful for controlling

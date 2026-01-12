@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import List, Tuple, Dict
 
 from pysandboxes.guard_files import BindRule, IgnoreRule
-from pysandboxes.guard_sandbox import read_and_parse_config
+from pysandboxes.guard_sandbox import read_and_parse_config, AllRules
 from pysandboxes.guard_socket import rule_to_netfilter
 from pysandboxes.remote import daemon
 from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon
 from pysandboxes.remote.tools import which_command, get_venv, get_default_gateway_info, \
-    suggest_package_installation
+    suggest_package_installation, return_level_parameter
 from pysandboxes.tools import read_config, substitute_env_vars
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,11 @@ DEBUG = False
 
 
 class FireJailDaemon(BaseSubProcessDaemon):
-    def _firejail_args(self, envs: Dict[str, str]) -> List[str]:
+    def update_rules(self,envs: Dict[str, str]):
+        _,all_rules=self._firejail_args(envs)
+        return all_rules
+
+    def _firejail_args(self, envs: Dict[str, str]) -> Tuple[List[str],AllRules]:
 
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
@@ -62,24 +66,24 @@ class FireJailDaemon(BaseSubProcessDaemon):
             f"--whitelist={get_venv()}",
             f"--read-only={get_venv()}",
         ])
-        # FIXME Need root
-        # args.append(f"--bind={get_venv()},/usr/local")
 
         # Add files rules
+        new_files_rules=[]
         for rule in files_rules:
             if isinstance(rule, BindRule):
                 if rule.source == rule.dest:
-                    args.append(f"--whitelist={rule.dest}")
+                    args.append(f"--whitelist={rule.source}")
                 else:
-                    args.append(f"--bind={rule.dest},{rule.source}")
+                    # Note: de py-sandbox manager the alias
+                    args.append(f"--whitelist={rule.source}")
                     need_root = True
                 if not rule.write:
-                    args.append(f"--read-only={rule.dest}")
+                    args.append(f"--read-only={rule.source}")
             elif isinstance(rule, IgnoreRule):
-                args.append(f"--blacklist={rule.source}")  # FIXME
+                args.append(f"--blacklist={rule.source}")
+                new_files_rules.append(rule)
+        files_rules=new_files_rules
 
-        # TODO Add socket rules
-        # --netfilter
         if socket_rules:
             gw = get_default_gateway_info()
             if gw:
@@ -107,6 +111,9 @@ class FireJailDaemon(BaseSubProcessDaemon):
             Path(netfilter_file).write_text("\n".join(net_filter4))
             args.append(f"--netfilter6={netfilter6_file}")
 
+            # Remove redondant sockets rules
+            socket_rules=[]  # FIXME: doublon ou non ?
+
         # TODO: nefilter6
         # TODO: Add tmp rules
         # --tmpfs DEST
@@ -117,17 +124,22 @@ class FireJailDaemon(BaseSubProcessDaemon):
 
         if need_root:
             logger.warning("Firejail needs root to run")
-        return args
 
-    def _subprocess(self) -> List[str]:
-        args = self._firejail_args()
+        return args,(sandbox_env, provider, socket_rules, files_rules)
+
+    def _subprocess(self,envs:Dict[str,str]) -> List[str]:
+        args, _ = self._firejail_args(envs=envs)
         args.extend([
-            sys.executable, "-m", f"--outer-sandbox=firejail", daemon.__name__
+            sys.executable,
+            "-u",  # FIXME unbuffered stdout and stderr
+            "-m",
+            return_level_parameter(logger),
+            "--outer-sandbox=firejail", daemon.__name__
         ])
         return args
 
     def bash_args(self, envs: Dict[str, str]) -> Tuple[List[str], Dict[str, str]]:
-        args = self._firejail_args(envs)
+        args,_ = self._firejail_args(envs)
         args.extend([
             "PS1=[os-sandbox-firejail] $ ",
             "/bin/bash", "--norc", "--noprofile", "-i",
