@@ -240,7 +240,7 @@ async def main():
     provider = providers.get(args.sandbox_provider or DEFAULT_PROVIDER)
     assert isinstance(provider,
                       BaseSubProcessDaemon), "The provider must be a BaseSubProcessDaemon"
-    args, kwargs = provider.shell_args()
+    args, kwargs = provider.bash_args()
     await run_bash_in_pty(*args, **kwargs)
 
 

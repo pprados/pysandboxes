@@ -113,66 +113,8 @@ class BaseSubProcessDaemon(BaseStartDaemon):
         ]
 
     @abstractmethod
-    def shell_args(self) -> Tuple[str, Dict[str,Any]]:
+    def bash_args(self) -> Tuple[str, Dict[str,Any]]:
         pass
-
-    # async def shell(self) -> None:
-    #     import pty
-    #     import termios
-    #     import tty
-    #
-    #     is_stdin_a_tty = False
-    #     old_settings=[]
-    #     if sys.stdin.isatty():
-    #         try:
-    #             old_settings = termios.tcgetattr(sys.stdin.fileno())
-    #             tty.setraw(sys.stdin.fileno())
-    #             is_stdin_a_tty = True
-    #         except termios.error as e:
-    #             is_stdin_a_tty = False  # Impossible de mettre en mode raw, traiter comme non-tty
-    #         # except Exception as e:
-    #         #     is_stdin_a_tty = False
-    #     master_fd = None
-    #     try:
-    #         master_fd, slave_fd = pty.openpty()
-    #
-    #         read_input_task = asyncio.create_task(
-    #             read_parent_stdin_and_write_to_pty(master_fd))
-    #
-    #         await self._re_start_cmd(
-    #             self._shell(),
-    #             kwargs={
-    #                 "start_new_session": True,  # Important for interatif shell
-    #                 "stdin": slave_fd,
-    #                 "pass_fds": [slave_fd],
-    #                 # "stdin":asyncio.subprocess.PIPE,
-    #             },
-    #             stdin=False)  # FIXME
-    #         os.close(slave_fd)
-    #         loop = asyncio.get_running_loop()
-    #         master_reader = asyncio.StreamReader()
-    #         master_protocol = asyncio.StreamReaderProtocol(master_reader)
-    #         await loop.connect_read_pipe(lambda: master_protocol,
-    #                                      os.fdopen(master_fd, 'rb', 0))
-    #
-    #         master_writer = asyncio.StreamWriter(
-    #             asyncio.StreamWriterTransport(loop.add_writer(master_fd, lambda: None),
-    #                                           master_protocol),
-    #             # Hacky way to get a transport
-    #             master_protocol,
-    #             master_reader,
-    #             loop
-    #         )
-    #
-    #         await self.join()
-    #
-    #     finally:
-    #         # read_input_task.cancel()
-    #         # write_output_task.cancel()
-    #         if is_stdin_a_tty:
-    #             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
-    #         if master_fd:
-    #             os.close(master_fd)
 
     async def _re_start(self) -> None:
         await self._re_start_cmd(self._subprocess(), {})
@@ -264,7 +206,7 @@ class BaseSubProcessDaemon(BaseStartDaemon):
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
-    def shell_args(self) -> Tuple[str, Dict[str,Any]]:
+    def bash_args(self) -> Tuple[str, Dict[str,Any]]:
 # '-c', 'PS1="$ "; export PS1; exec /bin/bash -i'
         return ["/bin/bash",
                 # "--norc","--noprofile",

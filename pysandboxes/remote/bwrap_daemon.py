@@ -1,4 +1,5 @@
 import logging
+import os
 import shlex
 import sys
 from pathlib import Path
@@ -32,13 +33,22 @@ class BWrapDaemon(BaseSubProcessDaemon):
             args.extend(["--setenv", env, val])
 
         # Add python venv
-        major, minor, *_ = sys.version_info
+        major, minor, release_level,*_ = sys.version_info
+
+        # Same place
+        args.extend(["--ro-bind", get_venv(), get_venv()])
         args.extend(["--ro-bind", get_venv(), "/usr/local"])
+        # args.extend(["--ro-bind",
+        #              f"/usr/lib/python{major}.{minor}/encodings",
+        #              f"/usr/lib/python{major}.{minor}/encodings"])
+
         # Extend mapping if the python version use a link
-        prg = Path(sys.executable)
-        while prg.is_symlink():
-            prg = prg.readlink()
-            args.extend(["--ro-bind", str(prg.parent), str(prg.parent)])
+        prg = sys.executable
+        while os.path.islink(prg):
+            prg = os.readlink(prg)
+            if ".pyenv" in prg:
+                prg=prg[:(prg.find(".pyenv/")+len(".pyenv/"))]
+            args.extend(["--ro-bind", os.path.dirname(prg), os.path.dirname(prg)])
 
         for rule in files_rules:
             if isinstance(rule, BindRule):
@@ -55,19 +65,22 @@ class BWrapDaemon(BaseSubProcessDaemon):
         # --tmpfs DEST
         return args
 
-    def shell_args(self) -> Tuple[List[str], Dict[str, str]]:
-        args=self._bwrap_args()
-        args.extend([
-            "/bin/bash", "--norc", "--noprofile",
-        ])
-        return args,{}
-
     def _subprocess(self) -> List[str]:
         args=self._bwrap_args()
         args.extend([
             "/bin/bash", "--norc", "--noprofile",
             # "/usr/local/bin/python", "-m", f"--outer-sandbox={provider}", daemon.__name__
         ])
-        print("----------")
-        print('"' + "\" \\\n\"".join(args) + '"')
         return args
+
+    def bash_args(self) -> Tuple[List[str], Dict[str, str]]:
+        args=self._bwrap_args()
+        args.extend([
+            "--setenv","PS1","[sandbox-bwrap] $ ",
+            "--ro-bind","/bin","/bin",
+            "--ro-bind","/lib","/lib",
+            "--ro-bind","/lib64","/lib64",
+            "/bin/bash", "--norc", "--noprofile", "-i",
+        ])
+        return args,{}
+

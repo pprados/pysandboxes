@@ -4,7 +4,7 @@
 # This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
 # environment helps limit accesses to minimal privileges.
 
---sandbox-provider=firejail
+--sandbox-provider=bwrap
 
 #######################################################################################
 # Select some variables for the sandbox
@@ -32,7 +32,7 @@
 # within your sandbox, ensuring that your applications have the necessary configuration.
 
 --set-env=HOME=/
---set-env=USER=sandbox
+--set-env=USER=${USER:=sandbox}
 --set-env=*_API_KEY=${*_API_KEY}
 --unset-env=OPENAI_API_KEY
 
@@ -53,6 +53,7 @@
 
 # Binds the current directory to the root of the sandbox
 --ro-bind=${PWD},${PWD}
+--ro-bind=/dev/null,/dev/null
 --ro-bind=dist,/toto
 
 #######################################################################################
