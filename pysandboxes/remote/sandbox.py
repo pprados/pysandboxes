@@ -8,8 +8,8 @@ from typing import Callable, Optional, Tuple
 
 import httpx
 
-from pysandboxes.remote.tools import _to_b85, _from_b85, is_in_sandbox
-from .daemon import HOST, PORT, PATH_RPC
+from .tools import _to_b85, _from_b85, is_in_sandbox
+from . import HOST, PORT, PATH_RPC
 
 logger = logging.getLogger(__name__)
 

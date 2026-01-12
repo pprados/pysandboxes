@@ -4,7 +4,6 @@ import os
 import re
 import sys
 import types
-from importlib.resources import files, as_file
 from pathlib import Path
 from typing import Optional, List, Dict
 

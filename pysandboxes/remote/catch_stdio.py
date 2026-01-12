@@ -81,53 +81,7 @@ sys.stderr = WrapperIO(contextvars.ContextVar(
     'current_stderr', default=sys.stderr))
 
 
-# def cfatch_stdio(
-#         queue: Optional[TQueue],
-#         fn: Callable,
-#         kwargs:Dict[str,Any],
-#         *args: Any,
-# ) -> Dict[str, Any]:
-#     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=queue)
-#     captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=queue)
-#     eval_result: Any = None
-#
-#     # Create a new context for this operation
-#     # This ensures that contextvars changes are isolated to this specific call
-#     # and not visible to other parts of the thread that are not within this context.
-#     # This is particularly important for asynchronous code, but good practice here too.
-#     ctx = contextvars.copy_context()
-#
-#     def run_in_context():
-#         # Allows modification of eval_result from outer scope
-#         nonlocal eval_result
-#         # Set the context variables for the current context
-#         sys.stdout.set_context(captured_stdout)
-#         sys.stderr.set_context(captured_stderr)
-#         result:Dict[str,Any]
-#
-#         try:
-#             eval_result = fn(*args, **kwargs)
-#             result = {"result": eval_result}
-#             if queue:
-#                 queue.put(result)
-#             return result
-#         except Exception:
-#             # If an error occurs during eval, print it to stderr
-#             result = {"exception": sys.exc_info()}
-#             if queue:
-#                 queue.put(result)
-#             return result
-#
-#     # Run the function within the new context.
-#     # The contextvars are automatically restored after this call.
-#     result: Dict[str, Any] = ctx.run(run_in_context)
-#     result["stdout"] = captured_stdout.getvalue()
-#     result["stderr"] = captured_stderr.getvalue()
-#
-#     return result
-#
-
-def catch_stdio(  # FIXME
+def catch_stdio(
         queue: Optional[TQueue],
         fn: Callable,
         kwargs: Dict[str, Any],
@@ -135,7 +89,7 @@ def catch_stdio(  # FIXME
 ) -> Dict[str, Any]:
     return asyncio.run(acatch_stdio(queue, fn, kwargs, *args)
                 )
-async def acatch_stdio(  # FIXME
+async def acatch_stdio(
         queue: Optional[TQueue],
         fn: Callable,
         kwargs: Dict[str, Any],

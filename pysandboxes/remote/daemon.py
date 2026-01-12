@@ -3,6 +3,9 @@ import importlib
 import inspect
 import json
 import logging
+import os
+import signal
+import sys
 from dataclasses import dataclass
 from typing import AsyncGenerator, List, Any
 from typing import Dict
@@ -11,8 +14,11 @@ import uvicorn
 from fastapi import FastAPI, Request, Body
 from fastapi.responses import StreamingResponse
 
-from pysandboxes.remote.catch_stdio import catch_stdio, acatch_stdio
-from pysandboxes.remote.tools import _from_b85, _to_b85
+from . import PATH_RPC, HOST, PORT
+from .abstract_start_daemon import BaseStartDaemon
+from .catch_stdio import catch_stdio, acatch_stdio
+from .tools import _from_b85, _to_b85, is_in_sandbox, \
+    set_is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +26,7 @@ from tblib import pickling_support
 
 pickling_support.install()
 
-HOST = "127.0.0.1"
-PORT = 8000
-PATH_RPC = "/rpc"
+
 
 @dataclass
 class RPCPayload(object):
@@ -38,7 +42,7 @@ async def sandbox_daemon(
         token: str,  # TODO: token
         session_id: str,
         function_id: str,
-        timeout: float, # TODO
+        timeout: float,  # TODO
         args: List[Any],
         kwargs: Dict[str, Any],
 ) -> AsyncGenerator[str, None]:
@@ -60,18 +64,35 @@ async def sandbox_daemon(
     stdio_queue = asyncio.Queue()
 
     if use_async:
-        task = asyncio.create_task(
-            acatch_stdio(
+        async def _set_sandbox_and_catch_stdio():
+            set_is_in_sandbox(True)
+            return await acatch_stdio(
                 stdio_queue,
-                function, kwargs, *args))
+                function, kwargs, *args)
+
+        task = asyncio.create_task(
+            _set_sandbox_and_catch_stdio())
+        # task = asyncio.create_task(
+        #     acatch_stdio(
+        #         stdio_queue,
+        #         function, kwargs, *args))
     else:
+        def _set_sandbox_and_catch_stdio():
+            set_is_in_sandbox(True)
+            return catch_stdio(
+                stdio_queue,
+                function, kwargs, *args)
+
         task = asyncio.get_running_loop().run_in_executor(None,
-                                                          catch_stdio,
-                                                          stdio_queue,
-                                                          function,
-                                                          kwargs,
-                                                          *args,
+                                                          _set_sandbox_and_catch_stdio,
                                                           )
+        # task = asyncio.get_running_loop().run_in_executor(None,
+        #                                                   catch_stdio,
+        #                                                   stdio_queue,
+        #                                                   function,
+        #                                                   kwargs,
+        #                                                   *args,
+        #                                                   )
     while stdio_queue:
         # msg = stream_queue.get()  # sync mode
         # msg = await loop.run_in_executor(None, stdio_queue.get)  # async mode
@@ -106,7 +127,6 @@ async def sandbox_daemon(
 # TODO: def after_sandbox(self, ns=None, /, **kwargs):
 
 def create_daemon() -> uvicorn.Server:
-
     app = FastAPI()
 
     @app.get("/")
@@ -124,6 +144,7 @@ def create_daemon() -> uvicorn.Server:
         SSE endpoint to process a given code string, authenticated by a token,
         and stream back structured results (stdout, stderr, result).
         """
+        assert is_in_sandbox()
         # Pass the code and authenticated user_id to the event generator
         return StreamingResponse(
             sandbox_daemon(
@@ -136,5 +157,43 @@ def create_daemon() -> uvicorn.Server:
             ),
             media_type="text/event-stream"
         )
+
     # TODO: https
     return uvicorn.Server(uvicorn.Config(app, host=HOST, port=PORT))
+
+
+class _TaskDaemon(BaseStartDaemon):
+
+    async def _start(self) -> None:
+        set_is_in_sandbox(True)
+        self.daemon = create_daemon()
+
+        self.task = asyncio.create_task(self.daemon.serve())
+
+    async def close(self) -> None:
+        await self.daemon.shutdown()
+        logger.info("daemon is shutdown")
+
+    async def join(self) -> int:
+        return await self.task
+
+
+async def main():
+    logging.basicConfig(level=logging.INFO)
+
+    task_daemon = _TaskDaemon()
+    try:
+        await task_daemon.start()
+        return await task_daemon.join()
+    finally:
+        await task_daemon.close()
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(asyncio.run(main()))
+    except SystemExit as e:
+        print("capturé par daemon")
+        sys.exit(e.code)
+    except KeyboardInterrupt:
+        sys.exit(0)
