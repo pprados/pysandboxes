@@ -1,5 +1,5 @@
 from importlib import metadata
-from .remote.sandboxes import sandbox,run
+from .remote.sandboxes import sandbox,run,sandboxes
 from .guard_sandbox import activate_sandboxes
 
 try:
@@ -11,5 +11,6 @@ except metadata.PackageNotFoundError:
 __all__=[
     "sandbox",
     "run",
+    "sandboxes",
     "activate_sandboxes",
 ]

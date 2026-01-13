@@ -1,5 +1,3 @@
-from concurrent.futures import Executor
-
 import asyncio
 import contextvars
 import inspect
@@ -7,8 +5,11 @@ import io
 import logging
 import queue
 import sys
+from concurrent.futures import Executor
 from functools import partial
 from typing import Any, Dict, Optional, Callable, Union
+
+from pysandboxes.remote.manage_loop import get_sandbox_loop
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +105,16 @@ def catch_stdio(
         *args: Any,
 ) -> Dict[str, Any]:
     # assert asyncio.get_running_loop(),"asyncio loop is not running"
-    result = asyncio.get_running_loop().run_until_complete(
-        acatch_stdio(queue, fn, kwargs, *args)
-        )
-    return result
+    assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
+    # result = asyncio.get_event_loop().run_until_complete(
+    #     acatch_stdio(queue, fn, kwargs, *args)
+    #     )
+    # result = asyncio.gather()
+    result = asyncio.run_coroutine_threadsafe(
+        acatch_stdio(queue, fn, kwargs, *args),
+        asyncio.get_event_loop()
+    )
+    return result.result()
 
 
 async def acatch_stdio(
@@ -116,6 +123,7 @@ async def acatch_stdio(
         kwargs: Dict[str, Any],
         *args: Any,
 ) -> Dict[str, Any]:
+    assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=queue)
     captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=queue)
     fn_result: Any = None

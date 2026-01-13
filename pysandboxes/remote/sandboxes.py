@@ -1,20 +1,21 @@
 import asyncio
-import contextlib
 import functools
 import inspect
 import json
 import logging
 import os
 import sys
+import traceback
+from datetime import timedelta
 from multiprocessing import Lock
-from typing import Any, TypeVar, AsyncGenerator
+from typing import Any, TypeVar, Union, \
+    Awaitable
 from typing import Callable, Optional, Tuple
 
-import httpx
 from aiohttp_sse_client import client as sse_client
 
-from .abstract_start_daemon import BaseDaemon
-from .os_sandbox import async_start_daemon
+from .base_daemon import BaseDaemon
+from .os_sandbox import async_start_daemon, start_daemon, shutdown_daemon
 from .parameters import HOST, PORT, PATH_RPC
 from .tools import _to_b85, _from_b85, is_in_sandbox
 from ..guard_sandbox import read_and_parse_config
@@ -85,46 +86,18 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
     return module_name, callable_name
 
 
-def _sync_rpc(func: Callable[..., Any],
-              timeout: float,
-              *args: Any,
-              **kwargs: Any) -> Any:
-    global token
-    _lazy_start_daemon()
-    # Use async context manager for httpx client
-    with httpx.Client() as client:
-        # Stream the response from the SSE endpoint
-        module_name, callable_name = get_callable_info(func)
-        if module_name == "__main__":
-            raise ValueError("Cannot call functions defined in __main__ module")
-        params = {
-            "token": token,
-            "session_id": "123",  # TODO
-            "timeout": timeout,
-            "function": f"{module_name}:{callable_name}",
-            "args": _to_b85(args),
-            "kwargs": _to_b85(kwargs),
-        }
-        with client.stream(
-                "POST", SANDBOX_SERVER_URL,
-                headers={"Accept": "text/event-stream"},
-                json=params,
-                follow_redirects=False,
-                timeout=None) as response:
-            response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+def _get_rpc_params(args, func, kwargs, timeout, token):
+    module_name, callable_name = get_callable_info(func)
+    params = {
+        "token": token,
+        "session_id": "123",  # TODO
+        "timeout": timeout,  # TODO
+        "function": f"{module_name}:{callable_name}",
+        "args": _to_b85(args),
+        "kwargs": _to_b85(kwargs),
+    }
+    return params
 
-            # Iterate over chunks of the response body
-            for chunk in response.iter_bytes():
-                chunk_str: str = chunk.decode("utf-8")
-                msg = json.loads(chunk_str)
-                if "result" in msg:
-                    return _from_b85(msg["result"])
-                if "exception" in msg:
-                    _reraise(2, *_from_b85(msg["exception"]))
-                if "stdout" in msg:
-                    print(msg["stdout"], end="")
-                if "stderr" in msg:
-                    print(msg["stderr"], end="", file=sys.stderr)
 
 
 async def _async_rpc(func: Callable[..., Any],
@@ -134,17 +107,7 @@ async def _async_rpc(func: Callable[..., Any],
     global token
     # Use async context manager for httpx client
     try:
-
-        module_name, callable_name = get_callable_info(func)
-        params = {
-            "token": token,
-            "session_id": "123",  # TODO
-            "timeout": timeout,  # TODO
-            "function": f"{module_name}:{callable_name}",
-            "args": _to_b85(args),
-            "kwargs": _to_b85(kwargs),
-        }
-
+        params = _get_rpc_params(args, func, kwargs, timeout, token)
         async with sse_client.EventSource(  # ← method override here
                 SANDBOX_SERVER_URL,
                 # session=session,  # TODO: garder la session ouverte pour reutiliser ?
@@ -152,28 +115,36 @@ async def _async_rpc(func: Callable[..., Any],
                 json=params,
                 headers={"Accept": "text/event-stream"},
                 timeout=None,  # keep-alive
+                reconnection_time=timedelta(seconds=0.5),
         ) as event_source:
             async for event in event_source:
                 msg = json.loads(event.data)
                 if "result" in msg:
                     return _from_b85(msg["result"])
                 if "exception" in msg:
-                    _reraise(1, *_from_b85(msg["exception"]))
+                    _reraise(1, *_from_b85(msg["exception"]))  # FIXME: check remoe: 1
                 if "stdout" in msg:
                     print(msg["stdout"], end="")
                 if "stderr" in msg:
                     print(msg["stderr"], end="", file=sys.stderr)
     except SystemExit as e:
-        logger.error(f"******** SystemExit: {e}")  # FIXME
         raise
     except Exception as e:
-        logger.error(f"******** client Error in sandbox: {e}")  # FIXME
+        logger.error(f"******** client Error in sandbox: {traceback.format_exc()}")  # FIXME
         raise
+
+def _sync_rpc(func: Callable[..., Any],
+              timeout: float,
+              *args: Any,
+              **kwargs: Any) -> Any:
+    loop = asyncio.get_event_loop()  # Get the current running loop
+    return loop.run_until_complete(_async_rpc(func, timeout, *args, **kwargs))
+
 
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-
+# TODO: ajouter le max de TU
 def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., Any]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
@@ -203,22 +174,55 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
         return decorator(_func)
 
 
-@contextlib.asynccontextmanager
-async def use_sandboxes() -> AsyncGenerator[BaseDaemon, None]:
-    current_daemon = None
-    try:
+SyncOrAsyncFunc = Union[
+    Callable[[], None],           # Fonction synchrone
+    Callable[[], Awaitable[None]] # Fonction asynchrone
+]
+
+# TODO: ajouter le max de TU
+# TODO: rendre le code testable, avec activation/déactivation des SB
+# @runtime_checkable
+class sandboxes:
+    def __init__(self,
+                 init_fn:Optional[SyncOrAsyncFunc]=None
+    ) -> None:
+       self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
+        #TODO: ajouter des paramètres complémentaire ici ?
+       # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
+
+    # ── synchronous API ────────────────────────────────
+    def __enter__(self) -> None:
         log_level = logging.root.getEffectiveLevel()
         _, os_sandbox, *_ = read_and_parse_config()
-        current_daemon = await async_start_daemon(os_sandbox, log_level)
-        yield current_daemon
-    finally:
-        if current_daemon:
-            await current_daemon.shutdown()
+        start_daemon(os_sandbox, log_level)
+
+    def __exit__(self,
+                 exc_type:  type[BaseException] | None,
+                 exc:       BaseException | None,
+                 tb:        Any | None) -> bool | None:
+        shutdown_daemon()
+        return True
+
+
+    # ── asynchronous API ───────────────────────────────
+    async def __aenter__(self) -> BaseDaemon:
+
+        self.current_daemon = None
+        log_level = logging.root.getEffectiveLevel()
+        _, os_sandbox, *_ = read_and_parse_config()
+        self.current_daemon = await async_start_daemon(os_sandbox, log_level)
+
+    async def __aexit__(self,
+                        exc_type:  type[BaseException] | None,
+                        exc:       BaseException | None,
+                        tb:        Any | None) -> bool | None:
+        if self.current_daemon:
+            await self.current_daemon.shutdown()
 
 
 def run(main, *, debug=None, loop_factory=None, cancel_remaining_tasks=True) -> Any:
     async def _run():
-        async with use_sandboxes():
+        async with sandboxes():
             result = (await asyncio.gather(main))[0]
 
         # Cancel all remaining tasks
@@ -238,4 +242,5 @@ def run(main, *, debug=None, loop_factory=None, cancel_remaining_tasks=True) -> 
                 done, _ = await asyncio.wait(tasks_to_cancel)
             return result
 
-    return asyncio.run(_run(), debug=debug, loop_factory=loop_factory)
+    #return asyncio.run(_run(), debug=debug, loop_factory=loop_factory) # FIXME: devrai fonctionner depuis 3.12
+    return asyncio.run(_run(), debug=debug)

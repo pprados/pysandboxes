@@ -10,6 +10,7 @@
 #--os-sandbox=subprocess
 #--os-sandbox=firejail
 # TODO: --no-dotenv
+# TODO: --firejail=file.template
 
 #######################################################################################
 # Select some variables for the sandbox

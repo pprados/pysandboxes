@@ -75,7 +75,7 @@ def main() -> None:
         script_name = command_args[0]
         sys.argv = command_args
         script = Path(script_name).read_text()
-        activate_sandboxes(args_rules=rules)
+        activate_sandboxes(args_rules=rules)  # FIXIE: ou via le lancement du process ? ou exec ?
         exec(script)
 
 

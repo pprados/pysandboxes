@@ -14,6 +14,9 @@ _valide_features = {
     "importlib",
 }
 
+# TODO: faire une injection paresseuse des patchs, lors de l'import des modules
+# via un paramétrage globale simple.
+# TODO Essayer de capturer le host des connexion réseaux, par capture des résolutions DNS précédante.
 # TODO: inspiration https://man7.org/linux/man-pages/man1/firejail.1.html
 # To help creating useful seccomp filters more easily, the
 #               following system call groups are defined: @aio, @basic-io,

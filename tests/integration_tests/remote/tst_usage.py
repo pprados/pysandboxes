@@ -1,0 +1,34 @@
+import functools
+import logging
+from typing import Any
+
+import dotenv
+
+import pysandboxes
+from pysandboxes import sandboxes
+from pysandboxes.remote.manage_loop import sandbox_loop
+from .sb_usage import run_in_sandbox, arun_in_sandbox, init_sandbox
+
+logger = logging.getLogger(__name__)
+dotenv.load_dotenv()
+
+
+
+async def amain():
+    rc = await arun_in_sandbox()
+    logger.info(f"{rc=}")
+
+def main():
+    rc = run_in_sandbox()
+    logger.info(f"{rc=}")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger("asyncio").setLevel(logging.INFO)
+
+    for i in range(0,2):
+        # pysandboxes.run(amain())
+        with sandboxes(init_sandbox): main()
+
+    logger.debug("App terminated")
