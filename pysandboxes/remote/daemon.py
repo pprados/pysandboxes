@@ -289,7 +289,7 @@ class LocalTaskDaemon(BaseDaemon):
         logger.debug("Uvicorn started")
 
     async def shutdown(self) -> None:
-        if not self.uvicorn:
+        if not self.is_started:
             raise RuntimeError("Server not started")
         self.task.cancel()
         await self.task
