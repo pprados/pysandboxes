@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable, List, Dict, Any, Tuple
 
 from .base_daemon import BaseDaemon
-from .tools import return_level_parameter
+from .tools import return_level_parameter, set_is_in_sandbox
 from ..guard_sandbox import AllRules, read_and_parse_config
 
 logger = logging.getLogger(__name__)
@@ -129,9 +129,10 @@ class BaseSubProcessDaemon(BaseDaemon):
     def bash_args(self, envs: Dict[str, str]) -> Tuple[str, Dict[str, Any]]:
         pass
 
-    async def _start(self,
-                     envs: Dict[str, str],
-                     log_level:int) -> None:
+    async def start(self, log_level:int,envs:dict[str,str]=None) -> Any:
+        if not envs:
+            envs=dict(os.environ)
+        set_is_in_sandbox(True)
         self.restart = 0
         await self._re_start(envs, log_level, first=True)
 

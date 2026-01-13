@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import logging
 from typing import Any
@@ -23,12 +24,24 @@ def main():
     logger.info(f"{rc=}")
 
 
+async def toto():
+    for i in range(0, 2):
+        # pysandboxes.run(amain())
+        async with sandboxes(init_sandbox):
+            await amain()
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logging.getLogger("asyncio").setLevel(logging.INFO)
 
-    for i in range(0,2):
-        # pysandboxes.run(amain())
-        with sandboxes(init_sandbox): main()
+    for i in range(0,10):
+        asyncio.run(toto())
+        print("----------------")
+        pysandboxes.run(amain())
+        print("----------------")
+        with sandboxes(init_sandbox):
+            main()
+        print("----------------")
 
     logger.debug("App terminated")

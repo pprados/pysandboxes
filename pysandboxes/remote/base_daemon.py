@@ -9,16 +9,14 @@ logger = logging.getLogger(__name__)
 
 class BaseDaemon(ABC):
     def __init__(self):
-        self.is_started=False
+        self._is_started=False
 
-    async def start(self, log_level:int) -> Any:
-        set_is_in_sandbox(True)
-        await self._start(dict(os.environ),log_level)  # FIXME: gerer les envs
-        assert is_in_sandbox()  # FIXME: a garder ?
-        self.is_started=True
+    @property
+    def is_started(self) -> bool:
+        return self._is_started
 
     @abstractmethod
-    async def _start(self,envs:Dict[str,str], log_level) -> Any:
+    async def start(self, log_level:int) -> Any:
         raise NotImplementedError
 
     @abstractmethod
@@ -26,7 +24,7 @@ class BaseDaemon(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def join(self) -> int:
+    async def join(self) -> None:
         raise NotImplementedError
 
 

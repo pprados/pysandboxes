@@ -15,7 +15,9 @@ from typing import Callable, Optional, Tuple
 from aiohttp_sse_client import client as sse_client
 
 from .base_daemon import BaseDaemon
-from .os_sandbox import async_start_daemon, start_daemon, shutdown_daemon
+from .manage_loop import sandbox_loop
+from .os_sandbox import async_start_daemon, start_daemon, shutdown_daemon, \
+    async_shutdown_daemon
 from .parameters import HOST, PORT, PATH_RPC
 from .tools import _to_b85, _from_b85, is_in_sandbox
 from ..guard_sandbox import read_and_parse_config
@@ -87,6 +89,9 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
 
 
 def _get_rpc_params(args, func, kwargs, timeout, token):
+    """
+    Get the parameters for the RPC call.
+    """
     module_name, callable_name = get_callable_info(func)
     params = {
         "token": token,
@@ -99,13 +104,11 @@ def _get_rpc_params(args, func, kwargs, timeout, token):
     return params
 
 
-
 async def _async_rpc(func: Callable[..., Any],
                      timeout: float,
                      *args: Any,
                      **kwargs: Any) -> Any:
     global token
-    # Use async context manager for httpx client
     try:
         params = _get_rpc_params(args, func, kwargs, timeout, token)
         async with sse_client.EventSource(  # ← method override here
@@ -127,25 +130,39 @@ async def _async_rpc(func: Callable[..., Any],
                     print(msg["stdout"], end="")
                 if "stderr" in msg:
                     print(msg["stderr"], end="", file=sys.stderr)
-    except SystemExit as e:
+    except SystemExit:
         raise
-    except Exception as e:
-        logger.error(f"******** client Error in sandbox: {traceback.format_exc()}")  # FIXME
+    except Exception:
+        logger.error(
+            f"Client Error when calling the sandbox: {traceback.format_exc()}")  # FIXME
         raise
 
+
+@sandbox_loop
 def _sync_rpc(func: Callable[..., Any],
               timeout: float,
               *args: Any,
               **kwargs: Any) -> Any:
     loop = asyncio.get_event_loop()  # Get the current running loop
-    return loop.run_until_complete(_async_rpc(func, timeout, *args, **kwargs))
-
+    return asyncio.run_coroutine_threadsafe(
+        _async_rpc(func, timeout, *args, **kwargs),
+        loop).result()
 
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+
 # TODO: ajouter le max de TU
 def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., Any]:
+    """
+    Decorator to run a function in a sandbox.y
+    The function can be either synchronous or asynchronous.
+    The timeout parameter is used to set the maximum execution time of the function.
+    Raises a TimeoutError if the function execution exceeds the timeout.
+    Return the result of the function if it completes within the timeout.
+    Reraises any exception raised by the function.
+    """
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -175,52 +192,80 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
 
 
 SyncOrAsyncFunc = Union[
-    Callable[[], None],           # Fonction synchrone
-    Callable[[], Awaitable[None]] # Fonction asynchrone
+    Callable[[], None],  # Fonction synchrone
+    Callable[[], Awaitable[None]]  # Fonction asynchrone
 ]
+
 
 # TODO: ajouter le max de TU
 # TODO: rendre le code testable, avec activation/déactivation des SB
 # @runtime_checkable
 class sandboxes:
+    """
+    Context manager to start and stop the sandbox daemon.
+    The parameter `init_fn` is a function that will be called when the daemon starts,
+    inside the daemon process. It's a good place to initialize the database connection,
+    or to load some data.
+    """
+
     def __init__(self,
-                 init_fn:Optional[SyncOrAsyncFunc]=None
-    ) -> None:
-       self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
-        #TODO: ajouter des paramètres complémentaire ici ?
-       # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
+                 init_fn: Optional[SyncOrAsyncFunc] = None
+                 ) -> None:
+        self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
+        # TODO: ajouter des paramètres complémentaire ici ?
+        # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
 
     # ── synchronous API ────────────────────────────────
     def __enter__(self) -> None:
+        """
+        Start the sandbox daemon.
+        """
+        logger.debug("__enter__ start...")
         log_level = logging.root.getEffectiveLevel()
         _, os_sandbox, *_ = read_and_parse_config()
         start_daemon(os_sandbox, log_level)
+        logger.debug("__enter__ ok")
 
     def __exit__(self,
-                 exc_type:  type[BaseException] | None,
-                 exc:       BaseException | None,
-                 tb:        Any | None) -> bool | None:
+                 exc_type: Optional[type[BaseException]],
+                 exc: Optional[BaseException],
+                 tb: Optional[Any]) -> bool:
+        """
+        Stop the sandbox daemon.
+        """
+        logger.debug("__exit__ start...")
         shutdown_daemon()
-        return True
-
+        logger.debug("__exit__ done")
+        return False
 
     # ── asynchronous API ───────────────────────────────
     async def __aenter__(self) -> BaseDaemon:
-
-        self.current_daemon = None
+        """
+        Start the sandbox daemon.
+        """
         log_level = logging.root.getEffectiveLevel()
         _, os_sandbox, *_ = read_and_parse_config()
-        self.current_daemon = await async_start_daemon(os_sandbox, log_level)
+        await async_start_daemon(os_sandbox, log_level)
 
     async def __aexit__(self,
-                        exc_type:  type[BaseException] | None,
-                        exc:       BaseException | None,
-                        tb:        Any | None) -> bool | None:
-        if self.current_daemon:
-            await self.current_daemon.shutdown()
+                        exc_type: Optional[type[BaseException]],
+                        exc: Optional[BaseException],
+                        tb: Optional[Any]) -> bool:
+        """
+        Stop the sandbox daemon.
+        """
+        await async_shutdown_daemon()
+        return False
 
 
 def run(main, *, debug=None, loop_factory=None, cancel_remaining_tasks=True) -> Any:
+    """
+    Run the main coroutine in a new event loop, with the sandbox
+    It's similar to `asyncio.run()`, but with the sandbox.
+    The parameters are the same as `asyncio.run()`.
+    cancem_remaining_tasks: if True, cancel all remaining tasks when the main coroutine is done.
+    """
+
     async def _run():
         async with sandboxes():
             result = (await asyncio.gather(main))[0]
@@ -242,5 +287,5 @@ def run(main, *, debug=None, loop_factory=None, cancel_remaining_tasks=True) -> 
                 done, _ = await asyncio.wait(tasks_to_cancel)
             return result
 
-    #return asyncio.run(_run(), debug=debug, loop_factory=loop_factory) # FIXME: devrai fonctionner depuis 3.12
-    return asyncio.run(_run(), debug=debug)
+    return asyncio.run(_run())
+    # return asyncio.run(_run(), debug=debug, loop_factory=loop_factory) # FIXME

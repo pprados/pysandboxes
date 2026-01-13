@@ -4,6 +4,7 @@ import importlib
 import inspect
 import json
 import logging
+import os
 import sys
 import traceback
 from asyncio import CancelledError
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 from typing import AsyncGenerator, List, Any, Optional, TYPE_CHECKING
 from typing import Dict
 
-from pysandboxes.remote.manage_loop import get_sandbox_loop, sandbox_loop
+from pysandboxes.remote.manage_loop import sandbox_loop
 
 if TYPE_CHECKING:
     import uvicorn
@@ -53,6 +54,12 @@ async def sandbox_daemon(
         args: List[Any],
         kwargs: Dict[str, Any],
 ) -> AsyncGenerator[str, None]:
+    """
+    This function is called by the sandbox daemon to execute a function in the sandbox.
+    The code use a run_in_executor to run the function in a separate thread.
+    All the stdio is captured and sent back to the client.
+    The exception is also sent back to the client.
+    """
     try:
         from .catch_stdio import catch_stdio, acatch_stdio
         loop = asyncio.get_event_loop()
@@ -82,18 +89,14 @@ async def sandbox_daemon(
                     function, kwargs, *args)
                 return rc
 
-            task = asyncio.create_task(
-                _set_sandbox_and_catch_stdio())
             # task = asyncio.create_task(
-            #     acatch_stdio(
-            #         stdio_queue,
-            #         function, kwargs, *args))
+            #     _set_sandbox_and_catch_stdio())
+            fut = asyncio.gather(_set_sandbox_and_catch_stdio())
         else:
             @sandbox_loop
             def _set_sandbox_and_catch_stdio():
                 try:
                     set_is_in_sandbox(True)
-                    logger.debug("sync _set_sandbox_and_catch_stdio()...")
                     return catch_stdio(
                         stdio_queue,
                         function, kwargs, *args)
@@ -101,14 +104,11 @@ async def sandbox_daemon(
                     logger.error(traceback.format_exc())
                     raise e
 
-            await loop.run_in_executor(
+            fut = loop.run_in_executor(
                 None,
                 _set_sandbox_and_catch_stdio,
             )
-            # logger.debug(f"{rr=}")
         while stdio_queue:
-            # msg = stream_queue.get()  # sync mode
-            # msg = await loop.run_in_executor(None, stdio_queue.get)  # async mode
             msg = await stdio_queue.get()
             if "result" in msg:
                 result = msg
@@ -119,8 +119,7 @@ async def sandbox_daemon(
                 yield _sse_msg(json.dumps(msg))
             elif "stderr" in msg:
                 yield _sse_msg(json.dumps(msg))
-        # await task  # FIXME: n'attend plus la fin de la task
-        # result = task.result()
+        result = await fut
         if "result" in result:
             logger.debug("(%s) ... return %s", session_id, repr(result["result"]))
             result["result"] = _to_b85(result["result"])
@@ -134,7 +133,7 @@ async def sandbox_daemon(
         logger.info("(%s) ... cancelled", session_id)
         yield json.dumps({"session_id": session_id, "cancelled": True})
     except AssertionError as e:
-        logger.exception("assertion %s",traceback.format_exc())
+        logger.exception("assertion %s", traceback.format_exc())
         sys.exit(-1)
     except Exception as e:
         logger.info("(%s) ... error %s", session_id, repr(e))
@@ -142,12 +141,6 @@ async def sandbox_daemon(
 
 
 # %%
-
-
-# TODO: def prepare_main(self, ns=None, /, **kwargs):
-# TODO: def prepare_sandbox(self, ns=None, /, **kwargs):
-# TODO: def after_sandbox(self, ns=None, /, **kwargs):
-
 
 def create_uvicorn_daemon(log_level: int) -> 'uvicorn.Server':
     import uvicorn
@@ -263,19 +256,18 @@ def create_uvicorn_daemon(log_level: int) -> 'uvicorn.Server':
 
 class LocalTaskDaemon(BaseDaemon):
 
-    async def _start(self, envs: Dict[str, str],
-                     log_level: int) -> None:  # FIXME: use envs ?
-        set_is_in_sandbox(True)  # FIXME: doublon avec l'appelant ?
+    async def start(self, log_level: int, envs: dict[str, str] = None) -> Any:
+        if not envs:
+            envs = dict(os.environ)
+        set_is_in_sandbox(True)
 
         self.uvicorn = create_uvicorn_daemon(log_level)
 
-
-
+        start_event = asyncio.Event()
 
         async def _run_daemon():
             try:
-                logger.warning("Start uvicorn")
-                assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
+                start_event.set()
                 await self.uvicorn.serve()
             except asyncio.CancelledError as e:
                 if self.uvicorn:
@@ -283,29 +275,36 @@ class LocalTaskDaemon(BaseDaemon):
                         await self.uvicorn.shutdown()
                     except Exception as e:
                         logger.warning(f"Ignore error during uvicorn shutdown: {e}")
-                    self.uvicorn = None
+                    self.uvicorn.started = False
             except SystemExit:
-                pass  # Ignore
+                raise
 
         self.task = asyncio.create_task(_run_daemon(), name="ServerTask")
 
         # Warning: the server is not yet ready to accept connections. Wait a small delay
+        await start_event.wait()
         while not self.uvicorn.started:
-            logger.debug("wait server")
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0)
+        assert is_in_sandbox()  # FIXME: a garder ?
         logger.debug("Uvicorn started")
 
     async def shutdown(self) -> None:
+        if not self.uvicorn:
+            raise RuntimeError("Server not started")
         self.task.cancel()
-        while self.uvicorn:
-            await asyncio.sleep(1)  # FIXME
-            logger.debug("wait shutdown")
         await self.task
-        self.is_started=False
-        set_is_in_sandbox(False)  # FIXME: vérifier, déplacer, ...
+        # FIXME: ne semble pas nécessaire
+        while self.uvicorn.started:
+            await asyncio.sleep(0.1)
+        self.uvicorn= None
+        self.task = None
 
-    async def join(self) -> int:
-        return await self.task
+    @property
+    def is_started(self) -> bool:
+        return self.uvicorn.started if self.uvicorn else False
+
+    async def join(self) -> None:
+        await self.task
 
 
 async def main() -> int:
@@ -347,7 +346,7 @@ async def main() -> int:
     task_daemon = LocalTaskDaemon()
     try:
         await task_daemon.start(log_level)
-        return await task_daemon.join()
+        await task_daemon.join()
     finally:
         await task_daemon.shutdown()
 

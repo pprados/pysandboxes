@@ -1,25 +1,20 @@
 import asyncio
 import functools
+import logging
 import threading
-import time
 import weakref
 from _weakref import ReferenceType
 from asyncio import AbstractEventLoop
-from contextlib import contextmanager
 from typing import Optional, Any, Callable
-
-import logging
 
 logger = logging.getLogger(__name__)
 
 _background_loop_ref:ReferenceType[AbstractEventLoop] = None
-_server_task_ref = None
-_background_thread = None
 
 _lock = threading.Lock()
 def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop]:
     """Crée une boucle d'arrière-plan dans un thread dédié si nécessaire"""
-    global _background_loop_ref, _background_thread,_lock
+    global _background_loop_ref
 
     if _background_loop_ref is not None:
         loop = _background_loop_ref()
@@ -31,27 +26,22 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
 
     with _lock:
         # Double check
-        logger.debug("double check")
         if _background_loop_ref is not None:
             loop = _background_loop_ref()
             if loop is not None and loop.is_running():
                 return loop
 
-        # Create a private loop in a thread
-        logger.debug("Create new event")
+        logger.debug("Create a private event loop")
         loop = asyncio.new_event_loop()
-        loop._debug=True  # FIXME: flag pour debug
         _background_loop_ref = weakref.ref(loop)
         asyncio.set_event_loop(loop)
 
         start_event = threading.Event()
         def _start_background_loop() -> None:
-            """Exécute la boucle événementielle en continu"""
-            logger.debug("Createion de la private loop")
+            """Start the background loop forever"""
             asyncio.set_event_loop(loop)
             start_event.set()
             loop.run_forever()
-            logger.error("Private loop stopped")
 
         thread = threading.Thread(
             target=_start_background_loop,
@@ -60,8 +50,6 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
         )
         thread.start()
         start_event.wait()
-        while not loop.is_running():
-            time.sleep(0)
     return loop
 
 
@@ -77,7 +65,6 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
 
         loop = get_sandbox_loop()
         asyncio.set_event_loop(loop)
-        assert asyncio.get_event_loop().get_debug()
 
         result = func(*args, **kwargs)
 
@@ -86,9 +73,13 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
 
     return wrapper
 
+def reset_sandbox_loop():
+    global _background_loop_ref
+    with _lock:
+        _background_loop_ref = None
+
 def get_sandbox_loop() -> AbstractEventLoop:
     """Lance le serveur dans la boucle appropriée"""
-    global _server_task_ref
 
     try:
         # # Reuse private loop?
