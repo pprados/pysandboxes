@@ -293,9 +293,6 @@ class LocalTaskDaemon(BaseDaemon):
             raise RuntimeError("Server not started")
         self.task.cancel()
         await self.task
-        # FIXME: ne semble pas nécessaire
-        while self.uvicorn.started:
-            await asyncio.sleep(0.1)
         self.uvicorn= None
         self.task = None
 
