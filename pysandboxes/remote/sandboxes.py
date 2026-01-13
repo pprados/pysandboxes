@@ -1,20 +1,21 @@
-from multiprocessing import Lock
-
 import asyncio
+import contextlib
 import functools
-import httpx
 import inspect
 import json
 import logging
 import os
 import sys
-from aiohttp_sse_client import client as sse_client
-from time import sleep
-from typing import Any, TypeVar
+from multiprocessing import Lock
+from typing import Any, TypeVar, AsyncGenerator
 from typing import Callable, Optional, Tuple
 
-from .os_sandbox import start_daemon, async_start_daemon
-from .parameters import HOST, PORT, PATH_RPC, DELAY_FOR_START_DAEMON
+import httpx
+from aiohttp_sse_client import client as sse_client
+
+from .abstract_start_daemon import BaseDaemon
+from .os_sandbox import async_start_daemon
+from .parameters import HOST, PORT, PATH_RPC
 from .tools import _to_b85, _from_b85, is_in_sandbox
 from ..guard_sandbox import read_and_parse_config
 
@@ -25,62 +26,9 @@ SANDBOX_SERVER_URL: str = os.environ.get(
     "SANDBOX_SERVER_URL",
     f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}{PATH_RPC}")
 
-token = "abc123"  # FIXME: a gerer via un context dans l'appelant ?
+token = "abc123"  # FIXME: token a gerer via un context dans l'appelant ?
 
 _lock = Lock()
-
-
-def _lazy_start_daemon() -> None:
-    global _daemon_started, _lock
-    with _lock:
-        if not _daemon_started:
-            log_level = logging.root.getEffectiveLevel()
-            _, os_sandbox, *_ = read_and_parse_config()
-            if os_sandbox != "prestarted":  # FIXME
-                start_daemon(os_sandbox, log_level)
-                _daemon_started = True
-    sleep(DELAY_FOR_START_DAEMON)
-    pass
-
-
-_alock = asyncio.Lock()
-_current_daemon: Optional[asyncio.Task[object]] = None
-
-
-async def _async_lazy_start_daemon() -> None:
-    global _alock, _current_daemon
-    async with _alock:
-        if not _current_daemon:
-            log_level = logging.root.getEffectiveLevel()
-            _, os_sandbox, *_ = read_and_parse_config()
-            _current_daemon = await async_start_daemon(os_sandbox, log_level)
-    await asyncio.sleep(
-        DELAY_FOR_START_DAEMON)  # FIXME: capturer le flux pour détecter le start, voir récupérer un secret
-    # atexit.register(_shutdown_daemon)
-
-
-async def _async_shutdown_daemon() -> None:
-    global _daemon_started, _alock, _current_daemon
-    async with _alock:
-        if _current_daemon:
-            await _current_daemon.shutdown()
-        _current_daemon = None
-
-
-# @atexit.register  FIXME: atexit ?
-def _shutdown_daemon() -> None:
-    global _lock, _current_daemon
-    with _lock:
-        if _current_daemon:
-
-            try:
-                # Gather all tasks and run them to completion.
-                asyncio.run(
-                    asyncio.gather(_current_daemon.shutdown(), return_exceptions=False))
-            except RuntimeError:  # Rare case: we are *still* inside a running loop (e.g. Jupyter)
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(asyncio.gather(_current_daemon.shutdown()))
-            _current_daemon = None
 
 
 def _reraise(remove: int, tp, value, tb=None):
@@ -184,7 +132,6 @@ async def _async_rpc(func: Callable[..., Any],
                      *args: Any,
                      **kwargs: Any) -> Any:
     global token
-    await _async_lazy_start_daemon()
     # Use async context manager for httpx client
     try:
 
@@ -201,7 +148,7 @@ async def _async_rpc(func: Callable[..., Any],
         async with sse_client.EventSource(  # ← method override here
                 SANDBOX_SERVER_URL,
                 # session=session,  # TODO: garder la session ouverte pour reutiliser ?
-                option={"method":"POST"},
+                option={"method": "POST"},
                 json=params,
                 headers={"Accept": "text/event-stream"},
                 timeout=None,  # keep-alive
@@ -254,3 +201,41 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
         return decorator
     else:
         return decorator(_func)
+
+
+@contextlib.asynccontextmanager
+async def use_sandboxes() -> AsyncGenerator[BaseDaemon, None]:
+    current_daemon = None
+    try:
+        log_level = logging.root.getEffectiveLevel()
+        _, os_sandbox, *_ = read_and_parse_config()
+        current_daemon = await async_start_daemon(os_sandbox, log_level)
+        yield current_daemon
+    finally:
+        if current_daemon:
+            await current_daemon.shutdown()
+
+
+def run(main, *, debug=None, loop_factory=None, cancel_remaining_tasks=True) -> Any:
+    async def _run():
+        async with use_sandboxes():
+            result = (await asyncio.gather(main))[0]
+
+        # Cancel all remaining tasks
+        if cancel_remaining_tasks:
+            loop = asyncio.get_running_loop()
+            tasks_to_cancel = [
+                task for task in asyncio.all_tasks(loop) if
+                task is not asyncio.current_task()
+            ]
+
+            if tasks_to_cancel:
+                # Cancelling all task
+                for task in tasks_to_cancel:
+                    task.cancel()
+
+                # Wait for all cancelled tasks to complete their cleanup
+                done, _ = await asyncio.wait(tasks_to_cancel)
+            return result
+
+    return asyncio.run(_run(), debug=debug, loop_factory=loop_factory)

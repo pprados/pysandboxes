@@ -274,7 +274,7 @@ def stop_daemon(daemon):
     # logger.debug("ATEXIT canceled")
 
 
-class _LocalTaskDaemon(BaseDaemon):
+class LocalTaskDaemon(BaseDaemon):
 
     async def _start(self, envs: Dict[str, str],
                      log_level: int) -> None:  # FIXME: use envs ?
@@ -346,7 +346,7 @@ async def main() -> int:
     logging.info(
         f"Start a py-sandbox encapsulated in an os-sandox of type '{outer_sandbox}'")
     # FIXME activate_sandboxes(dict(os.environ), args_rules=None, outer_sandbox=outer_sandbox)
-    task_daemon = _LocalTaskDaemon()
+    task_daemon = LocalTaskDaemon()
     try:
         await task_daemon.start(log_level)
         return await task_daemon.join()
