@@ -5,16 +5,19 @@ import inspect
 import json
 import logging
 import sys
+from asyncio import CancelledError
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Any, Optional
+from typing import AsyncGenerator, List, Any, Optional, TYPE_CHECKING
 from typing import Dict
 
-import uvicorn
+if TYPE_CHECKING:
+    import uvicorn
+
 from fastapi import FastAPI, Request, Body
 from fastapi.responses import StreamingResponse
 
+from .abstract_start_daemon import BaseDaemon
 from .parameters import HOST, PORT, PATH_RPC
-from .abstract_start_daemon import BaseStartDaemon
 from .tools import _from_b85, _to_b85, is_in_sandbox, \
     set_is_in_sandbox, configure_logging_level
 
@@ -35,6 +38,9 @@ class RPCPayload(object):
     kwargs: str
 
 
+def _sse_msg(data:str):
+    return "data:" + data + "\n\n"
+
 async def sandbox_daemon(
         token: str,  # TODO: token
         session_id: str,
@@ -43,79 +49,81 @@ async def sandbox_daemon(
         args: List[Any],
         kwargs: Dict[str, Any],
 ) -> AsyncGenerator[str, None]:
-    from .catch_stdio import catch_stdio, acatch_stdio
-
-    module_name, function_name = function_id.split(':', 1)
-    module = importlib.import_module(module_name)
     try:
-        function = getattr(module, function_name)
-    except AttributeError:
-        logger.warning("Function %s.%s() not found", module, function_name)
-        return
-    use_async = inspect.iscoroutinefunction(function)
-    logger.info(f"(%s) calling %s%s.%s(%s,%s)...",
-                session_id,
-                "async " if use_async else "",
-                module_name, function_name,
-                ",".join(map(repr, args)),
-                ",".join([f"{k}={repr(v)}" for k, v in kwargs.items()]))
+        from .catch_stdio import catch_stdio, acatch_stdio
 
-    stdio_queue = asyncio.Queue()
+        module_name, function_name = function_id.split(':', 1)
+        module = importlib.import_module(module_name)
+        try:
+            function = getattr(module, function_name)
+        except AttributeError:
+            logger.warning("Function %s.%s() not found", module, function_name)
+            return
+        use_async = inspect.iscoroutinefunction(function)
+        logger.debug(f"(%s) calling %s%s.%s(%s,%s)...",
+                     session_id,
+                     "async " if use_async else "",
+                     module_name, function_name,
+                     ",".join(map(repr, args)),
+                     ",".join([f"{k}={repr(v)}" for k, v in kwargs.items()]))
 
-    if use_async:
-        async def _set_sandbox_and_catch_stdio():
-            set_is_in_sandbox(True)
-            return await acatch_stdio(
-                stdio_queue,
-                function, kwargs, *args)
+        stdio_queue = asyncio.Queue()
 
-        task = asyncio.create_task(
-            _set_sandbox_and_catch_stdio())
-        # task = asyncio.create_task(
-        #     acatch_stdio(
-        #         stdio_queue,
-        #         function, kwargs, *args))
-    else:
-        def _set_sandbox_and_catch_stdio():
-            set_is_in_sandbox(True)
-            return catch_stdio(
-                stdio_queue,
-                function, kwargs, *args)
+        if use_async:
+            async def _set_sandbox_and_catch_stdio() -> Any:
+                set_is_in_sandbox(True)
+                rc = await acatch_stdio(
+                    stdio_queue,
+                    function, kwargs, *args)
+                return rc
 
-        task = asyncio.get_running_loop().run_in_executor(None,
-                                                          _set_sandbox_and_catch_stdio,
-                                                          )
-        # task = asyncio.get_running_loop().run_in_executor(None,
-        #                                                   catch_stdio,
-        #                                                   stdio_queue,
-        #                                                   function,
-        #                                                   kwargs,
-        #                                                   *args,
-        #                                                   )
-    while stdio_queue:
-        # msg = stream_queue.get()  # sync mode
-        # msg = await loop.run_in_executor(None, stdio_queue.get)  # async mode
-        msg = await stdio_queue.get()
-        if "result" in msg:
-            eval_result = msg["result"]
-            break
-        elif "exception" in msg:
-            break
-        elif "stdout" in msg:
-            yield json.dumps(msg)
-        elif "stderr" in msg:
-            yield json.dumps(msg)
-    await task
-    result = task.result()
-    if "result" in result:
-        logger.info("(%s) ... return %s", session_id, repr(result["result"]))
-        result["result"] = _to_b85(result["result"])
-    if "exception" in result:
-        logger.info("(%s) ... raise %s", session_id,
-                    repr(result["exception"][1]))
-        result["exception"] = _to_b85(result["exception"])
-    result["session_id"] = session_id
-    yield json.dumps(result)
+            task = asyncio.create_task(
+                _set_sandbox_and_catch_stdio())
+            # task = asyncio.create_task(
+            #     acatch_stdio(
+            #         stdio_queue,
+            #         function, kwargs, *args))
+        else:
+            def _set_sandbox_and_catch_stdio():
+                set_is_in_sandbox(True)
+                logger.debug("sync _set_sandbox_and_catch_stdio()...")
+                return catch_stdio(
+                    stdio_queue,
+                    function, kwargs, *args)
+
+            task = asyncio.get_running_loop().run_in_executor(None,
+                                                              _set_sandbox_and_catch_stdio,
+                                                              )
+        while stdio_queue:
+            # msg = stream_queue.get()  # sync mode
+            # msg = await loop.run_in_executor(None, stdio_queue.get)  # async mode
+            msg = await stdio_queue.get()
+            if "result" in msg:
+                result = msg
+                break
+            elif "exception" in msg:
+                break
+            elif "stdout" in msg:
+                yield _sse_msg(json.dumps(msg))
+            elif "stderr" in msg:
+                yield _sse_msg(json.dumps(msg))
+        # await task  # FIXME: n'attend plus la fin de la task
+        # result = task.result()
+        if "result" in result:
+            logger.debug("(%s) ... return %s", session_id, repr(result["result"]))
+            result["result"] = _to_b85(result["result"])
+        if "exception" in result:
+            logger.debug("(%s) ... raise %s", session_id,
+                         repr(result["exception"][1]))
+            result["exception"] = _to_b85(result["exception"])
+        result["session_id"] = session_id
+        yield _sse_msg(json.dumps(result))
+    except CancelledError:
+        logger.info("(%s) ... cancelled", session_id)
+        yield json.dumps({"session_id": session_id, "cancelled": True})
+    except Exception as e:
+        logger.info("(%s) ... error %s", session_id, repr(e))
+        yield json.dumps({"session_id": session_id, "error": repr(e)})
 
 
 # %%
@@ -125,7 +133,10 @@ async def sandbox_daemon(
 # TODO: def prepare_sandbox(self, ns=None, /, **kwargs):
 # TODO: def after_sandbox(self, ns=None, /, **kwargs):
 
-def create_uvicorn_daemon(log_level: int) -> uvicorn.Server:
+
+def create_uvicorn_daemon(log_level: int) -> 'uvicorn.Server':
+    import uvicorn
+
     app = FastAPI()
 
     @app.get("/")
@@ -158,25 +169,142 @@ def create_uvicorn_daemon(log_level: int) -> uvicorn.Server:
         )
 
     # TODO: https
-    return uvicorn.Server(uvicorn.Config(
+
+    # Extract current logging configuration
+    # If not logger exist, try to duplicate the root logger parameters
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        root_handler = root_logger.handlers[0]
+    else:
+        root_handler = logging.StreamHandler(stream=sys.stderr)  # FIXME: a tester
+        # root_handler=logging.StreamHandler(stream="ext://sys.stdout")  # FIXME: a tester
+    fmt = getattr(root_handler.formatter, "_fmt",
+                  '%(levelname)s:%(name)s:%(message)s')
+    if root_stream := getattr(root_handler, "stream", None):
+        if stream_name := getattr(root_stream, "name", None):
+            if stream_name == "<stderr>":
+                stream = "ext://sys.stderr"
+            elif stream_name == "<stdout>":
+                stream = "ext://sys.stdout"
+            else:
+                stream = f"ext:{root_stream.name}"
+    else:
+        stream = None
+    default_level=logger.getEffectiveLevel()
+    logging_confg = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "()": logging.Formatter,
+                "fmt": fmt,
+            },
+            "access": {
+                "()": "uvicorn.logging.AccessFormatter",
+                "fmt": '%(levelname)s:%(name)s: %(client_addr)s - '
+                       '"%(request_line)s" %(status_code)s',
+            },
+        },
+        "handlers": {
+            "default": {
+                "formatter": "default",
+                "class": root_handler.__class__,
+                "stream": stream,
+            },
+            "access": {
+                "formatter": "access",
+                "class": "logging.StreamHandler",
+                "stream": stream,
+            },
+        },
+        "loggers": {
+            "uvicorn": {
+                "handlers": ["default"],
+                "level": logging.ERROR, # logging.getLevelName(root_logger.level),
+                "propagate": False,
+                # "propagate": root_logger.propagate,
+            },
+            "uvicorn.error": {
+                "level": default_level
+            },
+            "uvicorn.access": {
+                "handlers": ["access"],
+                "level": default_level,
+                 "propagate": False
+            },
+        },
+    }
+
+    uvicorn_server= uvicorn.Server(uvicorn.Config(
         app,
         host=HOST,
         port=PORT,
-        log_level=log_level))
+        use_colors=None,
+        log_config=logging_confg,
+    ))
+    return uvicorn_server
+
+async def _cleanup(daemon):
+    logger.debug("CLEANUP ...")
+    if daemon.started:
+        await daemon.shutdown()
+    else:
+        logger.debug("server not started")
+
+    logger.debug("CLEANUP DONE")
+    # if self.daemon:
+    #     logger.debug("CLEANUP ...")
+    #     await self.daemon.shutdown()
+    #     logger.debug("CLEANUP DONE")
+    #     self.daemon=None
 
 
-class _LocalTaskDaemon(BaseStartDaemon):
+# @atexit.register  # Executed after normal interpreter shutdown has started
+def stop_daemon(daemon):
+    logger.debug("ATEXIT cancel...")
+    try:
+        # Gather all tasks and run them to completion.
+        asyncio.run(
+            asyncio.gather(_cleanup(daemon), return_exceptions=False))
+    except RuntimeError:  # Rare case: we are *still* inside a running loop (e.g. Jupyter)
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.gather(_cleanup(daemon)))
+    logger.debug("ATEXIT shutdowned")
+    # self.task.cancel()
+    # logger.debug("ATEXIT canceled")
+
+
+class _LocalTaskDaemon(BaseDaemon):
 
     async def _start(self, envs: Dict[str, str],
                      log_level: int) -> None:  # FIXME: use envs ?
-        set_is_in_sandbox(True)
-        self.daemon = create_uvicorn_daemon(log_level)
+        set_is_in_sandbox(True)  # FIXME: doublon avec l'appelant ?
 
-        self.task = asyncio.create_task(self.daemon.serve())
+        self.uvicorn = create_uvicorn_daemon(log_level)
 
-    async def close(self) -> None:
-        await self.daemon.shutdown()
-        logger.info("daemon is shutdown")
+        async def _run_daemon():
+            try:
+                await self.uvicorn.serve()
+            except asyncio.CancelledError as e:
+                if self.uvicorn:
+                    try:
+                        await self.uvicorn.shutdown()
+                    except Exception as e:
+                        logger.warning(f"Ignore error during uvicorn shutdown: {e}")
+                    self.uvicorn = None
+            except SystemExit:
+                pass  # Ignore
+
+        self.task = asyncio.create_task(_run_daemon())
+        # Warning: the server is not yet ready to accept connections. Wait a small delay
+        while not self.uvicorn.started:
+            await asyncio.sleep(0)
+        logger.debug("Uvicorn started")
+
+    async def shutdown(self) -> None:
+        self.task.cancel()
+        await self.task
+        set_is_in_sandbox(False)  # FIXME: vérifier, déplacer, ...
 
     async def join(self) -> int:
         return await self.task
@@ -223,7 +351,7 @@ async def main() -> int:
         await task_daemon.start(log_level)
         return await task_daemon.join()
     finally:
-        await task_daemon.close()
+        await task_daemon.shutdown()
 
 
 if __name__ == "__main__":

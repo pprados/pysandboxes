@@ -17,7 +17,7 @@ def event_loop():
 async def before_start_daemon() -> Iterator[None]:
     # server=await start_daemon("task")  # FIXME: pb de detection de sandbox, car même interpreter
     yield
-    # server.close()
+    # server.shutdown()
 
 
 @sandbox()
@@ -33,7 +33,7 @@ def test_sync_function():
 @sandbox()
 async def async_function(a: str, b: str) -> str:
     import asyncio
-    await asyncio.sleep(0.01)  # Simule une opération asynchrone
+    await asyncio.sleep(0)  # Simule une opération asynchrone
     return f"{a} {b}"
 
 

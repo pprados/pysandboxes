@@ -1,3 +1,5 @@
+import asyncio
+
 import base64
 import contextvars
 import logging
@@ -7,9 +9,12 @@ import shutil
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
 from pathlib import Path
-from typing import Any, Optional, Dict, Tuple
+from typing import Any, Optional, Dict, Tuple, Awaitable
 
 import netifaces
+
+logger = logging.getLogger(__name__)
+
 
 _is_in_sandbox = False
 
@@ -221,3 +226,32 @@ def return_level_parameter(log_level:int) -> str:
         logging.NOTSET: "-vvv",
     }
     return _map.get(log_level, logging.NOTSET)
+
+
+def create_daemon_task(
+    coro: Awaitable[object],
+    *,
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> asyncio.Task[object]:
+    """
+    Schedule *coro* as a fire-and-forget task that will not raise warnings
+    if cancelled and whose exceptions are logged instead of propagating.
+    """
+    async def _run() -> None:
+        try:
+            await coro
+        except asyncio.CancelledError:
+            # Silent cancellation → like a daemon stopping with the loop
+            logger.debug("Cancelled daemon task. Ignore")
+            pass
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("Unhandled exception in daemon task: %s", exc)
+
+    loop = loop or asyncio.get_running_loop()
+    task = loop.create_task(_run(), name="daemon")
+    # Ensure exception retrieval → no "Task exception was never retrieved"
+    def is_canceled(t: asyncio.Task[object]):
+        logger.debug(f"{t.cancelled()}")
+    # task.add_done_callback(lambda t: t.exception())
+    task.add_done_callback(is_canceled)
+    return task

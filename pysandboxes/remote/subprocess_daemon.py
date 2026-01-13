@@ -5,14 +5,16 @@ import random
 import sys
 import time
 from abc import abstractmethod
+from pathlib import Path
 from typing import Callable, List, Dict, Any, Tuple
 
-from .abstract_start_daemon import BaseStartDaemon
+from .abstract_start_daemon import BaseDaemon
 from .tools import return_level_parameter
 from ..guard_sandbox import AllRules, read_and_parse_config
 
 logger = logging.getLogger(__name__)
 
+DEBUG = True
 
 async def _write_stream(
         child_stdin_writer: asyncio.StreamWriter
@@ -77,7 +79,7 @@ async def _read_stream(
 #             break
 #
 
-class BaseSubProcessDaemon(BaseStartDaemon):
+class BaseSubProcessDaemon(BaseDaemon):
 
     def __init__(self,
                  max_attempts: int = 1,  # Maximum number of retry _attempts TODO 5
@@ -103,7 +105,7 @@ class BaseSubProcessDaemon(BaseStartDaemon):
                     log_level:int,
                     ) -> List[str]:
         from . import daemon
-        cmd = [
+        cmd_parameters = [
             sys.executable,
             "-P",  # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
 
@@ -113,11 +115,11 @@ class BaseSubProcessDaemon(BaseStartDaemon):
         ]
         verbose = return_level_parameter(log_level)
         if verbose:
-            cmd.append(verbose)
-        cmd.extend([
+            cmd_parameters.append(verbose)
+        cmd_parameters.extend([
             "--outer-sandbox", "subprocess",
         ])
-        return cmd
+        return cmd_parameters
 
     @abstractmethod
     def update_rules(self, envs: Dict[str, str]) -> AllRules:
@@ -150,12 +152,12 @@ class BaseSubProcessDaemon(BaseStartDaemon):
                             stdout: bool = False) -> None:
         umask = os.umask(0o002)
         umask = os.umask(umask) & 0o007  # Only keep user flags
-        logger.debug("\n#!/bin/bash\n" +
-              args[0] + " " +
-              " \\\n  ".join(
-                  param if " " not in param else repr(param) for param in args[1:]) +
-              "\n")
-
+        if DEBUG:
+            Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME:
+                  args[0] + " " +
+                  " \\\n  ".join(
+                      param if " " not in param else repr(param) for param in args[1:]) +
+                  "\n")
         self._process = await asyncio.create_subprocess_exec(
             *args,
             **process_kwargs,
@@ -192,7 +194,7 @@ class BaseSubProcessDaemon(BaseStartDaemon):
             )
         # FIXME self.task = asyncio.create_task(self.daemon.serve())
 
-    async def close(self) -> None:
+    async def shutdown(self) -> None:
         if self._stdout_task:
             self._stdout_task.cancel()
             self._stdout_task = None
@@ -225,7 +227,7 @@ class BaseSubProcessDaemon(BaseStartDaemon):
                 wait_time: float = random.uniform(current_base_backoff * 0.9,
                                                   current_base_backoff)
                 await asyncio.sleep(wait_time)
-                await self.close()
+                await self.shutdown()
                 self._last_reset = time.time()
                 await self._re_start()
         return errorlevel

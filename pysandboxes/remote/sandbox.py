@@ -1,54 +1,87 @@
+from multiprocessing import Lock
+
 import asyncio
 import functools
+import httpx
 import inspect
 import json
 import logging
+import os
 import sys
-from multiprocessing import Lock
+from aiohttp_sse_client import client as sse_client
 from time import sleep
 from typing import Any, TypeVar
 from typing import Callable, Optional, Tuple
 
-import httpx
-
-from . import HOST, PORT, PATH_RPC, DELAY_FOR_START_DAEMON
-from .abstract_start_daemon import BaseStartDaemon
 from .os_sandbox import start_daemon, async_start_daemon
+from .parameters import HOST, PORT, PATH_RPC, DELAY_FOR_START_DAEMON
 from .tools import _to_b85, _from_b85, is_in_sandbox
 from ..guard_sandbox import read_and_parse_config
 
 logger = logging.getLogger(__name__)
 
 # URL de votre serveur SSE
-SSE_SERVER_URL: str = f"http://{HOST}:{PORT}{PATH_RPC}"
+SANDBOX_SERVER_URL: str = os.environ.get(
+    "SANDBOX_SERVER_URL",
+    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}{PATH_RPC}")
 
 token = "abc123"  # FIXME: a gerer via un context dans l'appelant ?
 
-_daemon_started: bool = False
 _lock = Lock()
+
+
 def _lazy_start_daemon() -> None:
     global _daemon_started, _lock
     with _lock:
         if not _daemon_started:
             log_level = logging.root.getEffectiveLevel()
             _, os_sandbox, *_ = read_and_parse_config()
-            if os_sandbox != "prestarted": # FIXME
+            if os_sandbox != "prestarted":  # FIXME
                 start_daemon(os_sandbox, log_level)
-                _daemon_started=True
+                _daemon_started = True
     sleep(DELAY_FOR_START_DAEMON)
     pass
 
+
 _alock = asyncio.Lock()
+_current_daemon: Optional[asyncio.Task[object]] = None
+
+
 async def _async_lazy_start_daemon() -> None:
-    global _daemon_started, _alock
+    global _alock, _current_daemon
     async with _alock:
-        if not _daemon_started:
+        if not _current_daemon:
             log_level = logging.root.getEffectiveLevel()
             _, os_sandbox, *_ = read_and_parse_config()
-            await async_start_daemon(os_sandbox,log_level)
-            _daemon_started=True
-    await asyncio.sleep(DELAY_FOR_START_DAEMON)
-    pass
+            _current_daemon = await async_start_daemon(os_sandbox, log_level)
+    await asyncio.sleep(
+        DELAY_FOR_START_DAEMON)  # FIXME: capturer le flux pour détecter le start, voir récupérer un secret
+    # atexit.register(_shutdown_daemon)
+
+
+async def _async_shutdown_daemon() -> None:
+    global _daemon_started, _alock, _current_daemon
+    async with _alock:
+        if _current_daemon:
+            await _current_daemon.shutdown()
+        _current_daemon = None
+
+
+# @atexit.register  FIXME: atexit ?
+def _shutdown_daemon() -> None:
+    global _lock, _current_daemon
+    with _lock:
+        if _current_daemon:
+
+            try:
+                # Gather all tasks and run them to completion.
+                asyncio.run(
+                    asyncio.gather(_current_daemon.shutdown(), return_exceptions=False))
+            except RuntimeError:  # Rare case: we are *still* inside a running loop (e.g. Jupyter)
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(asyncio.gather(_current_daemon.shutdown()))
+            _current_daemon = None
+
 
 def _reraise(remove: int, tp, value, tb=None):
     while remove:
@@ -125,7 +158,7 @@ def _sync_rpc(func: Callable[..., Any],
             "kwargs": _to_b85(kwargs),
         }
         with client.stream(
-                "POST", SSE_SERVER_URL,
+                "POST", SANDBOX_SERVER_URL,
                 headers={"Accept": "text/event-stream"},
                 json=params,
                 follow_redirects=False,
@@ -151,10 +184,10 @@ async def _async_rpc(func: Callable[..., Any],
                      *args: Any,
                      **kwargs: Any) -> Any:
     global token
-    _lazy_start_daemon()
+    await _async_lazy_start_daemon()
     # Use async context manager for httpx client
-    async with httpx.AsyncClient() as client:
-        # Stream the response from the SSE endpoint
+    try:
+
         module_name, callable_name = get_callable_info(func)
         params = {
             "token": token,
@@ -164,17 +197,17 @@ async def _async_rpc(func: Callable[..., Any],
             "args": _to_b85(args),
             "kwargs": _to_b85(kwargs),
         }
-        async with client.stream(
-                "POST", SSE_SERVER_URL,
-                headers={"Accept": "text/event-stream"},
-                json=params,
-                timeout=None) as response:
-            response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
 
-            # Iterate over chunks of the response body
-            async for chunk in response.aiter_bytes():
-                chunk_str: str = chunk.decode("utf-8")
-                msg = json.loads(chunk_str)
+        async with sse_client.EventSource(  # ← method override here
+                SANDBOX_SERVER_URL,
+                # session=session,  # TODO: garder la session ouverte pour reutiliser ?
+                option={"method":"POST"},
+                json=params,
+                headers={"Accept": "text/event-stream"},
+                timeout=None,  # keep-alive
+        ) as event_source:
+            async for event in event_source:
+                msg = json.loads(event.data)
                 if "result" in msg:
                     return _from_b85(msg["result"])
                 if "exception" in msg:
@@ -183,6 +216,12 @@ async def _async_rpc(func: Callable[..., Any],
                     print(msg["stdout"], end="")
                 if "stderr" in msg:
                     print(msg["stderr"], end="", file=sys.stderr)
+    except SystemExit as e:
+        logger.error(f"******** SystemExit: {e}")  # FIXME
+        raise
+    except Exception as e:
+        logger.error(f"******** client Error in sandbox: {e}")  # FIXME
+        raise
 
 
 F = TypeVar("F", bound=Callable[..., Any])

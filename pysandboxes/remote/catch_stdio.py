@@ -1,3 +1,5 @@
+from concurrent.futures import Executor
+
 import asyncio
 import contextvars
 import inspect
@@ -5,15 +7,14 @@ import io
 import logging
 import queue
 import sys
-from concurrent.futures import Executor
 from functools import partial
 from typing import Any, Dict, Optional, Callable, Union
 
 logger = logging.getLogger(__name__)
 
-TQueue=Union[queue.Queue, asyncio.Queue]
+TQueue = Union[queue.Queue, asyncio.Queue]
 
-# TODO: put_nowait
+
 class QueueStringIO(io.StringIO):
     """
     A custom file-like object that intercepts writes, sends them to a thread-specific queue,
@@ -35,7 +36,7 @@ class QueueStringIO(io.StringIO):
         """
         # Put the message in the queue, associated with the thread ID
         if self._message_queue:
-            if isinstance(self._message_queue,asyncio.Queue):
+            if isinstance(self._message_queue, asyncio.Queue):
                 self._message_queue.put_nowait({self.type: s})
             else:
                 self._message_queue.put({self.type: s})
@@ -64,18 +65,19 @@ class WrapperIO(io.TextIOBase):
             self._old = self._context.get()
             self._context.set(new_textio)
 
-    def __getattr__(self, name: str) -> Any:
-        # Called only if attribute not found the usual way
-        if name in ("write", "flush","_context","_old"):
-            return super().__getattr__(name)
-        return getattr(self, name)
+    # def __getattr__(self, name: str) -> Any:
+    #     # Called only if attribute not found the usual way
+    #     # if name in ("write", "flush", "_context", "_old"):
+    #     #     return super().__getattr__(name)
+    #     # return getattr(self, name)
+    #     return super().__getattr__(name)
 
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name in ("write", "flush","_context","_old"):
-            # Assign _target to self, not to target
-            super().__setattr__(name, value)
-        else:
-            setattr(self, name, value)
+    # def __setattr__(self, name: str, value: Any) -> None:
+    #     if name in ("write", "flush", "_context", "_old"):
+    #         # Assign _target to self, not to target
+    #         super().__setattr__(name, value)
+    #     else:
+    #         setattr(self, name, value)
 
     def __del__(self):
         if self._old:
@@ -88,6 +90,7 @@ class WrapperIO(io.TextIOBase):
         self._context.get().flush()
 
 
+# FIXME: catch_stdio() not activated
 sys.stdout = WrapperIO(contextvars.ContextVar(
     'current_stdout', default=sys.stdout))
 sys.stderr = WrapperIO(contextvars.ContextVar(
@@ -100,10 +103,13 @@ def catch_stdio(
         kwargs: Dict[str, Any],
         *args: Any,
 ) -> Dict[str, Any]:
-    assert asyncio.get_event_loop(),"asyncio loop is not running"
-    result =asyncio.get_event_loop().run_until_complete(acatch_stdio(queue, fn, kwargs, *args)
-                )
+    # assert asyncio.get_running_loop(),"asyncio loop is not running"
+    result = asyncio.get_running_loop().run_until_complete(
+        acatch_stdio(queue, fn, kwargs, *args)
+        )
     return result
+
+
 async def acatch_stdio(
         queue: Optional[TQueue],
         fn: Callable,
@@ -121,19 +127,21 @@ async def acatch_stdio(
     ctx = contextvars.copy_context()  # FIXME: pourquoi cela ?
 
     async def run_in_context():
+        logger.debug("async run_in_context()...")
         # Allows modification of eval_result from outer scope
         nonlocal fn_result
         # Set the context variables for the current context
         sys.stdout.set_context(captured_stdout)
         sys.stderr.set_context(captured_stderr)
-        result:Dict[str,Any]
+        result: Dict[str, Any]
 
         try:
             use_async = inspect.iscoroutinefunction(fn)
+
             if use_async:
                 fn_result = await fn(*args, **kwargs)
             else:
-                fn_result= fn(*args, **kwargs)
+                fn_result = fn(*args, **kwargs)
             result = {"result": fn_result}
             if queue:
                 if isinstance(queue, asyncio.Queue):
@@ -154,8 +162,7 @@ async def acatch_stdio(
 
     # Run the function within the new context.
     # The contextvars are automatically restored after this call.
-    # FIXME: bien dans le context ? result: Dict[str, Any] = ctx.run(run_in_context)
-    result: Dict[str, Any] =await asyncio.create_task(run_in_context())
+    result: Dict[str, Any] = await run_in_context()
     result["stdout"] = captured_stdout.getvalue()
     result["stderr"] = captured_stderr.getvalue()
 
@@ -181,7 +188,6 @@ def _thread_catch_stream(
         msg = stream_queue.get()
 
         if "result" in msg:
-            eval_result = msg["result"]
             break
         elif "exception" in msg:
             break

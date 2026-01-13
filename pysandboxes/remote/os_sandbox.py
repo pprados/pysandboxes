@@ -4,7 +4,7 @@ import threading
 
 from pysandboxes.remote.bwrap_daemon import BWrapDaemon
 from pysandboxes.remote.firejail_daemon import FireJailDaemon
-from .abstract_start_daemon import BaseStartDaemon
+from .abstract_start_daemon import BaseDaemon
 from .subprocess_daemon import SubProcessDaemon
 from .task_daemon import TaskDaemon
 
@@ -19,18 +19,22 @@ providers = {
     #  docker, lxc, ...
     # docker alternative
     # TODO: external started daemon
+    # TODO https://github.com/igo95862/bubblejail
 }
 
 DEFAULT_OS_SANDBOX = "firejail"
 
 
-async def async_start_daemon(name: str, log_level: int) -> BaseStartDaemon:
-    logger.debug("Async start sub-process daemon")
+async def async_start_daemon(name: str, log_level: int) -> BaseDaemon:
     if name not in providers:
         raise ValueError(f"Unknown daemon name: {name}")
     await providers[name].start(log_level)
     return providers[name]
 
+async def async_shutdown_daemon(name: str):
+    await providers[name].shutdown()
+
+# TODO: def shutdown_daemon(name:str)
 
 def start_daemon(name: str, log_level: int) -> None:
     def _run_in_thread():
@@ -45,27 +49,3 @@ def start_daemon(name: str, log_level: int) -> None:
 
     thread = threading.Thread(target=_run_in_thread, daemon=True)
     thread.start()
-
-# async def main():
-#     # start default sandbox daemon
-#     # TODO: manage command line parameters
-#     logging.basicConfig(level=logging.INFO)
-#     current_loop = asyncio.get_running_loop()
-#     server = None
-#     try:
-#         server = await async_start_daemon()
-#         return await server.join()
-#     finally:
-#         if server:
-#             await server.close()
-#
-#
-# if __name__ == "__main__":
-#     try:
-#         # import dotenv
-#         # dotenv.load_dotenv()  # FIXME
-#         sys.exit(asyncio.run(main()))
-#     except SystemExit as e:
-#         sys.exit(e.code)
-#     except KeyboardInterrupt:
-#         sys.exit(0)

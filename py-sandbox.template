@@ -6,7 +6,9 @@
 # This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
 # environment helps limit accesses to minimal privileges.
 
---os-sandbox=subprocess
+--os-sandbox=task
+#--os-sandbox=subprocess
+#--os-sandbox=firejail
 # TODO: --no-dotenv
 
 #######################################################################################
@@ -36,6 +38,8 @@
 
 --set-env=HOME=${HOME}
 --set-env=USER=${USER}
+--set-env=PATH=${PATH}  # FIXME je ne pense pas cela nécessaire
+--set-env=VIRTUAL_ENV*=${VIRTUAL_ENV_*}
 --set-env=LC_*=${LC_*}
 --set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 --set-env=LANG=${LANG}
@@ -58,11 +62,14 @@
 # Ignores all hidden files and .log files
 --ignore=.*
 --ignore=*.log
+#--ignore=*.py # A tester !
 
 # Binds the current directory to the root of the sandbox
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
 --ro-bind=${PWD},${PWD}
-#--ro-bind=${PWD},/usr/src/myapp  # FIXME
+--ro-bind=${PYENV_ROOT},${PYENV_ROOT}
+--ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
+#--ro-bind=${PWD}/sandbox,/usr/src/myapp  # FIXME
 #--ro-bind=/dev/null,/dev/null
 #--ro-bind=dist,/toto  # TODO: a vérifier sous firejail
 
@@ -85,11 +92,11 @@
 
 # *** Whitelist strategy (recommanded) ***
 # Allow web access
---net=ALLOW|tcp|127.0.0.1/32|8080|OUT # FIXME: auto injection
---net=ALLOW|tcp|0.0.0.0/0|80,443|OUT # FIXME: may be only 443
---net=ALLOW|tcp|127.0.0.1/32|8080|IN  # FIXME: implicite sur lo ?
---net=ALLOW|udp|0.0.0.0/0|53|OUT
+--net=ALLOW|tcp|${BIND:=127.0.0.1}/32|${PORT:=8000}|IN
+--net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call all HTTPS services
+--net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
 --net=ALLOW|udp|0.0.0.0/0|53|IN
+# --bind=${BIND:=127.0.0.1} # FIXME a utilisé comme paramétre ?
 
 
 # TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)

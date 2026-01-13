@@ -124,7 +124,7 @@ def activate_sandboxes(
         assert isinstance(provider, BaseSubProcessDaemon)
 
     # Apply the rules
-    # sys.stdin.close()  # FIXME
+    # sys.stdin.shutdown()  # FIXME
     os.environ = sandbox_env
     guard_socket.activate_guard_socket(socket_rules)
     guard_files.activate_guard_files(files_rules)

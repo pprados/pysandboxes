@@ -242,8 +242,7 @@ async def main():
     provider = providers.get(args.os_sandbox or DEFAULT_OS_SANDBOX)
     assert isinstance(provider,
                       BaseSubProcessDaemon), "The os-sandbox provider must be a BaseSubProcessDaemon"
-    envs=dotenv.dotenv_values()
-    envs={"PWD":"/home/pprados/workspace.bda/langgraph-codeagent"}  # FIXME
+    envs={**dotenv.dotenv_values() , **dict(os.environ)}
     sandbox_args, kwargs = provider.bash_args(envs)
     if args.verbose >0:
         print("#!/bin/bash\n"+

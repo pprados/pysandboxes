@@ -7,7 +7,7 @@ from .tools import set_is_in_sandbox, is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
-class BaseStartDaemon(ABC):
+class BaseDaemon(ABC):
     async def start(self, log_level:int) -> Any:
         set_is_in_sandbox(True)
         await self._start(dict(os.environ),log_level)  # FIXME: gerer les envs
@@ -18,7 +18,7 @@ class BaseStartDaemon(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def close(self,id:Any) -> None:
+    async def shutdown(self, id:Any) -> None:
         raise NotImplementedError
 
     @abstractmethod

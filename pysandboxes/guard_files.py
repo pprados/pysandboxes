@@ -74,23 +74,35 @@ def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules], List[st
             value = line[len("--bind="):]
             try:
                 src, dest = value.split(",", 1)
-                if not src or not dest:
+                if not src and not dest:
+                    continue  # Ignore empty bind
+                if src and dest:
+                    # TODO: assert exist files
+                    # if not pathlib.Path(src).exists() and or Path(dest).exists():
+                    #     raise ValueError(f"Invalid bind rule: {line}")
+                    rules_bind.append(BindRule(source=src,
+                                               dest=src,
+                                               write=True))
+                else:
                     raise ValueError(f"Invalid bind rule: {line}")
-                rules_bind.append(BindRule(source=src,
-                                           dest=src,
-                                           write=True))
+
             except ValueError:
                 raise ValueError(f"Invalid bind rule: {line}")
         elif line.startswith("--ro-bind="):
             value = line[len("--ro-bind="):]
             try:
                 src, dest = value.split(",", 1)
-                # TODO: assert exist
-                if not src or not dest:
+                if not src and not dest:
+                    continue  # Ignore empty bind
+                if src and dest:
+                    # TODO: assert exist files
+                    # if not pathlib.Path(src).exists() and or Path(dest).exists():
+                    #     raise ValueError(f"Invalid bind rule: {line}")
+                    rules_bind.append(BindRule(source=src,
+                                               dest=src,
+                                               write=False))
+                else:
                     raise ValueError(f"Invalid bind rule: {line}")
-                rules_bind.append(BindRule(source=src.strip(),
-                                           dest=dest.strip(),
-                                           write=False))
             except ValueError:
                 raise ValueError(f"Invalid bind rule: {line}")
         elif line.startswith("--ignore="):
@@ -327,7 +339,7 @@ class _ScanDirContextManager:
 
     def close(self):
         if self.scanner:
-            self.scanner.close()
+            self.scanner.shutdown()
 
     def __init__(self, directory: str):
         self.directory = directory
