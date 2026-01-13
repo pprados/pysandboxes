@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 
-from pysandboxes import sandbox
+from pysandboxes.remote.sandboxes import sandbox
 
 logger = logging.getLogger(__name__)
 

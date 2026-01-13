@@ -181,7 +181,7 @@ def create_uvicorn_daemon(log_level: int) -> 'uvicorn.Server':
 
     # Extract current logging configuration
     # If not logger exist, try to duplicate the root logger parameters
-    root_logger = logging.getLogger()
+    root_logger = logging.getLogger("uvicorn.error")
     if root_logger.handlers:
         root_handler = root_logger.handlers[0]
     else:
@@ -229,12 +229,12 @@ def create_uvicorn_daemon(log_level: int) -> 'uvicorn.Server':
         "loggers": {
             "uvicorn": {
                 "handlers": ["default"],
-                "level": logging.ERROR,  # logging.getLevelName(root_logger.level),
+                "level": logging.WARNING,  # logging.getLevelName(root_logger.level),
                 "propagate": False,
                 # "propagate": root_logger.propagate,
             },
             "uvicorn.error": {
-                "level": default_level
+                "level": logging.WARNING
             },
             "uvicorn.access": {
                 "handlers": ["access"],

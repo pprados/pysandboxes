@@ -99,6 +99,7 @@ class BaseSubProcessDaemon(BaseDaemon):
         self._reset_delay = reset_delay
         self._last_reset = time.time()
         self.restart = 0
+        self._is_started=False
 
     def _subprocess(self,
                     envs: Dict[str, str],
@@ -151,6 +152,7 @@ class BaseSubProcessDaemon(BaseDaemon):
                             process_kwargs: Dict[str, Any],
                             stdin: bool = False,
                             stdout: bool = False) -> None:
+        self._is_started=False
         umask = os.umask(0o002)
         umask = os.umask(umask) & 0o007  # Only keep user flags
         if DEBUG:
@@ -194,6 +196,8 @@ class BaseSubProcessDaemon(BaseDaemon):
                 )
             )
         # FIXME self.task = asyncio.create_task(self.daemon.serve())
+        self._is_started=True
+
 
     async def shutdown(self) -> None:
         if self._stdout_task:
@@ -208,6 +212,7 @@ class BaseSubProcessDaemon(BaseDaemon):
                 self._process.terminate()
                 await self._process.wait()
             self._process = None
+        self._is_started=False
         logger.info("daemon is shutdown")
 
     async def join(self) -> int:

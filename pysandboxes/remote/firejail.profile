@@ -1,5 +1,5 @@
 # See man firejail
-# --quiet
+--quiet
 --name=firejail-sandbox
 #--caps.drop=all
 # --caps.keep=net_admin

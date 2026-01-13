@@ -9,18 +9,18 @@ import traceback
 from datetime import timedelta
 from multiprocessing import Lock
 from typing import Any, TypeVar, Union, \
-    Awaitable
+    Awaitable, TYPE_CHECKING
 from typing import Callable, Optional, Tuple
 
 from aiohttp_sse_client import client as sse_client
 
 from .base_daemon import BaseDaemon
 from .manage_loop import sandbox_loop
-from .os_sandbox import async_start_daemon, start_daemon, shutdown_daemon, \
-    async_shutdown_daemon
 from .parameters import HOST, PORT, PATH_RPC
-from .tools import _to_b85, _from_b85, is_in_sandbox
-from ..guard_sandbox import read_and_parse_config
+if TYPE_CHECKING:
+    from .os_sandbox import async_start_daemon, start_daemon, shutdown_daemon, \
+        async_shutdown_daemon
+    from .tools import _to_b85, _from_b85, is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,7 @@ def _get_rpc_params(args, func, kwargs, timeout, token):
     """
     Get the parameters for the RPC call.
     """
+    from .tools import _to_b85
     module_name, callable_name = get_callable_info(func)
     params = {
         "token": token,
@@ -108,6 +109,7 @@ async def _async_rpc(func: Callable[..., Any],
                      timeout: float,
                      *args: Any,
                      **kwargs: Any) -> Any:
+    from .tools import _from_b85
     global token
     try:
         params = _get_rpc_params(args, func, kwargs, timeout, token)
@@ -125,7 +127,7 @@ async def _async_rpc(func: Callable[..., Any],
                 if "result" in msg:
                     return _from_b85(msg["result"])
                 if "exception" in msg:
-                    _reraise(1, *_from_b85(msg["exception"]))  # FIXME: check remoe: 1
+                    _reraise(1, *_from_b85(msg["exception"]))  # FIXME: check remove: 1
                 if "stdout" in msg:
                     print(msg["stdout"], end="")
                 if "stderr" in msg:
@@ -166,6 +168,7 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            from .tools import is_in_sandbox
             if not is_in_sandbox():
                 # Call original function with captured parameters
                 return await _async_rpc(func, timeout, *args, **kwargs)
@@ -174,6 +177,7 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
 
         @functools.wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            from .tools import is_in_sandbox
             if not is_in_sandbox():
                 # Call original function with captured parameters
                 return _sync_rpc(func, timeout, *args, **kwargs)
@@ -220,6 +224,9 @@ class sandboxes:
         """
         Start the sandbox daemon.
         """
+        from ..guard_sandbox import read_and_parse_config
+        from .os_sandbox import start_daemon
+
         logger.debug("__enter__ start...")
         log_level = logging.root.getEffectiveLevel()
         _, os_sandbox, *_ = read_and_parse_config()
@@ -233,6 +240,7 @@ class sandboxes:
         """
         Stop the sandbox daemon.
         """
+        from .os_sandbox import shutdown_daemon
         logger.debug("__exit__ start...")
         shutdown_daemon()
         logger.debug("__exit__ done")
@@ -243,6 +251,7 @@ class sandboxes:
         """
         Start the sandbox daemon.
         """
+        from ..guard_sandbox import read_and_parse_config
         log_level = logging.root.getEffectiveLevel()
         _, os_sandbox, *_ = read_and_parse_config()
         await async_start_daemon(os_sandbox, log_level)

@@ -1,4 +1,5 @@
 # TODO: --build=file  pour apprentissage
+# TODO: ajouter un niveau de log dédié, puis tous logger dessus
 
 # Why a python sandbox ?
 # =======================
@@ -6,9 +7,9 @@
 # This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
 # environment helps limit accesses to minimal privileges.
 
---os-sandbox=task
+#--os-sandbox=task
 #--os-sandbox=subprocess
-#--os-sandbox=firejail
+--os-sandbox=firejail
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
 
