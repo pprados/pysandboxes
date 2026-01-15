@@ -370,7 +370,7 @@ async def main() -> int:
     logging.debug("config body and token successfully read from stdin")
 
     if not args.no_py_sandbox:
-        from pysandboxes import activate_sandboxes
+        from pysandboxes.guard_sandbox import activate_sandboxes
 
         activate_sandboxes(dict(os.environ),
                            args_rules=None,

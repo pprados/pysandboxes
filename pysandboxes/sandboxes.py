@@ -7,9 +7,8 @@ from typing import Any, TypeVar, Union, \
     Awaitable, TYPE_CHECKING
 from typing import Callable, Optional
 
-from .base_daemon import BaseDaemon
-from .os_sandboxes import call_in_sandbox, async_call_in_sandbox
-from ..guard_sandbox import get_config_path
+from .remote.base_daemon import BaseDaemon
+from .guard_sandbox import get_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +28,7 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
     Return the result of the function if it completes within the timeout.
     Reraises any exception raised by the function.
     """
+    from .remote.os_sandboxes import call_in_sandbox, async_call_in_sandbox
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
@@ -79,8 +79,8 @@ class sandboxes:
         """
         Start the sandbox daemon.
         """
-        from ..guard_sandbox import read_and_parse_config
-        from .os_sandboxes import start_daemon
+        from .guard_sandbox import read_and_parse_config
+        from .remote.os_sandboxes import start_daemon
 
         logger.debug("__enter__ start...")
         log_level = logging.root.getEffectiveLevel()
@@ -96,7 +96,7 @@ class sandboxes:
         """
         Stop the sandbox daemon.
         """
-        from .os_sandboxes import shutdown_daemon
+        from .remote.os_sandboxes import shutdown_daemon
         logger.debug("__exit__ start...")
         shutdown_daemon()
         logger.debug("__exit__ done")
@@ -107,8 +107,8 @@ class sandboxes:
         """
         Start the sandbox daemon.
         """
-        from ..guard_sandbox import read_and_parse_config
-        from .os_sandboxes import async_start_daemon
+        from .guard_sandbox import read_and_parse_config
+        from .remote.os_sandboxes import async_start_daemon
         log_level = logging.root.getEffectiveLevel()
         config = get_config_path(None).read_text().splitlines()
         config, _, os_sandbox, *_ = read_and_parse_config(config=config)
@@ -121,7 +121,7 @@ class sandboxes:
         """
         Stop the sandbox daemon.
         """
-        from .os_sandboxes import async_shutdown_daemon
+        from .remote.os_sandboxes import async_shutdown_daemon
         await async_shutdown_daemon()
         return False
 
