@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from pysandboxes.remote import ConfigLines
+from .types import ConfigLines
 
 
 def substitute_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigLines:

@@ -7,8 +7,8 @@ from _weakref import ReferenceType
 from typing import Any, Callable
 
 from .bwrap_daemon import BWrapDaemon
+from ..types import ConfigLines
 from .firejail_daemon import FireJailDaemon
-from . import ConfigLines
 from .base_daemon import BaseDaemon
 from .manage_loop import sandbox_loop, reset_sandbox_loop
 from .subprocess_daemon import SubProcessDaemon
@@ -21,7 +21,7 @@ providers = {
     # TODO: faire un provider "transparent"
     "task": TaskDaemon(),  # Impossible to activate py-sandbox in this mode.
     "subprocess": SubProcessDaemon(),
-    "bwrap": BWrapDaemon(),
+    # "bwrap": BWrapDaemon(),
     "firejail": FireJailDaemon(),
     # TODO: podman, https://www.redhat.com/en/blog/podman-inside-container https://www.redhat.com/en/blog/podman-inside-kubernetes
     #  docker, lxc, ...

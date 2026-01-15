@@ -16,8 +16,9 @@ packages = [
 dependencies = [
   "httpcore @ git+https://github.com/pprados/httpcore.git",
   "langgraph (>=0.3.0)",
-  "backports.interpreters (>0.2); python_version < '3.14'",
-#  "interpreters-pep-734; python_version < '3.15'",
+#  "backports.interpreters (>0.2); python_version < '3.14'",
+  "interpreters-pep-734; python_version >='3.13'",
+#  "interpreters-pep-734",
   "fastapi (>=0.115.0)",
   "uvicorn (>=0.34.0)",
   "tblib (>=3.1.0)",

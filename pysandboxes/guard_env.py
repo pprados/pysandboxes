@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from pysandboxes.remote import ConfigLines
+from .types import ConfigLines
 
 
 def _read_and_substitute_lines(

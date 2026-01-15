@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Tuple
 
-from . import daemon, Envs, ConfigLines, Args
+from . import daemon
+from ..types import Envs, ConfigLines, Args
 from .subprocess_daemon import SubProcessDaemon, BaseSubProcessDaemon
 from .tools import which_command, get_venv, suggest_package_installation
 from ..guard_files import BindRule

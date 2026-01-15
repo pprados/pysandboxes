@@ -4,7 +4,7 @@ import socket
 from typing import List
 
 from pysandboxes.guard_socket import SocketRule, SPEC_TO_TYPE_MAP
-from pysandboxes.remote import ConfigLines
+from pysandboxes.types import ConfigLines
 
 _map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
 _map_netfilter_direction = {"OUT": "OUTPUT", "IN": "INPUT"}

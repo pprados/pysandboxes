@@ -11,9 +11,6 @@ from .base_daemon import BaseDaemon
 from .os_sandboxes import call_in_sandbox, async_call_in_sandbox
 from ..guard_sandbox import get_config_path
 
-if TYPE_CHECKING:
-    pass
-
 logger = logging.getLogger(__name__)
 
 _lock = Lock()

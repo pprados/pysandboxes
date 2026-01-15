@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING, Callable, Optional
 
-from . import ConfigLines, Envs
+from ..types import ConfigLines, Envs
 from ..guard_sandbox import AllRules
 
 logger = logging.getLogger(__name__)

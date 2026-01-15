@@ -14,7 +14,7 @@ from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
 
-from pysandboxes.remote import ConfigLines
+from .types import ConfigLines
 
 if io or os:
     pass

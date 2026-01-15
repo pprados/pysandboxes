@@ -156,11 +156,7 @@ init: poetry.lock
 	@poetry self add poetry-dotenv-plugin
 	@poetry self add poetry-plugin-export
 	@poetry self add poetry-git-version-plugin
-<<<<<<< HEAD
 	@poetry config virtualenvs.in-project true
-=======
-	# @poetry config virtualenvs.in-project true
->>>>>>> eval_server
 	@poetry install --sync $(POETRY_EXTRA) --with $(POETRY_WITH)
 #	@pre-commit install
 	@git lfs install

@@ -9,7 +9,7 @@ from . import guard_files, guard_env
 from . import guard_socket
 from .guard_files import Files_Rules
 from .guard_socket import SocketRule
-from .remote import ConfigLines, Envs
+from .types import ConfigLines, Envs
 from .tools import remove_comments, substitute_env_vars
 
 logger = logging.getLogger(__name__)

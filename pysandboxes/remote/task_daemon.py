@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional
 
-from . import ConfigLines, Envs
+from ..types import ConfigLines, Envs
 from .daemon import LocalTaskDaemon
 
 logger = logging.getLogger(__name__)

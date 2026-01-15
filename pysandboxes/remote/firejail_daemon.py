@@ -8,14 +8,15 @@ from typing import List, Tuple, Dict
 
 import click
 
-from pysandboxes.guard_files import BindRule, IgnoreRule
-from pysandboxes.guard_sandbox import read_and_parse_config, AllRules
-from pysandboxes.netfilter import rule_to_netfilter
-from pysandboxes.remote import daemon, ConfigLines, Envs, Args
-from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon
-from pysandboxes.remote.tools import which_command, get_venv, \
+from ..guard_files import BindRule, IgnoreRule
+from ..guard_sandbox import read_and_parse_config, AllRules
+from ..netfilter import rule_to_netfilter
+from ..types import ConfigLines, Envs, Args
+from . import daemon
+from .subprocess_daemon import BaseSubProcessDaemon
+from .tools import which_command, get_venv, \
     suggest_package_installation, return_level_parameter
-from pysandboxes.tools import remove_comments, substitute_env_vars
+from ..tools import remove_comments, substitute_env_vars
 
 logger = logging.getLogger(__name__)
 

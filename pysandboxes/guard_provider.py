@@ -1,7 +1,7 @@
 import logging
 from typing import Tuple, List
 
-from .remote import ConfigLines
+from .types import ConfigLines
 from .remote.os_sandboxes import providers
 
 logger = logging.getLogger(__name__)

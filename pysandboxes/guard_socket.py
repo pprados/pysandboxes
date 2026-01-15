@@ -45,7 +45,7 @@ import sys
 from ipaddress import IPv4Network
 from typing import Tuple, Optional, Union, List, Dict
 
-from pysandboxes.remote import ConfigLines
+from .types import ConfigLines
 
 logger = logging.getLogger(__name__)
 

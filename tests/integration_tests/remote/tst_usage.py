@@ -1,12 +1,10 @@
 import asyncio
 import logging
-import time
 
 import dotenv
 
 import pysandboxes
 from pysandboxes import sandboxes
-
 from .sb_usage import run_in_sandbox, arun_in_sandbox, init_sandbox
 
 logger = logging.getLogger(__name__)
@@ -40,10 +38,10 @@ if __name__ == "__main__":
     for i in range(0, 1):
         asyncio.run(async_manager())
         print("----------------")
-        # pysandboxes.run(amain())
-        # print("----------------")
-        # with pysandboxes.sandboxes(init_sandbox):
-        #     main()
-        # print("----------------")
+        pysandboxes.run(amain())
+        print("----------------")
+        with pysandboxes.sandboxes(init_sandbox):
+            main()
+        print("----------------")
 
     logger.debug("App terminated")
