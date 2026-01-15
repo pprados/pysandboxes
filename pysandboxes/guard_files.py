@@ -14,6 +14,8 @@ from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
 
+from pysandboxes.remote import ConfigLines
+
 if io or os:
     pass
 
@@ -61,14 +63,14 @@ _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 
 
-def parse_rules(arguments: List[str]) -> typing.Tuple[List[Files_Rules], List[str]]:
+def parse_rules(arguments: ConfigLines) -> typing.Tuple[List[Files_Rules], ConfigLines]:
     """
     Parses rule strings into internal ParserRule objects.
     Supports --bind=src,dest and --ignore=glob_pattern.
     """
     rules_ignore: List[Files_Rules] = []
     rules_bind: List[Files_Rules] = []
-    ignore_rules: List[str] = []
+    ignore_rules: ConfigLines = []
     for line in arguments:
         if line.startswith("--bind="):
             value = line[len("--bind="):]
@@ -276,12 +278,12 @@ def _wrap_os_getcwd(func: Callable) -> Callable:
 
 def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]:
     @functools.wraps(func)
-    def wrapper(path: Union[str, bytes, os.PathLike] = '.') -> List[str]:
+    def wrapper(path: Union[str, bytes, os.PathLike] = '.') -> ConfigLines:
         if new_path := _apply_dest_to_src_rules(path, write=False):
             if _special_caller():  # FIXME: a garder ?
                 return func(new_path)
             entries = func(new_path)
-            filtered: List[str] = []
+            filtered: ConfigLines = []
             for entry in entries:
                 full_path = os.path.join(path, entry)
                 if _apply_dest_to_src_rules(full_path, write=False,

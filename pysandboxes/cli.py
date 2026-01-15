@@ -4,6 +4,9 @@ from typing import List
 
 from pysandboxes.sandbox import activate_sandboxes
 from dotenv import load_dotenv
+
+from pysandboxes.remote import ConfigLines
+
 load_dotenv()  # FIXME: a garder avec main ?
 
 def main() -> None:
@@ -13,7 +16,7 @@ def main() -> None:
     # Get all arguments except the script name itself
     args = sys.argv[1:]
 
-    rules: List[str] = []
+    rules: ConfigLines = []
     command_start_index = 0
 
     # 1. Collect all initial arguments that start with '--'

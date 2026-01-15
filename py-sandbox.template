@@ -1,4 +1,4 @@
-# TODO: --build=file  pour apprentissage
+# TODO: --build=file  pour apprentissage (ou verbe utilisé dans AppArmor)
 # TODO: ajouter un niveau de log dédié, puis tous logger dessus
 
 # Why a python sandbox ?
@@ -8,8 +8,9 @@
 # environment helps limit accesses to minimal privileges.
 
 #--os-sandbox=task
-#--os-sandbox=subprocess
---os-sandbox=firejail
+--os-sandbox=subprocess
+#--os-sandbox=firejail
+# TODO --no-py-sandbox
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
 

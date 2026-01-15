@@ -9,7 +9,8 @@ from . import guard_files, guard_env
 from . import guard_socket
 from .guard_files import Files_Rules
 from .guard_socket import SocketRule
-from .tools import read_config, substitute_env_vars
+from .remote import ConfigLines, Envs
+from .tools import remove_comments, substitute_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +39,18 @@ def get_caller_module(skip: int = 2) -> Optional[types.ModuleType]:
 
 
 AllRules = Tuple[
-    Dict[str, str],
-    str,
-    List[SocketRule],
-    List[Files_Rules]
+    ConfigLines,  # Merged config
+    Envs,  # sandbox env
+    str,  # os_sandboxg
+    List[SocketRule],  # Socket rules
+    List[Files_Rules],  # file rules
 ]
 
 
 def read_and_parse_config(
+        *,
         envs: Dict[str, str] = os.environ,
+        config: ConfigLines,
         args_rules: Optional[List[str]] = None
 ) -> AllRules:
     # 1. try to find .pysandboxes in the caller module
@@ -62,25 +66,13 @@ def read_and_parse_config(
     #         with as_file(resource) as path:
     #             body_from_ressource = _read_config(path)
 
-    # 2. try to find .pysandboxes in special directories
-    known_paths = [
-        Path(".py-sandbox"),  # Current directory
-        Path("~/.config/pysandboxes/py-sandbox").expanduser(),
-        Path("~/.local/share/pysandboxes/py-sandbox").expanduser(),
-        Path("/etc/pysandboxes/py-sandbox"),
-        Path("/usr/share/pysandboxes/py-sandbox"),
-        Path("/var/lib/pysandboxes/py-sandbox"),
-    ]
-    body_from_users_or_os = []
-    for path in known_paths:
-        if path.exists():
-            body_from_users_or_os = read_config(path)
-            break
+
+    body_from_users_or_os = remove_comments(config)
     # 3. Merge all files
-    rules = body_from_ressource + args_rules + body_from_users_or_os
+    config = body_from_ressource + args_rules + body_from_users_or_os
 
     # 4. Parse the rules, step by step
-    sandbox_env, others = guard_env.parse_guard_envs(rules, envs)  # TODO: a virer lors outer !
+    sandbox_env, others = guard_env.parse_guard_envs(config, envs)  # TODO: a virer lors outer !
     others = substitute_env_vars(others, envs)
     from pysandboxes import guard_provider
     provider, others = guard_provider.parse_rules(others)
@@ -91,7 +83,25 @@ def read_and_parse_config(
     if others:
         for invalide_rule in others:
             logger.warning(f"Ignore invalid rule: {invalide_rule}")
-    return sandbox_env, provider, socket_rules, files_rules
+    return config, sandbox_env, provider, socket_rules, files_rules
+
+
+def get_config_path(config_path:Optional[Path]) -> Optional[Path]:
+    if not config_path:
+        known_paths = [
+            Path(".py-sandbox"),  # Current directory
+            Path("~/.config/pysandboxes/py-sandbox").expanduser(),
+            Path("~/.local/share/pysandboxes/py-sandbox").expanduser(),
+            Path("/etc/pysandboxes/py-sandbox"),
+            Path("/usr/share/pysandboxes/py-sandbox"),
+            Path("/var/lib/pysandboxes/py-sandbox"),
+        ]
+        body_from_users_or_os = []
+        for path in known_paths:
+            if path.exists():
+                config_path = path
+                break
+    return config_path
 
 
 known_paths = [
@@ -104,24 +114,29 @@ known_paths = [
 ]
 
 
-def activate_sandboxes(
+def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?
         envs: Dict[str, str] = os.environ,
         args_rules: Optional[List[str]] = None,
         *,
-        outer_sandbox: str = None
+        config:ConfigLines = None,
+        outer_sandbox: str = None,
 ) -> None:
     from .remote.subprocess_daemon import BaseSubProcessDaemon
 
-    sandbox_env, os_sandbox, socket_rules, files_rules = read_and_parse_config(envs,
-                                                                             args_rules)
-
     if outer_sandbox:
-        from .remote.os_sandbox import providers
+        from .remote.os_sandboxes import providers
         if outer_sandbox not in providers:
             raise ValueError(f"Unknown os-sandbox name: {outer_sandbox}")
         provider = providers[outer_sandbox]
-        sandbox_env, os_sandbox, socket_rules, files_rules = provider.update_rules(envs)
-        assert isinstance(provider, BaseSubProcessDaemon)
+        config, sandbox_env, os_sandbox, socket_rules, files_rules = provider.update_rules(
+            envs=envs,
+            config=config,
+        )
+    else:
+        config,sandbox_env, os_sandbox, socket_rules, files_rules = (
+            read_and_parse_config(envs=envs,
+                                  config=config,
+                                  args_rules=args_rules))
 
     # Apply the rules
     # sys.stdin.shutdown()  # FIXME

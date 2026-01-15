@@ -45,6 +45,8 @@ import sys
 from ipaddress import IPv4Network
 from typing import Tuple, Optional, Union, List, Dict
 
+from pysandboxes.remote import ConfigLines
+
 logger = logging.getLogger(__name__)
 
 # Address format details can be found in the Python socket library documentation:
@@ -179,7 +181,7 @@ def _parse_rule(rule: str) -> Optional[List[SocketRule]]:
 
 
 
-def parse_rules(rules: List[str]) -> Tuple[List[SocketRule], List[str]]:
+def parse_rules(rules: ConfigLines) -> Tuple[List[SocketRule], ConfigLines]:
     socket_rules = []
     ignore_rules = []
     for rule_str in rules:

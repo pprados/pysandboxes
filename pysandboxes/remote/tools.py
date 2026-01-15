@@ -16,17 +16,19 @@ import netifaces
 logger = logging.getLogger(__name__)
 
 
+END_OF_FILE="---------- END OF FILE ----------\n"
+
 _is_in_sandbox = False
 
 _sandboxed = contextvars.ContextVar(
     'sanboxed', default=False)
 
 
-def is_in_sandbox():
+def is_in_sandbox() -> bool:
     return _sandboxed.get()
 
 
-def set_is_in_sandbox(value: bool):
+def set_is_in_sandbox(value: bool) -> None:
     _sandboxed.set(value)
 
 
@@ -71,7 +73,7 @@ def get_venv() -> str | None:
         return os.environ.get('VIRTUAL_ENV')
 
 
-def configure_logging_level(verbose_count: int) -> None:
+def configure_logging_level(verbose_count: int) -> int:
     """
     Configures the logging level based on the number of verbose flags.
 
@@ -92,7 +94,8 @@ def configure_logging_level(verbose_count: int) -> None:
         # NOTSET will log all messages, allowing custom levels below DEBUG if implemented
         log_level = logging.NOTSET
 
-    logging.getLogger().setLevel(log_level)
+    logging.getLogger().setLevel(log_level)  # Root logger
+    return log_level
 
 
 def get_default_gateway_info() -> Optional[Tuple[str, str]]:
@@ -169,7 +172,7 @@ def suggest_package_installation(package_name: str) -> str:
                 sudo dnf install {package_name}          (Fedora based systems)
                 sudo pacman -S {package_name}            (Arch Linux based systems)
                 Please refer to your distribution's documentation for the correct command.
-                """).trim()
+                """).strip()
 
     elif system == 'darwin':
         # For macOS, suggest Homebrew
@@ -191,31 +194,6 @@ def suggest_package_installation(package_name: str) -> str:
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for '{package_name}' to find installation instructions for your system.
             """).strip()
-
-
-def configure_logging_level(verbose_count: int) -> int:
-    """
-    Configures the logging level based on the number of verbose flags.
-
-    Args:
-        verbose_count (int): The number of '-v' flags provided by the user.
-                             - 0: WARNING
-                             - 1: INFO
-                             - 2: DEBUG
-                             - 3+: NOTSET (all messages, including custom trace levels if defined)
-    """
-    if verbose_count == 0:
-        log_level = logging.WARNING
-    elif verbose_count == 1:
-        log_level = logging.INFO
-    elif verbose_count == 2:
-        log_level = logging.DEBUG
-    else:  # verbose_count >= 3
-        # NOTSET will log all messages, allowing custom levels below DEBUG if implemented
-        log_level = logging.NOTSET
-
-    logging.basicConfig(level=log_level)
-    return log_level
 
 
 def return_level_parameter(log_level:int) -> str:

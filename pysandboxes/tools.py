@@ -2,8 +2,10 @@ import re
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from pysandboxes.remote import ConfigLines
 
-def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]:
+
+def substitute_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigLines:
     """
     The function supports two substitution formats:
     1. ${VAR_NAME}: Replaces the placeholder with the value of VAR_NAME from
@@ -41,28 +43,16 @@ def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]
     return [pattern.sub(substitute, line) for line in lines]
 
 
-def read_config(path: Path) -> List[str]:
-    """
-    Reads a file, filters out empty lines and comments, and handles end-of-line comments
-    while respecting quotes.
+def remove_comments(config: ConfigLines) -> ConfigLines:
+    processed_lines: ConfigLines = []
 
-    Args:
-        path: The Path object pointing to the file to be read.
+    for line in config:
+        # Remove end-of-line comments while respecting quotes
+        cleaned_line: str = _remove_comment(line.strip())
 
-    Returns:
-        A list of strings, where each string is a processed line from the file
-        with comments removed and empty lines filtered out.
-    """
-    processed_lines: List[str] = []
-
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            # Remove end-of-line comments while respecting quotes
-            cleaned_line: str = _remove_comment(line.strip())
-
-            # Filter out empty lines and lines that are full comments
-            if cleaned_line and not cleaned_line.lstrip().startswith("#"):
-                processed_lines.append(cleaned_line)
+        # Filter out empty lines and lines that are full comments
+        if cleaned_line and not cleaned_line.lstrip().startswith("#"):
+            processed_lines.append(cleaned_line)
 
     return processed_lines
 
@@ -77,7 +67,7 @@ def _remove_comment(line: str) -> str:
     Returns:
         Line without comment
     """
-    result: List[str] = []
+    result: ConfigLines = []
     in_quotes: bool = False
     quote_char: Optional[str] = None
     i: int = 0

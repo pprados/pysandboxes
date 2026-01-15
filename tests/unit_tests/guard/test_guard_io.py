@@ -80,7 +80,7 @@ def files(tmp_path):
         "bind_to_truncate": tmp_path / "bind_dest/to_truncate.txt",
     }
 
-def str_activate_guard_files(rules:List[str]) -> None:
+def str_activate_guard_files(rules:ConfigLines) -> None:
     file_rules, _ = parse_rules(rules)
     activate_guard_files(file_rules)
 

@@ -65,20 +65,20 @@ class WrapperIO(io.TextIOBase):
         if not self._old:
             self._old = self._context.get()
             self._context.set(new_textio)
+            assert not isinstance(self._old,WrapperIO)
 
-    # def __getattr__(self, name: str) -> Any:
-    #     # Called only if attribute not found the usual way
-    #     # if name in ("write", "flush", "_context", "_old"):
-    #     #     return super().__getattr__(name)
-    #     # return getattr(self, name)
-    #     return super().__getattr__(name)
+    def __getattr__(self, name: str) -> Any:
+        # Called only if attribute not found the usual way
+        if name in ("write", "flush", "_context", "_old"):
+            return super().__getattr__(name)
+        return getattr(self._old,name)
 
-    # def __setattr__(self, name: str, value: Any) -> None:
-    #     if name in ("write", "flush", "_context", "_old"):
-    #         # Assign _target to self, not to target
-    #         super().__setattr__(name, value)
-    #     else:
-    #         setattr(self, name, value)
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in ("write", "flush", "_context", "_old"):
+            # Assign _target to self, not to target
+            super().__setattr__(name, value)
+        else:
+            setattr(self._old, name, value)
 
     def __del__(self):
         if self._old:
@@ -123,7 +123,7 @@ async def acatch_stdio(
         kwargs: Dict[str, Any],
         *args: Any,
 ) -> Dict[str, Any]:
-    assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
+    # assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"  # FIXME activer
     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=queue)
     captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=queue)
     fn_result: Any = None

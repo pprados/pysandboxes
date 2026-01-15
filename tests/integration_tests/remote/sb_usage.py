@@ -22,5 +22,4 @@ def init_sandbox():
     logger.error("INIT Daemon")
 
 async def ainit_sandbox():
-    await asyncio.sleep(0)
     logger.error("INIT Daemon")

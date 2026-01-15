@@ -1,10 +1,12 @@
 import logging
 from typing import Tuple, List
-from .remote.os_sandbox import providers
+
+from .remote import ConfigLines
+from .remote.os_sandboxes import providers
 
 logger = logging.getLogger(__name__)
 
-def parse_rules(rules: List[str]) -> Tuple[str, List[str]]:
+def parse_rules(rules: ConfigLines) -> Tuple[str, ConfigLines]:
     other_rules = []
     provider=None
     for rule in rules:

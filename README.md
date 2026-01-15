@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-Lite sandbox for python code execution
-=======
 La programmation moderne, fait souvent appel à la génération de code ou à l'invocation d'API par des modèles de langagues (LLM).
 Ces derniers peuvent être manipulé pour exécuter des commandes malveillantes.
 L'[OWASP](https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/) présente une liste des risques associés à l'utilisation de ces modèles.
@@ -70,4 +67,5 @@ call_llm = partial(_call_llm,token=os.environ["LLM_TOKEN"])
 Pour connaitre précisément les paramètres utilisés pour lancer une os-sandbox, et tester le comportement,
 utilisez `python -m pysandboxes.remote.bash -v --os-sandbox=firejail`
 Indiquer également comment se brancher à firejail (`firejail --join=firejail-sandbox`)
->>>>>>> eval_server
+
+- Peux etre utilisé lors de l'apprentisage par renforcement

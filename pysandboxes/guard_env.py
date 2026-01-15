@@ -2,10 +2,12 @@ import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from pysandboxes.remote import ConfigLines
+
 
 def _read_and_substitute_lines(
         path: Path, env_vars: Dict[str, str]
-) -> List[str]:
+) -> ConfigLines:
     """
     Reads a file, filters out empty lines and comments, and performs variable
     substitution on the remaining lines.
@@ -35,7 +37,7 @@ def _read_and_substitute_lines(
         return env_vars.get(var_name,
                             default_value if default_value is not None else "")
 
-    processed_lines: List[str] = []
+    processed_lines: ConfigLines = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             stripped = line.strip()
@@ -46,8 +48,9 @@ def _read_and_substitute_lines(
 
 
 def parse_guard_envs(
-        rules: List[str], source_vars: Dict[str, str]
-) -> Tuple[Dict[str, str], List[str]]:
+        rules: ConfigLines,
+        source_vars: Dict[str, str]
+) -> Tuple[Dict[str, str], ConfigLines]:
     """
     Processes a list of rules to create a new dictionary of variables.
 
@@ -59,7 +62,7 @@ def parse_guard_envs(
         A new dictionary with the applied rules.
     """
     new_vars: Dict[str, str] = {}
-    ignore_rules: List[str] = []
+    ignore_rules: ConfigLines = []
 
     # This pattern finds ${VAR} or ${VAR:=default} substitutions.
     subst_pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")

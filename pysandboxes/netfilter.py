@@ -4,6 +4,7 @@ import socket
 from typing import List
 
 from pysandboxes.guard_socket import SocketRule, SPEC_TO_TYPE_MAP
+from pysandboxes.remote import ConfigLines
 
 _map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
 _map_netfilter_direction = {"OUT": "OUTPUT", "IN": "INPUT"}
@@ -84,7 +85,7 @@ def _build_network(network_obj, ipv6: bool):
     return network
 
 def rule_to_netfilter(socket_rules: List[SocketRule],
-                      is_ipv6: bool) -> List[str]:
+                      is_ipv6: bool) -> ConfigLines:
     # TODO: ajouter -A INPUT -i lo -j ACCEPT pour l'input du daemon ?
     netfilter = [
         "*filter",

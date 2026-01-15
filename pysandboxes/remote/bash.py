@@ -10,7 +10,7 @@ import tty
 import dotenv
 import termios
 
-from pysandboxes.remote.os_sandbox import DEFAULT_OS_SANDBOX
+from pysandboxes.remote.os_sandboxes import DEFAULT_OS_SANDBOX
 from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon
 from pysandboxes.remote.tools import configure_logging_level
 
@@ -210,7 +210,7 @@ async def run_bash_in_pty(*args, **kwargs) -> None:
 
 
 async def main():
-    from pysandboxes.remote.os_sandbox import providers
+    from pysandboxes.remote.os_sandboxes import providers
 
     parser = argparse.ArgumentParser(
         description="A script demonstrating command-line argument parsing for log verbosity.",

@@ -8,26 +8,12 @@ readme = "README.md"
 repository = "https://www.github.com/pprados/langgraph-codeagent"
 homepage = "https://www.github.com/pprados/langgraph-codeagent"
 #requires-python = ">=3.12,<4.0"
-<<<<<<< HEAD
-requires-python = ">=3.13"
-=======
-#requires-python = ">=3.10,<4.0"
 requires-python = ">=3.10,<4.0"
->>>>>>> eval_server
 packages = [
   { include = "pysandboxes" },
 ]
 
 dependencies = [
-<<<<<<< HEAD
-  "langgraph (>=0.3.0)",
-#  "RestrictedPython (>8.0)",
-#  "backports.interpreters (>0.2); python_version < '3.14'",
-  "interpreters-pep-734; python_version < '3.15'",
-  "dnspython>=2.7.0",
-]
-
-=======
   "httpcore @ git+https://github.com/pprados/httpcore.git",
   "langgraph (>=0.3.0)",
   "backports.interpreters (>0.2); python_version < '3.14'",
@@ -49,7 +35,6 @@ dependencies = [
 python-sandbox = "pysandboxes.cli:main"
 python3-sandbox = "pysandboxes.cli:main"
 sandbox-daemon = "pysandboxes.remote.daemon:main"
->>>>>>> eval_server
 
 [tool.poetry.group.dev]
 optional = true

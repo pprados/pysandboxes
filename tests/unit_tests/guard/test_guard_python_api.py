@@ -5,6 +5,7 @@ import pytest
 
 from pysandboxes.guard_python_api import parse_rules, activate_guard_python_api, \
     _loaded_sys_modules
+from pysandboxes.remote import ConfigLines
 
 
 @pytest.fixture(autouse=True)
@@ -15,7 +16,7 @@ def reset_rules():
     # _deactivate_guard_python_api()
 
 
-def str_activate_guard_python_api(rules: List[str]) -> None:
+def str_activate_guard_python_api(rules: ConfigLines) -> None:
     python_api_rules, _ = parse_rules(rules)
     activate_guard_python_api(python_api_rules)
 

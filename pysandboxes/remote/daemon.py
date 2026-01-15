@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import asyncio
 import importlib
@@ -9,32 +10,25 @@ import sys
 import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Any, Optional, TYPE_CHECKING
+from typing import AsyncGenerator, List, Any, Optional
 from typing import Dict
 
-from pysandboxes.remote.manage_loop import sandbox_loop
+from tblib import pickling_support
+from uvicorn import Server
 
-if TYPE_CHECKING:
-    import uvicorn
-
-from fastapi import FastAPI, Request, Body
-from fastapi.responses import StreamingResponse
-
-from .base_daemon import BaseDaemon
-from .parameters import HOST, PORT, PATH_RPC
-from .tools import _from_b85, _to_b85, is_in_sandbox, \
-    set_is_in_sandbox, configure_logging_level
+from ..guard_sandbox import AllRules
+from . import ConfigLines, Args, Envs
+from .sse_sandbox import SSESandbox
+from .manage_loop import sandbox_loop
+from .tools import _to_b85, set_is_in_sandbox, configure_logging_level, END_OF_FILE
 
 logger = logging.getLogger(__name__)
-
-from tblib import pickling_support
 
 pickling_support.install()
 
 
 @dataclass
 class RPCPayload(object):
-    token: str
     session_id: str
     timeout: float
     function: str
@@ -47,11 +41,10 @@ def _sse_msg(data: str):
 
 
 async def sandbox_daemon(
-        token: str,  # TODO: token
         session_id: str,
         function_id: str,
         timeout: float,  # TODO
-        args: List[Any],
+        args: Args,
         kwargs: Dict[str, Any],
 ) -> AsyncGenerator[str, None]:
     """
@@ -83,15 +76,12 @@ async def sandbox_daemon(
 
         if use_async:
             async def _set_sandbox_and_catch_stdio() -> Any:
-                set_is_in_sandbox(True)
                 rc = await acatch_stdio(
                     stdio_queue,
                     function, kwargs, *args)
                 return rc
 
-            # task = asyncio.create_task(
-            #     _set_sandbox_and_catch_stdio())
-            fut = asyncio.gather(_set_sandbox_and_catch_stdio())
+            fut = asyncio.create_task(_set_sandbox_and_catch_stdio())
         else:
             @sandbox_loop
             def _set_sandbox_and_catch_stdio():
@@ -127,7 +117,6 @@ async def sandbox_daemon(
             logger.debug("(%s) ... raise %s", session_id,
                          repr(result["exception"][1]))
             result["exception"] = _to_b85(result["exception"])
-        result["session_id"] = session_id
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
@@ -137,131 +126,32 @@ async def sandbox_daemon(
         sys.exit(-1)
     except Exception as e:
         logger.info("(%s) ... error %s", session_id, repr(e))
+        traceback.print_exception(e)
         yield json.dumps({"session_id": session_id, "error": repr(e)})
 
 
 # %%
 
-def create_uvicorn_daemon(log_level: int) -> 'uvicorn.Server':
-    import uvicorn
+class LocalTaskDaemon(SSESandbox):
 
-    app = FastAPI()
+    def __init__(self, token: Optional[str] = None):
+        super().__init__(token)
+        self.uvicorn: Optional[Server] = None
 
-    @app.get("/")
-    async def ping(
-    ):
-        return {"message": "OK"}
+    def update_rules(self,
+                     *,
+                     envs: Envs,
+                     config: ConfigLines) -> AllRules:
+        return config, envs, "task", [], []
 
-    @app.post(PATH_RPC)
-    async def rpc_endpoint(
-            request: Request,
-            payload: RPCPayload = Body(...,
-                                       description="Payload containing code and authentication token.")
-    ) -> StreamingResponse:
-        """
-        SSE endpoint to process a given code string, authenticated by a token,
-        and stream back structured results (stdout, stderr, result).
-        """
-        logger.debug(f"{asyncio.get_running_loop()=} {id(asyncio.get_running_loop())}")
-        assert is_in_sandbox()
-        # Pass the code and authenticated user_id to the event generator
-        return StreamingResponse(
-            sandbox_daemon(
-                payload.token,
-                payload.session_id,
-                payload.function,
-                payload.timeout,
-                _from_b85(payload.args),
-                _from_b85(payload.kwargs),
-            ),
-            media_type="text/event-stream"
-        )
+    async def start(self,
+                    log_level: int,
+                    envs: Envs,
+                    config: ConfigLines,
+                    token: Optional[str]) -> None:
+        from .uvicorn_daemon import create_uvicorn_daemon
 
-    # TODO: https
-
-    # Extract current logging configuration
-    # If not logger exist, try to duplicate the root logger parameters
-    root_logger = logging.getLogger("uvicorn.error")
-    if root_logger.handlers:
-        root_handler = root_logger.handlers[0]
-    else:
-        root_handler = logging.StreamHandler(stream=sys.stderr)  # FIXME: a tester
-        # root_handler=logging.StreamHandler(stream="ext://sys.stdout")  # FIXME: a tester
-    fmt = getattr(root_handler.formatter, "_fmt",
-                  '%(levelname)s:%(name)s:%(message)s')
-    if root_stream := getattr(root_handler, "stream", None):
-        if stream_name := getattr(root_stream, "name", None):
-            if stream_name == "<stderr>":
-                stream = "ext://sys.stderr"
-            elif stream_name == "<stdout>":
-                stream = "ext://sys.stdout"
-            else:
-                stream = f"ext:{root_stream.name}"
-    else:
-        stream = None
-    default_level = logger.getEffectiveLevel()
-    logging_confg = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "default": {
-                "()": logging.Formatter,
-                "fmt": fmt,
-            },
-            "access": {
-                "()": "uvicorn.logging.AccessFormatter",
-                "fmt": '%(levelname)s:%(name)s: %(client_addr)s - '
-                       '"%(request_line)s" %(status_code)s',
-            },
-        },
-        "handlers": {
-            "default": {
-                "formatter": "default",
-                "class": root_handler.__class__,
-                "stream": stream,
-            },
-            "access": {
-                "formatter": "access",
-                "class": "logging.StreamHandler",
-                "stream": stream,
-            },
-        },
-        "loggers": {
-            "uvicorn": {
-                "handlers": ["default"],
-                "level": logging.WARNING,  # logging.getLevelName(root_logger.level),
-                "propagate": False,
-                # "propagate": root_logger.propagate,
-            },
-            "uvicorn.error": {
-                "level": logging.WARNING
-            },
-            "uvicorn.access": {
-                "handlers": ["access"],
-                "level": default_level,
-                "propagate": False
-            },
-        },
-    }
-
-    uvicorn_server = uvicorn.Server(uvicorn.Config(
-        app,
-        host=HOST,
-        port=PORT,
-        use_colors=None,
-        log_config=logging_confg,
-    ))
-    return uvicorn_server
-
-
-class LocalTaskDaemon(BaseDaemon):
-
-    async def start(self, log_level: int, envs: dict[str, str] = None) -> Any:
-        if not envs:
-            envs = dict(os.environ)
-        set_is_in_sandbox(True)
-
-        self.uvicorn = create_uvicorn_daemon(log_level)
+        self.uvicorn = create_uvicorn_daemon(self.token)
 
         start_event = asyncio.Event()
 
@@ -284,8 +174,9 @@ class LocalTaskDaemon(BaseDaemon):
         # Warning: the server is not yet ready to accept connections. Wait a small delay
         await start_event.wait()
         while not self.uvicorn.started:
-            await asyncio.sleep(0)
-        assert is_in_sandbox()  # FIXME: a garder ?
+            await asyncio.sleep(0.1)  # FIXME
+        # assert is_in_sandbox()  # FIXME: a garder ?
+
         logger.debug("Uvicorn started")
 
     async def shutdown(self) -> None:
@@ -293,7 +184,7 @@ class LocalTaskDaemon(BaseDaemon):
             raise RuntimeError("Server not started")
         self.task.cancel()
         await self.task
-        self.uvicorn= None
+        self.uvicorn = None
         self.task = None
 
     @property
@@ -305,6 +196,8 @@ class LocalTaskDaemon(BaseDaemon):
 
 
 async def main() -> int:
+    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+
     parser = argparse.ArgumentParser(
         description="Stard a Python-sandbox daemon inside --outer-sandbox argument."
     )
@@ -329,6 +222,12 @@ async def main() -> int:
         default=None
     )
 
+    parser.add_argument(
+        '-n', '--no-py-sandbox',
+        action='store_true',
+        help='Desactivate py-sandbox'
+    )
+
     # Parse the arguments provided by the user
     args = parser.parse_args()
 
@@ -337,13 +236,38 @@ async def main() -> int:
     assert outer_sandbox, "--outer-sandbox is required"
     log_level = configure_logging_level(args.verbose)
 
-    logging.info(
-        f"Start a py-sandbox encapsulated in an os-sandox of type '{outer_sandbox}'")
-    # FIXME activate_sandboxes(dict(os.environ), args_rules=None, outer_sandbox=outer_sandbox)
-    task_daemon = LocalTaskDaemon()
+    # -------------
+    # Read all configuration from stdin until EOF
+    config_body = []
+    token = "NO_TOKEN"
+    for line in sys.stdin:
+        if line == END_OF_FILE:
+            token = next(sys.stdin).strip()
+            break
+        config_body.append(line)
+    logging.debug("config body and token successfully read from stdin")
+
+    if not args.no_py_sandbox:
+        from pysandboxes import activate_sandboxes
+
+        activate_sandboxes(dict(os.environ),
+                           args_rules=None,
+                           outer_sandbox=outer_sandbox,
+                           config=config_body)
+        logging.info(
+            f"Start a py-sandbox encapsulated in an os-sandox of type '{outer_sandbox}'")
+    else:
+        logging.info(
+            f"Start ONLY an os-sandox of type '{outer_sandbox}'")
+
+    task_daemon = LocalTaskDaemon(token=token)
     try:
-        await task_daemon.start(log_level)
+        await task_daemon.start(log_level,
+                                envs=dict(os.environ),
+                                config=config_body,
+                                token=token)
         await task_daemon.join()
+        return 0
     finally:
         await task_daemon.shutdown()
 

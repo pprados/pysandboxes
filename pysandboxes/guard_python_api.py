@@ -6,6 +6,7 @@ from types import ModuleType
 from typing import List, Tuple, Union, Literal, Set
 from typing import Optional
 
+from pysandboxes.remote import ConfigLines
 from unit_tests import save_default_values, restore_default_values  # FIXME
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ PythonAPIRules = Union[Imports_Rule, Feature_Rule]
 _rules: List[PythonAPIRules] = []
 
 
-def parse_rules(arguments: List[str]) -> Tuple[List[PythonAPIRules], List[str]]:
+def parse_rules(arguments: ConfigLines) -> Tuple[List[PythonAPIRules], ConfigLines]:
     python_api_rules = []
     import_mode: Literal["allow", "learn"] = "allow"
     ignore_rules = []

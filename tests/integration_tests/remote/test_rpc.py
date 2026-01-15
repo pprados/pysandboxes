@@ -4,7 +4,7 @@ from typing import Iterator
 import pytest
 
 from pysandboxes import sandbox
-from pysandboxes.remote.os_sandbox import start_daemon
+from pysandboxes.remote.os_sandboxes import start_daemon
 
 
 # See https://github.com/tortoise/tortoise-orm/issues/638
