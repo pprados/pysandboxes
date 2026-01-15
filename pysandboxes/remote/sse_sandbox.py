@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import asyncio
 import inspect
 import json
@@ -7,11 +8,17 @@ import sys
 import traceback
 from datetime import timedelta
 from typing import Any, Dict, Callable, Optional, Tuple
+from typing import TYPE_CHECKING
+
+from tblib import pickling_support
 
 from .base_daemon import BaseDaemon
 from .manage_loop import sandbox_loop
 from .parameters import HOST, PORT, PATH_RPC
 from .tools import is_in_sandbox
+
+
+pickling_support.install()
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +27,7 @@ SANDBOX_SERVER_URL: str = os.environ.get(
     "SANDBOX_SERVER_URL",
     f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}{PATH_RPC}")
 
-
-def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional[str]]:
+def _get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional[str]]:
     """
     Retrieves the module name and the fully qualified name of a callable.
 
@@ -74,14 +80,14 @@ def _get_rpc_params(args: Any,
     """
     Get the parameters for the RPC call.
     """
-    from .tools import _to_b85
-    module_name, callable_name = get_callable_info(func)
+    from .tools import to_b85
+    module_name, callable_name = _get_callable_info(func)
     params = {
         "session_id": "123",  # TODO
         "timeout": timeout,  # TODO
         "function": f"{module_name}:{callable_name}",
-        "args": _to_b85(args),
-        "kwargs": _to_b85(kwargs),
+        "args": to_b85(args),
+        "kwargs": to_b85(kwargs),
     }
     return params
 
@@ -105,7 +111,7 @@ class SSESandbox(BaseDaemon):
                                     **kwargs: Any) -> Any:
         if is_in_sandbox():
             return await func(*args, **kwargs)
-        from .tools import _from_b85
+        from .tools import from_b85
         from .os_sandboxes import get_token
         from aiohttp_sse_client import client as sse_client
 
@@ -128,10 +134,10 @@ class SSESandbox(BaseDaemon):
                 async for event in event_source:
                     msg = json.loads(event.data)
                     if "result" in msg:
-                        return _from_b85(msg["result"])
+                        return from_b85(msg["result"])
                     if "exception" in msg:
                         _reraise(1,
-                                 *_from_b85(msg["exception"]))  # FIXME: check remove: 1
+                                 *from_b85(msg["exception"]))  # FIXME: check remove: 1
                     if "stdout" in msg:
                         print(msg["stdout"], end="")
                     if "stderr" in msg:

@@ -21,7 +21,6 @@ async def amain():
 
 
 def main():
-    time.sleep(1)  # FIXME: a virer
     rc = run_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42

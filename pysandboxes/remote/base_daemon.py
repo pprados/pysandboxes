@@ -5,9 +5,6 @@ from typing import Any, TYPE_CHECKING, Callable, Optional
 from . import ConfigLines, Envs
 from ..guard_sandbox import AllRules
 
-if TYPE_CHECKING:
-    pass
-
 logger = logging.getLogger(__name__)
 
 
