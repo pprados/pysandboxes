@@ -1,0 +1,103 @@
+import re
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+
+def _read_and_substitute_lines(
+        path: Path, env_vars: Dict[str, str]
+) -> List[str]:
+    """
+    Reads a file, filters out empty lines and comments, and performs variable
+    substitution on the remaining lines.
+
+    The function supports two substitution formats:
+    1. ${VAR_NAME}: Replaces the placeholder with the value of VAR_NAME from
+       the env_vars dictionary. If the variable is not found, it's replaced
+       with an empty string.
+    2. ${VAR_NAME:=default_value}: Replaces the placeholder with the value of
+       VAR_NAME if it exists in env_vars. Otherwise, it uses the provided
+       default_value.
+
+    Args:
+        path: The Path object pointing to the file to be read.
+        env_vars: A dictionary containing the environment-like variables
+                  for substitution.
+
+    Returns:
+        A list of strings, where each string is a processed and substituted
+        line from the file.
+    """
+    pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
+
+    def substitute(match: re.Match) -> str:
+        var_name = match.group(1)
+        default_value = match.group(2)
+        return env_vars.get(var_name,
+                            default_value if default_value is not None else "")
+
+    processed_lines: List[str] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped and not stripped.lstrip().startswith("#"):
+                substituted_line = pattern.sub(substitute, stripped)
+                processed_lines.append(substituted_line)
+    return processed_lines
+
+
+def parse_guard_envs(
+        rules: List[str], source_vars: Dict[str, str]
+) -> Tuple[Dict[str, str], List[str]]:
+    """
+    Processes a list of rules to create a new dictionary of variables.
+
+    Args:
+        rules: A list of rule strings, e.g., ["key=value", "key2=${source_key}"].
+        source_vars: The original dictionary of variables to draw from.
+
+    Returns:
+        A new dictionary with the applied rules.
+    """
+    new_vars: Dict[str, str] = {}
+    ignore_rules: List[str] = []
+
+    # This pattern finds ${VAR} or ${VAR:=default} substitutions.
+    subst_pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
+
+    def substitute_value(value_pattern: str) -> str:
+        """Resolves a single value pattern, e.g., ${VAR:=default}."""
+        return subst_pattern.sub(
+            lambda m: source_vars.get(m.group(1),
+                                      m.group(2) if m.group(2) is not None else ""),
+            value_pattern
+        )
+
+    for rule in rules:
+        if rule.startswith("--set-env="):
+            rule = rule[len("--set-env="):]
+
+            if "=" not in rule:
+                print(f"Warning: Skipping malformed rule: {rule}", file=sys.stderr)
+                continue
+
+            key_pattern, value_pattern = rule.split("=", 1)
+
+            # Case: Wildcard rule like *_API_KEY=${*_API_KEY}
+            if "*" in key_pattern:
+                # Convert wildcard to regex pattern
+                regex_key = re.compile(
+                    re.escape(key_pattern).replace("\\*", ".*"))
+                for source_key, source_value in source_vars.items():
+                    if regex_key.match(source_key):
+                        # The rule implies copying the matched key-value pairs
+                        new_vars[source_key] = source_value
+            # Case: Simple rule like key=value or key=${VAR}
+            else:
+                new_vars[key_pattern] = substitute_value(value_pattern)
+        elif rule.startswith("--unset-env="):
+            rule = rule[len("--unset-env="):]
+            new_vars.pop(rule, None)
+        else:
+            ignore_rules.append(rule.strip())
+
+    return new_vars, ignore_rules

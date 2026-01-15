@@ -1,0 +1,127 @@
+# TODO: --build=file  pour apprentissage
+# TODO: ajouter un niveau de log dédié, puis tous logger dessus
+
+# Why a python sandbox ?
+# =======================
+# Using a tool by an LLM is equivalent to making a Remote Procedure Call (RPC).
+# This poses a risk of misuse. To mitigate this, placing the tool in a sandbox
+# environment helps limit accesses to minimal privileges.
+
+#--os-sandbox=task
+#--os-sandbox=subprocess
+--os-sandbox=firejail
+# TODO: --no-dotenv
+# TODO: --firejail=file.template
+
+#######################################################################################
+# Select some variables for the sandbox
+# The --set-env option is used to set environment variables that will be visible within
+# the sandbox.
+# The syntax allows you to:
+#
+# 1. Assign a fixed value to an environment variable:
+#    --set-env VAR_NAME=value
+#    This sets VAR_NAME to value within the sandbox.
+#
+# 2. Assign a value based on the environment outside the sandbox, with an optional
+#    default value if needed,
+#    using a syntax similar to bash:
+#    --set-env VAR_NAME=${OUTSIDE_VAR:-default_value}
+#    This sets VAR_NAME to the value of OUTSIDE_VAR from the environment outside the
+#    sandbox. If OUTSIDE_VAR is not set, it uses default_value.
+#
+# 3. Replicate the values of variables that match a specific naming pattern:
+#    --set-env VAR_*=${VAR_*}
+#    This replicates all environment variables from outside the sandbox that match the
+#    pattern VAR_* into the sandbox.
+#
+# By using --set-env, you can control and manage the environment variables available
+# within your sandbox, ensuring that your applications have the necessary configuration.
+
+--set-env=HOME=${HOME}
+--set-env=USER=${USER}
+--set-env=PATH=${PATH}  # FIXME je ne pense pas cela nécessaire
+--set-env=VIRTUAL_ENV*=${VIRTUAL_ENV_*}
+--set-env=LC_*=${LC_*}
+--set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+--set-env=LANG=${LANG}
+--set-env=TMP=/tmp
+--set-env=TEMP=/tmp
+--set-env=*_API_KEY=${*_API_KEY}
+--unset-env=OPENAI_API_KEY
+
+
+#######################################################################################
+# In a sandbox, it is crucial to prohibit access to certain file patterns
+# that contain confidential data (e.g., .*). Additionally, it is important to
+# limit write access to specific directories or to mount a restricted number
+# of directories that are accessible within the sandbox.
+# The syntax --ignore=<glob_pattern> allows excluding certain files when using
+# Python file APIs. The syntax --bind=<target_dir>:<src_dir> maps a directory outside
+# the sandbox to a directory visible inside the sandbox (which must exist).
+# Additionally, --bind-ro does the same but limits access to the sandbox as read-only.
+#
+# Ignores all hidden files and .log files
+--ignore=.*
+--ignore=*.log
+#--ignore=*.py # A tester !
+
+# Binds the current directory to the root of the sandbox
+# TODO: vérifier les impacts écritures. Est-ce bien visible ?
+--ro-bind=${PWD},${PWD}
+--ro-bind=${PYENV_ROOT},${PYENV_ROOT}
+--ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
+#--ro-bind=${PWD}/sandbox,/usr/src/myapp  # FIXME
+#--ro-bind=/dev/null,/dev/null
+#--ro-bind=dist,/toto  # TODO: a vérifier sous firejail
+
+#######################################################################################
+# Network rules management strategy:
+# There are two strategies: "allow" and "deny".
+# TODO The first network rule indicates the default behavior.
+#
+# It is recommended to operate in a whitelist mode, allowing specific connections
+# and denying all others. This approach enhances security by explicitly specifying
+# permitted connections.
+#
+# However, it is also possible to operate in a blacklist mode, denying specific connections
+# and allowing all others. This approach can be useful in scenarios where most connections
+# are trusted, and only a few need to be blocked.
+#
+# Example:
+# - In whitelist mode (allow), the first rule might be "deny".
+# - In blacklist mode (deny), the first rule might be "allow".
+
+# *** Whitelist strategy (recommanded) ***
+# Allow web access
+--net=ALLOW|tcp|${BIND:=127.0.0.1}/32|${PORT:=8000}|IN
+--net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call all HTTPS services
+--net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
+--net=ALLOW|udp|0.0.0.0/0|53|IN
+# --bind=${BIND:=127.0.0.1} # FIXME a utilisé comme paramétre ?
+
+
+# TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
+# TODO: valider le DENY + ALLOW|any|0.0.0.0/0|80,443|OUT
+## Allow Intranet
+#--net=ALLOW|any|10.0.0.0/8|*|OUT
+#--net=ALLOW|any|169.254.0.0/16|*|OUT
+#--net=ALLOW|any|172.16.0.0/12|*|OUT
+#--net=ALLOW|any|192.168.0.0/16|*|OUT
+#--net=ALLOW|any|fc00::/7|*|OUT
+
+#######################################################################################
+# Limit python features in the sandbox
+#--python-api=ALLOW:threads
+#--python-api-import=ALLOW:numpy.*,pandas.*
+
+#######################################################################################
+# Limit syntax and features when executing python code (very useful for controlling
+# LLM-generated code)
+#--python-exec-provider=interpreter
+#--python-exec-import=ALLOW:threads
+#--python-exec=ALLOW:annotations,async,class,def
+
+
+
+# TODO: --dns=1.1.1.1,4,4,4,4
