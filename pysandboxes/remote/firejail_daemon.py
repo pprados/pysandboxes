@@ -9,7 +9,7 @@ from typing import List, Tuple, Dict
 import click
 
 from ..guard_files import BindRule, IgnoreRule
-from ..guard_sandbox import read_and_parse_config, AllRules
+from ..py_sandbox import read_and_parse_config, AllRules
 from ..netfilter import rule_to_netfilter
 from ..types import ConfigLines, Envs, Args
 from . import daemon

@@ -1,7 +1,8 @@
-import pytest
 import stat
 
-from pysandboxes.guard_files import activate_guard_files, RuleFileNotFoundError
+import pytest
+
+from pysandboxes.guard_files import RuleFileNotFoundError
 from .test_guard_io import files, str_activate_guard_files
 
 
@@ -241,6 +242,7 @@ def test_pathlib_link_symlink_and_readlink(files):
     with pytest.raises(RuleFileNotFoundError):
         (files["new_link"]).symlink_to(files['bind_src'] / "toto")
 
+
 def test_pathlib_link_symlink_and_readlink_refused(files):
     rules = [
         f"--ignore=*.log",
@@ -250,6 +252,7 @@ def test_pathlib_link_symlink_and_readlink_refused(files):
 
     with pytest.raises(PermissionError):
         files['bound_file'].hardlink_to(files['visible'])
+
 
 def test_pathlib_touch(files):
     rules = [
@@ -265,6 +268,7 @@ def test_pathlib_touch(files):
     with pytest.raises(RuleFileNotFoundError):
         files["bind_src"].touch()
 
+
 def test_pathlib_touch_refused(files):
     rules = [
         f"--ignore=*.log",
@@ -274,6 +278,7 @@ def test_pathlib_touch_refused(files):
 
     with pytest.raises(PermissionError):
         files["bound_file"].touch() is None
+
 
 def test_pathlib_rename(files):
     rules = [
@@ -288,13 +293,15 @@ def test_pathlib_rename(files):
     files["new_rename"].unlink()
 
     files["bind_to_rename"].write_text("To rename")
-    assert files["bind_to_rename"].rename(files["new_bind_rename"]) == files["new_bind_rename"]
+    assert files["bind_to_rename"].rename(files["new_bind_rename"]) == files[
+        "new_bind_rename"]
     files["new_bind_rename"].unlink()
 
     with pytest.raises(RuleFileNotFoundError):
         files["ignore"].rename(files["ignore"])
     with pytest.raises(RuleFileNotFoundError):
         files["bind_src"].rename(files["bind_src"])
+
 
 def test_pathlib_rename_refused(files):
     rules = [
@@ -303,8 +310,9 @@ def test_pathlib_rename_refused(files):
     ]
     str_activate_guard_files(rules)
 
-    with pytest.raises(PermissionError): # TODO: refuse in et out
+    with pytest.raises(PermissionError):  # TODO: refuse in et out
         files["bound_file"].rename(files["bind_dest"] / "new_rename")
+
 
 def test_pathlib_replace(files):
     rules = [
@@ -327,6 +335,7 @@ def test_pathlib_replace(files):
     with pytest.raises(RuleFileNotFoundError):
         files["bind_src"].replace(files["new_replace"])
 
+
 def test_pathlib_replace_refused(files):
     rules = [
         f"--ignore=*.log",
@@ -336,6 +345,7 @@ def test_pathlib_replace_refused(files):
 
     with pytest.raises(PermissionError):  # TODO: refuse in et out
         files["bound_file"].replace(files["bind_dest"] / "new_replace")
+
 
 def test_pathlib_resolve(files):
     rules = [

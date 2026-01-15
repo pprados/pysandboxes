@@ -1,11 +1,7 @@
-import shutil
-
-import os
-
-import pytest
 import gzip
 
-from pysandboxes.guard_files import activate_guard_files
+import pytest
+
 from .test_guard_io import files, str_activate_guard_files
 
 

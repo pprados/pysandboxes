@@ -1,7 +1,7 @@
 import os
+
 import pytest
 
-from pysandboxes.guard_files import activate_guard_files
 from .test_guard_io import files, str_activate_guard_files
 
 
@@ -97,6 +97,7 @@ def test_os_path_realpath(files):
         files["path"] / "visible.txt")
     assert os.path.realpath(files["bind_dest"] / "bound_file.txt") == str(
         files["bind_dest"] / "bound_file.txt")
+
 
 def test_os_path_atime_mtime_ctime_and_size(files):
     rules = [

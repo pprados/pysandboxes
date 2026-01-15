@@ -3,12 +3,13 @@ import functools
 import inspect
 import logging
 from multiprocessing import Lock
+from pathlib import Path
 from typing import Any, TypeVar, Union, \
     Awaitable, TYPE_CHECKING
 from typing import Callable, Optional
 
 from .remote.base_daemon import BaseDaemon
-from .guard_sandbox import get_config_path
+from .py_sandbox import get_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +69,11 @@ class sandboxes:
     """
 
     def __init__(self,
-                 init_fn: Optional[SyncOrAsyncFunc] = None
+                 init_fn: Optional[SyncOrAsyncFunc] = None,
+                 config_path:Optional[Union[Path,str]]=None ,
                  ) -> None:
         self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
+        self.config_path=config_path
         # TODO: ajouter des paramètres complémentaire ici ?
         # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
 
@@ -79,12 +82,12 @@ class sandboxes:
         """
         Start the sandbox daemon.
         """
-        from .guard_sandbox import read_and_parse_config
+        from .py_sandbox import read_and_parse_config
         from .remote.os_sandboxes import start_daemon
 
         logger.debug("__enter__ start...")
         log_level = logging.root.getEffectiveLevel()
-        config = get_config_path(None).read_text().splitlines()
+        config = get_config_path(self.config_path).read_text().splitlines()
         config, _, os_sandbox, *_ = read_and_parse_config(config=config)
         start_daemon(os_sandbox, log_level, config)
         logger.debug("__enter__ ok")
@@ -107,10 +110,10 @@ class sandboxes:
         """
         Start the sandbox daemon.
         """
-        from .guard_sandbox import read_and_parse_config
+        from .py_sandbox import read_and_parse_config
         from .remote.os_sandboxes import async_start_daemon
         log_level = logging.root.getEffectiveLevel()
-        config = get_config_path(None).read_text().splitlines()
+        config = get_config_path(self.config_path).read_text().splitlines()
         config, _, os_sandbox, *_ = read_and_parse_config(config=config)
         return await async_start_daemon(os_sandbox, log_level, config)
 
@@ -126,7 +129,10 @@ class sandboxes:
         return False
 
 
-def run(main, *, debug=None, loop_factory=None, cancel_remaining_tasks=True) -> Any:
+def run(main:Callable, # FIXME: typage fort
+        *, debug=None, loop_factory=None,
+        cancel_remaining_tasks=True,
+        config_path:Optional[Union[Path,str]]) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
     It's similar to `asyncio.run()`, but with the sandbox.
@@ -135,8 +141,8 @@ def run(main, *, debug=None, loop_factory=None, cancel_remaining_tasks=True) -> 
     """
 
     async def _run():
-        async with sandboxes():
-            result = (await asyncio.gather(main))[0]
+        async with sandboxes(config_path=config_path):
+            result = (await asyncio.create_task(main))
 
         # Cancel all remaining tasks
         if cancel_remaining_tasks:

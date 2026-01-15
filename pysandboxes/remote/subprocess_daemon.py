@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable, Dict, Any
 
 from ..types import ConfigLines, Args, Envs
-from ..guard_sandbox import AllRules, read_and_parse_config
+from ..py_sandbox import AllRules, read_and_parse_config
 from .sse_sandbox import SSESandbox
 from .tools import return_level_parameter, END_OF_FILE
 

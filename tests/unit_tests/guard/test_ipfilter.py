@@ -1,7 +1,8 @@
 import subprocess
 from typing import List
 
-from pysandboxes.guard_socket import parse_rules, rule_to_netfilter
+from pysandboxes.guard_socket import parse_rules
+from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
 
 

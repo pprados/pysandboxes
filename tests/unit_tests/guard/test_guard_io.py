@@ -1,9 +1,8 @@
+import io
 import os
 import pathlib
-from typing import List
 
 import pytest
-import io
 
 from pysandboxes.guard_files import activate_guard_files, parse_rules, \
     RuleFileNotFoundError
@@ -80,9 +79,11 @@ def files(tmp_path):
         "bind_to_truncate": tmp_path / "bind_dest/to_truncate.txt",
     }
 
-def str_activate_guard_files(rules:ConfigLines) -> None:
+
+def str_activate_guard_files(rules: ConfigLines) -> None:
     file_rules, _ = parse_rules(rules)
     activate_guard_files(file_rules)
+
 
 def test_io_open_ignore_rule_blocks_file_access(files):
     rules = [f"--ignore={files['ignore']}"]
@@ -108,26 +109,27 @@ def test_io_open_bind_rule_redirects_file_access(files):
         content = f.read()
     assert content == "Content"
 
+
 def test_io_open_write(files):
     rules = [f"--bind={files['bind_src']},{files['bind_dest']}"]
     str_activate_guard_files(rules)
     target_path = files['bind_dest'] / "write.txt"
-    with io.open(target_path,"w") as f:
+    with io.open(target_path, "w") as f:
         f.write("sample")
     os.remove(str(target_path))
+
 
 def test_io_open_refuse_write(files):
     rules = [f"--ro-bind={files['bind_src']},{files['bind_dest']}"]
     str_activate_guard_files(rules)
     target_path = files['bind_dest'] / "write.txt"
     with pytest.raises(PermissionError):
-        with io.open(target_path,"w") as f:
+        with io.open(target_path, "w") as f:
             f.write("sample")
+
 
 def test_io_open_visible_file_is_accessible(files):
     rules = ["--ignore=*.log"]
     str_activate_guard_files(rules)
     with open(files['visible']) as f:
         assert f.read() == "Visible"
-
-

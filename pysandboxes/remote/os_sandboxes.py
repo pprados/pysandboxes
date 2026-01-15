@@ -33,7 +33,7 @@ providers = {
 DEFAULT_OS_SANDBOX = "firejail"
 
 _current_daemon: ReferenceType[BaseDaemon] = None  # Current daemon used by the sandbox
-
+_startup_counter = 0  # Number of time the daemon has been started
 
 @sandbox_loop
 async def async_start_daemon(name: str,
@@ -44,15 +44,17 @@ async def async_start_daemon(name: str,
     Asynchronize version to start daemon by name.
     Returns daemon object when is starred
     """
-    global _current_daemon
+    global _current_daemon,_startup_counter
     if _current_daemon is not None and _current_daemon():
-        logger.warning("Daemon already started")
+        logger.info("Daemon already started")
+        _startup_counter+=1
         return _current_daemon()
     if name not in providers:
         raise ValueError(f"Unknown daemon name: {name}")
     await providers[name].start(log_level, dict(os.environ), config, token=None)
     _current_daemon = weakref.ref(providers[name])
     assert providers[name].is_started == True
+    _startup_counter+=1
     return providers[name]
 
 
@@ -62,14 +64,18 @@ async def async_shutdown_daemon():
     Asynchronize version to shutdown the current daemon.
     Return when the daemon is shutdown.
     """
-    global _current_daemon
+    global _current_daemon,_startup_counter
     if not _current_daemon:
-        logger.warning("Daemon not started when shutdown")
+        logger.info("Daemon not started when shutdown")
+        _startup_counter -= 1
+        if _startup_counter < 0:
+            raise ValueError("Daemon shutdown more times than started")
         return
 
     await _current_daemon().shutdown()
     assert _current_daemon().is_started == False
     _current_daemon = None
+    _startup_counter -= 1
 
 
 @sandbox_loop

@@ -17,7 +17,7 @@ from logging import getLogger
 from tblib import pickling_support
 from uvicorn import Server
 
-from ..guard_sandbox import AllRules
+from ..py_sandbox import AllRules
 from ..types import ConfigLines, Args, Envs
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
@@ -370,7 +370,7 @@ async def main() -> int:
     logging.debug("config body and token successfully read from stdin")
 
     if not args.no_py_sandbox:
-        from pysandboxes.guard_sandbox import activate_sandboxes
+        from pysandboxes.py_sandbox import activate_sandboxes
 
         activate_sandboxes(dict(os.environ),
                            args_rules=None,

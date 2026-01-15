@@ -2,6 +2,7 @@ import inspect
 import logging
 import os
 import types
+from importlib.resources import as_file
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
@@ -15,14 +16,14 @@ from .tools import remove_comments, substitute_env_vars
 logger = logging.getLogger(__name__)
 
 
-def get_caller_module(skip: int = 2) -> Optional[types.ModuleType]:
+def _get_caller_module(skip: int = 4) -> Optional[types.ModuleType]:
     """
     Returns the module of the caller.
 
     Parameters:
         skip (int): How many stack frames to skip.
-                    skip=0 -> current function (get_caller_module),
-                    skip=1 -> function calling get_caller_module,
+                    skip=0 -> current function (_get_caller_module),
+                    skip=1 -> function calling _get_caller_module,
                     skip=2 -> caller of that function (default).
 
     Returns:
@@ -58,13 +59,16 @@ def read_and_parse_config(
         args_rules = []
     body_from_ressource = []
     # FIXME: a bug in importlib.resources.files
-    # caller_module = get_caller_module()
+    # caller_module = _get_caller_module()
     # if caller_module:
+    #     from importlib.metadata import files
     #     resource = files(caller_module.__name__).joinpath(".pysandboxes")
-    #     # resource = files(caller_module.__package__).joinpath(".pysandboxes")
+    #     resource = files(caller_module.__package__).joinpath(".pysandboxes")
+    #     FIXME
     #     if resource.exists():
     #         with as_file(resource) as path:
     #             body_from_ressource = _read_config(path)
+    #     pass
 
 
     body_from_users_or_os = remove_comments(config)
@@ -87,6 +91,7 @@ def read_and_parse_config(
 
 
 def get_config_path(config_path:Optional[Path]) -> Optional[Path]:
+    # TODO: merge parameter with others ?
     if not config_path:
         known_paths = [
             Path(".py-sandbox"),  # Current directory
@@ -101,17 +106,7 @@ def get_config_path(config_path:Optional[Path]) -> Optional[Path]:
             if path.exists():
                 config_path = path
                 break
-    return config_path
-
-
-known_paths = [
-    Path(".pysandboxes"),  # Current directory
-    Path("~/.config/pysandboxes/pysandboxes").expanduser(),
-    Path("~/.local/share/pysandboxes/pysandboxes").expanduser(),
-    Path("/etc/pysandboxes/pysandboxes"),
-    Path("/usr/share/pysandboxes/pysandboxes"),
-    Path("/var/lib/pysandboxes/pysandboxes"),
-]
+    return Path(config_path) if isinstance(config_path, str) else config_path
 
 
 def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?

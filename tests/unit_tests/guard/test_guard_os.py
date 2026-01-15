@@ -1,11 +1,12 @@
 import io
 import os
-import pytest
 import stat
 import sys
 import time
 
-from pysandboxes.guard_files import activate_guard_files, RuleFileNotFoundError
+import pytest
+
+from pysandboxes.guard_files import RuleFileNotFoundError
 from .test_guard_io import files, str_activate_guard_files
 
 
@@ -81,6 +82,7 @@ def test_os_statand_stat_and_lstat(files):
     with pytest.raises(RuleFileNotFoundError):
         assert os.lstat(files["bind_src"])
 
+
 def test_os_listxattr(files):
     rules = [
         f"--ignore=*.log",
@@ -90,6 +92,7 @@ def test_os_listxattr(files):
 
     assert os.listxattr(files['visible']) == []
 
+
 def test_os_xattr(files):
     rules = [
         f"--ignore=*.log",
@@ -97,15 +100,16 @@ def test_os_xattr(files):
     ]
     str_activate_guard_files(rules)
 
-    os.setxattr(files['visible'],"user.comment",b"comment")
-    assert os.getxattr(files['visible'],"user.comment") == b"comment"
+    os.setxattr(files['visible'], "user.comment", b"comment")
+    assert os.getxattr(files['visible'], "user.comment") == b"comment"
     assert os.listxattr(files['visible']) == ["user.comment"]
-    assert os.removexattr(files['visible'],"user.comment") is None
+    assert os.removexattr(files['visible'], "user.comment") is None
 
-    os.setxattr(files['bound_file'],"user.comment",b"comment")
-    assert os.getxattr(files['bound_file'],"user.comment") == b"comment"
+    os.setxattr(files['bound_file'], "user.comment", b"comment")
+    assert os.getxattr(files['bound_file'], "user.comment") == b"comment"
     assert os.listxattr(files['bound_file']) == ["user.comment"]
-    assert os.removexattr(files['bound_file'],"user.comment") is None
+    assert os.removexattr(files['bound_file'], "user.comment") is None
+
 
 def test_os_link_symlink_and_readlink(files):
     rules = [
@@ -166,6 +170,7 @@ def test_os_remove(files):
     with open(files["bind_dest"] / "to_remove.txt", "w") as f:
         f.write("To remove")
     assert os.remove(files["bind_dest"] / "to_remove.txt") is None
+
 
 def test_os_remove_refused(files):
     rules = [
@@ -237,6 +242,7 @@ def test_os_rename(files):
     with pytest.raises(RuleFileNotFoundError):
         assert os.rename(files["bind_src"] / "toto", files["visible"])
 
+
 def test_os_rename_refused(files):
     rules = [
         f"--ignore=*.log",
@@ -246,7 +252,7 @@ def test_os_rename_refused(files):
 
     with pytest.raises(PermissionError):
         os.rename(files["to_rename"],
-                     files["bound_file"])
+                  files["bound_file"])
 
 
 def test_os_chdir_and_getcwd(files):
@@ -273,17 +279,18 @@ def test_os_open_readonly(files):
     ]
     str_activate_guard_files(rules)
 
-    fd=-1
+    fd = -1
     try:
-        fd=os.open(files["visible"], os.O_RDONLY)
+        fd = os.open(files["visible"], os.O_RDONLY)
     finally:
-        if fd!=-1:
+        if fd != -1:
             os.close(fd)
     try:
-        fd=os.open(files["bind_dest"], os.O_RDONLY)
+        fd = os.open(files["bind_dest"], os.O_RDONLY)
     finally:
-        if fd!=-1:
+        if fd != -1:
             os.close(fd)
+
 
 def test_os_open_writeonly(files):
     rules = [
@@ -292,17 +299,18 @@ def test_os_open_writeonly(files):
     ]
     str_activate_guard_files(rules)
 
-    fd=-1
+    fd = -1
     try:
-        fd=os.open(files["visible"], os.O_WRONLY)
+        fd = os.open(files["visible"], os.O_WRONLY)
     finally:
-        if fd!=-1:
+        if fd != -1:
             os.close(fd)
     try:
-        fd=os.open(files["bind_dest"], os.O_RDONLY)
+        fd = os.open(files["bind_dest"], os.O_RDONLY)
     finally:
-        if fd!=-1:
+        if fd != -1:
             os.close(fd)
+
 
 def test_os_open_writeonly_refused(files):
     rules = [
@@ -311,14 +319,14 @@ def test_os_open_writeonly_refused(files):
     ]
     str_activate_guard_files(rules)
 
-
     with pytest.raises(PermissionError):
         fd = -1
         try:
-            fd=os.open(files["bind_dest"], os.O_WRONLY)
+            fd = os.open(files["bind_dest"], os.O_WRONLY)
         finally:
-            if fd!=-1:
+            if fd != -1:
                 os.close(fd)
+
 
 def test_os_open_readwrite(files):
     rules = [
@@ -327,17 +335,18 @@ def test_os_open_readwrite(files):
     ]
     str_activate_guard_files(rules)
 
-    fd=-1
+    fd = -1
     try:
-        fd=os.open(files["visible"], os.O_RDWR)
+        fd = os.open(files["visible"], os.O_RDWR)
     finally:
-        if fd!=-1:
+        if fd != -1:
             os.close(fd)
     try:
-        fd=os.open(files["bind_dest"], os.O_RDONLY)
+        fd = os.open(files["bind_dest"], os.O_RDONLY)
     finally:
-        if fd!=-1:
+        if fd != -1:
             os.close(fd)
+
 
 def test_os_open_readwrite_refused(files):
     rules = [
@@ -349,9 +358,9 @@ def test_os_open_readwrite_refused(files):
     with pytest.raises(PermissionError):
         fd = -1
         try:
-            fd=os.open(files["bind_dest"], os.O_WRONLY)
+            fd = os.open(files["bind_dest"], os.O_WRONLY)
         finally:
-            if fd!=-1:
+            if fd != -1:
                 os.close(fd)
 
 
@@ -362,12 +371,13 @@ def test_os_access_read_write(files):
     ]
     str_activate_guard_files(rules)
 
-    assert os.access(files["path"], os.R_OK|os.W_OK)
-    assert os.access(files["visible"], os.R_OK|os.W_OK)
-    assert os.access(files["bound_file"], os.R_OK|os.W_OK)
-    assert os.access(files["bind_dest"], os.R_OK|os.W_OK)
+    assert os.access(files["path"], os.R_OK | os.W_OK)
+    assert os.access(files["visible"], os.R_OK | os.W_OK)
+    assert os.access(files["bound_file"], os.R_OK | os.W_OK)
+    assert os.access(files["bind_dest"], os.R_OK | os.W_OK)
     with pytest.raises(RuleFileNotFoundError):
-        assert os.access(files["bind_src"], os.R_OK|os.W_OK)
+        assert os.access(files["bind_src"], os.R_OK | os.W_OK)
+
 
 def test_os_access_read_only(files):
     rules = [
@@ -376,12 +386,12 @@ def test_os_access_read_only(files):
     ]
     str_activate_guard_files(rules)
 
-    assert os.access(files["path"], os.R_OK|os.W_OK)  # FIXME
-    assert os.access(files["visible"], os.R_OK|os.W_OK)
-    assert os.access(files["bound_file"], os.R_OK|os.W_OK)
-    assert os.access(files["bind_dest"], os.R_OK|os.W_OK)
+    assert os.access(files["path"], os.R_OK | os.W_OK)  # FIXME
+    assert os.access(files["visible"], os.R_OK | os.W_OK)
+    assert os.access(files["bound_file"], os.R_OK | os.W_OK)
+    assert os.access(files["bind_dest"], os.R_OK | os.W_OK)
     with pytest.raises(RuleFileNotFoundError):
-        assert os.access(files["bind_src"], os.R_OK|os.W_OK)
+        assert os.access(files["bind_src"], os.R_OK | os.W_OK)
 
 
 @pytest.mark.skipif(not (sys.platform != "win32" and sys.platform != "linux"),
@@ -416,18 +426,19 @@ def test_os_chmod_and_lchmod(files):
     assert os.chmod(files["bind_dest"],
                     mode | stat.S_IREAD | stat.S_IWRITE) is None
     with pytest.raises(RuleFileNotFoundError):
-        os.chmod(files["bind_src"],mode | stat.S_IREAD | stat.S_IWRITE)
+        os.chmod(files["bind_src"], mode | stat.S_IREAD | stat.S_IWRITE)
 
     if sys.platform != "win32" and sys.platform != "linux":
         assert os.lchmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE) is None
         assert os.lchmod(files["bound_file"],
                          mode | stat.S_IREAD | stat.S_IWRITE) is None
         assert os.lchmod(files["bound_file"],
-                        mode | stat.S_IREAD | stat.S_IWRITE) is None
+                         mode | stat.S_IREAD | stat.S_IWRITE) is None
         assert os.lchmod(files["bind_dest"],
-                        mode | stat.S_IREAD | stat.S_IWRITE) is None
+                         mode | stat.S_IREAD | stat.S_IWRITE) is None
         with pytest.raises(RuleFileNotFoundError):
-            os.lchmod(files["bind_src"],mode | stat.S_IREAD |  stat.S_IWRITE)
+            os.lchmod(files["bind_src"], mode | stat.S_IREAD | stat.S_IWRITE)
+
 
 def test_os_chmod_and_lchmod_refused(files):
     rules = [
@@ -439,11 +450,12 @@ def test_os_chmod_and_lchmod_refused(files):
     mode = os.stat(files["bound_file"]).st_mode
     with pytest.raises(PermissionError):
         os.chmod(files["bound_file"],
-                    mode | stat.S_IREAD | stat.S_IWRITE)
+                 mode | stat.S_IREAD | stat.S_IWRITE)
 
     if sys.platform != "win32" and sys.platform != "linux":
         with pytest.raises(PermissionError):
             os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
+
 
 # @pytest.mark.skipif(sys.platform != "win32",
 #                     reason="requires no windows OS")
@@ -463,18 +475,19 @@ def test_os_chown_and_lchown(files):
                     uid, gid) is None
     with pytest.raises(RuleFileNotFoundError):
         os.chown(files["bind_src"],
-                    uid, gid)
+                 uid, gid)
 
     assert os.lchown(files["path"], uid, gid) is None
     assert os.lchown(files["bound_file"],
                      uid, gid) is None
     assert os.lchown(files["bound_file"],
-                    uid, gid) is None
+                     uid, gid) is None
     assert os.lchown(files["bind_dest"],
-                    uid, gid) is None
+                     uid, gid) is None
     with pytest.raises(RuleFileNotFoundError):
         os.lchown(files["bind_src"],
-                    uid, gid)
+                  uid, gid)
+
 
 def test_os_chown_and_lchown_refused(files):
     rules = [
@@ -512,9 +525,9 @@ def test_os_replace(files):
     os.unlink(files["new_bind_replace"])
 
     with pytest.raises(RuleFileNotFoundError):
-        os.replace(files["ignore"],files["new_replace"])
+        os.replace(files["ignore"], files["new_replace"])
     with pytest.raises(RuleFileNotFoundError):
-        os.replace(files["bind_src"],files["new_replace"])
+        os.replace(files["bind_src"], files["new_replace"])
 
 
 def test_os_replace_refused(files):
@@ -562,6 +575,7 @@ def test_os_truncate_refused(files):
     with pytest.raises(PermissionError):
         os.truncate(files["bound_file"], 3)
 
+
 def test_os_utime(files):
     rules = [
         f"--ignore=*.log",
@@ -581,6 +595,7 @@ def test_os_utime(files):
 
     with pytest.raises(RuleFileNotFoundError):
         os.utime(files["bind_src"], (yesterday, now))
+
 
 def test_os_utime_refused(files):
     rules = [
