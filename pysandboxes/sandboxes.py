@@ -5,16 +5,15 @@ import logging
 from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, TypeVar, Union, \
-    Awaitable, TYPE_CHECKING
+    Awaitable
 from typing import Callable, Optional
 
-from .remote.base_daemon import BaseDaemon
 from .py_sandbox import get_config_path
+from .remote.base_daemon import BaseDaemon
 
 logger = logging.getLogger(__name__)
 
 _lock = Lock()
-
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -70,10 +69,10 @@ class sandboxes:
 
     def __init__(self,
                  init_fn: Optional[SyncOrAsyncFunc] = None,
-                 config_path:Optional[Union[Path,str]]=None ,
+                 config_path: Optional[Union[Path, str]] = None,
                  ) -> None:
         self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
-        self.config_path=config_path
+        self.config_path = config_path
         # TODO: ajouter des paramètres complémentaire ici ?
         # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
 
@@ -129,10 +128,10 @@ class sandboxes:
         return False
 
 
-def run(main:Callable, # FIXME: typage fort
+def run(main: Callable[[], Awaitable[None]],
         *, debug=None, loop_factory=None,
         cancel_remaining_tasks=True,
-        config_path:Optional[Union[Path,str]]) -> Any:
+        config_path: Optional[Union[Path, str]]) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
     It's similar to `asyncio.run()`, but with the sandbox.

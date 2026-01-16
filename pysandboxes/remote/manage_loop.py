@@ -33,6 +33,7 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
 
         logger.debug("Create a private event loop")
         loop = asyncio.new_event_loop()
+        loop.set_debug(True)  # FIXME: remove this line in production
         _background_loop_ref = weakref.ref(loop)
         asyncio.set_event_loop(loop)
 
@@ -59,12 +60,16 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         old_loop = None
         try:
-            old_loop = asyncio.get_event_loop()
+            # old_loop = asyncio.get_event_loop()
+            old_loop = asyncio.get_running_loop()
         except RuntimeError:
             pass
 
         loop = get_sandbox_loop()
         asyncio.set_event_loop(loop)
+        # x=asyncio.get_running_loop()  # FIXME
+        x=asyncio.get_event_loop()  # FIXME
+        # assert x == loop
 
         result = func(*args, **kwargs)
 
@@ -88,7 +93,8 @@ def get_sandbox_loop() -> AbstractEventLoop:
             # logger.debug("Reuse the private event loop")
             return loop
         # Try to use the active loop
-        loop = asyncio.get_event_loop()
+        #loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         # logger.debug("Use the active loop")
         return loop
     except RuntimeError:

@@ -33,9 +33,9 @@ dependencies = [
 ]
 
 [tool.poetry.scripts]
-python-sandbox = "pysandboxes.cli:forty_two"
-python3-sandbox = "pysandboxes.cli:forty_two"
-sandbox-daemon = "pysandboxes.remote.daemon:forty_two"
+python-sandbox = "pysandboxes.cli:sync_forty_two"
+python3-sandbox = "pysandboxes.cli:sync_forty_two"
+sandbox-daemon = "pysandboxes.remote.daemon:sync_forty_two"
 
 [tool.poetry.group.dev]
 optional = true
