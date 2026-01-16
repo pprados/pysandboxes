@@ -75,6 +75,7 @@ def test_kill_child_process(capsys: _pytest.capture.CaptureFixture):
     assert Path(f"/proc/{child_pid}").exists(), "Child process not found"
     os.kill(child.pid, signal.SIGKILL)
     child.wait()
+    time.sleep(0.5)
     assert not Path(f"/proc/{child_pid}").exists(), "Child process alive"
 
 

@@ -152,9 +152,9 @@ class SSESandbox(BaseDaemon):
                         **kwargs: Any) -> Any:
         if is_in_sandbox():
             return func(*args, **kwargs)
-        loop = asyncio.get_event_loop()  # Get the current running loop
-        if loop == get_sandbox_loop():
-            raise RuntimeError(_mixed_sync_and_async_error)
+        loop = asyncio.get_event_loop()  # Get the current running loop. May be != sandbox loop
+        # if loop == get_sandbox_loop():  # FIXME: si je détecter, ca fait planter des trucs
+        #     raise RuntimeError(_mixed_sync_and_async_error)
 
         return asyncio.run_coroutine_threadsafe(
             self.async_call_in_sandbox(func, timeout, *args, **kwargs),

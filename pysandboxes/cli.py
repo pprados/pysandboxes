@@ -2,10 +2,10 @@ import sys
 from pathlib import Path
 from typing import List
 
-from pysandboxes.sandbox import activate_sandboxes
 from dotenv import load_dotenv
 
-from pysandboxes.remote import ConfigLines
+from pysandboxes.py_sandbox import activate_sandboxes
+from pysandboxes.types import ConfigLines
 
 load_dotenv()  # FIXME: a garder avec main ?
 

@@ -18,7 +18,7 @@ from typing import Dict
 from tblib import pickling_support
 from uvicorn import Server
 
-from .manage_loop import sandbox_loop
+from .manage_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
 from .tools import to_b85, set_is_in_sandbox, configure_logging_level, END_OF_FILE, \
@@ -162,6 +162,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         port=PORT,
         use_colors=None,
         log_config=logging_confg,
+        # loop="asyncio",
     ))
     return uvicorn_server
 
@@ -278,12 +279,14 @@ class LocalTaskDaemon(SSESandbox):
                     token: Optional[str]) -> None:
 
         self.uvicorn = create_uvicorn_daemon(self.token)
+        loop = get_sandbox_loop()
 
         start_event = asyncio.Event()
 
         async def _run_daemon():
             try:
                 start_event.set()
+                assert asyncio.get_running_loop() == get_sandbox_loop()
                 await self.uvicorn.serve()
             except asyncio.CancelledError as e:
                 if self.uvicorn:
@@ -295,19 +298,20 @@ class LocalTaskDaemon(SSESandbox):
             except SystemExit:
                 raise
 
-        self.task = asyncio.create_task(_run_daemon(), name="ServerTask")
+        self.task = loop.create_task(_run_daemon(), name="ServerTask")
 
         # Warning: the server is not yet ready to accept connections. Wait a small delay
         await start_event.wait()
         while not self.uvicorn.started:
-            await asyncio.sleep(0)
-        # assert is_in_sandbox()  # FIXME: a garder ?
+            await asyncio.sleep(0.1)
+
 
         logger.debug("Uvicorn started")
 
     async def shutdown(self) -> None:
         if not self.is_started:
-            raise RuntimeError("Server not started")
+            logger.warning("Server not started")
+            return
         self.task.cancel()
         await self.task
         self.uvicorn = None
@@ -373,7 +377,11 @@ async def main() -> int:
         config_body.append(line)
     logging.debug("config body and token successfully read from stdin")
 
+    # In this case, use the standard loop for is place of the sandbox
+    set_sandbox_loop(asyncio.get_running_loop())
+
     if not args.no_py_sandbox:
+        # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
 
         activate_sandboxes(dict(os.environ),
@@ -398,21 +406,9 @@ async def main() -> int:
         await task_daemon.shutdown()
 
 
-def signal_handler(signum: int, frame: object) -> None:
-    """
-    Signal handler to terminate child processes when parent receives a signal.
-    """
-    logger.error("Parent process %s received signal %s. "
-                 "Terminating children.", os.getpid(), signum)
-    exit(signum)
-
-
 if __name__ == "__main__":
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
-    signal.signal(signal.SIGTERM, signal_handler)  # kill command (default)
-    signal.signal(signal.SIGQUIT, signal_handler)  # kill command (default)
-    set_pdeathsig()  # Kill this process when the parent is killed
+    # Kill this process when the parent is killed
+    set_pdeathsig()
     rc = 0
     try:
         rc = asyncio.run(main())

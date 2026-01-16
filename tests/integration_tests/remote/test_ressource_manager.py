@@ -5,7 +5,7 @@ from pysandboxes import sandboxes
 from .sample import async_forty_two, sync_forty_two, init_sandbox, config_path
 
 
-async def test_async_sandboxes() -> None:
+async def test_async_run_sandboxes_twice() -> None:
     """
     Invoke the sandbox twice to ensure that the sandbox is properly reset.
     """
@@ -24,7 +24,7 @@ async def test_async_sandboxes_call_sync_sandbox() -> None:
             assert sync_forty_two() == 42
 
 
-def test_sync_sandboxes() -> None:
+def test_sync_sandboxes_twice() -> None:
     """
     Invoke the sandbox twice to ensure that the sandbox is properly reset.
     """

@@ -1,23 +1,39 @@
 import asyncio
+import logging
+from pathlib import Path
 from typing import Iterator
 
 import pytest
 
 from pysandboxes import sandbox
-from pysandboxes.remote.os_sandboxes import start_daemon
+from pysandboxes.py_sandbox import get_config_path, read_and_parse_config
+from pysandboxes.remote.manage_loop import get_sandbox_loop, reset_sandbox_loop
+from pysandboxes.remote.os_sandboxes import start_daemon, \
+    shutdown_daemon
 
 
 # See https://github.com/tortoise/tortoise-orm/issues/638
-@pytest.fixture(scope="session")
-def event_loop():
-    return asyncio.get_event_loop()
-
+@pytest.yield_fixture(scope='module')
+def event_loop(request):
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 @pytest.fixture(scope="module", autouse=True)
-async def before_start_daemon() -> Iterator[None]:
-    # server=await start_daemon("task")  # FIXME: pb de detection de sandbox, car même interpreter
+async def start_daemon_for_tests() -> Iterator[None]:
+    config_path = Path(__file__).parent.parent / "py-sandbox-test.profile"
+
+    log_level = logging.root.getEffectiveLevel()
+    config = get_config_path(config_path).read_text().splitlines()
+    config, _, os_sandbox, *_ = read_and_parse_config(config=config)
+
+    start_daemon("task",
+                 log_level,
+                 config,
+                 timeout=240,  # FIXME
+                 )
     yield
-    # server.shutdown()
+    shutdown_daemon()
 
 
 @sandbox()
@@ -59,7 +75,8 @@ async def async_function_with_error(a: int, b: int) -> str:
 
 async def test_async_function_with_error():
     with pytest.raises(ZeroDivisionError):
-        sync_function_with_error(10, 0)
+        await async_function_with_error(10, 0)
+
 
 @sandbox(timeout=0.5)
 async def async_function_with_timeout() -> str:

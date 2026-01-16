@@ -18,7 +18,7 @@ def set_sandbox_loop(loop:AbstractEventLoop) -> None:
     _background_loop_ref = weakref.ref(loop)
 
 def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop]:
-    """Crée une boucle d'arrière-plan dans un thread dédié si nécessaire"""
+    """FIXME Crée une boucle d'arrière-plan dans un thread dédié si nécessaire"""
     global _background_loop_ref
 
     if _background_loop_ref is not None:
@@ -44,10 +44,12 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
 
         start_event = threading.Event()
         def _start_background_loop() -> None:
-            """Start the background loop forever"""
+            """Start the sandbox background loop forever"""
             asyncio.set_event_loop(loop)
             start_event.set()
+            logger.debug("Start thread for sandbox event loop")
             loop.run_forever()
+            logger.debug("Stop thread for sandbox event loop")
 
         thread = threading.Thread(
             target=_start_background_loop,
@@ -84,15 +86,16 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 def reset_sandbox_loop():
+    """ Remove the sandbox loop """
     global _background_loop_ref
     with _lock:
         _background_loop_ref = None
 
 def get_sandbox_loop() -> AbstractEventLoop:
-    """Lance le serveur dans la boucle appropriée"""
+    """FIXME Lance le serveur dans la boucle appropriée"""
 
     try:
-        # # Reuse private loop?
+        # Reuse private loop?
         loop = _ensure_background_loop(new_loop=True)  # TODO: vérifer new_loop
         if loop:
             # logger.debug("Reuse the private event loop")
