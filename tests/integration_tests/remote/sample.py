@@ -52,12 +52,8 @@ async def async_sanboxes(config_path: Path) -> None:
 
 
 async def bridge_async_to_sync(config_path: Path) -> None:
-    try:
-        await asyncio.sleep(0)
-        sync_sanboxes(config_path)
-    except Exception as e:
-        logger.exception(e)  # FIXME
-        raise
+    await asyncio.sleep(0)
+    sync_sanboxes(config_path)
 
 @sandbox
 def sync_print_stdin_stdout():

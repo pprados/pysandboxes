@@ -8,7 +8,6 @@ import logging
 import os
 import signal
 import sys
-import time
 import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
@@ -98,7 +97,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         root_handler = root_logger.handlers[0]
     else:
         root_handler = logging.StreamHandler(stream=sys.stderr)  # FIXME: a tester
-        # root_handler=logging.StreamHandler(stream="ext://sys.stdout")  # FIXME: a tester
+        # root_handler=logging.StreamHandler(stream="ext://sys.stdout")  # FIXME: a tester. Pb de capture de flus
     fmt = getattr(root_handler.formatter, "_fmt",
                   '%(levelname)s:%(name)s:%(message)s')
     if root_stream := getattr(root_handler, "stream", None):
@@ -208,7 +207,8 @@ async def sandbox_daemon(
                     function, kwargs, *args)
                 return rc
 
-            fut = asyncio.create_task(_set_sandbox_and_catch_stdio(),name="catch_stdio")
+            fut = asyncio.create_task(_set_sandbox_and_catch_stdio(),
+                                      name="catch_stdio")
         else:
             @sandbox_loop
             def _set_sandbox_and_catch_stdio():

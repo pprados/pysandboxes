@@ -1,11 +1,14 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, TYPE_CHECKING, Callable, Optional
+from typing import Any, Callable, Optional
 
-from ..types import ConfigLines, Envs
 from ..py_sandbox import AllRules
+from ..types import ConfigLines, Envs
 
 logger = logging.getLogger(__name__)
+
+_mixed_sync_and_async_error = ("Cannot call the synchronize sandbox function "
+                               "from another sandbox async function")
 
 
 class BaseDaemon(ABC):

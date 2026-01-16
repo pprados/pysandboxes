@@ -9,9 +9,9 @@ from typing import Any, TypeVar, Union, \
 from typing import Callable, Optional
 
 from .py_sandbox import get_config_path, read_and_parse_config
-from .remote.base_daemon import BaseDaemon
+from .remote.base_daemon import BaseDaemon, _mixed_sync_and_async_error
 from .remote.manage_loop import set_sandbox_loop
-from .remote.os_sandboxes import shutdown_daemon, _async_start_daemon
+from .remote.os_sandboxes import shutdown_daemon, _async_start_daemon, is_daemon_started
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ SyncOrAsyncFunc = Union[
 
 # TODO: ajouter le max de TU
 # TODO: rendre le code testable, avec activation/déactivation des SB
-# @runtime_checkable
+# @runtime_checkable  # TODO: what is it ?
 class sandboxes:
     """
     Context manager to start and stop the sandbox daemon.
@@ -134,63 +134,37 @@ class sandboxes:
 
 def run(main: Coroutine[Any, Any, Any],
         *, debug=None, loop_factory=None,
-        cancel_remaining_tasks=True,
         config_path: Optional[Union[Path, str]]) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
     It's similar to `asyncio.run()`, but with the sandbox.
     The parameters are the same as `asyncio.run()`.
-    cancem_remaining_tasks: if True, cancel all remaining tasks when the main coroutine is done.
     """
 
     async def _run():
+        # In this context, use the standard running loop.
+        # the sandbox will be started before the main coroutine.
         loop = asyncio.get_running_loop()
-        # async with sandboxes(config_path=config_path):
+        set_sandbox_loop(loop)
+        # Config the sandbox
         log_level = logging.root.getEffectiveLevel()
         config = get_config_path(config_path).read_text().splitlines()
         config, _, os_sandbox, *_ = read_and_parse_config(config=config)
-        set_sandbox_loop(loop)
-        # FIXME
-        # J'ai créer un _async_start_daemon() pour ne pas avoir l'annotation de création
-        # de loop. Suivant les cas actuels de recherche, cela peut créer de la confusion
-        # si j'invoque la fonction pour initialiser un task, même si elle n'est pas
-        # lancée. L'annotation à le dessus, et va créer une loop, ce que je ne veux pas.
-
-        # Il faudra voir ce qui est préférable pour la création du daemon.
-        # dans le loop_factory ou via un with sandboxes() ?
         await loop.create_task(_async_start_daemon(os_sandbox, log_level, config),
                                name="_async_start_daemon")
-        result = (await asyncio.create_task(main), "sandbox_run")
-
-        # Cancel all remaining tasks
-        if cancel_remaining_tasks:
-            loop = asyncio.get_running_loop()
-            tasks_to_cancel = [
-                task for task in asyncio.all_tasks(loop) if
-                task is not asyncio.current_task()
-            ]
-
-            if tasks_to_cancel:
-                # Cancelling all task
-                for task in tasks_to_cancel:
-                    task.cancel()
-
-                # Wait for all cancelled tasks to complete their cleanup
-                done, _ = await asyncio.wait(tasks_to_cancel)
+        result = (await asyncio.create_task(main), "start sandbox in run")
+        # All remaining tasks are canceled by the Runner
         return result
 
-    def _loop_factory() -> asyncio.AbstractEventLoop:
-        # FIXME
-        # L'idée est d'utilsier loop_factory dans le run()
-        # pour créer une boucle sandbox.
-        # il faut confirmer que c'est une bonne idée. Par certain par rapport à
-        # l'approche ressource manager dans le _run().
-        loop = asyncio.new_event_loop()
-        loop.set_debug(debug)
-        return loop
-
-    # result = asyncio.run(_run(), loop_factory=_loop_factory)
-    result = asyncio.run(_run())
-    shutdown_daemon()  # FIXME: dans finally. Il faut revoir les moment de start/stop daemon.
-    return result
-    # return asyncio.run(_run(), debug=debug, loop_factory=loop_factory) # FIXME
+    try:
+        result = asyncio.run(_run())
+        return result
+    except RuntimeError as e:
+        if str(e) == _mixed_sync_and_async_error:
+            raise
+        else:
+            if is_daemon_started():
+                shutdown_daemon()
+    except BaseException:
+        if is_daemon_started():
+            shutdown_daemon()

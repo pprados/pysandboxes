@@ -21,20 +21,11 @@ def test_run_and_async_sanboxes() -> None:
     run(async_sanboxes(config_path), config_path=config_path)
 
 
-# FIXME
-# Le problème est que je dois lancer un run() dans le même thread que la loop
-# mais que ensuite, lorsque j'appel un truc synchrone, ce dernier ne pas récupérer le résultat
-# puisque la boucle de tourne plus.
-# Est-ce qu'il faut que j'identifie le pb pour le signaler simplement ?
-# Ne pas oublier de comparer avec la version git d'avant.
-# Voir l'explication du problème ici: https://g.co/gemini/share/fb0d5fd5c641
-
-# Est-ce très en amont qui faut utiliser un thread pour l'invocation synchrone ?
-# @pytest.mark.skip(reason="Not working")
-def test_run_and_sync_sanboxes() -> None:
+def test_run_and_sync_sanboxes(_mixed_sync_and_async_error=None) -> None:
     # An async method, call a sync method with sandboxes ressource manager
     # asyncio.run(bridge_async_to_sync(config_path))  # L'exception est bien remonté dans le run_until_finish
-    run(bridge_async_to_sync(config_path), config_path=config_path)
+    with pytest.raises(RuntimeError , match=_mixed_sync_and_async_error):
+        run(bridge_async_to_sync(config_path), config_path=config_path)
 
 
 

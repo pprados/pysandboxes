@@ -11,11 +11,10 @@ from typing import Any, Dict, Callable, Optional, Tuple
 
 from tblib import pickling_support
 
-from .base_daemon import BaseDaemon
+from .base_daemon import BaseDaemon, _mixed_sync_and_async_error
 from .manage_loop import sandbox_loop, get_sandbox_loop
 from .parameters import HOST, PORT, PATH_RPC
 from .tools import is_in_sandbox
-
 
 pickling_support.install()
 
@@ -144,10 +143,6 @@ class SSESandbox(BaseDaemon):
                 raise RuntimeError("No result received from the sandbox")
         except SystemExit:
             raise
-        except Exception:
-            logger.error(
-                f"Client Error when calling the sandbox: {traceback.format_exc()}")  # FIXME
-            raise
 
     @sandbox_loop
     def call_in_sandbox(self,
@@ -159,8 +154,7 @@ class SSESandbox(BaseDaemon):
             return func(*args, **kwargs)
         loop = asyncio.get_event_loop()  # Get the current running loop
         if loop == get_sandbox_loop():
-            raise RuntimeError("Cannot call the synchronize sandbox function "
-                               "from another sandbox async function")
+            raise RuntimeError(_mixed_sync_and_async_error)
 
         return asyncio.run_coroutine_threadsafe(
             self.async_call_in_sandbox(func, timeout, *args, **kwargs),
