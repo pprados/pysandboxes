@@ -6,24 +6,26 @@ import inspect
 import json
 import logging
 import os
+import signal
 import sys
+import time
 import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Any, Optional
-from typing import Dict
 from logging import getLogger
+from typing import AsyncGenerator, Any, Optional
+from typing import Dict
 
 from tblib import pickling_support
 from uvicorn import Server
 
-from ..py_sandbox import AllRules
-from ..types import ConfigLines, Args, Envs
+from .manage_loop import sandbox_loop
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
-from .manage_loop import sandbox_loop
 from .tools import to_b85, set_is_in_sandbox, configure_logging_level, END_OF_FILE, \
-    is_in_sandbox, from_b85
+    is_in_sandbox, from_b85, set_pdeathsig
+from ..py_sandbox import AllRules
+from ..types import ConfigLines, Args, Envs
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,8 @@ class RPCPayload(object):
 def _sse_msg(data: str):
     return "data:" + data + "\n\n"
 
-def create_uvicorn_daemon(token:str) -> 'uvicorn.Server':
+
+def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
     import uvicorn
 
     from fastapi import FastAPI, Request, Body, HTTPException
@@ -137,7 +140,8 @@ def create_uvicorn_daemon(token:str) -> 'uvicorn.Server':
         "loggers": {
             "uvicorn": {
                 "handlers": ["default"],
-                "level": getLogger("uvicorn").getEffectiveLevel(),  # logging.getLevelName(root_logger.level),
+                "level": getLogger("uvicorn").getEffectiveLevel(),
+                # logging.getLevelName(root_logger.level),
                 "propagate": False,
                 # "propagate": root_logger.propagate,
             },
@@ -204,7 +208,7 @@ async def sandbox_daemon(
                     function, kwargs, *args)
                 return rc
 
-            fut = asyncio.create_task(_set_sandbox_and_catch_stdio())
+            fut = asyncio.create_task(_set_sandbox_and_catch_stdio(),name="catch_stdio")
         else:
             @sandbox_loop
             def _set_sandbox_and_catch_stdio():
@@ -394,7 +398,21 @@ async def main() -> int:
         await task_daemon.shutdown()
 
 
+def signal_handler(signum: int, frame: object) -> None:
+    """
+    Signal handler to terminate child processes when parent receives a signal.
+    """
+    logger.error("Parent process %s received signal %s. "
+                 "Terminating children.", os.getpid(), signum)
+    exit(signum)
+
+
 if __name__ == "__main__":
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # kill command (default)
+    signal.signal(signal.SIGQUIT, signal_handler)  # kill command (default)
+    set_pdeathsig()  # Kill this process when the parent is killed
     rc = 0
     try:
         rc = asyncio.run(main())

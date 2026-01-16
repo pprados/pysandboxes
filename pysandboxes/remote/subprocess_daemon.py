@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import random
+import signal
 import sys
 import time
 import uuid
@@ -54,7 +55,6 @@ async def _read_stream(
             callback(line.decode('utf-8').strip())
         else:
             break
-
 
 class BaseSubProcessDaemon(SSESandbox):
 
@@ -186,20 +186,23 @@ class BaseSubProcessDaemon(SSESandbox):
             self._stdin_task = asyncio.create_task(
                 _write_stream(
                     self._process.stdin
-                )
+                ),
+                name="write_stream",
             )
         if stdout:
             self._stdout_task = asyncio.create_task(
                 _read_stream(
                     self._process.stdout,
                     lambda line: print(line, file=sys.stdout, flush=True)
-                )
+                ),
+                name="read_stdout_stream",
             )
             self._stderr_task = asyncio.create_task(
                 _read_stream(
                     self._process.stderr,
                     lambda line: print(line, file=sys.stderr, flush=True)
-                )
+                ),
+                name="read_stderr_stream"
             )
         # FIXME self.task = asyncio.create_task(self.daemon.serve())
         self._is_started = True  # FIXME: detecter le start

@@ -28,6 +28,7 @@ providers = {
     # docker alternative
     # TODO: external started daemon
     # TODO https://github.com/igo95862/bubblejail
+    # TODO: paraméter apparmor https://mail.google.com/mail/u/0/#inbox/FMfcgzQbfxdJgGfjGcjPBxXNKmWqgPdK
 }
 
 DEFAULT_OS_SANDBOX = "firejail"
@@ -40,23 +41,34 @@ async def async_start_daemon(name: str,
                              log_level: int,
                              config: ConfigLines,
                              ) -> BaseDaemon:
+    return await _async_start_daemon(name, log_level, config)
+
+_start_lock=asyncio.Lock()
+async def _async_start_daemon(name: str,
+                             log_level: int,
+                             config: ConfigLines,
+                             ) -> BaseDaemon:
     """
     Asynchronize version to start daemon by name.
     Returns daemon object when is starred
     """
     global _current_daemon,_startup_counter
-    if _current_daemon is not None and _current_daemon():
-        logger.info("Daemon already started")
-        _startup_counter+=1
-        return _current_daemon()
-    if name not in providers:
-        raise ValueError(f"Unknown daemon name: {name}")
-    await providers[name].start(log_level, dict(os.environ), config, token=None)
-    _current_daemon = weakref.ref(providers[name])
-    assert providers[name].is_started == True
-    _startup_counter+=1
-    return providers[name]
-
+    async with _start_lock:
+        if _current_daemon is not None and _current_daemon():
+            logger.info("Daemon already started")
+            _startup_counter+=1
+            return _current_daemon()
+        if name not in providers:
+            raise ValueError(f"Unknown daemon name: {name}")
+        _current_daemon = weakref.ref(providers[name])
+        try:
+            await providers[name].start(log_level, dict(os.environ), config, token=None)
+            assert providers[name].is_started == True
+            _startup_counter+=1
+            return providers[name]
+        except Exception as e:
+            _current_daemon = None
+            raise e
 
 @sandbox_loop
 async def async_shutdown_daemon():
@@ -86,6 +98,12 @@ def start_daemon(name: str,
     Synchronize version to start daemon by name.
     Returns daemon object when is starred
     """
+    global _current_daemon,_startup_counter
+    if _current_daemon is not None and _current_daemon():
+        logger.info("Daemon already started")
+        _startup_counter+=1
+        return _current_daemon()
+
     loop = asyncio.get_event_loop()
     start_event = threading.Event()
 
@@ -108,6 +126,13 @@ def shutdown_daemon() -> None:
     Synchronize version to shutdown the current daemon.
     Return when the daemon is shutdown.
     """
+    global _current_daemon,_startup_counter
+    if not _current_daemon:
+        logger.info("Daemon not started when shutdown")
+        _startup_counter -= 1
+        if _startup_counter < 0:
+            raise ValueError("Daemon shutdown more times than started")
+        return
     loop = asyncio.get_event_loop()
     stop_event = threading.Event()
 
@@ -117,7 +142,7 @@ def shutdown_daemon() -> None:
             name="Shutdown daemon")
         stop_event.set()
 
-    loop.call_soon_threadsafe(lambda: loop.create_task(_async_shutdown_daemon()))
+    loop.call_soon_threadsafe(lambda: loop.create_task(_async_shutdown_daemon(),name="shutdown daemon"))
     stop_event.wait()
     reset_sandbox_loop()  # FIXME: supprimer le sandbox loop, pour laisser la place
 

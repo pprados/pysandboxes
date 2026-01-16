@@ -5,11 +5,13 @@ import logging
 from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, TypeVar, Union, \
-    Awaitable
+    Awaitable, Coroutine
 from typing import Callable, Optional
 
-from .py_sandbox import get_config_path
+from .py_sandbox import get_config_path, read_and_parse_config
 from .remote.base_daemon import BaseDaemon
+from .remote.manage_loop import set_sandbox_loop
+from .remote.os_sandboxes import shutdown_daemon, _async_start_daemon
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +102,9 @@ class sandboxes:
         """
         from .remote.os_sandboxes import shutdown_daemon
         logger.debug("__exit__ start...")
-        shutdown_daemon()
+        # If "Cannot call the synchronize sandbox function from another sandbox async function"
+        if not isinstance(exc, RuntimeError):
+            shutdown_daemon()
         logger.debug("__exit__ done")
         return False
 
@@ -128,7 +132,7 @@ class sandboxes:
         return False
 
 
-def run(main: Callable[[], Awaitable[None]],
+def run(main: Coroutine[Any, Any, Any],
         *, debug=None, loop_factory=None,
         cancel_remaining_tasks=True,
         config_path: Optional[Union[Path, str]]) -> Any:
@@ -140,8 +144,23 @@ def run(main: Callable[[], Awaitable[None]],
     """
 
     async def _run():
-        async with sandboxes(config_path=config_path):
-            result = (await asyncio.create_task(main))
+        loop = asyncio.get_running_loop()
+        # async with sandboxes(config_path=config_path):
+        log_level = logging.root.getEffectiveLevel()
+        config = get_config_path(config_path).read_text().splitlines()
+        config, _, os_sandbox, *_ = read_and_parse_config(config=config)
+        set_sandbox_loop(loop)
+        # FIXME
+        # J'ai créer un _async_start_daemon() pour ne pas avoir l'annotation de création
+        # de loop. Suivant les cas actuels de recherche, cela peut créer de la confusion
+        # si j'invoque la fonction pour initialiser un task, même si elle n'est pas
+        # lancée. L'annotation à le dessus, et va créer une loop, ce que je ne veux pas.
+
+        # Il faudra voir ce qui est préférable pour la création du daemon.
+        # dans le loop_factory ou via un with sandboxes() ?
+        await loop.create_task(_async_start_daemon(os_sandbox, log_level, config),
+                               name="_async_start_daemon")
+        result = (await asyncio.create_task(main), "sandbox_run")
 
         # Cancel all remaining tasks
         if cancel_remaining_tasks:
@@ -158,7 +177,20 @@ def run(main: Callable[[], Awaitable[None]],
 
                 # Wait for all cancelled tasks to complete their cleanup
                 done, _ = await asyncio.wait(tasks_to_cancel)
-            return result
+        return result
 
-    return asyncio.run(_run())
+    def _loop_factory() -> asyncio.AbstractEventLoop:
+        # FIXME
+        # L'idée est d'utilsier loop_factory dans le run()
+        # pour créer une boucle sandbox.
+        # il faut confirmer que c'est une bonne idée. Par certain par rapport à
+        # l'approche ressource manager dans le _run().
+        loop = asyncio.new_event_loop()
+        loop.set_debug(debug)
+        return loop
+
+    # result = asyncio.run(_run(), loop_factory=_loop_factory)
+    result = asyncio.run(_run())
+    shutdown_daemon()  # FIXME: dans finally. Il faut revoir les moment de start/stop daemon.
+    return result
     # return asyncio.run(_run(), debug=debug, loop_factory=loop_factory) # FIXME

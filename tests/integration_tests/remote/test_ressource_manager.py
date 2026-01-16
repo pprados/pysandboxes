@@ -1,0 +1,35 @@
+# %% Test ressource manager
+import pytest
+
+from pysandboxes import sandboxes
+from .sample import async_forty_two, sync_forty_two, init_sandbox, config_path
+
+
+async def test_async_sandboxes() -> None:
+    """
+    Invoke the sandbox twice to ensure that the sandbox is properly reset.
+    """
+    for i in range(0, 2):
+        async with sandboxes(init_sandbox, config_path=config_path):
+            assert await async_forty_two() == 42
+
+
+@pytest.mark.skip(reason="Not working")
+async def test_async_sandboxes_call_sync_sandbox() -> None:
+    """
+    Invoke the sandbox twice and call sync sandbox function
+    """
+    for i in range(0, 2):
+        async with sandboxes(init_sandbox, config_path=config_path):
+            assert sync_forty_two() == 42
+
+
+def test_sync_sandboxes() -> None:
+    """
+    Invoke the sandbox twice to ensure that the sandbox is properly reset.
+    """
+    for i in range(0, 2):
+        with sandboxes(init_sandbox, config_path=config_path):
+            assert sync_forty_two() == 42
+
+

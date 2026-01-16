@@ -158,6 +158,8 @@ _module_backlist = [
 
 
 def guard_import_module(name: str, package: Optional[str] = None) -> ModuleType:
+    # TODO: voir le chat https://gemini.google.com/share/6a3e41fa4fbc
+    # pour voir comment faire un patch lazy lors des import
     import importlib
     print(f"trace import_module$({name=},{package=})")
     return importlib.import_module(name, package)

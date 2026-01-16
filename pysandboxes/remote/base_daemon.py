@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 class BaseDaemon(ABC):
+    __slots__ = ('_is_started', '_token')  # TODO: partout __slots__
+
     def __init__(self, token: Optional[str] = None):
         self._is_started = False
         self._token = token

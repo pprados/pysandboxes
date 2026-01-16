@@ -8,12 +8,11 @@ import sys
 import traceback
 from datetime import timedelta
 from typing import Any, Dict, Callable, Optional, Tuple
-from typing import TYPE_CHECKING
 
 from tblib import pickling_support
 
 from .base_daemon import BaseDaemon
-from .manage_loop import sandbox_loop
+from .manage_loop import sandbox_loop, get_sandbox_loop
 from .parameters import HOST, PORT, PATH_RPC
 from .tools import is_in_sandbox
 
@@ -159,6 +158,10 @@ class SSESandbox(BaseDaemon):
         if is_in_sandbox():
             return func(*args, **kwargs)
         loop = asyncio.get_event_loop()  # Get the current running loop
+        if loop == get_sandbox_loop():
+            raise RuntimeError("Cannot call the synchronize sandbox function "
+                               "from another sandbox async function")
+
         return asyncio.run_coroutine_threadsafe(
             self.async_call_in_sandbox(func, timeout, *args, **kwargs),
             loop).result()

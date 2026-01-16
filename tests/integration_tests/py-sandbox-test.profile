@@ -1,6 +1,6 @@
 #--os-sandbox=task
 --os-sandbox=subprocess
-#--os-sandbox=firejail
+# --os-sandbox=firejail
 # TODO --no-py-sandbox
 # TODO: --no-dotenv
 # TODO: --firejail=file.template

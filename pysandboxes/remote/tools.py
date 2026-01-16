@@ -6,10 +6,12 @@ import logging
 import os
 import pickle
 import shutil
+import signal
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
 from pathlib import Path
 from typing import Any, Optional, Dict, Tuple, Awaitable
+from ctypes import cdll
 
 import netifaces
 
@@ -233,3 +235,26 @@ def create_daemon_task(
     # task.add_done_callback(lambda t: t.exception())
     task.add_done_callback(is_canceled)
     return task
+
+
+
+# Constant from linux/prctl.h
+PR_SET_PDEATHSIG = 1
+
+def set_pdeathsig() -> None:
+    """
+    Sets the PR_SET_PDEATHSIG option for the current process,
+    so it receives SIGTERM if its parent dies.
+    """
+    if os.name != 'posix':
+        logger.warning("set_pdeathsig() not supported on non-POSIX systems.")
+        return
+    try:
+        # Load libc and call prctl
+        libc = cdll.LoadLibrary("libc.so.6")
+        result = libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
+        if result != 0:
+            logging.warning("prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s",result)
+    except OSError:
+        logging.warning("prctl not available (not Linux or libc not found).")
+

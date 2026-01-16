@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 _background_loop_ref:ReferenceType[AbstractEventLoop] = None
 
 _lock = threading.Lock()
+
+def set_sandbox_loop(loop:AbstractEventLoop) -> None:
+    global _background_loop_ref
+    _background_loop_ref = weakref.ref(loop)
+
 def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop]:
     """Crée une boucle d'arrière-plan dans un thread dédié si nécessaire"""
     global _background_loop_ref
