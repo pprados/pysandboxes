@@ -4,19 +4,19 @@ import shlex
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 
 import click
 
-from ..guard_files import BindRule, IgnoreRule
-from ..py_sandbox import read_and_parse_config, AllRules
-from ..netfilter import rule_to_netfilter
-from ..types import ConfigLines, Envs, Args
 from . import daemon
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, get_venv, \
     suggest_package_installation, return_level_parameter
+from ..guard_files import BindRule, IgnoreRule
+from ..netfilter import rule_to_netfilter
+from ..py_sandbox import read_and_parse_config, AllRules
 from ..tools import remove_comments, substitute_env_vars
+from ..types import ConfigLines, Envs, Args
 
 logger = logging.getLogger(__name__)
 

@@ -62,7 +62,7 @@ def sync_print_stdin_stdout():
 
 
 @sandbox
-def async_print_stdin_stdout():
+async def async_print_stdin_stdout():
     print("hello")
     print("world", file=sys.stderr)
 

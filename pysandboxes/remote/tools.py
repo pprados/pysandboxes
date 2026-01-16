@@ -1,5 +1,4 @@
 import asyncio
-
 import base64
 import contextvars
 import logging
@@ -9,9 +8,9 @@ import shutil
 import signal
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
+from ctypes import cdll
 from pathlib import Path
 from typing import Any, Optional, Dict, Tuple, Awaitable
-from ctypes import cdll
 
 import netifaces
 
@@ -32,6 +31,19 @@ def is_in_sandbox() -> bool:
 
 def set_is_in_sandbox(value: bool) -> None:
     _sandboxed.set(value)
+
+mixed_sync_and_async_error = (
+    "It's impossible to mixte synchronize and asynchronize sandbox function.")
+
+def check_mixte_async_async():
+    try:
+        if asyncio.get_running_loop():
+            raise RuntimeError(mixed_sync_and_async_error)
+    except RuntimeError as e:
+        if str(e) == "no running event loop":
+            pass  # Ignore
+        else:
+            raise
 
 
 def to_b85(obj: Any) -> str:

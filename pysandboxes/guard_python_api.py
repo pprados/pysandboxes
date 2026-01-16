@@ -6,7 +6,7 @@ from types import ModuleType
 from typing import List, Tuple, Union, Literal, Set
 from typing import Optional
 
-from pysandboxes.remote import ConfigLines
+from pysandboxes.types import ConfigLines
 from unit_tests import save_default_values, restore_default_values  # FIXME
 
 logger = logging.getLogger(__name__)

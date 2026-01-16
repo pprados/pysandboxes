@@ -1,6 +1,5 @@
 import re
-from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 
 from .types import ConfigLines
 

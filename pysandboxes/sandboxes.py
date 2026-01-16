@@ -3,17 +3,18 @@ import functools
 import inspect
 import logging
 import signal
+import threading
+import typing
 from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, TypeVar, Union, \
-    Awaitable, Coroutine
+    Awaitable, Coroutine, runtime_checkable, TYPE_CHECKING
 from typing import Callable, Optional
 
-from .py_sandbox import get_config_path, read_and_parse_config
-from .remote.base_daemon import BaseDaemon, _mixed_sync_and_async_error
-from .remote.manage_loop import set_sandbox_loop, get_sandbox_loop, reset_sandbox_loop
-from .remote.os_sandboxes import shutdown_daemon, _async_start_daemon, \
-    is_daemon_started, async_start_daemon, _check_mixte_async_async
+from .manage_loop import set_sandbox_loop
+from .py_sandbox import get_config_path
+from .base_daemon import BaseDaemon
+from .remote.tools import check_mixte_async_async
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,6 @@ _lock = Lock()
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-# TODO: ajouter le max de TU
 def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., Any]:
     """
     Decorator to run a function in a sandbox.y
@@ -60,25 +60,8 @@ SyncOrAsyncFunc = Union[
 ]
 
 
-# Define a signal handler function
-# def signal_handler(signum: int, frame: object) -> None:
-#     """
-#     Handles termination signals (SIGINT, SIGTERM) for the parent process.
-#     It will kill all child processes before exiting itself.
-#     """
-#     # Iterate through all child processes and send them SIGTERM
-#     for child_pid in child_pids:
-#         try:
-#             os.kill(child_pid, signal.SIGTERM)
-#         except OSError as e:
-#             print(f"Error killing child process {child_pid}: {e}")
-#     # Wait a bit for children to terminate gracefully
-#     time.sleep(0.5)
-
-# TODO: ajouter le max de TU
-# TODO: rendre le code testable, avec activation/déactivation des SB
-# @runtime_checkable  # TODO: what is it ?
-class sandboxes:
+@runtime_checkable
+class sandboxes(typing.Protocol):
     """
     Context manager to start and stop the sandbox daemon.
     The parameter `init_fn` is a function that will be called when the daemon starts,
@@ -92,6 +75,8 @@ class sandboxes:
                  ) -> None:
         self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
         self.config_path = config_path
+        self._old_sigint= None
+        self._old_sigterm= None
         # TODO: ajouter des paramètres complémentaire ici ?
         # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
 
@@ -104,7 +89,7 @@ class sandboxes:
         from .remote.os_sandboxes import start_daemon
 
         logger.debug("__enter__ start...")
-        _check_mixte_async_async()
+        check_mixte_async_async()
         log_level = logging.root.getEffectiveLevel()
         config = get_config_path(self.config_path).read_text().splitlines()
         config, _, os_sandbox, *_ = read_and_parse_config(config=config)
@@ -117,10 +102,12 @@ class sandboxes:
             """
             # Iterate through all child processes and send them SIGTERM
             global _current_daemon
+            logger.debug("Catch signal %s. Propagate to the dameon.",signum)
             _current_daemon.shutdown()
 
-        self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
-        self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
+        if threading.current_thread() is threading.main_thread():
+            self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
+            self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
         logger.debug("__enter__ ok")
 
     def __exit__(self,
@@ -136,8 +123,9 @@ class sandboxes:
         if not isinstance(exc, RuntimeError):
             shutdown_daemon()
 
-        signal.signal(signal.SIGINT, self._old_sigint)
-        signal.signal(signal.SIGTERM, self._old_sigterm)
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGINT, self._old_sigint)
+            signal.signal(signal.SIGTERM, self._old_sigterm)
 
         logger.debug("__exit__ done")
         return False

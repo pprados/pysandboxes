@@ -1,3 +1,4 @@
+
 import asyncio
 import functools
 import logging
@@ -36,7 +37,7 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
             if loop is not None and loop.is_running():
                 return loop
 
-        logger.debug("Create a private event loop")
+        logger.debug("Create a private event loop for sandbox")
         loop = asyncio.new_event_loop()
         loop.set_debug(True)  # FIXME: remove this line in production
         _background_loop_ref = weakref.ref(loop)

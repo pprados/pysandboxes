@@ -6,7 +6,6 @@ import inspect
 import json
 import logging
 import os
-import signal
 import sys
 import traceback
 from asyncio import CancelledError
@@ -18,11 +17,11 @@ from typing import Dict
 from tblib import pickling_support
 from uvicorn import Server
 
-from .manage_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
 from .tools import to_b85, set_is_in_sandbox, configure_logging_level, END_OF_FILE, \
     is_in_sandbox, from_b85, set_pdeathsig
+from ..manage_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from ..py_sandbox import AllRules
 from ..types import ConfigLines, Args, Envs
 
@@ -278,34 +277,40 @@ class LocalTaskDaemon(SSESandbox):
                     config: ConfigLines,
                     token: Optional[str]) -> None:
 
-        self.uvicorn = create_uvicorn_daemon(self.token)
         loop = get_sandbox_loop()
+        initial_threshold: float = loop.slow_callback_duration
+        try:
+            # during server launch, accept a longer delay for the async loop.
+            loop.slow_callback_duration = 1.0
 
-        start_event = asyncio.Event()
+            self.uvicorn = create_uvicorn_daemon(self.token)
 
-        async def _run_daemon():
-            try:
-                start_event.set()
-                assert asyncio.get_running_loop() == get_sandbox_loop()
-                await self.uvicorn.serve()
-            except asyncio.CancelledError as e:
-                if self.uvicorn:
-                    try:
-                        await self.uvicorn.shutdown()
-                    except Exception as e:
-                        logger.warning(f"Ignore error during uvicorn shutdown: {e}")
-                    self.uvicorn.started = False
-            except SystemExit:
-                raise
+            start_event = asyncio.Event()
 
-        self.task = loop.create_task(_run_daemon(), name="ServerTask")
+            async def _run_daemon():
+                try:
+                    start_event.set()
+                    assert asyncio.get_running_loop() == get_sandbox_loop()
+                    await self.uvicorn.serve()
+                except asyncio.CancelledError as e:
+                    if self.uvicorn:
+                        try:
+                            await self.uvicorn.shutdown()
+                        except Exception as e:
+                            logger.warning(f"Ignore error during uvicorn shutdown: {e}")
+                        self.uvicorn.started = False
+                except SystemExit:
+                    raise
 
-        # Warning: the server is not yet ready to accept connections. Wait a small delay
-        await start_event.wait()
-        while not self.uvicorn.started:
-            await asyncio.sleep(0.1)
+            self.task = loop.create_task(_run_daemon(), name="ServerTask")
 
+            # Warning: the server is not yet ready to accept connections. Wait a small delay
+            await start_event.wait()
+            while not self.uvicorn.started:
+                await asyncio.sleep(0.1)
 
+        finally:
+            loop.slow_callback_duration = initial_threshold
         logger.debug("Uvicorn started")
 
     async def shutdown(self) -> None:

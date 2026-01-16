@@ -42,7 +42,6 @@ import logging
 import os
 import socket
 import sys
-from ipaddress import IPv4Network
 from typing import Tuple, Optional, Union, List, Dict
 
 from .types import ConfigLines

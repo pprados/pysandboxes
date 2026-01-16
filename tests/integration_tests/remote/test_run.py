@@ -3,10 +3,10 @@ import asyncio
 
 import pytest
 
+from pysandboxes.remote.tools import mixed_sync_and_async_error
 from .sample import config_path, async_forty_two, \
     async_sanboxes, bridge_async_to_sync
 from pysandboxes import run
-from pysandboxes.remote.os_sandboxes import _mixed_sync_and_async_error
 
 
 def test_run() -> None:
@@ -25,7 +25,7 @@ def test_run_and_async_sanboxes() -> None:
 def test_run_and_sync_sanboxes() -> None:
     # An async method, call a sync method with sandboxes ressource manager
     # Can not be called. Use only async sandbox function.
-    with pytest.raises(RuntimeError , match=_mixed_sync_and_async_error):
+    with pytest.raises(RuntimeError , match=mixed_sync_and_async_error):
         run(bridge_async_to_sync(config_path), config_path=config_path)
 
 

@@ -10,9 +10,9 @@ import tty
 import dotenv
 import termios
 
-from pysandboxes.remote.os_sandboxes import DEFAULT_OS_SANDBOX
-from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon
-from pysandboxes.remote.tools import configure_logging_level
+from .os_sandboxes import DEFAULT_OS_SANDBOX
+from .subprocess_daemon import BaseSubProcessDaemon
+from .tools import configure_logging_level
 
 logger = logging.getLogger(__name__)
 

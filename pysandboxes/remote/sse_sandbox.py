@@ -5,16 +5,16 @@ import json
 import logging
 import os
 import sys
-import traceback
 from datetime import timedelta
 from typing import Any, Dict, Callable, Optional, Tuple
 
+from aiohttp_sse_client import client as sse_client
 from tblib import pickling_support
 
-from .base_daemon import BaseDaemon, _mixed_sync_and_async_error
-from .manage_loop import sandbox_loop, get_sandbox_loop
 from .parameters import HOST, PORT, PATH_RPC
-from .tools import is_in_sandbox
+from .tools import from_b85, is_in_sandbox
+from ..base_daemon import BaseDaemon
+from ..manage_loop import sandbox_loop
 
 pickling_support.install()
 
@@ -109,9 +109,7 @@ class SSESandbox(BaseDaemon):
                                     **kwargs: Any) -> Any:
         if is_in_sandbox():
             return await func(*args, **kwargs)
-        from .tools import from_b85
         from .os_sandboxes import get_token
-        from aiohttp_sse_client import client as sse_client
 
         try:
             token = get_token()
@@ -153,8 +151,6 @@ class SSESandbox(BaseDaemon):
         if is_in_sandbox():
             return func(*args, **kwargs)
         loop = asyncio.get_event_loop()  # Get the current running loop. May be != sandbox loop
-        # if loop == get_sandbox_loop():  # FIXME: si je détecter, ca fait planter des trucs
-        #     raise RuntimeError(_mixed_sync_and_async_error)
 
         return asyncio.run_coroutine_threadsafe(
             self.async_call_in_sandbox(func, timeout, *args, **kwargs),

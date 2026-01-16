@@ -18,7 +18,6 @@ def test_sync_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixture):
         assert captured_output.err == "world\n"
 
 
-@pytest.mark.skip(reason="Not working")
 async def test_async_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixture):
     """
     Catch stdin and stdout from the sandbox, in the main process

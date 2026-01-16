@@ -2,8 +2,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional
 
-from ..py_sandbox import AllRules
-from ..types import ConfigLines, Envs
+from pysandboxes.py_sandbox import AllRules
+from pysandboxes.types import ConfigLines, Envs
 
 logger = logging.getLogger(__name__)
 

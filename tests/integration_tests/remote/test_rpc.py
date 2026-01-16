@@ -7,7 +7,6 @@ import pytest
 
 from pysandboxes import sandbox
 from pysandboxes.py_sandbox import get_config_path, read_and_parse_config
-from pysandboxes.remote.manage_loop import get_sandbox_loop, reset_sandbox_loop
 from pysandboxes.remote.os_sandboxes import start_daemon, \
     shutdown_daemon
 

@@ -2,7 +2,6 @@ import inspect
 import logging
 import os
 import types
-from importlib.resources import as_file
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
@@ -10,8 +9,8 @@ from . import guard_files, guard_env
 from . import guard_socket
 from .guard_files import Files_Rules
 from .guard_socket import SocketRule
-from .types import ConfigLines, Envs
 from .tools import remove_comments, substitute_env_vars
+from .types import ConfigLines, Envs
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +115,6 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
         config:ConfigLines = None,
         outer_sandbox: str = None,
 ) -> None:
-    from .remote.subprocess_daemon import BaseSubProcessDaemon
-
     if outer_sandbox:
         from .remote.os_sandboxes import providers
         if outer_sandbox not in providers:

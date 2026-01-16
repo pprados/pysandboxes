@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import random
-import signal
 import sys
 import time
 import uuid
@@ -10,10 +9,10 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Callable, Dict, Any
 
-from ..types import ConfigLines, Args, Envs
-from ..py_sandbox import AllRules, read_and_parse_config
 from .sse_sandbox import SSESandbox
 from .tools import return_level_parameter, END_OF_FILE
+from ..py_sandbox import AllRules, read_and_parse_config
+from ..types import ConfigLines, Args, Envs
 
 logger = logging.getLogger(__name__)
 
