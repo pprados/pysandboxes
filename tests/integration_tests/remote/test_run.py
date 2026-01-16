@@ -6,6 +6,7 @@ import pytest
 from .sample import config_path, async_forty_two, \
     async_sanboxes, bridge_async_to_sync
 from pysandboxes import run
+from pysandboxes.remote.os_sandboxes import _mixed_sync_and_async_error
 
 
 def test_run() -> None:
@@ -16,16 +17,14 @@ def test_run() -> None:
     run(async_forty_two(), config_path=config_path)
 
 
-@pytest.mark.skip(reason="TODO")
 def test_run_and_async_sanboxes() -> None:
     # An async method, call a async method with sandboxes ressource manager
     run(async_sanboxes(config_path), config_path=config_path)
 
 
-@pytest.mark.skip(reason="TODO")
-def test_run_and_sync_sanboxes(_mixed_sync_and_async_error=None) -> None:
+def test_run_and_sync_sanboxes() -> None:
     # An async method, call a sync method with sandboxes ressource manager
-    # asyncio.run(bridge_async_to_sync(config_path))  # L'exception est bien remonté dans le run_until_finish
+    # Can not be called. Use only async sandbox function.
     with pytest.raises(RuntimeError , match=_mixed_sync_and_async_error):
         run(bridge_async_to_sync(config_path), config_path=config_path)
 

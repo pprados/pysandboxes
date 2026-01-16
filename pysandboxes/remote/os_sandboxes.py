@@ -35,6 +35,20 @@ DEFAULT_OS_SANDBOX = "subprocess"
 _current_daemon: ReferenceType[BaseDaemon] = None  # Current daemon used by the sandbox
 _startup_counter = 0  # Number of time the daemon has been started
 
+_mixed_sync_and_async_error = (
+    "It's impossible to mixte synchronize and asynchronize sandbox function.")
+
+
+def _check_mixte_async_async():
+    try:
+        if asyncio.get_running_loop():
+            raise RuntimeError(_mixed_sync_and_async_error)
+    except RuntimeError as e:
+        if str(e) == "no running event loop":
+            pass  # Ignore
+        else:
+            raise
+
 
 @sandbox_loop
 async def async_start_daemon(name: str,
@@ -80,7 +94,7 @@ async def _async_start_daemon(name: str,
             raise e
 
 
-@sandbox_loop
+# @sandbox_loop
 async def async_shutdown_daemon():
     """
     Asynchronize version to shutdown the current daemon.
@@ -94,11 +108,14 @@ async def async_shutdown_daemon():
             raise ValueError("Daemon shutdown more times than started")
         return
 
+    if _startup_counter > 1:
+        _startup_counter -= 1
+        logger.debug("Daemon not shutting donw, because the startup counter > 1")
+        return
     await _current_daemon().shutdown()
-    assert _current_daemon().is_started == False
+    assert _current_daemon().is_started == False  # FIXME: peut etre faul, si plusieur entrée
     _current_daemon = None
     _startup_counter -= 1
-    assert not _startup_counter
 
 
 # @sandbox_loop FIXME
@@ -106,7 +123,7 @@ def start_daemon(name: str,
                  log_level: int,
                  config: ConfigLines,
                  *,
-                 timeout:int=60) -> BaseDaemon:
+                 timeout: int = 60) -> BaseDaemon:
     """
     Synchronize version to start daemon by name.
     Returns daemon object when is starred
@@ -173,7 +190,6 @@ def shutdown_daemon() -> None:
     reset_sandbox_loop()  # FIXME: supprimer le sandbox loop, pour laisser la place
 
 
-
 def get_token() -> str:
     global _current_daemon
     if _current_daemon is None or not _current_daemon():
@@ -206,6 +222,7 @@ def call_in_sandbox(
     if is_in_sandbox():
         return func(*args, **kwargs)
     if _current_daemon is None or not _current_daemon():
-        logger.warning("Daemon not started when trying to get token")
-        return # FIXME
+        raise RuntimeError("Daemon not started when trying to get token")
+    _check_mixte_async_async()
+
     return _current_daemon().call_in_sandbox(func, timeout, *args, **kwargs)
