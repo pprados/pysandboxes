@@ -1,17 +1,16 @@
-# TODO: c'est quoi ?
-import os
+# fake main to test the pdeathsig
 import subprocess
 import sys
-import time
 
-from pysandboxes.remote import daemon
 
 def main():
+    from pysandboxes.remote import run_daemon
+
     subprocess.run(
         [
             sys.executable,
             '-m',
-            daemon.__name__,
+            run_daemon.__name__,
             "--outer-sandbox", "subprocess"
         ],
         capture_output=True,  # Capture stdout and stderr

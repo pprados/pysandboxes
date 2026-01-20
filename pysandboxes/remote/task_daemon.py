@@ -3,7 +3,7 @@ import logging
 from typing import Dict, List, Optional
 
 from ..types import ConfigLines, Envs
-from .daemon import LocalTaskDaemon
+from .run_daemon import LocalTaskDaemon
 
 logger = logging.getLogger(__name__)
 

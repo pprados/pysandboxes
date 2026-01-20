@@ -83,15 +83,15 @@ class BaseSubProcessDaemon(SSESandbox):
                     log_level: int,
                     config:ConfigLines,
                     ) -> Args:
-        from . import daemon
+        from . import run_daemon
         cmd_parameters = [
             sys.executable,
-            "-P",
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
+            "-P",
 
-            "-u",  # FIXME unbuffered stdout and stderr
+            "-u",  # FIXME unbuffered stdout and stderr?
             "-m",
-            daemon.__name__,
+            run_daemon.__name__,
         ]
         verbose = return_level_parameter(log_level)
         if verbose:

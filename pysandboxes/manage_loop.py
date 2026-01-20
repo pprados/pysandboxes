@@ -75,9 +75,9 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
 
         loop = get_sandbox_loop()
         asyncio.set_event_loop(loop)
-        # x=asyncio.get_running_loop()  # FIXME
-        x=asyncio.get_event_loop()  # FIXME
-        # assert x == loop
+
+
+
 
         result = func(*args, **kwargs)
 

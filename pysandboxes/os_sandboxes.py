@@ -6,13 +6,14 @@ import weakref
 from _weakref import ReferenceType
 from typing import Any, Callable
 
-from .firejail_daemon import FireJailDaemon
-from .subprocess_daemon import SubProcessDaemon
-from .task_daemon import TaskDaemon
+from .remote.firejail_daemon import FireJailDaemon
+from .remote.subprocess_daemon import SubProcessDaemon
+from .remote.task_daemon import TaskDaemon
+from .tools import check_mixte_async_async
 from .tools import is_in_sandbox, check_mixte_async_async
-from ..base_daemon import BaseDaemon
-from ..manage_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
-from ..types import ConfigLines
+from .base_daemon import BaseDaemon
+from .manage_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
+from .types import ConfigLines
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ def is_daemon_started() -> bool:
     return False if _current_daemon is None else _current_daemon().is_started
 
 
-@sandbox_loop
+@sandbox_loop  # TODO: a virer ?
 def shutdown_daemon() -> None:
     """
     Synchronize version to shutdown the current daemon.
@@ -177,7 +178,7 @@ def shutdown_daemon() -> None:
             lambda: loop.create_task(_async_shutdown_daemon(), name="shutdown daemon"))
         if not stop_event.wait(timeout=10):
             raise RuntimeError("Import to shutdown the sandbox")
-        reset_sandbox_loop()  # FIXME: supprimer le sandbox loop, pour laisser la place
+        reset_sandbox_loop()
 
 
 def get_token() -> str:

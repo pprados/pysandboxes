@@ -116,7 +116,7 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
         outer_sandbox: str = None,
 ) -> None:
     if outer_sandbox:
-        from .remote.os_sandboxes import providers
+        from pysandboxes.os_sandboxes import providers
         if outer_sandbox not in providers:
             raise ValueError(f"Unknown os-sandbox name: {outer_sandbox}")
         provider = providers[outer_sandbox]

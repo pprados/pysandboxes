@@ -1,3 +1,5 @@
+import asyncio
+import contextvars
 import re
 from typing import Dict, Optional
 
@@ -98,3 +100,34 @@ def _remove_comment(line: str) -> str:
 
     # Remove trailing whitespace
     return ''.join(result).rstrip()
+
+#%% -----------------------
+_is_in_sandbox = False
+
+_sandboxed = contextvars.ContextVar(
+    'sanboxed', default=False)
+
+
+def is_in_sandbox() -> bool:
+    return _sandboxed.get()
+
+
+def set_is_in_sandbox(value: bool) -> None:
+    _sandboxed.set(value)
+
+
+
+mixed_sync_and_async_error = (
+    "It's impossible to mixte synchronize and asynchronize sandbox function.")
+
+def check_mixte_async_async():
+    try:
+        if asyncio.get_running_loop():
+            raise RuntimeError(mixed_sync_and_async_error)
+    except RuntimeError as e:
+        if str(e) == "no running event loop":
+            pass  # Ignore
+        else:
+            raise
+
+

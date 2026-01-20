@@ -19,33 +19,6 @@ logger = logging.getLogger(__name__)
 
 END_OF_FILE="---------- END OF FILE ----------\n"
 
-_is_in_sandbox = False
-
-_sandboxed = contextvars.ContextVar(
-    'sanboxed', default=False)
-
-
-def is_in_sandbox() -> bool:
-    return _sandboxed.get()
-
-
-def set_is_in_sandbox(value: bool) -> None:
-    _sandboxed.set(value)
-
-mixed_sync_and_async_error = (
-    "It's impossible to mixte synchronize and asynchronize sandbox function.")
-
-def check_mixte_async_async():
-    try:
-        if asyncio.get_running_loop():
-            raise RuntimeError(mixed_sync_and_async_error)
-    except RuntimeError as e:
-        if str(e) == "no running event loop":
-            pass  # Ignore
-        else:
-            raise
-
-
 def to_b85(obj: Any) -> str:
     return base64.b85encode(
         pickle.dumps(obj,

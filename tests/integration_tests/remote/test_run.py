@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from pysandboxes.remote.tools import mixed_sync_and_async_error
+from pysandboxes.tools import mixed_sync_and_async_error
 from .sample import config_path, async_forty_two, \
     async_sanboxes, bridge_async_to_sync
 from pysandboxes import run

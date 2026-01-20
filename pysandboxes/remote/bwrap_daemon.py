@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import Tuple
 
-from . import daemon
+from . import run_daemon
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, get_venv, suggest_package_installation
 from ..guard_files import BindRule

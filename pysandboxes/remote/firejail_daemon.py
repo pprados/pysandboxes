@@ -8,7 +8,7 @@ from typing import List, Tuple
 
 import click
 
-from . import daemon
+from . import run_daemon
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, get_venv, \
     suggest_package_installation, return_level_parameter

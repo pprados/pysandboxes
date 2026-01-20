@@ -12,7 +12,8 @@ from aiohttp_sse_client import client as sse_client
 from tblib import pickling_support
 
 from .parameters import HOST, PORT, PATH_RPC
-from .tools import from_b85, is_in_sandbox
+from ..tools import is_in_sandbox
+from .tools import from_b85
 from ..base_daemon import BaseDaemon
 from ..manage_loop import sandbox_loop
 
@@ -109,7 +110,7 @@ class SSESandbox(BaseDaemon):
                                     **kwargs: Any) -> Any:
         if is_in_sandbox():
             return await func(*args, **kwargs)
-        from .os_sandboxes import get_token
+        from pysandboxes.os_sandboxes import get_token
 
         try:
             token = get_token()

@@ -2,7 +2,7 @@
 import pytest
 
 from pysandboxes import sandboxes
-from pysandboxes.remote.tools import mixed_sync_and_async_error
+from pysandboxes.tools import mixed_sync_and_async_error
 from .sample import async_forty_two, sync_forty_two, init_sandbox, config_path
 
 
