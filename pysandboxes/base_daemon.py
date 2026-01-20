@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional
 
 from pysandboxes.py_sandbox import AllRules
+from pysandboxes.tools import SyncOrAsyncFunc
 from pysandboxes.types import ConfigLines, Envs
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class BaseDaemon(ABC):
     async def start(self, log_level: int,
                     envs: Envs,
                     config: ConfigLines,
+                    init_fn: Optional[SyncOrAsyncFunc],
                     token: str) -> None:
         raise NotImplementedError
 

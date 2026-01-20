@@ -19,11 +19,11 @@ from uvicorn import Server
 
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
-from ..tools import set_is_in_sandbox,is_in_sandbox
 from .tools import to_b85, configure_logging_level, END_OF_FILE, \
     from_b85, set_pdeathsig
 from ..manage_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from ..py_sandbox import AllRules
+from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
 from ..types import ConfigLines, Args, Envs
 
 logger = logging.getLogger(__name__)
@@ -92,9 +92,9 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
 
     # Extract current logging configuration
     # If not logger exist, try to duplicate the root logger parameters
-    root_logger = logging.getLogger("uvicorn.error")
-    if root_logger.handlers:
-        root_handler = root_logger.handlers[0]
+    uvicorn_logger = logging.getLogger("uvicorn")
+    if uvicorn_logger.handlers:
+        root_handler = uvicorn_logger.handlers[0]
     else:
         root_handler = logging.StreamHandler(stream=sys.stderr)  # FIXME: a tester
         # root_handler=logging.StreamHandler(stream="ext://sys.stdout")  # FIXME: a tester. Pb de capture de flus
@@ -108,6 +108,8 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
                 stream = "ext://sys.stdout"
             else:
                 stream = f"ext:{root_stream.name}"
+        else:
+            stream = "ext://sys.stdout"
     else:
         stream = "ext://sys.stdout"
     logging_confg = {
@@ -140,9 +142,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
             "uvicorn": {
                 "handlers": ["default"],
                 "level": getLogger("uvicorn").getEffectiveLevel(),
-                # logging.getLevelName(root_logger.level),
                 "propagate": False,
-                # "propagate": root_logger.propagate,
             },
             "uvicorn.error": {
                 "level": getLogger("uvicorn.error").getEffectiveLevel()
@@ -276,8 +276,11 @@ class LocalTaskDaemon(SSESandbox):
                     log_level: int,
                     envs: Envs,
                     config: ConfigLines,
+                    init_fn: Optional[SyncOrAsyncFunc],
                     token: Optional[str]) -> None:
 
+        if init_fn:
+            init_fn()
         loop = get_sandbox_loop()
         initial_threshold: float = loop.slow_callback_duration
         try:
@@ -359,6 +362,14 @@ async def main() -> int:
     )
 
     parser.add_argument(
+        "--init-function",
+        type=str,
+        help="Specifies the reference of a method to initialize the sandbox "
+             "before it is started.",
+        default=None
+    )
+
+    parser.add_argument(
         '-n', '--no-py-sandbox',
         action='store_true',
         help='Desactivate py-sandbox'
@@ -400,10 +411,17 @@ async def main() -> int:
         logging.info(
             f"Start ONLY an os-sandox of type '{outer_sandbox}'")
 
+    init_fn: Optional[SyncOrAsyncFunc] = None
+    if args.init_function:
+        module_name, function_name = args.init_function.split(':', 1)
+        module = importlib.import_module(module_name)
+        init_fn = getattr(module, function_name)
+
     task_daemon = LocalTaskDaemon(token=token)
     try:
         await task_daemon.start(log_level,
                                 envs=dict(os.environ),
+                                init_fn=init_fn,
                                 config=config_body,
                                 token=token)
         await task_daemon.join()

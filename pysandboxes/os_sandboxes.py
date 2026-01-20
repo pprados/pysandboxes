@@ -4,20 +4,19 @@ import os
 import threading
 import weakref
 from _weakref import ReferenceType
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
+from .base_daemon import BaseDaemon
+from .manage_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
 from .remote.firejail_daemon import FireJailDaemon
 from .remote.subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
-from .tools import check_mixte_async_async
-from .tools import is_in_sandbox, check_mixte_async_async
-from .base_daemon import BaseDaemon
-from .manage_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
+from .tools import is_in_sandbox, check_mixte_async_async, SyncOrAsyncFunc
 from .types import ConfigLines
 
 logger = logging.getLogger(__name__)
 
-providers = {
+providers: dict[str, BaseDaemon] = {
     # TODO: faire un provider "transparent"
     "task": TaskDaemon(),  # Impossible to activate py-sandbox in this mode.
     "subprocess": SubProcessDaemon(),
@@ -40,13 +39,14 @@ _startup_counter = 0  # Number of time the daemon has been started
 @sandbox_loop
 async def async_start_daemon(name: str,
                              log_level: int,
+                             init_fn: Optional[SyncOrAsyncFunc],
                              config: ConfigLines,
                              ) -> BaseDaemon:
     """
     Asynchronize version to start daemon by name.
     Returns daemon object when is starred
     """
-    return await _async_start_daemon(name, log_level, config)
+    return await _async_start_daemon(name, log_level, init_fn, config)
 
 
 _async_start_lock = asyncio.Lock()
@@ -57,6 +57,7 @@ _stop_lock = threading.Lock()
 
 async def _async_start_daemon(name: str,
                               log_level: int,
+                              init_fn: Optional[SyncOrAsyncFunc],
                               config: ConfigLines,
                               ) -> BaseDaemon:
     """
@@ -73,7 +74,9 @@ async def _async_start_daemon(name: str,
         if name not in providers:
             raise ValueError(f"Unknown daemon name: {name}")
         try:
-            await providers[name].start(log_level, dict(os.environ), config, token=None)
+            await providers[name].start(log_level, dict(os.environ), config,
+                                        init_fn,
+                                        token=None)
             _current_daemon = weakref.ref(providers[name])
             assert providers[name].is_started == True
             _startup_counter += 1
@@ -90,7 +93,7 @@ async def async_shutdown_daemon():
     Return when the daemon is shutdown.
     """
     global _current_daemon, _startup_counter
-    async with _async_start_lock,_async_stop_lock:
+    async with _async_start_lock, _async_stop_lock:
         if not _current_daemon:
             logger.info("Daemon not started when shutdown")
             _startup_counter -= 1
@@ -111,6 +114,7 @@ async def async_shutdown_daemon():
 def start_daemon(name: str,
                  log_level: int,
                  config: ConfigLines,
+                 init_fn: Optional[SyncOrAsyncFunc] = None,
                  *,
                  timeout: int = 60) -> BaseDaemon:
     """
@@ -127,12 +131,11 @@ def start_daemon(name: str,
         if name not in providers:
             raise ValueError(f"Unknown daemon name: {name}")
 
-        # loop = asyncio.get_event_loop()
         loop = get_sandbox_loop()
         start_event = threading.Event()
 
         async def _start_daemon_and_signal():
-            await _async_start_daemon(name, log_level, config)
+            await _async_start_daemon(name, log_level, init_fn, config)
             start_event.set()
             logger.debug("Start event set")
 
@@ -160,7 +163,7 @@ def shutdown_daemon() -> None:
     Return when the daemon is shutdown.
     """
     global _current_daemon, _startup_counter
-    with _start_lock,_stop_lock:
+    with _start_lock, _stop_lock:
         if not _current_daemon:
             logger.info("Daemon not started when shutdown")
             _startup_counter -= 1

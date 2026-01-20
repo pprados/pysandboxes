@@ -7,11 +7,12 @@ import time
 import uuid
 from abc import abstractmethod
 from pathlib import Path
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Optional
 
 from .sse_sandbox import SSESandbox
 from .tools import return_level_parameter, END_OF_FILE
 from ..py_sandbox import AllRules, read_and_parse_config
+from ..tools import SyncOrAsyncFunc, get_callable_info
 from ..types import ConfigLines, Args, Envs
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ class BaseSubProcessDaemon(SSESandbox):
     def _subprocess(self,
                     envs: Dict[str, str],
                     log_level: int,
+                    init_fn: Optional[SyncOrAsyncFunc],
                     config:ConfigLines,
                     ) -> Args:
         from . import run_daemon
@@ -96,6 +98,11 @@ class BaseSubProcessDaemon(SSESandbox):
         verbose = return_level_parameter(log_level)
         if verbose:
             cmd_parameters.append(verbose)
+            if init_fn:
+                module,init_function_reference= get_callable_info(init_fn)
+                cmd_parameters.extend(["--init-function",
+                                       f"{module}:{init_function_reference}"])
+
         cmd_parameters.extend([
             "--outer-sandbox", "subprocess",
         ])
@@ -108,12 +115,15 @@ class BaseSubProcessDaemon(SSESandbox):
     async def start(self, log_level: int,
                     envs: Envs,
                     config: ConfigLines,
+                    init_fn: Optional[SyncOrAsyncFunc],
                     token: str) -> None:
         if not envs:
             envs = dict(os.environ)
         self.restart = 0
-        await self._re_start(envs, log_level,
+        await self._re_start(envs,
+                             log_level,
                              config,
+                             init_fn,
                              token=token,
                              first=True,
                              )
@@ -122,6 +132,7 @@ class BaseSubProcessDaemon(SSESandbox):
                         envs: Envs,
                         log_level: int,
                         config: ConfigLines,
+                        init_fn: Optional[SyncOrAsyncFunc],
                         *,
                         token: str,
                         first: bool = False) -> None:
@@ -129,6 +140,7 @@ class BaseSubProcessDaemon(SSESandbox):
             await self._re_start_cmd(self._subprocess(
                 envs,
                 log_level,
+                init_fn,
                 config,
             ), {},
                 config=config,

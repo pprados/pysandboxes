@@ -5,7 +5,7 @@ import dotenv
 
 import pysandboxes
 from pysandboxes import sandboxes
-from .sb_usage import run_in_sandbox, arun_in_sandbox, init_sandbox
+from .sb_usage import run_in_sandbox, arun_in_sandbox, init_sandbox, init_log_level
 
 logger = logging.getLogger(__name__)
 dotenv.load_dotenv()
@@ -26,20 +26,16 @@ def main():
 
 async def async_manager():
     for i in range(0, 2):
-        async with sandboxes(init_sandbox):
+        async with sandboxes(init_fn=init_sandbox):
             assert await amain() == 42
 
-
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-    logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-
+    init_log_level()
     for i in range(0, 1):
-        asyncio.run(async_manager())
-        print("----------------")
-        pysandboxes.run(amain())
-        print("----------------")
+        # asyncio.run(async_manager())
+        # print("----------------")
+        # pysandboxes.run(amain())
+        # print("----------------")
         with pysandboxes.sandboxes(init_sandbox):
             main()
         print("----------------")

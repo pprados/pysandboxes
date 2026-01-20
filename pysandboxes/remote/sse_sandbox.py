@@ -12,8 +12,8 @@ from aiohttp_sse_client import client as sse_client
 from tblib import pickling_support
 
 from .parameters import HOST, PORT, PATH_RPC
-from ..tools import is_in_sandbox
 from .tools import from_b85
+from ..tools import is_in_sandbox, get_callable_info
 from ..base_daemon import BaseDaemon
 from ..manage_loop import sandbox_loop
 
@@ -26,51 +26,6 @@ SANDBOX_SERVER_URL: str = os.environ.get(
     "SANDBOX_SERVER_URL",
     f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}{PATH_RPC}")
 
-def _get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Retrieves the module name and the fully qualified name of a callable.
-
-    Args:
-        func: The callable object (function, method, class method, static method,
-              lambda, or callable instance).
-
-    Returns:
-        A tuple containing:
-        - The name of the module where the callable is defined (str or None).
-        - The fully qualified name of the callable (str or None).
-    """
-    module_name: Optional[str] = None
-    callable_name: Optional[str] = None
-
-    # Get the module name using inspect.getmodule()
-    # This works well for functions, methods, and class methods
-    module_obj = inspect.getmodule(func)
-    if module_obj:
-        module_name = module_obj.__name__
-
-    # Get the qualified name of the callable
-    # __qualname__ provides the dotted path from the module to the callable,
-    # useful for nested functions or methods within classes.
-    # __name__ provides just the simple name.
-    if hasattr(func, '__qualname__'):
-        callable_name = func.__qualname__
-    elif hasattr(func, '__name__'):
-        callable_name = func.__name__
-    elif inspect.ismethod(func):
-        # For bound methods, func.__func__ gives the underlying function
-        if hasattr(func.__func__, '__qualname__'):
-            callable_name = func.__func__.__qualname__
-        elif hasattr(func.__func__, '__name__'):
-            callable_name = func.__func__.__name__
-    elif isinstance(func, type):  # It's a class
-        callable_name = func.__qualname__
-    elif hasattr(func, '__class__') and hasattr(func.__class__, '__call__'):
-        # It's an instance of a class with a __call__ method
-        callable_name = func.__class__.__qualname__
-        if callable_name:
-            callable_name += ".__call__"
-    return module_name, callable_name
-
 
 def _get_rpc_params(args: Any,
                     func: Callable[..., Any],
@@ -80,7 +35,7 @@ def _get_rpc_params(args: Any,
     Get the parameters for the RPC call.
     """
     from .tools import to_b85
-    module_name, callable_name = _get_callable_info(func)
+    module_name, callable_name = get_callable_info(func)
     params = {
         "session_id": "123",  # TODO
         "timeout": timeout,  # TODO

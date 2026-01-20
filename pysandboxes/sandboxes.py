@@ -11,10 +11,10 @@ from typing import Any, TypeVar, Union, \
     Awaitable, Coroutine, runtime_checkable
 from typing import Callable, Optional
 
+from .base_daemon import BaseDaemon
 from .manage_loop import set_sandbox_loop
 from .py_sandbox import get_config_path
-from .base_daemon import BaseDaemon
-from .tools import check_mixte_async_async
+from .tools import check_mixte_async_async, SyncOrAsyncFunc
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +54,6 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
         return decorator(_func)
 
 
-SyncOrAsyncFunc = Union[
-    Callable[[], None],  # Fonction synchrone
-    Callable[[], Awaitable[None]]  # Fonction asynchrone
-]
-
 
 @runtime_checkable
 class sandboxes(typing.Protocol):
@@ -75,8 +70,9 @@ class sandboxes(typing.Protocol):
                  ) -> None:
         self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
         self.config_path = config_path
-        self._old_sigint= None
-        self._old_sigterm= None
+        self.timeout = 60
+        self._old_sigint = None
+        self._old_sigterm = None
         # TODO: ajouter des paramètres complémentaire ici ?
         # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
 
@@ -93,7 +89,12 @@ class sandboxes(typing.Protocol):
         log_level = logging.root.getEffectiveLevel()
         config = get_config_path(self.config_path).read_text().splitlines()
         config, _, os_sandbox, *_ = read_and_parse_config(config=config)
-        start_daemon(os_sandbox, log_level, config)
+        start_daemon(os_sandbox,
+                     log_level,
+                     config,
+                     self.init_fn,
+                     timeout=self.timeout,
+                     )
 
         def signal_handler(signum: int, frame: object) -> None:
             """
@@ -102,7 +103,7 @@ class sandboxes(typing.Protocol):
             """
             # Iterate through all child processes and send them SIGTERM
             global _current_daemon
-            logger.debug("Catch signal %s. Propagate to the dameon.",signum)
+            logger.debug("Catch signal %s. Propagate to the dameon.", signum)
             _current_daemon.shutdown()
 
         if threading.current_thread() is threading.main_thread():
@@ -138,9 +139,10 @@ class sandboxes(typing.Protocol):
         from .py_sandbox import read_and_parse_config
         from pysandboxes.os_sandboxes import async_start_daemon
         log_level = logging.root.getEffectiveLevel()
+        assert get_config_path(self.config_path), "Set config path"
         config = get_config_path(self.config_path).read_text().splitlines()
         config, _, os_sandbox, *_ = read_and_parse_config(config=config)
-        return await async_start_daemon(os_sandbox, log_level, config)
+        return await async_start_daemon(os_sandbox, log_level, self.init_fn, config)
 
     async def __aexit__(self,
                         exc_type: Optional[type[BaseException]],
@@ -157,7 +159,7 @@ class sandboxes(typing.Protocol):
 def run(main: Coroutine[Any, Any, Any],
         *, debug=None, loop_factory=None,
         init_fn: Optional[SyncOrAsyncFunc] = None,
-        config_path: Optional[Union[Path, str]]) -> Any:
+        config_path: Optional[Union[Path, str]] = None) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
     It's similar to `asyncio.run()`, but with the sandbox.

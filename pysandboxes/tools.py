@@ -1,7 +1,10 @@
+# TODO: reorganize the tools
+
 import asyncio
 import contextvars
+import inspect
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, Union, Callable, Awaitable, Any, Tuple
 
 from .types import ConfigLines
 
@@ -114,6 +117,57 @@ def is_in_sandbox() -> bool:
 
 def set_is_in_sandbox(value: bool) -> None:
     _sandboxed.set(value)
+
+
+SyncOrAsyncFunc = Union[
+    Callable[[], None],  # Fonction synchrone
+    Callable[[], Awaitable[None]]  # Fonction asynchrone
+]
+
+def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Retrieves the module name and the fully qualified name of a callable.
+
+    Args:
+        func: The callable object (function, method, class method, static method,
+              lambda, or callable instance).
+
+    Returns:
+        A tuple containing:
+        - The name of the module where the callable is defined (str or None).
+        - The fully qualified name of the callable (str or None).
+    """
+    module_name: Optional[str] = None
+    callable_name: Optional[str] = None
+
+    # Get the module name using inspect.getmodule()
+    # This works well for functions, methods, and class methods
+    module_obj = inspect.getmodule(func)
+    if module_obj:
+        module_name = module_obj.__name__
+
+    # Get the qualified name of the callable
+    # __qualname__ provides the dotted path from the module to the callable,
+    # useful for nested functions or methods within classes.
+    # __name__ provides just the simple name.
+    if hasattr(func, '__qualname__'):
+        callable_name = func.__qualname__
+    elif hasattr(func, '__name__'):
+        callable_name = func.__name__
+    elif inspect.ismethod(func):
+        # For bound methods, func.__func__ gives the underlying function
+        if hasattr(func.__func__, '__qualname__'):
+            callable_name = func.__func__.__qualname__
+        elif hasattr(func.__func__, '__name__'):
+            callable_name = func.__func__.__name__
+    elif isinstance(func, type):  # It's a class
+        callable_name = func.__qualname__
+    elif hasattr(func, '__class__') and hasattr(func.__class__, '__call__'):
+        # It's an instance of a class with a __call__ method
+        callable_name = func.__class__.__qualname__
+        if callable_name:
+            callable_name += ".__call__"
+    return module_name, callable_name
 
 
 
