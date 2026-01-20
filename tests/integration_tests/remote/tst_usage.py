@@ -30,6 +30,12 @@ async def async_manager():
             assert await amain() == 42
 
 if __name__ == "__main__":
+    import sys
+    import site
+    print(f"{sys.path=}")
+    print(f"{sys.executable=}")
+    print(f"{site.getsitepackages()=}")
+
     init_log_level()
     for i in range(0, 1):
         # asyncio.run(async_manager())

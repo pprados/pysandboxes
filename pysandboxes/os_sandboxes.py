@@ -55,7 +55,7 @@ _start_lock = threading.Lock()
 _stop_lock = threading.Lock()
 
 
-async def _async_start_daemon(name: str,
+async def _async_start_daemon(name: Optional[str],
                               log_level: int,
                               init_fn: Optional[SyncOrAsyncFunc],
                               config: ConfigLines,
@@ -64,6 +64,8 @@ async def _async_start_daemon(name: str,
     Asynchronize version without the creation of the sandbox loop.
     It's used in run()
     """
+    if not name:
+        name="subprocess"
     global _current_daemon, _startup_counter
     async with _async_start_lock:
         if _current_daemon is not None and _current_daemon():
@@ -111,7 +113,7 @@ async def async_shutdown_daemon():
         _startup_counter -= 1
 
 
-def start_daemon(name: str,
+def start_daemon(name: Optional[str],
                  log_level: int,
                  config: ConfigLines,
                  init_fn: Optional[SyncOrAsyncFunc] = None,
@@ -121,6 +123,8 @@ def start_daemon(name: str,
     Synchronize version to start daemon by name.
     Returns daemon object when is starred
     """
+    if not name:
+        name = "subprocess"
     global _current_daemon, _startup_counter
     with _start_lock:
         if _current_daemon is not None and _current_daemon():

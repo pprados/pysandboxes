@@ -1,5 +1,5 @@
 #--os-sandbox=task
---os-sandbox=subprocess
+#--os-sandbox=subprocess
 # --os-sandbox=firejail
 # TODO --no-py-sandbox
 # TODO: --no-dotenv
@@ -8,7 +8,7 @@
 --set-env=HOME=${HOME}
 --set-env=USER=${USER}
 --set-env=PATH=${PATH}  # FIXME je ne pense pas cela nécessaire
---set-env=VIRTUAL_ENV*=${VIRTUAL_ENV_*}
+--set-env=VIRTUAL_ENV*=${VIRTUAL_ENV*}
 --set-env=LC_*=${LC_*}
 --set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 --set-env=LANG=${LANG}

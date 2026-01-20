@@ -1,7 +1,7 @@
 # See man firejail
 #--quiet
 --name=firejail-sandbox
-#--caps.drop=all
+--caps.drop=all
 # --caps.keep=net_admin
 #--private # Any files created in this directory will be deleted when you shutdown the sandbox
 --noprofile
@@ -17,7 +17,7 @@
 --hostname=firejail-sandbox
 --deterministic-shutdown
 --protocol=inet,inet6
-"--env=PYTHONSTARTUP="
+--env=PYTHONSTARTUP=
 --rmenv=SDL_GAMECONTROLLERCONFIG
 --private-tmp
 --noexec=/tmp

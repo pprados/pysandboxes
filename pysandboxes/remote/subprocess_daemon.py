@@ -17,7 +17,7 @@ from ..types import ConfigLines, Args, Envs
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
+DEBUG = True
 
 
 async def _write_stream(
@@ -56,6 +56,7 @@ async def _read_stream(
         else:
             break
 
+
 class BaseSubProcessDaemon(SSESandbox):
 
     def __init__(self,
@@ -83,7 +84,7 @@ class BaseSubProcessDaemon(SSESandbox):
                     envs: Dict[str, str],
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
-                    config:ConfigLines,
+                    config: ConfigLines,
                     ) -> Args:
         from . import run_daemon
         cmd_parameters = [
@@ -98,14 +99,11 @@ class BaseSubProcessDaemon(SSESandbox):
         verbose = return_level_parameter(log_level)
         if verbose:
             cmd_parameters.append(verbose)
-            if init_fn:
-                module,init_function_reference= get_callable_info(init_fn)
-                cmd_parameters.extend(["--init-function",
-                                       f"{module}:{init_function_reference}"])
+        if init_fn:
+            module, init_function_reference = get_callable_info(init_fn)
+            cmd_parameters.extend(
+                ["--init-function", f"{module}:{init_function_reference}"])
 
-        cmd_parameters.extend([
-            "--outer-sandbox", "subprocess",
-        ])
         return cmd_parameters
 
     @abstractmethod
@@ -146,7 +144,6 @@ class BaseSubProcessDaemon(SSESandbox):
                 config=config,
             )
 
-            # await asyncio.sleep(0) # FIXME: identifier rellement quand le server est démarré
             logger.info("daemon is started")
         else:
             logger.warning("daemon is re-started")
@@ -189,8 +186,8 @@ class BaseSubProcessDaemon(SSESandbox):
 
         # Send config body via stdin, because, it's not possible to use .py-sandbox file
         self._token = str(uuid.uuid4())
-        data = ("\n".join(config[0:2])) + "\n"+ END_OF_FILE + self._token + "\n"
-        #data = "A\nB\n" + END_OF_FILE + self._token + "\n"
+        data = ("\n".join(config[0:2])) + "\n" + END_OF_FILE + self._token + "\n"
+        # data = "A\nB\n" + END_OF_FILE + self._token + "\n"
         self._process.stdin.write(data.encode("utf-8"))
         await self._process.stdin.drain()
         if stdin:
@@ -262,6 +259,18 @@ class BaseSubProcessDaemon(SSESandbox):
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
+    def _subprocess(self,
+                    envs: Dict[str, str],
+                    log_level: int,
+                    init_fn: Optional[SyncOrAsyncFunc],
+                    config: ConfigLines,
+                    ) -> Args:
+        args = super()._subprocess(envs, log_level, init_fn, config)
+        args.extend([
+            "--outer-sandbox", "subprocess",
+        ])
+        return args
+
     def update_rules(self,
                      *,
                      envs: Envs,

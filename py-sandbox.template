@@ -8,8 +8,8 @@
 # environment helps limit accesses to minimal privileges.
 
 #--os-sandbox=task
---os-sandbox=subprocess
-#--os-sandbox=firejail
+#--os-sandbox=subprocess
+--os-sandbox=firejail
 # TODO --no-py-sandbox
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
@@ -62,14 +62,18 @@
 # the sandbox to a directory visible inside the sandbox (which must exist).
 # Additionally, --bind-ro does the same but limits access to the sandbox as read-only.
 #
-# Ignores all hidden files and .log files
---ignore=.*
+# Ignores somes files
+# Warning, --ignore .* rule exclude the .venv directory !
+# Use another name for the virtualenv
+--ignore=.env
 --ignore=*.log
-#--ignore=*.py # A tester !
+--ignore=*.py # All code must be pre-compiled (pyo)
 
 # Binds the current directory to the root of the sandbox
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
---ro-bind=${PWD},${PWD}
+#--ro-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path
+--ro-bind=${PWD}/.venv,${PWD}/.venv  # FIXME: uniquement pour le tst_usage
+--ro-bind=${PWD}/tests,${PWD}/tests  # FIXME: uniquement pour le tst_usage
 --ro-bind=${PYENV_ROOT},${PYENV_ROOT}
 --ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
 #--ro-bind=${PWD}/sandbox,/usr/src/myapp  # FIXME

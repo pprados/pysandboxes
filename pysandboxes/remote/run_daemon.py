@@ -377,6 +377,8 @@ async def main() -> int:
 
     # Parse the arguments provided by the user
     args = parser.parse_args()
+    logger.error("============")  # FIXME
+    logger.error(f"{args=}")
 
     # Access the value of --sandbox-provider
     outer_sandbox: Optional[str] = args.outer_sandbox
@@ -394,13 +396,14 @@ async def main() -> int:
         config_body.append(line)
     logging.debug("config body and token successfully read from stdin")
 
-    # In this case, use the standard loop for is place of the sandbox
+    # In this case, use the standard loop in place of the private sandbox loop
     set_sandbox_loop(asyncio.get_running_loop())
 
     if not args.no_py_sandbox:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
 
+        # Note: the init_function is called AFTER the activation of the python sandbox
         activate_sandboxes(dict(os.environ),
                            args_rules=None,
                            outer_sandbox=outer_sandbox,
@@ -414,6 +417,9 @@ async def main() -> int:
     init_fn: Optional[SyncOrAsyncFunc] = None
     if args.init_function:
         module_name, function_name = args.init_function.split(':', 1)
+        print(f"---------- {args.init_function=}")
+        print(f"---------- {module_name=}")
+        print(f"---------- {function_name=}")
         module = importlib.import_module(module_name)
         init_fn = getattr(module, function_name)
 

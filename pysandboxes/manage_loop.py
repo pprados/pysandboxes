@@ -46,11 +46,15 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
         start_event = threading.Event()
         def _start_background_loop() -> None:
             """Start the sandbox background loop forever"""
-            asyncio.set_event_loop(loop)
-            start_event.set()
-            logger.debug("Start thread for sandbox event loop")
-            loop.run_forever()
-            logger.debug("Stop thread for sandbox event loop")
+            try:
+                asyncio.set_event_loop(loop)
+                start_event.set()
+                logger.debug("Start thread for sandbox event loop")
+                loop.run_forever()
+                logger.debug("Stop thread for sandbox event loop")
+            except SystemExit as e:
+                import os
+                os._exit(e.args[0])
 
         thread = threading.Thread(
             target=_start_background_loop,

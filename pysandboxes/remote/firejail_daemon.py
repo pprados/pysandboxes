@@ -1,26 +1,170 @@
 import logging
 import os
 import shlex
+import site
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional, MutableSet, Any, Union
 
 import click
 
-from . import run_daemon
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, get_venv, \
-    suggest_package_installation, return_level_parameter
+    suggest_package_installation
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
 from ..py_sandbox import read_and_parse_config, AllRules
-from ..tools import remove_comments, substitute_env_vars
+from ..tools import remove_comments, substitute_env_vars, SyncOrAsyncFunc
 from ..types import ConfigLines, Envs, Args
 
 logger = logging.getLogger(__name__)
 
 DEBUG = True  # FIXME subprocess_daemon.DEBUG
+
+
+class WhiteList(MutableSet):
+    """
+    A class that simulates a set of directory paths, implementing a white list logic.
+
+    This class extends MutableSet to provide set-like functionality. It ensures
+    that the stored directory paths are unique and adhere to specific prefix rules.
+    If a new directory path is a prefix of an existing path, the existing path is
+    removed and replaced by the new, more general path. If a new path is already
+    prefixed by an existing path, it is not added.
+    """
+
+    def __init__(self, directories: list[str] = []) -> None:
+        """
+        Initializes the WhiteList with an optional list of directory paths.
+
+        Args:
+            directories (list[str]): A list of initial directory paths to add.
+        """
+        self._set: set[str] = set()
+        # Add initial directories, applying the whitelist logic.
+        for directory in directories:
+            self.add(directory)
+
+    def __contains__(self, item: Any) -> bool:
+        """
+        Checks if a directory path or any of its parent directories is in the WhiteList.
+
+        Args:
+            item (Any): The directory path to check.
+
+        Returns:
+            bool: True if the item is a string and is in the internal set or is a
+                  sub-directory of an existing path, False otherwise.
+        """
+        # Ensure the item is a string before proceeding.
+        if not isinstance(item, str):
+            return False
+
+        # Ensure the path ends with a separator for consistent prefix checking.
+        if not item.endswith('/'):
+            item += '/'
+
+        # Check if the item itself is in the set, or if an existing directory is
+        # a prefix of the item. This means the item is a subdirectory of a
+        # whitelisted path.
+        for existing_dir in self._set:
+            if item.startswith(existing_dir):
+                return True
+
+        return False
+
+    def __iter__(self):
+        """
+        Returns an iterator over the directory paths in the WhiteList.
+        """
+        return iter(self._set)
+
+    def __len__(self) -> int:
+        """
+        Returns the number of directory paths in the WhiteList.
+
+        Returns:
+            int: The number of paths.
+        """
+        return len(self._set)
+
+    def add(self, directory: str) -> None:
+        """
+        Adds a new directory path to the WhiteList, applying the prefix rules.
+
+        - If the new directory path is already prefixed by an existing path, it
+          is not added.
+        - If the new directory path is a prefix of one or more existing paths,
+          those paths are removed and the new path is added.
+
+        Args:
+            directory (str): The directory path to add.
+        """
+        # Ensure the path ends with a separator to simplify prefix checks.
+        if not directory.endswith('/'):
+            directory += '/'
+
+        # Check if an existing directory already prefixes the new one.
+        for existing_dir in self._set:
+            if directory.startswith(existing_dir):
+                return
+
+        # Find existing directories that are prefixed by the new directory.
+        to_remove = {
+            existing_dir
+            for existing_dir in self._set
+            if existing_dir.startswith(directory)
+        }
+
+        # If any directories are to be removed, perform the replacement.
+        if to_remove:
+            self._set -= to_remove
+            self._set.add(directory)
+        else:
+            # If no replacements are needed, just add the new directory.
+            self._set.add(directory)
+
+    def discard(self, directory: str) -> None:
+        """
+        Removes a directory path from the WhiteList if it exists.
+
+        Args:
+            directory (str): The directory path to remove.
+        """
+        # Ensure the path ends with a separator for consistency.
+        if not directory.endswith('/'):
+            directory += '/'
+        self._set.discard(directory)
+
+
+def _follow_links(filename: Union[str, Path], whitelist: WhiteList) -> None:
+    whitelist.add(str(filename))
+    try:
+        if Path(filename).is_symlink():
+            whitelist.add(str(Path(filename).resolve(strict=True)))
+    except FileNotFoundError:
+        raise RuntimeError("Impossible to resolve the sys.executable `%s`",
+                           sys.executable)
+
+
+def _follow_links_executable(executable: Path, whitelist: WhiteList) -> None:
+    if executable.parents[0].name == "bin":
+        if str(executable.parent.parent) not in whitelist:
+            whitelist.add(str(executable.parent.parent))
+        else:
+            return
+    else:
+        if str(executable) not in whitelist:
+            whitelist.add(str(executable))
+        else:
+            return
+    if executable.is_symlink():
+        try:
+            _follow_links_executable(executable.resolve(strict=True), whitelist)
+        except FileNotFoundError:
+            raise RuntimeError("Impossible to resolve the sys.executable `%s`",
+                               sys.executable)
 
 
 class FireJailDaemon(BaseSubProcessDaemon):
@@ -40,13 +184,15 @@ class FireJailDaemon(BaseSubProcessDaemon):
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
+            logger.error("And set 'restricted-network no'  in "
+                         "/etc/firejail/firejail.config")
             sys.exit(1)
 
         need_root = False
         from importlib.resources import files
 
         config, sandbox_env, provider, socket_rules, files_rules = (
-            read_and_parse_config(
+            read_and_parse_config(  # FIXME: etrange. C'est en paramètre
                 envs=envs,
                 config=config,
             ))
@@ -62,36 +208,51 @@ class FireJailDaemon(BaseSubProcessDaemon):
         for line in firejail_conf:
             args.extend(shlex.split(line))
 
-        # Extend mapping if the python version use a link
+        # Extend mapping if the python version use some links
         major, minor, release_level, *_ = sys.version_info
-        prg = sys.executable
-        while os.path.islink(prg):
-            prg = os.readlink(prg)
-            # if ".pyenv" in prg:
-            #     prg = prg[:(prg.find(".pyenv/") + len(".pyenv/"))]
-            args.extend([
-                f"--whitelist={os.path.dirname(prg)}",
-                f"--read-only={os.path.dirname(prg)}",
-            ])
+        whitelist = WhiteList()
+
+        # Manage sys.executable
+        _follow_links_executable(Path(sys.executable),whitelist)
+
+        for p in sys.path:
+            if os.path.isdir(p):
+                if p not in whitelist:
+                    _follow_links(p, whitelist)
+
+        for p in site.getsitepackages():
+            if os.path.isdir(p):
+                if p not in whitelist:
+                    _follow_links(p, whitelist)
 
         # Same place
-        args.extend([
-            f"--whitelist={get_venv()}",
-            f"--read-only={get_venv()}",
-        ])
+        # FIXME: ne semble pas nécessaire avec les autres
+        # if p := get_venv():
+        #     if p not in whitelist:
+        #         _follow_links(p, whitelist)
+
+        for white in whitelist:
+            args.extend([
+                f"--whitelist={white}",
+                f"--read-only={white}",
+            ])
 
         # Add files rules
         new_files_rules = []
         for rule in files_rules:
             if isinstance(rule, BindRule):
                 if rule.source == rule.dest:
-                    args.append(f"--whitelist={rule.source}")
+                    if rule.source not in whitelist:
+                        args.append(f"--whitelist={rule.source}")
+                        whitelist.add(rule.source)
                 else:
                     # Note: de py-sandbox manager the alias
-                    args.append(f"--whitelist={rule.source}")
+                    if rule.source not in whitelist:
+                        args.append(f"--whitelist={rule.source}")
+                        whitelist.add(rule.source)
                     need_root = True
-                if not rule.write:
-                    args.append(f"--read-only={rule.source}")
+                    if not rule.write:
+                        args.append(f"--read-only={rule.source}")
             elif isinstance(rule, IgnoreRule):
                 args.append(f"--blacklist={rule.source}")
                 new_files_rules.append(rule)
@@ -140,31 +301,37 @@ class FireJailDaemon(BaseSubProcessDaemon):
         if need_root:
             logger.warning("Firejail needs root to run")
 
-        return args, (config,sandbox_env, provider, socket_rules, files_rules)
+        return args, (config, sandbox_env, provider, socket_rules, files_rules)
 
     def _subprocess(self,
                     envs: Envs,
                     log_level: int,
-                    config:ConfigLines
+                    init_fn: Optional[SyncOrAsyncFunc],
+                    config: ConfigLines
                     ) -> List[str]:
-        cmd_parameters, _ = self._firejail_args(envs=envs,
-                                                config=config)
-
-        cmd_parameters.extend([
-            sys.executable,
-            "-P",
-            # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
-
-            # "-u",  # FIXME unbuffered stdout and stderr
-            "-m",
-            daemon.__name__,
-        ])
-        verbose = return_level_parameter(log_level)
-        if verbose:
-            cmd_parameters.append(verbose)
-        cmd_parameters.extend([
+        run_daemon = super()._subprocess(envs, log_level, init_fn, config)
+        run_daemon.extend([
             "--outer-sandbox", "firejail",
         ])
+
+        cmd_parameters, _ = self._firejail_args(envs=envs,
+                                                config=config)
+        cmd_parameters.extend(run_daemon)
+        # cmd_parameters.extend([
+        #     sys.executable,
+        #     "-P",
+        #     # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
+        #
+        #     # "-u",  # FIXME unbuffered stdout and stderr
+        #     "-m",
+        #     run_daemon.__name__,
+        # ])
+        # verbose = return_level_parameter(log_level)
+        # if verbose:
+        #     cmd_parameters.append(verbose)
+        # cmd_parameters.extend([
+        #     "--outer-sandbox", "firejail",
+        # ])
         if DEBUG:
             Path("run.sh").write_text("<.py-sandbox " + " \\\n".join(cmd_parameters))
         return cmd_parameters
