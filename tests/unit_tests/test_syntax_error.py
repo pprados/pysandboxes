@@ -53,6 +53,7 @@ def test_syntax_error(caplog):
             "syntax-error(18): In '--net=ALLOW|tcp|acme.acme|*|IN', invalid network specification.That does not resolve to any network.",
             "syntax-error(19): In '--net=ALLOW|tcp|0.0.0.0/0|a,b|IN', invalide port list.",
             "syntax-error(20): In '--net=ALLOW|tcp|0.0.0.0/0|*|', direction is not 'IN' or 'OUT'.",
+            "syntax-error(24): In '--ro-bind=syntax-error,syntax-error/tests', invalidate another rule from 'syntax-error(22)'.",
             "<extra>: Detect a missing '=' in rule: --set-env=abc.",
             "<extra>: Invalid os-sandbox 'error'.",
             "<extra>: In '--bind=', source and destination must be separated with a comma."

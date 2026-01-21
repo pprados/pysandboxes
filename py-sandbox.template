@@ -21,6 +21,7 @@
 # - firejail : A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
 
+#--os-sandbox=task
 #--os-sandbox=subprocess
 #--os-sandbox=firejail
 # TODO --no-py-sandbox

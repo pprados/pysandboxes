@@ -1,11 +1,12 @@
 import io
 import os
-import pathlib
+from pathlib import Path
 
 import pytest
 
 from pysandboxes.guard_files import activate_guard_files, parse_rules, \
     RuleFileNotFoundError
+from pysandboxes.types import ConfigLines, ConfigLine
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +20,7 @@ def reset_rules():
 @pytest.fixture
 def files(tmp_path):
     # Create test files and symlinks
-    tmp_path = pathlib.Path("/tmp/ppr");
+    tmp_path = Path("/tmp/ppr");
     tmp_path.mkdir(exist_ok=True)  # FIXME: remove this line
     (tmp_path / "visible.txt").write_text("Visible")
     (tmp_path / "ignore.log").write_text("Should be ignored")
@@ -81,12 +82,17 @@ def files(tmp_path):
 
 
 def str_activate_guard_files(rules: ConfigLines) -> None:
-    file_rules, _ = parse_rules(rules)
+    errors = []
+    file_rules, _ = parse_rules(rules, errors)
     activate_guard_files(file_rules)
+    assert not errors
 
 
 def test_io_open_ignore_rule_blocks_file_access(files):
-    rules = [f"--ignore={files['ignore']}"]
+    errors = []
+    rules = [
+        ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
+    ]
     str_activate_guard_files(rules)
 
     with pytest.raises(RuleFileNotFoundError):
@@ -94,14 +100,19 @@ def test_io_open_ignore_rule_blocks_file_access(files):
 
 
 def test_io_open_code_ignore_rule_blocks_open_code_file_access(files):
-    rules = [f"--ignore={files['ignore']}"]
+    errors = []
+    rules = [
+        ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
+    ]
     str_activate_guard_files(rules)
     with pytest.raises(RuleFileNotFoundError):
         io.open_code(str(files['ignore']))
 
 
 def test_io_open_bind_rule_redirects_file_access(files):
-    rules = [f"--bind={files['bind_src']},{files['bind_dest']}"]
+    rules = [
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
+    ]
     str_activate_guard_files(rules)
     # Access using the dest path should redirect to src
     target_path = files['bind_dest'] / "bound_file.txt"
@@ -111,7 +122,9 @@ def test_io_open_bind_rule_redirects_file_access(files):
 
 
 def test_io_open_write(files):
-    rules = [f"--bind={files['bind_src']},{files['bind_dest']}"]
+    rules = [
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
+    ]
     str_activate_guard_files(rules)
     target_path = files['bind_dest'] / "write.txt"
     with io.open(target_path, "w") as f:
@@ -120,7 +133,9 @@ def test_io_open_write(files):
 
 
 def test_io_open_refuse_write(files):
-    rules = [f"--ro-bind={files['bind_src']},{files['bind_dest']}"]
+    rules = [
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
+    ]
     str_activate_guard_files(rules)
     target_path = files['bind_dest'] / "write.txt"
     with pytest.raises(PermissionError):
@@ -129,7 +144,9 @@ def test_io_open_refuse_write(files):
 
 
 def test_io_open_visible_file_is_accessible(files):
-    rules = ["--ignore=*.log"]
+    rules = [
+        ConfigLine("--ignore=*.log", Path(), 0),
+    ]
     str_activate_guard_files(rules)
     with open(files['visible']) as f:
         assert f.read() == "Visible"

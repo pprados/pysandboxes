@@ -1,9 +1,11 @@
 import fileinput
 import shutil
+from pathlib import Path
 
 import pytest
 
 from pysandboxes.guard_files import activate_guard_files
+from pysandboxes.types import ConfigLine
 from .test_guard_io import files
 
 
@@ -16,9 +18,10 @@ def reset_rules():
 
 
 def test_fileinput_input(files):
+    errors = []
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log", Path(), 0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
 
     activate_guard_files(rules)

@@ -7,15 +7,14 @@ import logging
 import os
 import sys
 from os import scandir as _scandir
-from pathlib import Path
 from pathlib import Path as _Path
 from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
-from .main_logger import format_ruleref, ErrorMsg
-from .types import ConfigLines
+from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
+from .types import ConfigLines, ConfigLine
 
 if io or os:
     pass
@@ -47,6 +46,7 @@ class BindRule(NamedTuple):
     source: str
     dest: Optional[str]
     write: bool
+    config: ConfigLine
 
 
 class IgnoreRule(NamedTuple):
@@ -79,7 +79,7 @@ def parse_rules(config: ConfigLines,
                 if not src and not dest:
                     continue  # Ignore empty bind
                 if src and dest:
-                    if not Path(src).exists() or not Path(dest).exists():
+                    if not _Path(src).exists() or not _Path(dest).exists():
                         errors.append(
                             (
                                 f"{format_ruleref(rule)}: "
@@ -90,9 +90,30 @@ def parse_rules(config: ConfigLines,
                             )
                         )
                         continue
-                    rules_bind.append(BindRule(source=src,
-                                               dest=src,
-                                               write=rule.rule.startswith("--bind=")))
+                    # Search same rules with different write flag
+                    is_write=rule.rule.startswith("--bind=")
+                    for bind_rule in rules_bind:
+                        if bind_rule.source == src and bind_rule.dest == dest:
+                            if bind_rule.write != is_write:
+                                errors.append(
+                                    (
+                                        f"{format_ruleref(rule)}: "
+                                        f"In '{rule.rule}', "
+                                        f"invalidate another rule "
+                                        f"from '{format_ruleref(bind_rule.config)}'.",
+                                        rule.path,
+                                        rule.ln
+                                    )
+                                )
+                            else:
+                                # Detect duplicate bind rule
+                                break
+                    else:
+                        rules_bind.append(BindRule(source=src,
+                                                   dest=dest,
+                                                   write=rule.rule.startswith("--bind="),
+                                                   config=rule,
+                                                   ))
                 else:
                     errors.append(
                         (
@@ -488,12 +509,14 @@ def _wrap_pathlib(func: Callable) -> Callable:
 
 def _wrap_pathlib_glob(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(self, glob: str, *args, **kwargs) -> Iterator:
-        if new_path := _apply_dest_to_src_rules(self, write=False):
-            return (Path(_apply_src_to_dest_rules(p)) for p in
-                    func(_Path(new_path), glob, *args, **kwargs)
+    def wrapper(self, pattern: str, *args, **kwargs) -> Iterator:
+        if new_path := _apply_dest_to_src_rules(self, write=False, accept_source=True):
+
+            return (_Path(_apply_src_to_dest_rules(p)) for p in
+                    func(_Path(new_path), pattern, *args, **kwargs)
                     if _apply_src_to_dest_rules(p) is not None)
         else:
+            _apply_dest_to_src_rules(self, write=False)  # FIXME: remove line
             raise RuleFileNotFoundError(f"Access to '{self}' is ignored by rule")
 
     return wrapper
@@ -726,7 +749,7 @@ def activate_guard_files(rules: List[FilesRule]) -> None:
         # ALLOW shutil.rmtree
         # ALLOW shutil.which
 
-        logger.warning(
+        pysandboxes_logger.warning(
             "Guard_files activated.")
     else:
         logger.info("Guard_files was already activated.")

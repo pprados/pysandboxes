@@ -19,8 +19,6 @@ import netifaces
 logger = logging.getLogger(__name__)
 
 
-END_OF_FILE="---------- END OF FILE ----------\n"
-
 def to_b85(obj: Any) -> str:
     return base64.b85encode(
         pickle.dumps(obj,

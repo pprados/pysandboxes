@@ -19,3 +19,6 @@
 --net=ALLOW|tcp|0.0.0.0/0|a,b|IN
 --net=ALLOW|tcp|0.0.0.0/0|*|
 
+--bind=${PWD},${PWD}/tests
+--bind=${PWD},${PWD}/tests/unit_tests
+--ro-bind=${PWD},${PWD}/tests

@@ -1,9 +1,11 @@
 import subprocess
+from pathlib import Path
 from typing import List
 
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
+from pysandboxes.types import ConfigLine
 
 
 def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tuple[
@@ -50,20 +52,20 @@ def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tu
 def test_ip4_filter_conv():
     rules, _ = parse_rules(
         [
-            "--net=ALLOW|tcp|localhost|80,443|OUT",
-            "--net=ALLOW|tcp|192.0.0.0/8|80,443|OUT",
-            "--net=ALLOW|tcp|::1/128|80,443|OUT",  # skip
-            "--net=ALLOW|any|::/0|443|OUT",  # skip
-            "--net=ALLOW|tcp|0.0.0.0/0|80|IN",
-            "--net=ALLOW|any|127.0.0.0/8|*|OUT",
-            "--net=ALLOW|any|127.0.0.0/8|80,443|IN",
-            "--net=ALLOW|*|127.0.0.0/8|*|OUT",
-            "--net=ALLOW|udp|0.0.0.0/0|53|OUT",
-            "--net=ALLOW|udp|123.0.0.0/0|12-44|IN",
-            "--net=ALLOW|udp|123.0.0.0/32|1,3-5|IN",
-            "--net=ALLOW|udp,tcp|192.168.0.1/32|*|IN",
-            "--net=ALLOW|any|0.0.0.0/0|80,443|OUT",
-            "--net=ALLOW|udp|0.0.0.0/0|53|OUT",
+            ConfigLine("--net=ALLOW|tcp|localhost|80,443|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|tcp|192.0.0.0/8|80,443|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|tcp|::1/128|80,443|OUT",Path(),0),  # skip
+            ConfigLine("--net=ALLOW|any|::/0|443|OUT",Path(),0),  # skip
+            ConfigLine("--net=ALLOW|tcp|0.0.0.0/0|80|IN",Path(),0),
+            ConfigLine("--net=ALLOW|any|127.0.0.0/8|*|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|any|127.0.0.0/8|80,443|IN",Path(),0),
+            ConfigLine("--net=ALLOW|*|127.0.0.0/8|*|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|udp|0.0.0.0/0|53|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|udp|123.0.0.0/0|12-44|IN",Path(),0),
+            ConfigLine("--net=ALLOW|udp|123.0.0.0/32|1,3-5|IN",Path(),0),
+            ConfigLine("--net=ALLOW|udp,tcp|192.168.0.1/32|*|IN",Path(),0),
+            ConfigLine("--net=ALLOW|any|0.0.0.0/0|80,443|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|udp|0.0.0.0/0|53|OUT",Path(),0),
         ])
     ipfilter = rule_to_netfilter(rules, is_ipv6=False)
     print("\n".join(ipfilter))
@@ -101,19 +103,19 @@ def test_ip4_filter_conv():
 def test_ip6_filter_conv():
     rules, _ = parse_rules(
         [
-            "--net=ALLOW|tcp|2001:db8::/32|80,443|OUT",
-            "--net=ALLOW|tcp|192.168.0.0/16|80,443|OUT",  # Skip
-            "--net=ALLOW|any|0.0.0.0/0|443|OUT",  # Skip
-            "--net=ALLOW|tcp|2001:db8::/32|80|IN",
-            "--net=ALLOW|any|2001:db8::/32|*|OUT",
-            "--net=ALLOW|any|2001:db8::/32|80,443|IN",
-            "--net=ALLOW|*|2001:db8::/32|*|OUT",
-            "--net=ALLOW|udp|2001:db8::/32|53|OUT",
-            "--net=ALLOW|udp|2001:db8::/32|12-44|IN",
-            "--net=ALLOW|udp|2001:db8::/32|1,3-5|IN",
-            "--net=ALLOW|udp,tcp|2001:db8::/32|*|IN",
-            "--net=ALLOW|any|2001:db8::/32|80,443|OUT",
-            "--net=ALLOW|udp|2001:db8::/32|53|OUT",
+            ConfigLine("--net=ALLOW|tcp|2001:db8::/32|80,443|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|tcp|192.168.0.0/16|80,443|OUT",Path(),0),  # Skip,
+            ConfigLine("--net=ALLOW|any|0.0.0.0/0|443|OUT",Path(),0),  # Skip
+            ConfigLine("--net=ALLOW|tcp|2001:db8::/32|80|IN",Path(),0),
+            ConfigLine("--net=ALLOW|any|2001:db8::/32|*|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|any|2001:db8::/32|80,443|IN",Path(),0),
+            ConfigLine("--net=ALLOW|*|2001:db8::/32|*|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|udp|2001:db8::/32|53|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|udp|2001:db8::/32|12-44|IN",Path(),0),
+            ConfigLine("--net=ALLOW|udp|2001:db8::/32|1,3-5|IN",Path(),0),
+            ConfigLine("--net=ALLOW|udp,tcp|2001:db8::/32|*|IN",Path(),0),
+            ConfigLine("--net=ALLOW|any|2001:db8::/32|80,443|OUT",Path(),0),
+            ConfigLine("--net=ALLOW|udp|2001:db8::/32|53|OUT",Path(),0),
         ])
     ipfilter = rule_to_netfilter(rules, is_ipv6=True)
     print("\n".join(ipfilter))

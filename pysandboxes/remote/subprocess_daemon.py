@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable, Dict, Any, Optional
 
 from .sse_sandbox import SSESandbox
-from .tools import return_level_parameter, END_OF_FILE
+from .tools import return_level_parameter, to_b85
 from ..py_sandbox import AllRules, read_and_parse_config
 from ..tools import SyncOrAsyncFunc, get_callable_info
 from ..types import ConfigLines, Args, Envs
@@ -186,8 +186,9 @@ class BaseSubProcessDaemon(SSESandbox):
 
         # Send config body via stdin, because, it's not possible to use .py-sandboxes file
         self._token = str(uuid.uuid4())
-        data = ("\n".join(config[0:2])) + "\n" + END_OF_FILE + self._token + "\n"
-        # data = "A\nB\n" + END_OF_FILE + self._token + "\n"
+
+        data = to_b85((config, self._token)) + "\n"
+
         self._process.stdin.write(data.encode("utf-8"))
         await self._process.stdin.drain()
         if stdin:

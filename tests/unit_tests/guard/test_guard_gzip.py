@@ -1,7 +1,9 @@
 import gzip
+from pathlib import Path
 
 import pytest
 
+from pysandboxes.types import ConfigLine
 from .test_guard_io import files, str_activate_guard_files
 
 
@@ -16,8 +18,8 @@ def reset_rules():
 
 def test_gzip(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
     str_activate_guard_files(rules)

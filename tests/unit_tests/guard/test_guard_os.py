@@ -3,10 +3,12 @@ import os
 import stat
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
 from pysandboxes.guard_files import RuleFileNotFoundError
+from pysandboxes.types import ConfigLine
 from .test_guard_io import files, str_activate_guard_files
 
 
@@ -20,8 +22,8 @@ def reset_rules():
 
 def test_os_listdir_filters_ignored_files_and_bind(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -40,8 +42,8 @@ def test_os_listdir_filters_ignored_files_and_bind(files):
 
 def test_os_scandir(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
     with os.scandir(files['path']) as scandir_it:
@@ -60,8 +62,8 @@ def test_os_scandir(files):
 
 def test_os_statand_stat_and_lstat(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
     assert os.stat(files['visible'])
@@ -85,8 +87,8 @@ def test_os_statand_stat_and_lstat(files):
 
 def test_os_listxattr(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}"
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -95,8 +97,8 @@ def test_os_listxattr(files):
 
 def test_os_xattr(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}"
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -113,8 +115,8 @@ def test_os_xattr(files):
 
 def test_os_link_symlink_and_readlink(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}"
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -157,8 +159,8 @@ def test_os_link_symlink_and_readlink(files):
 
 def test_os_remove(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -174,8 +176,8 @@ def test_os_remove(files):
 
 def test_os_remove_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -185,8 +187,8 @@ def test_os_remove_refused(files):
 
 def test_os_mkdir_removedirs_and_rmdir(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -211,8 +213,8 @@ def test_os_mkdir_removedirs_and_rmdir(files):
 
 def test_os_mkdir_removedirs_and_rmdir_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -222,8 +224,8 @@ def test_os_mkdir_removedirs_and_rmdir_refused(files):
 
 def test_os_rename(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -245,8 +247,8 @@ def test_os_rename(files):
 
 def test_os_rename_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -257,8 +259,8 @@ def test_os_rename_refused(files):
 
 def test_os_chdir_and_getcwd(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -274,8 +276,8 @@ def test_os_chdir_and_getcwd(files):
 
 def test_os_open_readonly(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -294,8 +296,8 @@ def test_os_open_readonly(files):
 
 def test_os_open_writeonly(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -314,8 +316,8 @@ def test_os_open_writeonly(files):
 
 def test_os_open_writeonly_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -330,8 +332,8 @@ def test_os_open_writeonly_refused(files):
 
 def test_os_open_readwrite(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -350,8 +352,8 @@ def test_os_open_readwrite(files):
 
 def test_os_open_readwrite_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -366,8 +368,8 @@ def test_os_open_readwrite_refused(files):
 
 def test_os_access_read_write(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -381,8 +383,8 @@ def test_os_access_read_write(files):
 
 def test_os_access_read_only(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -398,8 +400,8 @@ def test_os_access_read_only(files):
                     reason="requires special os")
 def test_os_chflags_and_lchflags(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -414,8 +416,8 @@ def test_os_chflags_and_lchflags(files):
 
 def test_os_chmod_and_lchmod(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -442,8 +444,8 @@ def test_os_chmod_and_lchmod(files):
 
 def test_os_chmod_and_lchmod_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -461,8 +463,8 @@ def test_os_chmod_and_lchmod_refused(files):
 #                     reason="requires no windows OS")
 def test_os_chown_and_lchown(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -491,8 +493,8 @@ def test_os_chown_and_lchown(files):
 
 def test_os_chown_and_lchown_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -507,8 +509,8 @@ def test_os_chown_and_lchown_refused(files):
 
 def test_os_replace(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -532,8 +534,8 @@ def test_os_replace(files):
 
 def test_os_replace_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -544,8 +546,8 @@ def test_os_replace_refused(files):
 
 def test_os_truncate(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -567,8 +569,8 @@ def test_os_truncate(files):
 
 def test_os_truncate_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -578,8 +580,8 @@ def test_os_truncate_refused(files):
 
 def test_os_utime(files):
     rules = [
-        f"--ignore=*.log",
-        f"--bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine( f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -599,8 +601,8 @@ def test_os_utime(files):
 
 def test_os_utime_refused(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -613,8 +615,8 @@ def test_os_utime_refused(files):
 
 def test_os_scandir(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -636,8 +638,8 @@ def test_os_scandir(files):
 
 def test_os_walk(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 

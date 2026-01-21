@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Tuple
 from . import guard_files, guard_env, guard_provider, guard_socket
 from .guard_files import FilesRule
 from .guard_socket import SocketRule
-from .main_logger import format_ruleref, format_error_list, ErrorMsg
+from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
 from .tools import remove_comments, substitute_env_vars
 from .types import ConfigLines, Envs, ConfigLine
 
@@ -57,7 +57,7 @@ def read_and_parse_config(
         *,
         envs: Envs = os.environ,
         extra_rules: Optional[List[str]] = None,
-        exit_on_error:bool = False,
+        exit_on_error: bool = False,
 ) -> AllRules:
     if extra_rules is None:
         extra_lines = []
@@ -87,11 +87,12 @@ def read_and_parse_config(
                         envs=envs,
                         exit_on_error=exit_on_error)
 
+
 def parse_config(
         config: ConfigLines,
         *,
         envs: Envs = os.environ,
-        exit_on_error:bool = False,
+        exit_on_error: bool = False,
 ) -> AllRules:
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
@@ -106,14 +107,14 @@ def parse_config(
     # 2. If some line are ignored, log a warning
     if others:
         for invalide_rule in others:
-            logger.warning(
+            pysandboxes_logger.warning(
                 f"%s: Ignore invalid rule '%s'.",
                 format_ruleref(invalide_rule),
                 invalide_rule.rule
             )
     # 3. Print error
     if errors:
-        errors=sorted(errors, key=lambda r: (str(r[1]),r[2]))
+        errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))
         all_errors = "\n" + "\n".join([error[0] for error in errors])
         logger.error(all_errors)
         all_files_in_errors = list(set([repr(str(error[1])) for error in errors

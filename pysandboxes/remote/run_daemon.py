@@ -19,7 +19,7 @@ from uvicorn import Server
 
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
-from .tools import to_b85, configure_logging_level, END_OF_FILE, \
+from .tools import to_b85, configure_logging_level, \
     from_b85, set_pdeathsig
 from ..manage_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from ..py_sandbox import AllRules
@@ -377,23 +377,19 @@ async def main() -> int:
 
     # Parse the arguments provided by the user
     args = parser.parse_args()
-    logger.error("============")  # FIXME
-    logger.error(f"{args=}")
 
     # Access the value of --sandbox-provider
     outer_sandbox: Optional[str] = args.outer_sandbox
-    assert outer_sandbox, "--outer-sandbox is required"
+    assert outer_sandbox, "--outer-sandbox is required"  # FIXME: dans conf?
     log_level = configure_logging_level(args.verbose)
 
     # -------------
     # Read all configuration from stdin until EOF
-    config_body = []
+    config_body = None
     token = "NO_TOKEN"
     for line in sys.stdin:
-        if line == END_OF_FILE:
-            token = next(sys.stdin).strip()
-            break
-        config_body.append(line)
+        config, token = from_b85(line.strip())
+        break
     logging.debug("config body and token successfully read from stdin")
 
     # In this case, use the standard loop in place of the private sandbox loop

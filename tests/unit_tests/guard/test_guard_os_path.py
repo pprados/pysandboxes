@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 
 import pytest
 
+from pysandboxes.types import ConfigLine
 from .test_guard_io import files, str_activate_guard_files
 
 
@@ -15,8 +17,8 @@ def reset_rules():
 
 def test_os_path_abspath(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -28,8 +30,8 @@ def test_os_path_abspath(files):
 
 def test_os_path_exists_and_lexists(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -41,8 +43,8 @@ def test_os_path_exists_and_lexists(files):
 
 def test_os_path_islink(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -53,8 +55,8 @@ def test_os_path_islink(files):
 
 def test_os_path_isdir(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -64,8 +66,8 @@ def test_os_path_isdir(files):
 
 def test_os_path_isfile(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -75,8 +77,8 @@ def test_os_path_isfile(files):
 
 def test_os_path_samefile(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -88,8 +90,8 @@ def test_os_path_samefile(files):
 
 def test_os_path_realpath(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 
@@ -101,8 +103,8 @@ def test_os_path_realpath(files):
 
 def test_os_path_atime_mtime_ctime_and_size(files):
     rules = [
-        f"--ignore=*.log",
-        f"--ro-bind={files['bind_src']},{files['bind_dest']}",
+        ConfigLine(f"--ignore=*.log",Path(),0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
     str_activate_guard_files(rules)
 

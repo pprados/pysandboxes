@@ -46,7 +46,7 @@ from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
 from typing import Tuple, Optional, Union, List, Dict, NamedTuple
 
-from .main_logger import format_ruleref, ErrorMsg
+from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
 from .types import ConfigLines, ConfigLine
 
 logger = logging.getLogger(__name__)
@@ -614,5 +614,5 @@ def activate_guard_socket(rules: List[SocketRule]) -> None:
             if not hasattr(socket, '_original_socket_class'):
                 socket._original_socket_class = socket.socket  # type: ignore
             socket.socket = Guard_socket
-        logger.warning(
+        pysandboxes_logger.warning(
             "Guard_socket activated.")
