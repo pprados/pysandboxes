@@ -22,7 +22,6 @@ from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
 from .tools import to_b85, configure_logging_level, \
     from_b85, set_pdeathsig
-from ..guard_provider import parse_rules as parse_provider_rules
 from ..private_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from ..py_sandbox import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
@@ -275,10 +274,10 @@ class LocalTaskDaemon(SSESandbox):
         return config, envs, "task", [], []
 
     async def start(self,
+                    all_rules: AllRules,
                     *,
                     log_level: int,
                     envs: Envs,
-                    config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
 
@@ -369,7 +368,8 @@ async def main() -> int:
         raise RuntimeError("Impossible to read the config body from stdin")
     logging.debug("config body and token successfully read from stdin")
 
-    os_sandbox, use_py_sandbox, _ = parse_provider_rules(process_config.config, [])
+    os_sandbox = process_config.all_rules.os_sandbox
+    use_py_sandbox = process_config.all_rules.use_py_sandbox
 
     # In this case, use the standard loop in place of the private sandbox loop
     set_sandbox_loop(asyncio.get_running_loop())
@@ -399,9 +399,9 @@ async def main() -> int:
     task_daemon = LocalTaskDaemon(process_config.token)
     try:
         await task_daemon.start(
+            all_rules=process_config.all_rules,
             log_level=log_level,
             envs=dict(os.environ),
-            config=process_config.config,
             init_fn=init_fn,
         )
         await task_daemon.join()

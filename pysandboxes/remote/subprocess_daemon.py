@@ -4,7 +4,6 @@ import os
 import random
 import sys
 import time
-import uuid
 from abc import abstractmethod
 from pathlib import Path
 from typing import Callable, Dict, Any, Optional, NamedTuple
@@ -60,14 +59,13 @@ async def _read_stream(
 
 
 class SubProcessParameters(NamedTuple):
-    config: ConfigLines
+    all_rules: AllRules
     log_level: int
     token: str
     init_fn: str
 
 
 class BaseSubProcessDaemon(SSESandbox):
-
     __slots__ = ('_is_started', '_token',
                  '_process',
                  '_stdout_task',
@@ -84,7 +82,7 @@ class BaseSubProcessDaemon(SSESandbox):
                  )
 
     def __init__(self,
-                 token:str,
+                 token: str,
                  *,
                  max_attempts: int = 1,  # Maximum number of retry _attempts TODO 5
                  base_delay: float = 0.1,  # Initial delay in seconds (e.g., 100 ms)
@@ -107,7 +105,8 @@ class BaseSubProcessDaemon(SSESandbox):
         self.restart = 0
 
     def _subprocess(self,
-                    config: ConfigLines,
+                    all_rules: AllRules,
+                    envs: Envs,
                     ) -> Args:
         from . import run_daemon
         cmd_parameters = [
@@ -125,33 +124,46 @@ class BaseSubProcessDaemon(SSESandbox):
     def bash_args(self, envs: Envs) -> Args:
         pass
 
-    async def start(self, log_level: int,
+    async def start(self,
+                    all_rules: AllRules,
+                    *,
+                    log_level: int,
                     envs: Envs,
-                    config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
         if not envs:
             envs = dict(os.environ)
         self.restart = 0
-        await self._re_start(envs,
-                             log_level,
-                             config,
-                             init_fn,
+        await self._re_start(all_rules,
+                             envs=envs,
+                             log_level=log_level,
+                             init_fn=init_fn,
                              first=True,
                              )
 
     async def _re_start(self,
+                        all_rules: AllRules,
+                        *,
                         envs: Envs,
                         log_level: int,
-                        config: ConfigLines,
                         init_fn: Optional[SyncOrAsyncFunc],
-                        *,
                         first: bool = False) -> None:
         if first:
-            await self._re_start_cmd(self._subprocess(
-                config=config,
-            ), {},
-                config=config,
+            short_all_rules = AllRules(
+                config=all_rules.config,
+                envs=all_rules.envs,
+                os_sandbox=all_rules.os_sandbox,
+                use_py_sandbox=all_rules.use_py_sandbox,
+                socker_rules=[],
+                file_rules=[],
+            )
+
+            await self._re_start_cmd(
+                short_all_rules,
+                self._subprocess(
+                    all_rules=short_all_rules,
+                    envs=envs,
+                ), {},
                 log_level=log_level,
                 init_fn=init_fn,
             )
@@ -161,12 +173,12 @@ class BaseSubProcessDaemon(SSESandbox):
             pysandboxes_logger.warning("re-started")
 
     async def _re_start_cmd(self,
+                            all_rules: AllRules,
                             args: Args,
                             process_kwargs: Dict[str, Any],
                             *,
                             log_level: int,
                             init_fn: Optional[SyncOrAsyncFunc],
-                            config: ConfigLines,
                             stdin: bool = False,
                             stdout: bool = False) -> None:
         self._is_started = False
@@ -204,7 +216,7 @@ class BaseSubProcessDaemon(SSESandbox):
         module, init_function_reference = get_callable_info(init_fn)
 
         process_config = SubProcessParameters(
-            config=config,
+            all_rules=all_rules,
             log_level=log_level,
             token=self._token,
             init_fn=f"{module}:{init_function_reference}"

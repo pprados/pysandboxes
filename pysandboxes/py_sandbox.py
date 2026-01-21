@@ -3,13 +3,13 @@ import logging
 import os
 import types
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, NamedTuple
 
 from . import guard_files, guard_env, guard_provider, guard_socket
 from .guard_files import FilesRule
 from .guard_socket import SocketRule
 from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
-from .tools import remove_comments, substitute_env_vars
+from .tools import remove_config_comments, substitute_config_env_vars
 from .types import ConfigLines, Envs, ConfigLine
 
 logger = logging.getLogger(__name__)
@@ -38,19 +38,19 @@ def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
     return None
 
 
-AllRules = Tuple[
-    ConfigLines,  # Merged config
-    Envs,  # sandbox env
-    str,  # os_sandbox
-    bool,  # Use pysandbox
-    List[SocketRule],  # Socket socket_rules
-    List[FilesRule],  # file socket_rules
-]
+class AllRules(NamedTuple):
+    config: ConfigLines
+    envs:Envs
+    os_sandbox:str
+    use_py_sandbox:bool
+    socker_rules: List[SocketRule]
+    file_rules: List[FilesRule]
+
 
 
 def _read_config(config_path: Path) -> ConfigLines:
-    return remove_comments([ConfigLine(line, config_path, ln + 1) for ln, line in
-                            enumerate(config_path.read_text().splitlines())])
+    return remove_config_comments([ConfigLine(line, config_path, ln + 1) for ln, line in
+                                   enumerate(config_path.read_text().splitlines())])
 
 
 def read_and_parse_config(
@@ -63,7 +63,7 @@ def read_and_parse_config(
     if extra_rules is None:
         extra_lines = []
     else:
-        extra_lines = remove_comments(
+        extra_lines = remove_config_comments(
             [ConfigLine(line, "<extra>", 0) for line in extra_rules])
 
     # 1. try to find .pysandboxes in the caller module
@@ -99,7 +99,7 @@ def parse_config(
 
     # 1. Parse the socket_rules, step by step
     sandbox_env, others = guard_env.parse_guard_envs(config, envs, errors)
-    others = substitute_env_vars(others, envs)  # with main envs
+    others = substitute_config_env_vars(others, envs)  # with main envs
 
     os_sandbox, use_pysandbox, others = guard_provider.parse_rules(others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
@@ -124,7 +124,7 @@ def parse_config(
             os._exit(1)
         raise ValueError(f"Syntax error in {format_error_list(all_files_in_errors)} ")
 
-    return config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules
+    return AllRules(config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules)
 
 
 def get_config_path(config_path: Optional[Path]) -> Optional[Path]:

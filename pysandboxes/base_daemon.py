@@ -31,9 +31,11 @@ class BaseDaemon(ABC):
         return self._is_started
 
     @abstractmethod
-    async def start(self, log_level: int,
+    async def start(self,
+                    all_rules:AllRules,
+                    *,
+                    log_level: int,
                     envs: Envs,
-                    config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
         raise NotImplementedError

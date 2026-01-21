@@ -3,15 +3,15 @@ import logging
 import os
 import threading
 import uuid
-from typing import Any, Callable, Optional, Type
+from typing import Any, Callable, Optional, Type, cast
 
 from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
+from .py_sandbox import AllRules
 from .remote.firejail_daemon import FireJailDaemon
 from .remote.subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
 from .tools import is_in_sandbox, check_mixte_async_async, SyncOrAsyncFunc
-from .types import ConfigLines
 
 logger = logging.getLogger(__name__)
 
@@ -37,33 +37,31 @@ _startup_counter = 0  # Number of time the daemon has been started
 
 
 @sandbox_loop
-async def async_start_daemon(name: str,
+async def async_start_daemon(all_rules: AllRules,
+                             *,
                              log_level: int,
                              init_fn: Optional[SyncOrAsyncFunc],
-                             config: ConfigLines,
                              ) -> BaseDaemon:
     """
     Asynchronize version to start daemon by name.
     Returns daemon object when is starred
     """
-    return await _async_start_daemon(name, log_level, init_fn, config)
+    return await _async_start_daemon(all_rules, log_level, init_fn)
 
 
 _async_start_lock = asyncio.Lock()
 _start_lock = threading.Lock()
 
 
-async def _async_start_daemon(name: Optional[str],
+async def _async_start_daemon(all_rules: AllRules,
                               log_level: int,
                               init_fn: Optional[SyncOrAsyncFunc],
-                              config: ConfigLines,
                               ) -> BaseDaemon:
     """
     Asynchronize version without the creation of the sandbox loop.
     It's used in run()
     """
-    if not name:
-        name = "subprocess"
+    assert all_rules.os_sandbox
     async with _async_start_lock:
         global _current_daemon, _startup_counter
         if _current_daemon is not None:
@@ -71,16 +69,17 @@ async def _async_start_daemon(name: Optional[str],
             _startup_counter += 1
             return _current_daemon
 
-        if name not in providers_factory:
-            raise ValueError(f"Unknown daemon name: {name}")
+        if all_rules.os_sandbox not in providers_factory:
+            raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
         try:
             token = str(uuid.uuid4())
-            os_provider = providers_factory[name](token)
-            await os_provider.start(log_level,
-                                    dict(os.environ),
-                                    config,
-                                    init_fn
-                                    )
+            os_provider = providers_factory[all_rules.os_sandbox](token)
+            await os_provider.start(
+                all_rules,
+                log_level=log_level,
+                envs=dict(os.environ),
+                init_fn=init_fn
+            )
             _current_daemon = os_provider
             assert os_provider.is_started == True
             _startup_counter += 1
@@ -115,18 +114,17 @@ async def async_shutdown_daemon():
         _startup_counter -= 1
 
 
-def start_daemon(name: Optional[str],
-                 log_level: int,
-                 config: ConfigLines,
-                 init_fn: Optional[SyncOrAsyncFunc] = None,
-                 *,
-                 timeout: int = 60) -> BaseDaemon:
+def start_daemon(
+        all_rules: AllRules,
+        log_level: int,
+        init_fn: Optional[SyncOrAsyncFunc] = None,
+        *,
+        timeout: int = 60) -> BaseDaemon:
     """
     Synchronize version to start daemon by name.
     Returns daemon object when is starred
     """
-    if not name:
-        name = "subprocess"
+    assert all_rules.os_sandbox
     global _current_daemon, _startup_counter
     with _start_lock:
         if _current_daemon is not None:
@@ -134,14 +132,16 @@ def start_daemon(name: Optional[str],
             _startup_counter += 1
             return _current_daemon
 
-        if name not in providers_factory:
-            raise ValueError(f"Unknown daemon name: {name}")
+        if all_rules.os_sandbox not in providers_factory:
+            raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
 
         loop = get_sandbox_loop()
         start_event = threading.Event()
 
         async def _start_daemon_and_signal():
-            await _async_start_daemon(name, log_level, init_fn, config)
+            await _async_start_daemon(all_rules,
+                                      log_level=log_level,
+                                      init_fn=init_fn)
             start_event.set()
             logger.debug("Start event set")
 
@@ -154,7 +154,7 @@ def start_daemon(name: Optional[str],
             raise RuntimeError("Import to start the sandbox")
         assert _current_daemon
 
-        return _current_daemon
+        return cast(BaseDaemon, _current_daemon)
 
 
 def is_daemon_started() -> bool:

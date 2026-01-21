@@ -4,12 +4,12 @@ import asyncio
 import contextvars
 import inspect
 import re
-from typing import Dict, Optional, Union, Callable, Awaitable, Any, Tuple
+from typing import Dict, Optional, Union, Callable, Awaitable, Any, Tuple, List
 
 from .types import ConfigLines, ConfigLine
 
 
-def substitute_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigLines:
+def substitute_config_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigLines:
     """
     The function supports two substitution formats:
     1. ${VAR_NAME}: Replaces the placeholder with the value of VAR_NAME from
@@ -44,19 +44,44 @@ def substitute_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigL
         return env_vars.get(var_name,
                             default_value if default_value is not None else "")
 
-    return [ConfigLine(pattern.sub(substitute, line),path,ln) for line,path,ln in lines]
+    return [ConfigLine(pattern.sub(substitute, line), path, ln) for line, path, ln in
+            lines]
 
+def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]:
+    pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
 
-def remove_comments(config: ConfigLines) -> ConfigLines:
+    def substitute(match: re.Match) -> str:
+        var_name = match.group(1)
+        default_value = match.group(2)  # This will be None if no default is provided
+        return env_vars.get(var_name,
+                            default_value if default_value is not None else "")
+
+    return [pattern.sub(substitute, line) for line in lines]
+
+def remove_config_comments(config: ConfigLines) -> ConfigLines:
     processed_lines: ConfigLines = []
 
-    for line,path,ln in config:
+    for line, path, ln in config:
         # Remove end-of-line comments while respecting quotes
         cleaned_line: str = _remove_comment(line.strip())
 
         # Filter out empty lines and lines that are full comments
         if cleaned_line and not cleaned_line.lstrip().startswith("#"):
-            processed_lines.append(ConfigLine(cleaned_line,path,ln))
+            processed_lines.append(ConfigLine(cleaned_line, path, ln))
+
+    return processed_lines
+
+
+def remove_comments(config: List[str]) -> List[str]:
+    processed_lines: List[str] = []
+
+    for line in config:
+        # Remove end-of-line comments while respecting quotes
+        cleaned_line: str = _remove_comment(line.strip())
+
+        # Filter out empty lines and lines that are full comments
+        if cleaned_line and not cleaned_line.lstrip().startswith("#"):
+            processed_lines.append(cleaned_line)
 
     return processed_lines
 
@@ -104,7 +129,8 @@ def _remove_comment(line: str) -> str:
     # Remove trailing whitespace
     return ''.join(result).rstrip()
 
-#%% -----------------------
+
+# %% -----------------------
 _is_in_sandbox = False
 
 _sandboxed = contextvars.ContextVar(
@@ -123,6 +149,7 @@ SyncOrAsyncFunc = Union[
     Callable[[], None],  # Fonction synchrone
     Callable[[], Awaitable[None]]  # Fonction asynchrone
 ]
+
 
 def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -170,9 +197,9 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
     return module_name, callable_name
 
 
-
 mixed_sync_and_async_error = (
     "It's impossible to mixte synchronize and asynchronize sandbox function.")
+
 
 def check_mixte_async_async():
     try:
@@ -183,5 +210,3 @@ def check_mixte_async_async():
             pass  # Ignore
         else:
             raise
-
-

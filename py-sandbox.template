@@ -22,8 +22,8 @@
 #   capacity, system calls, etc.
 
 #--os-sandbox=task
---os-sandbox=subprocess
-#--os-sandbox=firejail
+#--os-sandbox=subprocess
+--os-sandbox=firejail
 --py-sandbox=False
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
@@ -97,18 +97,18 @@
 # By default, all connections are denied.
 
 # Denied localhost
-#--net=DENY|tcp|127.0.0.1/8|*|IN
+--net=DENY|tcp|127.0.0.1/8|*|IN
 
 # Accept locahost specific port in ${PORT} or 8000
 #--net=ALLOW|tcp|${BIND:=127.0.0.1}/32|${PORT:=8000}|IN
 
 # Denied intranet
-#--net=DENY|any|10.0.0.0/8|*|OUT
-#--net=DENY|any|169.254.0.0/16|*|OUT
-#--net=DENY|any|172.16.0.0/12|*|OUT
-#--net=DENY|any|192.168.0.0/16|*|OUT
-#--net=DENY|any|fc00::/7|*|OUT  # ULA
-#--net=DENY|any|fe80::/64|*|OUT # Link-Local
+--net=DENY|any|10.0.0.0/8|*|OUT
+--net=DENY|any|169.254.0.0/16|*|OUT
+--net=DENY|any|172.16.0.0/12|*|OUT
+--net=DENY|any|192.168.0.0/16|*|OUT
+--net=DENY|any|fc00::/7|*|OUT  # ULA
+--net=DENY|any|fe80::/64|*|OUT # Link-Local
 
 # Allow web access
 --net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call all HTTPS services

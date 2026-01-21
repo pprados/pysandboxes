@@ -94,15 +94,14 @@ class sandboxes(typing.Protocol):
         logger.debug("__enter__ start...")
         check_mixte_async_async()
         log_level = logging.root.getEffectiveLevel()
-        config, _, os_sandbox, *_ = read_and_parse_config(
+        all_rules = read_and_parse_config(
             self.config_path,
             envs=self.envs,
             extra_rules=self.extra_rules,
         )
-        start_daemon(os_sandbox,
-                     log_level,
-                     config,
-                     self.init_fn,
+        start_daemon(all_rules,
+                     log_level=log_level,
+                     init_fn=self.init_fn,
                      timeout=self.timeout,
                      )
 
@@ -150,13 +149,16 @@ class sandboxes(typing.Protocol):
         from pysandboxes.os_sandbox import async_start_daemon
         log_level = logging.root.getEffectiveLevel()
         assert get_config_path(self.config_path), "Set config path"
-        config, _, os_sandbox, *_ = read_and_parse_config(
+        all_rules = read_and_parse_config(
             self.config_path,
             envs=self.envs,
             extra_rules=self.extra_rules,
             exit_on_error=False,
         )
-        return await async_start_daemon(os_sandbox, log_level, self.init_fn, config)
+        return await async_start_daemon(
+            all_rules,
+            log_level=log_level,
+            init_fn=self.init_fn)
 
     async def __aexit__(self,
                         exc_type: Optional[type[BaseException]],

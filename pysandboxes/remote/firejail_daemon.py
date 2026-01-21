@@ -5,17 +5,16 @@ import site
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Tuple, Optional, MutableSet, Any, Union
+from typing import List, Tuple, MutableSet, Any, Union
 
 import click
 
 from .subprocess_daemon import BaseSubProcessDaemon
-from .tools import which_command, get_venv, \
-    suggest_package_installation
+from .tools import which_command, suggest_package_installation
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
-from ..py_sandbox import read_and_parse_config, AllRules
-from ..tools import remove_comments, substitute_env_vars, SyncOrAsyncFunc
+from ..py_sandbox import AllRules, parse_config
+from ..tools import remove_comments, substitute_env_vars, _remove_comment
 from ..types import ConfigLines, Envs, Args
 
 logger = logging.getLogger(__name__)
@@ -171,15 +170,19 @@ class FireJailDaemon(BaseSubProcessDaemon):
     def update_rules(self,
                      *,
                      envs: Envs,
-                     config: ConfigLines) -> AllRules:
+                     all_rules: AllRules) -> AllRules:
         _, all_rules = self._firejail_args(envs,
-                                           config)
+                                           all_rules)
         return all_rules
 
     def _firejail_args(self,
-                       config: ConfigLines,
+                       envs: Envs,
+                       all_rules: AllRules,
                        ) -> Tuple[Args, AllRules]:
-
+        """
+        Apply the pysandboxes rules to firejail.
+        TODO: expliquer si on modifie
+        """
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
@@ -190,12 +193,8 @@ class FireJailDaemon(BaseSubProcessDaemon):
         need_root = False
         from importlib.resources import files
 
-        # config, sandbox_env, provider, use_pysandbox, socket_rules, files_rules = (
-        #     read_and_parse_config(  # FIXME: etrange. C'est en paramètre
-        #         envs=envs,
-        #         config=config,
-        #         exit_on_error=True,
-        #     ))
+        # Need all internal rules. Parse another time here.
+        config, sandbox_env, provider, use_pysandbox, socket_rules, files_rules = all_rules
 
         # assert provider == "firejail"
         args = [str(which_command("firejail"))]
@@ -213,7 +212,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
         whitelist = WhiteList()
 
         # Manage sys.executable
-        _follow_links_executable(Path(sys.executable),whitelist)
+        _follow_links_executable(Path(sys.executable), whitelist)
 
         for p in sys.path:
             if os.path.isdir(p):
@@ -298,11 +297,13 @@ class FireJailDaemon(BaseSubProcessDaemon):
         return args, (config, sandbox_env, provider, socket_rules, files_rules)
 
     def _subprocess(self,
-                    config: ConfigLines,
+                    all_rules: AllRules,
+                    envs: Envs,
                     ) -> List[str]:
-        run_daemon = super()._subprocess(config)
+        run_daemon = super()._subprocess(envs, all_rules)
 
-        cmd_parameters, _ = self._firejail_args(config=config)
+        cmd_parameters, _ = self._firejail_args(envs=envs,
+                                                all_rules=all_rules)
         cmd_parameters.extend(run_daemon)
         # cmd_parameters.extend([
         #     sys.executable,

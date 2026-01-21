@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from .run_daemon import LocalTaskDaemon
+from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc
 from ..types import ConfigLines, Envs
 
@@ -11,13 +12,17 @@ logger = logging.getLogger(__name__)
 class TaskDaemon(LocalTaskDaemon):
 
     async def start(self,
+                    all_rules:AllRules,
+                    *,
                     log_level: int,
                     envs: Envs,
-                    config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
-                    token: Optional[str],
                     ) -> None:
-        await super().start(log_level, envs, config, init_fn, token)
+        await super().start(all_rules,
+                            log_level=log_level,
+                            envs=envs,
+                            init_fn=init_fn
+                            )
         logger.info("Sandbox Daemon in async task is started")
 
     async def shutdown(self) -> None:
