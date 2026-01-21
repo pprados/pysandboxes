@@ -420,24 +420,17 @@ def _check_address_with_rules(
     if not unique_ips:
         raise ValueError(
             f"Invalid hostname or IP address (resolution failed): {hostname}")
-    if not socket_rules:
-        logger.info(
-            "Connection to %s port %s ALLOWED because no socket_rules are set.",
-            hostname, destination_port
-        )
-        return
+    # if not socket_rules:  # FIXME: remove
+    #     logger.info(
+    #         "Connection to %s port %s ALLOWED because no socket_rules are set.",
+    #         hostname, destination_port
+    #     )
+    #     return
 
     # %% Analyse socket_rules
-    first_rule_action = socket_rules[0][0]
-    order_apply = (DENY, ALLOW) if first_rule_action == ALLOW else (ALLOW, DENY)
-    implicit_default_is_deny = (first_rule_action == ALLOW)
+    order_apply = (DENY, ALLOW)
 
-    logger.debug(
-        "First rule is %s, so rule check order is %s, and implicit default for non-matching connections is %s.",
-        first_rule_action, order_apply,
-        ('DENY' if implicit_default_is_deny else 'ALLOW'))
-
-    for rule_type_to_check in order_apply:
+    for rule_type_to_check in (DENY, ALLOW):
         for ip_host in unique_ips:
             for (action,
                  (rule_families, rule_types, network_obj, rule_ports_list),
@@ -452,7 +445,8 @@ def _check_address_with_rules(
                             if ip_host in network_obj and destination_port in rule_ports_list:
 
                                 pysandboxes_logger.info(
-                                    "Connection to '%s' (%s:%s) %s by explicit rule '%s' from $%s",
+                                    "Connection to '%s' (%s:%s) %s by explicit "
+                                    "rule '%s' from %s",
                                     hostname, ip_host, destination_port, action,
                                     config.rule, format_ruleref(config)
                                 )
@@ -460,36 +454,27 @@ def _check_address_with_rules(
                                     raise SocketRulesException(
                                         f"Guard network connection to "
                                         f"'{hostname}' ({ip_host}:{destination_port}) "
-                                        f"explicitly {action} by rule "
-                                        f"'{config.rule}' from {format_ruleref(config)})."
+                                        f"{action} by rule "
+                                        f"'{config.rule}' "
+                                        f"from {format_ruleref(config)})."
                                     )
                                 elif action == ALLOW:
                                     raise SocketRulesException(
                                         f"Guard network connection to "
                                         f"'{hostname}' ({ip_host}:{destination_port}) "
-                                        f"explicitly {action} by rule "
+                                        f"{action} by rule "
                                         f"'{config.rule}' from {format_ruleref(config)})."
                                     )
-    if implicit_default_is_deny:
-        pysandboxes_logger.info(
-            "Connection to '%s' (%s:%s) "
-            "DENIED by implicit default policy "
-            "(first rule was %s, no other rule explicitly matched).",
-            hostname, unique_ips, destination_port, first_rule_action
-        )
-        raise SocketRulesException(
-            f"Guard network connection to '{hostname}' ({unique_ips}:{destination_port}) "
-            f"DENIED by implicit default (first rule: {first_rule_action})."
-        )
-    else:
-        pysandboxes_logger.info(
-            "Connection to '%s' (%s:%s) "
-            "ALLOWED by implicit default policy "
-            "(first rule was %s, no other rule explicitly matched).",
-            hostname, unique_ips, destination_port,
-            first_rule_action
-        )
-        return
+    pysandboxes_logger.info(
+        "Connection to '%s' (%s:%s) "
+        "DENIED by implicit default policy.",
+        hostname, unique_ips, destination_port
+    )
+    raise SocketRulesException(
+        f"Guard network connection to '{hostname}' "
+        f"({unique_ips}:{destination_port}) "
+        f"DENIED by implicit default policy."
+    )
 
 
 _get_rules = lambda: []
@@ -522,10 +507,10 @@ class Guard_socket(socket.socket):
         # Note: self.family, self.type, self.proto are now available from the superclass
 
     def bind(self, address: Adresse_Type) -> None:
-        if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0],
-                                                                           str) and isinstance(
-            address[1], int):
-            self._check_address((address[0], address[1]), conn_direction=IN)
+        if (isinstance(address, tuple) and len(address) >= 2 and # FIXME: ajout de test
+                isinstance(address[0],str)
+                and isinstance(address[1], int)):
+            self._check_address((str(address[0]), int(address[1])), conn_direction=IN)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
                 "Allowing bind to AF_UNIX address (not subject to IP socket_rules): %s",
@@ -537,10 +522,10 @@ class Guard_socket(socket.socket):
         super().bind(address)
 
     def connect(self, address: Adresse_Type) -> None:
-        if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0],
-                                                                           str) and isinstance(
-            address[1], int):
-            self._check_address((address[0], address[1]), conn_direction=OUT)
+        if (isinstance(address, tuple) and len(address) >= 2
+                and isinstance(address[0],str)
+                and isinstance(address[1], int)):
+            self._check_address((str(address[0]), int(address[1])), conn_direction=OUT)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
                 "Allowing connect to AF_UNIX address (not subject to IP socket_rules): %s",

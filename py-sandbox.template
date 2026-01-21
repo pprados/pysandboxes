@@ -41,7 +41,7 @@
 # 2. Assign a value based on the environment outside the sandbox, with an optional
 #    default value if needed,
 #    using a syntax similar to bash:
-#    --set-env VAR_NAME=${OUTSIDE_VAR:-default_value}
+#    --set-env VAR_NAME=${OUTSIDE_VAR:=default_value}
 #    This sets VAR_NAME to the value of OUTSIDE_VAR from the environment outside the
 #    sandbox. If OUTSIDE_VAR is not set, it uses default_value.
 #
@@ -53,13 +53,14 @@
 # By using --set-env, you can control and manage the environment variables available
 # within your sandbox, ensuring that your applications have the necessary configuration.
 
---set-env=HOME=${HOME}
---set-env=USER=${USER}
-#--set-env=PATH=${PATH}  # FIXME je ne pense pas cela nécessaire
+#--set-env=HOME=${HOME}
+#--set-env=USER=${USER}
+--set-env=HOME=.
+--set-env=USER=pysandbox
 --set-env=VIRTUAL_ENV*=${VIRTUAL_ENV_*}
 --set-env=LC_*=${LC_*}
---set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 --set-env=LANG=${LANG}
+--set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 --set-env=TMP=/tmp
 --set-env=TEMP=/tmp
 --set-env=*_API_KEY=${*_API_KEY}
@@ -86,13 +87,8 @@
 # Binds the current directory to the root of the sandbox
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
 #--ro-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path
---ro-bind=${PWD}/.venv,${PWD}/.venv  # FIXME: uniquement pour le tst_usage
---ro-bind=${PWD}/tests,${PWD}/tests  # FIXME: uniquement pour le tst_usage
 --ro-bind=${PYENV_ROOT},${PYENV_ROOT}
 --ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
-#--ro-bind=${PWD}/sandbox,/usr/src/myapp  # FIXME
-#--ro-bind=/dev/null,/dev/null
-#--ro-bind=dist,/toto  # TODO: a vérifier sous firejail
 
 #######################################################################################
 # Network rules management strategy:
