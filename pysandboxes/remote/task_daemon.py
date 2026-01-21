@@ -15,7 +15,8 @@ class TaskDaemon(LocalTaskDaemon):
                     envs: Envs,
                     config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
-                    token: Optional[str]) -> None:
+                    token: Optional[str],
+                    ) -> None:
         await super().start(log_level, envs, config, init_fn, token)
         logger.info("Sandbox Daemon in async task is started")
 

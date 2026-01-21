@@ -10,16 +10,17 @@ logger = logging.getLogger(__name__)
 
 def parse_rules(rules: ConfigLines,
                 errors: List[ErrorMsg],
-                ) -> Tuple[str, ConfigLines]:
-    from .os_sandboxes import providers
+                ) -> Tuple[str, bool, ConfigLines]:
+    from .os_sandbox import providers_factory
     other_rules = []
     provider_rule: ConfigLines = []
-    provider = []
+    providers_set = []
+    use_py_sandbox = True
     for rule in rules:
         if rule.rule.startswith("--os-sandbox="):
             provider_rule.append(rule)
             provider = rule.rule[len("--os-sandbox="):].strip()
-            if provider not in providers:
+            if provider not in providers_factory:
                 errors.append(
                     (f"{format_ruleref(rule)}: "
                      f"Invalid os-sandbox '{provider}'.",
@@ -27,10 +28,23 @@ def parse_rules(rules: ConfigLines,
                      rule.ln
                      )
                 )
+            providers_set.append(provider)
+        elif rule.rule.startswith("--py-sandbox="):
+            value = rule.rule.split("=", 1)[1].strip().lower()
+            if value in ("", "true"):
+                use_py_sandbox = True
+            elif value == "false":
+                use_py_sandbox = False
+            else:
+                errors.append(
+                    (f"{format_ruleref(rule)}: "
+                     f"Invalid value '{value}' for --py-sandbox. Use true or false.",
+                     rule.path, rule.ln)
+                )
         else:
             other_rules.append(rule)
 
-    if len(provider) > 1:
+    if len(providers_set) > 1:
         all_error_lines = [format_ruleref(rule) for rule in provider_rule]
         errors.append(
             (
@@ -40,6 +54,6 @@ def parse_rules(rules: ConfigLines,
                 0
             )
         )
-        return 'errors', other_rules
+        return 'errors', use_py_sandbox, other_rules
 
-    return provider, other_rules
+    return provider, use_py_sandbox, other_rules

@@ -17,11 +17,13 @@ from typing import Dict
 from tblib import pickling_support
 from uvicorn import Server
 
+from pysandboxes.remote.subprocess_daemon import SubProcessParameters
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
 from .tools import to_b85, configure_logging_level, \
     from_b85, set_pdeathsig
-from ..manage_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
+from ..guard_provider import parse_rules as parse_provider_rules
+from ..private_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from ..py_sandbox import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
 from ..types import ConfigLines, Args, Envs
@@ -262,7 +264,7 @@ async def sandbox_daemon(
 
 class LocalTaskDaemon(SSESandbox):
 
-    def __init__(self, token: Optional[str] = None):
+    def __init__(self, token: str):
         super().__init__(token)
         self.uvicorn: Optional[Server] = None
 
@@ -273,11 +275,12 @@ class LocalTaskDaemon(SSESandbox):
         return config, envs, "task", [], []
 
     async def start(self,
+                    *,
                     log_level: int,
                     envs: Envs,
                     config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
-                    token: Optional[str]) -> None:
+                    ) -> None:
 
         if init_fn:
             init_fn()
@@ -338,7 +341,7 @@ async def main() -> int:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
     parser = argparse.ArgumentParser(
-        description="Stard a Python-sandbox daemon inside --outer-sandbox argument."
+        description="Start a Python-sandbox daemon inside os-sandbox."
     )
 
     # Add the verbose argument.
@@ -350,82 +353,57 @@ async def main() -> int:
         help='Increase output verbosity. Use -v for INFO, -vv for DEBUG, -vvv for all messages.'
     )
 
-    # Add the --outer-sandbox argument
-    # type=str: Specifies that the argument's value should be treated as a string.
-    # help: Provides a description for the argument in the help message.
-    # default=None: Sets a default value if the argument is not provided.
-    parser.add_argument(
-        "--outer-sandbox",
-        type=str,
-        help="Specifies the \"outer\" sandbox provider (e.g., 'firejail', 'docker').",
-        default=None
-    )
-
-    parser.add_argument(
-        "--init-function",
-        type=str,
-        help="Specifies the reference of a method to initialize the sandbox "
-             "before it is started.",
-        default=None
-    )
-
-    parser.add_argument(
-        '-n', '--no-py-sandbox',
-        action='store_true',
-        help='Desactivate py-sandbox'
-    )
-
     # Parse the arguments provided by the user
     args = parser.parse_args()
 
-    # Access the value of --sandbox-provider
-    outer_sandbox: Optional[str] = args.outer_sandbox
-    assert outer_sandbox, "--outer-sandbox is required"  # FIXME: dans conf?
     log_level = configure_logging_level(args.verbose)
 
     # -------------
     # Read all configuration from stdin until EOF
     config_body = None
-    token = "NO_TOKEN"
+    process_config: Optional[SubProcessParameters] = None
     for line in sys.stdin:
-        config, token = from_b85(line.strip())
+        process_config = from_b85(line.strip())
         break
+    if not process_config:
+        raise RuntimeError("Impossible to read the config body from stdin")
     logging.debug("config body and token successfully read from stdin")
+
+    os_sandbox, use_py_sandbox, _ = parse_provider_rules(process_config.config, [])
 
     # In this case, use the standard loop in place of the private sandbox loop
     set_sandbox_loop(asyncio.get_running_loop())
 
-    if not args.no_py_sandbox:
+    if use_py_sandbox:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
 
-        # Note: the init_function is called AFTER the activation of the python sandbox
         activate_sandboxes(dict(os.environ),
-                           args_rules=None,
-                           outer_sandbox=outer_sandbox,
+                           os_sandbox=os_sandbox,
                            config=config_body)
         logging.info(
             f"Start a py-sandbox encapsulated in an os-sandox of type '{outer_sandbox}'")
     else:
         logging.info(
-            f"Start ONLY an os-sandox of type '{outer_sandbox}'")
+            f"Start ONLY an os-sandox of type '{os_sandbox}'")
 
+    # Call init function
+    # Note: the init_function is called AFTER the activation of the python sandbox
     init_fn: Optional[SyncOrAsyncFunc] = None
-    if args.init_function:
-        module_name, function_name = args.init_function.split(':', 1)
-        print(f"---------- {args.init_function=}")
-        print(f"---------- {module_name=}")
-        print(f"---------- {function_name=}")
+    if process_config.init_fn:
+        module_name, function_name = process_config.init_fn.split(':', 1)
         module = importlib.import_module(module_name)
         init_fn = getattr(module, function_name)
 
-    task_daemon = LocalTaskDaemon(token=token)
+    # Start the daemon
+    task_daemon = LocalTaskDaemon(process_config.token)
     try:
-        await task_daemon.start(log_level,
-                                envs=dict(os.environ),
-                                init_fn=init_fn,
-                                config=config_body,
-                                token=token)
+        await task_daemon.start(
+            log_level=log_level,
+            envs=dict(os.environ),
+            config=process_config.config,
+            init_fn=init_fn,
+        )
         await task_daemon.join()
         return 0
     finally:

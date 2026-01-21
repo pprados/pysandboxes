@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import dotenv
@@ -42,7 +43,7 @@ def init_log_level():
 async def async_manager():
     for i in range(0, 2):
         async with sandboxes(init_fn=init_sandbox):
-            assert await amain() == 42
+            assert await arun() == 42
 
 #%% --------------------------------------
 def init_sandbox():
@@ -50,7 +51,7 @@ def init_sandbox():
     init_log_level()
 
 
-async def amain():
+async def arun():
     rc = await arun_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42
@@ -65,19 +66,13 @@ def run():
 def main():
     init_log_level()
 
-    config, sandbox_env, provider, socket_rules, files_rules= read_and_parse_config()
-    activate_sandboxes(
-        envs=sandbox_env,
-        config=config,
-    )
-
-    # for i in range(0, 1):
-    #     # asyncio.run(async_manager())
-    #     # print("----------------")
-    #     # pysandboxes.run(amain())
-    #     # print("----------------")
-    #     with pysandboxes.sandboxes(init_sandbox):
-    #         run()
-    #     print("----------------")
+    for i in range(0, 1):
+        asyncio.run(async_manager())
+        # print("----------------")
+        with pysandboxes.sandboxes(init_sandbox):
+            run()
+        print("----------------")
+        pysandboxes.run(arun(),init_fn=init_sandbox)
+        print("----------------")
 
 

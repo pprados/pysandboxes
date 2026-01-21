@@ -9,7 +9,7 @@ from concurrent.futures import Executor
 from functools import partial
 from typing import Any, Dict, Optional, Callable, Union
 
-from ..manage_loop import get_sandbox_loop
+from ..private_loop import get_sandbox_loop
 
 logger = logging.getLogger(__name__)
 

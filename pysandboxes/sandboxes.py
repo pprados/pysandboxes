@@ -9,11 +9,11 @@ import typing
 from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, TypeVar, Union, \
-    Awaitable, Coroutine, runtime_checkable,List
+    Coroutine, runtime_checkable, List
 from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
-from .manage_loop import set_sandbox_loop
+from .private_loop import set_sandbox_loop
 from .py_sandbox import get_config_path
 from .tools import check_mixte_async_async, SyncOrAsyncFunc
 
@@ -33,7 +33,7 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
     Return the result of the function if it completes within the timeout.
     Reraises any exception raised by the function.
     """
-    from pysandboxes.os_sandboxes import call_in_sandbox, async_call_in_sandbox
+    from pysandboxes.os_sandbox import call_in_sandbox, async_call_in_sandbox
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
@@ -55,7 +55,6 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
         return decorator(_func)
 
 
-
 @runtime_checkable
 class sandboxes(typing.Protocol):
     """
@@ -69,13 +68,15 @@ class sandboxes(typing.Protocol):
                  init_fn: Optional[SyncOrAsyncFunc] = None,
                  config_path: Optional[Union[Path, str]] = None,
                  *,
-                 envs: typing.Dict[str, str]=os.environ,
-                 extra_rules:Optional[List[str]]=None,
+                 envs: Optional[typing.Dict[str, str]] = None,
+                 extra_rules: Optional[List[str]] = None,
                  ) -> None:
         self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
         self.config_path = config_path
-        self.envs=envs
-        self.extra_rules=extra_rules
+        if envs is None:
+            envs = dict(os.environ)
+        self.envs = envs
+        self.extra_rules = extra_rules
         self.timeout = 60
         self._old_sigint = None
         self._old_sigterm = None
@@ -88,7 +89,7 @@ class sandboxes(typing.Protocol):
         Start the sandbox daemon.
         """
         from .py_sandbox import read_and_parse_config
-        from .os_sandboxes import start_daemon
+        from .os_sandbox import start_daemon
 
         logger.debug("__enter__ start...")
         check_mixte_async_async()
@@ -127,7 +128,7 @@ class sandboxes(typing.Protocol):
         """
         Stop the sandbox daemon.
         """
-        from pysandboxes.os_sandboxes import shutdown_daemon
+        from pysandboxes.os_sandbox import shutdown_daemon
         logger.debug("__exit__ start...")
         # If "Cannot call the synchronize sandbox function from another sandbox async function"
         if not isinstance(exc, RuntimeError):
@@ -146,11 +147,15 @@ class sandboxes(typing.Protocol):
         Start the sandbox daemon.
         """
         from .py_sandbox import read_and_parse_config
-        from pysandboxes.os_sandboxes import async_start_daemon
+        from pysandboxes.os_sandbox import async_start_daemon
         log_level = logging.root.getEffectiveLevel()
         assert get_config_path(self.config_path), "Set config path"
-        config = get_config_path(self.config_path).read_text().splitlines()
-        config, _, os_sandbox, *_ = read_and_parse_config(config=config)
+        config, _, os_sandbox, *_ = read_and_parse_config(
+            self.config_path,
+            envs=self.envs,
+            extra_rules=self.extra_rules,
+            exit_on_error=False,
+        )
         return await async_start_daemon(os_sandbox, log_level, self.init_fn, config)
 
     async def __aexit__(self,
@@ -160,7 +165,7 @@ class sandboxes(typing.Protocol):
         """
         Stop the sandbox daemon.
         """
-        from pysandboxes.os_sandboxes import async_shutdown_daemon
+        from pysandboxes.os_sandbox import async_shutdown_daemon
         await async_shutdown_daemon()
         return False
 

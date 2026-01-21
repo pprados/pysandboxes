@@ -22,9 +22,9 @@
 #   capacity, system calls, etc.
 
 #--os-sandbox=task
-#--os-sandbox=subprocess
+--os-sandbox=subprocess
 #--os-sandbox=firejail
-# TODO --no-py-sandbox
+--py-sandbox=False
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
 
@@ -93,38 +93,27 @@
 #######################################################################################
 # Network rules management strategy:
 # There are two strategies: "allow" and "deny".
-# TODO The first network rule indicates the default behavior.
 #
-# It is recommended to operate in a whitelist mode, allowing specific connections
-# and denying all others. This approach enhances security by explicitly specifying
-# permitted connections.
-#
-# However, it is also possible to operate in a blacklist mode, denying specific connections
-# and allowing all others. This approach can be useful in scenarios where most connections
-# are trusted, and only a few need to be blocked.
-#
-# Example:
-# - In whitelist mode (allow), the first rule might be "deny".
-# - In blacklist mode (deny), the first rule might be "allow".
+# By default, all connections are denied.
 
-# *** Whitelist strategy (recommanded) ***
+# Denied localhost
+#--net=DENY|tcp|127.0.0.1/8|*|IN
+
+# Accept locahost specific port in ${PORT} or 8000
+#--net=ALLOW|tcp|${BIND:=127.0.0.1}/32|${PORT:=8000}|IN
+
+# Denied intranet
+#--net=DENY|any|10.0.0.0/8|*|OUT
+#--net=DENY|any|169.254.0.0/16|*|OUT
+#--net=DENY|any|172.16.0.0/12|*|OUT
+#--net=DENY|any|192.168.0.0/16|*|OUT
+#--net=DENY|any|fc00::/7|*|OUT  # ULA
+#--net=DENY|any|fe80::/64|*|OUT # Link-Local
+
 # Allow web access
-
---net=ALLOW|tcp|${BIND:=127.0.0.1}/32|${PORT:=8000}|IN
 --net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call all HTTPS services
 --net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
 --net=ALLOW|udp|0.0.0.0/0|53|IN
-# --bind=${BIND:=127.0.0.1} # FIXME a utilisé comme paramétre ?
-
-
-# TODO Allows HTTP/HTTPS to any IPv6 (Corrected from ::0)
-# TODO: valider le DENY + ALLOW|any|0.0.0.0/0|80,443|OUT
-## Allow Intranet
-#--net=ALLOW|any|10.0.0.0/8|*|OUT
-#--net=ALLOW|any|169.254.0.0/16|*|OUT
-#--net=ALLOW|any|172.16.0.0/12|*|OUT
-#--net=ALLOW|any|192.168.0.0/16|*|OUT
-#--net=ALLOW|any|fc00::/7|*|OUT
 
 #######################################################################################
 # Limit python features in the sandbox

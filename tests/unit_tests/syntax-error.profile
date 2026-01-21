@@ -5,7 +5,7 @@
 --ro-bind=${PWD},not_exist
 --bind=not_exist,${PWD}
 --ro-bind=abc
---ignore-parameter*
+--ignore-parameter
 
 --net=ERROR
 --net=ERROR|tcp|127.0.0.1/32|8000|IN
@@ -22,3 +22,4 @@
 --bind=${PWD},${PWD}/tests
 --bind=${PWD},${PWD}/tests/unit_tests
 --ro-bind=${PWD},${PWD}/tests
+--py-sandbox=abc

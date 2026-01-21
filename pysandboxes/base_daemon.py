@@ -15,7 +15,7 @@ _mixed_sync_and_async_error = ("Cannot call the synchronize sandbox function "
 class BaseDaemon(ABC):
     __slots__ = ('_is_started', '_token')  # TODO: partout __slots__
 
-    def __init__(self, token: Optional[str] = None):
+    def __init__(self, token: str):
         self._is_started = False
         self._token = token
 
@@ -35,7 +35,7 @@ class BaseDaemon(ABC):
                     envs: Envs,
                     config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
-                    token: str) -> None:
+                    ) -> None:
         raise NotImplementedError
 
     @abstractmethod

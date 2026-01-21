@@ -177,7 +177,6 @@ class FireJailDaemon(BaseSubProcessDaemon):
         return all_rules
 
     def _firejail_args(self,
-                       envs: Envs,
                        config: ConfigLines,
                        ) -> Tuple[Args, AllRules]:
 
@@ -191,12 +190,12 @@ class FireJailDaemon(BaseSubProcessDaemon):
         need_root = False
         from importlib.resources import files
 
-        config, sandbox_env, provider, socket_rules, files_rules = (
-            read_and_parse_config(  # FIXME: etrange. C'est en paramètre
-                envs=envs,
-                config=config,
-                exit_on_error=True,
-            ))
+        # config, sandbox_env, provider, use_pysandbox, socket_rules, files_rules = (
+        #     read_and_parse_config(  # FIXME: etrange. C'est en paramètre
+        #         envs=envs,
+        #         config=config,
+        #         exit_on_error=True,
+        #     ))
 
         # assert provider == "firejail"
         args = [str(which_command("firejail"))]
@@ -225,12 +224,6 @@ class FireJailDaemon(BaseSubProcessDaemon):
             if os.path.isdir(p):
                 if p not in whitelist:
                     _follow_links(p, whitelist)
-
-        # Same place
-        # FIXME: ne semble pas nécessaire avec les autres
-        # if p := get_venv():
-        #     if p not in whitelist:
-        #         _follow_links(p, whitelist)
 
         for white in whitelist:
             args.extend([
@@ -305,18 +298,11 @@ class FireJailDaemon(BaseSubProcessDaemon):
         return args, (config, sandbox_env, provider, socket_rules, files_rules)
 
     def _subprocess(self,
-                    envs: Envs,
-                    log_level: int,
-                    init_fn: Optional[SyncOrAsyncFunc],
-                    config: ConfigLines
+                    config: ConfigLines,
                     ) -> List[str]:
-        run_daemon = super()._subprocess(envs, log_level, init_fn, config)
-        run_daemon.extend([
-            "--outer-sandbox", "firejail",
-        ])
+        run_daemon = super()._subprocess(config)
 
-        cmd_parameters, _ = self._firejail_args(envs=envs,
-                                                config=config)
+        cmd_parameters, _ = self._firejail_args(config=config)
         cmd_parameters.extend(run_daemon)
         # cmd_parameters.extend([
         #     sys.executable,

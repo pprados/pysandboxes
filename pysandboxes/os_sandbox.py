@@ -2,12 +2,11 @@ import asyncio
 import logging
 import os
 import threading
-import weakref
-from _weakref import ReferenceType
-from typing import Any, Callable, Optional
+import uuid
+from typing import Any, Callable, Optional, Type
 
 from .base_daemon import BaseDaemon
-from .manage_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
+from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
 from .remote.firejail_daemon import FireJailDaemon
 from .remote.subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
@@ -16,12 +15,12 @@ from .types import ConfigLines
 
 logger = logging.getLogger(__name__)
 
-providers: dict[str, BaseDaemon] = {
+providers_factory: dict[str, Type] = {
     # TODO: faire un provider "transparent"
-    "task": TaskDaemon(),  # Impossible to activate py-sandbox in this mode.
-    "subprocess": SubProcessDaemon(),
+    "task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
+    "subprocess": SubProcessDaemon,
     # "bwrap": BWrapDaemon(),
-    "firejail": FireJailDaemon(),
+    "firejail": FireJailDaemon,
     # TODO: podman, https://www.redhat.com/en/blog/podman-inside-container https://www.redhat.com/en/blog/podman-inside-kubernetes
     #  docker, lxc, ...
     # docker alternative
@@ -32,7 +31,8 @@ providers: dict[str, BaseDaemon] = {
 
 DEFAULT_OS_SANDBOX = "subprocess"
 
-_current_daemon: ReferenceType[BaseDaemon] = None  # Current daemon used by the sandbox
+# Singleton with the current daemon used by the sandbox
+_current_daemon: Optional[BaseDaemon] = None
 _startup_counter = 0  # Number of time the daemon has been started
 
 
@@ -63,24 +63,28 @@ async def _async_start_daemon(name: Optional[str],
     It's used in run()
     """
     if not name:
-        name="subprocess"
-    global _current_daemon, _startup_counter
+        name = "subprocess"
     async with _async_start_lock:
-        if _current_daemon is not None and _current_daemon():
+        global _current_daemon, _startup_counter
+        if _current_daemon is not None:
             logger.info("Daemon already started")
             _startup_counter += 1
-            return _current_daemon()
+            return _current_daemon
 
-        if name not in providers:
+        if name not in providers_factory:
             raise ValueError(f"Unknown daemon name: {name}")
         try:
-            await providers[name].start(log_level, dict(os.environ), config,
-                                        init_fn,
-                                        token=None)
-            _current_daemon = weakref.ref(providers[name])
-            assert providers[name].is_started == True
+            token = str(uuid.uuid4())
+            os_provider = providers_factory[name](token)
+            await os_provider.start(log_level,
+                                    dict(os.environ),
+                                    config,
+                                    init_fn
+                                    )
+            _current_daemon = os_provider
+            assert os_provider.is_started == True
             _startup_counter += 1
-            return providers[name]
+            return os_provider
         except Exception as e:
             _current_daemon = None
             raise e
@@ -105,8 +109,8 @@ async def async_shutdown_daemon():
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return
-        await _current_daemon().shutdown()
-        assert _current_daemon().is_started == False  # FIXME: peut etre faul, si plusieur entrée
+        await _current_daemon.shutdown()
+        assert not _current_daemon.is_started
         _current_daemon = None
         _startup_counter -= 1
 
@@ -125,12 +129,12 @@ def start_daemon(name: Optional[str],
         name = "subprocess"
     global _current_daemon, _startup_counter
     with _start_lock:
-        if _current_daemon is not None and _current_daemon():
+        if _current_daemon is not None:
             logger.info("Daemon already started")
             _startup_counter += 1
-            return _current_daemon()
+            return _current_daemon
 
-        if name not in providers:
+        if name not in providers_factory:
             raise ValueError(f"Unknown daemon name: {name}")
 
         loop = get_sandbox_loop()
@@ -150,12 +154,12 @@ def start_daemon(name: Optional[str],
             raise RuntimeError("Import to start the sandbox")
         assert _current_daemon
 
-        return _current_daemon()
+        return _current_daemon
 
 
 def is_daemon_started() -> bool:
     global _current_daemon
-    return False if _current_daemon is None else _current_daemon().is_started
+    return _current_daemon and _current_daemon.is_started
 
 
 @sandbox_loop  # TODO: a virer ?
@@ -188,10 +192,8 @@ def shutdown_daemon() -> None:
 
 def get_token() -> str:
     global _current_daemon
-    if _current_daemon is None or not _current_daemon():
-        logger.warning("Daemon not started when trying to get token")
-        return
-    return _current_daemon().token
+    assert _current_daemon is not None, "Daemon not started when trying to get token"
+    return _current_daemon.token
 
 
 async def async_call_in_sandbox(
@@ -203,10 +205,8 @@ async def async_call_in_sandbox(
     if is_in_sandbox():
         return await func(*args, **kwargs)
 
-    if _current_daemon is None or not _current_daemon():
-        logger.warning("Daemon not started when trying to get token")
-        return
-    return await _current_daemon().async_call_in_sandbox(func, timeout, *args, **kwargs)
+    assert _current_daemon is not None, "Daemon not started"
+    return await _current_daemon.async_call_in_sandbox(func, timeout, *args, **kwargs)
 
 
 def call_in_sandbox(
@@ -217,8 +217,7 @@ def call_in_sandbox(
     global _current_daemon
     if is_in_sandbox():
         return func(*args, **kwargs)
-    if _current_daemon is None or not _current_daemon():
-        raise RuntimeError("Daemon not started when trying to get token")
+    assert _current_daemon is not None, "Daemon not started"
     check_mixte_async_async()
 
-    return _current_daemon().call_in_sandbox(func, timeout, *args, **kwargs)
+    return _current_daemon.call_in_sandbox(func, timeout, *args, **kwargs)

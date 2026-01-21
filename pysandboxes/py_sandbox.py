@@ -41,7 +41,8 @@ def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
 AllRules = Tuple[
     ConfigLines,  # Merged config
     Envs,  # sandbox env
-    str,  # os_sandboxg
+    str,  # os_sandbox
+    bool,  # Use pysandbox
     List[SocketRule],  # Socket socket_rules
     List[FilesRule],  # file socket_rules
 ]
@@ -100,7 +101,7 @@ def parse_config(
     sandbox_env, others = guard_env.parse_guard_envs(config, envs, errors)
     others = substitute_env_vars(others, envs)  # with main envs
 
-    provider, others = guard_provider.parse_rules(others, errors)
+    os_sandbox, use_pysandbox, others = guard_provider.parse_rules(others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
 
@@ -123,7 +124,7 @@ def parse_config(
             os._exit(1)
         raise ValueError(f"Syntax error in {format_error_list(all_files_in_errors)} ")
 
-    return config, sandbox_env, provider, socket_rules, files_rules
+    return config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules
 
 
 def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
@@ -147,25 +148,26 @@ def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
 
 def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?
         envs: Dict[str, str] = os.environ,
-        args_rules: Optional[List[str]] = None,
         *,
         config: ConfigLines = None,
-        outer_sandbox: str = None,
+        os_sandbox: str = None,
 ) -> None:
-    if outer_sandbox:
-        from pysandboxes.os_sandboxes import providers
-        if outer_sandbox not in providers:
-            raise ValueError(f"Unknown os-sandbox name: {outer_sandbox}")
-        provider = providers[outer_sandbox]
-        config, sandbox_env, os_sandbox, socket_rules, files_rules = provider.update_rules(
-            envs=envs,
-            config=config,
-        )
+    if os_sandbox:
+        from pysandboxes.os_sandbox import providers_factory
+        if os_sandbox not in providers_factory:
+            raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
+        os_provider = providers_factory[os_sandbox](token=None)
+        config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules = (
+            os_provider.update_rules(
+                config,
+                envs=envs,
+            ))
     else:
-        config, sandbox_env, os_sandbox, socket_rules, files_rules = (
-            read_and_parse_config(envs=envs,
-                                  config=config,
-                                  extra_rules=args_rules))
+        config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules = (
+            parse_config(
+                config,
+                envs=envs,
+                exit_on_error=True))
 
     # Apply the socket_rules
     # sys.stdin.shutdown()  # FIXME

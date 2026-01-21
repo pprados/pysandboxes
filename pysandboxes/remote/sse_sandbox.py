@@ -15,7 +15,7 @@ from .parameters import HOST, PORT, PATH_RPC
 from .tools import from_b85
 from ..tools import is_in_sandbox, get_callable_info
 from ..base_daemon import BaseDaemon
-from ..manage_loop import sandbox_loop
+from ..private_loop import sandbox_loop
 
 pickling_support.install()
 
@@ -55,7 +55,7 @@ def _reraise(remove: int, tp, value, tb=None):
 
 
 class SSESandbox(BaseDaemon):
-    def __init__(self, token: Optional[str] = None):
+    def __init__(self, token: str):
         super().__init__(token)
 
     async def async_call_in_sandbox(self,
@@ -65,7 +65,7 @@ class SSESandbox(BaseDaemon):
                                     **kwargs: Any) -> Any:
         if is_in_sandbox():
             return await func(*args, **kwargs)
-        from pysandboxes.os_sandboxes import get_token
+        from pysandboxes.os_sandbox import get_token
 
         try:
             token = get_token()

@@ -10,7 +10,7 @@ import tty
 import dotenv
 import termios
 
-from pysandboxes.os_sandboxes import DEFAULT_OS_SANDBOX
+from pysandboxes.os_sandbox import DEFAULT_OS_SANDBOX
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import configure_logging_level
 
@@ -210,7 +210,7 @@ async def run_bash_in_pty(*args, **kwargs) -> None:
 
 
 async def main():
-    from pysandboxes.os_sandboxes import providers
+    from pysandboxes.os_sandbox import providers_factory
 
     parser = argparse.ArgumentParser(
         description="A script demonstrating command-line argument parsing for log verbosity.",
@@ -239,7 +239,7 @@ async def main():
 
     configure_logging_level(args.verbose)
 
-    provider = providers.get(args.os_sandbox or DEFAULT_OS_SANDBOX)
+    provider = providers_factory.get(args.os_sandbox or DEFAULT_OS_SANDBOX)
     assert isinstance(provider,
                       BaseSubProcessDaemon), "The os-sandbox provider must be a BaseSubProcessDaemon"
     envs={**dotenv.dotenv_values() , **dict(os.environ)}

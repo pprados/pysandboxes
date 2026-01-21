@@ -7,17 +7,19 @@ import time
 import uuid
 from abc import abstractmethod
 from pathlib import Path
-from typing import Callable, Dict, Any, Optional
+from typing import Callable, Dict, Any, Optional, NamedTuple
 
+from .parameters import DELAY_FOR_START_DAEMON
 from .sse_sandbox import SSESandbox
-from .tools import return_level_parameter, to_b85
-from ..py_sandbox import AllRules, read_and_parse_config
+from .tools import to_b85
+from ..main_logger import pysandboxes_logger
+from ..py_sandbox import AllRules, parse_config
 from ..tools import SyncOrAsyncFunc, get_callable_info
 from ..types import ConfigLines, Args, Envs
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True
+DEBUG = False
 
 
 async def _write_stream(
@@ -57,16 +59,40 @@ async def _read_stream(
             break
 
 
+class SubProcessParameters(NamedTuple):
+    config: ConfigLines
+    log_level: int
+    token: str
+    init_fn: str
+
+
 class BaseSubProcessDaemon(SSESandbox):
 
+    __slots__ = ('_is_started', '_token',
+                 '_process',
+                 '_stdout_task',
+                 '_stderr_task',
+                 '_attempts',
+                 '_base_delay',
+                 '_factor',
+                 '_max_delay',
+                 '_max_attempts',
+                 '_reset_delay',
+                 '_last_reset',
+                 '_is_started'
+                 'restart',
+                 )
+
     def __init__(self,
+                 token:str,
+                 *,
                  max_attempts: int = 1,  # Maximum number of retry _attempts TODO 5
                  base_delay: float = 0.1,  # Initial delay in seconds (e.g., 100 ms)
                  factor: float = 2.0,  # Exponential increase _factor
                  max_delay: float = 10.0,  # Maximum delay in seconds
                  reset_delay: float = 120.0  # delay to reset attemps
                  ):
-        super().__init__()
+        super().__init__(token)
         self._process = None
         self._stdout_task = None
         self._stderr_task = None
@@ -77,13 +103,10 @@ class BaseSubProcessDaemon(SSESandbox):
         self._max_attempts = max_attempts
         self._reset_delay = reset_delay
         self._last_reset = time.time()
-        self.restart = 0
         self._is_started = False
+        self.restart = 0
 
     def _subprocess(self,
-                    envs: Dict[str, str],
-                    log_level: int,
-                    init_fn: Optional[SyncOrAsyncFunc],
                     config: ConfigLines,
                     ) -> Args:
         from . import run_daemon
@@ -96,14 +119,6 @@ class BaseSubProcessDaemon(SSESandbox):
             "-m",
             run_daemon.__name__,
         ]
-        verbose = return_level_parameter(log_level)
-        if verbose:
-            cmd_parameters.append(verbose)
-        if init_fn:
-            module, init_function_reference = get_callable_info(init_fn)
-            cmd_parameters.extend(
-                ["--init-function", f"{module}:{init_function_reference}"])
-
         return cmd_parameters
 
     @abstractmethod
@@ -114,7 +129,7 @@ class BaseSubProcessDaemon(SSESandbox):
                     envs: Envs,
                     config: ConfigLines,
                     init_fn: Optional[SyncOrAsyncFunc],
-                    token: str) -> None:
+                    ) -> None:
         if not envs:
             envs = dict(os.environ)
         self.restart = 0
@@ -122,7 +137,6 @@ class BaseSubProcessDaemon(SSESandbox):
                              log_level,
                              config,
                              init_fn,
-                             token=token,
                              first=True,
                              )
 
@@ -132,30 +146,31 @@ class BaseSubProcessDaemon(SSESandbox):
                         config: ConfigLines,
                         init_fn: Optional[SyncOrAsyncFunc],
                         *,
-                        token: str,
                         first: bool = False) -> None:
         if first:
             await self._re_start_cmd(self._subprocess(
-                envs,
-                log_level,
-                init_fn,
-                config,
+                config=config,
             ), {},
                 config=config,
+                log_level=log_level,
+                init_fn=init_fn,
             )
 
-            logger.info("daemon is started")
+            pysandboxes_logger.info("started")
         else:
-            logger.warning("daemon is re-started")
+            pysandboxes_logger.warning("re-started")
 
     async def _re_start_cmd(self,
                             args: Args,
                             process_kwargs: Dict[str, Any],
                             *,
+                            log_level: int,
+                            init_fn: Optional[SyncOrAsyncFunc],
                             config: ConfigLines,
                             stdin: bool = False,
                             stdout: bool = False) -> None:
         self._is_started = False
+
         umask = os.umask(0o002)
         umask = os.umask(umask) & 0o007  # Only keep user flags
 
@@ -185,9 +200,16 @@ class BaseSubProcessDaemon(SSESandbox):
         )
 
         # Send config body via stdin, because, it's not possible to use .py-sandboxes file
-        self._token = str(uuid.uuid4())
 
-        data = to_b85((config, self._token)) + "\n"
+        module, init_function_reference = get_callable_info(init_fn)
+
+        process_config = SubProcessParameters(
+            config=config,
+            log_level=log_level,
+            token=self._token,
+            init_fn=f"{module}:{init_function_reference}"
+        )
+        data = to_b85(process_config) + "\n"
 
         self._process.stdin.write(data.encode("utf-8"))
         await self._process.stdin.drain()
@@ -213,8 +235,9 @@ class BaseSubProcessDaemon(SSESandbox):
                 ),
                 name="read_stderr_stream"
             )
-        # FIXME self.task = asyncio.create_task(self.daemon.serve())
-        self._is_started = True  # FIXME: detecter le start
+        await asyncio.sleep(DELAY_FOR_START_DAEMON)
+        # FIXME: detecter le start effectif par une boucle de connexion ?
+        self._is_started = True
 
     async def shutdown(self) -> None:
         if self._stdout_task:
@@ -230,7 +253,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 await self._process.wait()
             self._process = None
         self._is_started = False
-        logger.info("daemon is shutdown")
+        pysandboxes_logger.info("shutdown")
 
     async def join(self) -> int:
         errorlevel = -1
@@ -260,24 +283,12 @@ class BaseSubProcessDaemon(SSESandbox):
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
-    def _subprocess(self,
-                    envs: Dict[str, str],
-                    log_level: int,
-                    init_fn: Optional[SyncOrAsyncFunc],
-                    config: ConfigLines,
-                    ) -> Args:
-        args = super()._subprocess(envs, log_level, init_fn, config)
-        args.extend([
-            "--outer-sandbox", "subprocess",
-        ])
-        return args
 
     def update_rules(self,
                      *,
                      envs: Envs,
                      config: ConfigLines) -> AllRules:
-        return read_and_parse_config(envs=envs,
-                                     config=config)
+        return parse_config(envs=envs, config=config, exit_on_error=True)
 
     def bash_args(self, envs: Envs) -> Args:
         return ["/bin/bash",
