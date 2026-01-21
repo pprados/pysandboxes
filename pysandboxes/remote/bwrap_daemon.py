@@ -62,7 +62,7 @@ class BWrapDaemon(BaseSubProcessDaemon):
         #              f"/usr/lib/python{major}.{minor}/encodings",
         #              f"/usr/lib/python{major}.{minor}/encodings"])
 
-        # Add files rules
+        # Add files socket_rules
         for rule in files_rules:
             if isinstance(rule, BindRule):
                 if rule.write:
@@ -70,11 +70,11 @@ class BWrapDaemon(BaseSubProcessDaemon):
                 else:
                     args.extend(["--ro-bind", rule.source, rule.dest])
 
-        # TODO Add socket rules
+        # TODO Add socket socket_rules
         for rule in socket_rules:
             pass
 
-        # TODO: Add tmp rules
+        # TODO: Add tmp socket_rules
         # --tmpfs DEST
 
         return args

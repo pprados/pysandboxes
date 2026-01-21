@@ -42,8 +42,8 @@ AllRules = Tuple[
     ConfigLines,  # Merged config
     Envs,  # sandbox env
     str,  # os_sandboxg
-    List[SocketRule],  # Socket rules
-    List[FilesRule],  # file rules
+    List[SocketRule],  # Socket socket_rules
+    List[FilesRule],  # file socket_rules
 ]
 
 
@@ -96,7 +96,7 @@ def parse_config(
 ) -> AllRules:
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
-    # 1. Parse the rules, step by step
+    # 1. Parse the socket_rules, step by step
     sandbox_env, others = guard_env.parse_guard_envs(config, envs, errors)
     others = substitute_env_vars(others, envs)  # with main envs
 
@@ -167,7 +167,7 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
                                   config=config,
                                   extra_rules=args_rules))
 
-    # Apply the rules
+    # Apply the socket_rules
     # sys.stdin.shutdown()  # FIXME
     os.environ = sandbox_env
     guard_socket.activate_guard_socket(socket_rules)

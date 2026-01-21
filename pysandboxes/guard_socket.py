@@ -64,6 +64,7 @@ class SocketRule(NamedTuple):
     action: str
     mask: SocketMask
     direction: str
+    config: ConfigLine
 
 
 class SocketRulesException(RuntimeError):  # TODO
@@ -92,16 +93,6 @@ OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 # Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
 # Example: "--net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
 # SOCKET_SPECS: comma-separated list of "tcp", "udp", "any".
-
-
-# FIXME: valider et propager
-def _rule_to_str(rule: SocketRule) -> str:
-    (action,
-     (rule_types, network_obj, rule_ports_list),
-     rule_direction_from_rule) = rule
-    rule_types_str = [socket.SocketKind(t).name for t in
-                      rule_types] if rule_types else ["any"]
-    return f"types={','.join(rule_types_str)}, net={network_obj}, ports={rule_ports_list}, dir={conn_direction}"
 
 
 _rules: List[SocketRule] = []
@@ -257,7 +248,8 @@ def _parse_rule(rule: ConfigLine,
                               # May not be resolved
                               network,
                               ports_list_or_range),
-                          direction)
+                          direction,
+                          config=rule)
 
     try:
         return [
@@ -312,12 +304,12 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
         A sorted list of integers representing individual ports and expanded ranges,
         or a range(0, 65535) if '*' is specified. Returns an empty list for invalid syntax.
     """
+    max_port = 65535  # Maximum valid port number
     if not syntax:
         return []
     if syntax.strip() == '*':
-        return range(65535)  # Represents all ports
+        return range(max_port+1)  # Represents all ports
     ports = set()
-    max_port = 65535  # Maximum valid port number
     elements = syntax.split(',')
     for element in elements:
         element = element.strip()
@@ -350,7 +342,9 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
                     if not (0 <= end <= max_port):
                         raise ValueError(
                             f"End port {end} in range '{element}' is out of valid range (0-{max_port}).")
-                if start <= end:
+                if start == end:
+                    ports.add(start)
+                elif start <= end:
                     ports.add(range(start, end + 1))
                 else:
                     raise ValueError(
@@ -381,13 +375,13 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
 
 
 def _check_address_with_rules(
-        rules: List[SocketRule],
+        socket_rules: List[SocketRule],
         socket_instance_type: int,
         address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
         conn_direction: str):  # Expect IN or OUT constants
     """
     Checks if a given address and port are allowed for the specified connection direction
-    based on the configured rules and the derived implicit default policy.
+    based on the configured socket_rules and the derived implicit default policy.
     (Docstring needs update for new socket_instance_family, socket_instance_proto args)
     """
     logger.debug(
@@ -426,15 +420,15 @@ def _check_address_with_rules(
     if not unique_ips:
         raise ValueError(
             f"Invalid hostname or IP address (resolution failed): {hostname}")
-    if not rules:
+    if not socket_rules:
         logger.info(
-            "Connection to %s port %s ALLOWED because no rules are set.",
-            hostname, unique_ips, destination_port
+            "Connection to %s port %s ALLOWED because no socket_rules are set.",
+            hostname, destination_port
         )
         return
 
-    # %% Analyse rules
-    first_rule_action = rules[0][0]
+    # %% Analyse socket_rules
+    first_rule_action = socket_rules[0][0]
     order_apply = (DENY, ALLOW) if first_rule_action == ALLOW else (ALLOW, DENY)
     implicit_default_is_deny = (first_rule_action == ALLOW)
 
@@ -446,8 +440,9 @@ def _check_address_with_rules(
     for rule_type_to_check in order_apply:
         for ip_host in unique_ips:
             for (action,
-                 (rule_types, network_obj, rule_ports_list),
-                 rule_direction_from_rule) in rules:
+                 (rule_families, rule_types, network_obj, rule_ports_list),
+                 rule_direction_from_rule,
+                 config) in socket_rules:
                 if action == rule_type_to_check:
                     type_match = (not rule_types) or (
                             socket_instance_type in rule_types)
@@ -455,42 +450,44 @@ def _check_address_with_rules(
                     if type_match:
                         if rule_direction_from_rule == conn_direction:
                             if ip_host in network_obj and destination_port in rule_ports_list:
-                                rule_types_str = [socket.SocketKind(t).name for t in
-                                                  rule_types] if rule_types else ["any"]
-                                rule_spec_str = f"types={','.join(rule_types_str)}, net={network_obj}, ports={rule_ports_list}, dir={conn_direction}"
 
-                                logger.info(
-                                    "Connection to %s (%s:%s) %s by explicit rule: %s (%s)",
+                                pysandboxes_logger.info(
+                                    "Connection to '%s' (%s:%s) %s by explicit rule '%s' from $%s",
                                     hostname, ip_host, destination_port, action,
-                                    action, rule_spec_str
+                                    config.rule, format_ruleref(config)
                                 )
                                 if action == DENY:
                                     raise SocketRulesException(
                                         f"Guard network connection to "
-                                        f"{ip_host}:{destination_port} (from {hostname}) "
+                                        f"'{hostname}' ({ip_host}:{destination_port}) "
                                         f"explicitly {action} by rule "
-                                        f"({action} {rule_spec_str})."
+                                        f"'{config.rule}' from {format_ruleref(config)})."
                                     )
                                 elif action == ALLOW:
                                     raise SocketRulesException(
                                         f"Guard network connection to "
-                                        f"{ip_host}:{destination_port} (from {hostname}) "
+                                        f"'{hostname}' ({ip_host}:{destination_port}) "
                                         f"explicitly {action} by rule "
-                                        f"({action} {rule_spec_str})."
+                                        f"'{config.rule}' from {format_ruleref(config)})."
                                     )
     if implicit_default_is_deny:
-        logger.info(
-            "Connection to %s (resolved to %s) port %s DENIED by implicit default policy (first rule was %s, no other rule explicitly matched).",
+        pysandboxes_logger.info(
+            "Connection to '%s' (%s:%s) "
+            "DENIED by implicit default policy "
+            "(first rule was %s, no other rule explicitly matched).",
             hostname, unique_ips, destination_port, first_rule_action
         )
         raise SocketRulesException(
-            f"Guard network connection to {hostname} (port {destination_port}) "
-            f"DENIED by implicit default (first rule: {first_rule_action}). Resolved IPs: {unique_ips}"
+            f"Guard network connection to '{hostname}' ({unique_ips}:{destination_port}) "
+            f"DENIED by implicit default (first rule: {first_rule_action})."
         )
     else:
-        logger.info(
-            "Connection to %s (resolved to %s) port %s ALLOWED by implicit default policy (first rule was %s, no other rule explicitly matched).",
-            hostname, unique_ips, destination_port, first_rule_action
+        pysandboxes_logger.info(
+            "Connection to '%s' (%s:%s) "
+            "ALLOWED by implicit default policy "
+            "(first rule was %s, no other rule explicitly matched).",
+            hostname, unique_ips, destination_port,
+            first_rule_action
         )
         return
 
@@ -500,7 +497,7 @@ _get_rules = lambda: []
 
 class Guard_socket(socket.socket):
     """
-    A custom socket class that enforces network rules to restrict connections.
+    A custom socket class that enforces network socket_rules to restrict connections.
     Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
     Example: "--net=ALLOW|tcp|192.168.1.0/24|80,443|OUT"
     SOCKET_SPECS: "any", "tcp", "udp", or comma-separated combinations.
@@ -531,7 +528,7 @@ class Guard_socket(socket.socket):
             self._check_address((address[0], address[1]), conn_direction=IN)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
-                "Allowing bind to AF_UNIX address (not subject to IP rules): %s",
+                "Allowing bind to AF_UNIX address (not subject to IP socket_rules): %s",
                 address)
         else:
             logger.warning(
@@ -546,7 +543,7 @@ class Guard_socket(socket.socket):
             self._check_address((address[0], address[1]), conn_direction=OUT)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
-                "Allowing connect to AF_UNIX address (not subject to IP rules): %s",
+                "Allowing connect to AF_UNIX address (not subject to IP socket_rules): %s",
                 address)
         else:
             logger.warning(
@@ -561,7 +558,7 @@ class Guard_socket(socket.socket):
                 self._check_address((address[0], address[1]), conn_direction=OUT)
             elif isinstance(address, str):  # AF_UNIX
                 logger.debug(
-                    "Allowing connect_ex to AF_UNIX address (not subject to IP rules): %s",
+                    "Allowing connect_ex to AF_UNIX address (not subject to IP socket_rules): %s",
                     address)
             else:
                 logger.warning(
@@ -596,13 +593,13 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard_socket(rules: List[SocketRule]) -> None:
-    if not rules:
+def activate_guard_socket(socket_rules: List[SocketRule]) -> None:
+    if not socket_rules:
         return
     global _rules
     if _rules:
         raise RuntimeError("Guard_socket already activated.")
-    _rules = rules
+    _rules = socket_rules
     install_wrapper = not _rules
 
     if install_wrapper:

@@ -85,21 +85,23 @@ def _build_network(network_obj, ipv6: bool):
     return network
 
 def rule_to_netfilter(socket_rules: List[SocketRule],
-                      is_ipv6: bool) -> ConfigLines:
+                      is_ipv6: bool) -> List[str]:
     # TODO: ajouter -A INPUT -i lo -j ACCEPT pour l'input du daemon ?
     netfilter = [
         "*filter",
         ":INPUT DROP [0:0]",
         ":FORWARD DROP [0:0]",
         ":OUTPUT DROP [0:0]",
+        "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+        "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
     ]
-    if is_ipv6:
+    if is_ipv6:  # FIXME
         exclude = [socket.AF_INET, socket.IPPROTO_ICMP]
     else:
         exclude = [socket.AF_INET6, socket.IPPROTO_ICMPV6]
     for (action,
-         (rule_types, network_obj, rule_ports_list),
-         rule_direction_from_rule) in socket_rules:
+         (families, rule_types, network_obj, rule_ports_list),
+         rule_direction_from_rule,_) in socket_rules:
 
         if not rule_types:
             rule_types = set(SPEC_TO_TYPE_MAP.values())
@@ -126,23 +128,10 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
                             f"-j {_map_netfilter_action[action]} "
                     )
                     netfilter.append(ip_rule)
-                    if s_ports:
-                        multiport=f"-m multiport --sports {s_ports} "
-                    else:
-                        multiport=''
-                    ip_rule = (
-                            f"-A OUTPUT "
-                            f"-p tcp "
-                            f"{network}"
-                            f"{multiport}"
-                            f"-m conntrack --ctstate ESTABLISHED "
-                            f"-j {_map_netfilter_action[action]} "
-                    )
-                    netfilter.append(ip_rule)
                 else:
-                    s_ports = _build_port(rule_ports_list)
-                    if s_ports:
-                        multiport=f"-m multiport --dports {s_ports} "
+                    d_ports = _build_port(rule_ports_list)
+                    if d_ports:
+                        multiport=f"-m multiport --dports {d_ports} "
                     else:
                         multiport=''
                     network = _build_network(network_obj, is_ipv6)
@@ -151,20 +140,7 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
                             f"-p tcp "
                             f"{network}"
                             f"{multiport}"
-                            f"-m conntrack --ctstate NEW,ESTABLISHED "
-                            f"-j {_map_netfilter_action[action]} "
-                    )
-                    netfilter.append(ip_rule)
-                    if s_ports:
-                        multiport=f"-m multiport --sports {s_ports} "
-                    else:
-                        multiport=''
-                    ip_rule = (
-                            f"-A OUTPUT "
-                            f"-p tcp "
-                            f"{network}"
-                            f"{multiport}"
-                            f"-m conntrack --ctstate ESTABLISHED "
+                            f"-m conntrack --ctstate NEW "
                             f"-j {_map_netfilter_action[action]} "
                     )
                     netfilter.append(ip_rule)
@@ -186,7 +162,7 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
                 )
                 netfilter.append(ip_rule)
             else:
-                pass  # TODO
+                assert False, "Unkown protocol"  # TODO
 
     netfilter.append("COMMIT")
     return netfilter

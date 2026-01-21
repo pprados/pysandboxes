@@ -14,7 +14,7 @@ def format_ruleref(rule: ConfigLine) -> str:
     if rule.path == Path():
         path="<arg>"
     if rule.ln == 0:
-        return str(path)
+        return path
     else:
         return f"{path}({rule.ln})"
 

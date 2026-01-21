@@ -28,7 +28,7 @@ class WhiteList(MutableSet):
     A class that simulates a set of directory paths, implementing a white list logic.
 
     This class extends MutableSet to provide set-like functionality. It ensures
-    that the stored directory paths are unique and adhere to specific prefix rules.
+    that the stored directory paths are unique and adhere to specific prefix socket_rules.
     If a new directory path is a prefix of an existing path, the existing path is
     removed and replaced by the new, more general path. If a new path is already
     prefixed by an existing path, it is not added.
@@ -91,7 +91,7 @@ class WhiteList(MutableSet):
 
     def add(self, directory: str) -> None:
         """
-        Adds a new directory path to the WhiteList, applying the prefix rules.
+        Adds a new directory path to the WhiteList, applying the prefix socket_rules.
 
         - If the new directory path is already prefixed by an existing path, it
           is not added.
@@ -238,7 +238,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 f"--read-only={white}",
             ])
 
-        # Add files rules
+        # Add files socket_rules
         new_files_rules = []
         for rule in files_rules:
             if isinstance(rule, BindRule):
@@ -289,10 +289,10 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 Path(netfilter6_file).write_text("\n".join(net_filter6))
             args.append(f"--netfilter6={netfilter6_file}")
 
-            # Remove redondant sockets rules
+            # Remove redondant sockets socket_rules
             socket_rules = []  # FIXME: doublon ou non ?
 
-        # TODO: Add tmp rules
+        # TODO: Add tmp socket_rules
         # --tmpfs DEST
 
         args.extend(["env", "-i"])

@@ -90,7 +90,7 @@ def parse_rules(config: ConfigLines,
                             )
                         )
                         continue
-                    # Search same rules with different write flag
+                    # Search same socket_rules with different write flag
                     is_write=rule.rule.startswith("--bind=")
                     for bind_rule in rules_bind:
                         if bind_rule.source == src and bind_rule.dest == dest:
@@ -147,10 +147,10 @@ def parse_rules(config: ConfigLines,
     return rules_ignore + rules_bind, ignore_rules
 
 
-# Helper to resolve symlinks and apply rules
+# Helper to resolve symlinks and apply socket_rules
 def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[str]:
     """
-    Applies the rules to a file path.
+    Applies the socket_rules to a file path.
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
@@ -173,18 +173,18 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[st
                     real_path, rule.source):
                 return None
         else:
-            assert ("Invalide rules")
+            assert ("Invalide socket_rules")
     return path
 
 
-# Helper to resolve symlinks and apply rules
+# Helper to resolve symlinks and apply socket_rules
 def _apply_dest_to_src_rules(path: str,
                              *,
                              write: bool,
                              accept_source: bool = False,
                              ) -> Optional[str]:
     """
-    Applies the rules to a file path.
+    Applies the socket_rules to a file path.
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
@@ -211,7 +211,7 @@ def _apply_dest_to_src_rules(path: str,
                     fake_path, rule.source):
                 return None
         else:
-            assert ("Invalide rules")
+            assert ("Invalide socket_rules")
     return path
 
 

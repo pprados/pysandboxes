@@ -255,8 +255,8 @@ class BaseSubProcessDaemon(SSESandbox):
                 await self._re_start()
         return errorlevel
 
-    # def convert_rules(self, rules: AllRules) -> AllRules:
-    #     return rules
+    # def convert_rules(self, socket_rules: AllRules) -> AllRules:
+    #     return socket_rules
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
