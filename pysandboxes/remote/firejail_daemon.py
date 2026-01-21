@@ -20,7 +20,7 @@ from ..types import ConfigLines, Envs, Args
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True  # FIXME subprocess_daemon.DEBUG
+DEBUG = False
 
 
 class WhiteList(MutableSet):

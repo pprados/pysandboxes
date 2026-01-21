@@ -50,9 +50,7 @@ async def async_start_daemon(name: str,
 
 
 _async_start_lock = asyncio.Lock()
-_async_stop_lock = asyncio.Lock()
 _start_lock = threading.Lock()
-_stop_lock = threading.Lock()
 
 
 async def _async_start_daemon(name: Optional[str],
@@ -95,7 +93,7 @@ async def async_shutdown_daemon():
     Return when the daemon is shutdown.
     """
     global _current_daemon, _startup_counter
-    async with _async_start_lock, _async_stop_lock:
+    async with _async_start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when shutdown")
             _startup_counter -= 1
@@ -167,7 +165,7 @@ def shutdown_daemon() -> None:
     Return when the daemon is shutdown.
     """
     global _current_daemon, _startup_counter
-    with _start_lock, _stop_lock:
+    with _start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when shutdown")
             _startup_counter -= 1

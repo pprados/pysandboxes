@@ -30,7 +30,7 @@ async def start_daemon_for_tests() -> Iterator[None]:
     start_daemon("firejail",
                  log_level,
                  config,
-                 timeout=240,  # FIXME
+                 timeout=15,
                  )
     yield
     shutdown_daemon()
