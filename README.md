@@ -41,6 +41,7 @@ Un mécanisme d'apprentissage permet une amélioration continue des règles de s
 TODO: https://xxradar.medium.com/the-security-risks-of-model-context-protocol-mcp-c50c4817e80e
 
 
+TODO: expliquer qu'il faut créer le fichier .py-sandbox
 # FAQ
 
 ## Comment propager un token à une api dans la sandbox ?

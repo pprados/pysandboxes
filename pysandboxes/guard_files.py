@@ -2,18 +2,19 @@ import builtins
 import fnmatch
 import functools
 import inspect
+import io
 import logging
 import os
-import io
-import pathlib
 import sys
-import typing
 from os import scandir as _scandir
+from pathlib import Path
 from pathlib import Path as _Path
 from types import TracebackType
 from typing import Iterator
 from typing import List, Callable, Optional, Union
+from typing import NamedTuple, Any, Type, Tuple
 
+from .main_logger import format_ruleref, ErrorMsg
 from .types import ConfigLines
 
 if io or os:
@@ -32,86 +33,94 @@ _white_list = [
     # FIXME "pathlib/_local.py",
 ]
 
+
 class RuleFileNotFoundError(FileNotFoundError):
     pass
+
 
 class RulePermissionError(PermissionError):
     pass
 
 
 # Internal representation of a rule
-class BindRule:
-    def __init__(self,
-                 source: str,
-                 dest: Optional[str] = None,
-                 write: bool = True):
-        self.source = source
-        self.dest = dest
-        self.write = write
+class BindRule(NamedTuple):
+    source: str
+    dest: Optional[str]
+    write: bool
 
 
-class IgnoreRule:
-    def __init__(self, pattern: str):
-        self.source = pattern
+class IgnoreRule(NamedTuple):
+    source: str
 
 
-Files_Rules = Union[BindRule, IgnoreRule]
+FilesRule = Union[BindRule, IgnoreRule]
 # Internal state for the file filter
-_rules: List[Files_Rules] = []
+_rules: List[FilesRule] = []
 
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 
 
-def parse_rules(arguments: ConfigLines) -> typing.Tuple[List[Files_Rules], ConfigLines]:
+def parse_rules(config: ConfigLines,
+                errors: List[ErrorMsg],
+                ) -> Tuple[List[FilesRule], ConfigLines]:
     """
     Parses rule strings into internal ParserRule objects.
     Supports --bind=src,dest and --ignore=glob_pattern.
     """
-    rules_ignore: List[Files_Rules] = []
-    rules_bind: List[Files_Rules] = []
+    rules_ignore: List[FilesRule] = []
+    rules_bind: List[FilesRule] = []
     ignore_rules: ConfigLines = []
-    for line in arguments:
-        if line.startswith("--bind="):
-            value = line[len("--bind="):]
+    for rule in config:
+        if rule.rule.startswith("--bind=") or rule.rule.startswith("--ro-bind="):
+            value = rule.rule.split('=', 1)[1]
             try:
                 src, dest = value.split(",", 1)
                 if not src and not dest:
                     continue  # Ignore empty bind
                 if src and dest:
-                    # TODO: assert exist files
-                    # if not pathlib.Path(src).exists() and or Path(dest).exists():
-                    #     raise ValueError(f"Invalid bind rule: {line}")
+                    if not Path(src).exists() or not Path(dest).exists():
+                        errors.append(
+                            (
+                                f"{format_ruleref(rule)}: "
+                                f"In '{rule.rule}', "
+                                f"source and destination must exists.",
+                                rule.path,
+                                rule.ln
+                            )
+                        )
+                        continue
                     rules_bind.append(BindRule(source=src,
                                                dest=src,
-                                               write=True))
+                                               write=rule.rule.startswith("--bind=")))
                 else:
-                    raise ValueError(f"Invalid bind rule: {line}")
+                    errors.append(
+                        (
+                            f"{format_ruleref(rule)}: "
+                            f"In '{rule.rule}', "
+                            f" source and destination must be set",
+                            rule.path,
+                            rule.ln
+                        )
+                    )
+                    continue
 
             except ValueError:
-                raise ValueError(f"Invalid bind rule: {line}")
-        elif line.startswith("--ro-bind="):
-            value = line[len("--ro-bind="):]
-            try:
-                src, dest = value.split(",", 1)
-                if not src and not dest:
-                    continue  # Ignore empty bind
-                if src and dest:
-                    # TODO: assert exist files
-                    # if not pathlib.Path(src).exists() and or Path(dest).exists():
-                    #     raise ValueError(f"Invalid bind rule: {line}")
-                    rules_bind.append(BindRule(source=src,
-                                               dest=src,
-                                               write=False))
-                else:
-                    raise ValueError(f"Invalid bind rule: {line}")
-            except ValueError:
-                raise ValueError(f"Invalid bind rule: {line}")
-        elif line.startswith("--ignore="):
-            pattern = line[len("--ignore="):]
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"In '{rule.rule}', "
+                        f"source and destination must be separated with a comma.",
+                        rule.path,
+                        rule.ln
+                    )
+                )
+                continue
+        elif rule.rule.startswith("--ignore="):
+            pattern = rule.rule[len("--ignore="):]
             rules_ignore.append(IgnoreRule(pattern))
         else:
-            ignore_rules.append(line)
+            ignore_rules.append(rule)
     rules_bind = sorted(rules_bind, key=lambda r: len(r.dest), reverse=True)
 
     return rules_ignore + rules_bind, ignore_rules
@@ -168,7 +177,8 @@ def _apply_dest_to_src_rules(path: str,
                     return None
             if fake_path.startswith(rule.dest):
                 if not rule.write and write:
-                    raise RulePermissionError(f"Cannot write to {rule.dest}")  # FIXME: msg
+                    raise RulePermissionError(
+                        f"Cannot write to {rule.dest}")  # FIXME: msg
                 # FIXME: a supprimer ?
                 # if accept_source:
                 #     return original_path
@@ -180,7 +190,7 @@ def _apply_dest_to_src_rules(path: str,
                     fake_path, rule.source):
                 return None
         else:
-            assert("Invalide rules")
+            assert ("Invalide rules")
     return path
 
 
@@ -313,19 +323,19 @@ def _wrap_os_readlink(func: Callable) -> Callable:
 
 class _DirEntry:
     def __init__(self,
-                 target: typing.Any,
+                 target: Any,
                  path: str) -> None:
         self._target = target
         self.path = path
 
-    def __getattr__(self, name: str) -> typing.Any:
+    def __getattr__(self, name: str) -> Any:
         print("_DirEntry.__get")
         # Called only if attribute not found the usual way
         if name == "path":
             return super().__getattr__(name)
         return getattr(self._target, name)
 
-    def __setattr__(self, name: str, value: typing.Any) -> None:
+    def __setattr__(self, name: str, value: Any) -> None:
         print("_DirEntry.__set")
         if name in ("_target", "path"):
             # Assign _target to self, not to target
@@ -361,7 +371,7 @@ class _ScanDirContextManager:
             print(f"Error scanning directory {self.directory}: {e}")  # FIXME
             return self
 
-    def __exit__(self, exc_type: Optional[typing.Type[BaseException]],
+    def __exit__(self, exc_type: Optional[Type[BaseException]],
                  exc_val: Optional[BaseException],
                  exc_tb: Optional[TracebackType]) -> bool:
         """
@@ -471,7 +481,7 @@ def _wrap_pathlib(func: Callable) -> Callable:
         remapped = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if remapped is None:
             raise RuleFileNotFoundError(f"Access to '{file}' is ignored by rule")
-        return func(pathlib.Path(remapped), *args, **kwargs)
+        return func(Path(remapped), *args, **kwargs)
 
     return wrapper
 
@@ -480,7 +490,7 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self, glob: str, *args, **kwargs) -> Iterator:
         if new_path := _apply_dest_to_src_rules(self, write=False):
-            return (pathlib.Path(_apply_src_to_dest_rules(p)) for p in
+            return (Path(_apply_src_to_dest_rules(p)) for p in
                     func(_Path(new_path), glob, *args, **kwargs)
                     if _apply_src_to_dest_rules(p) is not None)
         else:
@@ -552,6 +562,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
                         sys.modules[__name__],
                         )
 
+
     def _deactivate_guard_files():
         restore_default_values(_memory,
                                sys.modules[__name__])
@@ -559,7 +570,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard_files(rules: List[Files_Rules]) -> None:
+def activate_guard_files(rules: List[FilesRule]) -> None:
     """
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.

@@ -2,13 +2,14 @@ import asyncio
 import functools
 import inspect
 import logging
+import os
 import signal
 import threading
 import typing
 from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, TypeVar, Union, \
-    Awaitable, Coroutine, runtime_checkable
+    Awaitable, Coroutine, runtime_checkable,List
 from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
@@ -67,9 +68,14 @@ class sandboxes(typing.Protocol):
     def __init__(self,
                  init_fn: Optional[SyncOrAsyncFunc] = None,
                  config_path: Optional[Union[Path, str]] = None,
+                 *,
+                 envs: typing.Dict[str, str]=os.environ,
+                 extra_rules:Optional[List[str]]=None,
                  ) -> None:
         self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
         self.config_path = config_path
+        self.envs=envs
+        self.extra_rules=extra_rules
         self.timeout = 60
         self._old_sigint = None
         self._old_sigterm = None
@@ -87,8 +93,11 @@ class sandboxes(typing.Protocol):
         logger.debug("__enter__ start...")
         check_mixte_async_async()
         log_level = logging.root.getEffectiveLevel()
-        config = get_config_path(self.config_path).read_text().splitlines()
-        config, _, os_sandbox, *_ = read_and_parse_config(config=config)
+        config, _, os_sandbox, *_ = read_and_parse_config(
+            self.config_path,
+            envs=self.envs,
+            extra_rules=self.extra_rules,
+        )
         start_daemon(os_sandbox,
                      log_level,
                      config,

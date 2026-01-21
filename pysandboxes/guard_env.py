@@ -1,8 +1,13 @@
+import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple, List
 
-from .types import ConfigLines
+from .main_logger import format_ruleref, ErrorMsg
+from .types import ConfigLines, ConfigLine
+
+logger = logging.getLogger(__name__)
+
 
 # TODO: déplacer les guard_* dans un module dédié
 def _read_and_substitute_lines(
@@ -49,7 +54,8 @@ def _read_and_substitute_lines(
 
 def parse_guard_envs(
         rules: ConfigLines,
-        source_vars: Dict[str, str]
+        source_vars: Dict[str, str],
+        errors: List[ErrorMsg],
 ) -> Tuple[Dict[str, str], ConfigLines]:
     """
     Processes a list of rules to create a new dictionary of variables.
@@ -75,15 +81,23 @@ def parse_guard_envs(
             value_pattern
         )
 
-    for rule in rules:
-        if rule.startswith("--set-env="):
-            rule = rule[len("--set-env="):]
+    for orule in rules:
+        if orule.rule.startswith("--set-env="):
+            # Remove prefix
+            rule = ConfigLine(orule.rule[len("--set-env="):], orule.path, orule.ln)
 
-            if "=" not in rule:
-                print(f"Warning: Skipping malformed rule: {rule}", file=sys.stderr)
+            if "=" not in rule.rule:
+                errors.append(
+                    (
+                        f"{format_ruleref(orule)}: "
+                        f"Detect a missing '=' in rule: {orule.rule}.",
+                        rule.path,
+                        rule.ln
+                    )
+                )
                 continue
 
-            key_pattern, value_pattern = rule.split("=", 1)
+            key_pattern, value_pattern = rule.rule.split("=", 1)
 
             # Case: Wildcard rule like *_API_KEY=${*_API_KEY}
             if "*" in key_pattern:
@@ -97,10 +111,10 @@ def parse_guard_envs(
             # Case: Simple rule like key=value or key=${VAR}
             else:
                 new_vars[key_pattern] = substitute_value(value_pattern)
-        elif rule.startswith("--unset-env="):
-            rule = rule[len("--unset-env="):]
-            new_vars.pop(rule, None)
+        elif orule.rule.startswith("--unset-env="):
+            remove_key = orule.rule[len("--unset-env="):]
+            new_vars.pop(remove_key, None)
         else:
-            ignore_rules.append(rule.strip())
+            ignore_rules.append(orule)
 
     return new_vars, ignore_rules

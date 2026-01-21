@@ -184,7 +184,7 @@ class BaseSubProcessDaemon(SSESandbox):
             env=os.environ.copy(),
         )
 
-        # Send config body via stdin, because, it's not possible to use .py-sandbox file
+        # Send config body via stdin, because, it's not possible to use .py-sandboxes file
         self._token = str(uuid.uuid4())
         data = ("\n".join(config[0:2])) + "\n" + END_OF_FILE + self._token + "\n"
         # data = "A\nB\n" + END_OF_FILE + self._token + "\n"

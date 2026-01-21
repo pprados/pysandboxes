@@ -195,6 +195,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
             read_and_parse_config(  # FIXME: etrange. C'est en paramètre
                 envs=envs,
                 config=config,
+                exit_on_error=True,
             ))
 
         # assert provider == "firejail"
@@ -333,7 +334,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
         #     "--outer-sandbox", "firejail",
         # ])
         if DEBUG:
-            Path("run.sh").write_text("<.py-sandbox " + " \\\n".join(cmd_parameters))
+            Path("run.sh").write_text("<.py-sandboxes " + " \\\n".join(cmd_parameters))
         return cmd_parameters
 
     def bash_args(self, envs: Envs) -> Args:

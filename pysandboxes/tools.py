@@ -6,7 +6,7 @@ import inspect
 import re
 from typing import Dict, Optional, Union, Callable, Awaitable, Any, Tuple
 
-from .types import ConfigLines
+from .types import ConfigLines, ConfigLine
 
 
 def substitute_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigLines:
@@ -44,19 +44,19 @@ def substitute_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigL
         return env_vars.get(var_name,
                             default_value if default_value is not None else "")
 
-    return [pattern.sub(substitute, line) for line in lines]
+    return [ConfigLine(pattern.sub(substitute, line),path,ln) for line,path,ln in lines]
 
 
 def remove_comments(config: ConfigLines) -> ConfigLines:
     processed_lines: ConfigLines = []
 
-    for line in config:
+    for line,path,ln in config:
         # Remove end-of-line comments while respecting quotes
         cleaned_line: str = _remove_comment(line.strip())
 
         # Filter out empty lines and lines that are full comments
         if cleaned_line and not cleaned_line.lstrip().startswith("#"):
-            processed_lines.append(cleaned_line)
+            processed_lines.append(ConfigLine(cleaned_line,path,ln))
 
     return processed_lines
 

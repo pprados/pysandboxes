@@ -42,11 +42,33 @@ import logging
 import os
 import socket
 import sys
-from typing import Tuple, Optional, Union, List, Dict
+from ipaddress import IPv4Network, IPv6Network
+from pathlib import Path
+from typing import Tuple, Optional, Union, List, Dict, NamedTuple
 
-from .types import ConfigLines
+from .main_logger import format_ruleref, ErrorMsg
+from .types import ConfigLines, ConfigLine
 
 logger = logging.getLogger(__name__)
+
+
+# Parsed rule format used internally:
+class SocketMask(NamedTuple):
+    families: List[str]
+    types: List[int]
+    network: Union[IPv4Network, IPv6Network]
+    ports: Union[List[int], range]
+
+
+class SocketRule(NamedTuple):
+    action: str
+    mask: SocketMask
+    direction: str
+
+
+class SocketRulesException(RuntimeError):  # TODO
+    pass
+
 
 # Address format details can be found in the Python socket library documentation:
 # https://docs.python.org/3/library/socket.html#address-families
@@ -66,21 +88,10 @@ ALLOW = "ALLOW"  # Action to allow a connection
 IN = "IN"  # Direction for incoming connections (e.g., server-side bind)
 OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 
+
 # Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
 # Example: "--net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
 # SOCKET_SPECS: comma-separated list of "tcp", "udp", "any".
-
-# Parsed rule format used internally:
-# (action_str,
-#  (parsed_families: List[int], parsed_types: List[int], network_obj, ports_list_or_range),
-#  direction_str)
-SocketRule = Tuple[str,
-Tuple[List[int], ipaddress.ip_network, Union[List[int], range]],
-str]
-
-
-class SocketRulesException(RuntimeError):
-    pass
 
 
 # FIXME: valider et propager
@@ -105,128 +116,225 @@ SPEC_TO_TYPE_MAP: Dict[str, int] = {
 }
 
 
-def _parse_rule(rule: str) -> Optional[List[SocketRule]]:
-    if not rule.startswith("--net="):
+def _parse_rule(rule: ConfigLine,
+                errors: List[Tuple[str, Path, int]]) -> Optional[List[SocketRule]]:
+    if not rule.rule.startswith("--net="):
         return []
-    # Remove prefix "--net="
-    socket_rules=[]
-    value_part = rule[len("--net="):]
-    # Split by '|' expecting 5 parts: ACTION | SOCKET_SPECS | NETWORK_STR | PORT_SPEC_STR | DIRECTION_STR
+    value_part = rule.rule[len("--net="):]
     rule_components = value_part.split('|', 4)  # Maxsplit is 4 for 5 parts
     if len(rule_components) != 5:
-        raise ValueError(
-            f"Rule '{rule}') has incorrect number of parts separated by '|'. "
-            f"Expected 5, got {len(rule_components)}. "
-            f"Format: ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR")
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"'{rule.rule}' has incorrect number of parts separated by '|'. "
+                f"Expected 5, got {len(rule_components)}. "
+                f"Format: "
+                f"<{ALLOW}, {DENY}>|"
+                f"<{','.join(SPEC_TO_TYPE_MAP)} list or any>|"
+                f"<ip/mask>, *|"
+                f"<port list>|"
+                f"<IN, OUT>.",
+                rule.path,
+                rule.ln
+            )
+        )
+        return None
     action, socket_specs_str, network_str, port_spec_str, direction = rule_components
     if action not in (DENY, ALLOW):
-        raise ValueError(
-            f"Action '{action}' is not '{ALLOW}' or '{DENY}'. Rule: {rule}")
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"'{rule.rule}' "
+                f"use an invalide action. Must be '{ALLOW}' or '{DENY}'.",
+                rule.path,
+                rule.ln
+            )
+        )
+        return None
+
     # Parse SOCKET_SPECS
-    parsed_rule_families: List[int] = []
     parsed_rule_types: List[int] = []
     specs_input = [s.strip().lower() for s in socket_specs_str.split(',') if
                    s.strip()]
     if not specs_input:
-        raise ValueError(f"'{rule}' has empty SOCKET_SPECS.")
-    if "any" in specs_input:
-        if len(specs_input) > 1:
-            raise ValueError(
-                f"'{rule}': 'any' in SOCKET_SPECS must be used alone, not combined with other specifiers like '{socket_specs_str}'.")
-        # 'any' means parsed_rule_families and parsed_rule_types remain empty (wildcard for both)
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"'{rule.rule}' "
+                f"has empty socket specs.",
+                rule.path,
+                rule.ln
+            )
+        )
+        return None
     else:
         for spec_part in specs_input:
             if spec_part in ["any", "*"]:
+                if len(specs_input) > 1:
+                    errors.append(
+                        (
+                            f"{format_ruleref(rule)}: "
+                            f"In '{rule.rule}', "
+                            f"'{spec_part}' must be used alone, "
+                            f"not combined with other specifiers.",
+                            rule.path,
+                            rule.ln
+                        )
+                    )
+                    return []
                 parsed_rule_types = []
+
             elif spec_part in SPEC_TO_TYPE_MAP:
                 parsed_rule_types.append(SPEC_TO_TYPE_MAP[spec_part])
             else:
-                raise ValueError(
-                    f"Rule has unknown socket specifier '{spec_part}' in '{socket_specs_str}'. "
-                    f"Valid specifiers: {', '.join(SPEC_TO_TYPE_MAP.keys())}. Rule: {rule}")
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"'{rule.rule}' "
+                        f"has unknown socket specifier '{spec_part}'."
+                        f"Valid specifiers: any, {', '.join(SPEC_TO_TYPE_MAP.keys())}.",
+                        rule.path,
+                        rule.ln
+                    )
+                )
+                return None
 
-        # Remove duplicates and sort for consistency
-        parsed_rule_families = sorted(list(set(parsed_rule_families)))  # FIXME
         parsed_rule_types = sorted(list(set(parsed_rule_types)))
     if not isinstance(network_str, str) or not network_str.strip():
-        raise ValueError(
-            f"Network part '{network_str}' is not a non-empty string. Rule: {rule}")
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"In '{rule.rule}', "
+                f"network part must be set.",
+                rule.path,
+                rule.ln
+            )
+        )
+        return None
     if not isinstance(port_spec_str, str):
-        raise ValueError(
-            f"Port spec part '{port_spec_str}' is not a string. Rule: {rule}")
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"In '{rule.rule}', "
+                f"port spec part is not valid.",
+                rule.path,
+                rule.ln
+            )
+        )
+        return None
     if direction not in (IN, OUT):
-        raise ValueError(
-            f"Direction '{direction}' is not '{IN}' or '{OUT}'. Rule: {rule}")
-    def _finish_rule(network):
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"In '{rule.rule}', "
+                f"direction is not '{IN}' or '{OUT}'.",
+                rule.path,
+                rule.ln
+            )
+        )
+        return None
+    try:
         ports_list_or_range = _convert_ports_range(port_spec_str)
-        if not ports_list_or_range and port_spec_str.strip() not in ('',
-                                                                     '*'):
-            raise ValueError(
-                f"Invalid or empty port specification '{port_spec_str}' ('{rule}') "
-                f"that does not resolve to any ports (and is not '*' or empty string "
-                f"for 'any port' if applicable).")
-        return action, (parsed_rule_types, network, ports_list_or_range), direction
+    except ValueError as e:
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"In '{rule.rule}', "
+                f"invalide port list.",
+                rule.path,
+                rule.ln
+            )
+        )
+        return None
+    if network_str in ("*",):
+        network_str = "0.0.0.0/0"
+
+    def _for_each_networks(network: Union[IPv4Network, IPv6Network]):
+        return SocketRule(action,
+                          SocketMask(
+                              specs_input,
+                              parsed_rule_types,
+                              # May not be resolved
+                              network,
+                              ports_list_or_range),
+                          direction)
 
     try:
-        return [_finish_rule(ipaddress.ip_network(network_str, strict=False))]
+        return [
+            _for_each_networks(ipaddress.ip_network(network_str, strict=False))
+        ]
     except ValueError as e:
         try:
-            _,_,networks = socket.gethostbyname_ex(network_str)
-            return [_finish_rule(ipaddress.ip_network(network, strict=False))  for network in networks]
-        except ValueError as e:
-            raise ValueError(
-                f"Invalid network specification '{network_str}' ('{rule}') "
-                f"that does not resolve to any network.") from e
+            _, _, networks = socket.gethostbyname_ex(network_str)
+            return [_for_each_networks(ipaddress.ip_network(network, strict=False)) for
+                    network in networks]
+        except socket.gaierror as e:
+            errors.append(
+                (
+                    f"{format_ruleref(rule)}: "
+                    f"In '{rule.rule}', "
+                    f"invalid network specification."
+                    f"That does not resolve to any network.",
+                    rule.path,
+                    rule.ln
+                )
+            )
+            return None
 
 
-
-def parse_rules(rules: ConfigLines) -> Tuple[List[SocketRule], ConfigLines]:
+def parse_rules(rules: ConfigLines,
+                errors: List[ErrorMsg]) -> Tuple[
+    List[SocketRule], ConfigLines]:
     socket_rules = []
     ignore_rules = []
-    for rule_str in rules:
-        parsed_rules = _parse_rule(rule_str)
+    for rule in rules:
+        parsed_rules = _parse_rule(rule, errors)
         if parsed_rules:
             socket_rules.extend(parsed_rules)
-        else:
-            ignore_rules.append(rule_str)
+        elif parsed_rules is not None:
+            ignore_rules.append(rule)
+
+    # TODO: Remove duplicates and sort for consistency
+    # parsed_rule_families = sorted(list(set(parsed_rule_families)))  # FIXME
+
     return socket_rules, ignore_rules
 
 
-def _convert_ports_range(syntaxe: str) -> Union[List[int], range]:
+def _convert_ports_range(syntax: str) -> Union[List[int], range]:
     """
     Converts a port specification string (e.g., "80,443,8000-8080,*")
     into a sorted list of unique integer port numbers or a range object for '*'.
 
     Args:
-        syntaxe: The port specification string.
+        syntax: The port specification string.
 
     Returns:
         A sorted list of integers representing individual ports and expanded ranges,
         or a range(0, 65535) if '*' is specified. Returns an empty list for invalid syntax.
     """
-    if not syntaxe:
+    if not syntax:
         return []
-    if syntaxe.strip() == '*':
+    if syntax.strip() == '*':
         return range(65535)  # Represents all ports
     ports = set()
     max_port = 65535  # Maximum valid port number
-    elements = syntaxe.split(',')
+    elements = syntax.split(',')
     for element in elements:
         element = element.strip()
         if not element:
             continue
         if '-' in element:
-            limites = element.split('-', 1)
-            if len(limites) == 2:
-                debut_str, end_str = limites[0].strip(), limites[1].strip()
-                if not debut_str:
+            limits = element.split('-', 1)
+            if len(limits) == 2:
+                start_str, end_str = limits[0].strip(), limits[1].strip()
+                if not start_str:
                     raise ValueError(
                         f"Invalid range format: '{element}'. Range start cannot be empty.")
                 try:
-                    start = int(debut_str)
+                    start = int(start_str)
                 except ValueError:
                     raise ValueError(
-                        f"Invalid start port number '{debut_str}' in range '{element}'.")
+                        f"Invalid start port number '{start_str}' in range '{element}'.")
                 if not (0 <= start <= max_port):
                     raise ValueError(
                         f"Start port {start} in range '{element}' is out of valid range (0-{max_port}).")
@@ -385,8 +493,6 @@ def _check_address_with_rules(
             hostname, unique_ips, destination_port, first_rule_action
         )
         return
-
-
 
 
 _get_rules = lambda: []

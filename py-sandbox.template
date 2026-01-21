@@ -21,9 +21,8 @@
 # - firejail : A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
 
-#--os-sandbox=task
 #--os-sandbox=subprocess
---os-sandbox=firejail
+#--os-sandbox=firejail
 # TODO --no-py-sandbox
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
@@ -55,7 +54,7 @@
 
 --set-env=HOME=${HOME}
 --set-env=USER=${USER}
---set-env=PATH=${PATH}  # FIXME je ne pense pas cela nécessaire
+#--set-env=PATH=${PATH}  # FIXME je ne pense pas cela nécessaire
 --set-env=VIRTUAL_ENV*=${VIRTUAL_ENV_*}
 --set-env=LC_*=${LC_*}
 --set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
@@ -113,6 +112,7 @@
 
 # *** Whitelist strategy (recommanded) ***
 # Allow web access
+
 --net=ALLOW|tcp|${BIND:=127.0.0.1}/32|${PORT:=8000}|IN
 --net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call all HTTPS services
 --net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services

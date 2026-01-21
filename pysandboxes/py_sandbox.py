@@ -5,17 +5,17 @@ import types
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
-from . import guard_files, guard_env
-from . import guard_socket
-from .guard_files import Files_Rules
+from . import guard_files, guard_env, guard_provider, guard_socket
+from .guard_files import FilesRule
 from .guard_socket import SocketRule
+from .main_logger import format_ruleref, format_error_list, ErrorMsg
 from .tools import remove_comments, substitute_env_vars
-from .types import ConfigLines, Envs
+from .types import ConfigLines, Envs, ConfigLine
 
 logger = logging.getLogger(__name__)
 
 
-def _get_caller_module(skip: int = 4) -> Optional[types.ModuleType]:
+def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
     """
     Returns the module of the caller.
 
@@ -43,57 +43,93 @@ AllRules = Tuple[
     Envs,  # sandbox env
     str,  # os_sandboxg
     List[SocketRule],  # Socket rules
-    List[Files_Rules],  # file rules
+    List[FilesRule],  # file rules
 ]
 
 
+def _read_config(config_path: Path) -> ConfigLines:
+    return remove_comments([ConfigLine(line, config_path, ln + 1) for ln, line in
+                            enumerate(config_path.read_text().splitlines())])
+
+
 def read_and_parse_config(
+        config_path: Optional[Path],
         *,
-        envs: Dict[str, str] = os.environ,
-        config: ConfigLines,
-        args_rules: Optional[List[str]] = None
+        envs: Envs = os.environ,
+        extra_rules: Optional[List[str]] = None,
+        exit_on_error:bool = False,
 ) -> AllRules:
+    if extra_rules is None:
+        extra_lines = []
+    else:
+        extra_lines = remove_comments(
+            [ConfigLine(line, "<extra>", 0) for line in extra_rules])
+
     # 1. try to find .pysandboxes in the caller module
-    if args_rules is None:
-        args_rules = []
     body_from_ressource = []
-    # FIXME: a bug in importlib.resources.files
-    # caller_module = _get_caller_module()
+    # caller_module = _get_caller_module(skip=3)
     # if caller_module:
     #     from importlib.metadata import files
-    #     resource = files(caller_module.__name__).joinpath(".pysandboxes")
-    #     resource = files(caller_module.__package__).joinpath(".pysandboxes")
-    #     FIXME
-    #     if resource.exists():
-    #         with as_file(resource) as path:
-    #             body_from_ressource = _read_config(path)
-    #     pass
+    #     try:
+    #         # FIXME: test
+    #         resource = files(caller_module.__name__).joinpath(".pysandboxes")
+    #         if resource.exists():
+    #             from importlib.resources import as_file
+    #             with as_file(resource) as path:
+    #                 body_from_ressource = _read_config(path)
+    #     except PackageNotFoundError:
+    #         pass  # Ignore
 
+    # 2. try to find .pysandboxes in the current directory
+    if not config_path and Path(".py-sandboxes").exists():
+        config_path = Path(".py-sandboxes")
+    return parse_config(extra_lines + _read_config(config_path),
+                        envs=envs,
+                        exit_on_error=exit_on_error)
 
-    body_from_users_or_os = remove_comments(config)
-    # 3. Merge all files
-    config = body_from_ressource + args_rules + body_from_users_or_os
+def parse_config(
+        config: ConfigLines,
+        *,
+        envs: Envs = os.environ,
+        exit_on_error:bool = False,
+) -> AllRules:
+    errors: List[ErrorMsg] = []  # Aggregate all errors
 
-    # 4. Parse the rules, step by step
-    sandbox_env, others = guard_env.parse_guard_envs(config, envs)  # TODO: a virer lors outer !
-    others = substitute_env_vars(others, envs)
-    from pysandboxes import guard_provider
-    provider, others = guard_provider.parse_rules(others)
-    socket_rules, others = guard_socket.parse_rules(others)
-    files_rules, others = guard_files.parse_rules(others)
+    # 1. Parse the rules, step by step
+    sandbox_env, others = guard_env.parse_guard_envs(config, envs, errors)
+    others = substitute_env_vars(others, envs)  # with main envs
 
-    # 5. If some line are ignored, log a warning
+    provider, others = guard_provider.parse_rules(others, errors)
+    socket_rules, others = guard_socket.parse_rules(others, errors)
+    files_rules, others = guard_files.parse_rules(others, errors)
+
+    # 2. If some line are ignored, log a warning
     if others:
         for invalide_rule in others:
-            logger.warning(f"Ignore invalid rule: {invalide_rule}")
+            logger.warning(
+                f"%s: Ignore invalid rule '%s'.",
+                format_ruleref(invalide_rule),
+                invalide_rule.rule
+            )
+    # 3. Print error
+    if errors:
+        errors=sorted(errors, key=lambda r: (str(r[1]),r[2]))
+        all_errors = "\n" + "\n".join([error[0] for error in errors])
+        logger.error(all_errors)
+        all_files_in_errors = list(set([repr(str(error[1])) for error in errors
+                                        if error[1] != Path("")]))
+        if exit_on_error:
+            os._exit(1)
+        raise ValueError(f"Syntax error in {format_error_list(all_files_in_errors)} ")
+
     return config, sandbox_env, provider, socket_rules, files_rules
 
 
-def get_config_path(config_path:Optional[Path]) -> Optional[Path]:
+def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
     # TODO: merge parameter with others ?
     if not config_path:
         known_paths = [
-            Path(".py-sandbox"),  # Current directory
+            Path(".py-sandboxes"),  # Current directory
             Path("~/.config/pysandboxes/py-sandbox").expanduser(),
             Path("~/.local/share/pysandboxes/py-sandbox").expanduser(),
             Path("/etc/pysandboxes/py-sandbox"),
@@ -112,7 +148,7 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
         envs: Dict[str, str] = os.environ,
         args_rules: Optional[List[str]] = None,
         *,
-        config:ConfigLines = None,
+        config: ConfigLines = None,
         outer_sandbox: str = None,
 ) -> None:
     if outer_sandbox:
@@ -125,10 +161,10 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
             config=config,
         )
     else:
-        config,sandbox_env, os_sandbox, socket_rules, files_rules = (
+        config, sandbox_env, os_sandbox, socket_rules, files_rules = (
             read_and_parse_config(envs=envs,
                                   config=config,
-                                  args_rules=args_rules))
+                                  extra_rules=args_rules))
 
     # Apply the rules
     # sys.stdin.shutdown()  # FIXME
