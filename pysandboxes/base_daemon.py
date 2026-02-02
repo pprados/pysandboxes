@@ -1,10 +1,12 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
-from pysandboxes.py_sandbox import AllRules
-from pysandboxes.tools import SyncOrAsyncFunc
-from pysandboxes.types import ConfigLines, Envs
+from .tools import SyncOrAsyncFunc
+from .types import ConfigLines, Envs
+
+if TYPE_CHECKING:
+    from .py_sandbox import AllRules
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,8 @@ class BaseDaemon(ABC):
     def update_rules(self,
                      *,
                      envs: Envs,
-                     config: ConfigLines) -> AllRules:
+                     all_rules: "AllRules",
+                     ) -> "AllRules":
         raise NotImplementedError
 
     @property
@@ -32,7 +35,7 @@ class BaseDaemon(ABC):
 
     @abstractmethod
     async def start(self,
-                    all_rules:AllRules,
+                    all_rules:"AllRules",
                     *,
                     log_level: int,
                     envs: Envs,
@@ -52,7 +55,7 @@ class BaseDaemon(ABC):
     def update_rules(self,
                      *,
                      envs: Envs,
-                     config: ConfigLines) -> AllRules:
+                     config: ConfigLines) -> "AllRules":
         raise NotImplementedError
 
     @property

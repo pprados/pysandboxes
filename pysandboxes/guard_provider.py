@@ -55,5 +55,6 @@ def parse_rules(rules: ConfigLines,
             )
         )
         return 'errors', use_py_sandbox, other_rules
-
-    return provider, use_py_sandbox, other_rules
+    if not providers_set:
+        return "subprocess", use_py_sandbox, other_rules
+    return providers_set[0], use_py_sandbox, other_rules

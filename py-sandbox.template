@@ -1,5 +1,10 @@
+# TODO: par défaut, si pas de fichier de conf, en mode apprentissage et création du fichier
+# sur base d'un meta-template.
 # TODO: --build=file  pour apprentissage (ou verbe utilisé dans AppArmor)
 # TODO: ajouter un niveau de log dédié, puis tous logger dessus
+# TODO: --no-dotenv
+# TODO: --firejail=file.template
+# TODO: --dns=1.1.1.1,4,4,4,4
 
 # Why a python sandbox ?
 # =======================
@@ -25,8 +30,6 @@
 #--os-sandbox=subprocess
 --os-sandbox=firejail
 --py-sandbox=False
-# TODO: --no-dotenv
-# TODO: --firejail=file.template
 
 #######################################################################################
 # Select some variables for the sandbox
@@ -53,8 +56,6 @@
 # By using --set-env, you can control and manage the environment variables available
 # within your sandbox, ensuring that your applications have the necessary configuration.
 
-#--set-env=HOME=${HOME}
-#--set-env=USER=${USER}
 --set-env=HOME=.
 --set-env=USER=pysandbox
 --set-env=VIRTUAL_ENV*=${VIRTUAL_ENV_*}
@@ -86,7 +87,7 @@
 
 # Binds the current directory to the root of the sandbox
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
-#--ro-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path
+--rw-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path. Conflit si rw ?
 --ro-bind=${PYENV_ROOT},${PYENV_ROOT}
 --ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
 
@@ -97,10 +98,21 @@
 # By default, all connections are denied.
 
 # Denied localhost
---net=DENY|tcp|127.0.0.1/8|*|IN
+# FIXME --net=DENY|tcp|127.0.0.1/8|*|IN
 
-# Accept locahost specific port in ${PORT} or 8000
-#--net=ALLOW|tcp|${BIND:=127.0.0.1}/32|${PORT:=8000}|IN
+# Allow web access, intranet and localhost
+--net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services
+#--net=ALLOW|tcp|0.0.0.0/0|80|OUT  # Can call HTTP services
+
+# TODO: filtrer le dns ?
+--net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
+--net=ALLOW|udp|0.0.0.0/0|53|IN
+
+# Deny locahost
+#--net=DENY|tcp|127.0.0.0/32|*|IN
+
+# Allow a specific port in ${PORT} or 8000 to locahost
+#--net=ALLOW|tcp|127.0.0.0/32|${PORT:=8000}|IN
 
 # Denied intranet
 --net=DENY|any|10.0.0.0/8|*|OUT
@@ -109,11 +121,6 @@
 --net=DENY|any|192.168.0.0/16|*|OUT
 --net=DENY|any|fc00::/7|*|OUT  # ULA
 --net=DENY|any|fe80::/64|*|OUT # Link-Local
-
-# Allow web access
---net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call all HTTPS services
---net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
---net=ALLOW|udp|0.0.0.0/0|53|IN
 
 #######################################################################################
 # Limit python features in the sandbox
@@ -127,6 +134,3 @@
 #--python-exec-import=ALLOW:threads
 #--python-exec=ALLOW:annotations,async,class,def
 
-
-
-# TODO: --dns=1.1.1.1,4,4,4,4

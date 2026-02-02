@@ -17,6 +17,7 @@ from typing import Dict
 from tblib import pickling_support
 from uvicorn import Server
 
+from pysandboxes.main_logger import pysandboxes_logger
 from pysandboxes.remote.subprocess_daemon import SubProcessParameters
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
@@ -270,8 +271,14 @@ class LocalTaskDaemon(SSESandbox):
     def update_rules(self,
                      *,
                      envs: Envs,
-                     config: ConfigLines) -> AllRules:
-        return config, envs, "task", [], []
+                     all_rules: AllRules) -> AllRules:
+        return AllRules(config=[],
+                        envs=envs,
+                        os_sandbox="",
+                        use_py_sandbox=all_rules.use_py_sandbox,
+                        socket_rules=[],
+                        file_rules=[],
+                        )
 
     async def start(self,
                     all_rules: AllRules,
@@ -378,13 +385,14 @@ async def main() -> int:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
 
-        activate_sandboxes(dict(os.environ),
-                           os_sandbox=os_sandbox,
-                           config=config_body)
-        logging.info(
-            f"Start a py-sandbox encapsulated in an os-sandox of type '{outer_sandbox}'")
+        activate_sandboxes(process_config.all_rules,
+                           os_sandbox,
+                           dict(os.environ)
+                           )
+        pysandboxes_logger.info(
+            f"Start a py-sandbox encapsulated in an os-sandox of type '{os_sandbox}'")
     else:
-        logging.info(
+        pysandboxes_logger.info(
             f"Start ONLY an os-sandox of type '{os_sandbox}'")
 
     # Call init function

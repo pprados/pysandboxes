@@ -11,7 +11,6 @@ def main():
             sys.executable,
             '-m',
             run_daemon.__name__,
-            "--outer-sandbox", "subprocess"
         ],
         capture_output=True,  # Capture stdout and stderr
         text=True,

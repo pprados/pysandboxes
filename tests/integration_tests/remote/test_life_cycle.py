@@ -11,7 +11,7 @@ from typing import List
 import _pytest
 import pytest
 
-from integration_tests.remote.sample import config_path
+from integration_tests.sample import config_path
 from integration_tests.remote.test_rpc import sync_function
 from pysandboxes import sandboxes
 
@@ -57,12 +57,12 @@ def find_process_childrens(parent_pid: int) -> List[int]:
     return children_pids
 
 
+@pytest.mark.skipif(os.name != 'posix',
+                    reason="This test is only for POSIX systems")
 def test_pdeathsig(capsys: _pytest.capture.CaptureFixture):
     """
     Check if the child is killed when the parent is killed
     """
-    if os.name != 'posix':
-        pytest.skip("This test is only for POSIX systems")
 
     from . import launch_child
     import subprocess

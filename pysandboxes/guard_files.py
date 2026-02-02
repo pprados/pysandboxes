@@ -577,7 +577,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         "os.path.realpath",
         "os.path.samefile",
         # -----------------
-        "pathlib.Path.glob",  # TODO: ajouter reste
+        # "pathlib.Path.glob",  # TODO: ajouter reste. Bug si activé
     }
     _memory = dict()
     save_default_values(_memory,

@@ -294,7 +294,8 @@ class FireJailDaemon(BaseSubProcessDaemon):
         if need_root:
             logger.warning("Firejail needs root to run")
 
-        return args, (config, sandbox_env, provider, socket_rules, files_rules)
+        # FIXME: ajustement des rules pour firejail ?
+        return args, all_rules
 
     def _subprocess(self,
                     all_rules: AllRules,

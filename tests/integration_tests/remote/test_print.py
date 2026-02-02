@@ -1,8 +1,7 @@
 # %% Test print
 import _pytest
-import pytest
 
-from .sample import async_print_stdin_stdout, init_sandbox, \
+from integration_tests.sample import async_print_stdin_stdout, init_sandbox, \
     sync_print_stdin_stdout, config_path
 from pysandboxes import sandboxes
 

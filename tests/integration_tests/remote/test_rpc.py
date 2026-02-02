@@ -23,12 +23,11 @@ async def start_daemon_for_tests() -> Iterator[None]:
     config_path = Path(__file__).parent.parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
-    config = get_config_path(config_path).read_text().splitlines()
-    config, _, os_sandbox, *_ = read_and_parse_config(config=config)
+    all_rules = read_and_parse_config(config_path=config_path)
 
-    start_daemon("task",
+    start_daemon(all_rules,
                  log_level,
-                 config,
+                 init_fn=None,
                  timeout=240,  # FIXME
                  )
     yield

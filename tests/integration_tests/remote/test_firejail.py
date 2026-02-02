@@ -6,9 +6,9 @@ from typing import Iterator
 import pytest
 
 from pysandboxes import sandbox
-from pysandboxes.py_sandbox import get_config_path, read_and_parse_config
 from pysandboxes.os_sandbox import start_daemon, \
     shutdown_daemon
+from pysandboxes.py_sandbox import read_and_parse_config
 from pysandboxes.remote.tools import which_command
 
 
@@ -19,17 +19,17 @@ def event_loop(request):
     yield loop
     loop.close()
 
+
 @pytest.fixture(scope="module", autouse=True)
 async def start_daemon_for_tests() -> Iterator[None]:
     config_path = Path(__file__).parent.parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
-    config = get_config_path(config_path).read_text().splitlines()
-    config, _, os_sandbox, *_ = read_and_parse_config(config=config)
-    config.append("--os-sandbox=firejail")
-    start_daemon("firejail",
+    all_rules = read_and_parse_config(config_path=config_path)
+    all_rules = all_rules._replace(os_sandbox="firejail")
+    start_daemon(all_rules,
                  log_level,
-                 config,
+                 init_fn=None,
                  timeout=15,
                  )
     yield
@@ -60,4 +60,3 @@ async def async_function(a: str, b: str) -> str:
 async def test_async_function():
     result_async = await async_function("a", b="b")
     assert result_async == 'a b'
-

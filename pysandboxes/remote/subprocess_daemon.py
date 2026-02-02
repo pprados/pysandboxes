@@ -12,9 +12,9 @@ from .parameters import DELAY_FOR_START_DAEMON
 from .sse_sandbox import SSESandbox
 from .tools import to_b85
 from ..main_logger import pysandboxes_logger
-from ..py_sandbox import AllRules, parse_config
+from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc, get_callable_info
-from ..types import ConfigLines, Args, Envs
+from ..types import Args, Envs
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +154,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 envs=all_rules.envs,
                 os_sandbox=all_rules.os_sandbox,
                 use_py_sandbox=all_rules.use_py_sandbox,
-                socker_rules=[],
+                socket_rules=[],
                 file_rules=[],
             )
 
@@ -213,13 +213,17 @@ class BaseSubProcessDaemon(SSESandbox):
 
         # Send config body via stdin, because, it's not possible to use .py-sandboxes file
 
-        module, init_function_reference = get_callable_info(init_fn)
+        if init_fn:
+            module, init_function_reference = get_callable_info(init_fn)
+            init_fn_ref = f"{module}:{init_function_reference}"
+        else:
+            init_fn_ref = ""
 
         process_config = SubProcessParameters(
             all_rules=all_rules,
             log_level=log_level,
             token=self._token,
-            init_fn=f"{module}:{init_function_reference}"
+            init_fn=init_fn_ref
         )
         data = to_b85(process_config) + "\n"
 
@@ -299,8 +303,9 @@ class SubProcessDaemon(BaseSubProcessDaemon):
     def update_rules(self,
                      *,
                      envs: Envs,
-                     config: ConfigLines) -> AllRules:
-        return parse_config(envs=envs, config=config, exit_on_error=True)
+                     all_rules: AllRules,
+                     ) -> AllRules:
+        return all_rules
 
     def bash_args(self, envs: Envs) -> Args:
         return ["/bin/bash",

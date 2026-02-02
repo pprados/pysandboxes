@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple, NamedTuple
 
 from . import guard_files, guard_env, guard_provider, guard_socket
+from .base_daemon import BaseDaemon
 from .guard_files import FilesRule
 from .guard_socket import SocketRule
 from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
@@ -43,7 +44,7 @@ class AllRules(NamedTuple):
     envs:Envs
     os_sandbox:str
     use_py_sandbox:bool
-    socker_rules: List[SocketRule]
+    socket_rules: List[SocketRule]  # TODO: en faire un tuple pour le rendre immuable
     file_rules: List[FilesRule]
 
 
@@ -147,30 +148,22 @@ def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
 
 
 def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?
+        all_rules:AllRules,
+        os_sandbox:str,
         envs: Dict[str, str] = os.environ,
-        *,
-        config: ConfigLines = None,
-        os_sandbox: str = None,
 ) -> None:
     if os_sandbox:
         from pysandboxes.os_sandbox import providers_factory
         if os_sandbox not in providers_factory:
             raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
-        os_provider = providers_factory[os_sandbox](token=None)
-        config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules = (
-            os_provider.update_rules(
-                config,
+        os_provider:BaseDaemon = providers_factory[os_sandbox](token=None)
+        all_rules = os_provider.update_rules(
+                all_rules=all_rules,
                 envs=envs,
-            ))
-    else:
-        config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules = (
-            parse_config(
-                config,
-                envs=envs,
-                exit_on_error=True))
+            )
 
-    # Apply the socket_rules
-    # sys.stdin.shutdown()  # FIXME
-    os.environ = sandbox_env
-    guard_socket.activate_guard_socket(socket_rules)
-    guard_files.activate_guard_files(files_rules)
+    # Apply the rules
+    # sys.stdin.shutdown()  # FIXME: Compléter l'activation des règles
+    os.environ = all_rules.envs
+    guard_socket.activate_guard_socket(all_rules.socket_rules)
+    guard_files.activate_guard_files(all_rules.file_rules)
