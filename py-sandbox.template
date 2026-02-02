@@ -26,6 +26,7 @@
 # - firejail : A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
 
+--learning=.pysandboxes.new
 #--os-sandbox=task
 --os-sandbox=subprocess
 #--os-sandbox=firejail
@@ -83,13 +84,18 @@
 # Use another name for the virtualenv
 --ignore=.env
 --ignore=*.log
+--ignore=${PWD}/docs
 # --ignore=*.py  # NON: All code must be pre-compiled (pyo)
 
 # Binds the current directory to the root of the sandbox
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
---ro-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path. Conflit si rw ?
---ro-bind=${PYENV_ROOT},${PYENV_ROOT}
---ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
+--ro-bind=${PWD}/tests,${PWD}/tests # FIXME: ajout à cause de sys.path. Conflit si rw ?
+--ro-bind=${PWD}/pysandboxes/remote,${PWD}/pysandboxes/remote # FIXME: ajout à cause de sys.path. Conflit si rw ?
+#--ro-bind=${HOME}/.local/share/JetBrains,${HOME}/.local/share/JetBrains
+#--ro-bind=${HOME}/miniconda3/share/locale,${HOME}/miniconda3/share/locale
+#--ro-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path. Conflit si rw ?
+#--ro-bind=${PYENV_ROOT},${PYENV_ROOT}
+#--ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
 
 # TODO
 # - répertoire avec les modeles hf téléchargé ?
