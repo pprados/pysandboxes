@@ -103,6 +103,8 @@ class SSESandbox(BaseDaemon):
         except ClientPayloadError:
             raise RuntimeError("No result received from the sandbox")
         except ClientConnectorError:
+            while True:  # FIXME: Pour attendre le debug
+                await asyncio.sleep(10)
             raise RuntimeError("Impossible to connect to the sandbox")
         except SystemExit:
             raise

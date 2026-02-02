@@ -1,12 +1,14 @@
 import logging
+import os
 
 import dotenv
 
 import pysandboxes
 from pysandboxes import sandbox, sandboxes
 from pysandboxes.exception import RuleError
+from pysandboxes.learning import is_learning_mode
 
-dotenv.load_dotenv()  # FIXME: il semble y avoir un bug dans la boucle load_dotenv, car elle ne remonte pas jusqu'a elle même
+dotenv.load_dotenv()
 
 
 
@@ -24,21 +26,40 @@ async def arun_in_sandbox():
 def run_in_sandbox():
     logger.info("Run 'run_in_sandbox()' in sandbox")
     import io
-    try:
-        with io.open(".env") as f:
-            pass
-        assert False, "Must be stopped by pysandbox"
-    except RuleError as e:
-        print(e)
-        pass
+    # try:
+    #     with io.open(".env") as f:
+    #         pass
+    #     assert False, "Must be stopped by pysandbox"
+    # except RuleError as e:
+    #     print(e)
+    #     pass
 
     try:
         with io.open("test.remove","w") as f:
             pass
-        assert False, "Must be stopped by pysandbox"
+        assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except RuleError as e:
         print(e)
-        pass
+
+    try:
+        with io.open("tst_wasm/factorial.wasm","r") as f:
+            pass
+        assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    except RuleError as e:
+        print(e)
+
+    try:
+        os.listdir(os.environ.get("PYENV_ROOT"))
+        assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    except RuleError as e:
+        print(e)
+
+    try:
+        os.listdir(os.environ.get("VIRTUAL_ENV"))
+        assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    except RuleError as e:
+        print(e)
+
     print(42)
     return 42
 

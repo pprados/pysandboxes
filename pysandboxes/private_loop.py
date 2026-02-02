@@ -56,10 +56,13 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
             except SystemExit as e:
                 import os
                 logger.error("Exit sandbox")
+                while True:  # FIXME: pour éviter le crash du parent lors d'un debug du fils
+                    import time
+                    time.sleep(10)
                 # os._exit(e.args[0]) # FIXME
             except Exception as e:
                 import os
-                logger.exception("Exception non généré dans run_forever")
+                logger.exception("Exception unknown in run_forever") ## FIXME
                 # os._exit(-1)  # FIXME
 
         thread = threading.Thread(

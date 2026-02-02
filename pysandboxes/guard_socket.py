@@ -44,7 +44,7 @@ import socket
 import sys
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
-from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast
+from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any
 
 from .exception import RuleError
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
@@ -293,6 +293,11 @@ def parse_rules(rules: ConfigLines,
     # parsed_rule_families = sorted(list(set(parsed_rule_families)))  # FIXME
 
     return tuple(socket_rules), ignore_rules
+
+def generate_rules(
+        learn: List[Any],
+                ) -> List[str]:
+    return []
 
 
 def _convert_ports_range(syntax: str) -> Union[List[int], range]:

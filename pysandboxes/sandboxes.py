@@ -12,7 +12,6 @@ from typing import Any, TypeVar, Union, \
 from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
-from .immutable_dict import ImmutableDict
 from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
 from .py_sandbox import get_config_path

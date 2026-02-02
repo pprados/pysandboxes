@@ -9,6 +9,7 @@ from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
 from .py_sandbox import AllRules
 from .remote.firejail_daemon import FireJailDaemon
+from .remote.parameters import DELAY_FOR_STOP_DAEMON
 from .remote.subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
 from .tools import is_in_sandbox, check_mixte_async_async, SyncOrAsyncFunc
@@ -115,6 +116,7 @@ async def async_shutdown_daemon():
         _startup_counter -= 1
 
 
+
 def start_daemon(
         all_rules: AllRules,
         log_level: int,
@@ -186,8 +188,8 @@ def shutdown_daemon() -> None:
 
         loop.call_soon_threadsafe(
             lambda: loop.create_task(_async_shutdown_daemon(), name="shutdown daemon"))
-        if not stop_event.wait(timeout=10):
-            raise RuntimeError("Import to shutdown the sandbox")
+        if not stop_event.wait(timeout=DELAY_FOR_STOP_DAEMON):
+            raise RuntimeError("Impossible to shutdown the sandbox")
         reset_sandbox_loop()
 
 

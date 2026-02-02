@@ -10,8 +10,10 @@ from .base_daemon import BaseDaemon
 from .guard_files import FileRules
 from .guard_import import ImportRules, PatchRules
 from .guard_socket import SocketRules
+from .learning import start_learning_mode
 from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
-from .tools import remove_config_comments, substitute_config_env_vars
+from .remote.parameters import CONFIG_NAME
+from .tools import remove_config_comments, substitute_config_env_vars, find_config
 from .types import ConfigLines, Envs, ConfigLine
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,7 @@ class AllRules(NamedTuple):
     envs: Envs
     os_sandbox: str
     use_py_sandbox: bool
+    learning_path: Optional[Path]
     socket_rules: SocketRules  # TODO: en faire un tuple pour le rendre immuable
     file_rules: FileRules
     import_rules: ImportRules
@@ -62,34 +65,52 @@ def read_and_parse_config(
         extra_rules: Optional[List[str]] = None,
         exit_on_error: bool = False,
 ) -> AllRules:
+    """
+    Reads and parses the configuration file for the sandbox.
+
+    The function follows this logic to find and process the configuration:
+    - If `config_path` is not provided, it defaults to "./.py-sandboxes".
+    - If the configuration file does not exist at the specified or default path,
+      the sandbox enters learning mode. At the end of the execution, it will
+      create a new configuration file at "./.py-sandboxes" based on the
+      activities observed.
+    - If `config_path` points to an existing file, that file is used for
+      configuration.
+    - If the configuration file contains a `--learning` directive pointing to
+      itself, any new rules generated during the run are appended to the end of
+      the file. The original file is backed up with a `.old` suffix before
+      being modified.
+
+    Args:
+        config_path: The path to the configuration file.
+        envs: A dictionary of environment variables to use for substitution.
+              Defaults to `os.environ`.
+        extra_rules: A list of additional rule strings to parse.
+        exit_on_error: If True, the program will exit if a parsing error occurs.
+
+    Returns:
+        An `AllRules` object containing the parsed configuration.
+    """
     if envs is None:
         envs = os.environ
-    if extra_rules is None:
-        extra_lines = []
-    else:
-        extra_lines = remove_config_comments(
-            [ConfigLine(line, Path(), 0) for line in extra_rules])
+    extra_lines = remove_config_comments(
+        [ConfigLine(line, Path(), 0) for line in extra_rules]) if extra_rules else []
 
     # TODO: voir l'approche de dotenv (find_dotenv)
-    # 1. try to find .pysandboxes in the caller module
-    body_from_ressource = []
-    # caller_module = _get_caller_module(skip=3)
-    # if caller_module:
-    #     from importlib.metadata import files
-    #     try:
-    #         # FIXME: test
-    #         resource = files(caller_module.__name__).joinpath(".pysandboxes")
-    #         if resource.exists():
-    #             from importlib.resources import as_file
-    #             with as_file(resource) as path:
-    #                 body_from_ressource = _read_config(path)
-    #     except PackageNotFoundError:
-    #         pass  # Ignore
+    if not config_path:
+        config_path = Path(CONFIG_NAME)
 
-    # 2. try to find .pysandboxes in the current directory
-    if not config_path and Path(".py-sandboxes").exists():
-        config_path = Path(".py-sandboxes")
-    return parse_config(extra_lines + _read_config(config_path),
+    find_config_path = find_config(str(config_path))
+    if not find_config_path:
+        # Activate the learning mode
+        config=[ConfigLine(f"--learning={CONFIG_NAME}", Path(), 0)]
+    else:
+        if not find_config_path and Path(CONFIG_NAME).exists():
+            config_path = Path(CONFIG_NAME)
+        else:
+            config_path = Path(find_config_path)
+        config = extra_lines + _read_config(config_path)
+    return parse_config(config,
                         envs=envs,
                         exit_on_error=exit_on_error)
 
@@ -109,7 +130,8 @@ def parse_config(
     sandbox_env, others = guard_env.parse_guard_envs(config, ienvs, errors)
     others = substitute_config_env_vars(others, ienvs)  # with main envs
 
-    os_sandbox, use_pysandbox, others = guard_provider.parse_rules(others, errors)
+    os_sandbox, use_pysandbox, learning_path, others = guard_provider.parse_rules(
+        others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
@@ -137,6 +159,7 @@ def parse_config(
                     sandbox_env,
                     os_sandbox,
                     use_pysandbox,
+                    learning_path,
                     socket_rules,
                     files_rules,
                     import_rules,
@@ -168,7 +191,7 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
 ) -> None:
     if envs is None:
         envs = os.environ
-    os_sandbox=all_rules.os_sandbox
+    os_sandbox = all_rules.os_sandbox
 
     if os_sandbox:
         from pysandboxes.os_sandbox import providers_factory
@@ -182,7 +205,10 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
 
     # Apply the rules
     # sys.stdin.shutdown()  # FIXME: Compléter l'activation des règles
-    os.environ = all_rules.envs
+    if all_rules.learning_path:
+        start_learning_mode(all_rules.learning_path)
+    else:
+        os.environ = all_rules.envs
     patch_rules: PatchRules = guard_files.patch_rules()  # TODO: dans socket egalement
     guard_import.activate_guard_import(patch_rules, all_rules.import_rules)
     guard_socket.activate_guard_socket(all_rules.socket_rules)

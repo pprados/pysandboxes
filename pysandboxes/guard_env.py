@@ -9,7 +9,6 @@ from .types import ConfigLines, ConfigLine, Envs
 logger = logging.getLogger(__name__)
 
 
-# TODO: déplacer les guard_* dans un module dédié
 def _read_and_substitute_lines(
         path: Path, env_vars: Dict[str, str]
 ) -> ConfigLines:

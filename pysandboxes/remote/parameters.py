@@ -6,3 +6,5 @@ PORT = int(os.environ.get("PORT", 8000))
 PATH_RPC = os.environ.get("PATH_RPC", "/rpc")
 DELAY_FOR_START_DAEMON = 0.4  # 0.4
 DELAY_FOR_CALL_DAEMON = 1  # 0.5
+DELAY_FOR_STOP_DAEMON = 200
+CONFIG_NAME=".py-sandboxes"

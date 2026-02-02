@@ -17,6 +17,7 @@ from typing import Dict
 from tblib import pickling_support
 from uvicorn import Server
 
+from pysandboxes.learning import is_learning_mode, generate_config_from_learning
 from pysandboxes.main_logger import pysandboxes_logger
 from pysandboxes.remote.subprocess_daemon import SubProcessParameters
 from .parameters import PATH_RPC, HOST, PORT
@@ -246,8 +247,8 @@ async def sandbox_daemon(
         if "exception" in result:
             logger.debug("(%s) ... raise %s", session_id,
                          repr(result["exception"][1]))
-            traceback.print_exception(result["exception"][0])
-            result["exception"] = to_b85(result["exception"])  # FIXME: les exceptions ne sont pas toujours pickle
+            traceback.print_exception(result["exception"][1])
+            result["exception"] = to_b85(result["exception"][1])  # FIXME: les exceptions ne sont pas toujours pickle
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
@@ -281,7 +282,8 @@ class LocalTaskDaemon(SSESandbox):
                         envs=envs,
                         os_sandbox="",
                         use_py_sandbox=all_rules.use_py_sandbox,
-                        socket_rules=[],
+                        learning_path=all_rules.learning_path,
+                        socket_rules=[],  # FIXME: nécessiare la recopue légère ?
                         file_rules=[],
                         )
 
@@ -341,6 +343,7 @@ class LocalTaskDaemon(SSESandbox):
         await self.task
         self.uvicorn = None
         self.task = None
+
 
     @property
     def is_started(self) -> bool:
@@ -428,6 +431,10 @@ async def main() -> int:
     finally:
         await task_daemon.shutdown()
 
+def shutdown():
+    logger.info("Shutting down... the daemon")
+    if is_learning_mode():
+        generate_config_from_learning()
 
 if __name__ == "__main__":
     # Kill this process when the parent is killed

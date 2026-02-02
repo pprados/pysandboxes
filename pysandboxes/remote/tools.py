@@ -1,4 +1,5 @@
 # TODO: reorganize the tools
+import _pickle
 import asyncio
 import base64
 import contextvars
@@ -20,11 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 def to_b85(obj: Any) -> str:
-    return base64.b85encode(
-        pickle.dumps(obj,
-                     protocol=pickle.HIGHEST_PROTOCOL
-                     )).decode("utf-8")
-
+    try:
+        return base64.b85encode(
+            pickle.dumps(obj,
+                         protocol=pickle.HIGHEST_PROTOCOL
+                         )).decode("utf-8")
+    except _pickle.PicklingError:
+        raise
 
 def from_b85(b85: str) -> Any:
     return pickle.loads(

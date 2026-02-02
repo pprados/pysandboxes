@@ -26,7 +26,7 @@
 # - firejail : A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
 
---learning=.pysandboxes.new
+--learning=.py-sandboxes  # Continue to learn
 #--os-sandbox=task
 --os-sandbox=subprocess
 #--os-sandbox=firejail
@@ -87,7 +87,8 @@
 --ignore=${PWD}/docs
 # --ignore=*.py  # NON: All code must be pre-compiled (pyo)
 
-# Binds the current directory to the root of the sandbox
+{learning_guard_files}
+
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
 --ro-bind=${PWD}/tests,${PWD}/tests # FIXME: ajout à cause de sys.path. Conflit si rw ?
 --ro-bind=${PWD}/pysandboxes/remote,${PWD}/pysandboxes/remote # FIXME: ajout à cause de sys.path. Conflit si rw ?
@@ -110,6 +111,8 @@
 
 # Denied localhost
 # FIXME --net=DENY|tcp|127.0.0.1/8|*|IN
+
+{learning_guard_socket}
 
 # Allow web access, intranet and localhost
 --net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services
@@ -145,4 +148,3 @@
 #--python-exec-provider=interpreter
 #--python-exec-import=ALLOW:threads
 #--python-exec=ALLOW:annotations,async,class,def
-

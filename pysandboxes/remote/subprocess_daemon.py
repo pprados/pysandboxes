@@ -154,6 +154,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 envs=all_rules.envs,
                 os_sandbox=all_rules.os_sandbox,
                 use_py_sandbox=all_rules.use_py_sandbox,
+                learning_path=all_rules.learning_path,
                 socket_rules=(),
                 file_rules=(),
                 import_rules=(), # all_rules.import_rules,
@@ -256,6 +257,11 @@ class BaseSubProcessDaemon(SSESandbox):
         self._is_started = True
 
     async def shutdown(self) -> None:
+        from . import run_daemon
+        await self.async_call_in_sandbox(
+            run_daemon.shutdown,
+            timeout=0,
+        )
         if self._stdout_task:
             self._stdout_task.cancel()
             self._stdout_task = None

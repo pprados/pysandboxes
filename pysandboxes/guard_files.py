@@ -8,12 +8,13 @@ import sys
 from os import scandir as _scandir
 from pathlib import Path as _Path, Path
 from types import TracebackType
-from typing import Iterator, Dict, cast
+from typing import Iterator, Dict, cast, Set
 from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
 from .exception import RuleError
 from .guard_import import PatchRules, conv_patch_rules
+from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
 from .types import ConfigLines, ConfigLine
 
@@ -60,6 +61,12 @@ FilesRule = Union[BindRule, IgnoreRule]
 
 FileRules = Tuple[FilesRule, ...]
 
+
+class LearnFileRule(NamedTuple):
+    path: Path
+    write: bool
+
+
 # Internal state for the file filter
 _rules: FileRules = cast(FileRules, ())
 
@@ -85,18 +92,18 @@ def parse_rules(config: ConfigLines,
                 if not src and not dest:
                     continue  # Ignore empty bind
                 if src and dest:
-                    if not _Path(src).exists() or not _Path(dest).exists():
+                    if not _Path(src).is_dir() or not _Path(dest).is_dir():
                         errors.append(
                             (
                                 f"{format_ruleref(rule)}: "
                                 f"In '{rule.rule}', "
-                                f"source and destination must exists.",
+                                f"source and destination must exists and be directories.",
                                 rule.path,
                                 rule.ln
                             )
                         )
                         continue
-                    # Search same socket_rules with different write flag
+                    # Search same file_rules with different write flag
                     is_write = rule.rule.startswith("--bind=")
                     for bind_rule in rules_bind:
                         if bind_rule.source == src and bind_rule.dest == dest:
@@ -115,8 +122,9 @@ def parse_rules(config: ConfigLines,
                                 # Detect duplicate bind rule
                                 break
                     else:
-                        rules_bind.append(BindRule(source=src + "/",
-                                                   dest=dest + "/",
+                        # Only one last "/"
+                        rules_bind.append(BindRule(source=str(Path(src)) + "/",
+                                                   dest=str(Path(dest)) + "/",
                                                    write=rule.rule.startswith(
                                                        "--bind="),
                                                    config=rule,
@@ -146,12 +154,61 @@ def parse_rules(config: ConfigLines,
                 continue
         elif rule.rule.startswith("--ignore="):
             pattern = rule.rule[len("--ignore="):]
-            rules_ignore.append(IgnoreRule(pattern,rule))
+            rules_ignore.append(IgnoreRule(pattern, rule))
         else:
-            ignore_rules.append(rule)
+            ignore_rules.append(rule)  # TODO: valider ignore repertoire interne
     rules_bind = sorted(rules_bind, key=lambda r: len(r.dest), reverse=True)
 
     return tuple(rules_ignore + rules_bind), ignore_rules
+
+
+def generate_rules(
+        learn: List[Any],
+) -> List[str]:
+    # Select only parent
+    parent_level: Dict[Path, bool] = {}
+    for learn_rule in filter(lambda x: isinstance(x, LearnFileRule), learn):
+        parent = learn_rule.path.absolute().parent
+        if not parent_level.get(parent, False) and learn_rule.write:
+            parent_level[parent] = True
+        else:
+            parent_level[parent] = False
+
+    result: Set[str] = set()
+    cwd = Path().absolute()
+    home = Path.home().absolute()
+
+    pyenv_root = os.environ.get("PYENV_ROOT")
+    pyenv = Path(pyenv_root) if pyenv_root else None
+
+    virtualenv_root = os.environ.get("VIRUTAL_ENV")
+    virtualenv = Path(virtualenv_root) if virtualenv_root else None
+
+    conda_root = os.environ.get("CONDA_HOME")
+    conda = Path(conda_root) if conda_root else None
+
+    dir: str
+    for path, write in parent_level.items():
+        if pyenv and path.is_relative_to(pyenv):
+            dir = "${PYENV_ROOT}"
+        elif virtualenv and path.is_relative_to(virtualenv):
+            dir = "${VIRTUAL_ENV}"
+        elif conda and path.is_relative_to(conda):
+            dir = "${CONDA_HOME}"
+        elif path.is_relative_to(cwd):
+            x = str(path.relative_to(cwd))
+            if x == ".":
+                x = ""
+            dir = "${PWD}/" + x
+        elif path.is_relative_to(home):
+            dir = "${HOME}/" + str(path.relative_to(home))
+        else:
+            dir = str(path)
+        result.add(
+            "--" +
+            f"{"" if write else "ro-"}bind={dir},{dir}"
+        )
+    return sorted(list(result), reverse=True)
 
 
 # Helper to resolve symlinks and apply socket_rules
@@ -205,20 +262,29 @@ def _apply_dest_to_src_rules(path: str,
                 return None, None
             if fake_path.startswith(rule.dest):
                 if not rule.write and write:
-                    raise RulePermissionError(
-                        f"Cannot write to '{rule.dest}'. "
-                        f"Rule '{rule.config.rule}' from {format_ruleref(rule.config)}"
-                    )
+                    if is_learning_mode():
+                        add_learning_rule(LearnFileRule(Path(path), True))
+                    else:
+                        raise RulePermissionError(
+                            f"Cannot write to '{rule.dest}'. "
+                            f"Rule '{rule.config.rule}' from {format_ruleref(rule.config)}"
+                        )
                 relative = os.path.relpath(fake_path, rule.dest)
                 new_path = os.path.join(rule.source, relative)
                 return new_path, None
         elif isinstance(rule, IgnoreRule):
-            if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
-                    fake_path, rule.source):
-                return None, rule
+            if rule.source[0] == "/":
+                if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
+                        fake_path, rule.source):
+                    return None, rule
+            else:
+                if (fnmatch.fnmatch(Path(original_path).name, rule.source) or
+                        fnmatch.fnmatch(
+                            Path(fake_path).name, rule.source)):
+                    return None, rule
         else:
             assert False, "Invalide guard_files rules"
-    return path, None
+    return None, None
 
 
 def _special_caller():
@@ -253,6 +319,13 @@ def _wrap_filename(func: Callable, *, write: bool) -> Callable:
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=write)
         if rule:
             raise RuleFileNotFoundError(_ignore_msg(file, rule))
+        if not remapped:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), write))
+                remapped = file
+            else:
+                raise RuleFileNotFoundError(
+                    f"Access to '{file}' must be accepted by a rule.")
         return func(remapped, *args, **kwargs)
 
     return wrapper
@@ -297,7 +370,31 @@ def _wrap_path_exists(func: Callable, *, write: bool) -> Callable:
             file = file.path
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=write)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            return False
+        if remapped is None:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), False))
+                remapped = file
+            else:
+                return False
+        return func(remapped, *args, **kwargs)
+
+    return wrapper
+
+
+def _wrap_path_is(func: Callable, *, write: bool) -> Callable:
+    @functools.wraps(func)
+    def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
+        # Detect call from posixpath
+        if _special_caller():
+            return func(file, *args, **kwargs)
+        if isinstance(file, int):
+            return func(file, *args, **kwargs)
+        if isinstance(file, _DirEntry):
+            file = file.path
+        remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=write)
+        if rule:
+            return False
         if remapped is None:
             return False
         return func(remapped, *args, **kwargs)
@@ -372,6 +469,12 @@ def _wrap_os_readlink(func: Callable) -> Callable:
         remapped_first, rule = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if rule:
             raise RuleFileNotFoundError(_ignore_msg(file, rule))
+        if not remapped_first:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), False))
+                remapped_first = file
+            else:
+                return None, None
         remapped = func(remapped_first, *args, **kwargs)
         if not remapped.startswith(os.path.sep):
             remapped = os.path.dirname(remapped_first) + "/" + remapped
@@ -507,11 +610,22 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if rule:
             raise RuleFileNotFoundError(_ignore_msg(file, rule))
+        if not remapped:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), False))
+                remapped = file
+            else:
+                raise RuleFileNotFoundError(
+                    f"Access to '{file}' must be accepted by a rule.")
         file = func(remapped, *args, **kwargs)
         remapped = _apply_src_to_dest_rules(os.fspath(file))
         if remapped is None:
-            raise RuleFileNotFoundError(
-                f"Access to '{file}' must be accepted by a rule.")
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), False))
+                remapped = os.fspath(file)
+            else:
+                raise RuleFileNotFoundError(
+                    f"Access to '{file}' must be accepted by a rule.")
         return remapped
 
     return wrapper
@@ -536,8 +650,12 @@ def _wrap_io_open(func: Callable) -> Callable:
         if rule:
             raise RuleFileNotFoundError(_ignore_msg(file, rule))
         if remapped is None:
-            raise RuleFileNotFoundError(
-                f"Access to '{file}' must be accepted by a rule.")
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), need_to_write))
+                remapped = file
+            else:
+                raise RuleFileNotFoundError(
+                    f"Access to '{file}' must be accepted by a rule.")
         return func(remapped, mode, *args, **kwargs)
 
     return wrapper
@@ -551,8 +669,11 @@ def _wrap_pathlib(func: Callable) -> Callable:
         if rule:
             raise RuleFileNotFoundError(_ignore_msg(file, rule))
         if remapped is None:
-            raise RuleFileNotFoundError(
-                f"Access to '{file}'  must be accepted by a rule.")
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), False))
+            else:
+                raise RuleFileNotFoundError(
+                    f"Access to '{file}'  must be accepted by a rule.")
         return func(Path(remapped), *args, **kwargs)
 
     return wrapper
@@ -574,8 +695,11 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
                                                       write=False)  # FIXME: remove line. PB de reset entre les tests
             if rule:
                 raise RuleFileNotFoundError(_ignore_msg(pattern, rule))
-            raise RuleFileNotFoundError(
-                f"Access to '{self}'  must be accepted by a rule.")
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(self), False))
+            else:
+                raise RuleFileNotFoundError(
+                    f"Access to '{self}'  must be accepted by a rule.")
 
     return wrapper
 
@@ -666,9 +790,9 @@ _default_rules = rules = {
     "os.path.getctime": _f(_wrap_filename, write=False),
     "os.path.getsize": _f(_wrap_filename, write=False),
     # ALLOW os.path.isabs
-    "os.path.isfile": _f(_wrap_filename, write=False),
-    "os.path.isdir": _f(_wrap_filename, write=False),
-    "os.path.islink": _f(_wrap_filename, write=False),
+    "os.path.isfile": _f(_wrap_path_is, write=False),
+    "os.path.isdir": _f(_wrap_path_is, write=False),
+    "os.path.islink": _f(_wrap_path_is, write=False),
     # ALLOW os.path.ismount
     # ALLOW os.path.join
     # ALLOW os.path.normcase

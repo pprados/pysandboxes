@@ -4,7 +4,9 @@ import asyncio
 import collections
 import contextvars
 import inspect
+import os
 import re
+import sys
 from typing import Dict, Optional, Union, Callable, Awaitable, Any, Tuple, List, \
     Iterator, Hashable, ItemsView, Generic, TypeVar
 
@@ -66,7 +68,9 @@ def remove_config_comments(config: ConfigLines) -> ConfigLines:
     for line, path, ln in config:
         # Remove end-of-line comments while respecting quotes
         cleaned_line: str = _remove_comment(line.strip())
-
+        if cleaned_line.startswith("{"):
+            # Remove template lines
+            continue
         # Filter out empty lines and lines that are full comments
         if cleaned_line and not cleaned_line.lstrip().startswith("#"):
             processed_lines.append(ConfigLine(cleaned_line, path, ln))
@@ -131,6 +135,76 @@ def _remove_comment(line: str) -> str:
     # Remove trailing whitespace
     return ''.join(result).rstrip()
 
+
+def _walk_to_base(path: str, base:str) -> Iterator[str]:
+    """
+    Yield directories starting from the given directory up to the root
+    """
+    if not os.path.exists(path):
+        raise IOError("Starting path not found")
+
+    if os.path.isfile(path):
+        path = os.path.dirname(path)
+
+    last_dir = None
+    current_dir = os.path.abspath(path)
+    while last_dir != current_dir:
+        yield current_dir
+        if current_dir == base:
+            break
+        parent_dir = os.path.abspath(os.path.join(current_dir, os.path.pardir))
+        last_dir, current_dir = current_dir, parent_dir
+
+
+def find_config(
+    filename: str,
+    raise_error_if_not_found: bool = False,
+    usecwd: bool = False,
+) -> str:
+    """
+    Search in increasingly higher folders for the given file
+
+    Returns path to the file if found, or an empty string otherwise
+    """
+
+    def _is_interactive():
+        """Decide whether this is running in a REPL or IPython notebook"""
+        if hasattr(sys, "ps1") or hasattr(sys, "ps2"):
+            return True
+        try:
+            main = __import__("__main__", None, None, fromlist=["__file__"])
+        except ModuleNotFoundError:
+            return False
+        return not hasattr(main, "__file__")
+
+    def _is_debugger():
+        return sys.gettrace() is not None
+
+    if usecwd or _is_interactive() or _is_debugger() or getattr(sys, "frozen", False):
+        # Should work without __file__, e.g. in REPL or IPython notebook.
+        path = os.getcwd()
+    else:
+        # will work for .py files
+        frame = sys._getframe()
+        current_file = __file__
+
+        while frame.f_code.co_filename == current_file or not os.path.exists(
+            frame.f_code.co_filename
+        ):
+            assert frame.f_back is not None
+            frame = frame.f_back
+        frame_filename = frame.f_code.co_filename
+        path = os.path.dirname(os.path.abspath(frame_filename))
+
+    for dirname in _walk_to_base(path,os.getcwd()):
+        check_path = os.path.join(dirname, filename)
+        if os.path.isfile(check_path):
+            return check_path
+
+    if raise_error_if_not_found:
+        raise IOError("File not found")
+
+    return ""
 
 # %% -----------------------
 _is_in_sandbox = False
