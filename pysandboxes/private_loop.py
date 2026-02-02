@@ -1,4 +1,3 @@
-
 import asyncio
 import functools
 import logging
@@ -10,15 +9,17 @@ from typing import Optional, Any, Callable
 
 logger = logging.getLogger(__name__)
 
-_background_loop_ref:ReferenceType[AbstractEventLoop] = None
+_background_loop_ref: ReferenceType[AbstractEventLoop] = None
 
 _lock = threading.Lock()
 
-def set_sandbox_loop(loop:AbstractEventLoop) -> None:
+
+def set_sandbox_loop(loop: AbstractEventLoop) -> None:
     global _background_loop_ref
     _background_loop_ref = weakref.ref(loop)
 
-def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop]:
+
+def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoop]:
     """FIXME Crée une boucle d'arrière-plan dans un thread dédié si nécessaire"""
     global _background_loop_ref
 
@@ -28,7 +29,6 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
             return loop
     if not new_loop:
         return None
-
 
     with _lock:
         # Double check
@@ -44,6 +44,7 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
         asyncio.set_event_loop(loop)
 
         start_event = threading.Event()
+
         def _start_background_loop() -> None:
             """Start the sandbox background loop forever"""
             try:
@@ -54,7 +55,12 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
                 logger.debug("Stop thread for sandbox event loop")
             except SystemExit as e:
                 import os
-                os._exit(e.args[0])
+                logger.error("Exit sandbox")
+                # os._exit(e.args[0]) # FIXME
+            except Exception as e:
+                import os
+                logger.exception("Exception non généré dans run_forever")
+                # os._exit(-1)  # FIXME
 
         thread = threading.Thread(
             target=_start_background_loop,
@@ -67,7 +73,6 @@ def _ensure_background_loop(new_loop:bool = False) -> Optional[AbstractEventLoop
 
 
 def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
-
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         old_loop = None
@@ -80,9 +85,6 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
         loop = get_sandbox_loop()
         asyncio.set_event_loop(loop)
 
-
-
-
         result = func(*args, **kwargs)
 
         asyncio.set_event_loop(old_loop)
@@ -90,11 +92,13 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
 
     return wrapper
 
+
 def reset_sandbox_loop():
     """ Remove the sandbox loop """
     global _background_loop_ref
     with _lock:
         _background_loop_ref = None
+
 
 def get_sandbox_loop() -> AbstractEventLoop:
     """FIXME Lance le serveur dans la boucle appropriée"""
@@ -106,11 +110,12 @@ def get_sandbox_loop() -> AbstractEventLoop:
             # logger.debug("Reuse the private event loop")
             return loop
         # Try to use the active loop
-        #loop = asyncio.get_event_loop()
+        # loop = asyncio.get_event_loop()
         loop = asyncio.get_running_loop()
         # logger.debug("Use the active loop")
         return loop
     except RuntimeError:
         # Create a private loop
         # logger.debug("Creating a private event loop")
-        return _ensure_background_loop(new_loop=True) # FIXME: propablement plus possible
+        return _ensure_background_loop(
+            new_loop=True)  # FIXME: propablement plus possible

@@ -8,6 +8,7 @@ import sys
 from datetime import timedelta
 from typing import Any, Dict, Callable, Optional, Tuple
 
+from aiohttp import ClientPayloadError, ClientConnectorError
 from aiohttp_sse_client import client as sse_client
 from tblib import pickling_support
 
@@ -81,7 +82,11 @@ class SSESandbox(BaseDaemon):
                         "Authorization": f"Bearer {token}"
                     },
                     timeout=None,  # keep-alive
-                    reconnection_time=timedelta(seconds=0.2),
+                    reconnection_time=
+                    timedelta(
+                        # seconds=30 # FIXME
+                        seconds=0.2
+                        ),
             ) as event_source:
                 async for event in event_source:
                     msg = json.loads(event.data)
@@ -95,8 +100,14 @@ class SSESandbox(BaseDaemon):
                     if "stderr" in msg:
                         print(msg["stderr"], end="", file=sys.stderr)
                 raise RuntimeError("No result received from the sandbox")
+        except ClientPayloadError:
+            raise RuntimeError("No result received from the sandbox")
+        except ClientConnectorError:
+            raise RuntimeError("Impossible to connect to the sandbox")
         except SystemExit:
             raise
+        except Exception as e:
+            raise RuntimeError(e)  # FIXME: qu'en faire ?
 
     @sandbox_loop
     def call_in_sandbox(self,

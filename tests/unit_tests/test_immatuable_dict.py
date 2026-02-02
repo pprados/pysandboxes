@@ -8,8 +8,6 @@ def test_immutable_dict():
     original_dict = {"a": 1, "b": 2, "c": 3}
     my_immutable_dict = ImmutableDict(original_dict)
 
-
-
     # Access a value
     assert my_immutable_dict['b'] == original_dict['b']
 

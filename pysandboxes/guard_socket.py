@@ -44,8 +44,9 @@ import socket
 import sys
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
-from typing import Tuple, Optional, Union, List, Dict, NamedTuple
+from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast
 
+from .exception import RuleError
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
 from .types import ConfigLines, ConfigLine
 
@@ -66,8 +67,11 @@ class SocketRule(NamedTuple):
     direction: str
     config: ConfigLine
 
-SocketRules=Tuple[SocketRule,...]
-class SocketRulesException(RuntimeError):  # TODO
+
+SocketRules = Tuple[SocketRule, ...]
+
+
+class SocketRulesError(RuleError):  # TODO: Se brancher sur une exception classique ?
     pass
 
 
@@ -89,13 +93,12 @@ ALLOW = "ALLOW"  # Action to allow a connection
 IN = "IN"  # Direction for incoming connections (e.g., server-side bind)
 OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 
-
 # Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
 # Example: "--net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
 # SOCKET_SPECS: comma-separated list of "tcp", "udp", "any".
 
 
-_rules: SocketRules = ()
+_rules: SocketRules = cast(SocketRules, ())
 
 SPEC_TO_TYPE_MAP: Dict[str, int] = {
     "tcp": socket.IPPROTO_TCP,
@@ -275,8 +278,8 @@ def _parse_rule(rule: ConfigLine,
 
 
 def parse_rules(rules: ConfigLines,
-                errors: List[ErrorMsg]) -> Tuple[
-    SocketRules, ConfigLines]:
+                errors: List[ErrorMsg]
+                ) -> Tuple[SocketRules, ConfigLines]:
     socket_rules = []
     ignore_rules = []
     for rule in rules:
@@ -308,7 +311,7 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
     if not syntax:
         return []
     if syntax.strip() == '*':
-        return range(max_port+1)  # Represents all ports
+        return range(max_port + 1)  # Represents all ports
     ports = set()
     elements = syntax.split(',')
     for element in elements:
@@ -451,7 +454,7 @@ def _check_address_with_rules(
                                     config.rule, format_ruleref(config)
                                 )
                                 if action == DENY:
-                                    raise SocketRulesException(
+                                    raise SocketRulesError(
                                         f"Guard network connection to "
                                         f"'{hostname}' ({ip_host}:{destination_port}) "
                                         f"{action} by rule "
@@ -459,7 +462,7 @@ def _check_address_with_rules(
                                         f"from {format_ruleref(config)})."
                                     )
                                 elif action == ALLOW:
-                                    raise SocketRulesException(
+                                    raise SocketRulesError(
                                         f"Guard network connection to "
                                         f"'{hostname}' ({ip_host}:{destination_port}) "
                                         f"{action} by rule "
@@ -470,7 +473,7 @@ def _check_address_with_rules(
         "DENIED by implicit default policy.",
         hostname, unique_ips, destination_port
     )
-    raise SocketRulesException(
+    raise SocketRulesError(
         f"Guard network connection to '{hostname}' "
         f"({unique_ips}:{destination_port}) "
         f"DENIED by implicit default policy."
@@ -507,8 +510,8 @@ class Guard_socket(socket.socket):
         # Note: self.family, self.type, self.proto are now available from the superclass
 
     def bind(self, address: Adresse_Type) -> None:
-        if (isinstance(address, tuple) and len(address) >= 2 and # FIXME: ajout de test
-                isinstance(address[0],str)
+        if (isinstance(address, tuple) and len(address) >= 2 and  # FIXME: ajout de test
+                isinstance(address[0], str)
                 and isinstance(address[1], int)):
             self._check_address((str(address[0]), int(address[1])), conn_direction=IN)
         elif isinstance(address, str):  # AF_UNIX
@@ -523,7 +526,7 @@ class Guard_socket(socket.socket):
 
     def connect(self, address: Adresse_Type) -> None:
         if (isinstance(address, tuple) and len(address) >= 2
-                and isinstance(address[0],str)
+                and isinstance(address[0], str)
                 and isinstance(address[1], int)):
             self._check_address((str(address[0]), int(address[1])), conn_direction=OUT)
         elif isinstance(address, str):  # AF_UNIX
@@ -549,10 +552,10 @@ class Guard_socket(socket.socket):
                 logger.warning(
                     "Unexpected address format for connect_ex: %s. Skipping IP rule check.",
                     address)
-        except SocketRulesException as e:
+        except SocketRulesError as e:
             logger.error("Rule violation during connect_ex pre-check: %s", e)
             # Reraise to ensure connect_ex reflects the block, or map to an error code if preferred.
-            # For now, reraising the SocketRulesException is consistent with connect().
+            # For now, reraising the SocketRulesError is consistent with connect().
             raise
         return super().connect_ex(address)
 

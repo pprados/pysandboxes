@@ -1,6 +1,5 @@
-from collections import namedtuple
 from pathlib import Path
-from typing import List, Dict, Tuple, NamedTuple
+from typing import List, NamedTuple
 
 from .immutable_dict import ImmutableDict
 

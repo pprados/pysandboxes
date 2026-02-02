@@ -27,9 +27,9 @@
 #   capacity, system calls, etc.
 
 #--os-sandbox=task
-#--os-sandbox=subprocess
---os-sandbox=firejail
---py-sandbox=False
+--os-sandbox=subprocess
+#--os-sandbox=firejail
+--py-sandbox=True  # Activate python sandbox (default)
 
 #######################################################################################
 # Select some variables for the sandbox
@@ -83,13 +83,18 @@
 # Use another name for the virtualenv
 --ignore=.env
 --ignore=*.log
---ignore=*.py  # All code must be pre-compiled (pyo)
+# --ignore=*.py  # NON: All code must be pre-compiled (pyo)
 
 # Binds the current directory to the root of the sandbox
 # TODO: vérifier les impacts écritures. Est-ce bien visible ?
---rw-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path. Conflit si rw ?
+--ro-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path. Conflit si rw ?
 --ro-bind=${PYENV_ROOT},${PYENV_ROOT}
 --ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
+
+# TODO
+# - répertoire avec les modeles hf téléchargé ?
+# - répertoire avec les autres modeles téléchargeable ? (llm local, etc)
+
 
 #######################################################################################
 # Network rules management strategy:
@@ -126,6 +131,7 @@
 # Limit python features in the sandbox
 #--python-api=ALLOW:threads
 #--python-api-import=ALLOW:numpy.*,pandas.*
+--python-import=a,b,c
 
 #######################################################################################
 # Limit syntax and features when executing python code (very useful for controlling

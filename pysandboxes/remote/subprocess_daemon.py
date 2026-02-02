@@ -14,7 +14,7 @@ from .tools import to_b85
 from ..main_logger import pysandboxes_logger
 from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc, get_callable_info
-from ..types import Args, Envs
+from ..types import Args, Envs, ConfigLines
 
 logger = logging.getLogger(__name__)
 
@@ -149,17 +149,17 @@ class BaseSubProcessDaemon(SSESandbox):
                         init_fn: Optional[SyncOrAsyncFunc],
                         first: bool = False) -> None:
         if first:
-            short_all_rules = AllRules(
+            short_all_rules = AllRules(  # FIXME: pourquoi purger ?
                 config=all_rules.config,
                 envs=all_rules.envs,
                 os_sandbox=all_rules.os_sandbox,
                 use_py_sandbox=all_rules.use_py_sandbox,
-                socket_rules=[],
-                file_rules=[],
+                socket_rules=(),
+                file_rules=(),
+                import_rules=(), # all_rules.import_rules,
             )
-
             await self._re_start_cmd(
-                short_all_rules,
+                all_rules,
                 self._subprocess(
                     all_rules=short_all_rules,
                     envs=envs,

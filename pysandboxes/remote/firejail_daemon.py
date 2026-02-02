@@ -13,9 +13,9 @@ from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, suggest_package_installation
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
-from ..py_sandbox import AllRules, parse_config
-from ..tools import remove_comments, substitute_env_vars, _remove_comment
-from ..types import ConfigLines, Envs, Args
+from ..py_sandbox import AllRules
+from ..tools import remove_comments, substitute_env_vars
+from ..types import Envs, Args
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +194,8 @@ class FireJailDaemon(BaseSubProcessDaemon):
         from importlib.resources import files
 
         # Need all internal rules. Parse another time here.
-        config, sandbox_env, provider, use_pysandbox, socket_rules, files_rules = all_rules
+        (config, sandbox_env, provider, use_pysandbox, socket_rules,
+         files_rules, import_rules) = all_rules
 
         # assert provider == "firejail"
         args = [str(which_command("firejail"))]
@@ -231,7 +232,6 @@ class FireJailDaemon(BaseSubProcessDaemon):
             ])
 
         # Add files socket_rules
-        new_files_rules = []
         for rule in files_rules:
             if isinstance(rule, BindRule):
                 if rule.source == rule.dest:
@@ -248,8 +248,6 @@ class FireJailDaemon(BaseSubProcessDaemon):
                         args.append(f"--read-only={rule.source}")
             elif isinstance(rule, IgnoreRule):
                 args.append(f"--blacklist={rule.source}")
-                new_files_rules.append(rule)
-        files_rules = new_files_rules
 
         if socket_rules:
             # gw = get_default_gateway_info()

@@ -13,7 +13,7 @@ def format_ruleref(rule: ConfigLine) -> str:
     if rule.path == Path():
         path = "<arg>"
     else:
-        path = str(rule.path.relative_to(Path.cwd()))
+        path = str(rule.path.absolute().relative_to(Path.cwd()))
     if rule.ln == 0:
         return path
     else:

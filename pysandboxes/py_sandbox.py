@@ -5,9 +5,10 @@ import types
 from pathlib import Path
 from typing import Optional, List, Dict, NamedTuple
 
-from . import guard_files, guard_env, guard_provider, guard_socket
+from . import guard_files, guard_env, guard_provider, guard_socket, guard_import
 from .base_daemon import BaseDaemon
 from .guard_files import FileRules
+from .guard_import import ImportRules, PatchRules
 from .guard_socket import SocketRules
 from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
 from .tools import remove_config_comments, substitute_config_env_vars
@@ -46,6 +47,7 @@ class AllRules(NamedTuple):
     use_py_sandbox: bool
     socket_rules: SocketRules  # TODO: en faire un tuple pour le rendre immuable
     file_rules: FileRules
+    import_rules: ImportRules
 
 
 def _read_config(config_path: Path) -> ConfigLines:
@@ -68,6 +70,7 @@ def read_and_parse_config(
         extra_lines = remove_config_comments(
             [ConfigLine(line, Path(), 0) for line in extra_rules])
 
+    # TODO: voir l'approche de dotenv (find_dotenv)
     # 1. try to find .pysandboxes in the caller module
     body_from_ressource = []
     # caller_module = _get_caller_module(skip=3)
@@ -109,7 +112,8 @@ def parse_config(
     os_sandbox, use_pysandbox, others = guard_provider.parse_rules(others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
-
+    import_rules, others = guard_import.parse_rules(others, errors)
+    # FIXME: utiliser patch_rules
     # 2. If some line are ignored, log a warning
     if others:
         for invalide_rule in others:
@@ -129,8 +133,14 @@ def parse_config(
             os._exit(1)
         raise ValueError(f"Syntax error in {format_error_list(all_files_in_errors)} ")
 
-    return AllRules(config, sandbox_env, os_sandbox, use_pysandbox, socket_rules,
-                    files_rules)
+    return AllRules(config,
+                    sandbox_env,
+                    os_sandbox,
+                    use_pysandbox,
+                    socket_rules,
+                    files_rules,
+                    import_rules,
+                    )
 
 
 def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
@@ -154,11 +164,12 @@ def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
 
 def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?
         all_rules: AllRules,
-        os_sandbox: str,
         envs: Optional[Dict[str, str]] = None,  # FIXME: dict or Env?
 ) -> None:
     if envs is None:
         envs = os.environ
+    os_sandbox=all_rules.os_sandbox
+
     if os_sandbox:
         from pysandboxes.os_sandbox import providers_factory
         if os_sandbox not in providers_factory:
@@ -172,5 +183,7 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
     # Apply the rules
     # sys.stdin.shutdown()  # FIXME: Compléter l'activation des règles
     os.environ = all_rules.envs
+    patch_rules: PatchRules = guard_files.patch_rules()  # TODO: dans socket egalement
+    guard_import.activate_guard_import(patch_rules, all_rules.import_rules)
     guard_socket.activate_guard_socket(all_rules.socket_rules)
     guard_files.activate_guard_files(all_rules.file_rules)

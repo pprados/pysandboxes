@@ -91,7 +91,6 @@ class WrapperIO(io.TextIOBase):
         self._context.get().flush()
 
 
-# FIXME: catch_stdio() not activated
 sys.stdout = WrapperIO(contextvars.ContextVar(
     'current_stdout', default=sys.stdout))
 sys.stderr = WrapperIO(contextvars.ContextVar(

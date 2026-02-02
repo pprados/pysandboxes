@@ -13,8 +13,10 @@ from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
 from .immutable_dict import ImmutableDict
+from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
 from .py_sandbox import get_config_path
+from .remote.parameters import DELAY_FOR_CALL_DAEMON
 from .tools import check_mixte_async_async, SyncOrAsyncFunc
 from .types import Envs
 
@@ -25,7 +27,8 @@ _lock = Lock()
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., Any]:
+def sandbox(_func: Optional[F] = None, *,
+            timeout: float = DELAY_FOR_CALL_DAEMON) -> Callable[..., Any]:
     """
     Decorator to run a function in a sandbox.y
     The function can be either synchronous or asynchronous.
@@ -119,9 +122,8 @@ class sandboxes(Protocol):
             It will kill daemon processes before exiting itself.
             """
             # Iterate through all child processes and send them SIGTERM
-            global _current_daemon
             logger.debug("Catch signal %s. Propagate to the dameon.", signum)
-            _current_daemon.shutdown()
+            shutdown_daemon()
 
         if threading.current_thread() is threading.main_thread():
             self._old_sigint = signal.signal(signal.SIGINT, signal_handler)

@@ -10,8 +10,10 @@ except metadata.PackageNotFoundError:
     # Case where package metadata is not available.
     __version__ = ""
 
-__all__ = [
-    "sandbox",
-    "run",
-    "sandboxes",
-]
+# FIXME: circular import
+# __all__ = [
+#     "sandbox",
+#     "run",
+#     "sandboxes",
+#     "RuleError",
+# ]

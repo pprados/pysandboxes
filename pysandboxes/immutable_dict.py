@@ -76,3 +76,6 @@ class ImmutableDict(
 
     def values(self) -> ValuesView[ValueType]:
         return Mapping.values(self)
+
+
+ImmutableDict=dict  # FIXME: patch temporaire pour debug

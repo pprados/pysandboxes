@@ -10,7 +10,7 @@ import sys
 import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
-from logging import getLogger
+from logging import getLogger, Logger
 from typing import AsyncGenerator, Any, Optional
 from typing import Dict
 
@@ -26,7 +26,7 @@ from .tools import to_b85, configure_logging_level, \
 from ..private_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from ..py_sandbox import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
-from ..types import ConfigLines, Args, Envs
+from ..types import Args, Envs
 
 logger = logging.getLogger(__name__)
 
@@ -246,14 +246,19 @@ async def sandbox_daemon(
         if "exception" in result:
             logger.debug("(%s) ... raise %s", session_id,
                          repr(result["exception"][1]))
-            result["exception"] = to_b85(result["exception"])
+            traceback.print_exception(result["exception"][0])
+            result["exception"] = to_b85(result["exception"])  # FIXME: les exceptions ne sont pas toujours pickle
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
         yield json.dumps({"session_id": session_id, "cancelled": True})
     except AssertionError as e:
+        logger.error("-------------------")
+        traceback.print_exc()
+        logger.error("-------------------")
         logger.exception("assertion %s", traceback.format_exc())
         sys.exit(-1)
+        # Ignore?
     except Exception as e:
         logger.info("(%s) ... error %s", session_id, repr(e))
         traceback.print_exception(e)
@@ -289,7 +294,7 @@ class LocalTaskDaemon(SSESandbox):
                     ) -> None:
 
         if envs is None:
-            envs=os.environ
+            envs = os.environ
         if init_fn:
             init_fn()
         loop = get_sandbox_loop()
@@ -377,8 +382,12 @@ async def main() -> int:
         raise RuntimeError("Impossible to read the config body from stdin")
     logging.debug("config body and token successfully read from stdin")
 
-    os_sandbox = process_config.all_rules.os_sandbox
-    use_py_sandbox = process_config.all_rules.use_py_sandbox
+    # Adjuste the log level
+    configure_logging_level(process_config.log_level)
+
+    all_rules = process_config.all_rules
+    os_sandbox = all_rules.os_sandbox
+    use_py_sandbox = all_rules.use_py_sandbox
 
     # In this case, use the standard loop in place of the private sandbox loop
     set_sandbox_loop(asyncio.get_running_loop())
@@ -387,10 +396,10 @@ async def main() -> int:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
 
-        activate_sandboxes(process_config.all_rules,
-                           os_sandbox,
-                           dict(os.environ)
-                           )
+        activate_sandboxes(
+            all_rules,
+            dict(os.environ)
+        )
         pysandboxes_logger.info(
             f"Start a py-sandbox encapsulated in an os-sandox of type '{os_sandbox}'")
     else:
@@ -409,9 +418,9 @@ async def main() -> int:
     task_daemon = LocalTaskDaemon(process_config.token)
     try:
         await task_daemon.start(
-            all_rules=process_config.all_rules,
+            all_rules=all_rules,
             log_level=log_level,
-            envs=dict(os.environ),
+            envs=Envs(os.environ),
             init_fn=init_fn,
         )
         await task_daemon.join()
