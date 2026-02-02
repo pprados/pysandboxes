@@ -54,8 +54,11 @@ class IgnoreRule(NamedTuple):
 
 
 FilesRule = Union[BindRule, IgnoreRule]
+
+FileRules=Tuple[FilesRule,...]
+
 # Internal state for the file filter
-_rules: List[FilesRule] = []
+_rules: FileRules = ()
 
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
@@ -63,7 +66,7 @@ _os_path_abspath = os.path.abspath
 
 def parse_rules(config: ConfigLines,
                 errors: List[ErrorMsg],
-                ) -> Tuple[List[FilesRule], ConfigLines]:
+                ) -> Tuple[FileRules, ConfigLines]:
     """
     Parses rule strings into internal ParserRule objects.
     Supports --bind=src,dest and --ignore=glob_pattern.
@@ -144,7 +147,7 @@ def parse_rules(config: ConfigLines,
             ignore_rules.append(rule)
     rules_bind = sorted(rules_bind, key=lambda r: len(r.dest), reverse=True)
 
-    return rules_ignore + rules_bind, ignore_rules
+    return tuple(rules_ignore + rules_bind), ignore_rules
 
 
 # Helper to resolve symlinks and apply socket_rules
@@ -516,7 +519,7 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
                     func(_Path(new_path), pattern, *args, **kwargs)
                     if _apply_src_to_dest_rules(p) is not None)
         else:
-            _apply_dest_to_src_rules(self, write=False)  # FIXME: remove line
+            _apply_dest_to_src_rules(self, write=False)  # FIXME: remove line. PB de reset entre les tests
             raise RuleFileNotFoundError(f"Access to '{self}' is ignored by rule")
 
     return wrapper
@@ -593,7 +596,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard_files(rules: List[FilesRule]) -> None:
+def activate_guard_files(rules: FileRules) -> None:
     """
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.

@@ -5,17 +5,18 @@ import logging
 import os
 import signal
 import threading
-import typing
 from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, TypeVar, Union, \
-    Coroutine, runtime_checkable, List
+    Coroutine, runtime_checkable, List, Protocol, Dict
 from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
+from .immutable_dict import ImmutableDict
 from .private_loop import set_sandbox_loop
 from .py_sandbox import get_config_path
 from .tools import check_mixte_async_async, SyncOrAsyncFunc
+from .types import Envs
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,14 @@ def sandbox(_func: Optional[F] = None, *, timeout: float = 0) -> Callable[..., A
 
 
 @runtime_checkable
-class sandboxes(typing.Protocol):
+class sandboxes(Protocol):
+    __slot__=(
+        'init_fn',
+        'config_path',
+        'envs',
+        'extra_rules',
+        'timeout',
+    )
     """
     Context manager to start and stop the sandbox daemon.
     The parameter `init_fn` is a function that will be called when the daemon starts,
@@ -68,14 +76,14 @@ class sandboxes(typing.Protocol):
                  init_fn: Optional[SyncOrAsyncFunc] = None,
                  config_path: Optional[Union[Path, str]] = None,
                  *,
-                 envs: Optional[typing.Dict[str, str]] = None,
+                 envs: Optional[Dict[str, str]] = None,
                  extra_rules: Optional[List[str]] = None,
                  ) -> None:
         self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
         self.config_path = config_path
         if envs is None:
-            envs = dict(os.environ)
-        self.envs = envs
+            envs = os.environ
+        self.envs = Envs(envs)
         self.extra_rules = extra_rules
         self.timeout = 60
         self._old_sigint = None

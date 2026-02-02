@@ -1,15 +1,17 @@
 # TODO: reorganize the tools
 
 import asyncio
+import collections
 import contextvars
 import inspect
 import re
-from typing import Dict, Optional, Union, Callable, Awaitable, Any, Tuple, List
+from typing import Dict, Optional, Union, Callable, Awaitable, Any, Tuple, List, \
+    Iterator, Hashable, ItemsView, Generic, TypeVar
 
-from .types import ConfigLines, ConfigLine
+from .types import ConfigLines, ConfigLine, Envs
 
 
-def substitute_config_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> ConfigLines:
+def substitute_config_env_vars(lines: ConfigLines, env_vars: Envs) -> ConfigLines:
     """
     The function supports two substitution formats:
     1. ${VAR_NAME}: Replaces the placeholder with the value of VAR_NAME from
@@ -47,7 +49,7 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Dict[str, str]) -> 
     return [ConfigLine(pattern.sub(substitute, line), path, ln) for line, path, ln in
             lines]
 
-def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]:
+def substitute_env_vars(lines: List[str], env_vars: Envs) -> List[str]:
     pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
 
     def substitute(match: re.Match) -> str:
@@ -210,3 +212,4 @@ def check_mixte_async_async():
             pass  # Ignore
         else:
             raise
+

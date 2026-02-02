@@ -2,6 +2,9 @@ from collections import namedtuple
 from pathlib import Path
 from typing import List, Dict, Tuple, NamedTuple
 
+from .immutable_dict import ImmutableDict
+
+
 class ConfigLine(NamedTuple):
     rule:str
     path:Path
@@ -9,4 +12,4 @@ class ConfigLine(NamedTuple):
 
 ConfigLines = List[ConfigLine]
 Args = List[str]
-Envs = Dict[str, str]
+Envs = ImmutableDict[str,str]

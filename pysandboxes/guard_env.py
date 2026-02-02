@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, Tuple, List
 
 from .main_logger import format_ruleref, ErrorMsg
-from .types import ConfigLines, ConfigLine
+from .types import ConfigLines, ConfigLine, Envs
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ def parse_guard_envs(
         rules: ConfigLines,
         source_vars: Dict[str, str],
         errors: List[ErrorMsg],
-) -> Tuple[Dict[str, str], ConfigLines]:
+) -> Tuple[Envs, ConfigLines]:
     """
     Processes a list of socket_rules to create a new dictionary of variables.
 

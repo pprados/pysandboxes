@@ -15,7 +15,7 @@ class TaskDaemon(LocalTaskDaemon):
                     all_rules:AllRules,
                     *,
                     log_level: int,
-                    envs: Envs,
+                    envs: Optional[Envs],
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
         await super().start(all_rules,

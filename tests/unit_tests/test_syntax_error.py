@@ -20,24 +20,27 @@ def test_syntax_error(caplog):
     except ValueError as e:
         cwd = str(Path.cwd())
         all_ignore = [record[2].replace(cwd, ".")
-                      .replace("./tests/unit_tests/syntax-error.profile",
+                      .replace("tests/unit_tests/syntax-error.profile",
                                "syntax-error")
                       for record in caplog.record_tuples[:-1]]
         # Check ignore rule
         assert all_ignore == [
-                "syntax-error(8): Ignore invalid rule '--ignore-parameter'.",
-                "syntax-error(13): Ignore invalid rule '--net=ALLOW|any,tcp,udp|127.0.0.1/32|8000|IN'.",
-                "syntax-error(14): Ignore invalid rule '--net=ALLOW|*,tcp,udp|127.0.0.1/32|8000|IN'."
+            "syntax-error(8): Ignore invalid rule '--ignore-parameter'.",
+            "syntax-error(13): Ignore invalid rule '--net=ALLOW|any,tcp,udp|127.0.0.1/32|8000|IN'.",
+            "syntax-error(14): Ignore invalid rule '--net=ALLOW|*,tcp,udp|127.0.0.1/32|8000|IN'."
         ]
         # Check syntax error
         syntax_error = [
             msg.replace(cwd, "syntax-error").replace(
-                "syntax-error/tests/unit_tests/syntax-error.profile", "syntax-error")
+                "tests/unit_tests/syntax-error.profile", "syntax-error")
             for msg in
             caplog.record_tuples[-1][2].splitlines()[1:]]
 
         assert syntax_error == [
-            "<extra>, syntax-error(1), syntax-error(2) and syntax-error(3): Multiple --os-sandbox parameters.",
+            "<arg>: Detect a missing '=' in rule: --set-env=abc.",
+            "<arg>: Invalid os-sandbox 'error'.",
+            '<arg>, syntax-error(1), syntax-error(2) and syntax-error(3): Multiple --os-sandbox parameters.',
+            "<arg>: In '--bind=', source and destination must be separated with a comma.",
             "syntax-error(1): Invalid os-sandbox 'toto'.",
             "syntax-error(4): Detect a missing '=' in rule: --set-env=ERROR.",
             "syntax-error(5): In '--ro-bind=syntax-error,not_exist', source and destination must exists.",
@@ -54,8 +57,5 @@ def test_syntax_error(caplog):
             "syntax-error(19): In '--net=ALLOW|tcp|0.0.0.0/0|a,b|IN', invalide port list.",
             "syntax-error(20): In '--net=ALLOW|tcp|0.0.0.0/0|*|', direction is not 'IN' or 'OUT'.",
             "syntax-error(24): In '--ro-bind=syntax-error,syntax-error/tests', invalidate another rule from 'syntax-error(22)'.",
-            "syntax-error(25): Invalid value 'abc' for --py-sandbox. Use true or false.",
-            "<extra>: Detect a missing '=' in rule: --set-env=abc.",
-            "<extra>: Invalid os-sandbox 'error'.",
-            "<extra>: In '--bind=', source and destination must be separated with a comma.",
+            "syntax-error(25): Invalid value 'abc' for --py-sandbox. Use true or false."
         ]

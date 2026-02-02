@@ -66,7 +66,7 @@ class SocketRule(NamedTuple):
     direction: str
     config: ConfigLine
 
-
+SocketRules=Tuple[SocketRule,...]
 class SocketRulesException(RuntimeError):  # TODO
     pass
 
@@ -95,7 +95,7 @@ OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 # SOCKET_SPECS: comma-separated list of "tcp", "udp", "any".
 
 
-_rules: List[SocketRule] = []
+_rules: SocketRules = ()
 
 SPEC_TO_TYPE_MAP: Dict[str, int] = {
     "tcp": socket.IPPROTO_TCP,
@@ -276,7 +276,7 @@ def _parse_rule(rule: ConfigLine,
 
 def parse_rules(rules: ConfigLines,
                 errors: List[ErrorMsg]) -> Tuple[
-    List[SocketRule], ConfigLines]:
+    SocketRules, ConfigLines]:
     socket_rules = []
     ignore_rules = []
     for rule in rules:
@@ -289,7 +289,7 @@ def parse_rules(rules: ConfigLines,
     # TODO: Remove duplicates and sort for consistency
     # parsed_rule_families = sorted(list(set(parsed_rule_families)))  # FIXME
 
-    return socket_rules, ignore_rules
+    return tuple(socket_rules), ignore_rules
 
 
 def _convert_ports_range(syntax: str) -> Union[List[int], range]:
@@ -375,7 +375,7 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
 
 
 def _check_address_with_rules(
-        socket_rules: List[SocketRule],
+        socket_rules: SocketRules,
         socket_instance_type: int,
         address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
         conn_direction: str):  # Expect IN or OUT constants
@@ -578,7 +578,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard_socket(socket_rules: List[SocketRule]) -> None:
+def activate_guard_socket(socket_rules: SocketRules) -> None:
     if not socket_rules:
         return
     global _rules

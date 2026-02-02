@@ -128,10 +128,10 @@ class BaseSubProcessDaemon(SSESandbox):
                     all_rules: AllRules,
                     *,
                     log_level: int,
-                    envs: Envs,
+                    envs: Optional[Envs],
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
-        if not envs:
+        if envs is None:
             envs = dict(os.environ)
         self.restart = 0
         await self._re_start(all_rules,
@@ -312,4 +312,4 @@ class SubProcessDaemon(BaseSubProcessDaemon):
                 "-c",
                 "PS1='[os-sandbox-subprocess] $ '; "
                 "export PS1; "
-                "exec /bin/bash --norc --noprofile -i"], {}
+                "exec /bin/bash --norc --noprofile -i"]

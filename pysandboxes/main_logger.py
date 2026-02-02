@@ -10,9 +10,10 @@ ErrorMsg = Tuple[str, Path, int]
 
 
 def format_ruleref(rule: ConfigLine) -> str:
-    path=str(rule.path)
     if rule.path == Path():
-        path="<arg>"
+        path = "<arg>"
+    else:
+        path = str(rule.path.relative_to(Path.cwd()))
     if rule.ln == 0:
         return path
     else:

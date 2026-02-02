@@ -38,7 +38,7 @@ class BaseDaemon(ABC):
                     all_rules:"AllRules",
                     *,
                     log_level: int,
-                    envs: Envs,
+                    envs: Optional[Envs],
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
         raise NotImplementedError
@@ -55,7 +55,7 @@ class BaseDaemon(ABC):
     def update_rules(self,
                      *,
                      envs: Envs,
-                     config: ConfigLines) -> "AllRules":
+                     all_rules: "AllRules") -> "AllRules":
         raise NotImplementedError
 
     @property

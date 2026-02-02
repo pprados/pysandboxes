@@ -3,12 +3,12 @@ import logging
 import os
 import types
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, NamedTuple
+from typing import Optional, List, Dict, NamedTuple
 
 from . import guard_files, guard_env, guard_provider, guard_socket
 from .base_daemon import BaseDaemon
-from .guard_files import FilesRule
-from .guard_socket import SocketRule
+from .guard_files import FileRules
+from .guard_socket import SocketRules
 from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
 from .tools import remove_config_comments, substitute_config_env_vars
 from .types import ConfigLines, Envs, ConfigLine
@@ -41,12 +41,11 @@ def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
 
 class AllRules(NamedTuple):
     config: ConfigLines
-    envs:Envs
-    os_sandbox:str
-    use_py_sandbox:bool
-    socket_rules: List[SocketRule]  # TODO: en faire un tuple pour le rendre immuable
-    file_rules: List[FilesRule]
-
+    envs: Envs
+    os_sandbox: str
+    use_py_sandbox: bool
+    socket_rules: SocketRules  # TODO: en faire un tuple pour le rendre immuable
+    file_rules: FileRules
 
 
 def _read_config(config_path: Path) -> ConfigLines:
@@ -57,15 +56,17 @@ def _read_config(config_path: Path) -> ConfigLines:
 def read_and_parse_config(
         config_path: Optional[Path],
         *,
-        envs: Envs = os.environ,
+        envs: Optional[Dict[str, str]] = None,
         extra_rules: Optional[List[str]] = None,
         exit_on_error: bool = False,
 ) -> AllRules:
+    if envs is None:
+        envs = os.environ
     if extra_rules is None:
         extra_lines = []
     else:
         extra_lines = remove_config_comments(
-            [ConfigLine(line, "<extra>", 0) for line in extra_rules])
+            [ConfigLine(line, Path(), 0) for line in extra_rules])
 
     # 1. try to find .pysandboxes in the caller module
     body_from_ressource = []
@@ -93,14 +94,17 @@ def read_and_parse_config(
 def parse_config(
         config: ConfigLines,
         *,
-        envs: Envs = os.environ,
+        envs: Optional[Dict[str, str]] = None,
         exit_on_error: bool = False,
 ) -> AllRules:
+    if envs is None:
+        envs = os.environ
+    ienvs = Envs(envs)
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse the socket_rules, step by step
-    sandbox_env, others = guard_env.parse_guard_envs(config, envs, errors)
-    others = substitute_config_env_vars(others, envs)  # with main envs
+    sandbox_env, others = guard_env.parse_guard_envs(config, ienvs, errors)
+    others = substitute_config_env_vars(others, ienvs)  # with main envs
 
     os_sandbox, use_pysandbox, others = guard_provider.parse_rules(others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
@@ -125,7 +129,8 @@ def parse_config(
             os._exit(1)
         raise ValueError(f"Syntax error in {format_error_list(all_files_in_errors)} ")
 
-    return AllRules(config, sandbox_env, os_sandbox, use_pysandbox, socket_rules, files_rules)
+    return AllRules(config, sandbox_env, os_sandbox, use_pysandbox, socket_rules,
+                    files_rules)
 
 
 def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
@@ -148,19 +153,21 @@ def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
 
 
 def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?
-        all_rules:AllRules,
-        os_sandbox:str,
-        envs: Dict[str, str] = os.environ,
+        all_rules: AllRules,
+        os_sandbox: str,
+        envs: Optional[Dict[str, str]] = None,  # FIXME: dict or Env?
 ) -> None:
+    if envs is None:
+        envs = os.environ
     if os_sandbox:
         from pysandboxes.os_sandbox import providers_factory
         if os_sandbox not in providers_factory:
             raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
-        os_provider:BaseDaemon = providers_factory[os_sandbox](token=None)
+        os_provider: BaseDaemon = providers_factory[os_sandbox](token=None)
         all_rules = os_provider.update_rules(
-                all_rules=all_rules,
-                envs=envs,
-            )
+            all_rules=all_rules,
+            envs=Envs(envs),
+        )
 
     # Apply the rules
     # sys.stdin.shutdown()  # FIXME: Compléter l'activation des règles

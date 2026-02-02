@@ -284,10 +284,12 @@ class LocalTaskDaemon(SSESandbox):
                     all_rules: AllRules,
                     *,
                     log_level: int,
-                    envs: Envs,
+                    envs: Optional[Envs],
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
 
+        if envs is None:
+            envs=os.environ
         if init_fn:
             init_fn()
         loop = get_sandbox_loop()

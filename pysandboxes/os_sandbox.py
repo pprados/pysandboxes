@@ -12,6 +12,7 @@ from .remote.firejail_daemon import FireJailDaemon
 from .remote.subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
 from .tools import is_in_sandbox, check_mixte_async_async, SyncOrAsyncFunc
+from .types import Envs
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +74,11 @@ async def _async_start_daemon(all_rules: AllRules,
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
         try:
             token = str(uuid.uuid4())
-            os_provider = providers_factory[all_rules.os_sandbox](token)
+            os_provider:BaseDaemon = providers_factory[all_rules.os_sandbox](token)
             await os_provider.start(
                 all_rules,
                 log_level=log_level,
-                envs=dict(os.environ),
+                envs=Envs(os.environ),
                 init_fn=init_fn
             )
             _current_daemon = os_provider
