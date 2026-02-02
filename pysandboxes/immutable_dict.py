@@ -1,71 +1,78 @@
 import collections
-from typing import ItemsView, Hashable, Any, Iterator, Generic, TypeVar, Tuple
+from typing import ItemsView, Hashable, Any, Iterator, Generic, TypeVar, Tuple, Union, \
+    Mapping, Iterable, KeysView, ValuesView
 
 KeyType = TypeVar('KeyType', bound=Hashable)
 ValueType = TypeVar('ValueType')
-class ImmutableDict(collections.abc.Mapping,Generic[KeyType, ValueType]):
+class ImmutableDict(
+    tuple,
+    collections.abc.Mapping,Generic[KeyType, ValueType]):
     """
     An immutable dictionary-like object built on a tuple of tuples.
     This class is compatible with the collections.abc.Mapping protocol.
     """
-    __slot__ = ('_kv')
-    _key: Tuple[Hashable, ...]
-    _value: Tuple[Any, ...]
+    __slot__ = ()
 
-    def __init__(self, data: collections.abc.Mapping[Hashable, Any]):
-        """
-        Initializes the ImmutableDict from an iterable of key-value pairs.
+    # construction accepts either a Mapping or an iterable of (key, value) pairs
+    def __new__(
+            cls,
+            data: Union[
+                Mapping[KeyType, ValueType],
+                Iterable[Tuple[KeyType, ValueType]]],
+    ) -> "ImmutableDict[KeyType, ValueType]":
+        # Normalize incoming data to an iterable of pairs
+        if isinstance(data, Mapping):
+            items = tuple(data.items())
+        else:
+            # allow any iterable of (k, v) pairs
+            items = tuple(data)
 
-        Args:
-            data: An iterable of (key, value) tuples.
-        """
-        data = tuple(list(data.items()))
-        self._kv = (
-            tuple(item[0] for item in data),
-            tuple(item[1] for item in data)
-        )
+        # Build parallel tuples of keys and values
+        keys: Tuple[KeyType, ...] = tuple(item[0] for item in items)
+        values: Tuple[ValueType, ...] = tuple(item[1] for item in items)
 
-    def __getitem__(self, key: Hashable) -> Any:
-        """
-        Retrieves the value for a given key.
+        # Create the tuple-subclass with two items: (keys, values)
+        obj = tuple.__new__(cls, (keys, values))
+        return obj
 
-        Args:
-            key: The key to look for.
+    @property
+    def _keys(self) -> Tuple[KeyType, ...]:
+        return tuple.__getitem__(self, 0)  # type: ignore[index]
 
-        Returns:
-            The value associated with the key.
+    @property
+    def _values(self) -> Tuple[ValueType, ...]:
+        return tuple.__getitem__(self, 1)  # type: ignore[index]
 
-        Raises:
-            KeyError: If the key is not found.
-        """
+    # Mapping protocol
+    def __getitem__(self, key: KeyType) -> ValueType:
         try:
-            index = self._kv[0].index(key)
-            return self._kv[1][index]
+            idx = self._keys.index(key)
         except ValueError:
-            raise KeyError(f"Key not found: {key}")
+            raise KeyError(key)
+        return self._values[idx]
+
+    def __iter__(self) -> Iterator[KeyType]:
+        return iter(self._keys)
 
     def __len__(self) -> int:
-        """
-        Returns the number of key-value pairs in the dictionary.
-        """
-        return len(self._kv[0])
+        return len(self._keys)
 
-    def __iter__(self) -> Iterator[Hashable]:
-        """
-        Returns an iterator over the keys.
-        """
-        return iter(self._kv[0])
+    def __contains__(self, key: object) -> bool:
+        try:
+            self._keys.index(key)  # type: ignore[arg-type]
+            return True
+        except ValueError:
+            return False
 
     def __repr__(self) -> str:
-        """
-        Returns a string representation of the object.
-        """
-        return f"ImmutableDict({dict(zip(*self._kv))})"
+        return f"ImmutableDict({dict(zip(self._keys, self._values))})"
 
-    # Optional method to provide a view of the items, similar to a standard dict
-    def items(self) -> ItemsView[Hashable, Any]:
-        """
-        Returns a view object that displays a list of a given dictionary’s
-        (key, value) tuple pairs.
-        """
-        return dict(zip(*self._kv)).items()
+    # Keep Mapping's default .keys(), .items(), .values()
+    def keys(self) -> KeysView[KeyType]:
+        return Mapping.keys(self)
+
+    def items(self) -> ItemsView[KeyType,ValueType]:
+        return Mapping.items(self)
+
+    def values(self) -> ValuesView[ValueType]:
+        return Mapping.values(self)
