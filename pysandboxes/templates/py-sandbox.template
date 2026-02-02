@@ -5,121 +5,130 @@
 # environment helps limit accesses to minimal privileges.
 
 #######################################################################################
+# There is a learning mode that automatically adds rules to the rules file as it sees
+# fit. This mode file can be activated at any time. New security errors will be added
+# to the settings file.
+#
+# This file is usually located in the project root directory under the
+# name `.py-sandboxes`.
+#
+# If this file does not exist, when the application is launched for the first time,
+# the system enters learning mode and a first version is produced. Use your
+# application in all its dimensions to feed it.
+#
+# You can modify it manually, or reactivate learning mode by adding a `--learning`
+# parameter with the name of the file to be fed.
+
+# Uncomment the next line to remain in learning mode at all times.
+#--learning=${SELF:=.py-sandboxes}
+
+#######################################################################################
+# To activate the py-sandbox, set the parameter `py-sandbox`.
+#
+# If this parameter is set to `false`, the code still runs in a sandbox
+# (and potentially an os-sandbox), but the Python-specific security rules
+# are not applied.
+# 
+--py-sandbox=True  # Activate python sandbox (default)
+
+#######################################################################################
 # Using a Python sandbox is a good idea, but it does not guarantee that an application
 # cannot escape it via compiled code, direct access to the kernel API, etc.
 # It is recommended to supplement this with an additional sandbox level, relying on
 # the capabilities of the OS (namespace).
+#
 # Various implementations are available, selected according to the application's
 # deployment constraints. For example, it is not always possible to use these advanced
 # tools if the application itself runs in a standard Docker container without specific
 # privileges.
-# Use the --os-sandbox parameter to select the technology from among:
-# - subprocess (default): Use a subprocess to invoke sandboxed functions
-# - firejail : A utility that allows you to restrict access to disks, networks,
+#
+# Use the `--os-sandbox` parameter to select the technology from among:
+# - `subprocess` (default): Use a subprocess to invoke sandboxed functions
+# - `firejail` : A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
 
-# Remove the --learning parameter to activate the sandboxes.
-# otherwise, the process continues to learn, adding the rules to the end of the file.
-
---learning=${SELF:=.py-sandboxes}
 #--os-sandbox=task
 --os-sandbox=subprocess
 #--os-sandbox=firejail
---py-sandbox=True  # Activate python sandbox (default)
 
 #######################################################################################
-# Select some variables for the sandbox
-# The --set-env option is used to set environment variables that will be visible within
-# the sandbox.
+# In the sandbox, only a selected set of environment variables are accessible.
+#
+# The `--set-env` option is used to set environment variables that will be visible
+# within the sandbox.
 # The syntax allows you to:
 #
 # 1. Assign a fixed value to an environment variable:
 #    --set-env VAR_NAME=value
-#    This sets VAR_NAME to value within the sandbox.
+#    This sets `VAR_NAME` to value within the sandbox.
 #
 # 2. Assign a value based on the environment outside the sandbox, with an optional
 #    default value if needed,
 #    using a syntax similar to bash:
 #    --set-env VAR_NAME=${OUTSIDE_VAR:=default_value}
-#    This sets VAR_NAME to the value of OUTSIDE_VAR from the environment outside the
-#    sandbox. If OUTSIDE_VAR is not set, it uses default_value.
+#    This sets `VAR_NAME` to the value of `OUTSIDE_VAR` from the environment outside the
+#    sandbox. If `OUTSIDE_VAR` is not set, it uses `default_value`.
 #
 # 3. Replicate the values of variables that match a specific naming pattern:
 #    --set-env VAR_*=${VAR_*}
 #    This replicates all environment variables from outside the sandbox that match the
-#    pattern VAR_* into the sandbox.
+#    pattern `VAR_*` into the sandbox.
 #
-# By using --set-env, you can control and manage the environment variables available
+# By using `--set-env`, you can control and manage the environment variables available
 # within your sandbox, ensuring that your applications have the necessary configuration.
 
---set-env=HOME=.
---set-env=USER=pysandbox
---set-env=LC_*=${LC_*}
-#--set-env=TMP=/tmp
-#--set-env=TEMP=/tmp
-#--set-env=*_API_KEY=${*_API_KEY}
+# Some exemples
+#--set-env=HOME=.
+#--set-env=USER=pysandbox
+#--set-env=LC_*=${LC_*}
+#--set-env=*_API_KEY=${*_API_KEY}  # Add access to all API_KEY :-(
 #--unset-env=OPENAI_API_KEY
 
-# here, the rules learned for os.environ
+# Here, the rules learned for os.environ
 # <learning_guard_envs>
 
 # </learning_guard_envs>
 
 #######################################################################################
 # In a sandbox, it is crucial to prohibit access to certain file patterns
-# that contain confidential data (e.g., .*). Additionally, it is important to
+# that contain confidential data (e.g., `.*`). Additionally, it is important to
 # limit write access to specific directories or to mount a restricted number
 # of directories that are accessible within the sandbox.
-# The syntax --ignore=<glob_pattern> allows excluding certain files when using
-# Python file APIs. The syntax --bind=<target_dir>:<src_dir> maps a directory outside
+#
+# The syntax `--ignore=<glob_pattern>` allows excluding certain files when using
+# Python file APIs. The syntax `--bind=<target_dir>,<src_dir>` maps a directory outside
 # the sandbox to a directory visible inside the sandbox (which must exist).
-# Additionally, --bind-ro does the same but limits access to the sandbox as read-only.
+# Additionally, `--ro-bind` does the same but limits access to the sandbox as read-only.
 #
 # Ignores somes files
-# Warning, --ignore .* rule exclude the .venv directory !
+# Warning '--ignore .*' rule exclude the '.venv' directory !
 # Use another name for the virtualenv
+
 --ignore=.env
 --ignore=*.log
---ignore=${PWD}/docs
-# --ignore=*.py  # NON: All code must be pre-compiled (pyo)
+#--ignore=*.py  # If you use before 'python3 -m compileall .'
 
-# here, the rules learned for files
+# Here, the rules learned for files
 # <learning_guard_files>
 
 # </learning_guard_files>
 
-# TODO
-# - répertoire avec les modeles hf téléchargé ?
-# - répertoire avec les autres modeles téléchargeable ? (llm local, etc)
-
-
 #######################################################################################
-# Network rules management strategy:
-# There are two strategies: "allow" and "deny".
-#
-# By default, all connections are denied.
+# In a sandbox, it is possible to limit the network access, like a firewall.
+# There are two strategies: "allow" and "deny". By default, all connections are denied.
+# Use `--net` to add a new rule. The format is:
+# --net=<ALLOW|DENY>|<tcp|udp|*>|<network>|<port list>|<IN,OUT>
 
-# Denied localhost
-# FIXME --net=DENY|tcp|127.0.0.1/8|*|IN
-
-# here, the rules learned for socket
-# <learning_guard_socket>
-
-# </learning_guard_socket>
-
-# Allow web access, intranet and localhost
---net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services
-#--net=ALLOW|tcp|0.0.0.0/0|80|OUT  # Can call HTTP services
+#--net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services for all network
+#--net=ALLOW|tcp|0.0.0.0/0|80|OUT  # Can call HTTP services for all network
 
 # TODO: filtrer le dns ?
---net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
---net=ALLOW|udp|0.0.0.0/0|53|IN
+#--net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
+#--net=ALLOW|udp|0.0.0.0/0|53|IN
 
-# Deny locahost
-#--net=DENY|tcp|127.0.0.0/32|*|IN
+#--net=DENY|tcp|127.0.0.0/32|*|IN  # Deny locahost
+#--net=ALLOW|tcp|127.0.0.0/32|${PORT:=8000}|IN  # Allow a specific port in ${PORT} or 8000 to locahost
 
-# Allow a specific port in ${PORT} or 8000 to locahost
-#--net=ALLOW|tcp|127.0.0.0/32|${PORT:=8000}|IN
 
 # Denied intranet
 --net=DENY|any|10.0.0.0/8|*|OUT
@@ -129,11 +138,19 @@
 --net=DENY|any|fc00::/7|*|OUT  # ULA
 --net=DENY|any|fe80::/64|*|OUT # Link-Local
 
+# here, the rules learned for socket
+# <learning_guard_socket>
+
+# </learning_guard_socket>
+
 #######################################################################################
 # Limit python features in the sandbox
 #--python-api=ALLOW:threads
 #--python-api-import=ALLOW:numpy.*,pandas.*
---python-import=a,b,c
+#--python-import=a,b,c
+# <learning_guard_import>
+
+# </learning_guard_import>
 
 #######################################################################################
 # Limit syntax and features when executing python code (very useful for controlling
@@ -146,4 +163,3 @@
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
 # TODO: --dns=1.1.1.1,4,4,4,4
-

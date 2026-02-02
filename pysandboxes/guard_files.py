@@ -162,6 +162,16 @@ def parse_rules(config: ConfigLines,
     return tuple(rules_ignore + rules_bind), ignore_rules
 
 
+def _check_is_in_rules(path: Path):
+    global _rules
+    spath = str(path) + '/'
+    for rule in _rules:
+        if isinstance(rule, BindRule):
+            if spath == rule.source:
+                return True
+    return False
+
+
 def generate_rules(
         learn: List[Any],
 ) -> List[str]:
@@ -196,9 +206,9 @@ def generate_rules(
     temp_root = os_environ._get("TEMP")
     temp = Path(temp_root) if temp_root else None
 
-    value: str
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
+        value:str=""
         write = parent_level[path]
 
         overflow = False
@@ -211,30 +221,36 @@ def generate_rules(
             continue
 
         if pyenv and path.is_relative_to(pyenv):
-            value = "${PYENV_ROOT}"
+            if not _check_is_in_rules(pyenv):
+                value = "${PYENV_ROOT}"
         elif virtualenv and path.is_relative_to(virtualenv):
-            value = "${VIRTUAL_ENV}"
+            if not _check_is_in_rules(virtualenv):
+                value = "${VIRTUAL_ENV}"
         elif conda and path.is_relative_to(conda):
-            value = "${CONDA_HOME}"
-        elif conda and path.is_relative_to(conda):
-            value = "${CONDA_HOME}"
+            if not _check_is_in_rules(conda):
+                value = "${CONDA_HOME}"
         elif tmp and path.is_relative_to(tmp):
-            value = "${TMP}"
+            if not _check_is_in_rules(tmp):
+                value = "${TMP}"
         elif temp and path.is_relative_to(temp):
-            value = "${TEMP}"
+            if not _check_is_in_rules(temp):
+                value = "${TEMP}"
         elif path.is_relative_to(cwd):
-            x = str(path.relative_to(cwd))
-            if x == ".":
-                x = ""
-            value = "${PWD}/" + x
+            if not _check_is_in_rules(path):
+                x = "/"+str(path.relative_to(cwd))
+                if x == "/.":
+                    x = ""
+                value = "${PWD}" + x
         elif path.is_relative_to(home):
-            value = "${HOME}/" + str(path.relative_to(home))
+            if not _check_is_in_rules(path):
+                value = "${HOME}/" + str(path.relative_to(home))
         else:
             value = str(path)
-        result.add(
-            "--" +
-            f'{"" if write else "ro-"}bind={value},{value}'
-        )
+        if value:
+            result.add(
+                "--" +
+                f'{"" if write else "ro-"}bind={value},{value}'
+            )
         allready_added.append(LearnFileRule(path, write))
     return sorted(list(result), reverse=True)
 

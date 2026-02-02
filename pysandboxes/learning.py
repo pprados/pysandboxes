@@ -62,6 +62,7 @@ def generate_config_from_learning() -> None:
     header = f"# Add rules ({datetime.now().strftime('%d/%m/%y at %H:%M')})"
 
     all_lines:List[str]=[]
+    update_file=False
     if old_learning_path:
         # Current lines
         all_lines = learning_path.read_text().split("\n")
@@ -87,35 +88,40 @@ def generate_config_from_learning() -> None:
                         "\n\n" +
                         line
                 )
+                update_file=True
                 del replaces[match.group(1)]
 
     # If it's impossible to insert in the file, add rules at the end
-    if replaces:
+    if replaces and any(replaces.values()):
         all_lines.append(header)
         for v in replaces.values():
             if v:
                 all_lines.append(v)
+                update_file = True
         all_lines.append("\n")
     if list(filter(lambda line: line.startswith("--learning"), all_lines)):
         find_learning = " Remove the --learning parameter to use the sandboxes."
     else:
         find_learning = ""
-    # Force level info
-    old_level = pysandboxes_logger.level
-    pysandboxes_logger.setLevel(logging.INFO)
-    pysandboxes_logger.info("Write all learning rules in '%s'.%s",
-                            learning_path.relative_to(Path()),
-                            find_learning)
 
-    if old_learning_path:
-        pysandboxes_logger.info("The old '%s' is renamed to '%s'.",
-                                learning_path, old_learning_path)
-        learning_path.rename(old_learning_path)
+    if update_file:
+        # Force level info
+        old_level = pysandboxes_logger.level
+        pysandboxes_logger.setLevel(logging.INFO)
+        pysandboxes_logger.info("Write all learning rules in '%s'.%s",
+                                learning_path.relative_to(Path()),
+                                find_learning)
 
-    pysandboxes_logger.setLevel(old_level)
-    learning_path.write_text(
-        "\n".join(all_lines)
-    )
+        if old_learning_path:
+            pysandboxes_logger.info("The old '%s' is renamed to '%s'.",
+                                    learning_path, old_learning_path)
+            learning_path.rename(old_learning_path)
+
+        pysandboxes_logger.info("Check and update this file to validate the rules.")
+        pysandboxes_logger.setLevel(old_level)
+        learning_path.write_text(
+            "\n".join(all_lines)
+        )
 
 
 def _manage_olds_file(_learning_path):
