@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pysandboxes.guard_files import activate_guard_files, parse_rules, \
+from pysandboxes.guard_files import activate_guard, parse_rules, \
     RuleFileNotFoundError
 from pysandboxes.types import ConfigLines, ConfigLine
 
@@ -84,7 +84,7 @@ def files(tmp_path):
 def str_activate_guard_files(rules: ConfigLines) -> None:
     errors = []
     file_rules, _ = parse_rules(rules, errors)
-    activate_guard_files(file_rules)
+    activate_guard(file_rules)
     assert not errors
 
 

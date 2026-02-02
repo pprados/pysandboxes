@@ -13,7 +13,7 @@ from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
 from .exception import RuleError
-from .guard_import import PatchRules, conv_patch_rules
+from .guard_envs import LearnEnviron
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
 from .types import ConfigLines, ConfigLine
@@ -168,7 +168,9 @@ def generate_rules(
     # Select only parent
     parent_level: Dict[Path, bool] = {}
     for learn_rule in filter(lambda x: isinstance(x, LearnFileRule), learn):
-        parent = learn_rule.path.absolute().parent
+        parent = learn_rule.path.absolute()
+        if not parent.is_dir():
+            parent = parent.parent
         if not parent_level.get(parent, False) and learn_rule.write:
             parent_level[parent] = True
         else:
@@ -178,36 +180,62 @@ def generate_rules(
     cwd = Path().absolute()
     home = Path.home().absolute()
 
-    pyenv_root = os.environ.get("PYENV_ROOT")
+    os_environ = LearnEnviron()  # Get singleton
+    pyenv_root = os_environ._get("PYENV_ROOT")
     pyenv = Path(pyenv_root) if pyenv_root else None
 
-    virtualenv_root = os.environ.get("VIRUTAL_ENV")
+    virtualenv_root = os_environ._get("VIRUTAL_ENV")
     virtualenv = Path(virtualenv_root) if virtualenv_root else None
 
-    conda_root = os.environ.get("CONDA_HOME")
+    conda_root = os_environ._get("CONDA_HOME")
     conda = Path(conda_root) if conda_root else None
 
-    dir: str
-    for path, write in parent_level.items():
+    tmp_root = os_environ._get("TMP")
+    tmp = Path(tmp_root) if tmp_root else None
+
+    temp_root = os_environ._get("TEMP")
+    temp = Path(temp_root) if temp_root else None
+
+    value: str
+    allready_added: List[LearnFileRule] = []
+    for path in sorted(parent_level.keys()):
+        write = parent_level[path]
+
+        overflow = False
+        for allready_path, allready_write in allready_added:
+            if path.is_relative_to(allready_path):
+                if write == allready_write:
+                    overflow = True
+                    break
+        if overflow:
+            continue
+
         if pyenv and path.is_relative_to(pyenv):
-            dir = "${PYENV_ROOT}"
+            value = "${PYENV_ROOT}"
         elif virtualenv and path.is_relative_to(virtualenv):
-            dir = "${VIRTUAL_ENV}"
+            value = "${VIRTUAL_ENV}"
         elif conda and path.is_relative_to(conda):
-            dir = "${CONDA_HOME}"
+            value = "${CONDA_HOME}"
+        elif conda and path.is_relative_to(conda):
+            value = "${CONDA_HOME}"
+        elif tmp and path.is_relative_to(tmp):
+            value = "${TMP}"
+        elif temp and path.is_relative_to(temp):
+            value = "${TEMP}"
         elif path.is_relative_to(cwd):
             x = str(path.relative_to(cwd))
             if x == ".":
                 x = ""
-            dir = "${PWD}/" + x
+            value = "${PWD}/" + x
         elif path.is_relative_to(home):
-            dir = "${HOME}/" + str(path.relative_to(home))
+            value = "${HOME}/" + str(path.relative_to(home))
         else:
-            dir = str(path)
+            value = str(path)
         result.add(
             "--" +
-            f"{"" if write else "ro-"}bind={dir},{dir}"
+            f'{"" if write else "ro-"}bind={value},{value}'
         )
+        allready_added.append(LearnFileRule(path, write))
     return sorted(list(result), reverse=True)
 
 
@@ -252,6 +280,8 @@ def _apply_dest_to_src_rules(path: str,
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
+    if not path:
+        return None
     fake_path = _os_path_abspath(path)
     original_path = path
 
@@ -420,7 +450,12 @@ def _wrap_os_open(func: Callable) -> Callable:
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file),
                                                   write=need_to_write != 0)
         if remapped is None:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), False))
+                remapped = file
+            else:
+                raise RuleFileNotFoundError(
+                    f"Access to '{file}' must be accepted by a rule.")
         return func(remapped, flags, *args, **kwargs)
 
     return wrapper
@@ -855,7 +890,7 @@ _default_rules = rules = {
 }
 
 
-def _patch_rules() -> Dict[str, Callable]:
+def patch_rules() -> Dict[str, Callable]:
     rules = dict(_default_rules)
     if sys.platform != "win32" and sys.platform != "linux":
         rules += {
@@ -871,10 +906,6 @@ def _patch_rules() -> Dict[str, Callable]:
     return rules
 
 
-def patch_rules() -> PatchRules:
-    return conv_patch_rules(_patch_rules())
-
-
 # %%
 if "PYTEST_RUN_CONFIG" in os.environ:
     from unit_tests import save_default_values, restore_default_values
@@ -883,7 +914,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
     # FIXME: sauver en lazy ? Fausse les imports
     _memory = dict()
     save_default_values(_memory,
-                        set(_patch_rules().keys()),
+                        set(patch_rules().keys()),
                         sys.modules[__name__],
                         )
 
@@ -895,7 +926,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = ()
 
 
-def activate_guard_files(
+def activate_guard(
         rules: FileRules
 ) -> None:
     """

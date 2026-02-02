@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from pysandboxes.guard_env import parse_guard_envs
+from pysandboxes.guard_envs import parse_rules
 from pysandboxes.types import ConfigLine
 
 
 def test_simple_env():
     errors = []
-    env, _ = parse_guard_envs([
+    env, _ = parse_rules([
         ConfigLine("--set-env=FOO=bar", Path(), 0),
     ], {},
         errors)
@@ -15,7 +15,7 @@ def test_simple_env():
 
 def test_var_value():
     errors = []
-    env, _ = parse_guard_envs([
+    env, _ = parse_rules([
         ConfigLine("--set-env=FOO=${bar}", Path(), 0),
     ], {"bar": "BAR"}, errors)
     assert env == {"FOO": "BAR"}
@@ -23,7 +23,7 @@ def test_var_value():
 
 def test_var_default_value():
     errors = []
-    env, _ = parse_guard_envs([
+    env, _ = parse_rules([
         ConfigLine("--set-env=FOO=${X:=BAR}", Path(), 0),
     ], {"bar": "BAR"},errors)
     assert env == {"FOO": "BAR"}
@@ -31,7 +31,7 @@ def test_var_default_value():
 
 def test_var_pattern():
     errors = []
-    env, _ = parse_guard_envs([
+    env, _ = parse_rules([
         ConfigLine("--set-env=*_API_KEY=${*_API_KEY}", Path(), 0),
     ],
         {
@@ -48,7 +48,7 @@ def test_var_pattern():
 
 def test_var_all_pattern():
     errors = []
-    env, _ = parse_guard_envs([
+    env, _ = parse_rules([
         ConfigLine("--set-env=*=${*}", Path(), 0),
     ],
         {
@@ -65,7 +65,7 @@ def test_var_all_pattern():
 
 def test_var_all_pattern_and_unset():
     errors = []
-    env, _ = parse_guard_envs([
+    env, _ = parse_rules([
         ConfigLine("--set-env=*=${*}", Path(), 0),
         ConfigLine("--unset-env=APP1_API_KEY", Path(), 0),
     ],

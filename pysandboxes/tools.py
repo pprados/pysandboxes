@@ -51,6 +51,7 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Envs) -> ConfigLine
     return [ConfigLine(pattern.sub(substitute, line), path, ln) for line, path, ln in
             lines]
 
+
 def substitute_env_vars(lines: List[str], env_vars: Envs) -> List[str]:
     pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
 
@@ -61,6 +62,7 @@ def substitute_env_vars(lines: List[str], env_vars: Envs) -> List[str]:
                             default_value if default_value is not None else "")
 
     return [pattern.sub(substitute, line) for line in lines]
+
 
 def remove_config_comments(config: ConfigLines) -> ConfigLines:
     processed_lines: ConfigLines = []
@@ -136,7 +138,7 @@ def _remove_comment(line: str) -> str:
     return ''.join(result).rstrip()
 
 
-def _walk_to_base(path: str, base:str) -> Iterator[str]:
+def _walk_to_base(path: str, base: str) -> Iterator[str]:
     """
     Yield directories starting from the given directory up to the root
     """
@@ -157,9 +159,9 @@ def _walk_to_base(path: str, base:str) -> Iterator[str]:
 
 
 def find_config(
-    filename: str,
-    raise_error_if_not_found: bool = False,
-    usecwd: bool = False,
+        filename: str,
+        raise_error_if_not_found: bool = False,
+        usecwd: bool = False,
 ) -> str:
     """
     Search in increasingly higher folders for the given file
@@ -189,14 +191,14 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-            frame.f_code.co_filename
+                frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back
         frame_filename = frame.f_code.co_filename
         path = os.path.dirname(os.path.abspath(frame_filename))
 
-    for dirname in _walk_to_base(path,os.getcwd()):
+    for dirname in _walk_to_base(path, os.getcwd()):
         check_path = os.path.join(dirname, filename)
         if os.path.isfile(check_path):
             return check_path
@@ -205,6 +207,7 @@ def find_config(
         raise IOError("File not found")
 
     return ""
+
 
 # %% -----------------------
 _is_in_sandbox = False
@@ -286,4 +289,3 @@ def check_mixte_async_async():
             pass  # Ignore
         else:
             raise
-

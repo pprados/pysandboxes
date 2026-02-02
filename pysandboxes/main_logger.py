@@ -4,7 +4,7 @@ from typing import Sequence, Tuple
 
 from pysandboxes.types import ConfigLine
 
-pysandboxes_logger = logging.getLogger("pysandbox")
+pysandboxes_logger = logging.getLogger("Pysandboxes")
 
 ErrorMsg = Tuple[str, Path, int]
 

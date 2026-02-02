@@ -10,7 +10,7 @@ import sys
 import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
-from logging import getLogger, Logger
+from logging import getLogger
 from typing import AsyncGenerator, Any, Optional
 from typing import Dict
 
@@ -184,7 +184,6 @@ async def sandbox_daemon(
     The exception is also sent back to the client.
     """
     try:
-        from .catch_stdio import catch_stdio, acatch_stdio
         loop = asyncio.get_event_loop()
 
         module_name, function_name = function_id.split(':', 1)
@@ -206,6 +205,8 @@ async def sandbox_daemon(
 
         if use_async:
             async def _set_sandbox_and_catch_stdio() -> Any:
+                from .catch_stdio import catch_stdio, acatch_stdio
+                # TODO: vérifier pourquoi c'est différent que l'async
                 rc = await acatch_stdio(
                     stdio_queue,
                     function, kwargs, *args)
@@ -217,7 +218,10 @@ async def sandbox_daemon(
             @sandbox_loop
             def _set_sandbox_and_catch_stdio():
                 try:
+                    import os
+                    logger.debug(f"{type(os.environ)=}")  # FIXME: recherche bug
                     set_is_in_sandbox(True)
+                    from .catch_stdio import catch_stdio, acatch_stdio
                     return catch_stdio(
                         stdio_queue,
                         function, kwargs, *args)
@@ -248,7 +252,8 @@ async def sandbox_daemon(
             logger.debug("(%s) ... raise %s", session_id,
                          repr(result["exception"][1]))
             traceback.print_exception(result["exception"][1])
-            result["exception"] = to_b85(result["exception"][1])  # FIXME: les exceptions ne sont pas toujours pickle
+            result["exception"] = to_b85(result["exception"][
+                                             1])  # FIXME: les exceptions ne sont pas toujours pickle
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
@@ -283,6 +288,7 @@ class LocalTaskDaemon(SSESandbox):
                         os_sandbox="",
                         use_py_sandbox=all_rules.use_py_sandbox,
                         learning_path=all_rules.learning_path,
+                        envs_rules=[],
                         socket_rules=[],  # FIXME: nécessiare la recopue légère ?
                         file_rules=[],
                         )
@@ -304,7 +310,7 @@ class LocalTaskDaemon(SSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-
+            set_is_in_sandbox(True)
             self.uvicorn = create_uvicorn_daemon(self.token)
 
             start_event = asyncio.Event()
@@ -344,7 +350,6 @@ class LocalTaskDaemon(SSESandbox):
         self.uvicorn = None
         self.task = None
 
-
     @property
     def is_started(self) -> bool:
         return self.uvicorn.started if self.uvicorn else False
@@ -354,7 +359,7 @@ class LocalTaskDaemon(SSESandbox):
 
 
 async def main() -> int:
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+    logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."
@@ -366,7 +371,12 @@ async def main() -> int:
         '-v', '--verbose',
         action='count',
         default=0,  # Default value if no -v is provided
-        help='Increase output verbosity. Use -v for INFO, -vv for DEBUG, -vvv for all messages.'
+        help='Increase output verbosity. '
+             'Use '
+             '-v for WARNING, '
+             '-vv for INFO, '
+             '-vvv for DEBUG, '
+             '-vvvv for all messages.'
     )
 
     # Parse the arguments provided by the user
@@ -383,10 +393,10 @@ async def main() -> int:
         break
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
-    logging.debug("config body and token successfully read from stdin")
+    logger.debug("config body and token successfully read from stdin")
 
-    # Adjuste the log level
-    configure_logging_level(process_config.log_level)
+    # Adjuste the root log level
+    logging.getLogger().setLevel(log_level)
 
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
@@ -423,7 +433,7 @@ async def main() -> int:
         await task_daemon.start(
             all_rules=all_rules,
             log_level=log_level,
-            envs=Envs(os.environ),
+            envs=None,
             init_fn=init_fn,
         )
         await task_daemon.join()
@@ -431,10 +441,12 @@ async def main() -> int:
     finally:
         await task_daemon.shutdown()
 
+
 def shutdown():
     logger.info("Shutting down... the daemon")
     if is_learning_mode():
         generate_config_from_learning()
+
 
 if __name__ == "__main__":
     # Kill this process when the parent is killed

@@ -2,15 +2,17 @@ import inspect
 import logging
 import os
 import types
+from importlib import resources
 from pathlib import Path
 from typing import Optional, List, Dict, NamedTuple
 
-from . import guard_files, guard_env, guard_provider, guard_socket, guard_import
+from . import guard_files, guard_envs, guard_provider, guard_socket, guard_import
 from .base_daemon import BaseDaemon
+from .guard_envs import EnvsRules
 from .guard_files import FileRules
-from .guard_import import ImportRules, PatchRules
+from .guard_import import ImportRules, conv_patch_rules
 from .guard_socket import SocketRules
-from .learning import start_learning_mode
+from .learning import activate_learning
 from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
 from .remote.parameters import CONFIG_NAME
 from .tools import remove_config_comments, substitute_config_env_vars, find_config
@@ -48,6 +50,7 @@ class AllRules(NamedTuple):
     os_sandbox: str
     use_py_sandbox: bool
     learning_path: Optional[Path]
+    envs_rules: EnvsRules
     socket_rules: SocketRules  # TODO: en faire un tuple pour le rendre immuable
     file_rules: FileRules
     import_rules: ImportRules
@@ -103,7 +106,17 @@ def read_and_parse_config(
     find_config_path = find_config(str(config_path))
     if not find_config_path:
         # Activate the learning mode
-        config=[ConfigLine(f"--learning={CONFIG_NAME}", Path(), 0)]
+        # Load the template, and add learning mode
+        with resources.as_file(
+                resources.files(
+                    __name__.rsplit('.', maxsplit=1)[:-1][
+                        0] + '.templates') / 'py-sandbox.template'
+        ) as resource_path:
+            config = (
+                    [ConfigLine(f"--learning={CONFIG_NAME}", Path(), 0)] +
+                    extra_lines +
+                    _read_config(resource_path)
+                      )
     else:
         if not find_config_path and Path(CONFIG_NAME).exists():
             config_path = Path(CONFIG_NAME)
@@ -127,7 +140,7 @@ def parse_config(
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse the socket_rules, step by step
-    sandbox_env, others = guard_env.parse_guard_envs(config, ienvs, errors)
+    envs_rules, sandbox_env, others = guard_envs.parse_rules(config, ienvs, errors)
     others = substitute_config_env_vars(others, ienvs)  # with main envs
 
     os_sandbox, use_pysandbox, learning_path, others = guard_provider.parse_rules(
@@ -135,7 +148,7 @@ def parse_config(
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
-    # FIXME: utiliser patch_rules
+
     # 2. If some line are ignored, log a warning
     if others:
         for invalide_rule in others:
@@ -160,6 +173,7 @@ def parse_config(
                     os_sandbox,
                     use_pysandbox,
                     learning_path,
+                    envs_rules,
                     socket_rules,
                     files_rules,
                     import_rules,
@@ -198,18 +212,26 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
         if os_sandbox not in providers_factory:
             raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
         os_provider: BaseDaemon = providers_factory[os_sandbox](token=None)
+        # Offer the opportunity to update the rules (add, remove, etc)
         all_rules = os_provider.update_rules(
             all_rules=all_rules,
             envs=Envs(envs),
         )
 
     # Apply the rules
-    # sys.stdin.shutdown()  # FIXME: Compléter l'activation des règles
+    env_patch_rules = guard_envs.patch_rules(all_rules.learning_path)
+    file_patch_rules = guard_files.patch_rules()
+    guard_import.activate_guard_import(
+        conv_patch_rules(
+            {
+                **file_patch_rules,
+                **env_patch_rules
+            }
+        ),
+        all_rules.import_rules,
+    )
+    guard_envs.activate_guard(all_rules.envs_rules)
+    guard_socket.activate_guard(all_rules.socket_rules)
+    guard_files.activate_guard(all_rules.file_rules)
     if all_rules.learning_path:
-        start_learning_mode(all_rules.learning_path)
-    else:
-        os.environ = all_rules.envs
-    patch_rules: PatchRules = guard_files.patch_rules()  # TODO: dans socket egalement
-    guard_import.activate_guard_import(patch_rules, all_rules.import_rules)
-    guard_socket.activate_guard_socket(all_rules.socket_rules)
-    guard_files.activate_guard_files(all_rules.file_rules)
+        activate_learning(all_rules.learning_path)

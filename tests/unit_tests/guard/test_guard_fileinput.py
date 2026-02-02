@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pysandboxes.guard_files import activate_guard_files
+from pysandboxes.guard_files import activate_guard
 from pysandboxes.types import ConfigLine
 from .test_guard_io import files
 
@@ -24,7 +24,7 @@ def test_fileinput_input(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
 
-    activate_guard_files(rules)
+    activate_guard(rules)
 
     shutil.copy2(files["visible"], files["new_replace"])
     with fileinput.input(files=[files["new_replace"]], inplace=True,

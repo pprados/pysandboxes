@@ -1,12 +1,14 @@
 import collections
-from typing import ItemsView, Hashable, Any, Iterator, Generic, TypeVar, Tuple, Union, \
+from typing import ItemsView, Hashable, Iterator, Generic, TypeVar, Tuple, Union, \
     Mapping, Iterable, KeysView, ValuesView
 
 KeyType = TypeVar('KeyType', bound=Hashable)
 ValueType = TypeVar('ValueType')
+
+
 class ImmutableDict(
     tuple,
-    collections.abc.Mapping,Generic[KeyType, ValueType]):
+    collections.abc.Mapping, Generic[KeyType, ValueType]):
     """
     An immutable dictionary-like object built on a tuple of tuples.
     This class is compatible with the collections.abc.Mapping protocol.
@@ -22,14 +24,19 @@ class ImmutableDict(
     ) -> "ImmutableDict[KeyType, ValueType]":
         # Normalize incoming data to an iterable of pairs
         if isinstance(data, Mapping):
+            from pysandboxes.guard_envs import LearnEnviron
+            # Hack to detect the learning phase.
+            # We don't want to learn all keys
+            if isinstance(data, LearnEnviron):
+                data = dict(data)
             items = tuple(data.items())
         else:
             # allow any iterable of (k, v) pairs
             items = tuple(data)
 
         # Build parallel tuples of keys and values
-        keys: Tuple[KeyType, ...] = tuple(item[0] for item in items)
-        values: Tuple[ValueType, ...] = tuple(item[1] for item in items)
+        keys: Tuple[KeyType, ...] = tuple(item[0] for item in items if item)
+        values: Tuple[ValueType, ...] = tuple(item[1] for item in items if item)
 
         # Create the tuple-subclass with two items: (keys, values)
         obj = tuple.__new__(cls, (keys, values))
@@ -71,11 +78,9 @@ class ImmutableDict(
     def keys(self) -> KeysView[KeyType]:
         return Mapping.keys(self)
 
-    def items(self) -> ItemsView[KeyType,ValueType]:
+    def items(self) -> ItemsView[KeyType, ValueType]:
         return Mapping.items(self)
 
     def values(self) -> ValuesView[ValueType]:
         return Mapping.values(self)
 
-
-ImmutableDict=dict  # FIXME: patch temporaire pour debug

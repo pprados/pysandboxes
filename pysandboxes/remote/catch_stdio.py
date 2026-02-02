@@ -103,12 +103,7 @@ def catch_stdio(
         kwargs: Dict[str, Any],
         *args: Any,
 ) -> Dict[str, Any]:
-    # assert asyncio.get_running_loop(),"asyncio loop is not running"
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
-    # result = asyncio.get_event_loop().run_until_complete(
-    #     acatch_stdio(queue, fn, kwargs, *args)
-    #     )
-    # result = asyncio.gather()
     result = asyncio.run_coroutine_threadsafe(
         acatch_stdio(queue, fn, kwargs, *args),
         asyncio.get_event_loop()

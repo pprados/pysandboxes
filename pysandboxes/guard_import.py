@@ -74,7 +74,7 @@ class GuardLoader(importlib.abc.Loader):
         Delegates the module creation to the original loader.
         This gets the base module object from the standard import process.
         """
-        logger.error(f"create_module({spec=}")
+        logger.debug(f"create_module({spec=}")
         module = self.original_loader.create_module(self.original_spec)
         return module  # Not initialized
 
@@ -83,11 +83,11 @@ class GuardLoader(importlib.abc.Loader):
         Executes the module code using the original loader, then performs custom modifications.
         This is where we add our custom logic after the standard loading.
         """
-        logger.error(f"exec_module({module.__name__})")
+        logger.debug(f"exec_module({module.__name__})")
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
-        # logger.error(f"{self.original_spec.name=}")
+        # logger.debug(f"{self.original_spec.name=}")
         if self.original_spec.name in _patch_rules:
             all_patch = _patch_rules[self.original_spec.name]
             for patch in all_patch:
@@ -102,7 +102,7 @@ class GuardLoader(importlib.abc.Loader):
                 # logger.info(f"patch {self.original_spec.name}.{patch.module_name} done")
                 self.done = True  # FIXME
 
-            # logger.error(f"GuardLoader: Injected patch into '{module.__name__}'.")
+            # logger.debug(f"GuardLoader: Injected patch into '{module.__name__}'.")
 
         # TODO: pour les modules pysandbox ?
         # # Override the __setattr__ method of the module to prevent changes
@@ -135,7 +135,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         """
         Finds the specification for a module.
         """
-        # logger.error(f"find_spec({fullname=},{path=},{target=})")
+        # logger.debug(f"find_spec({fullname=},{path=},{target=})")
         # if fullname and fullname.startswith("pysandboxes"):  # FIXME: util ?
         #     return None
         # Intercept ONLY the 'os.path' import
@@ -150,12 +150,14 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                 original_spec: importlib.util.spec_from_file_location = finder.find_spec(
                     fullname, path, target)
                 if original_spec:
-                    # logger.error(
+                    # logger.debug(
                     #     f"GuardFinder: Found original spec via '{type(finder).__name__}'.")
                     # Create a new spec using our custom GuardLoader, but with the original spec's data
                     # def __init__(self, name, loader, *, origin=None, loader_state=None,
                     #              is_package=None):
 
+                    logger.debug(
+                        f"GuardFinder: Found original spec {original_spec.name} via '{type(finder).__name__}'.")
                     if original_spec.name in _patch_rules:
 
                         logger.info(f"Inject patcher for {original_spec.name}")
@@ -220,7 +222,7 @@ def _activate_patch_import(
 
 def activate_guard_import(
         patch_rules: PatchRules,
-        rules: ImportRules
+        rules: ImportRules,
 ) -> None:
     global _rules
     if _rules:

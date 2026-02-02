@@ -155,6 +155,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 os_sandbox=all_rules.os_sandbox,
                 use_py_sandbox=all_rules.use_py_sandbox,
                 learning_path=all_rules.learning_path,
+                envs_rules=(),
                 socket_rules=(),
                 file_rules=(),
                 import_rules=(), # all_rules.import_rules,
@@ -275,7 +276,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 await self._process.wait()
             self._process = None
         self._is_started = False
-        pysandboxes_logger.info("shutdown")
+        logger.debug("shutdown")
 
     async def join(self) -> int:
         errorlevel = -1

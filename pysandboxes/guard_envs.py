@@ -1,13 +1,26 @@
 import logging
+import os
 import re
 from pathlib import Path
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Any, Optional, Callable, NamedTuple, cast
 
 from .main_logger import format_ruleref, ErrorMsg
 from .types import ConfigLines, ConfigLine, Envs
 
 logger = logging.getLogger(__name__)
 
+
+# Internal representation of a rule
+class EnvRule(NamedTuple):
+    pattern: re.Pattern
+    ignore: bool
+    config: ConfigLine
+
+
+EnvsRules = Tuple[EnvRule, ...]
+
+# Internal state for the file filter
+_rules: EnvsRules = cast(EnvsRules, ())
 
 def _read_and_substitute_lines(
         path: Path, env_vars: Dict[str, str]
@@ -51,11 +64,11 @@ def _read_and_substitute_lines(
     return processed_lines
 
 
-def parse_guard_envs(
+def parse_rules(
         rules: ConfigLines,
         source_vars: Dict[str, str],
         errors: List[ErrorMsg],
-) -> Tuple[Envs, ConfigLines]:
+) -> Tuple[EnvsRules, Envs, ConfigLines]:
     """
     Processes a list of socket_rules to create a new dictionary of variables.
 
@@ -80,6 +93,7 @@ def parse_guard_envs(
             value_pattern
         )
 
+    envs_rules = set()
     for orule in rules:
         if orule.rule.startswith("--set-env="):
             # Remove prefix
@@ -103,6 +117,7 @@ def parse_guard_envs(
                 # Convert wildcard to regex pattern
                 regex_key = re.compile(
                     re.escape(key_pattern).replace("\\*", ".*"))
+                envs_rules.add(EnvRule(regex_key, False, orule))
                 for source_key, source_value in source_vars.items():
                     if regex_key.match(source_key):
                         # The rule implies copying the matched key-value pairs
@@ -110,10 +125,95 @@ def parse_guard_envs(
             # Case: Simple rule like key=value or key=${VAR}
             else:
                 new_vars[key_pattern] = substitute_value(value_pattern)
+                envs_rules.add(EnvRule(re.compile(re.escape(key_pattern)), False, orule))
         elif orule.rule.startswith("--unset-env="):
             remove_key = orule.rule[len("--unset-env="):]
             new_vars.pop(remove_key, None)
+            envs_rules.add(EnvRule(re.compile(re.escape(remove_key)), True, orule))
         else:
             ignore_rules.append(orule)
 
-    return new_vars, ignore_rules
+    return tuple(envs_rules), Envs(new_vars), ignore_rules
+
+
+class LearnEnviron(os._Environ):
+    # """
+    # A custom class that replaces os.environ to log all accesses,
+    # while behaving like a standard dictionary.
+    # """
+
+    _instance: 'LearnEnviron' = None
+
+    def __new__(cls,
+                ) -> 'LearnEnviron':
+        # Implement a singleton
+        if cls._instance is None:
+            cls._instance = super(LearnEnviron, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        # Initialize with the original environment data
+        if not hasattr(self, '_keys_used'):
+            # super().__init__(original_environ)
+            encodekey = os.environ.encodekey
+            decodekey = os.environ.decodekey
+            encodevalue = os.environ.encodevalue
+            decodevalue = os.environ.decodevalue
+            data = os.environ._data
+            super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
+            self._keys_used = set()
+            self._original_envs = dict(os.environ)
+
+    def __getitem__(self, key: str) -> str:
+        try:
+            result = super(LearnEnviron, self).__getitem__(key)
+            self._keys_used.add(key)
+            return result
+        except KeyError:
+            raise
+
+    def __setitem__(self, key: str, value: str) -> None:
+        super(LearnEnviron, self).__setitem__(key, value)
+        self._keys_used.add(key)
+
+    def _clone(self):
+        return {k: v for k, v in super().items()}
+
+    def _get(self, key: str, default: Any = None) -> Any:
+        try:
+            result = super(LearnEnviron, self).__getitem__(key)
+            return result
+        except KeyError:
+            return default
+
+
+def generate_rules(
+) -> List[str]:
+    global _rules
+    learn_env = LearnEnviron()  # Get singleton
+    result = []
+    for key in sorted(learn_env._keys_used):
+        find = False
+        for pat in _rules:
+            if pat.pattern.match(key):
+                find=True
+                break
+        if not find:
+            result.append(f"--set-env={key}=$({key})")
+    return result
+
+def activate_guard(
+        rules: EnvsRules
+) -> None:
+    global _rules
+    _rules=rules
+
+
+def patch_rules(learning_path: Optional[Path]) -> Dict[str, Callable]:
+    if learning_path:
+        def activate_learning_env_factory(x):
+            return LearnEnviron()
+
+        return {"os.environ": activate_learning_env_factory}
+    else:
+        return {}

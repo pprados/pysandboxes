@@ -43,6 +43,8 @@ def parse_rules(rules: ConfigLines,
                      rule.path, rule.ln)
                 )
         elif rule.rule.startswith("--learning="):
+            if learning_path:
+                continue
             value = rule.rule.split("=", 1)[1].strip().lower()
             learning_path=Path(value)
             if not learning_path.parent.exists():

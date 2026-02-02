@@ -59,7 +59,7 @@ def sandbox(_func: Optional[F] = None, *,
 
 
 @runtime_checkable
-class sandboxes(Protocol):
+class sandboxes(Protocol):  # TODO: ne pas lancer si déjà dans SB
     __slot__=(
         'init_fn',
         'config_path',
@@ -87,7 +87,7 @@ class sandboxes(Protocol):
             envs = os.environ
         self.envs = Envs(envs)
         self.extra_rules = extra_rules
-        self.timeout = 60
+        self.timeout = 60  # FIXME
         self._old_sigint = None
         self._old_sigterm = None
         # TODO: ajouter des paramètres complémentaire ici ?

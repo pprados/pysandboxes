@@ -586,7 +586,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard_socket(socket_rules: SocketRules) -> None:
+def activate_guard(socket_rules: SocketRules) -> None:
     if not socket_rules:
         return
     global _rules

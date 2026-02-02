@@ -69,18 +69,21 @@ def configure_logging_level(verbose_count: int) -> int:
 
     Args:
         verbose_count (int): The number of '-v' flags provided by the user.
-                             - 0: WARNING
-                             - 1: INFO
-                             - 2: DEBUG
-                             - 3+: NOTSET (all messages, including custom trace levels if defined)
+                             - 0: ERROR
+                             - 1: WARNING
+                             - 2: INFO
+                             - 3: DEBUG
+                             - 4+: NOTSET (all messages, including custom trace levels if defined)
     """
     if verbose_count == 0:
-        log_level = logging.WARNING
+        log_level = logging.ERROR
     elif verbose_count == 1:
-        log_level = logging.INFO
+        log_level = logging.WARNING
     elif verbose_count == 2:
+        log_level = logging.INFO
+    elif verbose_count == 3:
         log_level = logging.DEBUG
-    else:  # verbose_count >= 3
+    else:  # verbose_count >= 4
         # NOTSET will log all messages, allowing custom levels below DEBUG if implemented
         log_level = logging.NOTSET
 

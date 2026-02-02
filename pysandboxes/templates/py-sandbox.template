@@ -1,11 +1,3 @@
-# TODO: par défaut, si pas de fichier de conf, en mode apprentissage et création du fichier
-# sur base d'un meta-template.
-# TODO: --build=file  pour apprentissage (ou verbe utilisé dans AppArmor)
-# TODO: ajouter un niveau de log dédié, puis tous logger dessus
-# TODO: --no-dotenv
-# TODO: --firejail=file.template
-# TODO: --dns=1.1.1.1,4,4,4,4
-
 # Why a python sandbox ?
 # =======================
 # Using a tool by an LLM is equivalent to making a Remote Procedure Call (RPC).
@@ -26,7 +18,10 @@
 # - firejail : A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
 
---learning=.py-sandboxes  # Continue to learn
+# Remove the --learning parameter to activate the sandboxes.
+# otherwise, the process continues to learn, adding the rules to the end of the file.
+
+--learning=${SELF:=.py-sandboxes}
 #--os-sandbox=task
 --os-sandbox=subprocess
 #--os-sandbox=firejail
@@ -59,15 +54,16 @@
 
 --set-env=HOME=.
 --set-env=USER=pysandbox
---set-env=VIRTUAL_ENV*=${VIRTUAL_ENV_*}
 --set-env=LC_*=${LC_*}
---set-env=LANG=${LANG}
---set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
---set-env=TMP=/tmp
---set-env=TEMP=/tmp
---set-env=*_API_KEY=${*_API_KEY}
---unset-env=OPENAI_API_KEY
+#--set-env=TMP=/tmp
+#--set-env=TEMP=/tmp
+#--set-env=*_API_KEY=${*_API_KEY}
+#--unset-env=OPENAI_API_KEY
 
+# here, the rules learned for os.environ
+# <learning_guard_envs>
+
+# </learning_guard_envs>
 
 #######################################################################################
 # In a sandbox, it is crucial to prohibit access to certain file patterns
@@ -87,16 +83,10 @@
 --ignore=${PWD}/docs
 # --ignore=*.py  # NON: All code must be pre-compiled (pyo)
 
-{learning_guard_files}
+# here, the rules learned for files
+# <learning_guard_files>
 
-# TODO: vérifier les impacts écritures. Est-ce bien visible ?
---ro-bind=${PWD}/tests,${PWD}/tests # FIXME: ajout à cause de sys.path. Conflit si rw ?
---ro-bind=${PWD}/pysandboxes/remote,${PWD}/pysandboxes/remote # FIXME: ajout à cause de sys.path. Conflit si rw ?
-#--ro-bind=${HOME}/.local/share/JetBrains,${HOME}/.local/share/JetBrains
-#--ro-bind=${HOME}/miniconda3/share/locale,${HOME}/miniconda3/share/locale
-#--ro-bind=${PWD},${PWD} # FIXME: ajout à cause de sys.path. Conflit si rw ?
-#--ro-bind=${PYENV_ROOT},${PYENV_ROOT}
-#--ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
+# </learning_guard_files>
 
 # TODO
 # - répertoire avec les modeles hf téléchargé ?
@@ -112,7 +102,10 @@
 # Denied localhost
 # FIXME --net=DENY|tcp|127.0.0.1/8|*|IN
 
-{learning_guard_socket}
+# here, the rules learned for socket
+# <learning_guard_socket>
+
+# </learning_guard_socket>
 
 # Allow web access, intranet and localhost
 --net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services
@@ -148,3 +141,9 @@
 #--python-exec-provider=interpreter
 #--python-exec-import=ALLOW:threads
 #--python-exec=ALLOW:annotations,async,class,def
+
+# TODO: --build=file  pour apprentissage (ou verbe utilisé dans AppArmor)
+# TODO: --no-dotenv
+# TODO: --firejail=file.template
+# TODO: --dns=1.1.1.1,4,4,4,4
+
