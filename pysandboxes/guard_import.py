@@ -8,6 +8,7 @@ from importlib.abc import MetaPathFinder
 from types import ModuleType
 from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast
 
+from .guard_module import readonly_module
 # %% Generic wrapper
 from .immutable_dict import ImmutableDict
 from .main_logger import ErrorMsg
@@ -232,3 +233,4 @@ def activate_guard_import(
     if not _rules:
         _activate_patch_import(patch_rules)
         _rules = rules
+    readonly_module(__name__)

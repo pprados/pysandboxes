@@ -14,6 +14,7 @@ from typing import NamedTuple, Any, Type, Tuple
 
 from .exception import SandBoxError
 from .guard_envs import LearnEnviron
+from .guard_module import readonly_module
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
 from .types import ConfigLines, ConfigLine
@@ -976,3 +977,5 @@ def activate_guard(
     if _rules:
         logger.info("Guard_files was already activated.")
     _rules = rules
+    readonly_module(__name__)
+

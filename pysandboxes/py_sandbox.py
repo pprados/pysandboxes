@@ -1,6 +1,7 @@
 import inspect
 import logging
 import os
+import sys
 import types
 from importlib import resources
 from pathlib import Path
