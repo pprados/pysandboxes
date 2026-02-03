@@ -838,7 +838,7 @@ def _read_host_file() -> Tuple[
 
 
 def generate_rules(
-        learn: List[Any],
+        learn: Set[Any],
 ) -> List[str]:
     result = set()
     dns, inverse_dns = _read_host_file()

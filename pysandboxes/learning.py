@@ -19,6 +19,7 @@ _learning_path: Optional[Path] = None
 def generate_config_from_learning() -> None:
     global _learning_path
     from .guard_envs import generate_rules as env_generate_rules
+    from .guard_import import generate_rules as import_generate_rules
     from .guard_files import generate_rules as file_generate_rules
     from .guard_socket import generate_rules as socket_generate_rules
 
@@ -33,6 +34,15 @@ def generate_config_from_learning() -> None:
         )
     else:
         all_env_rules = None
+
+    # Manage import rules
+    import_rules = import_generate_rules(_learning)
+    if import_rules:
+        all_import_rules = (
+            "\n".join(import_rules)
+        )
+    else:
+        all_import_rules = None
 
     # Manage files rules
     file_rules = file_generate_rules(_learning)
@@ -55,6 +65,7 @@ def generate_config_from_learning() -> None:
     replaces = {
         # "learning_repeat": f"--learning={learning_path}",
         "learning_guard_envs": all_env_rules,
+        "learning_guard_import": all_import_rules,
         "learning_guard_files": all_file_rules,
         "learning_guard_socket": all_socket_rules,
     }
@@ -96,9 +107,8 @@ def generate_config_from_learning() -> None:
         all_lines.append(header)
         for v in replaces.values():
             if v:
-                all_lines.append(v)
+                all_lines.append(v+"\n")
                 update_file = True
-        all_lines.append("\n")
     if list(filter(lambda line: line.startswith("--learning"), all_lines)):
         find_learning = " Remove the --learning parameter to use the sandboxes."
     else:

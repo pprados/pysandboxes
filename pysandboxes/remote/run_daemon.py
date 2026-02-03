@@ -56,7 +56,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
 
     app = FastAPI()
 
-    @app.get("/")
+    @app.get("/ping")
     async def ping(
     ):
         return {"message": "OK"}

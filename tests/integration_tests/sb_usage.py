@@ -5,7 +5,7 @@ import socket
 from socket import AF_INET, SOCK_STREAM, SOCK_DGRAM, AF_INET6
 
 import pysandboxes
-from pysandboxes import sandbox, sandboxes
+from pysandboxes.sandboxes import sandbox, sandboxes
 from pysandboxes.exception import SandBoxError
 
 # FIXME dotenv.load_dotenv()
@@ -75,9 +75,10 @@ def run_in_sandbox():
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
         sock.bind(("::1", 0))
 
+    # ---------- File
     import io
     try:
-        with io.open("test.remove", "w") as f:
+        with io.open("tmp/test.remove", "w") as f:
             pass
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except SandBoxError as e:
@@ -86,6 +87,13 @@ def run_in_sandbox():
 
     try:
         with io.open("tst_wasm/factorial.wasm", "r") as f:
+            pass
+        # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    except SandBoxError as e:
+        print(e)
+
+    try:
+        with io.open("README.md", "r") as f:
             pass
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except SandBoxError as e:
@@ -107,17 +115,17 @@ def run_in_sandbox():
 
     assert os.environ["HOME"]
 
-    try:
-        with tempfile.TemporaryFile(mode='w+') as temp_file:
-            pass
-    except SandBoxError as e:
-        print(e)
-
-    try:
-        with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
-            pass
-    except SandBoxError as e:
-        print(e)
+    # try:
+    #     with tempfile.TemporaryFile(mode='w+') as temp_file:
+    #         pass
+    # except SandBoxError as e:
+    #     print(e)
+    #
+    # try:
+    #     with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
+    #         pass
+    # except SandBoxError as e:
+    #     print(e)
 
     print(42)
     return 42
@@ -159,7 +167,7 @@ def main():
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # print("----------------")
-        with pysandboxes.sandboxes(init_sandbox):
+        with pysandboxes.sandboxes.sandboxes(init_sandbox):
             run()
         print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)

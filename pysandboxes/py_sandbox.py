@@ -202,7 +202,7 @@ def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
 
 def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?
         all_rules: AllRules,
-        envs: Optional[Dict[str, str]] = None,  # FIXME: dict or Env?
+        envs: Optional[Dict[str, str]] = None,
 ) -> None:
     if envs is None:
         envs = os.environ

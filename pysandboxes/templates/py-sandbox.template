@@ -109,7 +109,7 @@
 
 # Some exemples
 #--bind=/,/  # Accept all file access
-#--ro-bind=${HOME},${HOME}  # Read only for home and subdirectories
+#--ro-bind=/,/  # Accept all file read (add rules for write directories)
 
 # Here, the rules learned for files
 # <learning_guard_files>

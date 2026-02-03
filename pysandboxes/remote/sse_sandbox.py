@@ -25,6 +25,10 @@ SANDBOX_SERVER_URL: str = os.environ.get(
     "SANDBOX_SERVER_URL",
     f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}{PATH_RPC}")
 
+PING_SERVER_URL: str = os.environ.get(
+    "SANDBOX_SERVER_URL",
+    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}/ping")
+
 
 def _get_rpc_params(args: Any,
                     func: Callable[..., Any],

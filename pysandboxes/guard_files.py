@@ -5,6 +5,7 @@ import io
 import logging
 import os
 import sys
+from collections import OrderedDict
 from os import scandir as _scandir
 from pathlib import Path as _Path, Path
 from types import TracebackType
@@ -176,7 +177,7 @@ def _check_is_in_rules(path: Path):
 
 
 def generate_rules(
-        learn: List[Any],
+        learn: Set[Any],
 ) -> List[str]:
     # Select only parent
     parent_level: Dict[Path, bool] = {}
@@ -194,28 +195,49 @@ def generate_rules(
     home = Path.home().absolute()
 
     os_environ = LearnEnviron()  # Get singleton
-    pyenv_root = os_environ._get("PYENV_ROOT")
-    pyenv = Path(pyenv_root) if pyenv_root else None
 
-    virtualenv_root = os_environ._get("VIRUTAL_ENV")
-    virtualenv = Path(virtualenv_root) if virtualenv_root else None
+    special_env = {  # FIXME: déplacer en dehors de la fonction
+        k: os_environ._get(k) for k in
+        [
+            "PWD",
+            "HOME",
+            "TMP", "TEMP",
+        ]
+        if k in os_environ
+    }
+    special_env = OrderedDict(
+        sorted(special_env.items(),
+               key=lambda x: len(x[1]),
+               reverse=True))
 
-    conda_root = os_environ._get("CONDA_HOME")
-    conda = Path(conda_root) if conda_root else None
-
-    tmp_root = os_environ._get("TMP")
-    tmp = Path(tmp_root) if tmp_root else None
-
-    temp_root = os_environ._get("TEMP")
-    temp = Path(temp_root) if temp_root else None
+    special_home = {  # FIXME: déplacer en dehors de la fonction
+        k: os_environ._get(k) for k in
+        [
+            "PYENV_ROOT", "VIRTUAL_ENV", "CONDA_HOME",
+            "HF_HOME", "HF_DATASETS_CACHE", "HF_MODULES_CACHE", "HF_HUB_CACHE",
+            "TRANSFORMERS_CACHE"","
+            "TORCH_HOME",
+            "KERAS_HOME",
+            "TFHUB_CACHE_DIR",
+            "MXNET_HOME",
+            "NLTK_DATA",
+            "SPACY_DATA",
+        ]
+        if k in os_environ
+    }
+    special_home = OrderedDict(
+        sorted(special_home.items(),
+               key=lambda x: len(x[1]),
+               reverse=True))
 
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
-        value: str = ""
         write = parent_level[path]
-
+        value=None
         overflow = False
         for allready_path, allready_write in allready_added:
+            if allready_path == home:
+                continue
             if path.is_relative_to(allready_path):
                 if write == allready_write:
                     overflow = True
@@ -223,42 +245,28 @@ def generate_rules(
         if overflow:
             continue
 
-        if pyenv and path.is_relative_to(pyenv):
-            if not _check_is_in_rules(pyenv):
-                value = "${PYENV_ROOT}"
-        elif virtualenv and path.is_relative_to(virtualenv):
-            if not _check_is_in_rules(virtualenv):
-                value = "${VIRTUAL_ENV}"
-        elif conda and path.is_relative_to(conda):
-            if not _check_is_in_rules(conda):
-                value = "${CONDA_HOME}"
-        elif tmp and path.is_relative_to(tmp):
-            if not _check_is_in_rules(tmp):
-                value = "${TMP}"
-        elif temp and path.is_relative_to(temp):
-            if not _check_is_in_rules(temp):
-                value = "${TEMP}"
-        elif path.is_relative_to(cwd):
-            if not _check_is_in_rules(path):
-                x = "/" + str(path.relative_to(cwd))
-                if x == "/.":
-                    x = ""
-                value = "${PWD}" + x
-        elif path.is_relative_to(home):
-            if not _check_is_in_rules(path):
-                target = str(path.relative_to(home))
-                if target == ".":
-                    value = "${HOME}"
-                else:
-                    value = "${HOME}/" + str(path.relative_to(home))
+        for key, val in special_home.items():
+            if path.is_relative_to(val):
+                value = f"${{{key}}}"
+                break
         else:
+            for key, val in special_env.items():
+                if path.is_relative_to(val):
+                    if not _check_is_in_rules(path):  # FIXME: regle "à la main"
+                        x = "/" + str(path.relative_to(val))
+                        if x == "/.":
+                            x = ""
+                        value = f"${{{key}}}" + x
+                    break
+        if not value:
             value = str(path)
         if value:
             result.add(
                 "--" +
                 f'{"" if write else "ro-"}bind={value},{value}'
             )
-        allready_added.append(LearnFileRule(path, write))
+        if path != home:
+            allready_added.append(LearnFileRule(path, write))
     return sorted(list(result), reverse=True)
 
 
@@ -440,7 +448,8 @@ def _wrap_path_exists(func: Callable, *, write: bool) -> Callable:
             return False
         if remapped is None:
             if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), False))
+                # exist is not learn.
+                # add_learning_rule(LearnFileRule(Path(file), False))
                 remapped = file
             else:
                 return False
@@ -726,7 +735,7 @@ def _wrap_io_open(func: Callable) -> Callable:
             _raise_ignore(file, rule)
         if remapped is None:
             if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), need_to_write))
+                add_learning_rule(LearnFileRule(Path(file).absolute(), need_to_write))
                 remapped = file
             else:
                 _raise_access(file)
@@ -978,4 +987,3 @@ def activate_guard(
         logger.info("Guard_files was already activated.")
     _rules = rules
     readonly_module(__name__)
-

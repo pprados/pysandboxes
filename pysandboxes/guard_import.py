@@ -6,11 +6,13 @@ import logging
 import sys
 from importlib.abc import MetaPathFinder
 from types import ModuleType
-from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast
+from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set
 
+from .exception import SandBoxError
 from .guard_module import readonly_module
 # %% Generic wrapper
 from .immutable_dict import ImmutableDict
+from .learning import is_learning_mode, add_learning_rule
 from .main_logger import ErrorMsg
 from .types import ConfigLines
 
@@ -25,6 +27,14 @@ class PatchRule(NamedTuple):
 PatchRules = ImmutableDict[str, Tuple[PatchRule, ...]]
 
 ImportRules = Tuple[str, ...]
+
+
+class LearnImportRule(NamedTuple):
+    name: str
+
+
+class RuleModuleNotFoundError(ModuleNotFoundError, SandBoxError):
+    pass
 
 
 def conv_patch_rules(patch_rules: Dict[str, Callable]) -> PatchRules:
@@ -86,6 +96,16 @@ class GuardLoader(importlib.abc.Loader):
         custom modifications.
         This is where we add our custom logic after the standard loading.
         """
+
+        if not module:
+            return
+        if is_learning_mode():
+            add_learning_rule(LearnImportRule(module.__name__))
+        else:
+            if module.__name__ not in _rules:
+                raise RuleModuleNotFoundError(
+                    f"No module named '{module.__name__}'"
+                )
         logger.debug(f"exec_module({module.__name__})")
         self.original_loader.exec_module(module)
 
@@ -234,3 +254,13 @@ def activate_guard_import(
         _activate_patch_import(patch_rules)
         _rules = rules
     readonly_module(__name__)
+
+
+def generate_rules(
+        learn: Set[Any],
+) -> List[str]:
+    # Select only parent
+    result = set()
+    for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
+        result.add(f"--python-import={learn_rule.name}")
+    return list(result)

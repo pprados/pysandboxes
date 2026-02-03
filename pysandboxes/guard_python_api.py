@@ -89,9 +89,6 @@ def _loaded_sys_modules() -> List[ModuleType]:
     dict(sys.modules.items())
     return [module for _,module in dict(sys.modules).items() if not _is_system_module(module)]
 
-class RuleImportError(ImportError):
-    pass
-
 
 class Imports_Rule:
     def __init__(self, valid_imports: Set[str], mode: Literal["allow", "learn"]):

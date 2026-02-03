@@ -9,8 +9,11 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Callable, Dict, Any, Optional, NamedTuple
 
-from .parameters import DELAY_FOR_START_DAEMON
-from .sse_sandbox import SSESandbox
+import aiohttp
+from aiohttp import ClientConnectorError
+
+from .parameters import INTERVAL_FOR_PING_DAEMON
+from .sse_sandbox import SSESandbox, PING_SERVER_URL
 from ..main_logger import pysandboxes_logger
 from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc, get_callable_info
@@ -259,8 +262,22 @@ class BaseSubProcessDaemon(SSESandbox):
                 ),
                 name="read_stderr_stream"
             )
-        await asyncio.sleep(DELAY_FOR_START_DAEMON)
-        # FIXME: detecter le start effectif par une boucle de connexion ?
+
+        # Wait the server
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:
+                    async with session.get(PING_SERVER_URL, timeout=3) as response:
+                        if response.status == 200:
+                            break
+                        else:
+                            raise RuntimeError(
+                                f"Unexpected status {response.status} from {PING_SERVER_URL}")
+                except ClientConnectorError:
+                    pass # Ignore and continue
+
+                await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
+
         self._is_started = True
 
     async def shutdown(self) -> None:
