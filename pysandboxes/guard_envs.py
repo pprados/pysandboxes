@@ -199,7 +199,7 @@ def generate_rules(
                 find=True
                 break
         if not find:
-            result.append(f"--set-env={key}=$({key})")
+            result.append(f"--set-env={key}=${{{key}}}")
     return result
 
 def activate_guard(

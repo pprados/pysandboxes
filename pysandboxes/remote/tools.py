@@ -1,39 +1,18 @@
 # TODO: reorganize the tools
-import _pickle
 import asyncio
-import base64
-import contextvars
-import inspect
 import logging
 import os
-import pickle
 import shutil
 import signal
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
 from ctypes import cdll
 from pathlib import Path
-from typing import Any, Optional, Dict, Tuple, Awaitable, Callable
+from typing import Any, Optional, Dict, Tuple, Awaitable
 
 import netifaces
 
 logger = logging.getLogger(__name__)
-
-
-def to_b85(obj: Any) -> str:
-    try:
-        return base64.b85encode(
-            pickle.dumps(obj,
-                         protocol=pickle.HIGHEST_PROTOCOL
-                         )).decode("utf-8")
-    except _pickle.PicklingError:
-        raise
-
-def from_b85(b85: str) -> Any:
-    return pickle.loads(
-        base64.b85decode(b85.encode("utf-8")),
-    )
-
 
 known_paths = [
     Path("/bin/"),
@@ -53,9 +32,6 @@ def which_command(command: str) -> Optional[Path]:
 
 
 def get_venv() -> str | None:
-    """
-    Détecte le répertoire de l'environnement virtuel en comparant sys.prefix et sys.base_prefix.
-    """
     if sys.prefix != sys.base_prefix:
         venv_path = sys.prefix
         return venv_path
@@ -73,7 +49,7 @@ def configure_logging_level(verbose_count: int) -> int:
                              - 1: WARNING
                              - 2: INFO
                              - 3: DEBUG
-                             - 4+: NOTSET (all messages, including custom trace levels if defined)
+                             - 4+: NOTSET
     """
     if verbose_count == 0:
         log_level = logging.ERROR
@@ -84,7 +60,6 @@ def configure_logging_level(verbose_count: int) -> int:
     elif verbose_count == 3:
         log_level = logging.DEBUG
     else:  # verbose_count >= 4
-        # NOTSET will log all messages, allowing custom levels below DEBUG if implemented
         log_level = logging.NOTSET
 
     logging.getLogger().setLevel(log_level)  # Root logger
@@ -97,13 +72,15 @@ def get_default_gateway_info() -> Optional[Tuple[str, str]]:
     # Retrieve default IPv4 gateway
     try:
         if netifaces.AF_INET in gws['default']:
-            # The structure for default gateway is (gateway_ip, interface_name, is_primary)
+            # The structure for default gateway
+            # is (gateway_ip, interface_name, is_primary)
             ipv4_gateway_data = gws['default'][netifaces.AF_INET]
             return ipv4_gateway_data
 
         # Retrieve default IPv6 gateway
         if netifaces.AF_INET6 in gws['default']:
-            # The structure for default gateway is (gateway_ip, interface_name, is_primary)
+            # The structure for default gateway
+            # is (gateway_ip, interface_name, is_primary)
             ipv6_gateway_data = gws['default'][
                 netifaces.AF_INET6]
             return ipv6_gateway_data
@@ -115,12 +92,13 @@ def get_default_gateway_info() -> Optional[Tuple[str, str]]:
 
 def suggest_package_installation(package_name: str) -> str:
     """
-    Suggests how to install a given package based on the detected operating system and Linux distribution.
+    Suggests how to install a given package based on the detected operating system
+    and Linux distribution.
 
     Args:
         package_name (str): The name of the package to suggest installation for.
     """
-    system: str = sys.platform  # Get the operating system name (e.g., 'linux', 'darwin', 'win32')
+    system: str = sys.platform
 
     if system.startswith('linux'):
         # Try to identify the specific Linux distribution
@@ -158,21 +136,22 @@ def suggest_package_installation(package_name: str) -> str:
             return f"sudo pacman -S {package_name}"
         else:
             # Fallback for unknown or other Linux distributions
-            return textwrap.dedent(f"""
+            return textwrap.dedent(
+                f"""
                 You can try installing '{package_name}' using common package managers like:
                 sudo apt update && sudo apt install {package_name}  (Debian/Ubuntu based systems)
                 sudo yum install {package_name}          (CentOS/RHEL based systems)
                 sudo dnf install {package_name}          (Fedora based systems)
                 sudo pacman -S {package_name}            (Arch Linux based systems)
                 Please refer to your distribution's documentation for the correct command.
-                """).strip()
+                """).strip()  # noqa
 
     elif system == 'darwin':
         # For macOS, suggest Homebrew
         return textwrap.dedent(f"""
             /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
             brew install {package_name}
-            """).strip()
+            """).strip()  # noqa
     elif system == 'win32':
         # For Windows, suggest Winget or Chocolatey
         return textwrap.dedent(f"""
@@ -186,10 +165,10 @@ def suggest_package_installation(package_name: str) -> str:
         return textwrap.dedent(f"""
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for '{package_name}' to find installation instructions for your system.
-            """).strip()
+            """).strip()  # noqa
 
 
-def return_level_parameter(log_level:int) -> str:
+def return_level_parameter(log_level: int) -> str:
     _map = {
         logging.WARN: "",
         logging.INFO: "-v",
@@ -200,14 +179,15 @@ def return_level_parameter(log_level:int) -> str:
 
 
 def create_daemon_task(
-    coro: Awaitable[object],
-    *,
-    loop: asyncio.AbstractEventLoop | None = None,
+        coro: Awaitable[object],
+        *,
+        loop: asyncio.AbstractEventLoop | None = None,
 ) -> asyncio.Task[object]:
     """
     Schedule *coro* as a fire-and-forget task that will not raise warnings
     if cancelled and whose exceptions are logged instead of propagating.
     """
+
     async def _run() -> None:
         try:
             await coro
@@ -220,17 +200,19 @@ def create_daemon_task(
 
     loop = loop or asyncio.get_running_loop()
     task = loop.create_task(_run(), name="daemon")
+
     # Ensure exception retrieval → no "Task exception was never retrieved"
     def is_canceled(t: asyncio.Task[object]):
         logger.debug(f"{t.cancelled()}")
+
     # task.add_done_callback(lambda t: t.exception())
     task.add_done_callback(is_canceled)
     return task
 
 
-
 # Constant from linux/prctl.h
 PR_SET_PDEATHSIG = 1
+
 
 def set_pdeathsig() -> None:
     """
@@ -245,7 +227,7 @@ def set_pdeathsig() -> None:
         libc = cdll.LoadLibrary("libc.so.6")
         result = libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
         if result != 0:
-            logging.warning("prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s",result)
+            logging.warning("prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s",
+                            result)
     except OSError:
         logging.warning("prctl not available (not Linux or libc not found).")
-

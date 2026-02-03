@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import asyncio
+import base64
 import importlib
 import inspect
 import json
 import logging
 import os
+import pickle
 import sys
 import traceback
 from asyncio import CancelledError
@@ -22,8 +24,8 @@ from pysandboxes.main_logger import pysandboxes_logger
 from pysandboxes.remote.subprocess_daemon import SubProcessParameters
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
-from .tools import to_b85, configure_logging_level, \
-    from_b85, set_pdeathsig
+from .tools import configure_logging_level, \
+    set_pdeathsig
 from ..private_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
 from ..py_sandbox import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
@@ -32,7 +34,6 @@ from ..types import Args, Envs
 logger = logging.getLogger(__name__)
 
 pickling_support.install()
-
 
 @dataclass
 class RPCPayload(object):
@@ -70,6 +71,11 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         SSE endpoint to process a given code string, authenticated by a token,
         and stream back structured results (stdout, stderr, result).
         """
+        import pickle
+        def from_b85(b85: str) -> Any:
+            return pickle.loads(
+                base64.b85decode(b85.encode("utf-8")),
+            )
         set_is_in_sandbox(True)
         logger.debug(request.headers["Authorization"])
         if ("Authorization" not in request.headers or
@@ -183,6 +189,18 @@ async def sandbox_daemon(
     All the stdio is captured and sent back to the client.
     The exception is also sent back to the client.
     """
+    import pickle
+
+    def to_b85(obj: Any) -> str:
+            return base64.b85encode(pickle.dumps(obj,
+                                       protocol=pickle.HIGHEST_PROTOCOL
+                                       )).decode("utf-8")
+
+    # def from_b85(b85: str) -> Any:
+    #     return pickle.loads(
+    #         base64.b85decode(b85.encode("utf-8")),
+    #     )
+
     try:
         loop = asyncio.get_event_loop()
 
@@ -250,10 +268,11 @@ async def sandbox_daemon(
             result["result"] = to_b85(result["result"])
         if "exception" in result:
             logger.debug("(%s) ... raise %s", session_id,
-                         repr(result["exception"][1]))
-            traceback.print_exception(result["exception"][1])
-            result["exception"] = to_b85(result["exception"][
-                                             1])  # FIXME: les exceptions ne sont pas toujours pickle
+                         repr(result["exception"]))
+            # traceback.print_exception(result["exception"][0])
+            result["exception"] = base64.b85encode(pickle.dumps(result["exception"],
+                                                     protocol=pickle.HIGHEST_PROTOCOL
+                                                     )).decode("utf-8")
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
@@ -386,6 +405,11 @@ async def main() -> int:
 
     # -------------
     # Read all configuration from stdin until EOF
+    def from_b85(b85: str) -> Any:
+        return pickle.loads(
+            base64.b85decode(b85.encode("utf-8")),
+        )
+
     config_body = None
     process_config: Optional[SubProcessParameters] = None
     for line in sys.stdin:

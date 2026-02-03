@@ -20,7 +20,7 @@
 # parameter with the name of the file to be fed.
 
 # Uncomment the next line to remain in learning mode at all times.
-#--learning=${SELF:=.py-sandboxes}
+#--learning=.py-sandboxes
 
 #######################################################################################
 # To activate the py-sandbox, set the parameter `py-sandbox`.
@@ -47,12 +47,15 @@
 # - `firejail` : A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
 
-#--os-sandbox=task
 --os-sandbox=subprocess
 #--os-sandbox=firejail
+#--os-sandbox=task
 
 #######################################################################################
 # In the sandbox, only a selected set of environment variables are accessible.
+#
+# By using `--set-env`, you can control and manage the environment variables available
+# within your sandbox, ensuring that your applications have the necessary configuration.
 #
 # The `--set-env` option is used to set environment variables that will be visible
 # within the sandbox.
@@ -73,14 +76,11 @@
 #    --set-env VAR_*=${VAR_*}
 #    This replicates all environment variables from outside the sandbox that match the
 #    pattern `VAR_*` into the sandbox.
-#
-# By using `--set-env`, you can control and manage the environment variables available
-# within your sandbox, ensuring that your applications have the necessary configuration.
 
 # Some exemples
+#--set-env=*=${*}  # Duplicate all variables
 #--set-env=HOME=.
 #--set-env=USER=pysandbox
-#--set-env=LC_*=${LC_*}
 #--set-env=*_API_KEY=${*_API_KEY}  # Add access to all API_KEY :-(
 #--unset-env=OPENAI_API_KEY
 
@@ -100,13 +100,16 @@
 # the sandbox to a directory visible inside the sandbox (which must exist).
 # Additionally, `--ro-bind` does the same but limits access to the sandbox as read-only.
 #
-# Ignores somes files
-# Warning '--ignore .*' rule exclude the '.venv' directory !
-# Use another name for the virtualenv
-
+# Warning '--ignore .*' rule exclude the '.venv' directory ! Use another name for
+# the virtualenv.
+#
 --ignore=.env
 --ignore=*.log
 #--ignore=*.py  # If you use before 'python3 -m compileall .'
+
+# Some exemples
+#--bind=/,/  # Accept all file access
+#--ro-bind=${HOME},${HOME}  # Read only for home and subdirectories
 
 # Here, the rules learned for files
 # <learning_guard_files>

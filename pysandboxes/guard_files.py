@@ -8,7 +8,7 @@ import sys
 from os import scandir as _scandir
 from pathlib import Path as _Path, Path
 from types import TracebackType
-from typing import Iterator, Dict, cast, Set
+from typing import Iterator, Dict, cast, Set, NoReturn
 from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
@@ -123,8 +123,10 @@ def parse_rules(config: ConfigLines,
                                 break
                     else:
                         # Only one last "/"
-                        rules_bind.append(BindRule(source=str(Path(src)) + "/",
-                                                   dest=str(Path(dest)) + "/",
+                        src_str = str(Path(src)) + "/" if src != "/" else "/"
+                        dest_str = str(Path(dest)) + "/" if dest != "/" else "/"
+                        rules_bind.append(BindRule(source=src_str,
+                                                   dest=dest_str,
                                                    write=rule.rule.startswith(
                                                        "--bind="),
                                                    config=rule,
@@ -208,7 +210,7 @@ def generate_rules(
 
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
-        value:str=""
+        value: str = ""
         write = parent_level[path]
 
         overflow = False
@@ -237,7 +239,7 @@ def generate_rules(
                 value = "${TEMP}"
         elif path.is_relative_to(cwd):
             if not _check_is_in_rules(path):
-                x = "/"+str(path.relative_to(cwd))
+                x = "/" + str(path.relative_to(cwd))
                 if x == "/.":
                     x = ""
                 value = "${PWD}" + x
@@ -345,10 +347,25 @@ def _special_caller():
     return False
 
 
-def _ignore_msg(file: Union[str, bytes, os.PathLike, int], rule: FilesRule) -> str:
-    return (f"Access to '{file}' is ignored by "
-            f"rule '{rule.config.rule}' from {format_ruleref(rule.config)}"
-            )
+def _raise_ignore(file: Union[str, bytes, os.PathLike, int],
+                  rule: FilesRule) -> NoReturn:
+    raise RuleFileNotFoundError(
+        f"Access to '{file}' is ignored by "
+        f"rule '{rule.config.rule}' from {format_ruleref(rule.config)}"
+    )
+
+
+def _raise_access(file: Union[str, bytes, os.PathLike, int]) -> NoReturn:
+    f = Path(file)
+    if not f.is_dir():
+        f = f.parent
+    try:
+        sf = str(f.absolute().relative_to(Path().absolute()))
+        if sf != ".":
+            sf = "./" + sf
+    except ValueError:
+        sf = str(f)
+    raise RuleFileNotFoundError(f"Access to {sf}/' must be accepted by a rule.")
 
 
 # %% Generic wrapper
@@ -364,14 +381,13 @@ def _wrap_filename(func: Callable, *, write: bool) -> Callable:
             file = file.path
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=write)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            _raise_ignore(file, rule)
         if not remapped:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(file), write))
                 remapped = file
             else:
-                raise RuleFileNotFoundError(
-                    f"Access to '{file}' must be accepted by a rule.")
+                _raise_access(file)
         return func(remapped, *args, **kwargs)
 
     return wrapper
@@ -393,12 +409,12 @@ def _wrap_two_filenames(func: Callable, *,
             dest = dest.path
         remapped_src, rule = _apply_dest_to_src_rules(os.fspath(src), write=in_write)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(src, rule))
+            _raise_ignore(src, rule)
         remapped_dest, rule = _apply_dest_to_src_rules(os.fspath(dest), write=out_write)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(dest, rule))
+            _raise_ignore(dest, rule)
         if remapped_src is None:
-            raise RuleFileNotFoundError(_ignore_msg(src, rule))
+            _raise_ignore(src, rule)
         return func(str(remapped_src), str(remapped_dest), *args, **kwargs)
 
     return wrapper
@@ -470,8 +486,7 @@ def _wrap_os_open(func: Callable) -> Callable:
                 add_learning_rule(LearnFileRule(Path(file), False))
                 remapped = file
             else:
-                raise RuleFileNotFoundError(
-                    f"Access to '{file}' must be accepted by a rule.")
+                _raise_access(file)
         return func(remapped, flags, *args, **kwargs)
 
     return wrapper
@@ -494,18 +509,24 @@ def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]
     @functools.wraps(func)
     def wrapper(path: Union[str, bytes, os.PathLike] = '.') -> list[str]:
         if new_path_and_rule := _apply_dest_to_src_rules(path, write=False):
-            new_path, rule = new_path_and_rule
+            remapped, rule = new_path_and_rule
             if rule:
-                raise RuleFileNotFoundError(_ignore_msg(path, rule))
+                _raise_ignore(path, rule)
+            if remapped is None:
+                if is_learning_mode():
+                    add_learning_rule(LearnFileRule(Path(path), False))
+                    remapped = path
+                else:
+                    _raise_access(path)
             if _special_caller():  # FIXME: a garder ?
-                return func(new_path)
-            entries = func(new_path)
+                return func(remapped)
+            entries = func(remapped)
             filtered: List[str] = []
             for entry in entries:
                 full_path = os.path.join(path, entry)
-                new_path, rule = _apply_dest_to_src_rules(full_path, write=False,
+                remapped, rule = _apply_dest_to_src_rules(full_path, write=False,
                                                           accept_source=False)
-                if new_path is not None:
+                if remapped is not None:
                     filtered.append(entry)
             return filtered
         else:
@@ -519,7 +540,7 @@ def _wrap_os_readlink(func: Callable) -> Callable:
     def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
         remapped_first, rule = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            _raise_ignore(file, rule)
         if not remapped_first:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(file), False))
@@ -531,7 +552,7 @@ def _wrap_os_readlink(func: Callable) -> Callable:
             remapped = os.path.dirname(remapped_first) + "/" + remapped
         remapped = _apply_src_to_dest_rules(remapped)
         if not remapped:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            _raise_ignore(file, rule)
         return remapped
 
     return wrapper
@@ -660,14 +681,13 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
                 return func(*args, **kwargs)
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            _raise_ignore(file, rule)
         if not remapped:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(file), False))
                 remapped = file
             else:
-                raise RuleFileNotFoundError(
-                    f"Access to '{file}' must be accepted by a rule.")
+                _raise_access(file)
         file = func(remapped, *args, **kwargs)
         remapped = _apply_src_to_dest_rules(os.fspath(file))
         if remapped is None:
@@ -675,8 +695,7 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
                 add_learning_rule(LearnFileRule(Path(file), False))
                 remapped = os.fspath(file)
             else:
-                raise RuleFileNotFoundError(
-                    f"Access to '{file}' must be accepted by a rule.")
+                _raise_access(file)
         return remapped
 
     return wrapper
@@ -699,14 +718,13 @@ def _wrap_io_open(func: Callable) -> Callable:
                 "w" in mode or "a" in mode or "x" in mode or "+" in mode)
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=need_to_write)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            _raise_ignore(file, rule)
         if remapped is None:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(file), need_to_write))
                 remapped = file
             else:
-                raise RuleFileNotFoundError(
-                    f"Access to '{file}' must be accepted by a rule.")
+                _raise_access(file)
         return func(remapped, mode, *args, **kwargs)
 
     return wrapper
@@ -718,13 +736,12 @@ def _wrap_pathlib(func: Callable) -> Callable:
     def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
         remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=False)
         if rule:
-            raise RuleFileNotFoundError(_ignore_msg(file, rule))
+            _raise_ignore(file, rule)
         if remapped is None:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(file), False))
             else:
-                raise RuleFileNotFoundError(
-                    f"Access to '{file}'  must be accepted by a rule.")
+                _raise_access(file)
         return func(Path(remapped), *args, **kwargs)
 
     return wrapper
@@ -737,7 +754,7 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
                                                          accept_source=True):
             new_path, rule = new_path_and_rule
             if rule:
-                raise RuleFileNotFoundError(_ignore_msg(pattern, rule))
+                _raise_ignore(pattern, rule)
             return (_Path(_apply_src_to_dest_rules(p)) for p in
                     func(_Path(new_path), pattern, *args, **kwargs)
                     if _apply_src_to_dest_rules(p) is not None)
@@ -745,12 +762,11 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
             new_path, rule = _apply_dest_to_src_rules(self,
                                                       write=False)  # FIXME: remove line. PB de reset entre les tests
             if rule:
-                raise RuleFileNotFoundError(_ignore_msg(pattern, rule))
+                _raise_ignore(pattern, rule)
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(self), False))
             else:
-                raise RuleFileNotFoundError(
-                    f"Access to '{self}'  must be accepted by a rule.")
+                _raise_access(self)
 
     return wrapper
 

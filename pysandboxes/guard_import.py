@@ -60,7 +60,8 @@ def parse_rules(config: ConfigLines,
 
 class GuardLoader(importlib.abc.Loader):
     """
-    A custom loader that wraps an original loader to modify a module after it has been created and executed.
+    A custom loader that wraps an original loader to modify a module after it
+    has been created and executed.
     """
 
     def __init__(self, original_spec: importlib.util.spec_from_file_location):
@@ -80,7 +81,8 @@ class GuardLoader(importlib.abc.Loader):
 
     def exec_module(self, module: ModuleType) -> None:
         """
-        Executes the module code using the original loader, then performs custom modifications.
+        Executes the module code using the original loader, then performs
+        custom modifications.
         This is where we add our custom logic after the standard loading.
         """
         logger.debug(f"exec_module({module.__name__})")
@@ -91,15 +93,14 @@ class GuardLoader(importlib.abc.Loader):
         if self.original_spec.name in _patch_rules:
             all_patch = _patch_rules[self.original_spec.name]
             for patch in all_patch:
-                cur_module=module
-                path=""
-                paths=patch.module_name.split('.')
+                cur_module = module
+                path = ""
+                paths = patch.module_name.split('.')
                 for node in paths[:-1]:
                     logger.debug(f"{path=} {cur_module=}")
-                    cur_module= cur_module.__dict__[node]
+                    cur_module = cur_module.__dict__[node]
                 new_value = patch.patch_factory(cur_module.__dict__[paths[-1]])
                 cur_module.__dict__[paths[-1]] = new_value
-                # logger.info(f"patch {self.original_spec.name}.{patch.module_name} done")
                 self.done = True  # FIXME
 
             # logger.debug(f"GuardLoader: Injected patch into '{module.__name__}'.")
@@ -219,6 +220,7 @@ def _activate_patch_import(
     import sys
     sys.meta_path.insert(0, GuardFinder(sys.meta_path))
     assert "io" not in sys.modules
+
 
 def activate_guard_import(
         patch_rules: PatchRules,

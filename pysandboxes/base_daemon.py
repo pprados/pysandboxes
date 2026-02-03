@@ -1,6 +1,9 @@
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TYPE_CHECKING
+
+from tblib import pickling_support
 
 from .tools import SyncOrAsyncFunc
 from .types import ConfigLines, Envs
@@ -12,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 _mixed_sync_and_async_error = ("Cannot call the synchronize sandbox function "
                                "from another sandbox async function")
-
 
 class BaseDaemon(ABC):
     __slots__ = ('_is_started', '_token')  # TODO: partout __slots__

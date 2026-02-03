@@ -62,8 +62,8 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
                 # os._exit(e.args[0]) # FIXME
             except Exception as e:
                 import os
-                logger.exception("Exception unknown in run_forever") ## FIXME
-                # os._exit(-1)  # FIXME
+                logger.exception("Exception unknown in run_forever")
+                os._exit(-1)
 
         thread = threading.Thread(
             target=_start_background_loop,

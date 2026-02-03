@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 import asyncio
-import inspect
+import base64
 import json
 import logging
 import os
+import pickle
 import sys
 from datetime import timedelta
-from typing import Any, Dict, Callable, Optional, Tuple
+from typing import Any, Dict, Callable
 
 from aiohttp import ClientPayloadError, ClientConnectorError
 from aiohttp_sse_client import client as sse_client
-from tblib import pickling_support
 
 from .parameters import HOST, PORT, PATH_RPC
-from .tools import from_b85
-from ..tools import is_in_sandbox, get_callable_info
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
-
-pickling_support.install()
+# from .tools import from_b85
+from ..tools import is_in_sandbox, get_callable_info
 
 logger = logging.getLogger(__name__)
 
@@ -35,24 +33,21 @@ def _get_rpc_params(args: Any,
     """
     Get the parameters for the RPC call.
     """
-    from .tools import to_b85
+
+    def to_b85(obj: Any) -> str:
+        return base64.b85encode(pickle.dumps(obj,
+                                             protocol=pickle.HIGHEST_PROTOCOL
+                                             )).decode("utf-8")
+
     module_name, callable_name = get_callable_info(func)
     params = {
-        "session_id": "123",  # TODO
-        "timeout": timeout,  # TODO
+        "session_id": "123",  # TODO: session_id (correlation id?)
+        "timeout": timeout,  # TODO: timeout
         "function": f"{module_name}:{callable_name}",
         "args": to_b85(args),
         "kwargs": to_b85(kwargs),
     }
     return params
-
-
-def _reraise(remove: int, tp, value, tb=None):
-    while remove:
-        remove -= 1
-        if tb.tb_next:
-            tb = tb.tb_next
-    raise value.with_traceback(tb)
 
 
 class SSESandbox(BaseDaemon):
@@ -67,6 +62,11 @@ class SSESandbox(BaseDaemon):
         if is_in_sandbox():
             return await func(*args, **kwargs)
         from pysandboxes.os_sandbox import get_token
+        import pickle
+        def from_b85(b85: str) -> Any:
+            return pickle.loads(
+                base64.b85decode(b85.encode("utf-8")),
+            )
 
         try:
             token = get_token()
@@ -86,15 +86,24 @@ class SSESandbox(BaseDaemon):
                     timedelta(
                         # seconds=30 # FIXME
                         seconds=0.2
-                        ),
+                    ),
             ) as event_source:
                 async for event in event_source:
                     msg = json.loads(event.data)
                     if "result" in msg:
                         return from_b85(msg["result"])
                     if "exception" in msg:
-                        _reraise(1,
-                                 *from_b85(msg["exception"]))  # FIXME: check remove: 1
+                        exception, serial_traceback = from_b85(msg["exception"])
+                        traceback = serial_traceback.as_traceback()
+                        remove = 3
+                        while remove:
+                            remove -= 1
+                            if traceback.tb_next:
+                                traceback = traceback.tb_next
+                            else:
+                                break
+                        raise exception.with_traceback(traceback)
+
                     if "stdout" in msg:
                         print(msg["stdout"], end="")
                     if "stderr" in msg:
@@ -108,8 +117,10 @@ class SSESandbox(BaseDaemon):
             raise RuntimeError("Impossible to connect to the sandbox")
         except SystemExit:
             raise
-        except Exception as e:
-            raise RuntimeError(e)  # FIXME: qu'en faire ?
+        # It's an exception not catched
+        # except Exception as e:
+        #     raise  # FIXME: qu'en faire ?
+        #     # raise RuntimeError(e)  # FIXME: qu'en faire ?
 
     @sandbox_loop
     def call_in_sandbox(self,

@@ -1,7 +1,8 @@
 import asyncio
+import base64
 import logging
 import os
-import random
+import pickle
 import sys
 import time
 from abc import abstractmethod
@@ -10,11 +11,10 @@ from typing import Callable, Dict, Any, Optional, NamedTuple
 
 from .parameters import DELAY_FOR_START_DAEMON
 from .sse_sandbox import SSESandbox
-from .tools import to_b85
 from ..main_logger import pysandboxes_logger
 from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc, get_callable_info
-from ..types import Args, Envs, ConfigLines
+from ..types import Args, Envs
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 envs_rules=(),
                 socket_rules=(),
                 file_rules=(),
-                import_rules=(), # all_rules.import_rules,
+                import_rules=(),  # all_rules.import_rules,
             )
             await self._re_start_cmd(
                 all_rules,
@@ -183,6 +183,11 @@ class BaseSubProcessDaemon(SSESandbox):
                             init_fn: Optional[SyncOrAsyncFunc],
                             stdin: bool = False,
                             stdout: bool = False) -> None:
+        def to_b85(obj: Any) -> str:
+            return base64.b85encode(pickle.dumps(obj,
+                                                 protocol=pickle.HIGHEST_PROTOCOL
+                                                 )).decode("utf-8")
+
         self._is_started = False
 
         umask = os.umask(0o002)
@@ -213,7 +218,8 @@ class BaseSubProcessDaemon(SSESandbox):
             env=os.environ.copy(),
         )
 
-        # Send config body via stdin, because, it's not possible to use .py-sandboxes file
+        # Send config body via stdin, because, it's not possible
+        # to use .py-sandboxes file with a rule --ignore=.*
 
         if init_fn:
             module, init_function_reference = get_callable_info(init_fn)
@@ -279,30 +285,29 @@ class BaseSubProcessDaemon(SSESandbox):
         logger.debug("shutdown")
 
     async def join(self) -> int:
-        errorlevel = -1
-        while errorlevel != 0:
-            errorlevel = await self._process.wait()
-            if errorlevel != 0:
-                logger.warning("subprocess exited with %s", errorlevel)
-                if time.time() - self._last_reset > self._reset_delay:
-                    self._attempts = 0
-                self._attempts += 1
-                if self._attempts > self._max_attempts:
-                    return errorlevel
-                # Calculate the base delay for this attempt
-                current_base_backoff: float = min(self._max_delay, self._base_delay * (
-                        self._factor ** (self._attempts - 1)))
-
-                wait_time: float = random.uniform(current_base_backoff * 0.9,
-                                                  current_base_backoff)
-                await asyncio.sleep(wait_time)
-                await self.shutdown()
-                self._last_reset = time.time()
-                await self._re_start()
-        return errorlevel
-
-    # def convert_rules(self, socket_rules: AllRules) -> AllRules:
-    #     return socket_rules
+        return 0  # FIXME
+    #     errorlevel = -1
+    #     while errorlevel != 0:
+    #         errorlevel = await self._process.wait()
+    #         if errorlevel != 0:
+    #             logger.warning("subprocess exited with %s", errorlevel)
+    #             if time.time() - self._last_reset > self._reset_delay:
+    #                 self._attempts = 0
+    #             self._attempts += 1
+    #             if self._attempts > self._max_attempts:
+    #                 return errorlevel
+    #             # Calculate the base delay for this attempt
+    #             current_base_backoff: float = min(self._max_delay,
+    #               self._base_delay * (
+    #                     self._factor ** (self._attempts - 1)))
+    #
+    #             wait_time: float = random.uniform(current_base_backoff * 0.9,
+    #                                               current_base_backoff)
+    #             await asyncio.sleep(wait_time)
+    #             await self.shutdown()
+    #             self._last_reset = time.time()
+    #             await self._re_start()
+    #     return errorlevel
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
