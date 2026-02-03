@@ -245,7 +245,11 @@ def generate_rules(
                 value = "${PWD}" + x
         elif path.is_relative_to(home):
             if not _check_is_in_rules(path):
-                value = "${HOME}/" + str(path.relative_to(home))
+                target = str(path.relative_to(home))
+                if target == ".":
+                    value = "${HOME}"
+                else:
+                    value = "${HOME}/" + str(path.relative_to(home))
         else:
             value = str(path)
         if value:
