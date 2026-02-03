@@ -139,7 +139,7 @@ def parse_config(
     ienvs = Envs(envs)
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
-    # 1. Parse the socket_rules, step by step
+    # 1. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, ienvs, errors)
     others = substitute_config_env_vars(others, ienvs)  # with main envs
 
@@ -221,10 +221,12 @@ def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasi
     # Apply the rules
     env_patch_rules = guard_envs.patch_rules(all_rules.learning_path)
     file_patch_rules = guard_files.patch_rules()
+    socket_patch_rules = guard_socket.patch_rules()
     guard_import.activate_guard_import(
         conv_patch_rules(
             {
                 **file_patch_rules,
+                **socket_patch_rules,
                 **env_patch_rules
             }
         ),

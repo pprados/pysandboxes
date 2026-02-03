@@ -37,20 +37,39 @@
 # import requests
 # import urllib.request
 # # ... rest of your application code ...
-import ipaddress
+import functools
 import logging
 import os
 import socket
 import sys
-from ipaddress import IPv4Network, IPv6Network
+from collections.abc import Buffer
+from ipaddress import IPv4Network, IPv6Network, ip_network, IPv4Address, IPv6Address, \
+    ip_address
 from pathlib import Path
-from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any
+from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any, Callable, \
+    TypeAlias, Set
 
-from .exception import RuleError
+from netifaces import AF_INET, AF_INET6
+
+from .exception import SandBoxError
+from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
 from .types import ConfigLines, ConfigLine
 
 logger = logging.getLogger(__name__)
+
+# Address format details can be found in the Python socket library documentation:
+# https://docs.python.org/3/library/socket.html#address-families
+Adresse_Type = Union[
+    str,  # For AF_UNIX sockets
+    Tuple[str, int],  # For AF_INET, AF_BLUETOOTH, AF_PACKET, AF_RDS sockets
+    Tuple[str, int, int, int],  # For AF_INET6 sockets
+    Tuple[int, bytes],  # For AF_NETLINK sockets
+    Tuple[str],  # For AF_CAN, PF_SYSTEM sockets
+    Tuple[str, str],  # For AF_ALG sockets
+    Tuple[int, int],  # For AF_VSOCK, AF_QIPCRTR sockets
+    Tuple[int, int, int, int, int]  # For AF_TIPC sockets
+]
 
 
 # Parsed rule format used internally:
@@ -71,22 +90,18 @@ class SocketRule(NamedTuple):
 SocketRules = Tuple[SocketRule, ...]
 
 
-class SocketRulesError(RuleError):  # TODO: Se brancher sur une exception classique ?
+class LearnSocketRule(NamedTuple):
+    fn: str
+    protocol: str
+    address: str
+    port: int
+    direction: Optional[str]
+    dns: Tuple[Union[IPv4Address, IPv6Address], ...]
+
+
+class RuleSocketConnectionRefusedError(ConnectionRefusedError, SandBoxError):
     pass
 
-
-# Address format details can be found in the Python socket library documentation:
-# https://docs.python.org/3/library/socket.html#address-families
-Adresse_Type = Union[
-    str,  # For AF_UNIX sockets
-    Tuple[str, int],  # For AF_INET, AF_BLUETOOTH, AF_PACKET, AF_RDS sockets
-    Tuple[str, int, int, int],  # For AF_INET6 sockets
-    Tuple[int, bytes],  # For AF_NETLINK sockets
-    Tuple[str],  # For AF_CAN, PF_SYSTEM sockets
-    Tuple[str, str],  # For AF_ALG sockets
-    Tuple[int, int],  # For AF_VSOCK, AF_QIPCRTR sockets
-    Tuple[int, int, int, int, int]  # For AF_TIPC sockets
-]
 
 DENY = "DENY"  # Action to deny a connection
 ALLOW = "ALLOW"  # Action to allow a connection
@@ -101,12 +116,8 @@ OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 _rules: SocketRules = cast(SocketRules, ())
 
 SPEC_TO_TYPE_MAP: Dict[str, int] = {
-    "tcp": socket.IPPROTO_TCP,
-    "udp": socket.IPPROTO_UDP,
-    # "icmp": socket.IPPROTO_ICMP,
-    # "icmpv6": socket.IPPROTO_ICMPV6,
-    # "any": -1,
-    # "*": -1,
+    "tcp": socket.SOCK_STREAM,
+    "udp": socket.SOCK_DGRAM,
 }
 
 
@@ -256,12 +267,12 @@ def _parse_rule(rule: ConfigLine,
 
     try:
         return [
-            _for_each_networks(ipaddress.ip_network(network_str, strict=False))
+            _for_each_networks(ip_network(network_str, strict=False))
         ]
     except ValueError as e:
         try:
-            _, _, networks = socket.gethostbyname_ex(network_str)
-            return [_for_each_networks(ipaddress.ip_network(network, strict=False)) for
+            networks = socket.getaddrinfo(network_str,None)
+            return [_for_each_networks(ip_network(network[4][0], strict=False)) for
                     network in networks]
         except socket.gaierror as e:
             errors.append(
@@ -293,11 +304,6 @@ def parse_rules(rules: ConfigLines,
     # parsed_rule_families = sorted(list(set(parsed_rule_families)))  # FIXME
 
     return tuple(socket_rules), ignore_rules
-
-def generate_rules(
-        learn: List[Any],
-                ) -> List[str]:
-    return []
 
 
 def _convert_ports_range(syntax: str) -> Union[List[int], range]:
@@ -385,11 +391,12 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
 def _check_address_with_rules(
         socket_rules: SocketRules,
         socket_instance_type: int,
+        proto: int,
         address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
         conn_direction: str):  # Expect IN or OUT constants
     """
     Checks if a given address and port are allowed for the specified connection direction
-    based on the configured socket_rules and the derived implicit default policy.
+    based on the configured rules and the derived implicit default policy.
     (Docstring needs update for new socket_instance_family, socket_instance_proto args)
     """
     logger.debug(
@@ -401,43 +408,40 @@ def _check_address_with_rules(
             0 <= destination_port <= 65535):
         raise ValueError(f"Invalid port number: {destination_port}")
 
+    unique_ips:List[Union[IPv4Address, IPv6Address]]
     try:
-        # Resolve hostname to IP addresses using the socket instance's family, type, and proto
-        infos = socket.getaddrinfo(hostname, None,
-                                   type=socket_instance_type)
-    except socket.gaierror:
-        # Fallback if the specific proto causes issues, try with proto=0 (OS default for family/type)
-        # This might happen if self.proto is something specific but getaddrinfo needs a more general hint
+
+        unique_ips=[ip_address(hostname)]
+    except ValueError:
         try:
-            logger.debug(
-                "getaddrinfo failed with specific proto %s, retrying with proto=0")
+            # Resolve hostname to IP addresses using the socket instance's family, type, and proto
             infos = socket.getaddrinfo(hostname, None,
-                                       type=socket_instance_type, proto=0)
+                                       type=socket_instance_type)
         except socket.gaierror:
-            raise ValueError(
-                f"Invalid hostname or IP address (resolution failed): {hostname}")
+            # Fallback if the specific proto causes issues, try with proto=0 (OS default for family/type)
+            # This might happen if self.proto is something specific but getaddrinfo needs a more general hint
+            try:
+                logger.debug(
+                    "getaddrinfo failed with specific proto %s, retrying with proto=0")
+                infos = socket.getaddrinfo(hostname, None,
+                                           type=socket_instance_type, proto=0)
+            except socket.gaierror:
+                raise ValueError(
+                    f"Invalid hostname or IP address (resolution failed): {hostname}")
 
-    # %% Analyse ips
-    ip_objects = []
-    for res_family, _, _, _, sockaddr in infos:
-        # sockaddr[0] is the IP address string
-        addr_str = sockaddr[0]
-        ip_objects.append(ipaddress.ip_address(addr_str))
+        # %% Analyse ips
+        ip_objects = []
+        for res_family, _, _, _, sockaddr in infos:
+            # sockaddr[0] is the IP address string
+            addr_str = sockaddr[0]
+            ip_objects.append(ip_address(addr_str))
 
-    unique_ips = list(dict.fromkeys(ip_objects))
+        unique_ips = list(dict.fromkeys(ip_objects))
     if not unique_ips:
         raise ValueError(
             f"Invalid hostname or IP address (resolution failed): {hostname}")
-    # if not socket_rules:  # FIXME: remove
-    #     logger.info(
-    #         "Connection to %s port %s ALLOWED because no socket_rules are set.",
-    #         hostname, destination_port
-    #     )
-    #     return
 
-    # %% Analyse socket_rules
-    order_apply = (DENY, ALLOW)
-
+    # %% Analyse rules
     for rule_type_to_check in (DENY, ALLOW):
         for ip_host in unique_ips:
             for (action,
@@ -459,46 +463,91 @@ def _check_address_with_rules(
                                     config.rule, format_ruleref(config)
                                 )
                                 if action == DENY:
-                                    raise SocketRulesError(
+                                    pysandboxes_logger.error(
+                                        "Connection to '%s' (%s:%s) "
+                                        "DENIED by explicit rule "
+                                        "'%s' from %s",
+                                        hostname, ip_host, destination_port,
+                                        config.rule, format_ruleref(config)
+                                    )
+                                    raise RuleSocketConnectionRefusedError(
                                         f"Guard network connection to "
-                                        f"'{hostname}' ({ip_host}:{destination_port}) "
+                                        f"'{hostname}' "
+                                        f"({ip_host}:{destination_port}) "
                                         f"{action} by rule "
                                         f"'{config.rule}' "
                                         f"from {format_ruleref(config)})."
                                     )
                                 elif action == ALLOW:
-                                    raise SocketRulesError(
-                                        f"Guard network connection to "
-                                        f"'{hostname}' ({ip_host}:{destination_port}) "
-                                        f"{action} by rule "
-                                        f"'{config.rule}' from {format_ruleref(config)})."
+                                    pysandboxes_logger.debug(
+                                        "Connection to '%s' (%s:%s) "
+                                        "ALLOW by explicit rule "
+                                        "'%s' from %s",
+                                        hostname, ip_host, destination_port,
+                                        config.rule, format_ruleref(config)
                                     )
-    pysandboxes_logger.info(
-        "Connection to '%s' (%s:%s) "
+                                    return
+                                    # raise RuleSocketConnectionRefusedError(  # FIXME: ne devrait pas etre là
+                                    #     f"Guard network connection to "
+                                    #     f"'{hostname}' "
+                                    #     f"({ip_host}:{destination_port}) "
+                                    #     f"{action} by rule "
+                                    #     f"'{config.rule}' "
+                                    #     f"from {format_ruleref(config)})."
+                                    # )
+    try:
+        ip_address(hostname)
+        target = f'{hostname}:{destination_port}'
+    except ValueError:
+        target = (f"'{hostname}:{destination_port}' "
+                  f"({' '.join([str(unique_ip) for unique_ip in unique_ips])}"
+                  f"{destination_port}) ")
+
+    pysandboxes_logger.error(
+        "Connection to '%s' "
         "DENIED by implicit default policy.",
-        hostname, unique_ips, destination_port
+        target
     )
-    raise SocketRulesError(
-        f"Guard network connection to '{hostname}' "
-        f"({unique_ips}:{destination_port}) "
+    raise RuleSocketConnectionRefusedError(
+        f"Guard network connection to {target} "
         f"DENIED by implicit default policy."
     )
 
 
 _get_rules = lambda: []
 
+# see _scoket.pyi
+ReadableBuffer: TypeAlias = Buffer  # stable
+_Address: TypeAlias = tuple[Any, ...] | str | ReadableBuffer
+_RetAddress: TypeAlias = Any
+
+_map_socket_type = {
+    socket.SOCK_DGRAM: "udp",
+    socket.SOCK_STREAM: "tcp",
+}
+
+
+def _get_fammily(ip: str) -> int:
+    ip_object = ip_address(ip)
+    if ip_object.version == 4:
+        familly = AF_INET
+    elif ip_object.version == 6:
+        familly = AF_INET6
+    else:
+        familly = 0
+    return familly
+
 
 class Guard_socket(socket.socket):
     """
-    A custom socket class that enforces network socket_rules to restrict connections.
+    A custom socket class that enforces network rules to restrict connections.
     Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
     Example: "--net=ALLOW|tcp|192.168.1.0/24|80,443|OUT"
     SOCKET_SPECS: "any", "tcp", "udp", or comma-separated combinations.
     """
 
     def _check_address(self, address: Tuple[str, int], conn_direction: str):
-        rules = Guard_socket.get_rules()
-        _check_address_with_rules(rules, self.type, self.proto, address,
+        _check_address_with_rules(_rules, self.type, self.proto, address,
                                   conn_direction)
 
     def __init__(self,
@@ -518,10 +567,23 @@ class Guard_socket(socket.socket):
         if (isinstance(address, tuple) and len(address) >= 2 and  # FIXME: ajout de test
                 isinstance(address[0], str)
                 and isinstance(address[1], int)):
-            self._check_address((str(address[0]), int(address[1])), conn_direction=IN)
+            if is_learning_mode():
+                add_learning_rule(
+                    LearnSocketRule(
+                        "bind",
+                        _map_socket_type.get(self.type, ""),
+                        address[0],
+                        address[1],
+                        IN,
+                        (),
+                    )
+                )
+            else:
+                self._check_address((str(address[0]), int(address[1])),
+                                    conn_direction=IN)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
-                "Allowing bind to AF_UNIX address (not subject to IP socket_rules): %s",
+                "Allowing bind to AF_UNIX address (not subject to IP rules): %s",
                 address)
         else:
             logger.warning(
@@ -533,10 +595,23 @@ class Guard_socket(socket.socket):
         if (isinstance(address, tuple) and len(address) >= 2
                 and isinstance(address[0], str)
                 and isinstance(address[1], int)):
-            self._check_address((str(address[0]), int(address[1])), conn_direction=OUT)
+            if is_learning_mode():
+                add_learning_rule(
+                    LearnSocketRule(
+                        "connect",
+                        "tcp",
+                        address[0],
+                        address[1],
+                        OUT,
+                        ()
+                    )
+                )
+            else:
+                self._check_address((str(address[0]), int(address[1])),
+                                    conn_direction=OUT)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
-                "Allowing connect to AF_UNIX address (not subject to IP socket_rules): %s",
+                "Allowing connect to AF_UNIX address (not subject to IP rules): %s",
                 address)
         else:
             logger.warning(
@@ -545,24 +620,67 @@ class Guard_socket(socket.socket):
         super().connect(address)
 
     def connect_ex(self, address: Adresse_Type) -> int:
-        try:
-            if isinstance(address, tuple) and len(address) >= 2 and isinstance(
-                    address[0], str) and isinstance(address[1], int):
-                self._check_address((address[0], address[1]), conn_direction=OUT)
-            elif isinstance(address, str):  # AF_UNIX
-                logger.debug(
-                    "Allowing connect_ex to AF_UNIX address (not subject to IP socket_rules): %s",
-                    address)
+        if isinstance(address, tuple) and len(address) >= 2 and isinstance(
+                address[0], str) and isinstance(address[1], int):
+            if is_learning_mode():
+                add_learning_rule(
+                    LearnSocketRule(
+                        "connect_ex",
+                        "tcp",
+                        address[0],
+                        address[1],
+                        OUT,
+                        ()
+                    )
+                )
             else:
-                logger.warning(
-                    "Unexpected address format for connect_ex: %s. Skipping IP rule check.",
-                    address)
-        except SocketRulesError as e:
-            logger.error("Rule violation during connect_ex pre-check: %s", e)
-            # Reraise to ensure connect_ex reflects the block, or map to an error code if preferred.
-            # For now, reraising the SocketRulesError is consistent with connect().
-            raise
+                self._check_address((str(address[0]), int(address[1])),
+                                    conn_direction=OUT)
+        elif isinstance(address, str):  # AF_UNIX
+            logger.debug(
+                "Allowing connect_ex to AF_UNIX address (not subject to IP rules): %s",
+                address)
+        else:
+            logger.warning(
+                "Unexpected address format for connect_ex: %s. Skipping IP rule check.",
+                address)
         return super().connect_ex(address)
+
+    def sendto(self, data: ReadableBuffer, address: _Address, /) -> int:
+        if isinstance(address, tuple) and len(address) >= 2 and isinstance(
+                address[0], str) and isinstance(address[1], int):
+            if is_learning_mode():
+                add_learning_rule(
+                    LearnSocketRule(
+                        "sendto",
+                        "udp",
+                        address[0],
+                        address[1],
+                        OUT,
+                        ()
+                    )
+                )
+            else:
+                self._check_address((str(address[0]), int(address[1])),
+                                    conn_direction=OUT)
+        return super().sendto(data, address)
+
+    # def recvfrom(self, bufsize: int, flags: int = ..., /) -> tuple[bytes, _RetAddress]:
+    #     # if is_learning_mode():
+    #     #     add_learning_rule(
+    #     #         LearnSocketRule(
+    #     #             "sendto",
+    #     #             "udp",
+    #     #             address[0],
+    #     #             address[1],
+    #     #             IN,
+    #     #             ()
+    #     #         )
+    #     #     )
+    #     # else:
+    #     #     self._check_address((str(address[0]), int(address[1])),
+    #     #                             conn_direction=OUT)
+    #     return super().recvfrom(bufsize, flags)
 
 
 # %%
@@ -586,23 +704,173 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = []
 
 
-def activate_guard(socket_rules: SocketRules) -> None:
-    if not socket_rules:
+def _wrap_socket_gethostbyname(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(name: str, *args, **kwargs):
+        result = func(name, *args, **kwargs)
+        if (isinstance(name, str) and name and
+                is_learning_mode()):
+            add_learning_rule(
+                LearnSocketRule(
+                    "gethostbyname",
+                    "",
+                    name,
+                    0,
+                    None,
+                    (ip_address(result),),
+                )
+            )
+        return result
+
+    return wrapper
+
+
+def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(name: str, *args, **kwargs):
+        result = func(name, *args, **kwargs)
+        if (isinstance(name, str) and name and
+                is_learning_mode()):
+            add_learning_rule(
+                LearnSocketRule(
+                    "gethostbyname_ex",
+                    "",
+                    name,
+                    0,
+                    None,
+                    tuple(result[2])
+                )
+            )
+        return result
+
+    return wrapper
+
+
+def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(host: bytes | str | None,
+                port: bytes | str | int | None,
+                family: int = 0,
+                type: int = 0,
+                proto: int = 0,
+                flags: int = 0,
+                *args, **kwargs
+                ) -> list[
+        tuple[
+            socket.AddressFamily, socket.SocketKind,
+            int,
+            str, tuple[str, int] |
+                 tuple[str, int, int, int]]]:
+        result = func(host, port, family, type, proto, flags, *args, **kwargs)
+        if (isinstance(host, str) and host and
+                is_learning_mode()):
+            add_learning_rule(
+                LearnSocketRule(
+                    "getaddrinfo",
+                    "",
+                    host,
+                    int(port) if port is not None else 0,
+                    None,
+                    tuple({ip_address(info[4][0]) for info in result})
+                )
+            )
+        return result
+
+    return wrapper
+
+
+def patch_rules() -> Dict[str, Callable]:
+    return {
+        "socket.socket":
+            lambda x: Guard_socket,
+        # TODO: uniquement si learning ?
+        "socket.gethostbyname": _wrap_socket_gethostbyname,
+        "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
+        "socket.getaddrinfo": _wrap_socket_getaddrinfo,
+    }
+
+
+def activate_guard(rules: SocketRules) -> None:
+    if not rules:
         return
     global _rules
     if _rules:
         raise RuntimeError("Guard_socket already activated.")
-    _rules = socket_rules
-    install_wrapper = not _rules
+    _rules = rules
 
-    if install_wrapper:
-        import socket
-        # --- Activation & Patching ---
-        if socket.socket is not Guard_socket:
-            # Ensure that the original socket class is stored if not already.
-            # This is important if the module can be reloaded or patched multiple times.
-            if not hasattr(socket, '_original_socket_class'):
-                socket._original_socket_class = socket.socket  # type: ignore
-            socket.socket = Guard_socket
-        pysandboxes_logger.warning(
-            "Guard_socket activated.")
+
+def _read_host_file() -> Tuple[
+    Set[str],
+    Dict[Union[IPv4Address, IPv6Address], str]
+]:
+    dns: Set[str] = set()
+    inverse_dns: Dict[Union[IPv4Address, IPv6Address], str] = {}
+    # Read the host file
+    # Détecter le système d'exploitation pour trouver le bon chemin
+    if sys.platform == "win32":
+        system_root = os.environ.get("SystemRoot")
+        if not system_root:
+            system_root = r"C:\Windows"
+        hosts_file = Path(system_root) / r"System32\drivers\etc\hosts"
+    elif (sys.platform.startswith("linux") or
+          sys.platform == "darwin" or
+          sys.platform.startswith("freebsd") or
+          sys.platform == "sunos"):
+        hosts_file = Path("/etc/hosts")
+    else:
+        return {}
+    if hosts_file.exists():
+        host_lines = hosts_file.read_text().split("\n")
+        for line in host_lines:
+            if line.startswith("#"):
+                continue
+            line = line.strip()
+            if line:
+                ip, *hosts = line.split()
+                if hosts:
+                    inverse_dns[ip_address(ip)] = hosts[0]
+                for host in hosts:
+                    dns.add(host)
+    # Force localhost
+    return dns, inverse_dns
+
+
+def generate_rules(
+        learn: List[Any],
+) -> List[str]:
+    result = set()
+    dns, inverse_dns = _read_host_file()
+
+    # 1. Get dns info
+    for learn_rule in filter(lambda x: isinstance(x, LearnSocketRule), learn):
+        if learn_rule.fn in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
+            for ip in learn_rule.dns:
+                inverse_dns[ip] = learn_rule.address
+                dns.add(learn_rule.address)
+
+    # 2. Map access to dns
+    for learn_rule in filter(lambda x: isinstance(x, LearnSocketRule), learn):
+        if learn_rule.fn not in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
+            if learn_rule.address in dns:
+                destination = learn_rule.address
+            else:
+                ip = ip_address(learn_rule.address)
+                if ip in inverse_dns:
+                    destination = inverse_dns[ip]
+                else:
+                    if ip.version == 5:
+                        mask = 32
+                    elif ip.version == 6:
+                        mask = 128
+                    else:
+                        mask = 0  # Uknown mask
+                    if mask:
+                        destination = f"{learn_rule.address}/{mask}"
+                    else:
+                        destination = learn_rule.address
+            result.add(
+                f"--net=ALLOW|{learn_rule.protocol}|"
+                f"{destination}|{learn_rule.port}|"
+                f"{learn_rule.direction}"
+            )
+    return sorted(list(result))

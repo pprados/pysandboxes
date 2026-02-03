@@ -12,7 +12,7 @@ from typing import Iterator, Dict, cast, Set, NoReturn
 from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
-from .exception import RuleError
+from .exception import SandBoxError
 from .guard_envs import LearnEnviron
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
@@ -36,11 +36,11 @@ _white_list = [
 ]
 
 
-class RuleFileNotFoundError(FileNotFoundError, RuleError):
+class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
     pass
 
 
-class RulePermissionError(PermissionError, RuleError):
+class RulePermissionError(PermissionError, SandBoxError):
     pass
 
 
@@ -257,10 +257,10 @@ def generate_rules(
     return sorted(list(result), reverse=True)
 
 
-# Helper to resolve symlinks and apply socket_rules
+# Helper to resolve symlinks and apply rules
 def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[str]:
     """
-    Applies the socket_rules to a file path.
+    Applies the rules to a file path.
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
@@ -283,18 +283,18 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[st
                     real_path, rule.source):
                 return None
         else:
-            assert ("Invalide socket_rules")
+            assert ("Invalide rules")
     return path
 
 
-# Helper to resolve symlinks and apply socket_rules
+# Helper to resolve symlinks and apply rules
 def _apply_dest_to_src_rules(path: str,
                              *,
                              write: bool,
                              accept_source: bool = False,
                              ) -> Tuple[Optional[str], Optional[FilesRule]]:
     """
-    Applies the socket_rules to a file path.
+    Applies the rules to a file path.
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
@@ -965,6 +965,7 @@ def activate_guard(
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.
     """
+    # TODO: add __set_values dans le module pour interdire la modification ?
     if not rules:
         return
     global _rules

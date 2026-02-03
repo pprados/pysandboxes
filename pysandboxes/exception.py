@@ -1,2 +1,2 @@
-class RuleError(RuntimeError):
+class SandBoxError(RuntimeError):
     pass

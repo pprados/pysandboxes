@@ -11,7 +11,7 @@ from .main_logger import pysandboxes_logger
 logger = logging.getLogger(__name__)
 
 _lock = Lock()
-_learning = []
+_learning = set()
 
 _learning_path: Optional[Path] = None
 
@@ -156,5 +156,5 @@ def is_learning_mode():
 
 def add_learning_rule(rule: Any) -> None:
     with _lock:
-        _learning.append(rule)
+        _learning.add(rule)
         pysandboxes_logger.info(repr(rule))

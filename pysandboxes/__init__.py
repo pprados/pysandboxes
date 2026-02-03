@@ -15,5 +15,5 @@ except metadata.PackageNotFoundError:
 #     "sandbox",
 #     "run",
 #     "sandboxes",
-#     "RuleError",
+#     "SandBoxError",
 # ]

@@ -220,7 +220,7 @@ def _activate_guard_import(rules: List[PythonAPIRules]):
             import_rules = rule
             break
     if not import_rules:
-        raise ValueError("No import socket_rules found")
+        raise ValueError("No import rules found")
 
     class ImportBlocker:
         def find_spec(self, fullname: str, path: Optional[str],

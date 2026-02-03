@@ -11,11 +11,11 @@ from pysandboxes.types import ConfigLine
 def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tuple[
     bool, str]:
     """
-    Checks the syntax of iptables/ip6tables socket_rules without applying them.
+    Checks the syntax of iptables/ip6tables rules without applying them.
 
     Args:
-        rules_content (str): The content of the socket_rules in iptables-save/ip6tables-save format.
-        is_ipv6 (bool): True if socket_rules are for IPv6 (ip6tables-restore), False for IPv4 (iptables-restore).
+        rules_content (str): The content of the rules in iptables-save/ip6tables-save format.
+        is_ipv6 (bool): True if rules are for IPv6 (ip6tables-restore), False for IPv4 (iptables-restore).
 
     Returns:
         tuple[bool, str]: A tuple containing (True if syntax is OK, error/success message).
@@ -26,7 +26,7 @@ def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tu
     # Options for test mode
     command_args: List[str] = [which_command(restore_command), "--test"]
 
-    # Use a temporary file to pass the socket_rules to the restore tool's standard input
+    # Use a temporary file to pass the rules to the restore tool's standard input
     try:
         subprocess.run(
             command_args,

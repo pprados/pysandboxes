@@ -269,7 +269,7 @@ async def sandbox_daemon(
         if "exception" in result:
             logger.debug("(%s) ... raise %s", session_id,
                          repr(result["exception"]))
-            # traceback.print_exception(result["exception"][0])
+            traceback.print_exception(result["exception"][0])
             result["exception"] = base64.b85encode(pickle.dumps(result["exception"],
                                                      protocol=pickle.HIGHEST_PROTOCOL
                                                      )).decode("utf-8")

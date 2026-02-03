@@ -122,6 +122,11 @@
 # Use `--net` to add a new rule. The format is:
 # --net=<ALLOW|DENY>|<tcp|udp|*>|<network>|<port list>|<IN,OUT>
 
+#--net=ALLOW|*|0.0.0.0/0|*|IN  # Accept all IPV4 connexion
+#--net=ALLOW|*|0.0.0.0/0|*|OUT  # Accept all IPV4 connexion
+#--net=ALLOW|*|::1/0|*|IN  # Accept all IPV6 connexion
+#--net=ALLOW|*|::1/0|*|OUT  # Accept all IPV6 connexion
+
 #--net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services for all network
 #--net=ALLOW|tcp|0.0.0.0/0|80|OUT  # Can call HTTP services for all network
 
@@ -129,17 +134,17 @@
 #--net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
 #--net=ALLOW|udp|0.0.0.0/0|53|IN
 
-#--net=DENY|tcp|127.0.0.0/32|*|IN  # Deny locahost
-#--net=ALLOW|tcp|127.0.0.0/32|${PORT:=8000}|IN  # Allow a specific port in ${PORT} or 8000 to locahost
+#--net=DENY|tcp|localhost|*|IN  # Deny locahost
+#--net=ALLOW|tcp|ip6-localhost|${PORT:=8000}|IN  # Allow ${PORT} or 8000 to locahost
 
 
 # Denied intranet
---net=DENY|any|10.0.0.0/8|*|OUT
---net=DENY|any|169.254.0.0/16|*|OUT
---net=DENY|any|172.16.0.0/12|*|OUT
---net=DENY|any|192.168.0.0/16|*|OUT
---net=DENY|any|fc00::/7|*|OUT  # ULA
---net=DENY|any|fe80::/64|*|OUT # Link-Local
+#--net=DENY|any|10.0.0.0/8|*|OUT
+#--net=DENY|any|169.254.0.0/16|*|OUT
+#--net=DENY|any|172.16.0.0/12|*|OUT
+#--net=DENY|any|192.168.0.0/16|*|OUT
+#--net=DENY|any|fc00::/7|*|OUT  # ULA
+#--net=DENY|any|fe80::/64|*|OUT # Link-Local
 
 # here, the rules learned for socket
 # <learning_guard_socket>

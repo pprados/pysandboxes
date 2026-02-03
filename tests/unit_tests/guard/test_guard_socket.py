@@ -16,7 +16,7 @@ from pysandboxes.guard_socket import (
 )
 # Assuming _convert_ports_range is imported from your module
 from pysandboxes.guard_socket import _deactivate_guard_sockets, \
-    parse_rules, SocketRulesError
+    parse_rules, RuleSocketConnectionRefusedError
 from pysandboxes.types import ConfigLine
 
 
@@ -36,7 +36,7 @@ def mock_getaddrinfo() -> patch:
 
 def test_no_rules_denied_connection(mock_getaddrinfo: patch) -> None:
     """
-    If no socket_rules are set, the connection should be allowed.
+    If no rules are set, the connection should be allowed.
     """
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
@@ -44,7 +44,7 @@ def test_no_rules_denied_connection(mock_getaddrinfo: patch) -> None:
     errors = []
     rules, _ = parse_rules([], errors)
     address: Tuple[str, int] = ("example.com", 80)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -130,7 +130,7 @@ def test_explicit_deny_rule_blocks_connection(mock_getaddrinfo: patch) -> None:
         ],
     errors)
     address: Tuple[str, int] = ("blocked.host.local", 8080)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -146,7 +146,7 @@ def test_explicit_deny_rule_any_port_blocks_connection(mock_getaddrinfo: patch) 
         ConfigLine("--net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
     ], errors)
     address: Tuple[str, int] = ("internal.service", 1234)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -163,7 +163,7 @@ def test_explicit_deny_ipv6_rule_blocks_connection(mock_getaddrinfo: patch) -> N
             ConfigLine("--net=DENY|any|::1/128|443|OUT",Path(),0),
         ],errors)
     address: Tuple[str, int] = ("localhost_v6", 443)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -185,7 +185,7 @@ def test_no_deny_match_first_rule_allow_implicitly_denies(
         ],errors)
     address: Tuple[str, int] = ("example.com",
                                 9090)  # Port 9090 is not in the ALLOW rule
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -204,7 +204,7 @@ def test_no_deny_match_first_rule_allow_network_mismatch_implicitly_denies(
             ConfigLine("--net=ALLOW|any|1.1.1.1/32|80|OUT",Path(),0),
         ],errors)
     address: Tuple[str, int] = ("example.com", 80)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -225,7 +225,7 @@ def test_deny_rule_direction_mismatch_first_rule_allow_implicitly_denies(
         # Corrected double ==, DENY rule for IN (doesn't match direction)
     ], errors)
     address: Tuple[str, int] = ("example.com", 80)  # Connection is OUT
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -245,13 +245,13 @@ def test_multiple_ips_one_matches_deny_blocks(mock_getaddrinfo: patch) -> None:
         ConfigLine("--net=DENY|any|192.168.1.10/32|80|OUT", Path(), 0)
     ], errors)
     address: Tuple[str, int] = ("multihomed.host", 80)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
 def test_multiple_rules_first_matching_deny_blocks(mock_getaddrinfo: patch) -> None:
     """
-    If multiple DENY socket_rules exist, the first one that matches blocks the connection.
+    If multiple DENY rules exist, the first one that matches blocks the connection.
     """
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
@@ -264,7 +264,7 @@ def test_multiple_rules_first_matching_deny_blocks(mock_getaddrinfo: patch) -> N
         # Also matches but earlier one takes precedence
     ], errors)
     address: Tuple[str, int] = ("server.internal", 443)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -286,7 +286,7 @@ def test_explicit_allow_rule_triggers_allow_exception(mock_getaddrinfo: patch) -
     ], errors)
     address: Tuple[str, int] = ("google.dns", 53)
     # Expecting an "explicitly ALLOW by rule #1" exception due to current function behavior.
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -302,7 +302,7 @@ def test_bind_direction_check_explicit_deny(mock_getaddrinfo: patch) -> None:
         ConfigLine("--net=DENY|any|0.0.0.0/0|8080|IN", Path(), 0),
     ], errors)
     address: Tuple[str, int] = ("0.0.0.0", 8080)
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, IN)
 
 
@@ -333,7 +333,7 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: patch) -> None:
     ], errors)
     address: Tuple[str, int] = (hostname, port)
 
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_type, address, OUT)
 
 
@@ -356,7 +356,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None
     address: Tuple[str, int] = (hostname, port)
 
     # Test with SOCK_STREAM
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, socket.SOCK_STREAM, address, OUT)
 
     # Rule ALLOWING 'any' type
@@ -367,7 +367,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None
     address: Tuple[str, int] = (hostname, port)
 
     # Test with SOCK_STREAM
-    with pytest.raises(SocketRulesError):
+    with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, socket.SOCK_STREAM, address, OUT)
 
 

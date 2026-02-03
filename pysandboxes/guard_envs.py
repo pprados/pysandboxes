@@ -70,14 +70,14 @@ def parse_rules(
         errors: List[ErrorMsg],
 ) -> Tuple[EnvsRules, Envs, ConfigLines]:
     """
-    Processes a list of socket_rules to create a new dictionary of variables.
+    Processes a list of rules to create a new dictionary of variables.
 
     Args:
         rules: A list of rule strings, e.g., ["key=value", "key2=${source_key}"].
         source_vars: The original dictionary of variables to draw from.
 
     Returns:
-        A new dictionary with the applied socket_rules.
+        A new dictionary with the applied rules.
     """
     new_vars: Dict[str, str] = {}
     ignore_rules: ConfigLines = []
