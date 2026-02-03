@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.types import ConfigLine
-from .test_guard_io import files, str_activate_guard_files
+from .test_guard_io import files, _activate_guard
 
 
 @pytest.fixture(autouse=True)
@@ -20,7 +20,7 @@ def test_os_path_abspath(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert os.path.abspath(files["path"] / "visible.txt") == str(
         files["path"] / "visible.txt")
@@ -33,7 +33,7 @@ def test_os_path_exists_and_lexists(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert os.path.exists(files["path"] / "visible.txt")
     assert os.path.exists(files["bind_dest"] / "bound_file.txt")
@@ -46,7 +46,7 @@ def test_os_path_islink(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert not os.path.islink(files["path"] / "visible.txt")
     assert os.path.islink(files["home_link"])
@@ -58,7 +58,7 @@ def test_os_path_isdir(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert os.path.isdir(files["path"])
     assert os.path.isdir(files["bind_dest"])
@@ -69,7 +69,7 @@ def test_os_path_isfile(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert os.path.isfile(files["path"] / "visible.txt")
     assert os.path.isfile(files["bind_dest"] / "bound_file.txt")
@@ -80,7 +80,7 @@ def test_os_path_samefile(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert os.path.samefile(files["path"] / "visible.txt",
                             files["path"] / "visible.txt")
@@ -93,7 +93,7 @@ def test_os_path_realpath(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert os.path.realpath(files["path"] / "visible.txt") == str(
         files["path"] / "visible.txt")
@@ -106,7 +106,7 @@ def test_os_path_atime_mtime_ctime_and_size(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert os.path.getatime(files["path"] / "visible.txt")
     assert os.path.getatime(files["bind_dest"] / "bound_file.txt")

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.types import ConfigLine
-from .test_guard_io import files, str_activate_guard_files
+from .test_guard_io import files, _activate_guard
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +23,7 @@ def test_shutil_chown(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     uid = os.stat(files["bind_dest"]).st_uid
     gid = os.stat(files["bind_dest"]).st_gid
@@ -37,7 +37,7 @@ def test_shutil_copy(files):  # TODO: write
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.copy(files["visible"], files["new_replace"]) is None
     files["new_replace"].unlink()
@@ -51,7 +51,7 @@ def test_shutil_copy2(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.copy2(files["visible"], files["new_replace"]) is None
     files["new_replace"].unlink()
@@ -65,7 +65,7 @@ def test_shutil_copyfile(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.copyfile(files["visible"], files["new_rename"])
     assert files["new_rename"].exists()
@@ -82,7 +82,7 @@ def test_shutil_copymode(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.copymode(files["visible"], files["bound_file"])
     shutil.copymode(files["bound_file"], files["bound_file"])
@@ -94,7 +94,7 @@ def test_shutil_copystat(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.copystat(files["visible"], files["bound_file"]) is None
     shutil.copystat(files["bound_file"], files["visible"]) is None
@@ -106,7 +106,7 @@ def test_shutil_copytree_and_move(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.copytree(files["bind_dest"], files["path"] / "tmp") is None
     shutil.move(files["path"] / "tmp", files["path"] / "tmp2") is None
@@ -119,7 +119,7 @@ def test_shutil_disk_usage(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.disk_usage(files["bind_dest"]) is None
 
@@ -130,7 +130,7 @@ def test_shutil_make_archive(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     shutil.make_archive(
         base_name=files["path"] / "arch",

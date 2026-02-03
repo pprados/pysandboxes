@@ -156,6 +156,8 @@
 #--python-api=ALLOW:threads
 #--python-api-import=ALLOW:numpy.*,pandas.*
 #--python-import=a,b,c
+#--python-import=*  # Accept all import
+
 # <learning_guard_import>
 
 # </learning_guard_import>

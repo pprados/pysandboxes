@@ -13,9 +13,9 @@ from typing import Iterator, Dict, cast, Set, NoReturn
 from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
+from .config import OPTIMIZE
 from .exception import SandBoxError
 from .guard_envs import LearnEnviron
-from .guard_module import readonly_module
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
 from .types import ConfigLines, ConfigLine
@@ -233,7 +233,7 @@ def generate_rules(
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
         write = parent_level[path]
-        value=None
+        value = None
         overflow = False
         for allready_path, allready_write in allready_added:
             if allready_path == home:
@@ -271,33 +271,38 @@ def generate_rules(
 
 
 # Helper to resolve symlinks and apply rules
-def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Optional[str]:
+def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Tuple[
+    Optional[str],
+    Optional[FilesRule]
+]:
     """
     Applies the rules to a file path.
     Returns None if the file should be ignored.
     Otherwise, returns the potentially remapped path.
     """
     real_path = _os_path_abspath(os.path.normpath(path))
+    # if path.endswith("/"):
+    #     real_path = real_path + "/"
     original_path = path
 
     for rule in _rules:
         if isinstance(rule, BindRule):
-            if real_path.startswith(rule.source):
-                if not accept_src and real_path == rule.source:  # and real_path.startswith(rule.dest):
-                    return None
+            if real_path.startswith(rule.source) or real_path == rule.source[:-1]:
+                if not accept_src and real_path == rule.source[:-1]:
+                    return None, rule
                 relative = os.path.relpath(real_path, rule.source)
                 if relative != ".":
                     new_path = os.path.join(rule.dest, relative)
                 else:
                     new_path = rule.dest
-                return new_path
+                return new_path, None
         elif isinstance(rule, IgnoreRule):
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
                     real_path, rule.source):
-                return None
+                return None, rule
         else:
             assert ("Invalide rules")
-    return path
+    return path, None
 
 
 # Helper to resolve symlinks and apply rules
@@ -314,14 +319,20 @@ def _apply_dest_to_src_rules(path: str,
     if not path:
         return None
     fake_path = _os_path_abspath(path)
+    # if str(path).endswith("/"):
+    #     fake_path = fake_path + "/"
     original_path = path
 
     for rule in _rules:
         if isinstance(rule, BindRule):
             if rule.source != rule.dest and fake_path.startswith(
-                    rule.source) and not accept_source:
-                return None, None
-            if fake_path.startswith(rule.dest):
+                    rule.source[:-1]) and not accept_source:
+                return None, rule
+            if fake_path.startswith(rule.dest) or fake_path == rule.dest[:-1]:
+                if fake_path == rule.dest[:-1]:
+                    fake_path_dir = rule.dest
+                else:
+                    fake_path_dir = fake_path
                 if not rule.write and write:
                     if is_learning_mode():
                         add_learning_rule(LearnFileRule(Path(path), True))
@@ -330,7 +341,9 @@ def _apply_dest_to_src_rules(path: str,
                             f"Cannot write to '{rule.dest}'. "
                             f"Rule '{rule.config.rule}' from {format_ruleref(rule.config)}"
                         )
-                relative = os.path.relpath(fake_path, rule.dest)
+                relative = os.path.relpath(fake_path_dir, rule.dest)
+                if relative == ".":
+                    relative = ""
                 new_path = os.path.join(rule.source, relative)
                 return new_path, None
         elif isinstance(rule, IgnoreRule):
@@ -420,15 +433,42 @@ def _wrap_two_filenames(func: Callable, *,
             src = src.path
         if isinstance(dest, _DirEntry):
             dest = dest.path
-        remapped_src, rule = _apply_dest_to_src_rules(os.fspath(src), write=in_write)
-        if rule:
-            _raise_ignore(src, rule)
-        remapped_dest, rule = _apply_dest_to_src_rules(os.fspath(dest), write=out_write)
-        if rule:
-            _raise_ignore(dest, rule)
+        remapped_src, rule1 = _apply_dest_to_src_rules(os.fspath(src), write=in_write)
+        if rule1:
+            _raise_ignore(src, rule1)
+        remapped_dest, rule2 = _apply_dest_to_src_rules(os.fspath(dest),
+                                                        write=out_write)
+        if rule2:
+            _raise_ignore(dest, rule2)
         if remapped_src is None:
-            _raise_ignore(src, rule)
+            _raise_ignore(src, rule1)
         return func(str(remapped_src), str(remapped_dest), *args, **kwargs)
+
+    return wrapper
+
+
+def _wrap_dir(func: Callable, *, write: bool) -> Callable:
+    @functools.wraps(func)
+    def wrapper(dir: Union[str, bytes, os.PathLike, int], *args, **kwargs):
+        # Detect call from posixpath
+        new_dir = dir
+        if _special_caller():
+            return func(new_dir, *args, **kwargs)
+        if isinstance(dir, int):
+            return func(dir, *args, **kwargs)
+        new_dir = os.fspath(dir)
+        if not new_dir.endswith("/"):
+            new_dir = new_dir + "/"
+        remapped, rule = _apply_dest_to_src_rules(new_dir, write=write)
+        if rule:
+            _raise_ignore(dir, rule)
+        if not remapped:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(dir), write))
+                remapped = dir
+            else:
+                _raise_access(dir)
+        return func(remapped, *args, **kwargs)
 
     return wrapper
 
@@ -491,16 +531,17 @@ def _wrap_os_open(func: Callable) -> Callable:
             return func(file, flags, *args, **kwargs)
         if isinstance(file, _DirEntry):
             file = file.path
-        need_to_write = (flags & os.O_WRONLY) or (flags & os.O_RDWR) or (
-                flags & os.O_APPEND)
-        remapped, rule = _apply_dest_to_src_rules(os.fspath(file),
-                                                  write=need_to_write != 0)
-        if remapped is None:
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), False))
-                remapped = file
-            else:
-                _raise_access(file)
+        if isinstance(flags, int):
+            need_to_write = bool((flags & os.O_WRONLY) or (flags & os.O_RDWR) or (
+                    flags & os.O_APPEND))
+            remapped, rule = _apply_dest_to_src_rules(os.fspath(file),
+                                                      write=need_to_write)
+            if remapped is None:
+                if is_learning_mode():
+                    add_learning_rule(LearnFileRule(Path(file), False))
+                    remapped = file
+                else:
+                    _raise_access(file)
         return func(remapped, flags, *args, **kwargs)
 
     return wrapper
@@ -510,11 +551,40 @@ def _wrap_os_getcwd(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Detect call from posixpath
-        file = func(*args, **kwargs)
-        remapped = _apply_src_to_dest_rules(os.fspath(file), accept_src=True)
+        dir = func(*args, **kwargs)
+        new_dir = os.fspath(dir)
+        if not new_dir.endswith("/"):
+            new_dir = new_dir + "/"
+
+        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_src=True)
+        # remapped, rule = _apply_dest_to_src_rules(new_dir,write=False, accept_source=True)
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
+        if remapped.endswith(os.path.sep):
+            remapped = remapped[:-1]
         return str(remapped)
+
+    return wrapper
+
+
+def _wrap_os_getcwdb(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Detect call from posixpath
+        dir = func(*args, **kwargs)
+        new_dir = os.fspath(dir.decode())
+        if not new_dir.endswith("/"):
+            new_dir = new_dir + "/"
+
+        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_src=True)
+        # remapped, rule = _apply_dest_to_src_rules(new_dir,write=False, accept_source=True)
+        if remapped.endswith(os.path.sep + "."):
+            remapped = remapped[:-2]
+        if remapped.endswith(os.path.sep):
+            remapped = remapped[:-1]
+        if remapped == new_dir:
+            return dir
+        return str(remapped).encode(sys.getfilesystemencoding())
 
     return wrapper
 
@@ -538,7 +608,7 @@ def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]
             filtered: List[str] = []
             for entry in entries:
                 full_path = os.path.join(path, entry)
-                remapped, rule = _apply_dest_to_src_rules(full_path, write=False,
+                remapped, _ = _apply_dest_to_src_rules(full_path, write=False,
                                                           accept_source=False)
                 if remapped is not None:
                     filtered.append(entry)
@@ -563,8 +633,10 @@ def _wrap_os_readlink(func: Callable) -> Callable:
                 return None, None
         remapped = func(remapped_first, *args, **kwargs)
         if not remapped.startswith(os.path.sep):
-            remapped = os.path.dirname(remapped_first) + "/" + remapped
-        remapped = _apply_src_to_dest_rules(remapped)
+            remapped = os.path.dirname(remapped_first) + os.path.sep + remapped
+        remapped, rule = _apply_src_to_dest_rules(remapped)
+        if rule:
+            _raise_ignore(file, rule)
         if not remapped:
             _raise_ignore(file, rule)
         return remapped
@@ -576,23 +648,22 @@ class _DirEntry:
     def __init__(self,
                  target: Any,
                  path: str) -> None:
-        self._target = target
-        self.path = path
+        super()
+        # self._target = target
+        # self._path = path
+
+        super().__setattr__("_target", target)
+        super().__setattr__("_path", path)
 
     def __getattr__(self, name: str) -> Any:
-        print("_DirEntry.__get")
         # Called only if attribute not found the usual way
         if name == "path":
-            return super().__getattr__(name)
+            return self._path
         return getattr(self._target, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        print("_DirEntry.__set")
-        if name in ("_target", "path"):
-            # Assign _target to self, not to target
-            super().__setattr__(name, value)
-        else:
-            setattr(self._target, name, value)
+
+        setattr(self._target, name, value)
 
 
 class _ScanDirContextManager:
@@ -607,6 +678,14 @@ class _ScanDirContextManager:
     def __init__(self, directory: str):
         self.directory = directory
         new_path, rule = _apply_dest_to_src_rules(directory, write=False)
+        if rule:
+            _raise_ignore(directory, rule)
+        if new_path is None:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(directory).absolute(), False))
+                new_path = directory
+            else:
+                _raise_access(directory)
         self.real_directory = new_path
         self.scanner = None
 
@@ -639,6 +718,8 @@ class _ScanDirContextManager:
         """
         Make the context manager iterable.
         """
+        if is_learning_mode() and OPTIMIZE:
+            return self.scanner.__iter__()
         return self
 
     def __next__(self) -> os.DirEntry:
@@ -655,8 +736,11 @@ class _ScanDirContextManager:
             try:
                 while True:
                     entry = next(self.scanner)
-                    dest_path = _apply_src_to_dest_rules(entry.path, accept_src=False)
-                    if dest_path is not None:
+                    dest_path, rule = _apply_src_to_dest_rules(entry.path,
+                                                               accept_src=False)
+                    if rule:
+                        pass # Ignore
+                    elif dest_path is not None:
                         _entry = _DirEntry(entry, dest_path)
                         return _entry
             except StopIteration:
@@ -703,7 +787,7 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
             else:
                 _raise_access(file)
         file = func(remapped, *args, **kwargs)
-        remapped = _apply_src_to_dest_rules(os.fspath(file))
+        remapped, rule = _apply_src_to_dest_rules(os.fspath(file))
         if remapped is None:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(file), False))
@@ -713,6 +797,17 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
         return remapped
 
     return wrapper
+
+
+# %% Generic wrapper
+def _wrap_os_walk(func: Callable, *, write: bool) -> Callable:
+    @functools.wraps(func)
+    def wrapper(top, topdown=True, onerror=None, followlinks=False,
+                *args, **kwargs):
+        pass
+        remapped= top
+
+        return func(remapped, topdown=topdown, onerror=onerror, followlinks=followlinks,*args, **kwargs)
 
 
 # %% io wrapper
@@ -769,9 +864,9 @@ def _wrap_pathlib_glob(func: Callable) -> Callable:
             new_path, rule = new_path_and_rule
             if rule:
                 _raise_ignore(pattern, rule)
-            return (_Path(_apply_src_to_dest_rules(p)) for p in
+            return (_Path(_apply_src_to_dest_rules(p)[0]) for p in
                     func(_Path(new_path), pattern, *args, **kwargs)
-                    if _apply_src_to_dest_rules(p) is not None)
+                    if _apply_src_to_dest_rules(p)[0] is not None)
         else:
             new_path, rule = _apply_dest_to_src_rules(self,
                                                       write=False)  # FIXME: remove line. PB de reset entre les tests
@@ -801,13 +896,14 @@ def _f(func, *args, **kwargs):
 #     return _f(wrap_filename,*args,**kwargs)
 
 _default_rules = rules = {
-    "buildins.open": _f(_wrap_filename, write=True),
-    "os.chdir": _f(_wrap_filename, write=False),
+    "builtins.open": _f(_wrap_filename, write=True),
+    # # FIXME: builtins.open à valider et tester
+
+    "os.chdir": _f(_wrap_dir, write=False),
     # ALLOW os.fchdir
     "os.getcwd": _f(_wrap_os_getcwd),
-    "os.getcwdb": _f(_wrap_os_getcwd),
+    "os.getcwdb": _f(_wrap_os_getcwdb),
     # ALLOW os.fdopen
-    # ALLOW os.tmpfile
     "os.open": _f(_wrap_os_open),
     "os.access": _f(_wrap_filename, write=False),
     "os.chmod": _f(_wrap_filename, write=True),
@@ -815,13 +911,14 @@ _default_rules = rules = {
     "os.link": _f(_wrap_two_filenames),
     "os.listdir": _f(_wrap_os_listdir),
     "os.mkdir": _f(_wrap_filename, write=False),
+    # ALLOW "os.makedirs" (indirect calls)
     # DENY os.mkfifo
     # DENY os.mknod
     "os.readlink": _f(_wrap_os_readlink),
     "os.remove": _f(_wrap_filename, write=True),
-    # ALLOW os.removedirs= _wrap_filename(os.removedirs)
+    # ALLOW os.removedirs (indirect calls)
     "os.rename": _f(_wrap_two_filenames, in_write=True, out_write=True),
-    # ALLOW os.renames = _wrap_two_filenames(os.renames)
+    # ALLOW os.renames (indirect calls)
     "os.replace": _f(_wrap_two_filenames, in_write=True, out_write=True),
     "os.rmdir": _f(_wrap_filename, write=True),
     "os.scandir": _f(_wrap_os_scandir),
@@ -833,7 +930,8 @@ _default_rules = rules = {
     "os.truncate": _f(_wrap_filename, write=True),
     "os.unlink": _f(_wrap_filename, write=True),
     "os.utime": _f(_wrap_filename, write=True),
-    # ALLOW os.walk = _wrap_walk(os.walk)
+    # ALLOW os.fwalk (Indirect calls)
+    # ALLOW os.walk (Indirect calls)
 
     # Posix
     "os.listxattr": _f(_wrap_filename, write=False),
@@ -843,6 +941,28 @@ _default_rules = rules = {
     # TODO: revoir toutes les fonctions
     # DENY os.execv
     # DENY os.execve
+    # DENY os.execl
+    # DENY os.execle
+    # DENY os.execlp
+    # DENY os.execlpe
+    # DENY os.execvp
+    # DENY os.execvpe
+
+    # DENY os.spawnv
+    # DENY os.spawnve
+    # DENY os.spawnvp
+    # DENY os.spawnvpe
+    # DENY os.spawnl
+    # DENY os.spawnle
+    # DENY os.spawnlp
+    # DENY os.spawnlpe
+
+    # DENY os.popen
+
+    # ALLOW os.getenv
+    # ALLOW os.supports_bytes_environ
+    # ALLOW os.environb
+    # ALLOW os.getenvb
     # DENY os.fork
     # DENY os.forkpty
     # DENY os.kill
@@ -939,21 +1059,21 @@ _default_rules = rules = {
 def patch_rules() -> Dict[str, Callable]:
     rules = dict(_default_rules)
     if sys.platform != "win32" and sys.platform != "linux":
-        rules += {
+        rules = {**rules, **{
             "os.chflags": _f(_wrap_filename, write=True),
             "os.lchflags": _f(_wrap_filename, write=True),
             "os.lchmod": _f(_wrap_filename, write=True),
-        }
-        if sys.platform != "win32":
-            rules += {
-                "os.chown": _f(_wrap_filename, write=True),
-                "os.lchown": _f(_wrap_filename, write=True),
-            }
+        }}
+    if sys.platform != "win32":
+        rules = {**rules, **{
+            "os.chown": _f(_wrap_filename, write=True),
+            "os.lchown": _f(_wrap_filename, write=True),
+        }}
     return rules
 
 
 # %%
-if "PYTEST_RUN_CONFIG" in os.environ:
+if True:  ## FIXME "PYTEST_RUN_CONFIG" in os.environ:
     from unit_tests import save_default_values, restore_default_values
 
     # "pathlib.Path.glob",  # TODO: ajouter reste. Bug si activé
@@ -965,7 +1085,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
                         )
 
 
-    def _deactivate_guard_files():  # FIXME: voir si un clean du cache n'est pas suffisant
+    def _deactivate_guard_files():
         restore_default_values(_memory,
                                sys.modules[__name__])
         global _rules
@@ -986,4 +1106,4 @@ def activate_guard(
     if _rules:
         logger.info("Guard_files was already activated.")
     _rules = rules
-    readonly_module(__name__)
+    # readonly_module(__name__)

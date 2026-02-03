@@ -1,6 +1,5 @@
-import io
-import os
 from pathlib import Path
+from typing import Dict
 
 import pytest
 
@@ -11,17 +10,28 @@ from pysandboxes.types import ConfigLines, ConfigLine
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from pysandboxes.guard_files import _deactivate_guard_files
-
+    from pysandboxes.guard_import import conv_patch_rules, _deactivate_guard_import, \
+        activate_guard_import
+    from pysandboxes.guard_files import _deactivate_guard_files, patch_rules
+    activate_guard_import(
+        conv_patch_rules(
+            {
+                **patch_rules(),
+            }
+        ),
+        tuple(["*"]),  # Import all modules
+    )
     yield
     _deactivate_guard_files()
+    _deactivate_guard_import()
 
 
 @pytest.fixture
-def files(tmp_path):
+def files(tmp_path) -> Dict[str,Path]:
     # Create test files and symlinks
-    tmp_path = Path("/tmp/ppr");
-    tmp_path.mkdir(exist_ok=True)  # FIXME: remove this line
+    # It's executer without patch.
+    tmp_path = Path("/tmp/test")
+    tmp_path.mkdir(exist_ok=True)
     (tmp_path / "visible.txt").write_text("Visible")
     (tmp_path / "ignore.log").write_text("Should be ignored")
     (tmp_path / "bound.txt").write_text("Bound target")
@@ -81,72 +91,78 @@ def files(tmp_path):
     }
 
 
-def str_activate_guard_files(rules: ConfigLines) -> None:
+def _activate_guard(rules: ConfigLines) -> None:
     errors = []
     file_rules, _ = parse_rules(rules, errors)
     activate_guard(file_rules)
     assert not errors
 
 
-def test_io_open_ignore_rule_blocks_file_access(files):
+def test_io_open_ignore_rule_blocks_file_access(files:Dict[str,Path]):
     errors = []
     rules = [
         ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
+    import io
     with pytest.raises(RuleFileNotFoundError):
         io.open(files['ignore'])
 
 
-def test_io_open_code_ignore_rule_blocks_open_code_file_access(files):
+def test_io_open_code_ignore_rule_blocks_open_code_file_access(files:Dict[str,Path]):
     errors = []
     rules = [
         ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
+    import io
     with pytest.raises(RuleFileNotFoundError):
         io.open_code(str(files['ignore']))
 
 
-def test_io_open_bind_rule_redirects_file_access(files):
+def test_io_open_bind_rule_redirects_file_access(files:Dict[str,Path]):
     rules = [
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     # Access using the dest path should redirect to src
     target_path = files['bind_dest'] / "bound_file.txt"
+    import io
     with io.open(target_path) as f:
         content = f.read()
     assert content == "Content"
 
 
-def test_io_open_write(files):
+def test_io_open_write(files:Dict[str,Path]):
     rules = [
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     target_path = files['bind_dest'] / "write.txt"
+    import io
+    import os
     with io.open(target_path, "w") as f:
         f.write("sample")
     os.remove(str(target_path))
 
 
-def test_io_open_refuse_write(files):
+def test_io_open_refuse_write(files:Dict[str,Path]):
     rules = [
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     target_path = files['bind_dest'] / "write.txt"
+    import io
     with pytest.raises(PermissionError):
         with io.open(target_path, "w") as f:
             f.write("sample")
 
 
-def test_io_open_visible_file_is_accessible(files):
+def test_io_open_visible_file_is_accessible(files:Dict[str,Path]):
     rules = [
         ConfigLine("--ignore=*.log", Path(), 0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     with open(files['visible']) as f:
         assert f.read() == "Visible"

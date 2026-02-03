@@ -208,7 +208,7 @@ def activate_guard(
 ) -> None:
     global _rules
     _rules=rules
-    readonly_module(__name__)
+    # readonly_module(__name__)
 
 
 def patch_rules(learning_path: Optional[Path]) -> Dict[str, Callable]:

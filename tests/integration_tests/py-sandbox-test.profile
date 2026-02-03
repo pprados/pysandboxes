@@ -7,7 +7,6 @@
 
 --set-env=HOME=${HOME}
 --set-env=USER=${USER}
---set-env=PATH=${PATH}  # FIXME je ne pense pas cela nécessaire
 --set-env=VIRTUAL_ENV*=${VIRTUAL_ENV*}
 --set-env=LC_*=${LC_*}
 --set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
@@ -22,3 +21,8 @@
 --ro-bind=${PWD},${PWD}
 --ro-bind=${PYENV_ROOT},${PYENV_ROOT}
 --ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
+
+--python-import=os
+--python-import=socket
+--python-import=io
+

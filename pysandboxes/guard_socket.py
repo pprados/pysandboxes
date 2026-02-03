@@ -392,7 +392,6 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
 def _check_address_with_rules(
         socket_rules: SocketRules,
         socket_instance_type: int,
-        proto: int,
         address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
         conn_direction: str):  # Expect IN or OUT constants
     """
@@ -457,7 +456,7 @@ def _check_address_with_rules(
                         if rule_direction_from_rule == conn_direction:
                             if ip_host in network_obj and destination_port in rule_ports_list:
 
-                                pysandboxes_logger.info(
+                                pysandboxes_logger.debug(
                                     "Connection to '%s' (%s:%s) %s by explicit "
                                     "rule '%s' from %s",
                                     hostname, ip_host, destination_port, action,
@@ -548,7 +547,7 @@ class Guard_socket(socket.socket):
     """
 
     def _check_address(self, address: Tuple[str, int], conn_direction: str):
-        _check_address_with_rules(_rules, self.type, self.proto, address,
+        _check_address_with_rules(_rules, self.type, address,
                                   conn_direction)
 
     def __init__(self,
@@ -702,7 +701,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         restore_default_values(_memory,
                                sys.modules[__name__])
         global _rules
-        _rules = []
+        _rules = ()
 
 
 def _wrap_socket_gethostbyname(func: Callable) -> Callable:
@@ -798,7 +797,7 @@ def activate_guard(rules: SocketRules) -> None:
     if _rules:
         raise RuntimeError("Guard_socket already activated.")
     _rules = rules
-    readonly_module(__name__)
+    #readonly_module(__name__)
 
 
 def _read_host_file() -> Tuple[

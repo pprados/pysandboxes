@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.types import ConfigLine
-from .test_guard_io import files, str_activate_guard_files
+from .test_guard_io import files, _activate_guard
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +22,7 @@ def test_gzip(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     source = files["bound_file"]
     compressed = files["bound_file"].with_suffix(".gz")

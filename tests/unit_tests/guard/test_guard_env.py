@@ -78,3 +78,5 @@ def test_var_all_pattern_and_unset():
     assert env == {
         "APP2_API_KEY": "456"
     }
+
+# TODO: test activate with os.environ and os.environb

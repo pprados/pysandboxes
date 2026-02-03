@@ -5,15 +5,25 @@ import pytest
 
 from pysandboxes.guard_files import RuleFileNotFoundError
 from pysandboxes.types import ConfigLine
-from .test_guard_io import files, str_activate_guard_files
+from .test_guard_io import files, _activate_guard
 
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from pysandboxes.guard_files import _deactivate_guard_files
-
+    from pysandboxes.guard_import import conv_patch_rules, _deactivate_guard_import, \
+        activate_guard_import
+    from pysandboxes.guard_files import _deactivate_guard_files, patch_rules
+    activate_guard_import(
+        conv_patch_rules(
+            {
+                **patch_rules(),
+            }
+        ),
+        tuple(["*"]),  # Import all modules
+    )
     yield
     _deactivate_guard_files()
+    _deactivate_guard_import()
 
 
 def test_pathlib_open(files):
@@ -22,7 +32,7 @@ def test_pathlib_open(files):
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     with (files["visible"]).open() as f:
         f.read()
     with (files["bound_file"]).open() as f:
@@ -35,7 +45,7 @@ def test_pathlib_read_write_text(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     (files["path"] / "to_write.txt").write_text("To write")
     assert Path(files["path"] / "to_write.txt").read_text() == "To write"
     (files["bind_dest"] / "to_write.txt").write_text("To write")
@@ -48,7 +58,7 @@ def test_pathlib_read_write_bytes(files):
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     (files["path"] / "to_write.txt").write_bytes("To write".encode())
     assert Path(files["path"] / "to_write.txt").read_text() == "To write"
     (files["bind_dest"] / "to_write.txt").write_bytes("To write".encode())
@@ -61,7 +71,7 @@ def test_pathlib_is(files):
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     assert (files["path"] / "to_write.txt").is_absolute()
     assert (files["bind_dest"] / "to_write.txt").is_absolute()
     assert not (files["path"] / "to_write.txt").is_block_device()
@@ -86,7 +96,7 @@ def test_pathlib_is(files):
     assert not (files["bind_dest"]).is_socket()
     assert (files["home_link"]).is_symlink()
     assert not (files["bind_dest"] / "bound_file.txt").is_symlink()
-    assert (files["bind_dest"] / "bound_file.txt").exists()
+    assert (files["bind_dest"] / "bound_file.txt").exists() is True
 
 
 def test_pathlib_info(files):
@@ -95,7 +105,7 @@ def test_pathlib_info(files):
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     assert files["path"].owner()
     assert files["path"].group()
     assert files["bind_dest"].owner()
@@ -108,7 +118,7 @@ def test_pathlib_glob(files):
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     result = [Path(f).name for f in files['path'].glob("*")]
     assert "ignore.log" not in result
@@ -124,7 +134,7 @@ def test_pathlib_rglob(files):
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
 
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     result = list(files['path'].rglob("*"))
     assert files["path"] / "ignore.log" not in result
     assert files["path"] / "visible.txt" in result
@@ -136,7 +146,7 @@ def test_pathlib_iterdir(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     result = [f.name for f in Path(files['path']).iterdir()]
     assert "ignore.log" not in result
@@ -152,7 +162,7 @@ def test_pathlib_chmod_and_lchmod(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     mode = files["path"].stat().st_mode
     assert files["path"].chmod(mode | stat.S_IREAD) is None
@@ -168,7 +178,7 @@ def test_pathlib_statand_stat_and_lstat(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
     assert files['visible'].stat()
     with pytest.raises(RuleFileNotFoundError):
         assert files['ignore'].stat()
@@ -184,7 +194,7 @@ def test_pathlib_mkdir_removedirs_and_rmdir(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     (files["path"] / "dir_to_remove").mkdir()
     assert (files["path"] / "dir_to_remove").rmdir() is None
@@ -205,7 +215,7 @@ def test_pathlib_link_symlink_and_readlink(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0)
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert files['home_link'].readlink() == files['visible']
     assert files['home_link_to_bind_src'].readlink() == files['bound_file']
@@ -217,23 +227,23 @@ def test_pathlib_link_symlink_and_readlink(files):
         assert (files['home_link_to_ignore']).readlink()
 
     files['new_link'].hardlink_to(files['visible'])
-    assert files['new_link'].exists()
+    assert files['new_link'].exists() is True
     files['new_link'].unlink()
 
     files['new_link_to_bind'].hardlink_to(files['bound_file'])
-    assert files['new_link_to_bind'].exists()
+    assert files['new_link_to_bind'].exists() is True
     files['new_link_to_bind'].unlink()
 
     with pytest.raises(RuleFileNotFoundError):
         (files["new_link"]).hardlink_to(files['bind_src'] / "toto")
 
     files['new_link'].symlink_to(files['visible'])
-    assert files['new_link'].exists()
+    assert files['new_link'].exists() is True
     assert files['new_link'].readlink() == files['visible']
     files['new_link'].unlink()
 
     files['new_link_to_bind'].symlink_to(files['bound_file'])
-    assert files['new_link_to_bind'].exists()
+    assert files['new_link_to_bind'].exists() is True
     assert files['new_link_to_bind'].readlink() == files['bound_file']
     files['new_link_to_bind'].unlink()
 
@@ -246,7 +256,7 @@ def test_pathlib_link_symlink_and_readlink_refused(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     with pytest.raises(PermissionError):
         files['bound_file'].hardlink_to(files['visible'])
@@ -257,7 +267,7 @@ def test_pathlib_touch(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert files["path"].touch() is None
     assert (files["bind_dest"] / "bound_file.txt").touch() is None
@@ -272,7 +282,7 @@ def test_pathlib_touch_refused(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     with pytest.raises(PermissionError):
         files["bound_file"].touch() is None
@@ -283,7 +293,7 @@ def test_pathlib_rename(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     files["to_rename"].write_text("To rename")
     assert (files["to_rename"]).rename(
@@ -306,7 +316,7 @@ def test_pathlib_rename_refused(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     with pytest.raises(PermissionError):  # TODO: refuse in et out
         files["bound_file"].rename(files["bind_dest"] / "new_rename")
@@ -317,7 +327,7 @@ def test_pathlib_replace(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     files["to_replace"].write_text("To replace")
     files["to_replace"].replace(files["new_replace"])
@@ -339,7 +349,7 @@ def test_pathlib_replace_refused(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     with pytest.raises(PermissionError):  # TODO: refuse in et out
         files["bound_file"].replace(files["bind_dest"] / "new_replace")
@@ -350,7 +360,7 @@ def test_pathlib_resolve(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert (files["bind_dest"] / ".." / "visible.txt").resolve() == files["visible"]
 
@@ -360,7 +370,7 @@ def test_pathlib_samefile(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     assert (files["visible"]).samefile(files["visible"])
     assert (files["bound_file"]).samefile(files["bound_file"])
@@ -373,7 +383,7 @@ def test_pathlib_walk(files):
         ConfigLine(f"--ignore=*.log",Path(),0),
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    str_activate_guard_files(rules)
+    _activate_guard(rules)
 
     rc = list(files["path"].walk())
     assert rc[0][0] == files["path"]

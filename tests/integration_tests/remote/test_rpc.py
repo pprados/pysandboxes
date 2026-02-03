@@ -5,7 +5,7 @@ from typing import Iterator
 
 import pytest
 
-from pysandboxes import sandbox
+from pysandboxes.sandboxes import sandbox
 from pysandboxes.py_sandbox import get_config_path, read_and_parse_config
 from pysandboxes.os_sandbox import start_daemon, \
     shutdown_daemon

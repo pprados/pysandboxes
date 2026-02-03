@@ -39,17 +39,17 @@ def run_in_sandbox():
     logger.info("Run 'run_in_sandbox()' in sandbox")
 
 
-    # # tcp connexion
-    # import socket
-    # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-    #     remote_ip = socket.gethostbyname("www.google.com")
-    #     xx=socket.gethostbyname_ex("www.google.com")
-    #     addr_infos = socket.getaddrinfo("www.google.com",None,family=socket.AF_UNSPEC)
-    #     sock.connect((remote_ip, 80))
-    #
-    # # tcp bind ipv4
-    # with socket.socket(AF_INET, SOCK_STREAM) as sock:
-    #     sock.bind(("localhost", 0))
+    # tcp connexion
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        remote_ip = socket.gethostbyname("www.google.com")
+        xx=socket.gethostbyname_ex("www.google.com")
+        addr_infos = socket.getaddrinfo("www.google.com",None,family=socket.AF_UNSPEC)
+        sock.connect((remote_ip, 80))
+
+    # tcp bind ipv4
+    with socket.socket(AF_INET, SOCK_STREAM) as sock:
+        sock.bind(("localhost", 0))
 
     # tcp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
@@ -93,7 +93,7 @@ def run_in_sandbox():
         print(e)
 
     try:
-        with io.open("README.md", "r") as f:
+        with io.open("pysandboxes/__init__.py", "r") as f:
             pass
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except SandBoxError as e:
@@ -114,6 +114,10 @@ def run_in_sandbox():
             print(e)
 
     assert os.environ["HOME"]
+
+    with os.scandir("docs") as entries:
+        for entry in entries:
+            print(entry.name)
 
     # try:
     #     with tempfile.TemporaryFile(mode='w+') as temp_file:

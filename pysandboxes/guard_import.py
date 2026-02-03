@@ -3,6 +3,7 @@ import importlib
 import importlib.abc
 import importlib.util
 import logging
+import os
 import sys
 from importlib.abc import MetaPathFinder
 from types import ModuleType
@@ -66,6 +67,8 @@ def parse_rules(config: ConfigLines,
             white_list.extend([r.strip() for r in value.split(',')])
         else:
             ignore_rules.append(rule)
+    if "*" in white_list:
+        white_list=["*"]
     return tuple(white_list), ignore_rules
 
 
@@ -102,11 +105,12 @@ class GuardLoader(importlib.abc.Loader):
         if is_learning_mode():
             add_learning_rule(LearnImportRule(module.__name__))
         else:
-            if module.__name__ not in _rules:
-                raise RuleModuleNotFoundError(
-                    f"No module named '{module.__name__}'"
-                )
-        logger.debug(f"exec_module({module.__name__})")
+            if _rules and _rules[0] != "*":
+                if module.__name__ not in _rules:
+                    raise RuleModuleNotFoundError(
+                        f"No module named '{module.__name__}'"
+                    )
+        logger.error(f"exec_module({module.__name__})")  # FIXME
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
@@ -182,7 +186,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                         f"GuardFinder: Found original spec {original_spec.name} via '{type(finder).__name__}'.")
                     if original_spec.name in _patch_rules:
 
-                        logger.info(f"Inject patcher for {original_spec.name}")
+                        logger.info(f"Inject patcher for '{original_spec.name}'")
                         new_spec = importlib.machinery.ModuleSpec(
                             name=original_spec.name,
                             loader=GuardLoader(original_spec),
@@ -204,6 +208,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         # For all other imports, return None to let the standard import mechanism handle them
         return None
 
+_guard_finder:importlib.abc.MetaPathFinder=GuardFinder(sys.meta_path)
 
 def _activate_patch_import(
         patch_rules: PatchRules,
@@ -211,13 +216,19 @@ def _activate_patch_import(
     global _patch_rules
     _patch_rules = patch_rules
 
-    to_remove = set()
+    _remove_modules()
+    import sys
+    sys.meta_path.insert(0, _guard_finder)
 
+
+def _remove_modules() -> None:
+    to_remove = set()
     specials = {
         'sys',
         'concurrent',
         'asyncio',
-        "importlib",
+        'importlib',
+        'warnings',
         __name__.rsplit('.', maxsplit=1)[0],
     }
     import sys
@@ -234,12 +245,13 @@ def _activate_patch_import(
             continue
 
         to_remove.add(k)
-
     importlib.invalidate_caches()
+    # Special case for pytest
     for k in to_remove:
-        del sys.modules[k]
-    import sys
-    sys.meta_path.insert(0, GuardFinder(sys.meta_path))
+        if (not k.startswith("_pytest") and
+                not k.startswith("pytest")
+        ):
+            del sys.modules[k]
     assert "io" not in sys.modules
 
 
@@ -253,7 +265,25 @@ def activate_guard_import(
     if not _rules:
         _activate_patch_import(patch_rules)
         _rules = rules
-    readonly_module(__name__)
+
+
+if "PYTEST_RUN_CONFIG" in os.environ:
+    from unit_tests import save_default_values, restore_default_values
+
+    _memory = dict()
+
+
+    def _deactivate_guard_import():
+        import sys
+        restore_default_values(_memory,
+                               sys.modules[__name__])
+        global _rules
+        _rules = ()
+        import sys
+        if _guard_finder in sys.meta_path:
+            sys.meta_path.remove(_guard_finder)
+        _remove_modules()
+
 
 
 def generate_rules(
