@@ -122,7 +122,8 @@ def start_daemon(
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc] = None,
         *,
-        timeout: int = 60) -> BaseDaemon:
+        timeout: int = 60
+) -> BaseDaemon:
     """
     Synchronize version to start daemon by name.
     Returns daemon object when is starred
@@ -153,7 +154,7 @@ def start_daemon(
                 _start_daemon_and_signal(),
                 name="Start daemon")
         )
-        if not start_event.wait(timeout=timeout):
+        if not start_event.wait():
             raise RuntimeError("Import to start the sandbox")
         assert _current_daemon
 

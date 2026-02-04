@@ -9,7 +9,7 @@ from collections import OrderedDict
 from io import FileIO
 from os import scandir as _scandir
 from pathlib import Path as _Path, Path
-from types import TracebackType
+from types import TracebackType, ModuleType
 from typing import Iterator, Dict, cast, Set, NoReturn
 from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
@@ -396,6 +396,14 @@ def _raise_access(file: Union[str, bytes, os.PathLike, int]) -> NoReturn:
 
 
 # %% Generic wrapper
+def _wrap_empty(func: Callable) -> Callable:
+    return func
+
+def _wrap_reload_module(func: Callable, *, name: str) -> ModuleType:
+    # Use _f(_wrap_reload_module, name="io") to refresh a module in another module
+    import sys
+    return sys.modules[name]
+
 def _wrap_filename(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
@@ -1038,6 +1046,8 @@ _default_rules = rules = {
     # ALLOW os.path.walk (obsolette)
 
     # pathlib
+    # "pathlib._local.io":_f(_wrap_reload_module, name="io"),  # FIXME: ne semble pas nécessaire
+    # "pathlib._local.os":_f(_wrap_reload_module, name="os"),
     # ALLOW pathlib.Path.stat
     # ALLOW pathlib.Path.lstat
     # ALLOW pathlib.Path.exists

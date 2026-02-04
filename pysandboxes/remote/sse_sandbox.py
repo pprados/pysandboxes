@@ -39,9 +39,15 @@ def _get_rpc_params(args: Any,
     """
 
     def to_b85(obj: Any) -> str:
-        return base64.b85encode(pickle.dumps(obj,
+        result= base64.b85encode(pickle.dumps(obj,
                                              protocol=pickle.HIGHEST_PROTOCOL
                                              )).decode("utf-8")
+        # if pickle.loads(pickle.dumps(obj,protocol=pickle.HIGHEST_PROTOCOL)) != obj:
+        #     pass
+        # if pickle.loads(base64.b85decode(result.encode("utf-8"))) != obj:
+        #     pass  # FIXME
+        assert pickle.loads(base64.b85decode(result.encode("utf-8"))) == obj
+        return result
 
     module_name, callable_name = get_callable_info(func)
     params = {

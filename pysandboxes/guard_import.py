@@ -10,7 +10,6 @@ from types import ModuleType
 from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set
 
 from .exception import SandBoxError
-from .guard_module import readonly_module
 # %% Generic wrapper
 from .immutable_dict import ImmutableDict
 from .learning import is_learning_mode, add_learning_rule
@@ -68,7 +67,7 @@ def parse_rules(config: ConfigLines,
         else:
             ignore_rules.append(rule)
     if "*" in white_list:
-        white_list=["*"]
+        white_list = ["*"]
     return tuple(white_list), ignore_rules
 
 
@@ -106,11 +105,12 @@ class GuardLoader(importlib.abc.Loader):
             add_learning_rule(LearnImportRule(module.__name__))
         else:
             if _rules and _rules[0] != "*":
-                if module.__name__ not in _rules:
+                module_name = module.__name__
+                if module_name not in _rules:
                     raise RuleModuleNotFoundError(
-                        f"No module named '{module.__name__}'"
+                        f"No module named '{module_name}'"
                     )
-        logger.debug(f"exec_module({module.__name__})...")
+        # logger.error(f"exec_module({module.__name__})...")
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
@@ -162,53 +162,61 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         Finds the specification for a module.
         """
         # logger.debug(f"find_spec({fullname=},{path=},{target=})")
-        # if fullname and fullname.startswith("pysandboxes"):  # FIXME: util ?
-        #     return None
-        # Intercept ONLY the 'os.path' import
-        if True:  # fullname == "os.path":
-            # print(f"GuardFinder: Intercepting import for '{fullname}'.")
 
-            # Delegate to the rest of the chain to find the original module spec
-            # We skip our own finder by checking sys.meta_path from the next index
-            for finder in sys.meta_path:
-                if finder == self:
-                    continue
-                original_spec: importlib.util.spec_from_file_location = finder.find_spec(
-                    fullname, path, target)
-                if original_spec:
-                    # logger.debug(
-                    #     f"GuardFinder: Found original spec via '{type(finder).__name__}'.")
-                    # Create a new spec using our custom GuardLoader, but with the original spec's data
-                    # def __init__(self, name, loader, *, origin=None, loader_state=None,
-                    #              is_package=None):
+        parts = fullname.split(".")
+        mod_name = parts[-1]
+        # if path is None:  # top-level
+        #     search_paths = [self.search_path]
+        # else:
+        #     search_paths = path
 
-                    logger.debug(
-                        f"GuardFinder: Found original spec {original_spec.name} via '{type(finder).__name__}'.")
-                    if original_spec.name in _patch_rules:
+        # Delegate to the rest of the chain to find the original module spec
+        # We skip our own finder by checking sys.meta_path from the next index
+        for finder in sys.meta_path:
+            if finder == self:
+                continue
+            original_spec: importlib.util.spec_from_file_location = finder.find_spec(
+                fullname, path, target)
+            if original_spec:
+                # logger.debug(
+                #     f"GuardFinder: Found original spec via '{type(finder).__name__}'.")
+                # Create a new spec using our custom GuardLoader, but with the original spec's data
 
-                        logger.info(f"Inject patcher for '{original_spec.name}'")
+                logger.debug(
+                    f"GuardFinder: Found original spec {original_spec.name} via '{type(finder).__name__}'.")
+                if original_spec.name in _patch_rules:
+
+                    logger.debug(f"Inject patcher for '{original_spec.name}'")
+                    if original_spec.parent:
+                        # Use __init__
+                        init_file = os.path.join(
+                            original_spec.submodule_search_locations[0], "__init__.py")
+                        assert os.path.isfile(init_file), "module without __init__.py"
+                        new_spec = importlib.util.spec_from_file_location(
+                            fullname,
+                            init_file,
+                            loader=GuardLoader(original_spec),
+                            submodule_search_locations=
+                            original_spec.submodule_search_locations,
+                        )
+                    else:
                         new_spec = importlib.machinery.ModuleSpec(
                             name=original_spec.name,
                             loader=GuardLoader(original_spec),
                             origin=original_spec.origin,
-                            # is_package=original_spec.is_package,
                             loader_state=original_spec.loader_state,
-                            # submodule_search_locations=original_spec.submodule_search_locations,
                         )
-                    else:
-                        new_spec = original_spec
-                    return new_spec
-                    # return importlib.util.spec_from_loader(
-                    #     fullname,
-                    #     GuardLoader(original_spec),
-                    #     origin=original_spec.origin,
-                    #     is_package=original_spec.is_package,
-                    # )
+                else:
+                    new_spec = original_spec
+                return new_spec
 
-        # For all other imports, return None to let the standard import mechanism handle them
+        # For all other imports, return None to let the standard import
+        # mechanism handle them
         return None
 
-_guard_finder:importlib.abc.MetaPathFinder=GuardFinder(sys.meta_path)
+
+_guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
+
 
 def _activate_patch_import(
         patch_rules: PatchRules,
@@ -267,7 +275,7 @@ def activate_guard_import(
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:
-    from unit_tests import save_default_values, restore_default_values
+    from unit_tests import restore_default_values
 
     _memory = dict()
 
@@ -282,7 +290,6 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         if _guard_finder in sys.meta_path:
             sys.meta_path.remove(_guard_finder)
         _remove_modules()
-
 
 
 def generate_rules(

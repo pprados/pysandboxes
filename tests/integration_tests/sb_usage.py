@@ -78,10 +78,14 @@ def run_in_sandbox():
     # ---------- File
     import io
     import os
+    import pathlib
 
     os.path.exists("./README.md")
 
-    # try:
+    assert pathlib.Path("README.md").is_file()
+    pathlib.Path("README.md").read_text()
+
+    # try:-
     #     with io.open("tmp/test.remove", "w") as f:
     #         pass
     #     # assert is_learning_mode() or False, "Must be stopped by pysandbox"

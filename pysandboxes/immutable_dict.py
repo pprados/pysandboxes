@@ -36,7 +36,11 @@ class ImmutableDict(
 
         # Build parallel tuples of keys and values
         keys: Tuple[KeyType, ...] = tuple(item[0] for item in items if item)
-        values: Tuple[ValueType, ...] = tuple(item[1] for item in items if item)
+        try:
+            tuple(item[1] for item in items if item)
+        except RuntimeError:
+            pass
+        values: Tuple[ValueType, ...] = tuple((item[1] for item in items if item))
 
         # Create the tuple-subclass with two items: (keys, values)
         obj = tuple.__new__(cls, (keys, values))
