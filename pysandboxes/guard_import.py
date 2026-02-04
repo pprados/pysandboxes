@@ -110,7 +110,7 @@ class GuardLoader(importlib.abc.Loader):
                     raise RuleModuleNotFoundError(
                         f"No module named '{module.__name__}'"
                     )
-        logger.error(f"exec_module({module.__name__})")  # FIXME
+        logger.debug(f"exec_module({module.__name__})...")
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
@@ -262,9 +262,8 @@ def activate_guard_import(
     global _rules
     if _rules:
         logger.info("Guard_files was already activated.")
-    if not _rules:
-        _activate_patch_import(patch_rules)
-        _rules = rules
+    _activate_patch_import(patch_rules)
+    _rules = rules
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:

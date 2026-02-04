@@ -474,7 +474,7 @@ def _wrap_dir(func: Callable, *, write: bool) -> Callable:
     return wrapper
 
 
-def _wrap_path_exists(func: Callable, *, write: bool) -> Callable:
+def _wrap_os_path_exists(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
         # Detect call from posixpath
@@ -499,7 +499,7 @@ def _wrap_path_exists(func: Callable, *, write: bool) -> Callable:
     return wrapper
 
 
-def _wrap_path_is(func: Callable, *, write: bool) -> Callable:
+def _wrap_os_path_is(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
         # Detect call from posixpath
@@ -1015,7 +1015,7 @@ _default_rules = rules = {
     # ALLOW os.path.abspath
     # ALLOW os.path.basename
     # ALLOW os.path.dirname
-    "os.path.exists": _f(_wrap_path_exists, write=False),
+    "os.path.exists": _f(_wrap_os_path_exists, write=False),
     "os.path.lexists": _f(_wrap_filename, write=False),
     # ALLOW os.path.expanduser
     # ALLOW os.path.expandvars
@@ -1024,9 +1024,9 @@ _default_rules = rules = {
     "os.path.getctime": _f(_wrap_filename, write=False),
     "os.path.getsize": _f(_wrap_filename, write=False),
     # ALLOW os.path.isabs
-    "os.path.isfile": _f(_wrap_path_is, write=False),
-    "os.path.isdir": _f(_wrap_path_is, write=False),
-    "os.path.islink": _f(_wrap_path_is, write=False),
+    "os.path.isfile": _f(_wrap_os_path_is, write=False),
+    "os.path.isdir": _f(_wrap_os_path_is, write=False),
+    "os.path.islink": _f(_wrap_os_path_is, write=False),
     # ALLOW os.path.ismount
     # ALLOW os.path.join
     # ALLOW os.path.normcase
