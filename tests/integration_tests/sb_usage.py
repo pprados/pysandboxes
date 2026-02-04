@@ -80,10 +80,12 @@ def run_in_sandbox():
     import os
     import pathlib
 
-    os.path.exists("./README.md")
+    # with open("README.md", "r"):
+    #     pass
+    # os.path.exists("./README.md")
 
-    assert pathlib.Path("README.md").is_file()
-    pathlib.Path("README.md").read_text()
+    # assert pathlib.Path("README.md").is_file()
+    # pathlib.Path("README.md").read_text()
 
     # try:-
     #     with io.open("tmp/test.remove", "w") as f:

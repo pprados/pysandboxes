@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 _white_list = [
     '<frozen posixpath>',
     '<frozen genericpath>',
-    # FIXME "pathlib/_local.py",
+    # '<frozen site>',
 ]
 
 
@@ -399,14 +399,42 @@ def _raise_access(file: Union[str, bytes, os.PathLike, int]) -> NoReturn:
 def _wrap_empty(func: Callable) -> Callable:
     return func
 
+
 def _wrap_reload_module(func: Callable, *, name: str) -> ModuleType:
     # Use _f(_wrap_reload_module, name="io") to refresh a module in another module
     import sys
     return sys.modules[name]
 
+
+def _wrap_buitins_open(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(
+            file, mode='r',
+            *args, **kwargs
+    ):
+        if _special_caller():
+            return func(file, *args, **kwargs)
+        need_to_write = mode is not None and (
+                "w" in mode or "a" in mode or "x" in mode or "+" in mode)
+        remapped, rule = _apply_dest_to_src_rules(os.fspath(file), write=need_to_write)
+        if rule:
+            _raise_ignore(file, rule)
+        if not remapped:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), write=need_to_write))
+                remapped = file
+            else:
+                _raise_access(file)
+        return func(remapped, mode=mode, *args, **kwargs)
+
+    return wrapper
+
+
 def _wrap_filename(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
-    def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
+    def wrapper(file: Union[str, bytes, os.PathLike, int],
+                *args, **kwargs
+                ):
         # Detect call from posixpath
         if _special_caller():
             return func(file, *args, **kwargs)
@@ -869,15 +897,15 @@ class Guard_FileIO(FileIO):
     @staticmethod  # known case of __new__
     def __new__(cls,
                 name,
-                mode: str="r",
+                mode: str = "r",
                 closefd=True,
                 opener=None,
                 *args, **kwargs):  # real signature unknown
         """ Create and return a new object.  See help(type) for accurate signature. """
         need_to_write = mode is not None and (
                 "w" in mode or "a" in mode or "x" in mode or "+" in mode)
-        remapped,rule = _apply_dest_to_src_rules(name, write=need_to_write,
-                                            accept_source=False)
+        remapped, rule = _apply_dest_to_src_rules(name, write=need_to_write,
+                                                  accept_source=False)
         if rule:
             _raise_ignore(remapped, rule)
         if not remapped:
@@ -886,7 +914,9 @@ class Guard_FileIO(FileIO):
                 remapped = name
             else:
                 _raise_access(remapped)
-        return io.FileIO(str(remapped), mode=mode, closefd=closefd, opener=opener, *args, **kwargs)
+        return io.FileIO(str(remapped), mode=mode, closefd=closefd, opener=opener,
+                         *args, **kwargs)
+
 
 def _wrap_io_FileIO__init__(func: Callable) -> Callable:
     @functools.wraps(func)
@@ -934,9 +964,6 @@ def _f(func, *args, **kwargs):
 #     return _f(wrap_filename,*args,**kwargs)
 
 _default_rules = rules = {
-    "builtins.open": _f(_wrap_filename, write=True),
-    # # FIXME: builtins.open à valider et tester
-
     "os.chdir": _f(_wrap_dir, write=False),
     # ALLOW os.fchdir
     "os.getcwd": _f(_wrap_os_getcwd),
@@ -964,7 +991,7 @@ _default_rules = rules = {
     # ALLOW os.statvfs = _wrap_filename(os.statvfs)
     "os.lstat": _f(_wrap_filename, write=False),
     # ALLOW os.stat_float_times
-    "os.symlink": _f(_wrap_two_filenames),  # TODO: in_write ?
+    "os.symlink": _f(_wrap_two_filenames, in_write=False, out_write=True),
     "os.truncate": _f(_wrap_filename, write=True),
     "os.unlink": _f(_wrap_filename, write=True),
     "os.utime": _f(_wrap_filename, write=True),
@@ -1014,9 +1041,7 @@ _default_rules = rules = {
 
     # %% high level access
     "io.open": _f(_wrap_io_open),
-    "io.open_code": _f(_wrap_io_open),
-    # FIXME "io.FileIO"
-    # "io.FileIO": _wrap_io_FileIO__init__,
+    "io.open_code": _f(_wrap_filename, write=False),
     "io.FileIO": lambda x: Guard_FileIO,
 
     # %%
@@ -1096,6 +1121,10 @@ _default_rules = rules = {
     # ALLOW shutil.move
     # ALLOW shutil.rmtree
     # ALLOW shutil.which
+
+    # builtins
+    "builtins.open": _f(_wrap_buitins_open),
+
 }
 
 

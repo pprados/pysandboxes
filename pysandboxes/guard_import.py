@@ -71,6 +71,19 @@ def parse_rules(config: ConfigLines,
     return tuple(white_list), ignore_rules
 
 
+def _apply_patch(module, name: str):
+    all_patch = _patch_rules[name]
+    for patch in all_patch:
+        cur_module = module
+        path = ""
+        paths = patch.module_name.split('.')
+        for node in paths[:-1]:
+            logger.debug(f"{path=} {cur_module=}")
+            cur_module = cur_module.__dict__[node]
+        new_value = patch.patch_factory(cur_module.__dict__[paths[-1]])
+        cur_module.__dict__[paths[-1]] = new_value
+
+
 class GuardLoader(importlib.abc.Loader):
     """
     A custom loader that wraps an original loader to modify a module after it
@@ -116,17 +129,8 @@ class GuardLoader(importlib.abc.Loader):
         # if not self.done and self.original_spec.name in _rules:
         # logger.debug(f"{self.original_spec.name=}")
         if self.original_spec.name in _patch_rules:
-            all_patch = _patch_rules[self.original_spec.name]
-            for patch in all_patch:
-                cur_module = module
-                path = ""
-                paths = patch.module_name.split('.')
-                for node in paths[:-1]:
-                    logger.debug(f"{path=} {cur_module=}")
-                    cur_module = cur_module.__dict__[node]
-                new_value = patch.patch_factory(cur_module.__dict__[paths[-1]])
-                cur_module.__dict__[paths[-1]] = new_value
-                self.done = True  # FIXME
+            _apply_patch(module, self.original_spec.name)
+            self.done = True  # FIXME
 
             # logger.debug(f"GuardLoader: Injected patch into '{module.__name__}'.")
 
@@ -271,6 +275,11 @@ def activate_guard_import(
     if _rules:
         logger.info("Guard_files was already activated.")
     _activate_patch_import(patch_rules)
+    if "builtins" in patch_rules:
+        import builtins
+        if builtins.open:
+            builtins_module = sys.modules["builtins"]
+            _apply_patch(builtins_module, "builtins")
     _rules = rules
 
 

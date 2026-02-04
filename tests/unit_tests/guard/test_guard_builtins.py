@@ -1,8 +1,9 @@
 import pytest
 
+from pysandboxes.guard_files import RuleFileNotFoundError
 from pysandboxes.types import ConfigLine
-from .test_guard_io import files, _activate_guard
 
+from .test_guard_io import files, _activate_guard
 
 @pytest.fixture(autouse=True)
 def reset_rules():
@@ -22,7 +23,7 @@ def reset_rules():
     _deactivate_guard_import()
 
 
-def test_gzip(files):
+def test_builtins_open(files):
     from pathlib import Path
 
     rules = [
@@ -33,14 +34,14 @@ def test_gzip(files):
 
     _activate_guard(rules)
 
-    import gzip
-    import pathlib
+    import builtins
 
-    source = pathlib.Path(files["bind_dest"] / "bound_file.txt")
-    compressed = source.with_suffix(".gz")
-    with (source.open("rb") as f_in,
-          gzip.open(compressed, "wb") as f_out):
-        f_out.writelines(f_in)
-    compressed.unlink()
+    with builtins.open(files['bind_dest'] / "bound_file.txt"):
+        pass
 
-    # FIXME: add les ignores tests
+
+    with pytest.raises(RuleFileNotFoundError):
+        builtins.open(files['ignore'])
+
+    with pytest.raises(RuleFileNotFoundError):
+        builtins.open(files['bind_src'] / "bound_file.txt")
