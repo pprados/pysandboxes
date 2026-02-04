@@ -75,12 +75,16 @@ def _apply_patch(module, name: str):
     all_patch = _patch_rules[name]
     for patch in all_patch:
         cur_module = module
-        path = ""
         paths = patch.module_name.split('.')
         for node in paths[:-1]:
-            logger.debug(f"{path=} {cur_module=}")
+            # logger.debug(f"{path=} {cur_module=}")
             cur_module = cur_module.__dict__[node]
         new_value = patch.patch_factory(cur_module.__dict__[paths[-1]])
+        assert not hasattr(cur_module.__dict__[paths[-1]],
+                           "__pysandbox__"), "Double injection"
+        if __debug__ and isinstance(new_value,
+                                    type(_apply_patch)):  # Fake types.FunctionType
+            new_value.__pysandbox__ = True  # Add a marker
         cur_module.__dict__[paths[-1]] = new_value
 
 
@@ -89,12 +93,12 @@ class GuardLoader(importlib.abc.Loader):
     A custom loader that wraps an original loader to modify a module after it
     has been created and executed.
     """
+    __slots__ = ("original_spec", "original_loader")
 
     def __init__(self, original_spec: importlib.util.spec_from_file_location):
         # Store the original spec and loader
         self.original_spec: importlib.util.spec_from_file_location = original_spec
         self.original_loader: importlib.abc.Loader = original_spec.loader
-        self.done = False
 
     def create_module(self, spec: importlib.util.spec_from_file_location) -> ModuleType:
         """
@@ -123,7 +127,7 @@ class GuardLoader(importlib.abc.Loader):
                     raise RuleModuleNotFoundError(
                         f"No module named '{module_name}'"
                     )
-        # logger.error(f"exec_module({module.__name__})...")
+        # logger.debug(f"exec_module({module.__name__})...")
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
@@ -146,12 +150,14 @@ class GuardLoader(importlib.abc.Loader):
 
 # Define the custom finder class
 class GuardFinder(importlib.abc.MetaPathFinder):
+    __slots__ = ("_finders")
+
     def __init__(self, finders: MetaPathFinder):
         self._finders = finders
 
     # TODO: This method is used by importlib.invalidate_caches().
     def invalidate_caches(self):
-        pass
+        logger.debug("invalidate_caches() called")
 
     """
     A custom finder that locates our special module.
@@ -165,17 +171,11 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         """
         Finds the specification for a module.
         """
-        # logger.debug(f"find_spec({fullname=},{path=},{target=})")
-
-        parts = fullname.split(".")
-        mod_name = parts[-1]
-        # if path is None:  # top-level
-        #     search_paths = [self.search_path]
-        # else:
-        #     search_paths = path
+        logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
         # Delegate to the rest of the chain to find the original module spec
         # We skip our own finder by checking sys.meta_path from the next index
+        # import builtins;builtins.print(f"finder {fullname}")
         for finder in sys.meta_path:
             if finder == self:
                 continue
@@ -186,11 +186,11 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                 #     f"GuardFinder: Found original spec via '{type(finder).__name__}'.")
                 # Create a new spec using our custom GuardLoader, but with the original spec's data
 
-                logger.debug(
-                    f"GuardFinder: Found original spec {original_spec.name} via '{type(finder).__name__}'.")
+                # logger.debug(
+                #     f"GuardFinder: Found original spec {original_spec.name} via '{type(finder).__name__}'.")
                 if original_spec.name in _patch_rules:
 
-                    logger.debug(f"Inject patcher for '{original_spec.name}'")
+                    # logger.debug(f"Inject loader for '{original_spec.name}'")
                     if original_spec.parent:
                         # Use __init__
                         init_file = os.path.join(
@@ -224,29 +224,35 @@ _guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
 
 def _activate_patch_import(
         patch_rules: PatchRules,
-):
-    global _patch_rules
-    _patch_rules = patch_rules
-
-    _remove_modules()
+) -> bool:
     import sys
-    sys.meta_path.insert(0, _guard_finder)
+    if _guard_finder not in sys.meta_path:
+        global _patch_rules
+        _patch_rules = patch_rules
+
+        _remove_modules()
+        sys.meta_path.insert(0, _guard_finder)
+        return True
+    else:
+        logger.info("Guard_import was already activated.")
+        return False
 
 
 def _remove_modules() -> None:
     to_remove = set()
     specials = {
+        'builtins',
         'sys',
+        'importlib',
         'concurrent',
         'asyncio',
-        'importlib',
         'warnings',
         __name__.rsplit('.', maxsplit=1)[0],
     }
     import sys
     for k, m in dict(sys.modules).items():
         # Detect system modules
-        if k in sys.builtin_module_names:
+        if k in sys.builtin_module_names:  # Il y a builtins
             continue
         flag = False
         for special in specials:
@@ -257,14 +263,25 @@ def _remove_modules() -> None:
             continue
 
         to_remove.add(k)
-    importlib.invalidate_caches()
     # Special case for pytest
     for k in to_remove:
         if (not k.startswith("_pytest") and
                 not k.startswith("pytest")
         ):
-            del sys.modules[k]
-    assert "io" not in sys.modules
+            if k in sys.modules:
+                # try:
+                if k in sys.builtin_module_names:
+                    m = sys.modules[k]
+                    if m:
+                        print(f"reload {k}")  # FIXME
+                        importlib.reload(m)
+                else:
+                    del sys.modules[k]
+                # except Exception as x:
+                #     print(x)
+                # logger.exception(x)
+    # assert "io" not in sys.modules  # FIXME: ajouter l'assertion
+    importlib.invalidate_caches()
 
 
 def activate_guard_import(
@@ -274,31 +291,24 @@ def activate_guard_import(
     global _rules
     if _rules:
         logger.info("Guard_files was already activated.")
-    _activate_patch_import(patch_rules)
-    if "builtins" in patch_rules:
-        import builtins
-        if builtins.open:
+    if _activate_patch_import(patch_rules):
+        if "builtins" in patch_rules:
             builtins_module = sys.modules["builtins"]
             _apply_patch(builtins_module, "builtins")
     _rules = rules
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:
-    from unit_tests import restore_default_values
-
-    _memory = dict()
-
-
     def _deactivate_guard_import():
         import sys
-        restore_default_values(_memory,
-                               sys.modules[__name__])
         global _rules
         _rules = ()
         import sys
-        if _guard_finder in sys.meta_path:
-            sys.meta_path.remove(_guard_finder)
-        _remove_modules()
+        # if _guard_finder in sys.meta_path:
+        if True:
+        #     logger.debug("Remove in meta-path")
+        #     sys.meta_path.remove(_guard_finder)
+            _remove_modules()
 
 
 def generate_rules(

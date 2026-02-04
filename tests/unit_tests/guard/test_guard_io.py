@@ -8,8 +8,7 @@ from pysandboxes.guard_files import activate_guard, parse_rules, \
 from pysandboxes.types import ConfigLines, ConfigLine
 
 
-@pytest.fixture(autouse=True)
-def reset_rules():
+def _reset_rules():
     from pysandboxes.guard_import import conv_patch_rules, _deactivate_guard_import, \
         activate_guard_import
     from pysandboxes.guard_files import _deactivate_guard_files, patch_rules
@@ -26,8 +25,13 @@ def reset_rules():
     _deactivate_guard_import()
 
 
+@pytest.fixture(autouse=True)
+def reset_rules():
+    _reset_rules()
+
+
 @pytest.fixture
-def files(tmp_path) -> Dict[str,Path]:
+def files(tmp_path) -> Dict[str, Path]:
     # Create test files and symlinks
     # It's executer without patch.
     tmp_path = Path("/tmp/test")
@@ -98,7 +102,7 @@ def _activate_guard(rules: ConfigLines) -> None:
     assert not errors
 
 
-def test_io_open_ignore_rule_blocks_file_access(files:Dict[str,Path]):
+def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
     errors = []
     rules = [
         ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
@@ -110,7 +114,7 @@ def test_io_open_ignore_rule_blocks_file_access(files:Dict[str,Path]):
         io.open(files['ignore'])
 
 
-def test_io_open_code_ignore_rule_blocks_open_code_file_access(files:Dict[str,Path]):
+def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, Path]):
     errors = []
     rules = [
         ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
@@ -121,7 +125,7 @@ def test_io_open_code_ignore_rule_blocks_open_code_file_access(files:Dict[str,Pa
         io.open_code(str(files['ignore']))
 
 
-def test_io_open_bind_rule_redirects_file_access(files:Dict[str,Path]):
+def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]):
     rules = [
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
@@ -135,7 +139,7 @@ def test_io_open_bind_rule_redirects_file_access(files:Dict[str,Path]):
     assert content == "Content"
 
 
-def test_io_open_write(files:Dict[str,Path]):
+def test_io_open_write(files: Dict[str, Path]):
     rules = [
         ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
@@ -149,7 +153,7 @@ def test_io_open_write(files:Dict[str,Path]):
     os.remove(str(target_path))
 
 
-def test_io_open_refuse_write(files:Dict[str,Path]):
+def test_io_open_refuse_write(files: Dict[str, Path]):
     rules = [
         ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
@@ -162,7 +166,7 @@ def test_io_open_refuse_write(files:Dict[str,Path]):
             f.write("sample")
 
 
-def test_io_open_visible_and_invisible_files(files:Dict[str,Path]):
+def test_io_open_visible_and_invisible_files(files: Dict[str, Path]):
     rules = [
         ConfigLine("--ignore=*.log", Path(), 0),
         ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -186,7 +190,7 @@ def test_io_open_visible_and_invisible_files(files:Dict[str,Path]):
             pass
 
 
-def test_io_FileIO(files:Dict[str,Path]) -> None:
+def test_io_FileIO(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine("--ignore=*.log", Path(), 0),
         ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),

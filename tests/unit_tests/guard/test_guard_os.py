@@ -2,32 +2,19 @@ import stat
 import sys
 import time
 from pathlib import Path
-from tempfile import gettempdir
 from typing import Dict
 
 import pytest
 
 from pysandboxes.guard_files import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.types import ConfigLine
-from .test_guard_io import files, _activate_guard
+from .test_guard_io import files, _activate_guard, _reset_rules
 
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from pysandboxes.guard_import import conv_patch_rules, _deactivate_guard_import, \
-        activate_guard_import
-    from pysandboxes.guard_files import _deactivate_guard_files, patch_rules
-    activate_guard_import(
-        conv_patch_rules(
-            {
-                **patch_rules(),
-            }
-        ),
-        tuple(["*"]),  # Import all modules
-    )
-    yield
-    _deactivate_guard_files()
-    _deactivate_guard_import()
+    yield from _reset_rules()
+
 
 
 def test_os_listdir_filters_ignored_files_and_bind(files:Dict[str,Path]) -> None:

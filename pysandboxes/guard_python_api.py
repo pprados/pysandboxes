@@ -7,7 +7,6 @@ from typing import List, Tuple, Union, Literal, Set
 from typing import Optional
 
 from pysandboxes.types import ConfigLines
-from unit_tests import save_default_values, restore_default_values  # FIXME
 
 logger = logging.getLogger(__name__)
 
@@ -268,21 +267,7 @@ def _activate_guard_import(rules: List[PythonAPIRules]):
 # importlib.import_module("hack","pack")
 
 if "PYTEST_RUN_CONFIG" in os.environ:
-    _key_to_remember = {
-        # TODO
-    }
-
-    _memory = dict()
-    save_default_values(_memory,
-                        _key_to_remember,
-                        sys.modules[__name__],
-                        )
-
-
     def _deactivate_guard_python_api():
-        if __name__ in sys.modules:
-            restore_default_values(_memory,
-                                   sys.modules[__name__])
         global _rules,_import_blocker
         _rules = []
         # if sys.meta_path[0]

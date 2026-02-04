@@ -1,0 +1,6 @@
+- Faire un papier de recherche
+- Expliquer qu'il faut réduire les techniques pour réduires la surface d'attaque: uniquement via closure
+- Il faut identifier les méthodes à patcher vs les méthodes avec effet de bors (a valider avec les tests)
+- Expliquer les statégies d'auto-protection a ajouter
+- Limitation de l'approche via python vs C/C++, kernel
+- stratégie de AST

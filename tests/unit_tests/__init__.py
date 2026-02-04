@@ -21,11 +21,3 @@ def save_default_values(
             memory[name] = val
 
 
-def restore_default_values(memory: Dict[str, Any], module: ModuleType):
-    logging.error("Remove restore default value")
-    # for name, v in memory.items():
-    #     obj = module
-    #     part_names = name.split('.')
-    #     for m in part_names[:-1]:
-    #         obj = getattr(obj, m)
-    #     setattr(obj, part_names[-1], v)

@@ -3,25 +3,12 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.types import ConfigLine
-from .test_guard_io import files, _activate_guard
+from .test_guard_io import files, _activate_guard, _reset_rules
 
 
 @pytest.fixture(autouse=True)
 def reset_rules():
-    from pysandboxes.guard_import import conv_patch_rules, _deactivate_guard_import, \
-        activate_guard_import
-    from pysandboxes.guard_files import _deactivate_guard_files, patch_rules
-    activate_guard_import(
-        conv_patch_rules(
-            {
-                **patch_rules(),
-            }
-        ),
-        tuple(["*"]),  # Import all modules
-    )
-    yield
-    _deactivate_guard_files()
-    _deactivate_guard_import()
+    yield  from _reset_rules()
 
 
 
@@ -104,9 +91,11 @@ def test_os_path_samefile(files):
 
     import os
     assert os.path.samefile(files["path"] / "visible.txt",
-                            files["path"] / "visible.txt")
+                            files["path"] / "visible.txt") is True
     assert os.path.samefile(files["bind_dest"] / "bound_file.txt",
-                            files["bind_dest"] / "bound_file.txt")
+                            files["bind_dest"] / "bound_file.txt") is True
+    assert os.path.samefile(files["path"] / "visible.txt",
+                            files["bound_file"]) is False
 
 
 def test_os_path_realpath(files):

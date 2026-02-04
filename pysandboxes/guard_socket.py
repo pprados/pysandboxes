@@ -685,21 +685,7 @@ class Guard_socket(socket.socket):
 
 # %%
 if "PYTEST_RUN_CONFIG" in os.environ:
-    from unit_tests import save_default_values, restore_default_values
-
-    _key_to_remember = {
-        "socket.socket",
-    }
-    _memory = dict()
-    save_default_values(_memory,
-                        _key_to_remember,
-                        sys.modules[__name__],
-                        )
-
-
     def _deactivate_guard_sockets():
-        restore_default_values(_memory,
-                               sys.modules[__name__])
         global _rules
         _rules = ()
 
