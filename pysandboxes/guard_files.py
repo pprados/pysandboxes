@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from collections import OrderedDict
+from io import FileIO
 from os import scandir as _scandir
 from pathlib import Path as _Path, Path
 from types import TracebackType
@@ -609,7 +610,7 @@ def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]
             for entry in entries:
                 full_path = os.path.join(path, entry)
                 remapped, _ = _apply_dest_to_src_rules(full_path, write=False,
-                                                          accept_source=False)
+                                                       accept_source=False)
                 if remapped is not None:
                     filtered.append(entry)
             return filtered
@@ -662,7 +663,6 @@ class _DirEntry:
         return getattr(self._target, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
-
         setattr(self._target, name, value)
 
 
@@ -739,7 +739,7 @@ class _ScanDirContextManager:
                     dest_path, rule = _apply_src_to_dest_rules(entry.path,
                                                                accept_src=False)
                     if rule:
-                        pass # Ignore
+                        pass  # Ignore
                     elif dest_path is not None:
                         _entry = _DirEntry(entry, dest_path)
                         return _entry
@@ -805,9 +805,10 @@ def _wrap_os_walk(func: Callable, *, write: bool) -> Callable:
     def wrapper(top, topdown=True, onerror=None, followlinks=False,
                 *args, **kwargs):
         pass
-        remapped= top
+        remapped = top
 
-        return func(remapped, topdown=topdown, onerror=onerror, followlinks=followlinks,*args, **kwargs)
+        return func(remapped, topdown=topdown, onerror=onerror, followlinks=followlinks,
+                    *args, **kwargs)
 
 
 # %% io wrapper
@@ -854,6 +855,35 @@ def _wrap_pathlib(func: Callable) -> Callable:
         return func(Path(remapped), *args, **kwargs)
 
     return wrapper
+
+
+class Guard_FileIO(FileIO):
+    @staticmethod  # known case of __new__
+    def __new__(cls,
+                name,
+                mode: str="r",
+                closefd=True,
+                opener=None,
+                *args, **kwargs):  # real signature unknown
+        """ Create and return a new object.  See help(type) for accurate signature. """
+        need_to_write = mode is not None and (
+                "w" in mode or "a" in mode or "x" in mode or "+" in mode)
+        remapped,rule = _apply_dest_to_src_rules(name, write=need_to_write,
+                                            accept_source=False)
+        if rule:
+            _raise_ignore(remapped, rule)
+        if not remapped:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(name), need_to_write))
+                remapped = name
+            else:
+                _raise_access(remapped)
+        return io.FileIO(str(remapped), mode=mode, closefd=closefd, opener=opener, *args, **kwargs)
+
+def _wrap_io_FileIO__init__(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs) -> Any:
+        return func(*args, **kwargs)
 
 
 def _wrap_pathlib_glob(func: Callable) -> Callable:
@@ -977,6 +1007,9 @@ _default_rules = rules = {
     # %% high level access
     "io.open": _f(_wrap_io_open),
     "io.open_code": _f(_wrap_io_open),
+    # FIXME "io.FileIO"
+    # "io.FileIO": _wrap_io_FileIO__init__,
+    "io.FileIO": lambda x: Guard_FileIO,
 
     # %%
     # ALLOW os.path.abspath

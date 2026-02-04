@@ -128,6 +128,7 @@ def test_io_open_bind_rule_redirects_file_access(files:Dict[str,Path]):
     _activate_guard(rules)
     # Access using the dest path should redirect to src
     target_path = files['bind_dest'] / "bound_file.txt"
+
     import io
     with io.open(target_path) as f:
         content = f.read()
@@ -140,6 +141,7 @@ def test_io_open_write(files:Dict[str,Path]):
     ]
     _activate_guard(rules)
     target_path = files['bind_dest'] / "write.txt"
+
     import io
     import os
     with io.open(target_path, "w") as f:
@@ -153,16 +155,56 @@ def test_io_open_refuse_write(files:Dict[str,Path]):
     ]
     _activate_guard(rules)
     target_path = files['bind_dest'] / "write.txt"
+
     import io
     with pytest.raises(PermissionError):
         with io.open(target_path, "w") as f:
             f.write("sample")
 
 
-def test_io_open_visible_file_is_accessible(files:Dict[str,Path]):
+def test_io_open_visible_and_invisible_files(files:Dict[str,Path]):
     rules = [
         ConfigLine("--ignore=*.log", Path(), 0),
+        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
-    with open(files['visible']) as f:
+
+    import io
+    with io.open(files['visible']) as f:
         assert f.read() == "Visible"
+
+    with pytest.raises(RuleFileNotFoundError):
+        with io.open(files['ignore']) as f:
+            pass
+
+    with io.open(files['bind_dest'] / "bound_file.txt") as f:
+        pass
+
+    with pytest.raises(RuleFileNotFoundError):
+        with io.open(files['bind_src'] / "bound_file.txt") as f:
+            pass
+
+
+def test_io_FileIO(files:Dict[str,Path]) -> None:
+    rules = [
+        ConfigLine("--ignore=*.log", Path(), 0),
+        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+    ]
+    _activate_guard(rules)
+
+    import io
+    with io.FileIO(files['visible'], "r") as f:
+        assert f.read() == b"Visible"
+
+    with io.FileIO(files['bind_dest'] / "bound_file.txt", "r") as f:
+        pass
+
+    with pytest.raises(RuleFileNotFoundError):
+        with io.FileIO(files['ignore'], "r") as f:
+            pass
+
+    with pytest.raises(RuleFileNotFoundError):
+        with io.FileIO(files['bind_src'], "r") as f:
+            pass
