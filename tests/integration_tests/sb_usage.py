@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from functools import partial
 
 import pysandboxes
 from pysandboxes.sandboxes import sandbox, sandboxes
@@ -9,7 +11,8 @@ from pysandboxes.sandboxes import sandbox, sandboxes
 logger = logging.getLogger(__name__)
 
 
-def init_log_level():
+async def init_log_level():
+    await asyncio.sleep(0)
     if True: # "PYTEST_RUN_CONFIG" in os.environ:
         format = '%(levelname)-5s [%(process)d] %(name)s:%(message)s'
     else:
@@ -170,14 +173,25 @@ def run():
     return rc
 
 
+@sandbox
+def _call_llm(token: str):
+    print(f"{token=}")
+
+
+def call_llm():
+    _call_llm(token=os.environ["USER"])
+
 def main():
     init_log_level()
+    os.environ["LLM_TOKEN"]="abc"
+
 
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # print("----------------")
         with pysandboxes.sandboxes.sandboxes(init_sandbox):
-            run()
+            # run()
+            call_llm()
         print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")
