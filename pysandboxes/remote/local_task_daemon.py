@@ -10,6 +10,7 @@ import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
 from logging import getLogger
+from types import CoroutineType
 from typing import AsyncGenerator, Any, Optional
 from typing import Dict
 
@@ -162,7 +163,6 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         SSE endpoint to process a given code string, authenticated by a token,
         and stream back structured results (stdout, stderr, result).
         """
-        import pickle
 
         set_is_in_sandbox(True)
         logger.debug(request.headers["Authorization"])
@@ -296,7 +296,7 @@ class LocalTaskDaemon(SSESandbox):
         if envs is None:
             envs = os.environ
         if init_fn:
-            if asyncio.iscoroutine(init_fn()):
+            if asyncio.iscoroutinefunction(init_fn):
                 await init_fn()
             else:
                 init_fn()

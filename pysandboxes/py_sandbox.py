@@ -15,8 +15,8 @@ from .guard_files import FileRules
 from .guard_import import ImportRules, conv_patch_rules
 from .guard_socket import SocketRules
 from .learning import activate_learning
-from .main_logger import format_ruleref, format_error_list, ErrorMsg, \
-    pysandboxes_logger, make_relative_path
+from .main_logger import format_ruleref, ErrorMsg, \
+    pysandboxes_logger
 from .remote.parameters import CONFIG_NAME
 from .tools import remove_config_comments, substitute_config_env_vars, find_config
 from .types import ConfigLines, Envs, ConfigLine
@@ -235,11 +235,6 @@ def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
     if not config_path:
         known_paths = [
             Path(".py-sandboxes"),  # Current directory
-            Path("~/.config/pysandboxes/py-sandbox").expanduser(),
-            Path("~/.local/share/pysandboxes/py-sandbox").expanduser(),
-            Path("/etc/pysandboxes/py-sandbox"),
-            Path("/usr/share/pysandboxes/py-sandbox"),
-            Path("/var/lib/pysandboxes/py-sandbox"),
         ]
         body_from_users_or_os = []
         for path in known_paths:

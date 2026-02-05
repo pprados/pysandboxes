@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-from typing import List
 
 from dotenv import load_dotenv
 

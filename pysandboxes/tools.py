@@ -165,7 +165,7 @@ def find_config(
 
     Returns path to the file if found, or an empty string otherwise
     """
-
+    # TODO: search in module of the caller
     def _is_interactive():
         """Decide whether this is running in a REPL or IPython notebook"""
         if hasattr(sys, "ps1") or hasattr(sys, "ps2"):

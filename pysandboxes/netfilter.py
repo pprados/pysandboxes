@@ -3,8 +3,7 @@ import ipaddress
 import socket
 from typing import List
 
-from .guard_socket import SocketRule, SPEC_TO_TYPE_MAP, SocketRules
-from .types import ConfigLines
+from .guard_socket import SPEC_TO_TYPE_MAP, SocketRules
 
 _map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
 _map_netfilter_direction = {"OUT": "OUTPUT", "IN": "INPUT"}

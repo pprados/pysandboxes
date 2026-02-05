@@ -14,7 +14,7 @@ from typing import Callable, Optional
 from .base_daemon import BaseDaemon
 from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
-from .py_sandbox import get_config_path, ConfigSyntaxError
+from .py_sandbox import ConfigSyntaxError
 from .remote.parameters import DELAY_FOR_CALL_DAEMON
 from .tools import check_mixte_async_async, SyncOrAsyncFunc
 from .types import Envs
@@ -158,7 +158,6 @@ class sandboxes(Protocol):
         from .py_sandbox import read_and_parse_config
         from pysandboxes.os_sandbox import async_start_daemon
         log_level = logging.root.getEffectiveLevel()
-        assert get_config_path(self.config_path), "Set config path"
         all_rules = read_and_parse_config(
             self.config_path,
             envs=self.envs,

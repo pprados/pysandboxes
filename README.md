@@ -202,6 +202,7 @@ It also verifies the relevance of the multiple sandbox encapsulation strategy, w
 
 We have a planned roadmap. Developments will arrive gradually, with no specific order:
 
+  - Guard some criticals methods in Python (spawn, shell, etc.)
   - New **OS-sandboxes**
   - Management of *Denial of Service*
   - Management of regular expressions
@@ -209,8 +210,10 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - Compile a part of code
   - Propagate the tracability id
 
-## New **OS-sandboxes**
+## Guard some critical methods
+Certain methods must be rejected, even if the package is authorized.
 
+## New **OS-sandboxes**
 Other OS-level sandbox solutions will be integrated, including `Docker` of course.
 
 If your application itself runs in a Docker container, it may not be able to launch a Docker in a Docker (depending on the parameters). This is also the case for solutions relying on Linux *capabilities*.
@@ -218,13 +221,11 @@ If your application itself runs in a Docker container, it may not be able to lau
 Different solutions will be proposed (pre-launch of the sandbox in another container, in parallel; use of emulation solutions that do not require privileges, etc.).
 
 ## Denial of Service
-
 Generated code may never terminate and cause a denial of service. It's not easy to manage this. Indeed, it is easy to identify that a `@sandbox` function is taking too long to respond, but it is very difficult to interrupt it. It is not possible to kill a thread, unlike a process. A simple malicious regular expression can be exploited to kill the FastAPI server (see [Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html)).
 
 We are considering a solution to identify these situations and kill the offending function if necessary.
 
 ## Regular Expressions
-
 Certain regular expression patterns cause problems because they can cause the Python program to become unresponsive.
 We plan to add a specific filter to refuse the execution of expressions identified as *at risk*.
 

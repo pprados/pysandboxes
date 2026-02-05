@@ -35,7 +35,7 @@ include "/etc/pysandboxes/global-py-sandboxes.profile"
 # (and potentially an os-sandbox), but the Python-specific security rules
 # are not applied.
 # 
-py-sandbox=True  # Activate python sandbox (default)
+py-sandbox=True  # Activate the python sandbox (true by default)
 
 #######################################################################################
 # Using a Python sandbox is a good idea, but it does not guarantee that an application
@@ -55,7 +55,6 @@ py-sandbox=True  # Activate python sandbox (default)
 
 os-sandbox=subprocess
 #os-sandbox=firejail
-#os-sandbox=task
 
 #######################################################################################
 # In the sandbox, only a selected set of environment variables are accessible.
@@ -113,11 +112,10 @@ os-sandbox=subprocess
 #
 ignore=.env
 ignore=*.log
-#ignore=*.py  # If you use before 'python3 -m compileall .'
 
 # Some exemples
 #bind=/,/  # Accept all file access
-#ro-bind=/,/  # Accept all file read (add rules for write directories)
+#ro-bind=/,/  # Accept to read all file (add rules to write in somes directories)
 
 # Here, the rules learned for files
 # <learning_guard_files>

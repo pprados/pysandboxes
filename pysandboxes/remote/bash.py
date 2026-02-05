@@ -5,10 +5,10 @@ import logging
 import os
 import pty
 import sys
+import termios
 import tty
 
 import dotenv
-import termios
 
 from pysandboxes.os_sandbox import DEFAULT_OS_SANDBOX
 from .subprocess_daemon import BaseSubProcessDaemon

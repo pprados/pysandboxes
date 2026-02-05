@@ -52,7 +52,6 @@ from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any, Ca
 from netifaces import AF_INET, AF_INET6
 
 from .exception import SandBoxError
-from .guard_module import readonly_module
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
 from .types import ConfigLines, ConfigLine

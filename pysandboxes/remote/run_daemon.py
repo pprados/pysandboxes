@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import asyncio
-import base64
 import importlib
 import logging
 import os
-import pickle
 import sys
 import threading
-from typing import Any, Optional
+from typing import Optional
 
 from tblib import pickling_support
 
@@ -18,6 +16,7 @@ from .tools import configure_logging_level, \
 from ..learning import is_learning_mode, generate_config_from_learning
 from ..private_loop import set_sandbox_loop
 from ..tools import SyncOrAsyncFunc
+
 logger = logging.getLogger(__name__)
 
 pickling_support.install()

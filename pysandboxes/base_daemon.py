@@ -1,12 +1,9 @@
 import logging
-import os
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
-from tblib import pickling_support
-
 from .tools import SyncOrAsyncFunc
-from .types import ConfigLines, Envs
+from .types import Envs
 
 if TYPE_CHECKING:
     from .py_sandbox import AllRules

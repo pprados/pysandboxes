@@ -5,10 +5,10 @@ from typing import Iterator
 
 import pytest
 
-from pysandboxes.sandboxes import sandbox
-from pysandboxes.py_sandbox import get_config_path, read_and_parse_config
 from pysandboxes.os_sandbox import start_daemon, \
     shutdown_daemon
+from pysandboxes.py_sandbox import read_and_parse_config
+from pysandboxes.sandboxes import sandbox
 
 
 # See https://github.com/tortoise/tortoise-orm/issues/638

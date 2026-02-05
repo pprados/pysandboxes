@@ -13,19 +13,19 @@ logger = logging.getLogger(__name__)
 
 def init_log_level():
     if True: # "PYTEST_RUN_CONFIG" in os.environ:
-        format = '%(levelname)-5s [%(process)d] %(name)s:%(message)s'
+        format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     else:
-        format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s:%(message)s'
+        format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s: %(message)s'
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format=format
     )
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
-    logging.getLogger("pysandboxes").setLevel(logging.INFO)
+    logging.getLogger("Pysandboxes").setLevel(logging.WARNING)
+    logging.getLogger("pysandboxes").setLevel(logging.WARNING)
 
 
 @sandbox
@@ -193,8 +193,7 @@ def main():
         # asyncio.run(async_manager())
         # # print("----------------")
         with pysandboxes.sandboxes.sandboxes(async_init_sandbox):
-            # run()
-            call_llm()
+            run()
         print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")

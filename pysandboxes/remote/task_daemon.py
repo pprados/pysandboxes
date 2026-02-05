@@ -4,7 +4,7 @@ from typing import Optional
 from .local_task_daemon import LocalTaskDaemon
 from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc
-from ..types import ConfigLines, Envs
+from ..types import Envs
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 import asyncio
-import base64
 import json
 import logging
 import os
-import pickle
 import sys
 from datetime import timedelta
 from typing import Any, Dict, Callable
@@ -61,7 +59,6 @@ class SSESandbox(BaseDaemon):
         if is_in_sandbox():
             return await func(*args, **kwargs)
         from pysandboxes.os_sandbox import get_token
-        import pickle
 
         try:
             token = get_token()
