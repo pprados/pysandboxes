@@ -9,6 +9,7 @@ import logging
 import os
 import pickle
 import sys
+import threading
 import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
@@ -378,6 +379,7 @@ class LocalTaskDaemon(SSESandbox):
 
 
 async def main() -> int:
+    threading.main_thread().name="DaemonMainThread"
     logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
     parser = argparse.ArgumentParser(

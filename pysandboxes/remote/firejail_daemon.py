@@ -193,11 +193,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
         need_root = False
         from importlib.resources import files
 
-        # Need all internal rules. Parse another time here.
-        (config, sandbox_env, provider, use_pysandbox, socket_rules,
-         files_rules, import_rules) = all_rules
 
-        # assert provider == "firejail"
         args = [str(which_command("firejail"))]
 
         # Add default parameters
@@ -232,7 +228,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
             ])
 
         # Add files rules
-        for rule in files_rules:
+        for rule in all_rules.file_rules:
             if isinstance(rule, BindRule):
                 if rule.source == rule.dest:
                     if rule.source not in whitelist:
@@ -249,7 +245,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
             elif isinstance(rule, IgnoreRule):
                 args.append(f"--blacklist={rule.source}")
 
-        if socket_rules:
+        if all_rules.socket_rules:
             # gw = get_default_gateway_info()
             # if gw:  # Initialize the gateway
             # FIXME: pour le dns, j'ai besoin de la gateway localhost
@@ -259,7 +255,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
             # args.append(f"--net={gw[1]}")
             # pass
 
-            net_filter4 = rule_to_netfilter(socket_rules, is_ipv6=False)
+            net_filter4 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=False)
             netfilter_file = tempfile.NamedTemporaryFile(mode='w+t',
                                                          delete=False,
                                                          # TODO: manager tmp file?
@@ -269,7 +265,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 Path(netfilter_file).write_text("\n".join(net_filter4))
             args.append(f"--netfilter={netfilter_file}")
 
-            net_filter6 = rule_to_netfilter(socket_rules, is_ipv6=True)
+            net_filter6 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=True)
             netfilter6_file = tempfile.NamedTemporaryFile(mode='w+t',
                                                           delete=False,
                                                           # TODO: manager tmp file?
@@ -286,7 +282,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
         # --tmpfs DEST
 
         args.extend(["env", "-i"])
-        for env, val in sandbox_env.items():
+        for env, val in all_rules.envs.items():
             args.append(f"{env}={val}")
 
         if need_root:
