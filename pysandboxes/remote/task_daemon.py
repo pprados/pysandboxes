@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from .run_daemon import LocalTaskDaemon
+from .local_task_daemon import LocalTaskDaemon
 from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc
 from ..types import ConfigLines, Envs

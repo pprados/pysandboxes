@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Sequence, Tuple
 
-from pysandboxes.types import ConfigLine
+from .types import ConfigLine
 
 pysandboxes_logger = logging.getLogger("Pysandboxes")
 

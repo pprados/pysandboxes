@@ -123,7 +123,7 @@ class GuardLoader(importlib.abc.Loader):
         else:
             if _rules and _rules[0] != "*":
                 module_name = module.__name__
-                if module_name not in _rules:
+                if module_name not in _rules:  # FIXME
                     raise RuleModuleNotFoundError(
                         f"No module named '{module_name}'"
                     )
@@ -131,12 +131,10 @@ class GuardLoader(importlib.abc.Loader):
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
-        # logger.debug(f"{self.original_spec.name=}")
         if self.original_spec.name in _patch_rules:
             _apply_patch(module, self.original_spec.name)
-            self.done = True  # FIXME
 
-            # logger.debug(f"GuardLoader: Injected patch into '{module.__name__}'.")
+            # logger.error(f"GuardLoader: Injected patch into '{module.__name__}'.")
 
         # TODO: pour les modules pysandbox ?
         # # Override the __setattr__ method of the module to prevent changes
@@ -171,7 +169,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         """
         Finds the specification for a module.
         """
-        logger.debug(f"find_spec({fullname=},{path=},{target=})")
+        # logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
         # Delegate to the rest of the chain to find the original module spec
         # We skip our own finder by checking sys.meta_path from the next index
@@ -193,9 +191,13 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     # logger.debug(f"Inject loader for '{original_spec.name}'")
                     if original_spec.parent:
                         # Use __init__
-                        init_file = os.path.join(
-                            original_spec.submodule_search_locations[0], "__init__.py")
+                        if original_spec.submodule_search_locations:
+                            init_file = os.path.join(
+                                original_spec.submodule_search_locations[0], "__init__.py")
+                        else:
+                            init_file = original_spec.origin
                         assert os.path.isfile(init_file), "module without __init__.py"
+                        logger.debug(f"Inject loader for '{original_spec.name}'")
                         new_spec = importlib.util.spec_from_file_location(
                             fullname,
                             init_file,
@@ -247,6 +249,7 @@ def _remove_modules() -> None:
         'concurrent',
         'asyncio',
         'warnings',
+        'logging',
         __name__.rsplit('.', maxsplit=1)[0],
     }
     import sys
@@ -273,14 +276,9 @@ def _remove_modules() -> None:
                 if k in sys.builtin_module_names:
                     m = sys.modules[k]
                     if m:
-                        print(f"reload {k}")  # FIXME
                         importlib.reload(m)
                 else:
                     del sys.modules[k]
-                # except Exception as x:
-                #     print(x)
-                # logger.exception(x)
-    # assert "io" not in sys.modules  # FIXME: ajouter l'assertion
     importlib.invalidate_caches()
 
 

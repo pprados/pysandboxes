@@ -1,30 +1,29 @@
 import logging
 import os
-import tempfile
-import socket
-from socket import AF_INET, SOCK_STREAM, SOCK_DGRAM, AF_INET6
 
 import pysandboxes
 from pysandboxes.sandboxes import sandbox, sandboxes
-from pysandboxes.exception import SandBoxError
 
 # FIXME dotenv.load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
 def init_log_level():
+    if True: # "PYTEST_RUN_CONFIG" in os.environ:
+        format = '%(levelname)-5s [%(process)d] %(name)s:%(message)s'
+    else:
+        format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s:%(message)s'
     logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(levelname)-5s [%(process)d] %(name)s:%(message)s'
-        # format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s:%(message)s'
+        level=logging.INFO,
+        format=format
     )
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(logging.DEBUG)
-    logging.getLogger("pysandboxes").setLevel(logging.DEBUG)
-
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
+    logging.getLogger("pysandboxes").setLevel(logging.INFO)
 
 
 @sandbox
@@ -37,7 +36,6 @@ async def arun_in_sandbox():
 @sandbox
 def run_in_sandbox():
     logger.info("Run 'run_in_sandbox()' in sandbox")
-
 
     # # tcp connexion
     # import socket
@@ -76,9 +74,6 @@ def run_in_sandbox():
     #     sock.bind(("::1", 0))
 
     # ---------- File
-    import io
-    import os
-    import pathlib
 
     # with open("README.md", "r"):
     #     pass

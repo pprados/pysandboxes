@@ -12,6 +12,7 @@ import click
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, suggest_package_installation
 from ..guard_files import BindRule, IgnoreRule
+from ..main_logger import pysandboxes_logger
 from ..netfilter import rule_to_netfilter
 from ..py_sandbox import AllRules
 from ..tools import remove_comments, substitute_env_vars
@@ -196,6 +197,9 @@ class FireJailDaemon(BaseSubProcessDaemon):
 
         args = [str(which_command("firejail"))]
 
+        if pysandboxes_logger.getEffectiveLevel() > logging.INFO:
+            args.append("--quiet")
+
         # Add default parameters
         firejail_conf = remove_comments(
             Path(files(__name__).joinpath('firejail.profile')).read_text().splitlines())
@@ -276,7 +280,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
             args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove redondant sockets rules
-            socket_rules = []  # FIXME: doublon ou non ?
+            socket_rules = []  # FIXME: Remove redondant sockets rules?
 
         # TODO: Add tmp rules
         # --tmpfs DEST

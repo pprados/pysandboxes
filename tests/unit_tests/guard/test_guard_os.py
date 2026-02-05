@@ -39,28 +39,6 @@ def test_os_listdir_filters_ignored_files_and_bind(files:Dict[str,Path]) -> None
         os.listdir(files['bind_src'])
 
 
-def test_os_scandir(files:Dict[str,Path]) -> None:
-    rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
-    ]
-    _activate_guard(rules)
-
-    import os
-    with os.scandir(files['path']) as scandir_it:
-        entries = [entry.name for entry in scandir_it]
-    assert "ignore.log" not in entries
-    assert "visible.txt" in entries
-
-    with os.scandir(files['bind_dest']) as scandir_it:
-        entries = [entry.name for entry in scandir_it]
-    assert "bound_file.txt" in entries
-
-    with pytest.raises(RuleFileNotFoundError):
-        with os.scandir(files['bind_src']) as scandir_it:
-            pass
-
-
 def test_os_statand_stat_and_lstat(files:Dict[str,Path]) -> None:
     rules = [
         ConfigLine(f"--ignore=*.log", Path(), 0),

@@ -120,6 +120,7 @@ def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, 
         ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
     ]
     _activate_guard(rules)
+
     import io
     with pytest.raises(RuleFileNotFoundError):
         io.open_code(str(files['ignore']))

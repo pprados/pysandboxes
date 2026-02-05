@@ -1,9 +1,8 @@
-import os
-
 from pysandboxes.guard_envs import LearnEnviron
 
 
 def test_environ():
+    LearnEnviron._instance = None  # Reset singleton
     envs = LearnEnviron()
 
     assert not "not_present" in envs

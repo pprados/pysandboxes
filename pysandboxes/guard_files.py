@@ -29,13 +29,9 @@ _Path_rglob = _Path.rglob
 
 logger = logging.getLogger(__name__)
 
-# TODO: injecter les mappings dans les filtres de répertoires si c'est présent ?
-# n'accepte pas mapping phantome ?
-
 _white_list = [
     '<frozen posixpath>',
     '<frozen genericpath>',
-    # '<frozen site>',
 ]
 
 
@@ -69,6 +65,7 @@ class LearnFileRule(NamedTuple):
     path: Path
     write: bool
 
+
 class _DirEntry:
     def __init__(self,
                  target: Any,
@@ -88,7 +85,6 @@ class _DirEntry:
 
     def __setattr__(self, name: str, value: Any) -> None:
         setattr(self._target, name, value)
-
 
 
 # Internal state for the file filter
@@ -182,7 +178,7 @@ def parse_rules(config: ConfigLines,
             pattern = rule.rule[len("--ignore="):]
             rules_ignore.append(IgnoreRule(pattern, rule))
         else:
-            ignore_rules.append(rule)  # TODO: valider ignore repertoire interne
+            ignore_rules.append(rule)
     rules_bind = sorted(rules_bind, key=lambda r: len(r.dest), reverse=True)
 
     return tuple(rules_ignore + rules_bind), ignore_rules
@@ -198,10 +194,49 @@ def _check_is_in_rules(path: Path):
     return False
 
 
+_special_env = OrderedDict(
+    sorted(
+        (
+            (k, LearnEnviron()._get(k)) for k in
+            [
+                "PWD",
+                "HOME",
+                "TMP", "TEMP",
+            ]
+            if k in LearnEnviron()
+        ),
+        key=lambda x: len(x[1]),
+        reverse=True
+    )
+)
+
+_special_home = OrderedDict(
+    sorted(
+        (
+            (k, LearnEnviron()._get(k)) for k in
+            [
+                "PYENV_ROOT", "VIRTUAL_ENV", "CONDA_HOME",
+                "HF_HOME", "HF_DATASETS_CACHE", "HF_MODULES_CACHE", "HF_HUB_CACHE",
+                "TRANSFORMERS_CACHE"","
+                "TORCH_HOME",
+                "KERAS_HOME",
+                "TFHUB_CACHE_DIR",
+                "MXNET_HOME",
+                "NLTK_DATA",
+                "SPACY_DATA",
+            ]
+            if k in LearnEnviron()
+        ),
+        key=lambda x: len(x[1]),
+        reverse=True)
+)
+
+
 def generate_rules(
         learn: Set[Any],
 ) -> List[str]:
     # Select only parent
+    global _special_env, _special_home
     parent_level: Dict[Path, bool] = {}
     for learn_rule in filter(lambda x: isinstance(x, LearnFileRule), learn):
         parent = learn_rule.path.absolute()
@@ -218,40 +253,6 @@ def generate_rules(
 
     os_environ = LearnEnviron()  # Get singleton
 
-    special_env = {  # FIXME: déplacer en dehors de la fonction
-        k: os_environ._get(k) for k in
-        [
-            "PWD",
-            "HOME",
-            "TMP", "TEMP",
-        ]
-        if k in os_environ
-    }
-    special_env = OrderedDict(
-        sorted(special_env.items(),
-               key=lambda x: len(x[1]),
-               reverse=True))
-
-    special_home = {  # FIXME: déplacer en dehors de la fonction
-        k: os_environ._get(k) for k in
-        [
-            "PYENV_ROOT", "VIRTUAL_ENV", "CONDA_HOME",
-            "HF_HOME", "HF_DATASETS_CACHE", "HF_MODULES_CACHE", "HF_HUB_CACHE",
-            "TRANSFORMERS_CACHE"","
-            "TORCH_HOME",
-            "KERAS_HOME",
-            "TFHUB_CACHE_DIR",
-            "MXNET_HOME",
-            "NLTK_DATA",
-            "SPACY_DATA",
-        ]
-        if k in os_environ
-    }
-    special_home = OrderedDict(
-        sorted(special_home.items(),
-               key=lambda x: len(x[1]),
-               reverse=True))
-
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
         write = parent_level[path]
@@ -267,14 +268,14 @@ def generate_rules(
         if overflow:
             continue
 
-        for key, val in special_home.items():
+        for key, val in _special_home.items():
             if path.is_relative_to(val):
                 value = f"${{{key}}}"
                 break
         else:
-            for key, val in special_env.items():
+            for key, val in _special_env.items():
                 if path.is_relative_to(val):
-                    if not _check_is_in_rules(path):  # FIXME: regle "à la main"
+                    if not _check_is_in_rules(path):
                         x = "/" + str(path.relative_to(val))
                         if x == "/.":
                             x = ""
@@ -328,7 +329,7 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Tuple[
 
 
 # Helper to resolve symlinks and apply rules
-def _apply_dest_to_src_rules(path: Union[str,os.PathLike,_DirEntry],
+def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
                              *,
                              write: bool,
                              accept_source: bool = False,
@@ -340,8 +341,8 @@ def _apply_dest_to_src_rules(path: Union[str,os.PathLike,_DirEntry],
     """
     if not path:
         return None
-    if isinstance(path,_DirEntry):
-        path=path.path
+    if isinstance(path, _DirEntry):
+        path = path.path
     fake_path = _os_path_abspath(path)
     # if str(path).endswith("/"):
     #     fake_path = fake_path + "/"
@@ -510,7 +511,7 @@ def _wrap_two_filenames(func: Callable, *,
 
 def _wrap_os_path_samefile(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(src: Union[str, bytes, os.PathLike,_DirEntry],
+    def wrapper(src: Union[str, bytes, os.PathLike, _DirEntry],
                 dest: Union[str, bytes, os.PathLike],
                 *args, **kwargs):
         # Detect call from posixpath
@@ -519,7 +520,7 @@ def _wrap_os_path_samefile(func: Callable) -> Callable:
         remapped_src, rule1 = _apply_dest_to_src_rules(src, write=False)
         if rule1:
             _raise_ignore(src, rule1)
-        remapped_dest=None
+        remapped_dest = None
         if remapped_src is not None:
             remapped_dest, rule2 = _apply_dest_to_src_rules(dest,
                                                             write=False)
@@ -687,8 +688,6 @@ def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]
                     remapped = path
                 else:
                     _raise_access(path)
-            if _special_caller():  # FIXME: a garder ?
-                return func(remapped)
             entries = func(remapped)
             filtered: List[str] = []
             for entry in entries:
@@ -733,7 +732,9 @@ class _ScanDirContextManager:
     """
     A context manager that wraps os.scandir and implements the context manager protocol.
     """
-    # TODO __slot__
+
+    __slot__ = ("directory", "real_directory", "scanner")
+
     def close(self):
         if self.scanner:
             self.scanner.shutdown()
@@ -756,14 +757,9 @@ class _ScanDirContextManager:
         """
         Enter the context manager, opening the scandir iterator.
         """
-        try:
-            self.scanner = _scandir(self.real_directory)
-            self.scanner.__enter__()
-            return self
-        except Exception as e:
-            self.error = e
-            print(f"Error scanning directory {self.directory}: {e}")  # FIXME
-            return self
+        self.scanner = _scandir(self.real_directory)
+        self.scanner.__enter__()
+        return self
 
     def __exit__(self, exc_type: Optional[Type[BaseException]],
                  exc_val: Optional[BaseException],
@@ -808,9 +804,6 @@ class _ScanDirContextManager:
                         return _entry
             except StopIteration:
                 raise
-            except Exception as e:
-                print(f"Error iterating over {self.directory}: {e}")  # FIXME
-                raise StopIteration
 
 
 def _wrap_os_scandir(func: Callable) -> Callable:
@@ -951,30 +944,6 @@ def _wrap_io_FileIO__init__(func: Callable) -> Callable:
         return func(*args, **kwargs)
 
 
-def _wrap_pathlib_glob(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(self, pattern: str, *args, **kwargs) -> Iterator:
-        if new_path_and_rule := _apply_dest_to_src_rules(self, write=False,
-                                                         accept_source=True):
-            new_path, rule = new_path_and_rule
-            if rule:
-                _raise_ignore(pattern, rule)
-            return (_Path(_apply_src_to_dest_rules(p)[0]) for p in
-                    func(_Path(new_path), pattern, *args, **kwargs)
-                    if _apply_src_to_dest_rules(p)[0] is not None)
-        else:
-            new_path, rule = _apply_dest_to_src_rules(self,
-                                                      write=False)  # FIXME: remove line. PB de reset entre les tests
-            if rule:
-                _raise_ignore(pattern, rule)
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(self), False))
-            else:
-                _raise_access(self)
-
-    return wrapper
-
-
 # Wrapper for factory to wrapper ;-)
 def _f(func, *args, **kwargs):
     def wrapper():
@@ -1030,7 +999,6 @@ _default_rules = rules = {
     "os.removexattr": _f(_wrap_filename, write=True),
     "os.setxattr": _f(_wrap_filename, write=True),
     "os.getxattr": _f(_wrap_filename, write=False),
-    # TODO: revoir toutes les fonctions
     # DENY os.execv
     # DENY os.execve
     # DENY os.execl
@@ -1098,8 +1066,6 @@ _default_rules = rules = {
     # ALLOW os.path.walk (obsolette)
 
     # pathlib
-    # "pathlib._local.io":_f(_wrap_reload_module, name="io"),  # FIXME: ne semble pas nécessaire
-    # "pathlib._local.os":_f(_wrap_reload_module, name="os"),
     # ALLOW pathlib.Path.stat
     # ALLOW pathlib.Path.lstat
     # ALLOW pathlib.Path.exists
@@ -1113,15 +1079,15 @@ _default_rules = rules = {
     # ALLOW pathlib.Path.is_fifo
     # ALLOW pathlib.Path.is_socket
     # ALLOW pathlib.Path.samefile
-    # ALLOW pathlib.Path.open = _wrap_filename(pathlib.Path.open)
-    # ALLOW pathlib.Path.read_bytes = _wrap_filename(pathlib.Path.read_bytes)
-    # ALLOW pathlib.Path.read_text = _wrap_pathlib(pathlib.Path.read_text)
-    # ALLOW pathlib.Path.write_bytes = _wrap_filename(pathlib.Path.write_bytes)
-    # ALLOW pathlib.Path.write_text = _wrap_pathlib(pathlib.Path.write_text)
-    # ALLOW pathlib.Path.iterdir = _wrap_pathlib_iterdir(pathlib.Path.iterdir)
-    # "pathlib.Path.glob": _f(_wrap_pathlib_glob),  # FIXME: bug dejà avant
-    # ALLOW pathlib.Path.rglob = _wrap_pathlib_glob(pathlib.Path.rglob)
-    # pathlib.Path.walk = _wrap_filename(pathlib.Path.walk)
+    # ALLOW pathlib.Path.open
+    # ALLOW pathlib.Path.read_bytes
+    # ALLOW pathlib.Path.read_text
+    # ALLOW pathlib.Path.write_bytes
+    # ALLOW pathlib.Path.write_text
+    # ALLOW pathlib.Path.iterdir
+    # ALLOW pathlib.Path.glob
+    # ALLOW pathlib.Path.rglob
+    # ALLOW pathlib.Path.walk
     # ALLOW pathlib.Path.relative_to
     # ALLOW pathlib.Path.is_relative_to
     # ALLOW pathlib.Path.is_absolute
@@ -1185,11 +1151,10 @@ def activate_guard(
     Initializes the file access filter with the given rule list.
     Overrides built-in open and os.listdir functions.
     """
-    # TODO: add __set_values dans le module pour interdire la modification ?
     if not rules:
         return
     global _rules
     if _rules:
-        logger.info("Guard_files was already activated.")
+        logger.debug("Guard_files was already activated.")
     _rules = rules
     # readonly_module(__name__)

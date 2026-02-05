@@ -23,6 +23,16 @@ logger = logging.getLogger(__name__)
 
 DEBUG = False
 
+def _get_log_formatter():
+    root_logger = logging.getLogger()
+    fmt = None
+    for h in root_logger.handlers:
+        fmt = h.formatter
+        break
+    if fmt is None:
+        # Default formatter if none set explicitly
+        fmt = logging.Formatter()
+    return fmt._fmt
 
 async def _write_stream(
         child_stdin_writer: asyncio.StreamWriter
@@ -64,6 +74,7 @@ async def _read_stream(
 class SubProcessParameters(NamedTuple):
     all_rules: AllRules
     log_level: int
+    log_format: str
     token: str
     init_fn: str
 
@@ -233,6 +244,7 @@ class BaseSubProcessDaemon(SSESandbox):
         process_config = SubProcessParameters(
             all_rules=all_rules,
             log_level=log_level,
+            log_format=_get_log_formatter(),
             token=self._token,
             init_fn=init_fn_ref
         )
