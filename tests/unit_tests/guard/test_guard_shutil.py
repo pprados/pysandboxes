@@ -14,9 +14,9 @@ def reset_rules():
 @pytest.mark.skip(reason="not implemented")
 def test_shutil_chown(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -30,9 +30,9 @@ def test_shutil_chown(files):
 
 def test_shutil_copy(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -45,9 +45,9 @@ def test_shutil_copy(files):
 
 def test_shutil_copy2(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -63,9 +63,9 @@ def test_shutil_copy2(files):
 
 def test_shutil_copyfile(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -82,9 +82,9 @@ def test_shutil_copyfile(files):
 
 def test_shutil_copymode(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -95,9 +95,9 @@ def test_shutil_copymode(files):
 
 def test_shutil_copystat(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -108,9 +108,9 @@ def test_shutil_copystat(files):
 
 def test_shutil_copytree_and_move(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -122,9 +122,9 @@ def test_shutil_copytree_and_move(files):
 
 def test_shutil_disk_usage(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -134,9 +134,9 @@ def test_shutil_disk_usage(files):
 
 def test_shutil_make_archive(files):
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 

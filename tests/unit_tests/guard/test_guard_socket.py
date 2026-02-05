@@ -1,6 +1,4 @@
 import re
-import \
-    socket  # Required for socket.SOCK_STREAM etc. if used directly in this file, though not for these specific tests
 from pathlib import Path
 from typing import Union, List, \
     Tuple  # Added Tuple and Any for mock_getaddrinfo clarity
@@ -38,9 +36,11 @@ def test_no_rules_denied_connection(mock_getaddrinfo: patch) -> None:
     """
     If no rules are set, the connection should be allowed.
     """
+    import socket
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
         (s_family, s_type, 6, '', ('93.184.216.34', 80))]  # Used s_family
+    x=socket.getaddrinfo("abc",0)
     errors = []
     rules, _ = parse_rules([], errors)
     address: Tuple[str, int] = ("example.com", 80)
@@ -52,6 +52,7 @@ def test_invalid_port_raises_value_error(mock_getaddrinfo: patch) -> None:
     """
     Connections to an invalid port number should raise a ValueError.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     rules, _ = parse_rules([], errors)  # Rules don't matter here
@@ -66,13 +67,14 @@ def test_hostname_resolution_failure_raises_value_error(
     """
     If hostname resolution fails (socket.gaierror), a ValueError should be raised.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.side_effect = socket.gaierror("Resolution failed")
     rules, _ = parse_rules(
         [
-            ConfigLine("--net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
-            ConfigLine("--net=DENY|any|127.0.0.1/32|80|OUT", Path(), 0)
+            ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
+            ConfigLine("net=DENY|any|127.0.0.1/32|80|OUT", Path(), 0)
         ], errors)
     address: Tuple[str, int] = ("nonexistent.example.com", 80)
     with pytest.raises(
@@ -88,13 +90,14 @@ def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     If getaddrinfo returns no parsable IP addresses matching the socket family,
     a ValueError should be raised.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = []  # No results
     rules, _ = parse_rules(
         [
-            ConfigLine("--net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
-            ConfigLine("--net=DENY|any|127.0.0.1/32|80|OUT", Path(), 0)
+            ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
+            ConfigLine("net=DENY|any|127.0.0.1/32|80|OUT", Path(), 0)
         ], errors)
     address: Tuple[str, int] = ("empty.resolve.com", 80)
     # This ValueError is unlikely to be raised by the current guard_socket.py code in this scenario.
@@ -119,14 +122,15 @@ def test_explicit_deny_rule_blocks_connection(mock_getaddrinfo: patch) -> None:
     """
     An explicit DENY rule matching the IP, port, and direction should block the connection.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
         (s_family, s_type, s_proto, '', ('192.168.1.100', 8080))]  # Used s_family
     rules, _ = parse_rules(
         [
-            ConfigLine("--net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
-            ConfigLine("--net=DENY|any|192.168.1.100/24|8080|OUT", Path(), 0),
+            ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
+            ConfigLine("net=DENY|any|192.168.1.100/24|8080|OUT", Path(), 0),
         ],
         errors)
     address: Tuple[str, int] = ("blocked.host.local", 8080)
@@ -138,13 +142,14 @@ def test_explicit_deny_rule_any_port_blocks_connection(mock_getaddrinfo: patch) 
     """
     An explicit DENY rule with '*' (all ports) should block connection to any port on that network.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
         (s_family, s_type, s_proto, '', ('10.0.0.5', 1234))]  # Used s_family
     rules, _ = parse_rules([
-        ConfigLine("--net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
-        ConfigLine("--net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
+        ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
+        ConfigLine("net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
     ], errors)
     address: Tuple[str, int] = ("internal.service", 1234)
     with pytest.raises(RuleSocketConnectionRefusedError):
@@ -155,14 +160,15 @@ def test_explicit_deny_ipv6_rule_blocks_connection(mock_getaddrinfo: patch) -> N
     """
     An explicit DENY rule for an IPv6 address should block the connection.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET6, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
         (s_family, s_type, s_proto, '', ('::1', 443, 0, 0))]  # Used s_family
     rules, _ = parse_rules(
         [
-            ConfigLine("--net=ALLOW|any|::1/0|*|OUT", Path(), 0),
-            ConfigLine("--net=DENY|any|::1/128|443|OUT", Path(), 0),
+            ConfigLine("net=ALLOW|any|::1/0|*|OUT", Path(), 0),
+            ConfigLine("net=DENY|any|::1/128|443|OUT", Path(), 0),
         ], errors)
     address: Tuple[str, int] = ("ip6-localhost", 443)
     with pytest.raises(RuleSocketConnectionRefusedError):
@@ -173,6 +179,7 @@ def test_multiple_ips_one_matches_deny_blocks(mock_getaddrinfo: patch) -> None:
     """
     If a hostname resolves to multiple IPs, and one matches a DENY rule, it's blocked.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
@@ -182,8 +189,8 @@ def test_multiple_ips_one_matches_deny_blocks(mock_getaddrinfo: patch) -> None:
         (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('5.6.7.8', 80))
     ]
     rules, _ = parse_rules([
-        ConfigLine("--net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
-        ConfigLine("--net=DENY|any|192.168.1.10/32|80|OUT", Path(), 0)
+        ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
+        ConfigLine("net=DENY|any|192.168.1.10/32|80|OUT", Path(), 0)
     ], errors)
     address: Tuple[str, int] = ("multihomed.host", 80)
     with pytest.raises(RuleSocketConnectionRefusedError):
@@ -197,14 +204,15 @@ def test_explicit_allow_rule_not_triggers_allow_exception(
     RuntimeError, as per the current function logic.
     This occurs if no preceding DENY rule matched.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
         (s_family, s_type, s_proto, '', ('8.8.8.8', 53))]  # Used s_family
     rules, _ = parse_rules([
-        # ConfigLine("--net=DENY|any|1.1.1.1/32|1234|OUT", Path(), 0),
+        # ConfigLine("net=DENY|any|1.1.1.1/32|1234|OUT", Path(), 0),
         # # First rule is ALLOW.
-        ConfigLine("--net=ALLOW|any|8.8.8.8/32|53|OUT", Path(), 0),
+        ConfigLine("net=ALLOW|any|8.8.8.8/32|53|OUT", Path(), 0),
         # This ALLOW rule (rule #1) matches.
     ], errors)
     address: Tuple[str, int] = ("google.dns", 53)
@@ -215,13 +223,14 @@ def test_bind_direction_check_explicit_deny(mock_getaddrinfo: patch) -> None:
     """
     Test explicit DENY for IN (bind) direction.
     """
+    import socket
     errors = []
     s_family, s_type, s_proto = socket.AF_INET, socket.SOCK_STREAM, 6
     mock_getaddrinfo.return_value = [
         (s_family, s_type, s_proto, '', ('0.0.0.0', 8080))]  # Used s_family
     rules, _ = parse_rules([
-        ConfigLine("--net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
-        ConfigLine("--net=DENY|any|0.0.0.0/0|8080|IN", Path(), 0),
+        ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
+        ConfigLine("net=DENY|any|0.0.0.0/0|8080|IN", Path(), 0),
     ], errors)
     address: Tuple[str, int] = ("0.0.0.0", 8080)
     with pytest.raises(RuleSocketConnectionRefusedError):
@@ -234,6 +243,7 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: patch) -> None:
     the connection is blocked. The socket instance is AF_INET6.
     The first rule is ALLOW to set implicit DENY, but it doesn't match the connection.
     """
+    import socket
     hostname: str = "mixed.ip.example.com"
     port: int = 9000
     # Socket instance is IPv6 capable
@@ -248,9 +258,9 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: patch) -> None:
     ]
 
     rules, _ = parse_rules([
-        ConfigLine("--net=ALLOW|any|::1/0|80|OUT", Path(), 0),
+        ConfigLine("net=ALLOW|any|::1/0|80|OUT", Path(), 0),
         # Rule 0: First rule is ALLOW, implicit default is DENY. Doesn't match port.
-        ConfigLine("--net=DENY|any|2a00:1450::/32|9000|OUT", Path(), 0),
+        ConfigLine("net=DENY|any|2a00:1450::/32|9000|OUT", Path(), 0),
         # Corrected double ==, Rule 1: DENY rule for the IPv6 network.
     ], errors)
     address: Tuple[str, int] = (hostname, port)
@@ -263,6 +273,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None
     """
     Tests that a rule with 'any' for socket type allows connections with different socket types.
     """
+    import socket
     errors = []
     s_family_inet, s_type_stream, _ = socket.AF_INET, socket.SOCK_STREAM, 0
     hostname, port = "anytype.example.com", 1234
@@ -273,8 +284,8 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: patch) -> None
     ]
     # Rule ALLOWING 'any' type
     rules, _ = parse_rules([
-        ConfigLine(f"--net=ALLOW|*|0.0.0.0/0|{port}|OUT", Path(), 0),
-        ConfigLine(f"--net=DENY|*|{ip_address}/32|{port}|OUT", Path(), 0),
+        ConfigLine(f"net=ALLOW|*|0.0.0.0/0|{port}|OUT", Path(), 0),
+        ConfigLine(f"net=DENY|*|{ip_address}/32|{port}|OUT", Path(), 0),
     ], errors)
     address: Tuple[str, int] = (hostname, port)
 

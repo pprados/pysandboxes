@@ -96,9 +96,9 @@ def parse_rules(
 
     envs_rules = set()
     for orule in rules:
-        if orule.rule.startswith("--set-env="):
+        if orule.rule.startswith("set-env="):
             # Remove prefix
-            rule = ConfigLine(orule.rule[len("--set-env="):], orule.path, orule.ln)
+            rule = ConfigLine(orule.rule[len("set-env="):], orule.path, orule.ln)
 
             if "=" not in rule.rule:
                 errors.append(
@@ -127,8 +127,8 @@ def parse_rules(
             else:
                 new_vars[key_pattern] = substitute_value(value_pattern)
                 envs_rules.add(EnvRule(re.compile(re.escape(key_pattern)), False, orule))
-        elif orule.rule.startswith("--unset-env="):
-            remove_key = orule.rule[len("--unset-env="):]
+        elif orule.rule.startswith("unset-env="):
+            remove_key = orule.rule[len("unset-env="):]
             new_vars.pop(remove_key, None)
             envs_rules.add(EnvRule(re.compile(re.escape(remove_key)), True, orule))
         else:
@@ -200,7 +200,7 @@ def generate_rules(
                 find=True
                 break
         if not find:
-            result.append(f"--set-env={key}=${{{key}}}")
+            result.append(f"set-env={key}=${{{key}}}")
     return result
 
 def activate_guard(

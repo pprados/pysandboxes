@@ -1,28 +1,21 @@
-#--os-sandbox=task
-#--os-sandbox=subprocess
-# --os-sandbox=firejail
-# TODO --no-py-sandbox
-# TODO: --no-dotenv
-# TODO: --firejail=file.template
-
---set-env=HOME=${HOME}
---set-env=USER=${USER}
---set-env=VIRTUAL_ENV*=${VIRTUAL_ENV*}
---set-env=LC_*=${LC_*}
---set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
---set-env=LANG=${LANG}
---set-env=TMP=/tmp
---set-env=TEMP=/tmp
+set-env=HOME=${HOME}
+set-env=USER=${USER}
+set-env=VIRTUAL_ENV*=${VIRTUAL_ENV*}
+set-env=LC_*=${LC_*}
+set-env=LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+set-env=LANG=${LANG}
+set-env=TMP=/tmp
+set-env=TEMP=/tmp
 
 
 # Ignores all hidden files and .log files
---ignore=.*
---ignore=*.log
---ro-bind=${PWD},${PWD}
---ro-bind=${PYENV_ROOT},${PYENV_ROOT}
---ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
+ignore=.*
+ignore=*.log
+ro-bind=${PWD},${PWD}
+ro-bind=${PYENV_ROOT},${PYENV_ROOT}
+ro-bind=${VIRTUAL_ENV},${VIRTUAL_ENV}
 
---python-import=os
---python-import=socket
---python-import=io
+python-import=os
+python-import=socket
+python-import=io
 

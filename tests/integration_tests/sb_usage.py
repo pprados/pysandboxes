@@ -11,8 +11,7 @@ from pysandboxes.sandboxes import sandbox, sandboxes
 logger = logging.getLogger(__name__)
 
 
-async def init_log_level():
-    await asyncio.sleep(0)
+def init_log_level():
     if True: # "PYTEST_RUN_CONFIG" in os.environ:
         format = '%(levelname)-5s [%(process)d] %(name)s:%(message)s'
     else:
@@ -158,6 +157,10 @@ def init_sandbox():
     logger.debug("INIT Daemon")
     init_log_level()
 
+async def async_init_sandbox():
+    await asyncio.sleep(0)
+    init_sandbox()
+
 
 async def arun():
     rc = await arun_in_sandbox()
@@ -189,7 +192,7 @@ def main():
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # print("----------------")
-        with pysandboxes.sandboxes.sandboxes(init_sandbox):
+        with pysandboxes.sandboxes.sandboxes(async_init_sandbox):
             # run()
             call_llm()
         print("----------------")

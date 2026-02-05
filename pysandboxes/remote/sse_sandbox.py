@@ -15,7 +15,6 @@ from aiohttp_sse_client import client as sse_client
 from .parameters import HOST, PORT, PATH_RPC
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
-# from .tools import from_b85
 from ..tools import is_in_sandbox, get_callable_info
 
 logger = logging.getLogger(__name__)
@@ -41,8 +40,9 @@ def _get_rpc_params(args: Any,
     def to_b85(obj: Any) -> str:
         result = base64.b85encode(pickle.dumps(obj,
                                                protocol=pickle.HIGHEST_PROTOCOL
-                                               )).decode("utf-8")
-        # assert pickle.loads(base64.b85decode(result.encode("utf-8"))) == obj
+                                               )).decode("ascii")
+        assert pickle.loads(
+            base64.b85decode(result.encode("ascii"))) == obj  # FIXME
         return result
 
     module_name, callable_name = get_callable_info(func)
@@ -71,7 +71,7 @@ class SSESandbox(BaseDaemon):
         import pickle
         def from_b85(b85: str) -> Any:
             return pickle.loads(
-                base64.b85decode(b85.encode("utf-8")),
+                base64.b85decode(b85.encode("ascii")),
             )
 
         try:

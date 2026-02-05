@@ -120,7 +120,7 @@ Note the following pattern, which involves calling the same initialization funct
 
 ```python
 # Init.py file
-def init_app():
+async def init_app():
     # Run in main() and in the sandbox
    ...
 
@@ -128,7 +128,7 @@ def init_app():
 import pysandboxes
 from init import init_app
 async def main():
-    init_app()
+    await init_app()
     
 if __name__ == "__main__":
     pysandboxes.run(main(),init_fn=init_app)  # in place of asyncio.run(main())

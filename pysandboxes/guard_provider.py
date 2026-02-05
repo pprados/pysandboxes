@@ -18,9 +18,9 @@ def parse_rules(rules: ConfigLines,
     use_py_sandbox = True
     learning_path=None
     for rule in rules:
-        if rule.rule.startswith("--os-sandbox="):
+        if rule.rule.startswith("os-sandbox="):
             provider_rule.append(rule)
-            provider = rule.rule[len("--os-sandbox="):].strip()
+            provider = rule.rule[len("os-sandbox="):].strip()
             if provider not in providers_factory:
                 errors.append(
                     (f"{format_ruleref(rule)}: "
@@ -30,7 +30,7 @@ def parse_rules(rules: ConfigLines,
                      )
                 )
             providers_set.append(provider)
-        elif rule.rule.startswith("--py-sandbox="):
+        elif rule.rule.startswith("py-sandbox="):
             value = rule.rule.split("=", 1)[1].strip().lower()
             if value in ("", "true"):
                 use_py_sandbox = True
@@ -42,7 +42,7 @@ def parse_rules(rules: ConfigLines,
                      f"Invalid value '{value}' for --py-sandbox. Use true or false.",
                      rule.path, rule.ln)
                 )
-        elif rule.rule.startswith("--learning="):
+        elif rule.rule.startswith("learning="):
             if learning_path:
                 continue
             value = rule.rule.split("=", 1)[1].strip().lower()

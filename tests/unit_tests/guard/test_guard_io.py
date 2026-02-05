@@ -11,17 +11,21 @@ from pysandboxes.types import ConfigLines, ConfigLine
 def _reset_rules():
     from pysandboxes.guard_import import conv_patch_rules, _deactivate_guard_import, \
         activate_guard_import
-    from pysandboxes.guard_files import _deactivate_guard_files, patch_rules
+    from pysandboxes.guard_files import _deactivate_guard_files, patch_rules as file_patch_rules
+    from pysandboxes.guard_socket import _deactivate_guard_sockets, patch_rules as socket_path_rules
     activate_guard_import(
         conv_patch_rules(
             {
-                **patch_rules(),
+                **file_patch_rules(),
+                **socket_path_rules(),
             }
         ),
         tuple(["*"]),  # Import all modules
     )
     yield
+    import socket # FIXME: a virer
     _deactivate_guard_files()
+    _deactivate_guard_sockets()
     _deactivate_guard_import()
 
 
@@ -105,7 +109,7 @@ def _activate_guard(rules: ConfigLines) -> None:
 def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
     errors = []
     rules = [
-        ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
+        ConfigLine(f"ignore={files['ignore']}", Path(), 0)
     ]
     _activate_guard(rules)
 
@@ -117,7 +121,7 @@ def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
 def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, Path]):
     errors = []
     rules = [
-        ConfigLine(f"--ignore={files['ignore']}", Path(), 0)
+        ConfigLine(f"ignore={files['ignore']}", Path(), 0)
     ]
     _activate_guard(rules)
 
@@ -128,7 +132,7 @@ def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, 
 
 def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]):
     rules = [
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
     _activate_guard(rules)
     # Access using the dest path should redirect to src
@@ -142,7 +146,7 @@ def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]):
 
 def test_io_open_write(files: Dict[str, Path]):
     rules = [
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
     _activate_guard(rules)
     target_path = files['bind_dest'] / "write.txt"
@@ -156,7 +160,7 @@ def test_io_open_write(files: Dict[str, Path]):
 
 def test_io_open_refuse_write(files: Dict[str, Path]):
     rules = [
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
     _activate_guard(rules)
     target_path = files['bind_dest'] / "write.txt"
@@ -169,9 +173,9 @@ def test_io_open_refuse_write(files: Dict[str, Path]):
 
 def test_io_open_visible_and_invisible_files(files: Dict[str, Path]):
     rules = [
-        ConfigLine("--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -193,9 +197,9 @@ def test_io_open_visible_and_invisible_files(files: Dict[str, Path]):
 
 def test_io_FileIO(files: Dict[str, Path]) -> None:
     rules = [
-        ConfigLine("--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 

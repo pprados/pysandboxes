@@ -1,10 +1,12 @@
 import collections
 from typing import ItemsView, Hashable, Iterator, Generic, TypeVar, Tuple, Union, \
-    Mapping, Iterable, KeysView, ValuesView
+    Mapping, Iterable, KeysView, ValuesView, AnyStr, Dict
 
 KeyType = TypeVar('KeyType', bound=Hashable)
 ValueType = TypeVar('ValueType')
 
+def _restore_picle(data:Dict[KeyType,ValueType]) -> 'ImmutableDict[KeyType,ValueType]':
+    return ImmutableDict(data)
 
 class ImmutableDict(
     tuple,
@@ -23,28 +25,36 @@ class ImmutableDict(
                 Iterable[Tuple[KeyType, ValueType]]],
     ) -> "ImmutableDict[KeyType, ValueType]":
         # Normalize incoming data to an iterable of pairs
-        if isinstance(data, Mapping):
-            from pysandboxes.guard_envs import LearnEnviron
-            # Hack to detect the learning phase.
-            # We don't want to learn all keys
-            if isinstance(data, LearnEnviron):
-                data = dict(data)
-            items = tuple(data.items())
+        keys: Tuple[KeyType, ...]
+        values: Tuple[ValueType, ...]
+        if isinstance(data, ImmutableDict):
+            keys = data._keys
+            values = data._values
         else:
-            # allow any iterable of (k, v) pairs
-            items = tuple(data)
+            # elif isinstance(data, Tuple) and not isinstance(data,ImmutableDict):
+            #     items = tuple(data)
+            if isinstance(data, Mapping):
+                from pysandboxes.guard_envs import LearnEnviron
+                # Hack to detect the learning phase.
+                # We don't want to learn all keys
+                if isinstance(data, LearnEnviron):
+                    data = dict(data)
+                keys = tuple(data.keys())
+                values = tuple(data.values())
+            else:
+                # allow any iterable of (k, v) pairs
+                items = tuple(data)
 
-        # Build parallel tuples of keys and values
-        keys: Tuple[KeyType, ...] = tuple(item[0] for item in items if item)
-        try:
-            tuple(item[1] for item in items if item)
-        except RuntimeError:
-            pass
-        values: Tuple[ValueType, ...] = tuple((item[1] for item in items if item))
+                # Build parallel tuples of keys and values
+                keys = tuple(item[0] for item in items if item)
+                values = tuple(item[1] if len(item) > 1 else None for item in items)
 
         # Create the tuple-subclass with two items: (keys, values)
         obj = tuple.__new__(cls, (keys, values))
         return obj
+
+    def __reduce__(self):
+        return (_restore_picle,(dict(self),))
 
     @property
     def _keys(self) -> Tuple[KeyType, ...]:
@@ -87,4 +97,3 @@ class ImmutableDict(
 
     def values(self) -> ValuesView[ValueType]:
         return Mapping.values(self)
-

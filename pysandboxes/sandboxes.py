@@ -14,7 +14,7 @@ from typing import Callable, Optional
 from .base_daemon import BaseDaemon
 from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
-from .py_sandbox import get_config_path
+from .py_sandbox import get_config_path, ConfigSyntaxError
 from .remote.parameters import DELAY_FOR_CALL_DAEMON
 from .tools import check_mixte_async_async, SyncOrAsyncFunc
 from .types import Envs
@@ -102,11 +102,14 @@ class sandboxes(Protocol):
         logger.debug("__enter__ start...")
         check_mixte_async_async()
         log_level = logging.root.getEffectiveLevel()
-        all_rules = read_and_parse_config(
-            self.config_path,
-            envs=self.envs,
-            extra_rules=self.extra_rules,
-        )
+        try:
+            all_rules = read_and_parse_config(
+                self.config_path,
+                envs=self.envs,
+                extra_rules=self.extra_rules,
+            )
+        except ConfigSyntaxError as e:
+            raise e
         start_daemon(all_rules,
                      log_level=log_level,
                      init_fn=self.init_fn,

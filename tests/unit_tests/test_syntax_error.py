@@ -12,9 +12,9 @@ def test_syntax_error(caplog):
         with caplog.at_level(logging.WARNING):
             read_and_parse_config(config_path,
                                   extra_rules=[
-                                      "--os-sandbox=error",
-                                      "--set-env=abc",
-                                      "--bind=",
+                                      "os-sandbox=error",
+                                      "set-env=abc",
+                                      "bind=",
                                   ])
             assert 0, "Must raise an exception"
     except ValueError as e:

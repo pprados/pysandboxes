@@ -23,3 +23,11 @@ def test_immutable_dict():
     # Check immutability
     with pytest.raises(TypeError):
         my_immutable_dict["a"] = 10
+
+def test_empty_immutable_dict():
+    my_immutable_dict = ImmutableDict({})
+    my_immutable_dict.keys()
+    my_immutable_dict.values()
+    import pickle
+    p=pickle.dumps(my_immutable_dict)
+    pickle.loads(p)

@@ -198,9 +198,12 @@ class BaseSubProcessDaemon(SSESandbox):
                             stdin: bool = False,
                             stdout: bool = False) -> None:
         def to_b85(obj: Any) -> str:
-            return base64.b85encode(pickle.dumps(obj,
-                                                 protocol=pickle.HIGHEST_PROTOCOL
-                                                 )).decode("utf-8")
+            result = base64.b85encode(pickle.dumps(obj,
+                                                   protocol=pickle.HIGHEST_PROTOCOL
+                                                   )).decode("ascii")
+            assert pickle.loads(
+                base64.b85decode(result.encode("ascii"))) == obj  # FIXME
+            return result
 
         self._is_started = False
 

@@ -16,9 +16,9 @@ def reset_rules():
 def test_fileinput_input(files):
     errors = []
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
 
     _activate_guard(rules)

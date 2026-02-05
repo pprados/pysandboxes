@@ -54,14 +54,12 @@ async def sandbox_daemon(
     import pickle
 
     def to_b85(obj: Any) -> str:
-        return base64.b85encode(pickle.dumps(obj,
-                                             protocol=pickle.HIGHEST_PROTOCOL
-                                             )).decode("utf-8")
-
-    # def from_b85(b85: str) -> Any:
-    #     return pickle.loads(
-    #         base64.b85decode(b85.encode("utf-8")),
-    #     )
+        result = base64.b85encode(pickle.dumps(obj,
+                                               protocol=pickle.HIGHEST_PROTOCOL
+                                               )).decode("ascii")
+        assert pickle.loads(
+            base64.b85decode(result.encode("ascii"))) == obj  # FIXME
+        return result
 
     try:
         loop = asyncio.get_event_loop()
@@ -139,15 +137,11 @@ async def sandbox_daemon(
         logger.info("(%s) ... cancelled", session_id)
         yield json.dumps({"session_id": session_id, "cancelled": True})
     except AssertionError as e:
-        logger.error("-------------------")
-        traceback.print_exc()
-        logger.error("-------------------")
         logger.exception("assertion %s", traceback.format_exc())
         sys.exit(-1)
         # Ignore?
     except Exception as e:
-        logger.info("(%s) ... error %s", session_id, repr(e))
-        traceback.print_exception(e)
+        logger.exception("(%s) ... error %s", session_id, repr(e))
         yield json.dumps({"session_id": session_id, "error": repr(e)})
 
 
@@ -177,7 +171,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         import pickle
         def from_b85(b85: str) -> Any:
             return pickle.loads(
-                base64.b85decode(b85.encode("utf-8")),
+                base64.b85decode(b85.encode("ascii")),
             )
 
         set_is_in_sandbox(True)
@@ -312,7 +306,10 @@ class LocalTaskDaemon(SSESandbox):
         if envs is None:
             envs = os.environ
         if init_fn:
-            init_fn()
+            if asyncio.iscoroutine(init_fn()):
+                await init_fn()
+            else:
+                init_fn()
         loop = get_sandbox_loop()
         initial_threshold: float = loop.slow_callback_duration
         try:

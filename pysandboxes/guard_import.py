@@ -59,7 +59,7 @@ def parse_rules(config: ConfigLines,
     white_list: List[str] = []
     ignore_rules: ConfigLines = []
     for rule in config:
-        if rule.rule.startswith("--python-import="):
+        if rule.rule.startswith("python-import="):
             value = rule.rule.split('=', 1)[1]
             # Accept multiple --python-import rules
             white_list.extend([r.strip() for r in value.split(',')])
@@ -71,12 +71,12 @@ def parse_rules(config: ConfigLines,
 
 
 def _apply_patch(module, name: str):
+    logger.info(f"Apply patch {name=} {module=}")  # FIXME
     all_patch = _patch_rules[name]
     for patch in all_patch:
         cur_module = module
         paths = patch.module_name.split('.')
         for node in paths[:-1]:
-            # logger.debug(f"{path=} {cur_module=}")
             cur_module = cur_module.__dict__[node]
         new_value = patch.patch_factory(cur_module.__dict__[paths[-1]])
         assert not hasattr(cur_module.__dict__[paths[-1]],
@@ -273,7 +273,7 @@ def activate_guard_import(
 ) -> None:
     global _rules
     if _rules:
-        logger.info("Guard_files was already activated.")
+        logger.debug("Guard_files was already activated.")
     if _activate_patch_import(patch_rules):
         if "builtins" in patch_rules:
             builtins_module = sys.modules["builtins"]
@@ -288,7 +288,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         _rules = ()
         import sys
         # if _guard_finder in sys.meta_path:
-        if True:
+        if True: # FIXME
         #     logger.debug("Remove in meta-path")
         #     sys.meta_path.remove(_guard_finder)
             _remove_modules()
@@ -300,5 +300,5 @@ def generate_rules(
     # Select only parent
     result = set()
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
-        result.add(f"--python-import={learn_rule.name}")
+        result.add(f"python-import={learn_rule.name}")
     return list(result)

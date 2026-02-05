@@ -18,9 +18,9 @@ def reset_rules():
 
 def test_pathlib_open(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
 
     _activate_guard(rules)
@@ -34,9 +34,9 @@ def test_pathlib_open(files):
 
 def test_pathlib_read_write_text(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
 
     _activate_guard(rules)
@@ -50,9 +50,9 @@ def test_pathlib_read_write_text(files):
 
 def test_pathlib_read_write_bytes(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
     
@@ -65,9 +65,9 @@ def test_pathlib_read_write_bytes(files):
 
 def test_pathlib_is(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
     
@@ -101,9 +101,9 @@ def test_pathlib_is(files):
 
 def test_pathlib_info(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
     
@@ -116,9 +116,9 @@ def test_pathlib_info(files):
 
 def test_pathlib_glob(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -133,9 +133,9 @@ def test_pathlib_glob(files):
 
 def test_pathlib_rglob(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
     
@@ -148,9 +148,9 @@ def test_pathlib_rglob(files):
 
 def test_pathlib_iterdir(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -166,9 +166,9 @@ def test_pathlib_iterdir(files):
 
 def test_pathlib_chmod_and_lchmod(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -184,9 +184,9 @@ def test_pathlib_chmod_and_lchmod(files):
 
 def test_pathlib_statand_stat_and_lstat(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
     
@@ -203,9 +203,9 @@ def test_pathlib_statand_stat_and_lstat(files):
 
 def test_pathlib_mkdir_removedirs_and_rmdir(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -226,9 +226,9 @@ def test_pathlib_mkdir_removedirs_and_rmdir(files):
 
 def test_pathlib_link_symlink_and_readlink(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0)
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0)
     ]
     _activate_guard(rules)
 
@@ -269,9 +269,9 @@ def test_pathlib_link_symlink_and_readlink(files):
 
 def test_pathlib_link_symlink_and_readlink_refused(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -282,9 +282,9 @@ def test_pathlib_link_symlink_and_readlink_refused(files):
 
 def test_pathlib_touch(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -299,9 +299,9 @@ def test_pathlib_touch(files):
 
 def test_pathlib_touch_refused(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -312,9 +312,9 @@ def test_pathlib_touch_refused(files):
 
 def test_pathlib_rename(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -337,9 +337,9 @@ def test_pathlib_rename(files):
 
 def test_pathlib_rename_refused(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -350,9 +350,9 @@ def test_pathlib_rename_refused(files):
 
 def test_pathlib_replace(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -374,9 +374,9 @@ def test_pathlib_replace(files):
 
 def test_pathlib_replace_refused(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -387,9 +387,9 @@ def test_pathlib_replace_refused(files):
 
 def test_pathlib_resolve(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -399,9 +399,9 @@ def test_pathlib_resolve(files):
 
 def test_pathlib_samefile(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 
@@ -414,9 +414,9 @@ def test_pathlib_samefile(files):
 
 def test_pathlib_walk(files):
     rules = [
-        ConfigLine(f"--ignore=*.log",NonePath,0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
+        ConfigLine(f"ignore=*.log",NonePath,0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
     _activate_guard(rules)
 

@@ -1,25 +1,38 @@
 import inspect
 import logging
 import os
-import sys
+import re
 import types
 from importlib import resources
 from pathlib import Path
-from typing import Optional, List, Dict, NamedTuple
+from typing import Optional, List, Dict, NamedTuple, Set
 
 from . import guard_files, guard_envs, guard_provider, guard_socket, guard_import
 from .base_daemon import BaseDaemon
+from .exception import SandBoxError
 from .guard_envs import EnvsRules
 from .guard_files import FileRules
 from .guard_import import ImportRules, conv_patch_rules
 from .guard_socket import SocketRules
 from .learning import activate_learning
-from .main_logger import format_ruleref, format_error_list, ErrorMsg, pysandboxes_logger
+from .main_logger import format_ruleref, format_error_list, ErrorMsg, \
+    pysandboxes_logger, make_relative_path
 from .remote.parameters import CONFIG_NAME
 from .tools import remove_config_comments, substitute_config_env_vars, find_config
 from .types import ConfigLines, Envs, ConfigLine
 
 logger = logging.getLogger(__name__)
+
+
+class ConfigSyntaxError(SandBoxError):
+    def __init__(self, message: str, errors: List[str]):
+        super().__init__()
+        self.message = message
+        self.errors = errors
+
+    def __str__(self):
+        return (self.message + "\n" +
+                "\n".join(self.errors))
 
 
 def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
@@ -113,10 +126,10 @@ def read_and_parse_config(
                         0] + '.templates') / 'py-sandbox.template'
         ) as resource_path:
             config = (
-                    [ConfigLine(f"--learning={CONFIG_NAME}", Path(), 0)] +
+                    [ConfigLine(f"learning={CONFIG_NAME}", Path(), 0)] +
                     extra_lines +
                     _read_config(resource_path)
-                      )
+            )
     else:
         if not find_config_path and Path(CONFIG_NAME).exists():
             config_path = Path(CONFIG_NAME)
@@ -126,6 +139,41 @@ def read_and_parse_config(
     return parse_config(config,
                         envs=envs,
                         exit_on_error=exit_on_error)
+
+
+def parse_include(
+        rules: ConfigLines,
+) -> ConfigLines:
+    includes = set()
+    return _parse_include(includes, rules)
+
+
+def _parse_include(
+        includes: Set[Path],
+        rules: ConfigLines,
+) -> ConfigLines:
+    others: ConfigLines = []
+    pattern = re.compile(r'^include\s+"(.+)"\s*$')
+    for rule in rules:
+        match = pattern.match(rule.rule)
+        if match:
+            filename = Path(match[1]).expanduser().absolute()
+            if filename not in includes:  # No loop of include
+                try:
+                    if filename.exists():
+                        # Read the file
+                        include_config = remove_config_comments(
+                            [ConfigLine(line, filename, ln + 1) for ln, line in
+                             enumerate(filename.read_text().split("\n"))])
+                        # Recursive include
+                        includes.add(filename.absolute())
+                        others.extend(
+                            _parse_include(includes, include_config))
+                except PermissionError:
+                    pass  # Ignore
+        else:
+            others.append(rule)
+    return others
 
 
 def parse_config(
@@ -139,10 +187,14 @@ def parse_config(
     ienvs = Envs(envs)
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
-    # 1. Parse the rules, step by step
+    # 1. Parse includes
+    config = parse_include(config)
+
+    # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, ienvs, errors)
     others = substitute_config_env_vars(others, ienvs)  # with main envs
 
+    # 3. Parse others rules
     os_sandbox, use_pysandbox, learning_path, others = guard_provider.parse_rules(
         others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
@@ -162,11 +214,14 @@ def parse_config(
         errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))
         all_errors = "\n" + "\n".join([error[0] for error in errors])
         logger.error(all_errors)
-        all_files_in_errors = list(set([repr(str(error[1])) for error in errors
-                                        if error[1] != Path("")]))
+        all_files_in_errors = list(
+            set([repr(make_relative_path(error[1])) for error in errors
+                 if error[1] != Path("")]))
         if exit_on_error:
             os._exit(1)
-        raise ValueError(f"Syntax error in {format_error_list(all_files_in_errors)} ")
+        raise ConfigSyntaxError(
+            f"Syntax error in config files.",
+            [error[0] for error in errors])
 
     return AllRules(config,
                     sandbox_env,

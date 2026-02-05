@@ -105,14 +105,16 @@ def parse_rules(config: ConfigLines,
     rules_bind: List[FilesRule] = []
     ignore_rules: ConfigLines = []
     for rule in config:
-        if rule.rule.startswith("--bind=") or rule.rule.startswith("--ro-bind="):
+        if rule.rule.startswith("bind=") or rule.rule.startswith("ro-bind="):
             value = rule.rule.split('=', 1)[1]
             try:
                 src, dest = value.split(",", 1)
                 if not src and not dest:
                     continue  # Ignore empty bind
                 if src and dest:
-                    if not _Path(src).is_dir() or not _Path(dest).is_dir():
+                    src=_Path(src).expanduser()
+                    dest=_Path(dest).expanduser()
+                    if not src.is_dir() or not dest.is_dir():
                         errors.append(
                             (
                                 f"{format_ruleref(rule)}: "
@@ -124,7 +126,7 @@ def parse_rules(config: ConfigLines,
                         )
                         continue
                     # Search same file_rules with different write flag
-                    is_write = rule.rule.startswith("--bind=")
+                    is_write = rule.rule.startswith("bind=")
                     for bind_rule in rules_bind:
                         if bind_rule.source == src and bind_rule.dest == dest:
                             if bind_rule.write != is_write:
@@ -148,7 +150,7 @@ def parse_rules(config: ConfigLines,
                         rules_bind.append(BindRule(source=src_str,
                                                    dest=dest_str,
                                                    write=rule.rule.startswith(
-                                                       "--bind="),
+                                                       "bind="),
                                                    config=rule,
                                                    ))
                 else:
@@ -174,8 +176,8 @@ def parse_rules(config: ConfigLines,
                     )
                 )
                 continue
-        elif rule.rule.startswith("--ignore="):
-            pattern = rule.rule[len("--ignore="):]
+        elif rule.rule.startswith("ignore="):
+            pattern = rule.rule[len("ignore="):]
             rules_ignore.append(IgnoreRule(pattern, rule))
         else:
             ignore_rules.append(rule)
@@ -285,7 +287,7 @@ def generate_rules(
             value = str(path)
         if value:
             result.add(
-                "--" +
+                "" +
                 f'{"" if write else "ro-"}bind={value},{value}'
             )
         if path != home:

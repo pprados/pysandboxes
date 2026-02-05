@@ -3,7 +3,7 @@ import ipaddress
 import socket
 from typing import List
 
-from .guard_socket import SocketRule, SPEC_TO_TYPE_MAP
+from .guard_socket import SocketRule, SPEC_TO_TYPE_MAP, SocketRules
 from .types import ConfigLines
 
 _map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
@@ -84,7 +84,7 @@ def _build_network(network_obj, ipv6: bool):
             network = f'-d {network_obj.compressed} '
     return network
 
-def rule_to_netfilter(socket_rules: List[SocketRule],
+def rule_to_netfilter(socket_rules: SocketRules,
                       is_ipv6: bool) -> List[str]:
     netfilter = [
         "*filter",
@@ -110,7 +110,7 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
                 continue
             elif not is_ipv6 and isinstance(network_obj, ipaddress.IPv6Network):
                 continue
-            if rule_type in [socket.IPPROTO_TCP]:
+            if rule_type in [socket.SOCK_STREAM]:
                 if rule_direction_from_rule == "OUT":
                     s_ports = _build_port(rule_ports_list)
                     if s_ports:
@@ -143,7 +143,7 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
                             f"-j {_map_netfilter_action[action]} "
                     )
                     netfilter.append(ip_rule)
-            elif rule_type in [socket.IPPROTO_UDP]:
+            elif rule_type in [socket.SOCK_DGRAM]:
                 s_ports = _build_port(rule_ports_list)
                 if rule_direction_from_rule == "IN":
                     sd="s"
@@ -160,6 +160,8 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
                     f"-j {_map_netfilter_action[action]} "
                 )
                 netfilter.append(ip_rule)
+            elif rule_type in exclude:
+                pass # Ignore
             else:
                 assert False, "Unkown protocol"
 

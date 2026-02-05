@@ -54,9 +54,9 @@ async def main() -> int:
 
     # -------------
     # Read all configuration from stdin until EOF
-    def from_b85(b85: str) -> Any:
+    def from_b85(b85: str) -> Any:  # FIXME: pourquoi plusieurs versions?
         return pickle.loads(
-            base64.b85decode(b85.encode("utf-8")),
+            base64.b85decode(b85.encode("ascii")),
         )
 
     config_body = None

@@ -19,9 +19,9 @@ def reset_rules():
 
 def test_os_listdir_filters_ignored_files_and_bind(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -41,9 +41,9 @@ def test_os_listdir_filters_ignored_files_and_bind(files:Dict[str,Path]) -> None
 
 def test_os_statand_stat_and_lstat(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -70,9 +70,9 @@ def test_os_statand_stat_and_lstat(files:Dict[str,Path]) -> None:
 
 def test_os_listxattr(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -87,9 +87,9 @@ def test_os_listxattr(files:Dict[str,Path]) -> None:
 
 def test_os_xattr(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -111,9 +111,9 @@ def test_os_xattr(files:Dict[str,Path]) -> None:
 
 def test_os_link_symlink_and_readlink(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -157,9 +157,9 @@ def test_os_link_symlink_and_readlink(files:Dict[str,Path]) -> None:
 
 def test_os_remove(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -185,8 +185,8 @@ def test_os_remove(files:Dict[str,Path]) -> None:
 
 def test_os_remove_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -197,9 +197,9 @@ def test_os_remove_refused(files:Dict[str,Path]) -> None:
 
 def test_os_mkdir_removedirs_and_rmdir(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -225,8 +225,8 @@ def test_os_mkdir_removedirs_and_rmdir(files:Dict[str,Path]) -> None:
 
 def test_os_mkdir_removedirs_and_rmdir_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -240,9 +240,9 @@ def test_os_mkdir_removedirs_and_rmdir_refused(files:Dict[str,Path]) -> None:
 
 def test_os_rename(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -269,8 +269,8 @@ def test_os_rename(files:Dict[str,Path]) -> None:
 
 def test_os_rename_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -283,10 +283,10 @@ def test_os_rename_refused(files:Dict[str,Path]) -> None:
 def test_os_chdir_and_getcwd(files:Dict[str,Path]) -> None:
     import os
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={os.environ["PWD"]},{os.environ["PWD"]}", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={os.environ["PWD"]},{os.environ["PWD"]}", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -304,10 +304,10 @@ def test_os_chdir_and_getcwd(files:Dict[str,Path]) -> None:
 def test_os_getcwdb(files:Dict[str,Path]) -> None:
     import os
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={os.environ["PWD"]},{os.environ["PWD"]}", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={os.environ["PWD"]},{os.environ["PWD"]}", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -319,9 +319,9 @@ def test_os_getcwdb(files:Dict[str,Path]) -> None:
 
 def test_os_open_readonly(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -344,9 +344,9 @@ def test_os_open_readonly(files:Dict[str,Path]) -> None:
 
 def test_os_open_writeonly(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -369,9 +369,9 @@ def test_os_open_writeonly(files:Dict[str,Path]) -> None:
 
 def test_os_open_writeonly_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -387,9 +387,9 @@ def test_os_open_writeonly_refused(files:Dict[str,Path]) -> None:
 
 def test_os_open_readwrite(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -409,9 +409,9 @@ def test_os_open_readwrite(files:Dict[str,Path]) -> None:
 
 def test_os_open_readwrite_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -427,9 +427,9 @@ def test_os_open_readwrite_refused(files:Dict[str,Path]) -> None:
 
 def test_os_access_read_write(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -444,9 +444,9 @@ def test_os_access_read_write(files:Dict[str,Path]) -> None:
 
 def test_os_access_read_only(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -463,8 +463,8 @@ def test_os_access_read_only(files:Dict[str,Path]) -> None:
                     reason="requires special os")
 def test_os_chflags_and_lchflags(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -480,9 +480,9 @@ def test_os_chflags_and_lchflags(files:Dict[str,Path]) -> None:
 
 def test_os_chmod_and_lchmod(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -510,9 +510,9 @@ def test_os_chmod_and_lchmod(files:Dict[str,Path]) -> None:
 
 def test_os_chmod_and_lchmod_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -531,9 +531,9 @@ def test_os_chmod_and_lchmod_refused(files:Dict[str,Path]) -> None:
                     reason="requires no windows OS")
 def test_os_chown_and_lchown(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -563,9 +563,9 @@ def test_os_chown_and_lchown(files:Dict[str,Path]) -> None:
 
 def test_os_chown_and_lchown_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -581,9 +581,9 @@ def test_os_chown_and_lchown_refused(files:Dict[str,Path]) -> None:
 
 def test_os_replace(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -609,8 +609,8 @@ def test_os_replace(files:Dict[str,Path]) -> None:
 
 def test_os_replace_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -622,9 +622,9 @@ def test_os_replace_refused(files:Dict[str,Path]) -> None:
 
 def test_os_truncate(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -648,8 +648,8 @@ def test_os_truncate(files:Dict[str,Path]) -> None:
 
 def test_os_truncate_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -660,9 +660,9 @@ def test_os_truncate_refused(files:Dict[str,Path]) -> None:
 
 def test_os_utime(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -683,8 +683,8 @@ def test_os_utime(files:Dict[str,Path]) -> None:
 
 def test_os_utime_refused(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -698,9 +698,9 @@ def test_os_utime_refused(files:Dict[str,Path]) -> None:
 
 def test_os_scandir(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -725,9 +725,9 @@ def test_os_scandir(files:Dict[str,Path]) -> None:
 
 def test_os_walk(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -745,9 +745,9 @@ def test_os_walk(files:Dict[str,Path]) -> None:
 
 def test_os_makedirs_and_removedirs(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -766,9 +766,9 @@ def test_os_makedirs_and_removedirs(files:Dict[str,Path]) -> None:
 
 def test_os_renames(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 
@@ -782,9 +782,9 @@ def test_os_renames(files:Dict[str,Path]) -> None:
 
 def test_os_walk_and_fwalk(files:Dict[str,Path]) -> None:
     rules = [
-        ConfigLine(f"--ignore=*.log", Path(), 0),
-        ConfigLine(f"--ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"--ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     _activate_guard(rules)
 

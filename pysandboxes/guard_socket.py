@@ -109,8 +109,8 @@ ALLOW = "ALLOW"  # Action to allow a connection
 IN = "IN"  # Direction for incoming connections (e.g., server-side bind)
 OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 
-# Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
-# Example: "--net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
+# Rule string format: "net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
+# Example: "net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
 # SOCKET_SPECS: comma-separated list of "tcp", "udp", "any".
 
 
@@ -124,9 +124,9 @@ SPEC_TO_TYPE_MAP: Dict[str, int] = {
 
 def _parse_rule(rule: ConfigLine,
                 errors: List[Tuple[str, Path, int]]) -> Optional[List[SocketRule]]:
-    if not rule.rule.startswith("--net="):
+    if not rule.rule.startswith("net="):
         return []
-    value_part = rule.rule[len("--net="):]
+    value_part = rule.rule[len("net="):]
     rule_components = value_part.split('|', 4)  # Maxsplit is 4 for 5 parts
     if len(rule_components) != 5:
         errors.append(
@@ -533,8 +533,8 @@ def _get_fammily(ip: str) -> int:
 class Guard_socket(socket.socket):
     """
     A custom socket class that enforces network rules to restrict connections.
-    Rule string format: "--net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
-    Example: "--net=ALLOW|tcp|192.168.1.0/24|80,443|OUT"
+    Rule string format: "net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
+    Example: "net=ALLOW|tcp|192.168.1.0/24|80,443|OUT"
     SOCKET_SPECS: "any", "tcp", "udp", or comma-separated combinations.
     """
 
@@ -763,7 +763,7 @@ def patch_rules() -> Dict[str, Callable]:
         "socket.socket":
             lambda x: Guard_socket,
         # FIXME: Use patch for method?
-        # TODO: uniquement si learning ?
+        # FIXME: patch gethostbyname() only if learning ?
         "socket.gethostbyname": _wrap_socket_gethostbyname,
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "socket.getaddrinfo": _wrap_socket_getaddrinfo,
@@ -850,7 +850,7 @@ def generate_rules(
                     else:
                         destination = learn_rule.address
             result.add(
-                f"--net=ALLOW|{learn_rule.protocol}|"
+                f"net=ALLOW|{learn_rule.protocol}|"
                 f"{destination}|{learn_rule.port}|"
                 f"{learn_rule.direction}"
             )

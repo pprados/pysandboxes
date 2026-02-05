@@ -15,8 +15,8 @@ def str_activate_guard_python_api(rules: ConfigLines) -> None:
     activate_guard_python_api(python_api_rules)
 
 
-# _default_python_rules = f"--python-api-import=ALLOW:{','.join(_loaded_sys_modules())}"
-_default_python_rules = (f"--python-api-import=ALLOW:"
+# _default_python_rules = f"python-api-import=ALLOW:{','.join(_loaded_sys_modules())}"
+_default_python_rules = (f"python-api-import=ALLOW:"
                          "abc,_abc,"
                          "builtins,"
                          "collections,_collections,_collections_abc,"
@@ -36,9 +36,9 @@ _default_python_rules = (f"--python-api-import=ALLOW:"
 def test_guard_python_api_import():
     rules = [
         _default_python_rules,
-        "--python-api-import=ALLOW:_pytest.*,faulthandler,teamcity",
-        "--python-api-import=ALLOW:re.*",
-        # "--python-api-import=LEARN",
+        "python-api-import=ALLOW:_pytest.*,faulthandler,teamcity",
+        "python-api-import=ALLOW:re.*",
+        # "python-api-import=LEARN",
     ]
 
     str_activate_guard_python_api(rules)
