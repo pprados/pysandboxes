@@ -47,7 +47,7 @@ def _get_rpc_params(args: Any,
 
     module_name, callable_name = get_callable_info(func)
     params = {
-        "session_id": "123",  # TODO: session_id (correlation id?)
+        "session_id": "123",  # FIXME: session_id (correlation id?)
         "timeout": timeout,
         "function": f"{module_name}:{callable_name}",
         "args": to_b85(args),

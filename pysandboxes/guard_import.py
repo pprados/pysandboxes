@@ -122,7 +122,7 @@ class GuardLoader(importlib.abc.Loader):
         else:
             if _rules and _rules[0] != "*":
                 module_name = module.__name__
-                if module_name not in _rules:  # FIXME
+                if module_name not in _rules:
                     raise RuleModuleNotFoundError(
                         f"No module named '{module_name}'"
                     )

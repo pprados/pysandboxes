@@ -86,7 +86,7 @@ async def sandbox_daemon(
         if use_async:
             async def _set_sandbox_and_catch_stdio() -> Any:
                 from .catch_stdio import catch_stdio, acatch_stdio
-                # TODO: vérifier pourquoi c'est différent que l'async
+                # FIXME: vérifier pourquoi c'est différent que l'async
                 rc = await acatch_stdio(
                     stdio_queue,
                     function, kwargs, *args)
@@ -297,7 +297,7 @@ class LocalTaskDaemon(SSESandbox):
                         use_py_sandbox=all_rules.use_py_sandbox,
                         learning_path=all_rules.learning_path,
                         envs_rules=(),
-                        socket_rules=(),  # FIXME: need short copy for AllRules?
+                        socket_rules=(),  # TODO: need short copy for AllRules?
                         file_rules=(),
                         )
 

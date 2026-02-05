@@ -166,7 +166,7 @@ def is_daemon_started() -> bool:
     return _current_daemon and _current_daemon.is_started
 
 
-@sandbox_loop  # TODO: a virer ?
+@sandbox_loop  # FIXME: a virer ?
 def shutdown_daemon() -> None:
     """
     Synchronize version to shutdown the current daemon.

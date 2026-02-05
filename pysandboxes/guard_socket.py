@@ -556,7 +556,7 @@ class Guard_socket(socket.socket):
         # Note: self.family, self.type, self.proto are now available from the superclass
 
     def bind(self, address: Adresse_Type) -> None:
-        # FIXME: add unit test
+        # TODO: add unit test
         if (isinstance(address, tuple) and len(address) >= 2 and
                 isinstance(address[0], str)
                 and isinstance(address[1], int)):
@@ -763,7 +763,7 @@ def patch_rules() -> Dict[str, Callable]:
         "socket.socket":
             lambda x: Guard_socket,
         # FIXME: Use patch for method?
-        # FIXME: uniquement si learning ?
+        # TODO: uniquement si learning ?
         "socket.gethostbyname": _wrap_socket_gethostbyname,
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "socket.getaddrinfo": _wrap_socket_getaddrinfo,

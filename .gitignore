@@ -27,8 +27,10 @@ share/python-wheels/
 *.egg
 MANIFEST
 .make-*
+
+
 PPR*
-chroma_langchain_db/
+.py-sandboxes
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

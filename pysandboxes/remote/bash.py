@@ -253,7 +253,7 @@ async def main():
     await run_bash_in_pty(*sandbox_args, **kwargs)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # FIXME: check main launcher
     # Ensure the script is run on a compatible OS
     if sys.platform not in ["linux", "darwin"]:
         print("This script is designed for Linux/macOS as it uses the 'pty' module.")

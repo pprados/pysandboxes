@@ -128,7 +128,7 @@ class BaseSubProcessDaemon(SSESandbox):
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
             "-P",
 
-            "-u",  # FIXME Use unbuffered stdout and stderr? why?
+            "-u",  # TODO Use unbuffered stdout and stderr? why?
             "-m",
             run_daemon.__name__,
         ]
@@ -163,7 +163,7 @@ class BaseSubProcessDaemon(SSESandbox):
                         init_fn: Optional[SyncOrAsyncFunc],
                         first: bool = False) -> None:
         if first:
-            short_all_rules = AllRules(  # FIXME: why short copy of AllRules?
+            short_all_rules = AllRules(  # TODO: why short copy of AllRules?
                 config=all_rules.config,
                 envs=all_rules.envs,
                 os_sandbox=all_rules.os_sandbox,
@@ -208,7 +208,7 @@ class BaseSubProcessDaemon(SSESandbox):
         umask = os.umask(umask) & 0o007  # Only keep user flags
 
         if DEBUG:
-            Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME:
+            Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
                                       args[0] + " " +
                                       " \\\n  ".join(
                                           param if " " not in param else repr(param) for

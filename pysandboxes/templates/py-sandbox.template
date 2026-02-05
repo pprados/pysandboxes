@@ -23,7 +23,7 @@
 #--learning=.py-sandboxes
 
 #######################################################################################
-# To activate the py-sandbox, set the parameter `py-sandbox`.
+# To activate the py-sandbox, set the parameter `py-sandbox` to true.
 #
 # If this parameter is set to `false`, the code still runs in a sandbox
 # (and potentially an os-sandbox), but the Python-specific security rules
@@ -63,7 +63,7 @@
 #
 # 1. Assign a fixed value to an environment variable:
 #    --set-env VAR_NAME=value
-#    This sets `VAR_NAME` to value within the sandbox.
+#    This sets `VAR_NAME` to `value` within the sandbox.
 #
 # 2. Assign a value based on the environment outside the sandbox, with an optional
 #    default value if needed,
@@ -76,6 +76,8 @@
 #    --set-env VAR_*=${VAR_*}
 #    This replicates all environment variables from outside the sandbox that match the
 #    pattern `VAR_*` into the sandbox.
+#
+# You can remove a variable with `--unset-env=<name>`
 
 # Some exemples
 #--set-env=*=${*}  # Duplicate all variables
@@ -96,12 +98,12 @@
 # of directories that are accessible within the sandbox.
 #
 # The syntax `--ignore=<glob_pattern>` allows excluding certain files when using
-# Python file APIs. The syntax `--bind=<target_dir>,<src_dir>` maps a directory outside
+# Python file APIs. The syntax `--bind=<src_dir>,<target_dir>` maps a directory outside
 # the sandbox to a directory visible inside the sandbox (which must exist).
 # Additionally, `--ro-bind` does the same but limits access to the sandbox as read-only.
 #
-# Warning '--ignore .*' rule exclude the '.venv' directory ! Use another name for
-# the virtualenv.
+# Warning '--ignore .*' rule exclude the '.venv' directory ! Use another name or
+# location for the virtualenv.
 #
 --ignore=.env
 --ignore=*.log
@@ -122,15 +124,15 @@
 # Use `--net` to add a new rule. The format is:
 # --net=<ALLOW|DENY>|<tcp|udp|*>|<network>|<port list>|<IN,OUT>
 
-#--net=ALLOW|*|0.0.0.0/0|*|IN  # Accept all IPV4 connexion
+#--net=ALLOW|*|0.0.0.0/0|*|IN  # Accept all incoming IPV4 connexion
 #--net=ALLOW|*|0.0.0.0/0|*|OUT  # Accept all IPV4 connexion
-#--net=ALLOW|*|::1/0|*|IN  # Accept all IPV6 connexion
+#--net=ALLOW|*|::1/0|*|IN  # Accept all incoming IPV6 connexion
 #--net=ALLOW|*|::1/0|*|OUT  # Accept all IPV6 connexion
 
 #--net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services for all network
 #--net=ALLOW|tcp|0.0.0.0/0|80|OUT  # Can call HTTP services for all network
 
-# TODO: filtrer le dns ?
+# TODO: The dns use the libc implementation, without Python
 #--net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
 #--net=ALLOW|udp|0.0.0.0/0|53|IN
 
@@ -153,8 +155,6 @@
 
 #######################################################################################
 # Limit python features in the sandbox
-#--python-api=ALLOW:threads
-#--python-api-import=ALLOW:numpy.*,pandas.*
 #--python-import=a,b,c
 #--python-import=*  # Accept all import
 
@@ -163,8 +163,7 @@
 # </learning_guard_import>
 
 #######################################################################################
-# Limit syntax and features when executing python code (very useful for controlling
-# LLM-generated code)
+# TODO Limit syntax and features when executing python code (very useful for controlling LLM-generated code)
 #--python-exec-provider=interpreter
 #--python-exec-import=ALLOW:threads
 #--python-exec=ALLOW:annotations,async,class,def
@@ -174,3 +173,5 @@
 # TODO: --no-dotenv
 # TODO: --firejail=file.template
 # TODO: --dns=1.1.1.1,4,4,4,4
+# TODO: --python-api=ALLOW:threads
+# TODO: --python-api-import=ALLOW:numpy.*,pandas.*

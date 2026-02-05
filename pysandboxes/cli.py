@@ -9,7 +9,7 @@ from pysandboxes.types import ConfigLines
 
 load_dotenv()  # FIXME: a garder avec main ?
 
-def main() -> None:
+def main() -> None:  # FIXME: véririfer CLI
     """
     Parses command-line arguments to separate flags from the execution command.
     """
