@@ -14,6 +14,7 @@ from aiohttp import ClientConnectorError
 
 from .parameters import INTERVAL_FOR_PING_DAEMON
 from .sse_sandbox import SSESandbox, PING_SERVER_URL
+from .tools import to_b85
 from ..main_logger import pysandboxes_logger
 from ..py_sandbox import AllRules
 from ..tools import SyncOrAsyncFunc, get_callable_info
@@ -197,14 +198,6 @@ class BaseSubProcessDaemon(SSESandbox):
                             init_fn: Optional[SyncOrAsyncFunc],
                             stdin: bool = False,
                             stdout: bool = False) -> None:
-        def to_b85(obj: Any) -> str:
-            result = base64.b85encode(pickle.dumps(obj,
-                                                   protocol=pickle.HIGHEST_PROTOCOL
-                                                   )).decode("ascii")
-            assert pickle.loads(
-                base64.b85decode(result.encode("ascii"))) == obj  # FIXME
-            return result
-
         self._is_started = False
 
         umask = os.umask(0o002)

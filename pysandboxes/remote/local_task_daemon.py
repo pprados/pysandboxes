@@ -17,6 +17,7 @@ from uvicorn import Server
 
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
+from .tools import from_b85, to_b85
 from ..private_loop import sandbox_loop, get_sandbox_loop
 from ..py_sandbox import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
@@ -53,13 +54,6 @@ async def sandbox_daemon(
     """
     import pickle
 
-    def to_b85(obj: Any) -> str:
-        result = base64.b85encode(pickle.dumps(obj,
-                                               protocol=pickle.HIGHEST_PROTOCOL
-                                               )).decode("ascii")
-        assert pickle.loads(
-            base64.b85decode(result.encode("ascii"))) == obj  # FIXME
-        return result
 
     try:
         loop = asyncio.get_event_loop()
@@ -169,10 +163,6 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         and stream back structured results (stdout, stderr, result).
         """
         import pickle
-        def from_b85(b85: str) -> Any:
-            return pickle.loads(
-                base64.b85decode(b85.encode("ascii")),
-            )
 
         set_is_in_sandbox(True)
         logger.debug(request.headers["Authorization"])

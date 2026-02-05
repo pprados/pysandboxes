@@ -39,7 +39,7 @@ def parse_rules(rules: ConfigLines,
             else:
                 errors.append(
                     (f"{format_ruleref(rule)}: "
-                     f"Invalid value '{value}' for --py-sandbox. Use true or false.",
+                     f"Invalid value '{value}' for py-sandbox. Use true or false.",
                      rule.path, rule.ln)
                 )
         elif rule.rule.startswith("learning="):
@@ -64,7 +64,7 @@ def parse_rules(rules: ConfigLines,
         errors.append(
             (
                 f"{format_error_list(all_error_lines)}: "
-                f"Multiple --os-sandbox parameters.",
+                f"Multiple os-sandbox parameters.",
                 Path(""),
                 0
             )

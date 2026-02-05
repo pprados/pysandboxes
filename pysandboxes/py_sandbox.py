@@ -212,11 +212,6 @@ def parse_config(
     # 3. Print error
     if errors:
         errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))
-        all_errors = "\n" + "\n".join([error[0] for error in errors])
-        logger.error(all_errors)
-        all_files_in_errors = list(
-            set([repr(make_relative_path(error[1])) for error in errors
-                 if error[1] != Path("")]))
         if exit_on_error:
             os._exit(1)
         raise ConfigSyntaxError(

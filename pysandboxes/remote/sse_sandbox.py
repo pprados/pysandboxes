@@ -13,6 +13,7 @@ from aiohttp import ClientPayloadError, ClientConnectorError
 from aiohttp_sse_client import client as sse_client
 
 from .parameters import HOST, PORT, PATH_RPC
+from .tools import to_b85, from_b85
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
 from ..tools import is_in_sandbox, get_callable_info
@@ -36,14 +37,6 @@ def _get_rpc_params(args: Any,
     """
     Get the parameters for the RPC call.
     """
-
-    def to_b85(obj: Any) -> str:
-        result = base64.b85encode(pickle.dumps(obj,
-                                               protocol=pickle.HIGHEST_PROTOCOL
-                                               )).decode("ascii")
-        assert pickle.loads(
-            base64.b85decode(result.encode("ascii"))) == obj  # FIXME
-        return result
 
     module_name, callable_name = get_callable_info(func)
     params = {
@@ -69,10 +62,6 @@ class SSESandbox(BaseDaemon):
             return await func(*args, **kwargs)
         from pysandboxes.os_sandbox import get_token
         import pickle
-        def from_b85(b85: str) -> Any:
-            return pickle.loads(
-                base64.b85decode(b85.encode("ascii")),
-            )
 
         try:
             token = get_token()

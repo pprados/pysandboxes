@@ -197,7 +197,7 @@ def _parse_rule(rule: ConfigLine,
                     (
                         f"{format_ruleref(rule)}: "
                         f"'{rule.rule}' "
-                        f"has unknown socket specifier '{spec_part}'."
+                        f"has unknown socket specifier '{spec_part}'. "
                         f"Valid specifiers: any, {', '.join(SPEC_TO_TYPE_MAP.keys())}.",
                         rule.path,
                         rule.ln
@@ -280,7 +280,7 @@ def _parse_rule(rule: ConfigLine,
                 (
                     f"{format_ruleref(rule)}: "
                     f"In '{rule.rule}', "
-                    f"invalid network specification."
+                    f"invalid network specification. "
                     f"That does not resolve to any network.",
                     rule.path,
                     rule.ln

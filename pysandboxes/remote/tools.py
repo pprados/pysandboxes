@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import logging
 import os
+import pickle
 import shutil
 import signal
 import sys  # Import the sys module to access system-specific parameters and functions
@@ -230,3 +232,18 @@ def set_pdeathsig() -> None:
                             result)
     except OSError:
         logging.warning("prctl not available (not Linux or libc not found).")
+
+
+def to_b85(obj: Any) -> str:
+    result = base64.b85encode(pickle.dumps(obj,
+                                           protocol=pickle.HIGHEST_PROTOCOL
+                                           )).decode("ascii")
+    assert pickle.loads(
+        base64.b85decode(result.encode("ascii"))) == obj  # FIXME
+    return result
+
+
+def from_b85(b85: str) -> Any:
+    return pickle.loads(
+        base64.b85decode(b85.encode("ascii")),
+    )

@@ -31,8 +31,6 @@ class ImmutableDict(
             keys = data._keys
             values = data._values
         else:
-            # elif isinstance(data, Tuple) and not isinstance(data,ImmutableDict):
-            #     items = tuple(data)
             if isinstance(data, Mapping):
                 from pysandboxes.guard_envs import LearnEnviron
                 # Hack to detect the learning phase.

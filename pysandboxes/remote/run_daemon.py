@@ -14,7 +14,7 @@ from tblib import pickling_support
 
 from .subprocess_daemon import SubProcessParameters
 from .tools import configure_logging_level, \
-    set_pdeathsig
+    set_pdeathsig, from_b85
 from ..learning import is_learning_mode, generate_config_from_learning
 from ..private_loop import set_sandbox_loop
 from ..tools import SyncOrAsyncFunc
@@ -54,11 +54,6 @@ async def main() -> int:
 
     # -------------
     # Read all configuration from stdin until EOF
-    def from_b85(b85: str) -> Any:  # FIXME: pourquoi plusieurs versions?
-        return pickle.loads(
-            base64.b85decode(b85.encode("ascii")),
-        )
-
     config_body = None
     process_config: Optional[SubProcessParameters] = None
     for line in sys.stdin:

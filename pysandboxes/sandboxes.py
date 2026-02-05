@@ -109,7 +109,7 @@ class sandboxes(Protocol):
                 extra_rules=self.extra_rules,
             )
         except ConfigSyntaxError as e:
-            raise e
+            raise e.with_traceback(None)
         start_daemon(all_rules,
                      log_level=log_level,
                      init_fn=self.init_fn,
