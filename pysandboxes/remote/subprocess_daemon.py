@@ -98,7 +98,7 @@ class BaseSubProcessDaemon(SSESandbox):
     def __init__(self,
                  token: str,
                  *,
-                 max_attempts: int = 1,  # Maximum number of retry _attempts TODO 5
+                 max_attempts: int = 5,  # Maximum number of retry _attempts
                  base_delay: float = 0.1,  # Initial delay in seconds (e.g., 100 ms)
                  factor: float = 2.0,  # Exponential increase _factor
                  max_delay: float = 10.0,  # Maximum delay in seconds
@@ -128,7 +128,7 @@ class BaseSubProcessDaemon(SSESandbox):
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
             "-P",
 
-            "-u",  # FIXME unbuffered stdout and stderr?
+            "-u",  # FIXME Use unbuffered stdout and stderr? why?
             "-m",
             run_daemon.__name__,
         ]
@@ -163,7 +163,7 @@ class BaseSubProcessDaemon(SSESandbox):
                         init_fn: Optional[SyncOrAsyncFunc],
                         first: bool = False) -> None:
         if first:
-            short_all_rules = AllRules(  # FIXME: pourquoi purger ?
+            short_all_rules = AllRules(  # FIXME: why short copy of AllRules?
                 config=all_rules.config,
                 envs=all_rules.envs,
                 os_sandbox=all_rules.os_sandbox,
@@ -223,11 +223,6 @@ class BaseSubProcessDaemon(SSESandbox):
             stdout=asyncio.subprocess.PIPE,
             # stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE,
-
-            # close_fds=True,
-            # cwd=None,
-            # restore_signals=True,
-            # #     # process_group=1,  # FIXME
             umask=umask,
             env=os.environ.copy(),
         )
@@ -314,29 +309,28 @@ class BaseSubProcessDaemon(SSESandbox):
         logger.debug("shutdown")
 
     async def join(self) -> int:
-        return 0  # FIXME
-    #     errorlevel = -1
-    #     while errorlevel != 0:
-    #         errorlevel = await self._process.wait()
-    #         if errorlevel != 0:
-    #             logger.warning("subprocess exited with %s", errorlevel)
-    #             if time.time() - self._last_reset > self._reset_delay:
-    #                 self._attempts = 0
-    #             self._attempts += 1
-    #             if self._attempts > self._max_attempts:
-    #                 return errorlevel
-    #             # Calculate the base delay for this attempt
-    #             current_base_backoff: float = min(self._max_delay,
-    #               self._base_delay * (
-    #                     self._factor ** (self._attempts - 1)))
-    #
-    #             wait_time: float = random.uniform(current_base_backoff * 0.9,
-    #                                               current_base_backoff)
-    #             await asyncio.sleep(wait_time)
-    #             await self.shutdown()
-    #             self._last_reset = time.time()
-    #             await self._re_start()
-    #     return errorlevel
+        errorlevel = -1
+        while errorlevel != 0:
+            errorlevel = await self._process.wait()
+            if errorlevel != 0:
+                logger.warning("subprocess exited with %s", errorlevel)
+                if time.time() - self._last_reset > self._reset_delay:
+                    self._attempts = 0
+                self._attempts += 1
+                if self._attempts > self._max_attempts:
+                    return errorlevel
+                # Calculate the base delay for this attempt
+                current_base_backoff: float = min(self._max_delay,
+                  self._base_delay * (
+                        self._factor ** (self._attempts - 1)))
+
+                wait_time: float = random.uniform(current_base_backoff * 0.9,
+                                                  current_base_backoff)
+                await asyncio.sleep(wait_time)
+                await self.shutdown()
+                self._last_reset = time.time()
+                await self._re_start()
+        return errorlevel
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):

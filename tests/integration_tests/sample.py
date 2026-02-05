@@ -13,7 +13,7 @@ assert config_path.exists()
 
 
 def init_sandbox() -> None:
-    pass  # TODO: implémenter et invoquer
+    pass  # FIXME: implémenter et invoquer init_sandbox()
 
 
 

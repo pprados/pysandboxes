@@ -52,7 +52,7 @@ class AllRules(NamedTuple):
     use_py_sandbox: bool
     learning_path: Optional[Path]
     envs_rules: EnvsRules
-    socket_rules: SocketRules  # TODO: en faire un tuple pour le rendre immuable
+    socket_rules: SocketRules
     file_rules: FileRules
     import_rules: ImportRules
 
@@ -100,7 +100,6 @@ def read_and_parse_config(
     extra_lines = remove_config_comments(
         [ConfigLine(line, Path(), 0) for line in extra_rules]) if extra_rules else []
 
-    # TODO: voir l'approche de dotenv (find_dotenv)
     if not config_path:
         config_path = Path(CONFIG_NAME)
 
@@ -182,7 +181,7 @@ def parse_config(
 
 
 def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
-    # TODO: merge parameter with others ?
+    # FIXME: merge files parameters?
     if not config_path:
         known_paths = [
             Path(".py-sandboxes"),  # Current directory
@@ -200,7 +199,7 @@ def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
     return Path(config_path) if isinstance(config_path, str) else config_path
 
 
-def activate_sandboxes(  # FIXME: split en 2 pour éviter les paramètres parasites ?
+def activate_sandboxes(
         all_rules: AllRules,
         envs: Optional[Dict[str, str]] = None,
 ) -> None:

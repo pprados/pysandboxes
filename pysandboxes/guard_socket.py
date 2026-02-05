@@ -301,8 +301,8 @@ def parse_rules(rules: ConfigLines,
         elif parsed_rules is not None:
             ignore_rules.append(rule)
 
-    # TODO: Remove duplicates and sort for consistency
-    # parsed_rule_families = sorted(list(set(parsed_rule_families)))  # FIXME
+    # FIXME: Remove duplicates and sort for consistency
+    # parsed_rule_families = sorted(list(set(parsed_rule_families)))
 
     return tuple(socket_rules), ignore_rules
 
@@ -487,14 +487,6 @@ def _check_address_with_rules(
                                         config.rule, format_ruleref(config)
                                     )
                                     return
-                                    # raise RuleSocketConnectionRefusedError(  # FIXME: ne devrait pas etre là
-                                    #     f"Guard network connection to "
-                                    #     f"'{hostname}' "
-                                    #     f"({ip_host}:{destination_port}) "
-                                    #     f"{action} by rule "
-                                    #     f"'{config.rule}' "
-                                    #     f"from {format_ruleref(config)})."
-                                    # )
     try:
         ip_address(hostname)
         target = f'{hostname}:{destination_port}'
@@ -564,7 +556,8 @@ class Guard_socket(socket.socket):
         # Note: self.family, self.type, self.proto are now available from the superclass
 
     def bind(self, address: Adresse_Type) -> None:
-        if (isinstance(address, tuple) and len(address) >= 2 and  # FIXME: ajout de test
+        # FIXME: add unit test
+        if (isinstance(address, tuple) and len(address) >= 2 and
                 isinstance(address[0], str)
                 and isinstance(address[1], int)):
             if is_learning_mode():
@@ -769,7 +762,8 @@ def patch_rules() -> Dict[str, Callable]:
     return {
         "socket.socket":
             lambda x: Guard_socket,
-        # TODO: uniquement si learning ?
+        # FIXME: Use patch for method?
+        # FIXME: uniquement si learning ?
         "socket.gethostbyname": _wrap_socket_gethostbyname,
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "socket.getaddrinfo": _wrap_socket_getaddrinfo,

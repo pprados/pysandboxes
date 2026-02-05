@@ -451,7 +451,7 @@ def test_os_access_read_only(files:Dict[str,Path]) -> None:
     _activate_guard(rules)
 
     import os
-    assert os.access(files["path"], os.R_OK | os.W_OK)  # FIXME
+    assert os.access(files["path"], os.R_OK | os.W_OK)
     assert os.access(files["visible"], os.R_OK | os.W_OK)
     assert os.access(files["bound_file"], os.R_OK | os.W_OK)
     assert os.access(files["bind_dest"], os.R_OK | os.W_OK)

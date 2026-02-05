@@ -59,7 +59,7 @@ def sandbox(_func: Optional[F] = None, *,
 
 
 @runtime_checkable
-class sandboxes(Protocol):  # TODO: ne pas lancer si déjà dans SB
+class sandboxes(Protocol):
     __slot__=(
         'init_fn',
         'config_path',
@@ -81,17 +81,15 @@ class sandboxes(Protocol):  # TODO: ne pas lancer si déjà dans SB
                  envs: Optional[Dict[str, str]] = None,
                  extra_rules: Optional[List[str]] = None,
                  ) -> None:
-        self.init_fn = init_fn  # TODO: invoquer la fn lors du start du process
+        self.init_fn = init_fn
         self.config_path = config_path
         if envs is None:
             envs = os.environ
         self.envs = Envs(envs)
         self.extra_rules = extra_rules
-        self.timeout = 60  # FIXME
+        self.timeout = 60  # FIXME: timeout=60
         self._old_sigint = None
         self._old_sigterm = None
-        # TODO: ajouter des paramètres complémentaire ici ?
-        # Pas certain, car cela risque de ne pas utiliser le fichier qui est util par ailleur
 
     # ── synchronous API ────────────────────────────────
     def __enter__(self) -> None:

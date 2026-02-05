@@ -20,7 +20,6 @@ def set_sandbox_loop(loop: AbstractEventLoop) -> None:
 
 
 def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoop]:
-    """FIXME Crée une boucle d'arrière-plan dans un thread dédié si nécessaire"""
     global _background_loop_ref
 
     if _background_loop_ref is not None:
@@ -39,7 +38,7 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
 
         logger.debug("Create a private event loop for sandbox")
         loop = asyncio.new_event_loop()
-        loop.set_debug(True)  # FIXME: remove this line in production
+        loop.set_debug(True)  # FIXME: remove this flag in production
         _background_loop_ref = weakref.ref(loop)
         asyncio.set_event_loop(loop)
 
@@ -56,10 +55,7 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
             except SystemExit as e:
                 import os
                 logger.error("Exit sandbox")
-                while True:  # FIXME: pour éviter le crash du parent lors d'un debug du fils
-                    import time
-                    time.sleep(10)
-                # os._exit(e.args[0]) # FIXME
+                os._exit(e.args[0])
             except Exception as e:
                 import os
                 logger.exception("Exception unknown in run_forever")

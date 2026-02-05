@@ -94,7 +94,7 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
         "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
         "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
     ]
-    if is_ipv6:  # FIXME
+    if is_ipv6:  # FIXME: why exclude not used?
         exclude = [socket.AF_INET, socket.IPPROTO_ICMP]
     else:
         exclude = [socket.AF_INET6, socket.IPPROTO_ICMPV6]
@@ -161,7 +161,7 @@ def rule_to_netfilter(socket_rules: List[SocketRule],
                 )
                 netfilter.append(ip_rule)
             else:
-                assert False, "Unkown protocol"  # TODO
+                assert False, "Unkown protocol"
 
     netfilter.append("COMMIT")
     return netfilter

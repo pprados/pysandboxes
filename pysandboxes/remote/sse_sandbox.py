@@ -39,20 +39,16 @@ def _get_rpc_params(args: Any,
     """
 
     def to_b85(obj: Any) -> str:
-        result= base64.b85encode(pickle.dumps(obj,
-                                             protocol=pickle.HIGHEST_PROTOCOL
-                                             )).decode("utf-8")
-        # if pickle.loads(pickle.dumps(obj,protocol=pickle.HIGHEST_PROTOCOL)) != obj:
-        #     pass
-        # if pickle.loads(base64.b85decode(result.encode("utf-8"))) != obj:
-        #     pass  # FIXME
-        assert pickle.loads(base64.b85decode(result.encode("utf-8"))) == obj
+        result = base64.b85encode(pickle.dumps(obj,
+                                               protocol=pickle.HIGHEST_PROTOCOL
+                                               )).decode("utf-8")
+        # assert pickle.loads(base64.b85decode(result.encode("utf-8"))) == obj
         return result
 
     module_name, callable_name = get_callable_info(func)
     params = {
         "session_id": "123",  # TODO: session_id (correlation id?)
-        "timeout": timeout,  # TODO: timeout
+        "timeout": timeout,
         "function": f"{module_name}:{callable_name}",
         "args": to_b85(args),
         "kwargs": to_b85(kwargs),
@@ -84,7 +80,7 @@ class SSESandbox(BaseDaemon):
             logger.debug("Try to call to %s", SANDBOX_SERVER_URL)
             async with sse_client.EventSource(
                     SANDBOX_SERVER_URL,
-                    # session=session,  # TODO: garder la session ouverte pour reutiliser ?
+                    # session=session,  # TODO: Use a correlationid?
                     option={"method": "POST"},
                     json=params,
                     headers={
@@ -94,7 +90,6 @@ class SSESandbox(BaseDaemon):
                     timeout=None,  # keep-alive
                     reconnection_time=
                     timedelta(
-                        # seconds=30 # FIXME
                         seconds=0.2
                     ),
             ) as event_source:
@@ -122,15 +117,9 @@ class SSESandbox(BaseDaemon):
         except ClientPayloadError:
             raise RuntimeError("No result received from the sandbox")
         except ClientConnectorError:
-            while True:  # FIXME: Pour attendre le debug
-                await asyncio.sleep(10)
             raise RuntimeError("Impossible to connect to the sandbox")
         except SystemExit:
             raise
-        # It's an exception not catched
-        # except Exception as e:
-        #     raise  # FIXME: qu'en faire ?
-        #     # raise RuntimeError(e)  # FIXME: qu'en faire ?
 
     @sandbox_loop
     def call_in_sandbox(self,

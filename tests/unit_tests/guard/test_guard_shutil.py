@@ -28,7 +28,7 @@ def test_shutil_chown(files):
     shutil.chown(files["bind_dest"], uid, gid)
 
 
-def test_shutil_copy(files):  # TODO: write
+def test_shutil_copy(files):
     rules = [
         ConfigLine(f"--ignore=*.log", Path(), 0),
         ConfigLine(f"--bind={files['path']},{files['path']}", Path(), 0),

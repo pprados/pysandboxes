@@ -38,7 +38,6 @@ class RuleModuleNotFoundError(ModuleNotFoundError, SandBoxError):
 
 
 def conv_patch_rules(patch_rules: Dict[str, Callable]) -> PatchRules:
-    #  TODO: faire les sous modules comme os.path
     rules = {}
     # Split path by first module
     for k, v in patch_rules.items():
@@ -136,15 +135,6 @@ class GuardLoader(importlib.abc.Loader):
 
             # logger.error(f"GuardLoader: Injected patch into '{module.__name__}'.")
 
-        # TODO: pour les modules pysandbox ?
-        # # Override the __setattr__ method of the module to prevent changes
-        # def immutable_setattr(obj: ModuleType, name: str, value: Any) -> None:
-        #     raise AttributeError(
-        #         f"Cannot reassign attributes on immutable module '{obj.__name__}'")
-        #
-        # # Assign the new method to the module's __setattr__
-        # module.__setattr__ = immutable_setattr
-
 
 # Define the custom finder class
 class GuardFinder(importlib.abc.MetaPathFinder):
@@ -153,14 +143,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
     def __init__(self, finders: MetaPathFinder):
         self._finders = finders
 
-    # TODO: This method is used by importlib.invalidate_caches().
-    def invalidate_caches(self):
-        logger.debug("invalidate_caches() called")
-
     """
     A custom finder that locates our special module.
     """
-
     def find_spec(self,
                   fullname: str,
                   path: list[str],

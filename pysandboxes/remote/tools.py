@@ -1,4 +1,3 @@
-# TODO: reorganize the tools
 import asyncio
 import logging
 import os

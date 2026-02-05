@@ -1,4 +1,3 @@
-import argparse
 import asyncio
 import base64
 import importlib
@@ -6,9 +5,7 @@ import inspect
 import json
 import logging
 import os
-import pickle
 import sys
-import threading
 import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
@@ -16,21 +13,17 @@ from logging import getLogger
 from typing import AsyncGenerator, Any, Optional
 from typing import Dict
 
-from tblib import pickling_support
 from uvicorn import Server
 
-from pysandboxes.learning import is_learning_mode, generate_config_from_learning
-from pysandboxes.remote.subprocess_daemon import SubProcessParameters
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
-from .tools import configure_logging_level, \
-    set_pdeathsig
-from ..private_loop import sandbox_loop, get_sandbox_loop, set_sandbox_loop
+from ..private_loop import sandbox_loop, get_sandbox_loop
 from ..py_sandbox import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
 from ..types import Args, Envs
 
-logger=logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class RPCPayload(object):
@@ -48,7 +41,7 @@ def _sse_msg(data: str):
 async def sandbox_daemon(
         session_id: str,
         function_id: str,
-        timeout: float,  # TODO
+        timeout: float,  # TODO: implementes timeout
         args: Args,
         kwargs: Dict[str, Any],
 ) -> AsyncGenerator[str, None]:
@@ -61,9 +54,9 @@ async def sandbox_daemon(
     import pickle
 
     def to_b85(obj: Any) -> str:
-            return base64.b85encode(pickle.dumps(obj,
-                                       protocol=pickle.HIGHEST_PROTOCOL
-                                       )).decode("utf-8")
+        return base64.b85encode(pickle.dumps(obj,
+                                             protocol=pickle.HIGHEST_PROTOCOL
+                                             )).decode("utf-8")
 
     # def from_b85(b85: str) -> Any:
     #     return pickle.loads(
@@ -106,7 +99,6 @@ async def sandbox_daemon(
             def _set_sandbox_and_catch_stdio():
                 try:
                     import os
-                    logger.debug(f"{type(os.environ)=}")  # FIXME: recherche bug
                     set_is_in_sandbox(True)
                     from .catch_stdio import catch_stdio, acatch_stdio
                     return catch_stdio(
@@ -140,8 +132,8 @@ async def sandbox_daemon(
                          repr(result["exception"]))
             traceback.print_exception(result["exception"][0])
             result["exception"] = base64.b85encode(pickle.dumps(result["exception"],
-                                                     protocol=pickle.HIGHEST_PROTOCOL
-                                                     )).decode("utf-8")
+                                                                protocol=pickle.HIGHEST_PROTOCOL
+                                                                )).decode("utf-8")
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
@@ -157,7 +149,6 @@ async def sandbox_daemon(
         logger.info("(%s) ... error %s", session_id, repr(e))
         traceback.print_exception(e)
         yield json.dumps({"session_id": session_id, "error": repr(e)})
-
 
 
 def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
@@ -188,6 +179,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
             return pickle.loads(
                 base64.b85decode(b85.encode("utf-8")),
             )
+
         set_is_in_sandbox(True)
         logger.debug(request.headers["Authorization"])
         if ("Authorization" not in request.headers or
@@ -281,32 +273,32 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         port=PORT,
         use_colors=None,
         log_config=logging_confg,
-        log_level=logging.DEBUG,  # FIXME
         access_log=True,
         # loop="asyncio",
     ))
     return uvicorn_server
 
 
-
 class LocalTaskDaemon(SSESandbox):
+    __slots__ = ("task", "uvicorn")
 
     def __init__(self, token: str):
         super().__init__(token)
         self.uvicorn: Optional[Server] = None
+        self.task = None
 
     def update_rules(self,
                      *,
                      envs: Envs,
                      all_rules: AllRules) -> AllRules:
-        return AllRules(config=[],
+        return AllRules(config=(),
                         envs=envs,
                         os_sandbox="",
                         use_py_sandbox=all_rules.use_py_sandbox,
                         learning_path=all_rules.learning_path,
-                        envs_rules=[],
-                        socket_rules=[],  # FIXME: nécessiare la recopue légère ?
-                        file_rules=[],
+                        envs_rules=(),
+                        socket_rules=(),  # FIXME: need short copy for AllRules?
+                        file_rules=(),
                         )
 
     async def start(self,
@@ -372,5 +364,3 @@ class LocalTaskDaemon(SSESandbox):
 
     async def join(self) -> None:
         await self.task
-
-

@@ -216,7 +216,7 @@ def test_pathlib_mkdir_removedirs_and_rmdir(files):
     pathlib.Path(files["bind_dest"] / "dir_to_remove").mkdir()
     assert pathlib.Path(files["bind_dest"] / "dir_to_remove").rmdir() is None
 
-    # FIXME
+    # FIXME: add test mkdir
     # (files["path"] / "dir_to_remove").mkdir()
     # assert os.removedirs(files["path"] / "dir_to_remove") is None
     #
@@ -344,7 +344,7 @@ def test_pathlib_rename_refused(files):
     _activate_guard(rules)
 
     import pathlib
-    with pytest.raises(PermissionError):  # TODO: refuse in et out
+    with pytest.raises(PermissionError):
         pathlib.Path(files["bound_file"]).rename(files["bind_dest"] / "new_rename")
 
 
@@ -381,7 +381,7 @@ def test_pathlib_replace_refused(files):
     _activate_guard(rules)
 
     import pathlib
-    with pytest.raises(PermissionError):  # TODO: refuse in et out
+    with pytest.raises(PermissionError):
         pathlib.Path(files["bound_file"]).replace(files["bind_dest"] / "new_replace")
 
 
