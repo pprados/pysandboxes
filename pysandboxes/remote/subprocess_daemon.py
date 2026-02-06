@@ -14,7 +14,7 @@ from .parameters import INTERVAL_FOR_PING_DAEMON
 from .sse_sandbox import SSESandbox, PING_SERVER_URL
 from .tools import to_b85
 from ..main_logger import pysandboxes_logger
-from ..py_sandbox import AllRules
+from ..all_rules import AllRules
 from ..tools import SyncOrAsyncFunc, get_callable_info
 from ..types import Args, Envs
 

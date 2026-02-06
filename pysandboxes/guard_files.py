@@ -15,6 +15,7 @@ from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
 from .config import OPTIMIZE
+from .exceptions import RulePermissionError, RuleFileNotFoundError
 from .guard_envs import LearnEnviron
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
@@ -352,7 +353,6 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
                     if is_learning_mode():
                         add_learning_rule(LearnFileRule(Path(path), True))
                     else:
-                        from . import RulePermissionError
                         raise RulePermissionError(
                             f"Cannot write to {rule.dest!r}. "
                             f"Rule {rule.config.rule!r} from {format_ruleref(rule.config)}"
@@ -392,7 +392,6 @@ def _special_caller():
 def _raise_ignore(file: Union[str, bytes, os.PathLike, int],
                   rule: FilesRule) -> NoReturn:
     assert rule is not None
-    from . import RuleFileNotFoundError
 
     raise RuleFileNotFoundError(
         f"Access to {file!r} is ignored by "
@@ -410,7 +409,6 @@ def _raise_access(file: Union[str, bytes, os.PathLike, int]) -> NoReturn:
             sf = "./" + sf
     except ValueError:
         sf = str(f)
-    from . import RuleFileNotFoundError
     raise RuleFileNotFoundError(f"Access to {sf}/' must be accepted by a rule.")
 
 

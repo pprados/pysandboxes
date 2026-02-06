@@ -10,6 +10,7 @@ from types import ModuleType
 from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set
 from weakref import WeakKeyDictionary
 
+from .exceptions import RuleModuleNotFoundError, RuleAttributeError
 from .immutable_dict import ImmutableDict
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import ErrorMsg
@@ -128,7 +129,6 @@ class GuardLoader(importlib.abc.Loader):
             if _rules and _rules[0] != "*":
                 module_name = module.__name__
                 if module_name not in _rules:
-                    from . import RuleModuleNotFoundError
                     raise RuleModuleNotFoundError(
                         f"No module named {module_name!r}"
                     )
@@ -303,7 +303,6 @@ class GuardModule(ModuleType):
     def __setattr__(self, name: str, value: object) -> None:
         guard_attributs = GuardModule._states[self].get("guard_attributs",set())
         if name in guard_attributs:
-            from . import RuleAttributeError
             raise RuleAttributeError(
                 f"Cannot set attribute {self.__name__ + "." + name!r}")
         super().__setattr__(name, value)

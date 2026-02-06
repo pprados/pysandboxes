@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, NamedTuple, Set
 
 from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import
+from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .guard_envs import EnvsRules
 from .guard_files import FileRules
@@ -45,18 +46,6 @@ def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
         module = inspect.getmodule(frame)
         return module
     return None
-
-
-class AllRules(NamedTuple):
-    config: ConfigLines
-    envs: Envs
-    os_sandbox: str
-    use_py_sandbox: bool
-    learning_path: Optional[Path]
-    envs_rules: EnvsRules
-    socket_rules: SocketRules
-    file_rules: FileRules
-    import_rules: ImportRules
 
 
 def _read_config(config_path: Path) -> ConfigLines:

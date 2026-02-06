@@ -1,48 +1,56 @@
-from importlib import metadata
-from typing import List
+from typing import Any
 
-from .sandboxes import sandboxes, sandbox, run
-
-try:
-    __version__ = metadata.version(__package__)
-except metadata.PackageNotFoundError:
-    # Case where package metadata is not available.
-    __version__ = ""
-
-__all__ = [
+_api = {
+    "sandboxes",
     "sandbox",
     "run",
-    "sandboxes",
+}
+_exception = {
     "SandBoxError",
-]
+    "ConfigSyntaxError",
+    "RuleFileNotFoundError",
+    "RulePermissionError",
+    "RuleSocketConnectionRefusedError",
+    "RuleModuleNotFoundError",
+    "RuleAttributeError",
+}
 
-# All the exceptions are here, to have a better stack trace.
-class SandBoxError(RuntimeError):
-    pass
+_cli={
+    "cli",
+}
 
-class ConfigSyntaxError(SandBoxError):
-    def __init__(self, message: str, errors: List[str]):
-        super().__init__()
-        self.message = message
-        self.errors = errors
-
-    def __str__(self):
-        return (self.message + "\n" +
-                "\n".join(self.errors))
-
-class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
-    pass
+__all__ = _api | _exception
 
 
-class RulePermissionError(PermissionError, SandBoxError):
-    pass
+class LazySandboxesProxy:
+    """
+    Manage circular import
+    """
 
-class RuleSocketConnectionRefusedError(ConnectionRefusedError, SandBoxError):
-    pass
+    def __init__(self):
+        # Le module n'est pas encore importé, juste son nom est stocké
+        self.modules = None
 
-class RuleModuleNotFoundError(ModuleNotFoundError, SandBoxError):
-    pass
+    def __getattr__(self, name: str) -> Any:
+        """
+        Intercepte l'accès à un attribut et importe le module si nécessaire.
+        """
+        if not self.modules:
+            import importlib
+            module_api = importlib.import_module(".sandboxes_api", package=__name__)
+            module_exception = importlib.import_module(".exceptions", package=__name__)
+            self.modules = {
+                **{api: module_api for api in _api},
+                **{api: module_exception for api in _exception}
+            }
+        if name in self.modules:
+            return getattr(self.modules[name], name)
+        else:
+            raise AttributeError(f"{name} not found")
 
 
-class RuleAttributeError(AttributeError, SandBoxError):
-    pass
+_sandboxes = LazySandboxesProxy()
+
+
+def __getattr__(name):
+    return _sandboxes.__getattr__(name)

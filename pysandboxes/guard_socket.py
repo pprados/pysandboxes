@@ -49,8 +49,7 @@ from pathlib import Path
 from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any, Callable, \
     TypeAlias, Set
 
-from netifaces import AF_INET, AF_INET6
-
+from .exceptions import RuleSocketConnectionRefusedError
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
 from .types import ConfigLines, ConfigLine
@@ -464,7 +463,6 @@ def _check_address_with_rules(
                                         hostname, ip_host, destination_port,
                                         config.rule, format_ruleref(config)
                                     )
-                                    from . import RuleSocketConnectionRefusedError
                                     raise RuleSocketConnectionRefusedError(
                                         f"Guard network connection to "
                                         f"{hostname!r} "
@@ -495,7 +493,6 @@ def _check_address_with_rules(
         "DENIED by implicit default policy.",
         target
     )
-    from . import RuleSocketConnectionRefusedError
     raise RuleSocketConnectionRefusedError(
         f"Guard network connection to {target} "
         f"DENIED by implicit default policy."
@@ -518,9 +515,9 @@ _map_socket_type = {
 def _get_fammily(ip: str) -> int:
     ip_object = ip_address(ip)
     if ip_object.version == 4:
-        familly = AF_INET
+        familly = socket.AF_INET
     elif ip_object.version == 6:
-        familly = AF_INET6
+        familly = socket.AF_INET6
     else:
         familly = 0
     return familly

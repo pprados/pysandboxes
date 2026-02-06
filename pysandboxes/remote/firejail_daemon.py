@@ -14,7 +14,7 @@ from .tools import which_command, suggest_package_installation
 from ..guard_files import BindRule, IgnoreRule
 from ..main_logger import pysandboxes_logger
 from ..netfilter import rule_to_netfilter
-from ..py_sandbox import AllRules
+from ..all_rules import AllRules
 from ..tools import remove_comments, substitute_env_vars
 from ..types import Envs, Args
 

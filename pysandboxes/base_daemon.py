@@ -6,7 +6,7 @@ from .tools import SyncOrAsyncFunc
 from .types import Envs
 
 if TYPE_CHECKING:
-    from .py_sandbox import AllRules
+    from .all_rules import AllRules
 
 logger = logging.getLogger(__name__)
 

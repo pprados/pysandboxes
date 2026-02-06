@@ -24,6 +24,11 @@ dependencies = [
   "tblib (>=3.1.0)",
   "aiohttp-sse-client (>=0.2.1)",
   "netifaces (>=0.11.0)",
+
+  # For CLI
+  "click (>=8.2.0)",
+  "dotenv (>=0.9.0)",
+
 #  "dnspython>=2.7.0", TODO
 #  "RestrictedPython (>8.0)", TODO
   # For ikernel_executor
@@ -33,9 +38,8 @@ dependencies = [
 ]
 
 [tool.poetry.scripts]
-python-sandbox = "pysandboxes.cli:sync_forty_two"
-python3-sandbox = "pysandboxes.cli:sync_forty_two"
-sandbox-daemon = "pysandboxes.remote.daemon:sync_forty_two"
+python-sb = "pysandboxes.cli:sync_forty_two"
+python3-sb = "pysandboxes.cli:sync_forty_two"
 
 [tool.poetry.group.dev]
 optional = true

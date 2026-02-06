@@ -1,2 +1,0 @@
-class SandBoxError(RuntimeError):
-    pass

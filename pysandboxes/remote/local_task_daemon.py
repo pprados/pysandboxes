@@ -20,7 +20,7 @@ from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
 from .tools import from_b85, to_b85
 from ..private_loop import sandbox_loop, get_sandbox_loop
-from ..py_sandbox import AllRules
+from ..all_rules import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
 from ..types import Args, Envs
 

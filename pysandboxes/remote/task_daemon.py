@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from .local_task_daemon import LocalTaskDaemon
-from ..py_sandbox import AllRules
+from ..all_rules import AllRules
 from ..tools import SyncOrAsyncFunc
 from ..types import Envs
 

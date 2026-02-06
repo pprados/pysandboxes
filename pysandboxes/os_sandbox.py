@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional, Type, cast
 
 from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
-from .py_sandbox import AllRules
+from .all_rules import AllRules
 from .remote.firejail_daemon import FireJailDaemon
 from .remote.parameters import DELAY_FOR_STOP_DAEMON
 from .remote.subprocess_daemon import SubProcessDaemon

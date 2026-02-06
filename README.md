@@ -86,16 +86,18 @@ In your program, you must launch the sandbox before you can isolate certain part
 
 ```python
 # Synchronous version
-from pysandboxes import sandboxes
+from pysandboxes import sandboxes_api
+
 with sandboxes(init_fn=init_sandbox):
-   ...
+    ...
 ```
 
 ```python
 # Asynchronous version
-from pysandboxes import sandboxes
+from pysandboxes import sandboxes_api
+
 async with sandboxes(init_fn=init_sandbox):
-   ...
+    ...
 ```
 
 The `init_fn` parameter is optional. It can contain a function that will be invoked during the initialization of the sandbox. This is the ideal place to put:

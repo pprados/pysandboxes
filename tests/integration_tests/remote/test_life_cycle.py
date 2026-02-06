@@ -13,7 +13,7 @@ import pytest
 
 from integration_tests.sample import config_path
 from integration_tests.remote.test_rpc import sync_function
-from pysandboxes import sandboxes
+from pysandboxes import sandboxes_api
 
 
 def find_process_childrens(parent_pid: int) -> List[int]:
