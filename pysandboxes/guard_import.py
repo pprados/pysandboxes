@@ -124,7 +124,8 @@ class GuardLoader(importlib.abc.Loader):
         if not module:
             return
         if is_learning_mode():
-            add_learning_rule(LearnImportRule(module.__name__))
+            if module.__name__ not in _rules:
+                add_learning_rule(LearnImportRule(module.__name__))
         else:
             if _rules and _rules[0] != "*":
                 module_name = module.__name__

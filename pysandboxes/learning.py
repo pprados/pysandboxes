@@ -137,7 +137,7 @@ def generate_config_from_learning() -> None:
 def _manage_olds_file(_learning_path):
     old_learning_path = None
     learning_path = _learning_path
-    if learning_path.exists():
+    if learning_path.exists() and not learning_path.is_dir():
         i = 0
         while True:
             suffix = f".old_{i}" if i else ".old"
@@ -167,4 +167,4 @@ def is_learning_mode():
 def add_learning_rule(rule: Any) -> None:
     with _lock:
         _learning.add(rule)
-        pysandboxes_logger.info(repr(rule))
+        pysandboxes_logger.debug(repr(rule))

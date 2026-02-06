@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Tuple, List, Optional
 
+from .config import CONFIG_NAME
 from .main_logger import format_ruleref, format_error_list, ErrorMsg
 from .sb_types import ConfigLines
 
@@ -46,7 +47,7 @@ def parse_rules(rules: ConfigLines,
             if learning_path:
                 continue
             value = rule.rule.split("=", 1)[1].strip().lower()
-            learning_path=Path(value)
+            learning_path=Path(value) if value else Path(CONFIG_NAME)
             if not learning_path.parent.exists():
                 learning_path=None
                 errors.append(

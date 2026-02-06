@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level():
-    if True: # "PYTEST_RUN_CONFIG" in os.environ:
+    if True: # TODO "PYTEST_RUN_CONFIG" in os.environ:
         format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     else:
         format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s: %(message)s'

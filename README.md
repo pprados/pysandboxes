@@ -60,7 +60,10 @@ There are two usage modes:
 
 ## Apply the sandbox to the entire application
 
-This scenario is the simplest. You just need to replace the launch of your application (`python -m xxx`) with a launch in the sandbox (`python-sb -m xxx`).
+This scenario is the simplest. You just need to replace the launch of your application (`python -m xxx`) with a launch in the sandbox (`python-sb -m xxx`). It's possible to add some parameters, at the beginning:
+```shell
+python-db --learning -m my_module
+```
 
 It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example.
 

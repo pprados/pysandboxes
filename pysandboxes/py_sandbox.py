@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, NamedTuple, Set
 from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
+from .config import CONFIG_NAME
 from .guard_envs import EnvsRules
 from .guard_files import FileRules
 from .guard_import import ImportRules
@@ -17,7 +18,6 @@ from .guard_socket import SocketRules
 from .learning import activate_learning
 from .main_logger import format_ruleref, ErrorMsg, \
     pysandboxes_logger
-from .remote.parameters import CONFIG_NAME
 from .tools import remove_config_comments, substitute_config_env_vars, find_config
 from .sb_types import ConfigLines, Envs, ConfigLine
 
@@ -89,7 +89,7 @@ def read_and_parse_config(
     if envs is None:
         envs = os.environ
     extra_lines = remove_config_comments(
-        [ConfigLine(line, Path(), 0) for line in extra_rules]) if extra_rules else []
+        [ConfigLine(f"{k}={v}", Path(), 0) for k,v in extra_rules.items()]) if extra_rules else []
 
     if not config_path:
         config_path = Path(CONFIG_NAME)
@@ -119,14 +119,14 @@ def read_and_parse_config(
                         exit_on_error=exit_on_error)
 
 
-def parse_include(
-        rules: ConfigLines,
+def _parse_include(
+        rules: ConfigLines,  # FIXME: add root file in include
 ) -> ConfigLines:
     includes = set()
-    return _parse_include(includes, rules)
+    return __parse_include(includes, rules)
 
 
-def _parse_include(
+def __parse_include(
         includes: Set[Path],
         rules: ConfigLines,
 ) -> ConfigLines:
@@ -146,7 +146,7 @@ def _parse_include(
                         # Recursive include
                         includes.add(filename.absolute())
                         others.extend(
-                            _parse_include(includes, include_config))
+                            __parse_include(includes, include_config))
                 except PermissionError:
                     pass  # Ignore
         else:
@@ -166,7 +166,7 @@ def parse_config(
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
-    config = parse_include(config)
+    config = _parse_include(config)
 
     # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, ienvs, errors)
