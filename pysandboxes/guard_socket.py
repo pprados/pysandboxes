@@ -74,10 +74,10 @@ Adresse_Type = Union[
 
 # Parsed rule format used internally:
 class SocketMask(NamedTuple):
-    families: List[str]
-    types: List[int]
+    families: Tuple[str, ...]
+    types: Tuple[int, ...]
     network: Union[IPv4Network, IPv6Network]
-    ports: Union[List[int], range]
+    ports: Union[Tuple[int, ...], range]
 
 
 class SocketRule(NamedTuple):
@@ -257,8 +257,8 @@ def _parse_rule(rule: ConfigLine,
     def _for_each_networks(network: Union[IPv4Network, IPv6Network]):
         return SocketRule(action,
                           SocketMask(
-                              specs_input,
-                              parsed_rule_types,
+                              tuple(specs_input),
+                              tuple(parsed_rule_types),
                               # May not be resolved
                               network,
                               ports_list_or_range),
@@ -271,7 +271,7 @@ def _parse_rule(rule: ConfigLine,
         ]
     except ValueError as e:
         try:
-            networks = socket.getaddrinfo(network_str,None)
+            networks = socket.getaddrinfo(network_str, None)
             return [_for_each_networks(ip_network(network[4][0], strict=False)) for
                     network in networks]
         except socket.gaierror as e:
@@ -300,13 +300,12 @@ def parse_rules(rules: ConfigLines,
         elif parsed_rules is not None:
             ignore_rules.append(rule)
 
-    # FIXME: Remove duplicates and sort for consistency
-    # parsed_rule_families = sorted(list(set(parsed_rule_families)))
+    # Remove duplicates and sort for consistency
+    uniq_rules = set(socket_rules)
+    return tuple(uniq_rules), ignore_rules
 
-    return tuple(socket_rules), ignore_rules
 
-
-def _convert_ports_range(syntax: str) -> Union[List[int], range]:
+def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
     """
     Converts a port specification string (e.g., "80,443,8000-8080,*")
     into a sorted list of unique integer port numbers or a range object for '*'.
@@ -320,7 +319,7 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
     """
     max_port = 65535  # Maximum valid port number
     if not syntax:
-        return []
+        return tuple()
     if syntax.strip() == '*':
         return range(max_port + 1)  # Represents all ports
     ports = set()
@@ -385,7 +384,7 @@ def _convert_ports_range(syntax: str) -> Union[List[int], range]:
             list_port.update(list(port))
         else:
             list_port.add(port)
-    return sorted(list_port)
+    return tuple(sorted(list_port))
 
 
 def _check_address_with_rules(
@@ -407,10 +406,10 @@ def _check_address_with_rules(
             0 <= destination_port <= 65535):
         raise ValueError(f"Invalid port number: {destination_port}")
 
-    unique_ips:List[Union[IPv4Address, IPv6Address]]
+    unique_ips: List[Union[IPv4Address, IPv6Address]]
     try:
 
-        unique_ips=[ip_address(hostname)]
+        unique_ips = [ip_address(hostname)]
     except ValueError:
         try:
             # Resolve hostname to IP addresses using the socket instance's family, type, and proto
@@ -776,7 +775,7 @@ def activate_guard(rules: SocketRules) -> None:
     if _rules:
         raise RuntimeError("Guard_socket already activated.")
     _rules = rules
-    #readonly_module(__name__)
+    # readonly_module(__name__)
 
 
 def _read_host_file() -> Tuple[
