@@ -1,6 +1,6 @@
 import pytest
 
-from pysandboxes.guard_files import RuleFileNotFoundError
+from pysandboxes import RuleFileNotFoundError
 from pysandboxes.types import ConfigLine
 from .test_guard_io import files, _reset_rules, _activate_guard
 

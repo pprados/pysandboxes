@@ -15,7 +15,6 @@ from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
 from .config import OPTIMIZE
-from .exception import SandBoxError
 from .guard_envs import LearnEnviron
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
@@ -33,14 +32,6 @@ _white_list = [
     '<frozen posixpath>',
     '<frozen genericpath>',
 ]
-
-
-class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
-    pass
-
-
-class RulePermissionError(PermissionError, SandBoxError):
-    pass
 
 
 # Internal representation of a rule
@@ -112,13 +103,13 @@ def parse_rules(config: ConfigLines,
                 if not src and not dest:
                     continue  # Ignore empty bind
                 if src and dest:
-                    src=_Path(src).expanduser()
-                    dest=_Path(dest).expanduser()
+                    src = _Path(src).expanduser()
+                    dest = _Path(dest).expanduser()
                     if not src.is_dir() or not dest.is_dir():
                         errors.append(
                             (
                                 f"{format_ruleref(rule)}: "
-                                f"In '{rule.rule}', "
+                                f"In {rule.rule!r}, "
                                 f"source and destination must exists and be directories.",
                                 rule.path,
                                 rule.ln
@@ -133,9 +124,9 @@ def parse_rules(config: ConfigLines,
                                 errors.append(
                                     (
                                         f"{format_ruleref(rule)}: "
-                                        f"In '{rule.rule}', "
+                                        f"In {rule.rule!r}, "
                                         f"invalidate another rule "
-                                        f"from '{format_ruleref(bind_rule.config)}'.",
+                                        f"from {format_ruleref(bind_rule.config)!r}.",
                                         rule.path,
                                         rule.ln
                                     )
@@ -157,7 +148,7 @@ def parse_rules(config: ConfigLines,
                     errors.append(
                         (
                             f"{format_ruleref(rule)}: "
-                            f"In '{rule.rule}', "
+                            f"In {rule.rule!r}, "
                             f" source and destination must be set",
                             rule.path,
                             rule.ln
@@ -169,7 +160,7 @@ def parse_rules(config: ConfigLines,
                 errors.append(
                     (
                         f"{format_ruleref(rule)}: "
-                        f"In '{rule.rule}', "
+                        f"In {rule.rule!r}, "
                         f"source and destination must be separated with a comma.",
                         rule.path,
                         rule.ln
@@ -250,10 +241,7 @@ def generate_rules(
             parent_level[parent] = False
 
     result: Set[str] = set()
-    cwd = Path().absolute()
     home = Path.home().absolute()
-
-    os_environ = LearnEnviron()  # Get singleton
 
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
@@ -326,7 +314,7 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Tuple[
                     real_path, rule.source):
                 return None, rule
         else:
-            assert ("Invalide rules")
+            assert "Invalide rules"
     return path, None
 
 
@@ -364,9 +352,10 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
                     if is_learning_mode():
                         add_learning_rule(LearnFileRule(Path(path), True))
                     else:
+                        from . import RulePermissionError
                         raise RulePermissionError(
-                            f"Cannot write to '{rule.dest}'. "
-                            f"Rule '{rule.config.rule}' from {format_ruleref(rule.config)}"
+                            f"Cannot write to {rule.dest!r}. "
+                            f"Rule {rule.config.rule!r} from {format_ruleref(rule.config)}"
                         )
                 relative = os.path.relpath(fake_path_dir, rule.dest)
                 if relative == ".":
@@ -403,9 +392,11 @@ def _special_caller():
 def _raise_ignore(file: Union[str, bytes, os.PathLike, int],
                   rule: FilesRule) -> NoReturn:
     assert rule is not None
+    from . import RuleFileNotFoundError
+
     raise RuleFileNotFoundError(
-        f"Access to '{file}' is ignored by "
-        f"rule '{rule.config.rule}' from {format_ruleref(rule.config)}"
+        f"Access to {file!r} is ignored by "
+        f"rule {rule.config.rule!r} from {format_ruleref(rule.config)}"
     )
 
 
@@ -419,6 +410,7 @@ def _raise_access(file: Union[str, bytes, os.PathLike, int]) -> NoReturn:
             sf = "./" + sf
     except ValueError:
         sf = str(f)
+    from . import RuleFileNotFoundError
     raise RuleFileNotFoundError(f"Access to {sf}/' must be accepted by a rule.")
 
 
@@ -755,7 +747,7 @@ class _ScanDirContextManager:
         self.real_directory = new_path
         self.scanner = None
 
-    def __enter__(self) -> 'ScanDirContextManager':
+    def __enter__(self) -> '_ScanDirContextManager':
         """
         Enter the context manager, opening the scandir iterator.
         """
@@ -803,7 +795,7 @@ class _ScanDirContextManager:
                         pass  # Ignore
                     elif dest_path is not None:
                         _entry = _DirEntry(entry, dest_path)
-                        return _entry
+                        return cast(os.DirEntry,_entry)
             except StopIteration:
                 raise
 
@@ -855,18 +847,6 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
         return remapped
 
     return wrapper
-
-
-# %% Generic wrapper
-def _wrap_os_walk(func: Callable, *, write: bool) -> Callable:
-    @functools.wraps(func)
-    def wrapper(top, topdown=True, onerror=None, followlinks=False,
-                *args, **kwargs):
-        pass
-        remapped = top
-
-        return func(remapped, topdown=topdown, onerror=onerror, followlinks=followlinks,
-                    *args, **kwargs)
 
 
 # %% io wrapper
@@ -938,12 +918,6 @@ class Guard_FileIO(FileIO):
                 _raise_access(remapped)
         return io.FileIO(str(remapped), mode=mode, closefd=closefd, opener=opener,
                          *args, **kwargs)
-
-
-def _wrap_io_FileIO__init__(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs) -> Any:
-        return func(*args, **kwargs)
 
 
 # Wrapper for factory to wrapper ;-)
@@ -1159,4 +1133,3 @@ def activate_guard(
     if _rules:
         logger.debug("Guard_files was already activated.")
     _rules = rules
-    # readonly_module(__name__)

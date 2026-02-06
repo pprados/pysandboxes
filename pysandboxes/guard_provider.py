@@ -24,7 +24,7 @@ def parse_rules(rules: ConfigLines,
             if provider not in providers_factory:
                 errors.append(
                     (f"{format_ruleref(rule)}: "
-                     f"Invalid os-sandbox '{provider}'.",
+                     f"Invalid os-sandbox {provider!r}.",
                      rule.path,
                      rule.ln
                      )
@@ -39,7 +39,7 @@ def parse_rules(rules: ConfigLines,
             else:
                 errors.append(
                     (f"{format_ruleref(rule)}: "
-                     f"Invalid value '{value}' for py-sandbox. Use true or false.",
+                     f"Invalid value {value!r} for py-sandbox. Use true or false.",
                      rule.path, rule.ln)
                 )
         elif rule.rule.startswith("learning="):
@@ -51,7 +51,7 @@ def parse_rules(rules: ConfigLines,
                 learning_path=None
                 errors.append(
                     (f"{format_ruleref(rule)}: "
-                     f"Invalid value '{value}' for --learning. "
+                     f"Invalid value {value!r} for --learning. "
                      f"The parent path must exist.",
                      rule.path, rule.ln)
                 )

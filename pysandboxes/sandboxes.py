@@ -14,7 +14,6 @@ from typing import Callable, Optional
 from .base_daemon import BaseDaemon
 from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
-from .py_sandbox import ConfigSyntaxError
 from .remote.parameters import DELAY_FOR_CALL_DAEMON
 from .tools import check_mixte_async_async, SyncOrAsyncFunc
 from .types import Envs
@@ -87,7 +86,6 @@ class sandboxes(Protocol):
             envs = os.environ
         self.envs = Envs(envs)
         self.extra_rules = extra_rules
-        self.timeout = 60  # FIXME: timeout=60
         self._old_sigint = None
         self._old_sigterm = None
 
@@ -98,6 +96,7 @@ class sandboxes(Protocol):
         """
         from .py_sandbox import read_and_parse_config
         from .os_sandbox import start_daemon
+        from . import ConfigSyntaxError
 
         logger.debug("__enter__ start...")
         check_mixte_async_async()
@@ -113,7 +112,6 @@ class sandboxes(Protocol):
         start_daemon(all_rules,
                      log_level=log_level,
                      init_fn=self.init_fn,
-                     timeout=self.timeout,
                      )
 
         def signal_handler(signum: int, frame: object) -> None:

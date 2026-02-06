@@ -6,7 +6,7 @@ from typing import Dict
 
 import pytest
 
-from pysandboxes.guard_files import RuleFileNotFoundError, RulePermissionError
+from pysandboxes import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.types import ConfigLine
 from .test_guard_io import files, _activate_guard, _reset_rules
 
@@ -719,7 +719,7 @@ def test_os_scandir(files:Dict[str,Path]) -> None:
     assert next(filter(lambda x: x.path == str(files["bound_file"]), rc), None)
 
     with pytest.raises(RuleFileNotFoundError):
-        with os.scandir(files["bind_src"]) as entries:
+        with os.scandir(files["bind_src"]):
             pass
 
 

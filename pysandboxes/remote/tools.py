@@ -139,7 +139,7 @@ def suggest_package_installation(package_name: str) -> str:
             # Fallback for unknown or other Linux distributions
             return textwrap.dedent(
                 f"""
-                You can try installing '{package_name}' using common package managers like:
+                You can try installing {package_name!r} using common package managers like:
                 sudo apt update && sudo apt install {package_name}  (Debian/Ubuntu based systems)
                 sudo yum install {package_name}          (CentOS/RHEL based systems)
                 sudo dnf install {package_name}          (Fedora based systems)
@@ -156,7 +156,7 @@ def suggest_package_installation(package_name: str) -> str:
     elif system == 'win32':
         # For Windows, suggest Winget or Chocolatey
         return textwrap.dedent(f"""
-            You can try installing '{package_name}' using:")
+            You can try installing {package_name!r} using:")
               winget install {package_name}            (Windows Package Manager)
               choco install {package_name}             (Chocolatey - if installed)
             You might need to install Winget or Chocolatey first if you don't have them.
@@ -165,7 +165,7 @@ def suggest_package_installation(package_name: str) -> str:
         # For other or unknown systems
         return textwrap.dedent(f"""
             Your operating system ({system}) is not explicitly supported.
-            Please refer to the documentation for '{package_name}' to find installation instructions for your system.
+            Please refer to the documentation for {package_name!r} to find installation instructions for your system.
             """).strip()  # noqa
 
 

@@ -121,8 +121,6 @@ def start_daemon(
         all_rules: AllRules,
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc] = None,
-        *,
-        timeout: int = 60
 ) -> BaseDaemon:
     """
     Synchronize version to start daemon by name.

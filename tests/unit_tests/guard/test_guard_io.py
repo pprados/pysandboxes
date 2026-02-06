@@ -3,27 +3,25 @@ from typing import Dict
 
 import pytest
 
-from pysandboxes.guard_files import activate_guard, parse_rules, \
-    RuleFileNotFoundError
+from pysandboxes import RuleFileNotFoundError
+from pysandboxes.guard_files import activate_guard, parse_rules
 from pysandboxes.types import ConfigLines, ConfigLine
 
 
 def _reset_rules():
-    from pysandboxes.guard_import import conv_patch_rules, _deactivate_guard_import, \
-        activate_guard_import
+    from pysandboxes.guard_import import _deactivate_guard_import, \
+        activate_guard_import, patch_rules as import_path_rules
     from pysandboxes.guard_files import _deactivate_guard_files, patch_rules as file_patch_rules
     from pysandboxes.guard_socket import _deactivate_guard_sockets, patch_rules as socket_path_rules
     activate_guard_import(
-        conv_patch_rules(
-            {
-                **file_patch_rules(),
-                **socket_path_rules(),
-            }
-        ),
+        {
+            **file_patch_rules(),
+            **socket_path_rules(),
+            **import_path_rules(),
+        },
         tuple(["*"]),  # Import all modules
     )
     yield
-    import socket # FIXME: a virer
     _deactivate_guard_files()
     _deactivate_guard_sockets()
     _deactivate_guard_import()
@@ -107,7 +105,6 @@ def _activate_guard(rules: ConfigLines) -> None:
 
 
 def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
-    errors = []
     rules = [
         ConfigLine(f"ignore={files['ignore']}", Path(), 0)
     ]
@@ -119,7 +116,6 @@ def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
 
 
 def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, Path]):
-    errors = []
     rules = [
         ConfigLine(f"ignore={files['ignore']}", Path(), 0)
     ]
@@ -184,14 +180,14 @@ def test_io_open_visible_and_invisible_files(files: Dict[str, Path]):
         assert f.read() == "Visible"
 
     with pytest.raises(RuleFileNotFoundError):
-        with io.open(files['ignore']) as f:
+        with io.open(files['ignore']):
             pass
 
-    with io.open(files['bind_dest'] / "bound_file.txt") as f:
+    with io.open(files['bind_dest'] / "bound_file.txt"):
         pass
 
     with pytest.raises(RuleFileNotFoundError):
-        with io.open(files['bind_src'] / "bound_file.txt") as f:
+        with io.open(files['bind_src'] / "bound_file.txt"):
             pass
 
 
@@ -207,13 +203,13 @@ def test_io_FileIO(files: Dict[str, Path]) -> None:
     with io.FileIO(files['visible'], "r") as f:
         assert f.read() == b"Visible"
 
-    with io.FileIO(files['bind_dest'] / "bound_file.txt", "r") as f:
+    with io.FileIO(files['bind_dest'] / "bound_file.txt", "r"):
         pass
 
     with pytest.raises(RuleFileNotFoundError):
-        with io.FileIO(files['ignore'], "r") as f:
+        with io.FileIO(files['ignore'], "r"):
             pass
 
     with pytest.raises(RuleFileNotFoundError):
-        with io.FileIO(files['bind_src'], "r") as f:
+        with io.FileIO(files['bind_src'], "r"):
             pass

@@ -51,7 +51,6 @@ from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any, Ca
 
 from netifaces import AF_INET, AF_INET6
 
-from .exception import SandBoxError
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
 from .types import ConfigLines, ConfigLine
@@ -99,9 +98,6 @@ class LearnSocketRule(NamedTuple):
     dns: Tuple[Union[IPv4Address, IPv6Address], ...]
 
 
-class RuleSocketConnectionRefusedError(ConnectionRefusedError, SandBoxError):
-    pass
-
 
 DENY = "DENY"  # Action to deny a connection
 ALLOW = "ALLOW"  # Action to allow a connection
@@ -131,7 +127,7 @@ def _parse_rule(rule: ConfigLine,
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
-                f"'{rule.rule}' has incorrect number of parts separated by '|'. "
+                f"{rule.rule!r} has incorrect number of parts separated by '|'. "
                 f"Expected 5, got {len(rule_components)}. "
                 f"Format: "
                 f"<{ALLOW}, {DENY}>|"
@@ -149,8 +145,8 @@ def _parse_rule(rule: ConfigLine,
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
-                f"'{rule.rule}' "
-                f"use an invalide action. Must be '{ALLOW}' or '{DENY}'.",
+                f"{rule.rule!r} "
+                f"use an invalide action. Must be {ALLOW!r} or {DENY!r}.",
                 rule.path,
                 rule.ln
             )
@@ -165,7 +161,7 @@ def _parse_rule(rule: ConfigLine,
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
-                f"'{rule.rule}' "
+                f"{rule.rule!r} "
                 f"has empty socket specs.",
                 rule.path,
                 rule.ln
@@ -179,8 +175,8 @@ def _parse_rule(rule: ConfigLine,
                     errors.append(
                         (
                             f"{format_ruleref(rule)}: "
-                            f"In '{rule.rule}', "
-                            f"'{spec_part}' must be used alone, "
+                            f"In {rule.rule!r}, "
+                            f"{spec_part!r} must be used alone, "
                             f"not combined with other specifiers.",
                             rule.path,
                             rule.ln
@@ -195,8 +191,8 @@ def _parse_rule(rule: ConfigLine,
                 errors.append(
                     (
                         f"{format_ruleref(rule)}: "
-                        f"'{rule.rule}' "
-                        f"has unknown socket specifier '{spec_part}'. "
+                        f"{rule.rule!r} "
+                        f"has unknown socket specifier {spec_part!r}. "
                         f"Valid specifiers: any, {', '.join(SPEC_TO_TYPE_MAP.keys())}.",
                         rule.path,
                         rule.ln
@@ -209,7 +205,7 @@ def _parse_rule(rule: ConfigLine,
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
-                f"In '{rule.rule}', "
+                f"In {rule.rule!r}, "
                 f"network part must be set.",
                 rule.path,
                 rule.ln
@@ -220,7 +216,7 @@ def _parse_rule(rule: ConfigLine,
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
-                f"In '{rule.rule}', "
+                f"In {rule.rule!r}, "
                 f"port spec part is not valid.",
                 rule.path,
                 rule.ln
@@ -231,8 +227,8 @@ def _parse_rule(rule: ConfigLine,
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
-                f"In '{rule.rule}', "
-                f"direction is not '{IN}' or '{OUT}'.",
+                f"In {rule.rule!r}, "
+                f"direction is not {IN!r} or {OUT!r}.",
                 rule.path,
                 rule.ln
             )
@@ -240,11 +236,11 @@ def _parse_rule(rule: ConfigLine,
         return None
     try:
         ports_list_or_range = _convert_ports_range(port_spec_str)
-    except ValueError as e:
+    except ValueError:
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
-                f"In '{rule.rule}', "
+                f"In {rule.rule!r}, "
                 f"invalide port list.",
                 rule.path,
                 rule.ln
@@ -269,16 +265,16 @@ def _parse_rule(rule: ConfigLine,
         return [
             _for_each_networks(ip_network(network_str, strict=False))
         ]
-    except ValueError as e:
+    except ValueError:
         try:
             networks = socket.getaddrinfo(network_str, None)
             return [_for_each_networks(ip_network(network[4][0], strict=False)) for
                     network in networks]
-        except socket.gaierror as e:
+        except socket.gaierror:
             errors.append(
                 (
                     f"{format_ruleref(rule)}: "
-                    f"In '{rule.rule}', "
+                    f"In {rule.rule!r}, "
                     f"invalid network specification. "
                     f"That does not resolve to any network.",
                     rule.path,
@@ -301,8 +297,8 @@ def parse_rules(rules: ConfigLines,
             ignore_rules.append(rule)
 
     # Remove duplicates and sort for consistency
-    uniq_rules = set(socket_rules)
-    return tuple(uniq_rules), ignore_rules
+    sorted_rules = set(socket_rules)
+    return tuple(sorted_rules), ignore_rules
 
 
 def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
@@ -334,15 +330,15 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                 start_str, end_str = limits[0].strip(), limits[1].strip()
                 if not start_str:
                     raise ValueError(
-                        f"Invalid range format: '{element}'. Range start cannot be empty.")
+                        f"Invalid range format: {element!r}. Range start cannot be empty.")
                 try:
                     start = int(start_str)
                 except ValueError:
                     raise ValueError(
-                        f"Invalid start port number '{start_str}' in range '{element}'.")
+                        f"Invalid start port number {start_str!r}' in range {element!r}.")
                 if not (0 <= start <= max_port):
                     raise ValueError(
-                        f"Start port {start} in range '{element}' is out of valid range (0-{max_port}).")
+                        f"Start port {start} in range {element!r} is out of valid range (0-{max_port}).")
 
                 if end_str == '':  # Handles open-ended ranges like "8000-"
                     end = max_port
@@ -351,29 +347,29 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                         end = int(end_str)
                     except ValueError:
                         raise ValueError(
-                            f"Invalid end port number '{end_str}' in range '{element}'.")
+                            f"Invalid end port number {end_str!r} in range {element!r}.")
                     if not (0 <= end <= max_port):
                         raise ValueError(
-                            f"End port {end} in range '{element}' is out of valid range (0-{max_port}).")
+                            f"End port {end} in range {element!r} is out of valid range (0-{max_port}).")
                 if start == end:
                     ports.add(start)
                 elif start <= end:
                     ports.add(range(start, end + 1))
                 else:
                     raise ValueError(
-                        f"Invalid range: start port {start} is greater than end port {end} in '{element}'.")
+                        f"Invalid range: start port {start} is greater than end port {end} in {element!r}.")
             else:
                 raise ValueError(
-                    f"Invalid range format: '{element}'. Unexpected hyphen usage.")
+                    f"Invalid range format: {element!r}. Unexpected hyphen usage.")
         else:
             try:
                 port = int(element)
                 if not (0 <= port <= max_port):
                     raise ValueError(
-                        f"Port number {port} in '{element}' is out of valid range (0-{max_port}).")
+                        f"Port number {port} in {element!r} is out of valid range (0-{max_port}).")
                 ports.add(port)
             except ValueError:
-                raise ValueError(f"Invalid port number '{element}'.")
+                raise ValueError(f"Invalid port number {element!r}.")
     if len(ports) == 1:
         first = next(iter(ports))
         if isinstance(first, range):
@@ -468,12 +464,13 @@ def _check_address_with_rules(
                                         hostname, ip_host, destination_port,
                                         config.rule, format_ruleref(config)
                                     )
+                                    from . import RuleSocketConnectionRefusedError
                                     raise RuleSocketConnectionRefusedError(
                                         f"Guard network connection to "
-                                        f"'{hostname}' "
+                                        f"{hostname!r} "
                                         f"({ip_host}:{destination_port}) "
                                         f"{action} by rule "
-                                        f"'{config.rule}' "
+                                        f"{config.rule!r} "
                                         f"from {format_ruleref(config)})."
                                     )
                                 elif action == ALLOW:
@@ -498,6 +495,7 @@ def _check_address_with_rules(
         "DENIED by implicit default policy.",
         target
     )
+    from . import RuleSocketConnectionRefusedError
     raise RuleSocketConnectionRefusedError(
         f"Guard network connection to {target} "
         f"DENIED by implicit default policy."
@@ -775,7 +773,6 @@ def activate_guard(rules: SocketRules) -> None:
     if _rules:
         raise RuntimeError("Guard_socket already activated.")
     _rules = rules
-    # readonly_module(__name__)
 
 
 def _read_host_file() -> Tuple[

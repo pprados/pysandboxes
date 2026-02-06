@@ -17,6 +17,9 @@ def test_immutable_dict():
     # Access list of values
     assert list(original_dict.values()) == list(my_immutable_dict.values())
 
+    # Access with slice
+    assert my_immutable_dict[0:2] == ("a", "b")
+
     # Check key
     assert "a" in my_immutable_dict
 
@@ -24,10 +27,11 @@ def test_immutable_dict():
     with pytest.raises(TypeError):
         my_immutable_dict["a"] = 10
 
+
 def test_empty_immutable_dict():
     my_immutable_dict = ImmutableDict({})
     my_immutable_dict.keys()
     my_immutable_dict.values()
     import pickle
-    p=pickle.dumps(my_immutable_dict)
+    p = pickle.dumps(my_immutable_dict)
     pickle.loads(p)

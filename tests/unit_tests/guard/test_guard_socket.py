@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from pysandboxes import RuleSocketConnectionRefusedError
 from pysandboxes.guard_socket import (
     _check_address_with_rules,
     IN,
@@ -14,7 +15,7 @@ from pysandboxes.guard_socket import (
 )
 # Assuming _convert_ports_range is imported from your module
 from pysandboxes.guard_socket import _deactivate_guard_sockets, \
-    parse_rules, RuleSocketConnectionRefusedError
+    parse_rules
 from pysandboxes.types import ConfigLine
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from pysandboxes.guard_files import RuleFileNotFoundError
+from pysandboxes import RuleFileNotFoundError
 from pysandboxes.types import ConfigLine
 from .test_guard_io import files, _activate_guard, _reset_rules
 
@@ -35,6 +35,6 @@ def test_gzip(files):
         source = pathlib.Path(files["bind_dest"] / "bound_file.txt")
         compressed = pathlib.Path(files["bind_src"] / "bound_file.txt").with_suffix(
             ".gz")
-        with (source.open("rb") as f_in,
-              gzip.open(compressed, "wb") as f_out):
+        with (source.open("rb"),
+              gzip.open(compressed, "wb")):
             pass

@@ -93,7 +93,7 @@ def rule_to_netfilter(socket_rules: SocketRules,
         "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
         "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
     ]
-    if is_ipv6:  # FIXME: why exclude not used?
+    if is_ipv6:
         exclude = [socket.AF_INET, socket.IPPROTO_ICMP]
     else:
         exclude = [socket.AF_INET6, socket.IPPROTO_ICMPV6]

@@ -1,6 +1,6 @@
 import collections
 from typing import ItemsView, Hashable, Iterator, Generic, TypeVar, Tuple, Union, \
-    Mapping, Iterable, KeysView, ValuesView, Dict
+    Mapping, Iterable, KeysView, ValuesView, Dict, Any
 
 KeyType = TypeVar('KeyType', bound=Hashable)
 ValueType = TypeVar('ValueType')
@@ -64,11 +64,14 @@ class ImmutableDict(
 
     # Mapping protocol
     def __getitem__(self, key: KeyType) -> ValueType:
-        try:
-            idx = self._keys.index(key)
-        except ValueError:
-            raise KeyError(key)
-        return self._values[idx]
+        if isinstance(key,slice):
+            return self._keys[key]
+        else:
+            try:
+                idx = self._keys.index(key)
+            except ValueError:
+                raise KeyError(key)
+            return self._values[idx]
 
     def __iter__(self) -> Iterator[KeyType]:
         return iter(self._keys)

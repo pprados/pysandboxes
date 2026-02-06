@@ -1,7 +1,8 @@
 import logging
 from pathlib import Path
 
-from pysandboxes.py_sandbox import read_and_parse_config, ConfigSyntaxError
+from pysandboxes import ConfigSyntaxError
+from pysandboxes.py_sandbox import read_and_parse_config
 
 
 def test_syntax_error(caplog):

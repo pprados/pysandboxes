@@ -38,7 +38,6 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
 
         logger.debug("Create a private event loop for sandbox")
         loop = asyncio.new_event_loop()
-        loop.set_debug(True)  # FIXME: remove this flag in production
         _background_loop_ref = weakref.ref(loop)
         asyncio.set_event_loop(loop)
 
@@ -56,7 +55,7 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
                 import os
                 logger.error("Exit sandbox")
                 os._exit(e.args[0])
-            except Exception as e:
+            except Exception:
                 import os
                 logger.exception("Exception unknown in run_forever")
                 os._exit(-1)
@@ -100,8 +99,6 @@ def reset_sandbox_loop():
 
 
 def get_sandbox_loop() -> AbstractEventLoop:
-    """FIXME Lance le serveur dans la boucle appropriée"""
-
     try:
         # Reuse private loop?
         loop = _ensure_background_loop(new_loop=True)  # TODO: vérifer new_loop

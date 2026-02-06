@@ -7,12 +7,11 @@ from importlib import resources
 from pathlib import Path
 from typing import Optional, List, Dict, NamedTuple, Set
 
-from . import guard_files, guard_envs, guard_provider, guard_socket, guard_import
+from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import
 from .base_daemon import BaseDaemon
-from .exception import SandBoxError
 from .guard_envs import EnvsRules
 from .guard_files import FileRules
-from .guard_import import ImportRules, conv_patch_rules
+from .guard_import import ImportRules
 from .guard_socket import SocketRules
 from .learning import activate_learning
 from .main_logger import format_ruleref, ErrorMsg, \
@@ -23,16 +22,6 @@ from .types import ConfigLines, Envs, ConfigLine
 
 logger = logging.getLogger(__name__)
 
-
-class ConfigSyntaxError(SandBoxError):
-    def __init__(self, message: str, errors: List[str]):
-        super().__init__()
-        self.message = message
-        self.errors = errors
-
-    def __str__(self):
-        return (self.message + "\n" +
-                "\n".join(self.errors))
 
 
 def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
@@ -214,6 +203,7 @@ def parse_config(
         errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))
         if exit_on_error:
             os._exit(1)
+        from . import ConfigSyntaxError
         raise ConfigSyntaxError(
             f"Syntax error in config files.",
             [error[0] for error in errors])
@@ -228,20 +218,6 @@ def parse_config(
                     files_rules,
                     import_rules,
                     )
-
-
-def get_config_path(config_path: Optional[Path]) -> Optional[Path]:
-    # FIXME: merge files parameters?
-    if not config_path:
-        known_paths = [
-            Path(".py-sandboxes"),  # Current directory
-        ]
-        body_from_users_or_os = []
-        for path in known_paths:
-            if path.exists():
-                config_path = path
-                break
-    return Path(config_path) if isinstance(config_path, str) else config_path
 
 
 def activate_sandboxes(
@@ -267,14 +243,14 @@ def activate_sandboxes(
     env_patch_rules = guard_envs.patch_rules(all_rules.learning_path)
     file_patch_rules = guard_files.patch_rules()
     socket_patch_rules = guard_socket.patch_rules()
+    import_patch_rules = guard_import.patch_rules()
     guard_import.activate_guard_import(
-        conv_patch_rules(
-            {
-                **file_patch_rules,
-                **socket_patch_rules,
-                **env_patch_rules
-            }
-        ),
+        {
+            **file_patch_rules,
+            **socket_patch_rules,
+            **env_patch_rules,
+            **import_patch_rules,
+        },
         all_rules.import_rules,
     )
     guard_envs.activate_guard(all_rules.envs_rules)

@@ -28,7 +28,6 @@ async def start_daemon_for_tests() -> Iterator[None]:
     start_daemon(all_rules,
                  log_level,
                  init_fn=None,
-                 timeout=2,
                  )
     yield
     shutdown_daemon()

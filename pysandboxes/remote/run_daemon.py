@@ -53,7 +53,6 @@ async def main() -> int:
 
     # -------------
     # Read all configuration from stdin until EOF
-    config_body = None
     process_config: Optional[SubProcessParameters] = None
     for line in sys.stdin:
         process_config = from_b85(line.strip())
@@ -88,16 +87,16 @@ async def main() -> int:
         )
 
         pysandboxes_logger.info(
-            f"Start a py-sandbox encapsulated in an os-sandox of type '{os_sandbox}'")
+            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")
     else:
         pysandboxes_logger.info(
-            f"Start ONLY an os-sandox of type '{os_sandbox}'")
+            f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
     # Call init function
     # Note: the init_function is called AFTER the activation of the python sandbox
     init_fn: Optional[SyncOrAsyncFunc] = None
     if process_config.init_fn:
-        module_name, function_name = process_config.init_fn.split(':', 1)
+        module_name, function_name = str(process_config.init_fn).split(':', 1)
         module = importlib.import_module(module_name)
         init_fn = getattr(module, function_name)
 
