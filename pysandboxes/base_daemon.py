@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from .tools import SyncOrAsyncFunc
-from .types import Envs
+from .sb_types import Envs
 
 if TYPE_CHECKING:
     from .all_rules import AllRules

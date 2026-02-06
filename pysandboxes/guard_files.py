@@ -19,7 +19,7 @@ from .exceptions import RulePermissionError, RuleFileNotFoundError
 from .guard_envs import LearnEnviron
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg
-from .types import ConfigLines, ConfigLine
+from .sb_types import ConfigLines, ConfigLine
 
 if io or os:
     pass

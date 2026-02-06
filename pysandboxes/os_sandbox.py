@@ -13,7 +13,7 @@ from .remote.parameters import DELAY_FOR_STOP_DAEMON
 from .remote.subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
 from .tools import is_in_sandbox, check_mixte_async_async, SyncOrAsyncFunc
-from .types import Envs
+from .sb_types import Envs
 
 logger = logging.getLogger(__name__)
 

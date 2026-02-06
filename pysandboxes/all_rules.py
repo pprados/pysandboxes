@@ -5,7 +5,7 @@ from pysandboxes.guard_envs import EnvsRules
 from pysandboxes.guard_files import FileRules
 from pysandboxes.guard_import import ImportRules
 from pysandboxes.guard_socket import SocketRules
-from pysandboxes.types import ConfigLines, Envs
+from pysandboxes.sb_types import ConfigLines, Envs
 
 
 class AllRules(NamedTuple):

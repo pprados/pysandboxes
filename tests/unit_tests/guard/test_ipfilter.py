@@ -5,7 +5,7 @@ from typing import List
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
-from pysandboxes.types import ConfigLine
+from pysandboxes.sb_types import ConfigLine
 
 
 def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tuple[

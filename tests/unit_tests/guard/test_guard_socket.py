@@ -16,7 +16,7 @@ from pysandboxes.guard_socket import (
 # Assuming _convert_ports_range is imported from your module
 from pysandboxes.guard_socket import _deactivate_guard_sockets, \
     parse_rules
-from pysandboxes.types import ConfigLine
+from pysandboxes.sb_types import ConfigLine
 
 
 @pytest.fixture(autouse=True)

@@ -22,7 +22,7 @@ from .tools import from_b85, to_b85
 from ..private_loop import sandbox_loop, get_sandbox_loop
 from ..all_rules import AllRules
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
-from ..types import Args, Envs
+from ..sb_types import Args, Envs
 
 logger = logging.getLogger(__name__)
 

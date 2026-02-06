@@ -14,7 +14,7 @@ from .exceptions import RuleModuleNotFoundError, RuleAttributeError
 from .immutable_dict import ImmutableDict
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import ErrorMsg
-from .types import ConfigLines
+from .sb_types import ConfigLines
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.guard_files import activate_guard, parse_rules
-from pysandboxes.types import ConfigLines, ConfigLine
+from pysandboxes.sb_types import ConfigLines, ConfigLine
 
 
 def _reset_rules():

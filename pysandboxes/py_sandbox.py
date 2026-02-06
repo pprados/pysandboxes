@@ -19,7 +19,7 @@ from .main_logger import format_ruleref, ErrorMsg, \
     pysandboxes_logger
 from .remote.parameters import CONFIG_NAME
 from .tools import remove_config_comments, substitute_config_env_vars, find_config
-from .types import ConfigLines, Envs, ConfigLine
+from .sb_types import ConfigLines, Envs, ConfigLine
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +54,11 @@ def _read_config(config_path: Path) -> ConfigLines:
 
 
 def read_and_parse_config(
-        config_path: Optional[Path],
+        config_path: Optional[Path] = None,
         *,
         envs: Optional[Dict[str, str]] = None,
-        extra_rules: Optional[List[str]] = None,
         exit_on_error: bool = False,
+        **extra_rules,
 ) -> AllRules:
     """
     Reads and parses the configuration file for the sandbox.

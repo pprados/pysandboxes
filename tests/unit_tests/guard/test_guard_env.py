@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pysandboxes.guard_envs import parse_rules
-from pysandboxes.types import ConfigLine, Envs
+from pysandboxes.sb_types import ConfigLine, Envs
 
 
 def test_simple_env():

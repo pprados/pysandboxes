@@ -38,8 +38,8 @@ dependencies = [
 ]
 
 [tool.poetry.scripts]
-python-sb = "pysandboxes.cli:sync_forty_two"
-python3-sb = "pysandboxes.cli:sync_forty_two"
+python-sb = "pysandboxes.python_sb:main"
+python3-sb = "pysandboxes.python_sb:main"
 
 [tool.poetry.group.dev]
 optional = true

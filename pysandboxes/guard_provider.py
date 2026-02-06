@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Tuple, List, Optional
 
 from .main_logger import format_ruleref, format_error_list, ErrorMsg
-from .types import ConfigLines
+from .sb_types import ConfigLines
 
 logger = logging.getLogger(__name__)
 

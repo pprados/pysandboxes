@@ -16,7 +16,7 @@ from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
 from .remote.parameters import DELAY_FOR_CALL_DAEMON
 from .tools import check_mixte_async_async, SyncOrAsyncFunc
-from .types import Envs
+from .sb_types import Envs
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class sandboxes(Protocol):
                  config_path: Optional[Union[Path, str]] = None,
                  *,
                  envs: Optional[Dict[str, str]] = None,
-                 extra_rules: Optional[List[str]] = None,
+                 **extra_rules,
                  ) -> None:
         self.init_fn = init_fn
         self.config_path = config_path
@@ -96,7 +96,7 @@ class sandboxes(Protocol):
         """
         from .py_sandbox import read_and_parse_config
         from .os_sandbox import start_daemon
-        from . import ConfigSyntaxError
+        from .exceptions import ConfigSyntaxError
 
         logger.debug("__enter__ start...")
         check_mixte_async_async()
@@ -105,7 +105,7 @@ class sandboxes(Protocol):
             all_rules = read_and_parse_config(
                 self.config_path,
                 envs=self.envs,
-                extra_rules=self.extra_rules,
+                **self.extra_rules,
             )
         except ConfigSyntaxError as e:
             raise e.with_traceback(None)
@@ -159,8 +159,8 @@ class sandboxes(Protocol):
         all_rules = read_and_parse_config(
             self.config_path,
             envs=self.envs,
-            extra_rules=self.extra_rules,
             exit_on_error=False,
+            **self.extra_rules,
         )
         return await async_start_daemon(
             all_rules,

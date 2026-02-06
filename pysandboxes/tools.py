@@ -7,7 +7,7 @@ import sys
 from typing import Optional, Union, Callable, Awaitable, Any, Tuple, List, \
     Iterator
 
-from .types import ConfigLines, ConfigLine, Envs
+from .sb_types import ConfigLines, ConfigLine, Envs
 
 
 def substitute_config_env_vars(lines: ConfigLines, env_vars: Envs) -> ConfigLines:

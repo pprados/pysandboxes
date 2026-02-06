@@ -16,7 +16,7 @@ from .tools import to_b85
 from ..main_logger import pysandboxes_logger
 from ..all_rules import AllRules
 from ..tools import SyncOrAsyncFunc, get_callable_info
-from ..types import Args, Envs
+from ..sb_types import Args, Envs
 
 logger = logging.getLogger(__name__)
 

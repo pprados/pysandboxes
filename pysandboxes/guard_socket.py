@@ -52,7 +52,7 @@ from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any, Ca
 from .exceptions import RuleSocketConnectionRefusedError
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
-from .types import ConfigLines, ConfigLine
+from .sb_types import ConfigLines, ConfigLine
 
 logger = logging.getLogger(__name__)
 

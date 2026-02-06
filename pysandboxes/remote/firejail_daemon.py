@@ -16,7 +16,7 @@ from ..main_logger import pysandboxes_logger
 from ..netfilter import rule_to_netfilter
 from ..all_rules import AllRules
 from ..tools import remove_comments, substitute_env_vars
-from ..types import Envs, Args
+from ..sb_types import Envs, Args
 
 logger = logging.getLogger(__name__)
 

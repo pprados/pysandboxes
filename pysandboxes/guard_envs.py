@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Tuple, List, Any, Optional, Callable, NamedTuple, cast
 
 from .main_logger import format_ruleref, ErrorMsg
-from .types import ConfigLines, ConfigLine, Envs
+from .sb_types import ConfigLines, ConfigLine, Envs
 
 logger = logging.getLogger(__name__)
 
