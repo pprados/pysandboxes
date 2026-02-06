@@ -1,7 +1,7 @@
 # %% Test ressource manager
 import pytest
 
-from pysandboxes.sandboxes import sandboxes
+from pysandboxes import sandboxes
 from pysandboxes.tools import mixed_sync_and_async_error
 from integration_tests.sample import async_forty_two, sync_forty_two, init_sandbox, config_path
 

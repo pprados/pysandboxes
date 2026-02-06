@@ -4,7 +4,7 @@ from pathlib import Path
 
 import logging
 
-from pysandboxes.sandboxes import sandbox, sandboxes
+from pysandboxes import sandbox, sandboxes
 
 logger = logging.getLogger(__name__)
 

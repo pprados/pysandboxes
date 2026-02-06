@@ -2,7 +2,7 @@
 import pytest
 
 from integration_tests.sample import init_sandbox, config_path
-from pysandboxes.sandboxes import sandbox, sandboxes
+from pysandboxes import sandbox, sandboxes
 
 
 @sandbox

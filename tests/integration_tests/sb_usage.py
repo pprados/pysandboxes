@@ -4,7 +4,7 @@ import os
 from functools import partial
 
 import pysandboxes
-from pysandboxes.sandboxes import sandbox, sandboxes
+from pysandboxes import sandbox, sandboxes
 
 # FIXME dotenv.load_dotenv()
 
@@ -17,15 +17,15 @@ def init_log_level():
     else:
         format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s: %(message)s'
     logging.basicConfig(
-        level=logging.WARNING,
+        level=logging.INFO,
         format=format
     )
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(logging.WARNING)
-    logging.getLogger("pysandboxes").setLevel(logging.WARNING)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
+    logging.getLogger("pysandboxes").setLevel(logging.INFO)
 
 
 @sandbox
@@ -192,7 +192,7 @@ def main():
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # print("----------------")
-        with pysandboxes.sandboxes.sandboxes(async_init_sandbox):
+        with sandboxes(async_init_sandbox):
             run()
         print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)

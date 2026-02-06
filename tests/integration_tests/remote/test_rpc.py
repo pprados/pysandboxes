@@ -8,7 +8,7 @@ import pytest
 from pysandboxes.os_sandbox import start_daemon, \
     shutdown_daemon
 from pysandboxes.py_sandbox import read_and_parse_config
-from pysandboxes.sandboxes import sandbox
+from pysandboxes import sandbox
 
 
 # See https://github.com/tortoise/tortoise-orm/issues/638
