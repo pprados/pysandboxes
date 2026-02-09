@@ -88,8 +88,13 @@ def read_and_parse_config(
     """
     if envs is None:
         envs = os.environ
-    extra_lines = remove_config_comments(
-        [ConfigLine(f"{k}={v}", Path(), 0) for k,v in extra_rules.items()]) if extra_rules else []
+    # Extra rules can be in form k=v or k=[v1,v2,...]
+    extra_lines=[]
+    for k,all_v in extra_rules.items():
+        if isinstance(all_v,List):
+            extra_lines.extend([ConfigLine(f"{k}={v}", Path(), 0) for v in all_v])
+        else:
+            extra_lines.append(ConfigLine(f"{k}={all_v}", Path(), 0))
 
     if not config_path:
         config_path = Path(CONFIG_NAME)
@@ -104,7 +109,6 @@ def read_and_parse_config(
                         0] + '.templates') / 'py-sandbox.template'
         ) as resource_path:
             config = (
-                    [ConfigLine(f"learning={CONFIG_NAME}", Path(), 0)] +
                     extra_lines +
                     _read_config(resource_path)
             )

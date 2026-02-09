@@ -12,6 +12,7 @@ from typing import Any, TypeVar, Union, \
 from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
+from .learning import is_learning_mode
 from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
 from .remote.parameters import DELAY_FOR_CALL_DAEMON
@@ -65,6 +66,10 @@ class sandboxes(Protocol):
         'envs',
         'extra_rules',
         'timeout',
+        'learning_path',
+        "_old_sigint"
+        "_old_sigterm"
+        "_daemon"
     )
     """
     Context manager to start and stop the sandbox daemon.
@@ -86,11 +91,13 @@ class sandboxes(Protocol):
             envs = os.environ
         self.envs = Envs(envs)
         self.extra_rules = extra_rules
+        self.learning_path = None
         self._old_sigint = None
         self._old_sigterm = None
+        self._daemon = None
 
     # ── synchronous API ────────────────────────────────
-    def __enter__(self) -> None:
+    def __enter__(self) -> "sandboxes":
         """
         Start the sandbox daemon.
         """
@@ -109,10 +116,11 @@ class sandboxes(Protocol):
             )
         except ConfigSyntaxError as e:
             raise e.with_traceback(None)
-        start_daemon(all_rules,
+        self._daemon = start_daemon(all_rules,
                      log_level=log_level,
                      init_fn=self.init_fn,
                      )
+        self.learning_path = all_rules.learning_path
 
         def signal_handler(signum: int, frame: object) -> None:
             """
@@ -121,12 +129,13 @@ class sandboxes(Protocol):
             """
             # Iterate through all child processes and send them SIGTERM
             logger.debug("Catch signal %s. Propagate to the dameon.", signum)
-            shutdown_daemon()
+            self._stop_daemon()
 
         if threading.current_thread() is threading.main_thread():
             self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
             self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
         logger.debug("__enter__ ok")
+        return self
 
     def __exit__(self,
                  exc_type: Optional[type[BaseException]],
@@ -135,18 +144,25 @@ class sandboxes(Protocol):
         """
         Stop the sandbox daemon.
         """
-        from pysandboxes.os_sandbox import shutdown_daemon
-        logger.debug("__exit__ start...")
-        # If "Cannot call the synchronize sandbox function from another sandbox async function"
-        if not isinstance(exc, RuntimeError):
-            shutdown_daemon()
-
-        if threading.current_thread() is threading.main_thread():
-            signal.signal(signal.SIGINT, self._old_sigint)
-            signal.signal(signal.SIGTERM, self._old_sigterm)
-
-        logger.debug("__exit__ done")
+        self._stop_daemon()
         return False
+
+    def _stop_daemon(self):
+        if self._daemon:
+            from pysandboxes.os_sandbox import shutdown_daemon
+            logger.debug("__exit__ start...")
+
+            if threading.current_thread() is threading.main_thread():
+                signal.signal(signal.SIGINT, self._old_sigint)
+                signal.signal(signal.SIGTERM, self._old_sigterm)
+
+            shutdown_daemon()
+            self._daemon = None
+            self.learning_path = False
+            logger.debug("__exit__ done")
+
+    def __delete__(self, instance):
+        self._stop_daemon()
 
     # ── asynchronous API ───────────────────────────────
     async def __aenter__(self) -> BaseDaemon:
