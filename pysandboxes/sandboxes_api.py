@@ -12,12 +12,10 @@ from typing import Any, TypeVar, Union, \
 from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
-from .learning import is_learning_mode
-from .os_sandbox import shutdown_daemon
 from .private_loop import set_sandbox_loop
 from .remote.parameters import DELAY_FOR_CALL_DAEMON
-from .tools import check_mixte_async_async, SyncOrAsyncFunc
 from .sb_types import Envs
+from .tools import check_mixte_async_async, SyncOrAsyncFunc
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +58,14 @@ def sandbox(_func: Optional[F] = None, *,
 
 @runtime_checkable
 class sandboxes(Protocol):
-    __slot__=(
+    __slot__ = (
         'init_fn',
         'config_path',
         'envs',
         'extra_rules',
         'timeout',
         'learning_path',
+        'python_args',
         "_old_sigint"
         "_old_sigterm"
         "_daemon"
@@ -83,6 +82,7 @@ class sandboxes(Protocol):
                  config_path: Optional[Union[Path, str]] = None,
                  *,
                  envs: Optional[Dict[str, str]] = None,
+                 python_args: Optional[List[str]] = None,
                  **extra_rules,
                  ) -> None:
         self.init_fn = init_fn
@@ -92,6 +92,7 @@ class sandboxes(Protocol):
         self.envs = Envs(envs)
         self.extra_rules = extra_rules
         self.learning_path = None
+        self.python_args = python_args
         self._old_sigint = None
         self._old_sigterm = None
         self._daemon = None
@@ -117,9 +118,10 @@ class sandboxes(Protocol):
         except ConfigSyntaxError as e:
             raise e.with_traceback(None)
         self._daemon = start_daemon(all_rules,
-                     log_level=log_level,
-                     init_fn=self.init_fn,
-                     )
+                                    log_level=log_level,
+                                    init_fn=self.init_fn,
+                                    python_args=self.python_args,
+                                    )
         self.learning_path = all_rules.learning_path
 
         def signal_handler(signum: int, frame: object) -> None:
@@ -165,7 +167,7 @@ class sandboxes(Protocol):
         self._stop_daemon()
 
     # ── asynchronous API ───────────────────────────────
-    async def __aenter__(self) -> BaseDaemon:
+    async def __aenter__(self) -> BaseDaemon:  # FIXME: compare avec enter() et TU
         """
         Start the sandbox daemon.
         """

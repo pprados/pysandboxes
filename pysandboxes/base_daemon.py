@@ -16,7 +16,10 @@ _mixed_sync_and_async_error = ("Cannot call the synchronize sandbox function "
 class BaseDaemon(ABC):
     __slots__ = ('_is_started', '_token')
 
-    def __init__(self, token: str):
+    def __init__(self,
+                 token: str,
+                 **kwargs,
+                 ):
         self._is_started = False
         self._token = token
 

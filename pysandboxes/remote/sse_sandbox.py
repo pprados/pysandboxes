@@ -48,7 +48,10 @@ def _get_rpc_params(args: Any,
 
 
 class SSESandbox(BaseDaemon):
-    def __init__(self, token: str):
+    def __init__(self,
+                 token: str,
+                 **kwargs,
+                 ):
         super().__init__(token)
 
     async def async_call_in_sandbox(self,

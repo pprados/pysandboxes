@@ -5,7 +5,7 @@ import sys
 import time
 from abc import abstractmethod
 from pathlib import Path
-from typing import Callable, Dict, Any, Optional, NamedTuple
+from typing import Callable, Dict, Any, Optional, NamedTuple, List
 
 import aiohttp
 from aiohttp import ClientConnectorError
@@ -20,7 +20,7 @@ from ..sb_types import Args, Envs
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
+DEBUG = True
 
 def _get_log_formatter():
     root_logger = logging.getLogger()
@@ -97,13 +97,16 @@ class BaseSubProcessDaemon(SSESandbox):
     def __init__(self,
                  token: str,
                  *,
+                 python_args: Optional[List[str]] = None,
                  max_attempts: int = 5,  # Maximum number of retry _attempts
                  base_delay: float = 0.1,  # Initial delay in seconds (e.g., 100 ms)
                  factor: float = 2.0,  # Exponential increase _factor
                  max_delay: float = 10.0,  # Maximum delay in seconds
-                 reset_delay: float = 120.0  # delay to reset attemps
+                 reset_delay: float = 120.0,  # delay to reset attemps
+                 **kwargs,
                  ):
         super().__init__(token)
+        self._python_args = python_args or []
         self._process = None
         self._stdout_task = None
         self._stderr_task = None
@@ -126,11 +129,13 @@ class BaseSubProcessDaemon(SSESandbox):
             sys.executable,
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
             "-P",
-
-            "-u",  # TODO Use unbuffered stdout and stderr? why?
+            "-u",
+            ]
+        cmd_parameters.extend(self._python_args)
+        cmd_parameters.extend([
             "-m",
             run_daemon.__name__,
-        ]
+        ])
         return cmd_parameters
 
     @abstractmethod
@@ -178,7 +183,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 self._subprocess(
                     all_rules=short_all_rules,
                     envs=envs,
-                ), {},
+                ),
                 log_level=log_level,
                 init_fn=init_fn,
             )
@@ -190,7 +195,6 @@ class BaseSubProcessDaemon(SSESandbox):
     async def _re_start_cmd(self,
                             all_rules: AllRules,
                             args: Args,
-                            process_kwargs: Dict[str, Any],
                             *,
                             log_level: int,
                             init_fn: Optional[SyncOrAsyncFunc],
@@ -211,7 +215,6 @@ class BaseSubProcessDaemon(SSESandbox):
 
         self._process = await asyncio.create_subprocess_exec(
             *args,
-            **process_kwargs,
             # FIXME: avec ceci, il n'y a plus de trace sur la console
             # Voir comment fixer cela.
             stdout=asyncio.subprocess.PIPE,

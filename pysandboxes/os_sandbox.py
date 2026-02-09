@@ -43,12 +43,14 @@ async def async_start_daemon(all_rules: AllRules,
                              *,
                              log_level: int,
                              init_fn: Optional[SyncOrAsyncFunc],
+                             python_args: Optional[list[str]] = None,
                              ) -> BaseDaemon:
     """
     Asynchronize version to start daemon by name.
     Returns daemon object when is starred
     """
-    return await _async_start_daemon(all_rules, log_level, init_fn)
+    return await _async_start_daemon(all_rules, log_level, init_fn,
+                                     python_args=python_args)
 
 
 _async_start_lock = asyncio.Lock()
@@ -58,6 +60,7 @@ _start_lock = threading.Lock()
 async def _async_start_daemon(all_rules: AllRules,
                               log_level: int,
                               init_fn: Optional[SyncOrAsyncFunc],
+                              python_args: Optional[list[str]] = None,
                               ) -> BaseDaemon:
     """
     Asynchronize version without the creation of the sandbox loop.
@@ -75,7 +78,10 @@ async def _async_start_daemon(all_rules: AllRules,
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
         try:
             token = str(uuid.uuid4())
-            os_provider:BaseDaemon = providers_factory[all_rules.os_sandbox](token)
+            os_provider:BaseDaemon = providers_factory[all_rules.os_sandbox](
+                token,
+                python_args=python_args
+            )
             await os_provider.start(
                 all_rules,
                 log_level=log_level,
@@ -121,6 +127,7 @@ def start_daemon(
         all_rules: AllRules,
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc] = None,
+        python_args: Optional[list[str]] = None,
 ) -> BaseDaemon:
     """
     Synchronize version to start daemon by name.
@@ -143,7 +150,9 @@ def start_daemon(
         async def _start_daemon_and_signal():
             await _async_start_daemon(all_rules,
                                       log_level=log_level,
-                                      init_fn=init_fn)
+                                      init_fn=init_fn,
+                                      python_args=python_args,
+                                      )
             start_event.set()
             logger.debug("Start event set")
 

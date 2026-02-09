@@ -1,16 +1,11 @@
 import argparse
-import logging
-import os
 import sys
 from itertools import groupby
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple
 
 from dotenv import load_dotenv
 
-from pysandboxes.config import CONFIG_NAME
-from pysandboxes.py_sandbox import activate_sandboxes
-from pysandboxes.remote.run_daemon import shutdown
-from pysandboxes.sandboxes_api import sandboxes
+from pysandboxes.python_run import _sandbox_run
 
 # from pathlib import Path
 
@@ -18,105 +13,6 @@ from pysandboxes.sandboxes_api import sandboxes
 # from pysandboxes.sb_types import ConfigLines
 
 load_dotenv()  # FIXME: a garder avec main ?
-
-
-def _convert_extra_rules(args: List[str]) -> Dict[str, Union[str, List[str]]]:
-    result = {}
-    for rule in args:
-        assert rule.startswith("--")
-        if '=' in rule:
-            key, val = rule.split('=', maxsplit=1)
-        else:
-            key, val = rule, ""  # Empty by default
-        if key in result:
-            result[key[2:]].append(val)
-        else:
-            result[key[2:]] = [val]
-    return result
-
-
-def _python_interactive(
-        extra_rules: List[str]
-):
-    with sandboxes(
-            envs=dict(os.environ),
-            **_convert_extra_rules(extra_rules)
-    ) as sb:
-        # TODO: le envs final doit être injecté proprement
-        sb_mode = (f'APIs are LIMITED according to the rules in '
-                   f'the {str(sb.learning_path)!r} file.\n')
-        exit_msg = ""
-        if sb.learning_path:
-            sb_mode = (f'API calls are LEARNED and saved in '
-                       f'{str(sb.learning_path)!r} at the '
-                       f'end of the program.\n')
-            exit_msg = f"Save the {CONFIG_NAME!r}"
-        banner: str = (
-            f'SANDBOXES Python {sys.version} on {sys.platform}\n'
-            f'{sb_mode}'
-            'Type "help", "copyright", "credits" or "license" for more information.'
-        )
-        prefix = "\u26A0 "
-
-        try:
-            # Try to import and use IPython for a better REPL experience
-            import IPython
-            # raise ImportError()  # FIXME: force Python
-            from traitlets.config import get_config
-            c = get_config()
-
-            # Update the prompt
-            from IPython.terminal.prompts import Prompts, Token
-            class CustomPrompts(Prompts):
-                def in_prompt_tokens(self, cli=None):
-                    result = list(super().in_prompt_tokens())
-                    full_prompt = prefix + result[2][1]
-                    result[2] = result[2][0], full_prompt
-                    self.shell.prompt_length = len(full_prompt)
-                    return result
-
-            c.TerminalInteractiveShell.prompts_class = CustomPrompts
-
-            c.TerminalIPythonApp.display_banner = False
-            print(banner)
-            print(
-                f"IPython {IPython.__version__} -- An enhanced Interactive Python. Type '?' for help.")
-            IPython.start_ipython(argv=[], user_ns=None,
-                                  config=c,
-                                  )
-        except ImportError:
-            # Fallback to the standard Python REPL if IPython is not installed
-            import code
-
-            # Create a banner for the standard REPL
-            if hasattr(sys, 'ps1'):
-                sys.ps1 = prefix + sys.ps1
-            else:
-                sys.ps1 = prefix + ">>> "
-
-            # Start the standard interactive console
-            code.interact(banner=banner,
-                          exitmsg=exit_msg,
-                          # When self.local_exit is True, we overwrite the builtins so
-                          # exit() and quit() only raises SystemExit and we can catch that
-                          # to only exit the interactive shell
-                          local_exit=True,
-                          )
-
-
-def _python_module(module_name: str):
-    import runpy
-    import importlib
-    module = importlib.import_module(module_name)
-    activate_sandboxes(all_rules,
-                       envs=dict(os.environ))
-    runpy.run_module(module_name, run_name="__main__")
-
-
-def _python_script(script: str):
-    activate_sandboxes(all_rules,
-                       envs=dict(os.environ))
-    exec(script)
 
 
 def _split_list(data_list: List[str], delimiters: List[str]) -> List[str]:
@@ -157,13 +53,10 @@ def _split_python_cmd(args: List[str]) -> Tuple[List[str], List[str]]:
 
 def main() -> None:  # FIXME: vérifier sauvegarde en cas de learning
     """
-    Parses command-line arguments to separate flags from the execution command.
+    Parses command-line arguments and run the sandbox
     """
     # Get all arguments except the script name itself
     args = sys.argv[1:]
-
-    rules: Dict[str, str] = {}
-    command_start_index = 0
 
     # Split args before and after python command
     python_args, python_cmd = _split_python_cmd(args)
@@ -207,7 +100,6 @@ def main() -> None:  # FIXME: vérifier sauvegarde en cas de learning
         def format_help(self) -> str:
             help = super().format_help()
             help += (
-                "  --<sb-option>=<value> Add dynamically a pysandbox paramater\n"
                 "\n"
                 "Arguments:\n"
                 "file   : program read from script file\n"
@@ -275,59 +167,23 @@ def main() -> None:  # FIXME: vérifier sauvegarde en cas de learning
     python_parsed_args = [arg for arg in python_args if arg not in sandboxes_args]
 
     if sandboxes_parsed.help:
-        # Add extra parameter
+        # Add extra parameter before generate the help
         parser.add_argument("-i", action="store_true",
                             help="Enter interactive mode after execution.")
         parser.add_argument("-m", action="store", metavar="mod", dest="module",
                             help="Run library module as a script (terminates option list).")
         parser.add_argument("-c", action="store", metavar="cmd", dest="command",
                             help="Program passed in as a string.")
+        parser.add_argument("--<sb-option>=<value>", action="store_true", dest="config",
+                            help="Add some Py-sandboxes parameters.")
 
         parser.print_help()
         sys.exit(0)
 
-    # Search python command in unknown_args
-
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(levelname)-5s [%(process)d] %(name)s: %(message)s'
-    )
-    logging.getLogger("pysandboxes").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(
-        logging.INFO)  # TODO: with parameter level ?
-
-    # 4. Analyze the remaining arguments to determine the action
-    try:
-        if not len(python_cmd) or python_cmd[0] == "-i" or python_cmd[0] == "-":
-            _python_interactive(sandboxes_args)
-        elif python_cmd[0] == '-m':
-            # Case: Execute a module
-            if len(python_cmd) > 1:
-                module_name = python_cmd[1]
-                python_cmd.pop(
-                    1)  # FIXME: vérifier la justification par rapport au classique
-                # command_args[0] = module.__file__   # FIXME: vérifier la justification par rapport au classique
-                sys.argv = python_cmd
-                _python_module(module_name)
-            else:
-                # Error case for '-m' without a module name
-                print("\nError: -m flag requires a module name.", file=sys.stderr)
-
-        elif python_cmd[0] == '-c':
-            # Case: Execute a module
-            if len(python_cmd) > 1:
-                script = python_cmd[1]
-                python_cmd.pop(
-                    1)  # FIXME: vérifier la justification par rapport au classique
-                sys.argv = python_cmd
-                _python_script(script)
-            else:
-                # Error case for '-m' without a module name
-                print("\nError: -c flag requires a script.", file=sys.stderr)
-        else:
-            assert False, "Internal error"
-    finally:
-        shutdown()
+    # run the sandbox
+    _sandbox_run(python_parsed_args,
+                 sandboxes_args,
+                 python_cmd)
 
 
 if __name__ == "__main__":
