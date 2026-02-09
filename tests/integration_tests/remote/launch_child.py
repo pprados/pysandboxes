@@ -4,7 +4,7 @@ import sys
 
 
 def main():
-    from pysandboxes.remote import run_daemon
+    from pysandboxes.remote import main_sandbox
 
     subprocess.run(
         [

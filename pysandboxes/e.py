@@ -1,5 +1,4 @@
 # All the exceptions are here, to have a better stack trace.
-# TODO: see to move to pysandboxes, for a better error stack trace
 from typing import List
 
 

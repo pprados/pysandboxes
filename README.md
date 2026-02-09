@@ -204,17 +204,17 @@ The feature proposed by each technologies:
 
 | Guard                     | py-sandbox |  firejail  |
 |---------------------------|:----------:|:----------:|
-| Python code               |     ✅      |      ❌      |
+| Python code               |     ✅      |     ❌      |
 | Compiled code             |     ❌      |     ✅      |
-| env                       |     ✅      |     ✅      |
+| env                       |     ✅      |      ❌      |
 | bind=a,a                  |     ✅      |     ✅      |
-| bind=a,b                  |     ✅      |     ❌     |
+| bind=a,b                  |     ✅      |     ❌      |
 | ignore=*                  |     ✅      |     ✅      |
 | network                   |     ✅      |     ✅      |
-| import                    |     ✅      |     ❌     |
+| import                    |     ✅      |     ❌      |
 | OS-sandbox                |     ❌      |     ✅      |
 | Vm compatible             |     ✅      |     ✅      |
-| Container<br/> compatible |     ✅      |     ❌     |
+| Container<br/> compatible |     ✅      |     ❌      |
 
 
 Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.

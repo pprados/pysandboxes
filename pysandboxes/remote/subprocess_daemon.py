@@ -1,28 +1,29 @@
 import asyncio
 import logging
 import os
+import pickle
+import random
 import sys
 import time
 from abc import abstractmethod
+from asyncio.subprocess import Process
 from pathlib import Path
-from typing import Callable, Dict, Any, Optional, NamedTuple, List
+from typing import Callable, Optional, NamedTuple, List, Dict
 
 import aiohttp
 from aiohttp import ClientConnectorError
 
 from .parameters import INTERVAL_FOR_PING_DAEMON
 from .sse_sandbox import SSESandbox, PING_SERVER_URL
-from .tools import to_b85
-from ..main_logger import pysandboxes_logger
 from ..all_rules import AllRules
-from ..tools import SyncOrAsyncFunc, get_callable_info
+from ..main_logger import pysandboxes_logger
 from ..sb_types import Args, Envs
+from ..tools import SyncOrAsyncFunc, get_callable_info
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True
 
-def _get_log_formatter():
+def get_log_formatter():
     root_logger = logging.getLogger()
     fmt = None
     for h in root_logger.handlers:
@@ -32,6 +33,7 @@ def _get_log_formatter():
         # Default formatter if none set explicitly
         fmt = logging.Formatter()
     return fmt._fmt
+
 
 async def _write_stream(
         child_stdin_writer: asyncio.StreamWriter
@@ -70,12 +72,48 @@ async def _read_stream(
             break
 
 
-class SubProcessParameters(NamedTuple):
+class DaemonParameters(NamedTuple):
     all_rules: AllRules
     log_level: int
     log_format: str
     token: str
     init_fn: str
+
+
+async def launch_sandbox(
+        cmd: List[str],
+        pipe_path:Path,
+        envs: Dict[str,str],
+        process_config: DaemonParameters,
+        wait:bool,
+) -> Process:
+    os.mkfifo(pipe_path)  # FIXME FileExitError ?
+    DEBUG = False
+    if DEBUG:
+        Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
+                                  cmd[0] + " " +
+                                  " \\\n  ".join(
+                                      param if " " not in param else repr(param) for
+                                      param in cmd[1:]) +
+                                  "\n")
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            # umask=umask,  # FIXME
+            env=envs,
+        )
+
+        await asyncio.sleep(1)  # FIXME
+
+        with open(pipe_path, 'wb') as fifo:
+            fifo.write(pickle.dumps(process_config))
+            fifo.close()
+
+        if wait:
+            await process.wait()
+        return process
+    finally:
+        pass
 
 
 class BaseSubProcessDaemon(SSESandbox):
@@ -120,21 +158,21 @@ class BaseSubProcessDaemon(SSESandbox):
         self._is_started = False
         self.restart = 0
 
-    def _subprocess(self,
-                    all_rules: AllRules,
-                    envs: Envs,
-                    ) -> Args:
-        from . import run_daemon
+    def subprocess_cmd(self,
+                       all_rules: AllRules,
+                       envs: Envs,
+                       ) -> Args:
+        from . import main_sandbox
         cmd_parameters = [
             sys.executable,
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
             "-P",
             "-u",
-            ]
+        ]
         cmd_parameters.extend(self._python_args)
         cmd_parameters.extend([
             "-m",
-            run_daemon.__name__,
+            main_sandbox.__name__,
         ])
         return cmd_parameters
 
@@ -173,6 +211,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 os_sandbox=all_rules.os_sandbox,
                 use_py_sandbox=all_rules.use_py_sandbox,
                 learning_path=all_rules.learning_path,
+                learning=all_rules.learning,
                 envs_rules=(),
                 socket_rules=(),
                 file_rules=(),
@@ -180,7 +219,7 @@ class BaseSubProcessDaemon(SSESandbox):
             )
             await self._re_start_cmd(
                 all_rules,
-                self._subprocess(
+                self.subprocess_cmd(
                     all_rules=short_all_rules,
                     envs=envs,
                 ),
@@ -202,30 +241,10 @@ class BaseSubProcessDaemon(SSESandbox):
                             stdout: bool = False) -> None:
         self._is_started = False
 
+        pipe_path=Path("/tmp/toto")
+        pipe_path.unlink(missing_ok=True)  # FIXME
         umask = os.umask(0o002)
         umask = os.umask(umask) & 0o007  # Only keep user flags
-
-        if DEBUG:
-            Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
-                                      args[0] + " " +
-                                      " \\\n  ".join(
-                                          param if " " not in param else repr(param) for
-                                          param in args[1:]) +
-                                      "\n")
-
-        self._process = await asyncio.create_subprocess_exec(
-            *args,
-            # FIXME: avec ceci, il n'y a plus de trace sur la console
-            # Voir comment fixer cela.
-            stdout=asyncio.subprocess.PIPE,
-            # stderr=asyncio.subprocess.PIPE,
-            stdin=asyncio.subprocess.PIPE,
-            umask=umask,
-            env=os.environ.copy(),
-        )
-
-        # Send config body via stdin, because, it's not possible
-        # to use .py-sandboxes file with a rule --ignore=.*
 
         if init_fn:
             module, init_function_reference = get_callable_info(init_fn)
@@ -233,25 +252,23 @@ class BaseSubProcessDaemon(SSESandbox):
         else:
             init_fn_ref = ""
 
-        process_config = SubProcessParameters(
+        process_config = DaemonParameters(
             all_rules=all_rules,
             log_level=log_level,
-            log_format=_get_log_formatter(),
+            log_format=get_log_formatter(),
             token=self._token,
             init_fn=init_fn_ref
         )
-        data = to_b85(process_config) + "\n"
 
-        self._process.stdin.write(data.encode("utf-8"))
-        await self._process.stdin.drain()
-        if stdin:
-            self._stdin_task = asyncio.create_task(
-                _write_stream(
-                    self._process.stdin
-                ),
-                name="write_stream",
-            )
-        if stdout:
+        self._process=await launch_sandbox(
+            args + ["--_named-pipe",str(pipe_path)],
+            pipe_path=pipe_path,
+            envs=os.environ.copy(),
+            process_config=process_config,
+            wait=False,
+        )
+
+        if stdout:  # FIXME: sert à quoi ? (remove le main)
             self._stdout_task = asyncio.create_task(
                 _read_stream(
                     self._process.stdout,
@@ -278,16 +295,16 @@ class BaseSubProcessDaemon(SSESandbox):
                             raise RuntimeError(
                                 f"Unexpected status {response.status} from {PING_SERVER_URL}")
                 except ClientConnectorError:
-                    pass # Ignore and continue
+                    pass  # Ignore and continue
 
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
         self._is_started = True
 
     async def shutdown(self) -> None:
-        from . import run_daemon
+        from . import main_sandbox
         await self.async_call_in_sandbox(
-            run_daemon.shutdown,
+            main_sandbox.shutdown,
             timeout=0,
         )
         if self._stdout_task:
@@ -318,8 +335,9 @@ class BaseSubProcessDaemon(SSESandbox):
                     return errorlevel
                 # Calculate the base delay for this attempt
                 current_base_backoff: float = min(self._max_delay,
-                  self._base_delay * (
-                        self._factor ** (self._attempts - 1)))
+                                                  self._base_delay * (
+                                                          self._factor ** (
+                                                              self._attempts - 1)))
 
                 wait_time: float = random.uniform(current_base_backoff * 0.9,
                                                   current_base_backoff)

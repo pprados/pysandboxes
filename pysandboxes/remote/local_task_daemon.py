@@ -10,7 +10,6 @@ import traceback
 from asyncio import CancelledError
 from dataclasses import dataclass
 from logging import getLogger
-from types import CoroutineType
 from typing import AsyncGenerator, Any, Optional
 from typing import Dict
 
@@ -19,10 +18,10 @@ from uvicorn import Server
 from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
 from .tools import from_b85, to_b85
-from ..private_loop import sandbox_loop, get_sandbox_loop
 from ..all_rules import AllRules
-from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
+from ..private_loop import sandbox_loop, get_sandbox_loop
 from ..sb_types import Args, Envs
+from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +279,8 @@ class LocalTaskDaemon(SSESandbox):
                         os_sandbox="",
                         use_py_sandbox=all_rules.use_py_sandbox,
                         learning_path=all_rules.learning_path,
-                        envs_rules=(),
+                        learning=all_rules.learning,
+                        envs_rules=(),  # FIXME: pourquoi épurer?
                         socket_rules=(),  # TODO: need short copy for AllRules?
                         file_rules=(),
                         )

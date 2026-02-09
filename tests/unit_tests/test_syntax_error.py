@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from pysandboxes import ConfigSyntaxError
-from pysandboxes.py_sandbox import read_and_parse_config
+from pysandboxes.py_sandbox import load_and_parse_config
 
 
 def test_syntax_error(caplog):
@@ -11,7 +11,7 @@ def test_syntax_error(caplog):
 
     try:
         with caplog.at_level(logging.WARNING):
-            read_and_parse_config(config_path,
+            load_and_parse_config(config_path,
                                   extra_rules=[
                                       "os-sandbox=error",
                                       "set-env=abc",

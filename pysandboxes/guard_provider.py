@@ -11,14 +11,14 @@ logger = logging.getLogger(__name__)
 
 def parse_rules(rules: ConfigLines,
                 errors: List[ErrorMsg],
-                ) -> Tuple[str, bool, Optional[Path], ConfigLines]:
+                ) -> Tuple[str, bool, Optional[Path], bool, ConfigLines]:
     from .os_sandbox import providers_factory
     other_rules = []
     provider_rule: ConfigLines = []
     providers_set = []
     use_py_sandbox = True
     learning_path = None
-    learning_mode = False
+    learning = False
 
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
@@ -58,7 +58,7 @@ def parse_rules(rules: ConfigLines,
                      f"The parent path must exist.",
                      rule.path, rule.ln)
                 )
-            learning_mode = True
+            learning = True
 
         else:
             other_rules.append(rule)
@@ -78,10 +78,9 @@ def parse_rules(rules: ConfigLines,
         return "subprocess", use_py_sandbox, learning_path, other_rules
     if not learning_path:
         learning_path = Path(CONFIG_NAME)
-    if not learning_path.exists() and not learning_mode:
-        learning_mode = True
 
-    if not learning_mode:
-        learning_path = None
+    # Force learning mode if the file not exists
+    if not learning_path.exists() and not learning:
+        learning = True
 
-    return providers_set[0], use_py_sandbox, learning_path, other_rules
+    return providers_set[0], use_py_sandbox, learning_path, learning, other_rules

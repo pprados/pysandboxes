@@ -4,15 +4,18 @@ import asyncio
 import importlib
 import logging
 import os
+import pickle
 import sys
 import threading
+from pathlib import Path
 from typing import Optional
 
 from tblib import pickling_support
 
-from .subprocess_daemon import SubProcessParameters
+from pysandboxes.remote.subprocess_daemon import DaemonParameters
+from .python_in_sb import python_in_sb
 from .tools import configure_logging_level, \
-    set_pdeathsig, from_b85
+    set_pdeathsig
 from ..learning import is_learning_mode, generate_config_from_learning
 from ..private_loop import set_sandbox_loop
 from ..tools import SyncOrAsyncFunc
@@ -21,47 +24,38 @@ logger = logging.getLogger(__name__)
 
 pickling_support.install()
 
+
 # %%
 
-async def main() -> int:
-    threading.main_thread().name="DaemonMainThread"
+def main() -> int:
+    threading.main_thread().name = "DaemonMainThread"
     logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."
     )
 
-    # Add the verbose argument.
-    # action='count' is key here: it counts how many times the argument is present.
-    parser.add_argument(
-        '-v', '--verbose',
-        action='count',
-        default=0,  # Default value if no -v is provided
-        help='Increase output verbosity. '
-             'Use '
-             '-v for WARNING, '
-             '-vv for INFO, '
-             '-vvv for DEBUG, '
-             '-vvvv for all messages.'
-    )
+    parser.add_argument("--_python-sb",
+                        action='store_true',
+                        default=False,
+                        help="_internal parameter")
+
+    parser.add_argument("--_named-pipe",
+                        help="_internal parameter")
 
     # Parse the arguments provided by the user
-    args = parser.parse_args()
-
-    log_level = configure_logging_level(args.verbose)
-    logging.getLogger().setLevel(log_level)
+    sandboxes_parsed, sandboxes_args = parser.parse_known_args()
 
     # -------------
-    # Read all configuration from stdin until EOF
-    process_config: Optional[SubProcessParameters] = None
-    for line in sys.stdin:
-        process_config = from_b85(line.strip())
-        break
+    # Read all configuration from named-pipe until EOF
+    assert sandboxes_parsed._named_pipe,"Set parameter --_named-pipe <path>"
+    pickle_data = Path(sandboxes_parsed._named_pipe).read_bytes()
+    process_config:DaemonParameters = pickle.loads(pickle_data)
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
 
     # Adjuste the root log level and format
-    root_logger=logging.getLogger()
+    root_logger = logging.getLogger()
     root_logger.handlers.clear()
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(process_config.log_format))
@@ -69,13 +63,11 @@ async def main() -> int:
     root_logger.setLevel(process_config.log_level)
     logger.debug("config body and token successfully read from stdin")
 
-
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
     use_py_sandbox = all_rules.use_py_sandbox
 
     # In this case, use the standard loop in place of the private sandbox loop
-    set_sandbox_loop(asyncio.get_running_loop())
 
     from pysandboxes.main_logger import pysandboxes_logger
     if use_py_sandbox:
@@ -86,12 +78,6 @@ async def main() -> int:
             dict(os.environ)
         )
 
-        pysandboxes_logger.info(
-            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")
-    else:
-        pysandboxes_logger.info(
-            f"Start ONLY an os-sandox of type {os_sandbox!r}")
-
     # Call init function
     # Note: the init_function is called AFTER the activation of the python sandbox
     init_fn: Optional[SyncOrAsyncFunc] = None
@@ -100,33 +86,49 @@ async def main() -> int:
         module = importlib.import_module(module_name)
         init_fn = getattr(module, function_name)
 
-    # Start the daemon
+    # Use python-sb command?
+    if sandboxes_parsed._python_sb:
+        return python_in_sb(
+            all_rules,
+            sandboxes_args)
+
+    # Else, start the daemon
+    if use_py_sandbox:
+        pysandboxes_logger.info(
+            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")
+    else:
+        pysandboxes_logger.info(
+            f"Start ONLY an os-sandox of type {os_sandbox!r}")
+
     from .local_task_daemon import LocalTaskDaemon
     task_daemon = LocalTaskDaemon(process_config.token)
-    try:
-        await task_daemon.start(
-            all_rules=all_rules,
-            log_level=log_level,
-            envs=None,
-            init_fn=init_fn,
-        )
-        await task_daemon.join()
-        return 0
-    finally:
-        await task_daemon.shutdown()
-
+    async def _run():
+        try:
+            set_sandbox_loop(asyncio.get_running_loop())
+            await task_daemon.start(
+                all_rules=all_rules,
+                log_level=process_config.log_level,
+                envs=None,
+                init_fn=init_fn,
+            )
+            await task_daemon.join()
+            return 0
+        finally:
+            await task_daemon.shutdown()
+    asyncio.run(_run())
 
 def shutdown():
     logger.info("Shutting down... the daemon")
     if is_learning_mode():
         generate_config_from_learning()
 
+
 if __name__ == "__main__":
     # Kill this process when the parent is killed
     set_pdeathsig()
     rc = 0
     try:
-        rc = asyncio.run(main())
+        rc = main()
     except SystemExit as e:
         rc = int(e.code)
     except KeyboardInterrupt:

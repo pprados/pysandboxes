@@ -56,6 +56,7 @@ twine = "^5.1.0"
 importlib-metadata = "7.2.1"
 scikit-learn = "^1.6"
 aiohttp = "*"
+pydevd-pycharm = "*"
 
 [tool.poetry.group.test.dependencies]
 # The only dependencies that should be added are

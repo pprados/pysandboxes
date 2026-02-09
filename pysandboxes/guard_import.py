@@ -10,7 +10,7 @@ from types import ModuleType
 from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set
 from weakref import WeakKeyDictionary
 
-from .exceptions import RuleModuleNotFoundError, RuleAttributeError
+from .e import RuleModuleNotFoundError, RuleAttributeError
 from .immutable_dict import ImmutableDict
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import ErrorMsg
@@ -131,7 +131,7 @@ class GuardLoader(importlib.abc.Loader):
                 module_name = module.__name__
                 if module_name not in _rules:
                     raise RuleModuleNotFoundError(
-                        f"No module named {module_name!r}"
+                        f"Module named {module_name!r} is not allowed by a rule"
                     )
         # logger.debug(f"exec_module({module.__name__})...")
         self.original_loader.exec_module(module)

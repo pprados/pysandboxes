@@ -5,24 +5,19 @@ import re
 import types
 from importlib import resources
 from pathlib import Path
-from typing import Optional, List, Dict, NamedTuple, Set
+from typing import Optional, List, Dict, Set, Iterable
 
 from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
-from .guard_envs import EnvsRules
-from .guard_files import FileRules
-from .guard_import import ImportRules
-from .guard_socket import SocketRules
 from .learning import activate_learning
 from .main_logger import format_ruleref, ErrorMsg, \
     pysandboxes_logger
-from .tools import remove_config_comments, substitute_config_env_vars, find_config
 from .sb_types import ConfigLines, Envs, ConfigLine
+from .tools import remove_config_comments, substitute_config_env_vars, find_config
 
 logger = logging.getLogger(__name__)
-
 
 
 def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
@@ -53,7 +48,7 @@ def _read_config(config_path: Path) -> ConfigLines:
                                    enumerate(config_path.read_text().splitlines())])
 
 
-def read_and_parse_config(
+def load_and_parse_config(
         config_path: Optional[Path] = None,
         *,
         envs: Optional[Dict[str, str]] = None,
@@ -80,7 +75,8 @@ def read_and_parse_config(
         config_path: The path to the configuration file.
         envs: A dictionary of environment variables to use for substitution.
               Defaults to `os.environ`.
-        extra_rules: A list of additional rule strings to parse.
+        extra_rules: A list of additional rule strings to parse. Mays be string
+         or Iterable of strings for the same key
         exit_on_error: If True, the program will exit if a parsing error occurs.
 
     Returns:
@@ -89,9 +85,9 @@ def read_and_parse_config(
     if envs is None:
         envs = os.environ
     # Extra rules can be in form k=v or k=[v1,v2,...]
-    extra_lines=[]
-    for k,all_v in extra_rules.items():
-        if isinstance(all_v,List):
+    extra_lines = []
+    for k, all_v in extra_rules.items():
+        if isinstance(all_v, Set):
             extra_lines.extend([ConfigLine(f"{k}={v}", Path(), 0) for v in all_v])
         else:
             extra_lines.append(ConfigLine(f"{k}={all_v}", Path(), 0))
@@ -177,7 +173,7 @@ def parse_config(
     others = substitute_config_env_vars(others, ienvs)  # with main envs
 
     # 3. Parse others rules
-    os_sandbox, use_pysandbox, learning_path, others = guard_provider.parse_rules(
+    os_sandbox, use_pysandbox, learning_path, learning, others = guard_provider.parse_rules(
         others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
@@ -206,6 +202,7 @@ def parse_config(
                     os_sandbox,
                     use_pysandbox,
                     learning_path,
+                    learning,
                     envs_rules,
                     socket_rules,
                     files_rules,
@@ -249,5 +246,5 @@ def activate_sandboxes(
     guard_envs.activate_guard(all_rules.envs_rules)
     guard_socket.activate_guard(all_rules.socket_rules)
     guard_files.activate_guard(all_rules.file_rules)
-    if all_rules.learning_path:
+    if all_rules.learning:
         activate_learning(all_rules.learning_path)

@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any, Callable, \
     TypeAlias, Set
 
-from .exceptions import RuleSocketConnectionRefusedError
+from .e import RuleSocketConnectionRefusedError
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg, pysandboxes_logger
 from .sb_types import ConfigLines, ConfigLine

@@ -15,7 +15,7 @@ from typing import List, Callable, Optional, Union
 from typing import NamedTuple, Any, Type, Tuple
 
 from .config import OPTIMIZE
-from .exceptions import RulePermissionError, RuleFileNotFoundError
+from .e import RulePermissionError, RuleFileNotFoundError
 from .guard_envs import LearnEnviron
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import format_ruleref, ErrorMsg

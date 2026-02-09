@@ -59,6 +59,7 @@ os-sandbox=subprocess
 #######################################################################################
 # In the sandbox, only a selected set of environment variables are accessible.
 #
+# FIXME: use env= in place of set-env ?
 # By using `set-env`, you can control and manage the environment variables available
 # within your sandbox, ensuring that your applications have the necessary configuration.
 #

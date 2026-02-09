@@ -102,15 +102,15 @@ class sandboxes(Protocol):
         """
         Start the sandbox daemon.
         """
-        from .py_sandbox import read_and_parse_config
+        from .py_sandbox import load_and_parse_config
         from .os_sandbox import start_daemon
-        from .exceptions import ConfigSyntaxError
+        from .e import ConfigSyntaxError
 
         logger.debug("__enter__ start...")
         check_mixte_async_async()
         log_level = logging.root.getEffectiveLevel()
         try:
-            all_rules = read_and_parse_config(
+            all_rules = load_and_parse_config(
                 self.config_path,
                 envs=self.envs,
                 **self.extra_rules,
@@ -126,7 +126,7 @@ class sandboxes(Protocol):
 
         def signal_handler(signum: int, frame: object) -> None:
             """
-            Handles termination signals (SIGINT, SIGTERM) for the parent process.
+            Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
             It will kill daemon processes before exiting itself.
             """
             # Iterate through all child processes and send them SIGTERM
@@ -171,10 +171,10 @@ class sandboxes(Protocol):
         """
         Start the sandbox daemon.
         """
-        from .py_sandbox import read_and_parse_config
+        from .py_sandbox import load_and_parse_config
         from pysandboxes.os_sandbox import async_start_daemon
         log_level = logging.root.getEffectiveLevel()
-        all_rules = read_and_parse_config(
+        all_rules = load_and_parse_config(
             self.config_path,
             envs=self.envs,
             exit_on_error=False,

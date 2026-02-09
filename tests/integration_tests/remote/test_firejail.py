@@ -8,7 +8,7 @@ import pytest
 from pysandboxes import sandbox
 from pysandboxes.os_sandbox import start_daemon, \
     shutdown_daemon
-from pysandboxes.py_sandbox import read_and_parse_config
+from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.tools import which_command
 
 
@@ -25,7 +25,7 @@ async def start_daemon_for_tests() -> Iterator[None]:
     config_path = Path(__file__).parent.parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
-    all_rules = read_and_parse_config(config_path=config_path)
+    all_rules = load_and_parse_config(config_path=config_path)
     all_rules = all_rules._replace(os_sandbox="firejail")
     start_daemon(all_rules,
                  log_level,

@@ -285,6 +285,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
         # TODO: Add tmp rules
         # --tmpfs DEST
 
+        # FIXME: use --env=name=value
         args.extend(["env", "-i"])
         for env, val in all_rules.envs.items():
             args.append(f"{env}={val}")
@@ -295,11 +296,11 @@ class FireJailDaemon(BaseSubProcessDaemon):
         # FIXME: ajustement des rules pour firejail ?
         return args, all_rules
 
-    def _subprocess(self,
-                    all_rules: AllRules,
-                    envs: Envs,
-                    ) -> List[str]:
-        run_daemon = super()._subprocess(envs, all_rules)
+    def subprocess_cmd(self,
+                       all_rules: AllRules,
+                       envs: Envs,
+                       ) -> List[str]:
+        run_daemon = super().subprocess_cmd(envs, all_rules)
 
         cmd_parameters, _ = self._firejail_args(envs=envs,
                                                 all_rules=all_rules)
