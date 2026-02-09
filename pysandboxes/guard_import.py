@@ -310,12 +310,12 @@ class GuardModule(ModuleType):
 
 
 def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
+    # Not PEP726 is rejeted
     return GuardModule(
-        module.__name__,  # FIXME
+        module.__name__,
         original=module,
         guard_attributs=("meta_path",)
                        )
-
 
 def patch_rules() -> Dict[str, Callable]:
     return {

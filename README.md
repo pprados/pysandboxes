@@ -52,6 +52,11 @@ To install the component:
 ```bash
 pip install pysandboxes
 ```
+We propose only four think:
+- A Command Line Interface: `python-sb`
+- A function: `run`
+- A ressource provider: `sandboxes`
+- An annotation: `@sandbox`
 
 There are two usage modes:
 
@@ -194,6 +199,23 @@ We offer several implementations to encapsulate the Python sandbox:
 | [firejail](https://github.com/netblue30/firejail) | - Disk mapping (without rename)<br/> - File filtering<br/> - Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                 |
 
 *Other implementations will be added soon*
+
+The feature proposed by each technologies:
+
+| Guard                     | py-sandbox |  firejail  |
+|---------------------------|:----------:|:----------:|
+| Python code               |     ✅      |      ❌      |
+| Compiled code             |     ❌      |     ✅      |
+| env                       |     ✅      |     ✅      |
+| bind=a,a                  |     ✅      |     ✅      |
+| bind=a,b                  |     ✅      |     ❌     |
+| ignore=*                  |     ✅      |     ✅      |
+| network                   |     ✅      |     ✅      |
+| import                    |     ✅      |     ❌     |
+| OS-sandbox                |     ❌      |     ✅      |
+| Vm compatible             |     ✅      |     ✅      |
+| Container<br/> compatible |     ✅      |     ❌     |
+
 
 Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
@@ -366,6 +388,7 @@ Here are some vulnerabilities:
   - Any compiled code can have access to the entire Python memory and therefore find all secrets. A vulnerability in a Python library using compiled code can be exploited.
   - A child process, if it has the rights to read `/proc/${PPID}/environ`, can search for tokens there. **OS-sandboxes** generally prohibit this.
 
+We invite you to try out these approaches, without looking at the sources if you are gamers. This will teach you the ins and outs of Python. If you find any new vulnerabilities, we would be happy to hear about them. Note that the code is still hardened.
 ---
 # Appendix
 

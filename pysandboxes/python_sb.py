@@ -1,14 +1,14 @@
-import argparse
 import atexit
 import logging
 import os
 import sys
-import textwrap
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict
 
 from dotenv import load_dotenv
 
+from pysandboxes.all_rules import AllRules
+from pysandboxes.config import CONFIG_NAME
 from pysandboxes.py_sandbox import read_and_parse_config, activate_sandboxes
 from pysandboxes.remote.run_daemon import shutdown
 
@@ -20,6 +20,80 @@ from pysandboxes.remote.run_daemon import shutdown
 load_dotenv()  # FIXME: a garder avec main ?
 
 
+def _python_interactive(all_rules: AllRules,
+                        envs: Dict[str, str],
+                        ):
+    # activate_sandboxes(all_rules,
+    #                    envs=dict(os.environ))
+    # TODO: le envs final doit être injecté proprement
+    sb_mode = f'APIs are LIMITED according to the rules in the {CONFIG_NAME!r} file.\n'
+    if not Path(CONFIG_NAME).exists():
+        sb_mode = (f'API calls are LEARNED and saved in {CONFIG_NAME!r} at the '
+                   f'end of the program.\n')
+    banner: str = (
+        f'SANDBOXES Python {sys.version} on {sys.platform}\n'
+        f'{sb_mode}'
+        'Type "help", "copyright", "credits" or "license" for more information.'
+    )
+    prefix = "\u26A0 "
+
+    try:
+        # Try to import and use IPython for a better REPL experience
+        import IPython
+        raise ImportError()  # FIXME: force Python
+        from traitlets.config import get_config
+        c = get_config()
+
+        # Update the prompt
+        from IPython.terminal.prompts import Prompts, Token
+        class CustomPrompts(Prompts):
+            def in_prompt_tokens(self, cli=None):
+                result = list(super().in_prompt_tokens())
+                full_prompt = prefix + result[2][1]
+                result[2] = result[2][0], full_prompt
+                self.shell.prompt_length = len(full_prompt)
+                return result
+
+        c.TerminalIPythonApp.display_banner = False
+        print(banner)
+        print(
+            f"IPython {IPython.__version__} -- An enhanced Interactive Python. Type '?' for help.")
+        IPython.start_ipython(argv=[], user_ns=None,
+                              config=c,
+                              )
+    except ImportError:
+        # Fallback to the standard Python REPL if IPython is not installed
+        import code
+
+        # Create a banner for the standard REPL
+        if hasattr(sys, 'ps1'):
+            sys.ps1 = prefix + sys.ps1
+        else:
+            sys.ps1 = prefix + ">>> "
+
+        # Start the standard interactive console
+        code.interact(banner=banner, local={})
+
+
+def _python_module(all_rules: AllRules,
+                   envs: Dict[str, str],
+                   module_name: str):
+    import runpy
+    import importlib
+    module = importlib.import_module(module_name)
+    activate_sandboxes(all_rules,
+                       envs=dict(os.environ))
+    runpy.run_module(module_name, run_name="__main__")
+
+
+def _python_script(all_rules: AllRules,
+                   envs: Dict[str, str],
+                   script: str):
+    activate_sandboxes(all_rules,
+                       envs=dict(os.environ))
+    exec(script)
+
+
 def main() -> None:  # FIXME: véririfer CLI
     """
     Parses command-line arguments to separate flags from the execution command.
@@ -27,18 +101,18 @@ def main() -> None:  # FIXME: véririfer CLI
     # Get all arguments except the script name itself
     args = sys.argv[1:]
 
-    rules: Dict[str,str] = {}
+    rules: Dict[str, str] = {}
     command_start_index = 0
 
     # 1. Collect all initial arguments that start with '--'
     for i, arg in enumerate(args):
         if arg.startswith('--'):
             if '=' in args:
-                param,value=arg[2:].split("=",1)
+                param, value = arg[2:].split("=", 1)
             else:
-                param=arg[2:]
-                value=""
-            rules[param]=value
+                param = arg[2:]
+                value = ""
+            rules[param] = value
             # Keep track of where the command part will start
             command_start_index = i + 1
         else:
@@ -47,7 +121,17 @@ def main() -> None:  # FIXME: véririfer CLI
 
     # The rest of the arguments form the potential command
     command_args = args[command_start_index:]
-
+    # TODO: sous process si les parametres ne sont pas bon
+    # TODO: execution dans notebook (__destructor__)
+    # TODO: execution dans des TU en désactivatnt les annotations
+    # TODO: gérer les paramètres multiples de mmeme nom lors de l'appel et du CLI (dans un tableau)
+    # TODO: utiliser ia pour générer des github actions pour tester toutes versions
+    # TODO: utilsier ia pour génerer doc de contribution
+    # TODO: executer python-sb avec os-sandbox
+    # TODO: intégrer REPL suivant les cas
+    # TODO: tester installation au niveau user, pour tous les projets
+    # TODO: améliorer la doc sur python-py
+    # TODO: expliquer la stratégie d'implémentation (dans wiki?)
     # All standard single-character flags TODO
     # parser = argparse.ArgumentParser(
     #     description="Run a Python program in a sandbox.",
@@ -123,7 +207,8 @@ def main() -> None:  # FIXME: véririfer CLI
         format='%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     )
     logging.getLogger("pysandboxes").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(logging.INFO)  # TODO: with parameter level ?
+    logging.getLogger("Pysandboxes").setLevel(
+        logging.INFO)  # TODO: with parameter level ?
     all_rules = read_and_parse_config(
         config_path=None,
         **rules
@@ -131,14 +216,11 @@ def main() -> None:  # FIXME: véririfer CLI
 
     atexit.register(shutdown)
     # 4. Analyze the remaining arguments to determine the action
-    if not command_args:
+    if not command_args or command_args[0] == '-i':
+        _python_interactive(all_rules,
+                            envs=dict(os.environ))
         # Case: No command arguments left, enter REPL mode
         # In a real application, you would start an interactive session:
-        activate_sandboxes(all_rules,
-                           envs=dict(os.environ))
-#TODO: le envs final doit être injecté proprement
-        import code
-        code.interact()
 
 
 
@@ -146,15 +228,10 @@ def main() -> None:  # FIXME: véririfer CLI
         # Case: Execute a module
         if len(command_args) > 1:
             module_name = command_args[1]
-            import runpy
-            import importlib
-            module = importlib.import_module(module_name)
             command_args.pop(1)
-            command_args[0] = module.__file__
+            # command_args[0] = module.__file__
             sys.argv = command_args
-            activate_sandboxes(all_rules,
-                               envs=dict(os.environ))
-            runpy.run_module(module_name, run_name="__main__")
+            _python_module(all_rules, dict(os.environ), module_name)
         else:
             # Error case for '-m' without a module name
             print("\nError: -m flag requires a module name.", file=sys.stderr)
@@ -165,9 +242,7 @@ def main() -> None:  # FIXME: véririfer CLI
             script = command_args[1]
             command_args.pop(1)
             sys.argv = command_args
-            activate_sandboxes(all_rules,
-                               envs=dict(os.environ))
-            exec(script)
+            _python_script(all_rules, dict(os.environ), cript)
         else:
             # Error case for '-m' without a module name
             print("\nError: -c flag requires a script.", file=sys.stderr)

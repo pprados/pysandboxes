@@ -47,7 +47,8 @@ def test_escape_with_subclasses():
     # Gets the modules associated with these subclasses
     found_modules = get_subclasses_modules(find_all_subclasses(object))
     import_module = found_modules["pysandboxes.guard_import"]
-    import_module._rules = ()  # Remove rules
+    with pytest.raises(RuleAttributeError):
+        import_module._rules = ()  # Remove rules
 
 
 def test_escape_with_meta_path():
