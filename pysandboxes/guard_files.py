@@ -188,16 +188,18 @@ def _check_is_in_rules(path: Path):
     return False
 
 
+_learn_env = LearnEnviron()
+
 _special_env = OrderedDict(
     sorted(
         (
-            (k, LearnEnviron()._get(k)) for k in
+            (k, _learn_env._get(k)) for k in
             [
                 "PWD",
                 "HOME",
                 "TMP", "TEMP",
             ]
-            if k in LearnEnviron()
+            if _learn_env._has(k)
         ),
         key=lambda x: len(x[1]),
         reverse=True
@@ -207,7 +209,7 @@ _special_env = OrderedDict(
 _special_home = OrderedDict(
     sorted(
         (
-            (k, LearnEnviron()._get(k)) for k in
+            (k, _learn_env._get(k)) for k in
             [
                 "PYENV_ROOT", "VIRTUAL_ENV", "CONDA_HOME",
                 "HF_HOME", "HF_DATASETS_CACHE", "HF_MODULES_CACHE", "HF_HUB_CACHE",
@@ -219,7 +221,7 @@ _special_home = OrderedDict(
                 "NLTK_DATA",
                 "SPACY_DATA",
             ]
-            if k in LearnEnviron()
+            if _learn_env._has(k)
         ),
         key=lambda x: len(x[1]),
         reverse=True)
@@ -564,12 +566,11 @@ def _wrap_os_path_exists(func: Callable, *, write: bool) -> Callable:
         remapped, rule = _apply_dest_to_src_rules(file, write=write)
         if rule:
             return False
+        if is_learning_mode():
+            # exist is not learn.
+            # add_learning_rule(LearnFileRule(Path(file), False))
+            remapped = file
         if remapped is None:
-            if is_learning_mode():
-                # exist is not learn.
-                # add_learning_rule(LearnFileRule(Path(file), False))
-                remapped = file
-            else:
                 return False
         return func(remapped, *args, **kwargs)
 

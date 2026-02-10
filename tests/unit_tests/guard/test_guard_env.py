@@ -8,7 +8,7 @@ def test_simple_env():
     errors = []
     _, env, _ = parse_rules(
         [
-            ConfigLine("set-env=FOO=bar", Path(), 0),
+            ConfigLine("env=FOO=bar", Path(), 0),
         ],
         Envs({}),
         errors)
@@ -20,7 +20,7 @@ def test_var_value():
     errors = []
     _, env, _ = parse_rules(
         [
-            ConfigLine("set-env=FOO=${bar}", Path(), 0),
+            ConfigLine("env=FOO=${bar}", Path(), 0),
         ],
         Envs({"bar": "BAR"}),
         errors)
@@ -31,7 +31,7 @@ def test_var_default_value():
     errors = []
     _, env, _ = parse_rules(
         [
-            ConfigLine("set-env=FOO=${X:=BAR}", Path(), 0),
+            ConfigLine("env=FOO=${X:=BAR}", Path(), 0),
         ],
         Envs({"bar": "BAR"}),
         errors)
@@ -42,7 +42,7 @@ def test_var_pattern():
     errors = []
     _, env, _ = parse_rules(
         [
-            ConfigLine("set-env=*_API_KEY=${*_API_KEY}", Path(), 0),
+            ConfigLine("env=*_API_KEY=${*_API_KEY}", Path(), 0),
         ],
         Envs({
             "APP1_API_KEY": "123",
@@ -60,7 +60,7 @@ def test_var_all_pattern():
     errors = []
     _, env, _ = parse_rules(
         [
-            ConfigLine("set-env=*=${*}", Path(), 0),
+            ConfigLine("env=*=${*}", Path(), 0),
         ],
         Envs({
             "APP1_API_KEY": "123",
@@ -78,8 +78,8 @@ def test_var_all_pattern_and_unset():
     errors = []
     _, env, _ = parse_rules(
         [
-            ConfigLine("set-env=*=${*}", Path(), 0),
-            ConfigLine("unset-env=APP1_API_KEY", Path(), 0),
+            ConfigLine("env=*=${*}", Path(), 0),
+            ConfigLine("unenv=APP1_API_KEY", Path(), 0),
         ],
         Envs({
             "APP1_API_KEY": "123",

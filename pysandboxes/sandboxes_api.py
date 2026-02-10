@@ -111,7 +111,7 @@ class sandboxes(Protocol):
         log_level = logging.root.getEffectiveLevel()
         try:
             all_rules = load_and_parse_config(
-                self.config_path,
+                config_path=self.config_path,
                 envs=self.envs,
                 **self.extra_rules,
             )

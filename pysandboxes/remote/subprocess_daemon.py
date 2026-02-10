@@ -85,11 +85,11 @@ class DaemonParameters(NamedTuple):
 async def launch_sandbox(
         cmd: List[str],
         pipe_path:Path,
-        envs: Dict[str,str],
+        envs: Envs,
         process_config: DaemonParameters,
 ) -> Process:
     os.mkfifo(pipe_path)
-    DEBUG = False
+    DEBUG = False  # FIXME
     if DEBUG:
         Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
                                   cmd[0] + " " +
@@ -103,11 +103,11 @@ async def launch_sandbox(
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
-            env=envs,
+            env=dict(envs),
             preexec_fn=preexec_fn
         )
 
-        await asyncio.sleep(1)  # FIXME
+        await asyncio.sleep(1)  # FIXME: remove sleep avec signal?
 
         with open(pipe_path, 'wb') as fifo:
             fifo.write(pickle.dumps(process_config))
@@ -120,8 +120,6 @@ async def launch_sandbox(
 class BaseSubProcessDaemon(SSESandbox):
     __slots__ = ('_is_started', '_token',
                  '_process',
-                 '_stdout_task',
-                 '_stderr_task',
                  '_attempts',
                  '_base_delay',
                  '_factor',
@@ -147,8 +145,6 @@ class BaseSubProcessDaemon(SSESandbox):
         super().__init__(token)
         self._python_args = python_args or []
         self._process = None
-        self._stdout_task = None
-        self._stderr_task = None
         self._attempts = 0
         self._base_delay = base_delay
         self._factor = factor
@@ -238,8 +234,7 @@ class BaseSubProcessDaemon(SSESandbox):
                             *,
                             log_level: int,
                             init_fn: Optional[SyncOrAsyncFunc],
-                            stdin: bool = False,
-                            stdout: bool = False) -> None:
+                            ) -> None:
         self._is_started = False
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -260,28 +255,17 @@ class BaseSubProcessDaemon(SSESandbox):
                 init_fn=init_fn_ref
             )
 
+            if all_rules.learning:
+                env = {**os.environ, **all_rules.envs}
+            else:
+                env = all_rules.envs
+
             self._process=await launch_sandbox(
                 args + ["--_named-pipe",str(pipe_path)],
                 pipe_path=pipe_path,
-                envs=os.environ.copy(),
+                envs=Envs(env),
                 process_config=process_config,
             )
-
-            if stdout:  # FIXME: sert à quoi ? (remove le main)
-                self._stdout_task = asyncio.create_task(
-                    _read_stream(
-                        self._process.stdout,
-                        lambda line: print(line, file=sys.stdout, flush=True)
-                    ),
-                    name="read_stdout_stream",
-                )
-                self._stderr_task = asyncio.create_task(
-                    _read_stream(
-                        self._process.stderr,
-                        lambda line: print(line, file=sys.stderr, flush=True)
-                    ),
-                    name="read_stderr_stream"
-                )
 
             # Wait the server
             async with aiohttp.ClientSession() as session:
@@ -306,12 +290,6 @@ class BaseSubProcessDaemon(SSESandbox):
             main_sandbox.shutdown,
             timeout=0,
         )
-        if self._stdout_task:
-            self._stdout_task.cancel()
-            self._stdout_task = None
-        if self._stderr_task:
-            self._stderr_task.cancel()
-            self._stderr_task = None
         if self._process:
             if self._process.returncode is None:
                 # Child process receive SIGINT

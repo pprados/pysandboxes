@@ -6,10 +6,12 @@ import tempfile
 from functools import partial
 from socket import AF_INET, SOCK_STREAM, AF_INET6, SOCK_DGRAM
 
+import dotenv
+
 import pysandboxes
 from pysandboxes import sandbox, sandboxes, SandBoxError
 
-# FIXME dotenv.load_dotenv()
+dotenv.load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -195,8 +197,11 @@ def main():
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # print("----------------")
-        with sandboxes(async_init_sandbox):
+        with sandboxes(async_init_sandbox,
+                       learning=".py-sandboxes", # Learn all the times
+                       ):
             run()
+        # TODO: voir la capture d'exception
         print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")

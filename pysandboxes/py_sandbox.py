@@ -11,6 +11,7 @@ from . import guard_envs, guard_provider, guard_socket, guard_files, guard_impor
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
+from .e import ConfigSyntaxError
 from .learning import activate_learning
 from .main_logger import format_ruleref, ErrorMsg, \
     pysandboxes_logger
@@ -52,7 +53,6 @@ def load_and_parse_config(
         config_path: Optional[Path] = None,
         *,
         envs: Optional[Dict[str, str]] = None,
-        exit_on_error: bool = False,
         **extra_rules,
 ) -> AllRules:
     """
@@ -116,7 +116,7 @@ def load_and_parse_config(
         config = extra_lines + _read_config(config_path)
     return parse_config(config,
                         envs=envs,
-                        exit_on_error=exit_on_error)
+                        )
 
 
 def _parse_include(
@@ -158,7 +158,6 @@ def parse_config(
         config: ConfigLines,
         *,
         envs: Optional[Dict[str, str]] = None,
-        exit_on_error: bool = False,
 ) -> AllRules:
     if envs is None:
         envs = os.environ
@@ -173,7 +172,7 @@ def parse_config(
     others = substitute_config_env_vars(others, ienvs)  # with main envs
 
     # 3. Parse others rules
-    os_sandbox, use_pysandbox, learning_path, learning, others = guard_provider.parse_rules(
+    os_sandbox, use_py_sandbox, learning_path, learning, others = guard_provider.parse_rules(
         others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
@@ -190,23 +189,20 @@ def parse_config(
     # 3. Print error
     if errors:
         errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))
-        if exit_on_error:
-            os._exit(1)
-        from . import ConfigSyntaxError
         raise ConfigSyntaxError(
             f"Syntax error in config files.",
             [error[0] for error in errors])
 
-    return AllRules(config,
-                    sandbox_env,
-                    os_sandbox,
-                    use_pysandbox,
-                    learning_path,
-                    learning,
-                    envs_rules,
-                    socket_rules,
-                    files_rules,
-                    import_rules,
+    return AllRules(config=config,
+                    envs=sandbox_env,
+                    os_sandbox=os_sandbox,
+                    use_py_sandbox=use_py_sandbox,
+                    learning_path=learning_path,
+                    learning=learning,
+                    envs_rules=envs_rules,
+                    socket_rules=socket_rules,
+                    file_rules=files_rules,
+                    import_rules=import_rules,
                     )
 
 

@@ -171,7 +171,7 @@ There are a few peculiarities to note:
 # Security Filters
 What are the security filters offered by **Py-Sandboxes**?
 
-  - **Environment variable control**: The environment variables visible in the sandbox are limited. Mapping rules allow easily forwarding sets of variables from the outside to the inside of the sandbox (e.g., `set-env=*_API_KEY=${*_API_KEY}`).
+  - **Environment variable control**: The environment variables visible in the sandbox are limited. Mapping rules allow easily forwarding sets of variables from the outside to the inside of the sandbox (e.g., `env=*_API_KEY=${*_API_KEY}`).
   - **Network access control**: It is possible to control the direction, IP addresses, domain names, and ports available to the sandbox.
   - **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. It is also possible to use a different directory name in the sandbox than the original name. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
   - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
@@ -341,7 +341,7 @@ Consult the corresponding documentation.
 ## How to disable py-sandbox?
 Sometimes the sandbox disrupts development. There are several approaches to disabling the sandbox while adjusting the code.
 
-  - Use the `py-sandbox=True` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
+  - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
   - Use the `learning=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
 
 ## How to package the project
@@ -356,7 +356,7 @@ Here is a brief description of the implementation. You will find more details by
   - The parameters are converted into specific parameters for **os-sandbox**.
   - The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `bind` on directories is not relevant.
   - A subprocess is launched with the selected **os-sandbox**.
-  - The sandbox's parameters, state, and log format, as well as a random token, are transmitted to the sandbox via *stdin* (the sandbox does not always have access to the parameter file).
+  - The sandbox's parameters, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
   - An HTTP FastAPI server is launched.
       - It implements the SSE protocol.
       - The sandbox is activated.

@@ -49,16 +49,24 @@ def parse_rules(rules: ConfigLines,
             if learning_path:
                 continue
             value = rule.rule.split("=", 1)[1].strip().lower()
-            learning_path = Path(value) if value else Path(CONFIG_NAME)
-            if not learning_path.parent.exists():
-                learning_path = None
+            if value.lower() in ("true","false","0","1"):
                 errors.append(
                     (f"{format_ruleref(rule)}: "
                      f"Invalid value {value!r} for --learning. "
-                     f"The parent path must exist.",
+                     f"Use the filename instead.",
                      rule.path, rule.ln)
                 )
-            learning = True
+            else:
+                learning_path = Path(value) if value else Path(CONFIG_NAME)
+                if not learning_path.parent.exists():
+                    learning_path = None
+                    errors.append(
+                        (f"{format_ruleref(rule)}: "
+                         f"Invalid value {value!r} for --learning. "
+                         f"The parent path must exist.",
+                         rule.path, rule.ln)
+                    )
+                learning = True
 
         else:
             other_rules.append(rule)

@@ -14,7 +14,7 @@ def test_syntax_error(caplog):
             load_and_parse_config(config_path,
                                   extra_rules=[
                                       "os-sandbox=error",
-                                      "set-env=abc",
+                                      "env=abc",
                                       "bind=",
                                   ])
             assert 0, "Must raise an exception"
@@ -26,12 +26,12 @@ def test_syntax_error(caplog):
                       for error in e.errors]
         # Check syntax error
         assert without_filename == [
-            '<arg>: Detect a missing \'=\' in rule: set-env=abc.',
+            '<arg>: Detect a missing \'=\' in rule: env=abc.',
             '<arg>: Invalid os-sandbox \'error\'.',
             '<arg>, syntax-error(1), syntax-error(2) and syntax-error(3): Multiple os-sandbox parameters.',
             '<arg>: In \'bind=\', source and destination must be separated with a comma.',
             'syntax-error(1): Invalid os-sandbox \'toto\'.',
-            'syntax-error(4): Detect a missing \'=\' in rule: set-env=ERROR.',
+            'syntax-error(4): Detect a missing \'=\' in rule: env=ERROR.',
             'syntax-error(5): In \'ro-bind=.,not_exist\', source and destination must exists and be directories.',
             'syntax-error(6): In \'bind=not_exist,.\', source and destination must exists and be directories.',
             'syntax-error(7): In \'ro-bind=abc\', source and destination must be separated with a comma.',

@@ -95,9 +95,9 @@ def parse_rules(
 
     envs_rules = set()
     for orule in rules:
-        if orule.rule.startswith("set-env="):
+        if orule.rule.startswith("env="):
             # Remove prefix
-            rule = ConfigLine(orule.rule[len("set-env="):], orule.path, orule.ln)
+            rule = ConfigLine(orule.rule[len("env="):], orule.path, orule.ln)
 
             if "=" not in rule.rule:
                 errors.append(
@@ -126,8 +126,8 @@ def parse_rules(
             else:
                 new_vars[key_pattern] = substitute_value(value_pattern)
                 envs_rules.add(EnvRule(re.compile(re.escape(key_pattern)), False, orule))
-        elif orule.rule.startswith("unset-env="):
-            remove_key = orule.rule[len("unset-env="):]
+        elif orule.rule.startswith("unenv="):
+            remove_key = orule.rule[len("unenv="):]
             new_vars.pop(remove_key, None)
             envs_rules.add(EnvRule(re.compile(re.escape(remove_key)), True, orule))
         else:
@@ -186,6 +186,14 @@ class LearnEnviron(os._Environ):
         except KeyError:
             return default
 
+    def _has(self, key: str) -> Any:
+        try:
+            super(LearnEnviron, self).__getitem__(key)
+            return True
+        except KeyError:
+            return False
+
+
 
 def generate_rules(
 ) -> List[str]:
@@ -199,7 +207,7 @@ def generate_rules(
                 find=True
                 break
         if not find:
-            result.append(f"set-env={key}=${{{key}}}")
+            result.append(f"env={key}=${{{key}}}")
     return result
 
 def activate_guard(

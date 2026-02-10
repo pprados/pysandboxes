@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 providers_factory: dict[str, Type] = {
     # TODO: faire un provider "transparent"
-    "task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
+    "_task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
     "subprocess": SubProcessDaemon,
     # "bwrap": BWrapDaemon(),
     "firejail": FireJailDaemon,

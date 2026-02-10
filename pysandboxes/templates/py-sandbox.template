@@ -59,38 +59,38 @@ os-sandbox=subprocess
 #######################################################################################
 # In the sandbox, only a selected set of environment variables are accessible.
 #
-# FIXME: use env= in place of set-env ?
-# By using `set-env`, you can control and manage the environment variables available
+# FIXME: use env= in place of env ?
+# By using `env`, you can control and manage the environment variables available
 # within your sandbox, ensuring that your applications have the necessary configuration.
 #
-# The `set-env` option is used to set environment variables that will be visible
+# The `env` option is used to set environment variables that will be visible
 # within the sandbox.
 # The syntax allows you to:
 #
 # 1. Assign a fixed value to an environment variable:
-#    set-env VAR_NAME=value
+#    env VAR_NAME=value
 #    This sets `VAR_NAME` to `value` within the sandbox.
 #
 # 2. Assign a value based on the environment outside the sandbox, with an optional
 #    default value if needed,
 #    using a syntax similar to bash:
-#    set-env VAR_NAME=${OUTSIDE_VAR:=default_value}
+#    env VAR_NAME=${OUTSIDE_VAR:=default_value}
 #    This sets `VAR_NAME` to the value of `OUTSIDE_VAR` from the environment outside the
 #    sandbox. If `OUTSIDE_VAR` is not set, it uses `default_value`.
 #
 # 3. Replicate the values of variables that match a specific naming pattern:
-#    set-env VAR_*=${VAR_*}
+#    env VAR_*=${VAR_*}
 #    This replicates all environment variables from outside the sandbox that match the
 #    pattern `VAR_*` into the sandbox.
 #
-# You can remove a variable with `unset-env=<name>`
+# You can remove a variable with `unenv=<name>`
 
 # Some exemples
-#set-env=*=${*}  # Duplicate all variables
-#set-env=HOME=.
-#set-env=USER=pysandbox
-#set-env=*_API_KEY=${*_API_KEY}  # Add access to all API_KEY :-(
-#unset-env=OPENAI_API_KEY
+#env=*=${*}  # Duplicate all variables
+#env=HOME=.
+#env=USER=pysandbox
+#env=*_API_KEY=${*_API_KEY}  # Add access to all API_KEY :-(
+#unenv=OPENAI_API_KEY
 
 # Here, the rules learned for os.environ
 # <learning_guard_envs>

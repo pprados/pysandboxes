@@ -173,42 +173,48 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             original_spec: importlib.util.spec_from_file_location = finder.find_spec(
                 fullname, path, target)
             if original_spec:
-                # logger.debug(
-                #     f"GuardFinder: Found original spec via {type(finder).__name__!r}.")
-                # Create a new spec using our custom GuardLoader, but with the original spec's data
+                break
+        else:
+            if not original_spec:
+                if fullname in "sys.modules":
+                    original_spec = sys.modules[fullname].__spec__
+        if original_spec:
+            # logger.debug(
+            #     f"GuardFinder: Found original spec via {type(finder).__name__!r}.")
+            # Create a new spec using our custom GuardLoader, but with the original spec's data
 
-                # logger.debug(
-                #     f"GuardFinder: Found original spec {original_spec.name} via {type(finder).__name__!r}.")
-                if original_spec.name in _patch_rules:
+            # logger.debug(
+            #     f"GuardFinder: Found original spec {original_spec.name} via {type(finder).__name__!r}.")
+            if original_spec.name in _patch_rules:
 
-                    # logger.debug(f"Inject loader for {original_spec.name!r}")
-                    if original_spec.parent:
-                        # Use __init__
-                        if original_spec.submodule_search_locations:
-                            init_file = os.path.join(
-                                original_spec.submodule_search_locations[0],
-                                "__init__.py")
-                        else:
-                            init_file = original_spec.origin
-                        assert os.path.isfile(init_file), "module without __init__.py"
-                        logger.debug(f"Inject loader for {original_spec.name!r}")
-                        new_spec = importlib.util.spec_from_file_location(
-                            fullname,
-                            init_file,
-                            loader=GuardLoader(original_spec),
-                            submodule_search_locations=
-                            original_spec.submodule_search_locations,
-                        )
+                # logger.debug(f"Inject loader for {original_spec.name!r}")
+                if original_spec.parent:
+                    # Use __init__
+                    if original_spec.submodule_search_locations:
+                        init_file = os.path.join(
+                            original_spec.submodule_search_locations[0],
+                            "__init__.py")
                     else:
-                        new_spec = importlib.machinery.ModuleSpec(
-                            name=original_spec.name,
-                            loader=GuardLoader(original_spec),
-                            origin=original_spec.origin,
-                            loader_state=original_spec.loader_state,
-                        )
+                        init_file = original_spec.origin
+                    assert os.path.isfile(init_file), "module without __init__.py"
+                    logger.debug(f"Inject loader for {original_spec.name!r}")
+                    new_spec = importlib.util.spec_from_file_location(
+                        fullname,
+                        init_file,
+                        loader=GuardLoader(original_spec),
+                        submodule_search_locations=
+                        original_spec.submodule_search_locations,
+                    )
                 else:
-                    new_spec = original_spec
-                return new_spec
+                    new_spec = importlib.machinery.ModuleSpec(
+                        name=original_spec.name,
+                        loader=GuardLoader(original_spec),
+                        origin=original_spec.origin,
+                        loader_state=original_spec.loader_state,
+                    )
+            else:
+                new_spec = original_spec
+            return new_spec
 
         # For all other imports, return None to let the standard import
         # mechanism handle them

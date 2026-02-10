@@ -11,12 +11,12 @@ import click
 
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, suggest_package_installation
+from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..main_logger import pysandboxes_logger
 from ..netfilter import rule_to_netfilter
-from ..all_rules import AllRules
-from ..tools import remove_comments, substitute_env_vars
 from ..sb_types import Envs, Args
+from ..tools import remove_comments, substitute_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +194,6 @@ class FireJailDaemon(BaseSubProcessDaemon):
         need_root = False
         from importlib.resources import files
 
-
         args = [str(which_command("firejail"))]
 
         if pysandboxes_logger.getEffectiveLevel() > logging.INFO:
@@ -300,7 +299,10 @@ class FireJailDaemon(BaseSubProcessDaemon):
                        all_rules: AllRules,
                        envs: Envs,
                        ) -> List[str]:
-        run_daemon = super().subprocess_cmd(envs, all_rules)
+        run_daemon = super().subprocess_cmd(
+            all_rules,
+            envs,
+        )
 
         cmd_parameters, _ = self._firejail_args(envs=envs,
                                                 all_rules=all_rules)

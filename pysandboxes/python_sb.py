@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 
 from pysandboxes.config import CONFIG_NAME
+from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.python_in_sb import _convert_extra_rules
@@ -29,10 +30,16 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
         if not v or '' in v:
             extra_rules["learning"] = CONFIG_NAME
 
-    all_rules = load_and_parse_config(
-        exit_on_error=True,
-        **extra_rules
-    )
+    try:
+        all_rules = load_and_parse_config(
+            config_path=Path(extra_rules.get("learning", CONFIG_NAME)),
+            envs=dict(os.environ),  # Use current environ
+            **extra_rules
+        )
+    except ConfigSyntaxError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(-1)
+
     token = str(uuid.uuid4())
 
     os_provider: BaseSubProcessDaemon = providers_factory[all_rules.os_sandbox](
@@ -41,7 +48,7 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
     )
     cmd = os_provider.subprocess_cmd(
         all_rules,
-        envs=Envs(os.environ)  # FIXME: valider
+        envs=dict(all_rules.envs)  # Use the transformed version
     )
     pipe_path = Path("/tmp/toto")  # FIXME
     pipe_path.unlink(missing_ok=True)
@@ -59,14 +66,20 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
         token=token,
         init_fn=""
     )
+    if all_rules.learning:
+        env = {**os.environ, **all_rules.envs}
+    else:
+        env = all_rules.envs
+
     async def launch_and_wait():
         process = await launch_sandbox(
             cmd + python_cmd,
             pipe_path,
-            dict(os.environ),
-            process_config,
+            envs=Envs(env),
+            process_config=process_config,
         )
         await process.wait()
+
     asyncio.run(
         launch_and_wait()
     )

@@ -48,7 +48,11 @@ def _python_interactive(
 
     try:
         # Try to import and use IPython for a better REPL experience
-        import IPython  # TODO: add color?
+        from types import ModuleType
+
+        # Hack for IPython
+        sys.modules["__main__"] = ModuleType("__main__")
+        import IPython
         # raise ImportError()  # FIXME: force Python
         from traitlets.config import get_config
         c = get_config()
@@ -86,17 +90,6 @@ def _python_interactive(
 
         # Start the standard interactive console
         try:
-            def signal_handler(signum: int, frame: object) -> None:
-                """
-                Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
-                It will kill daemon processes before exiting itself.
-                """
-                # Iterate through all child processes and send them SIGTERM
-                logger.debug("Catch signal %s. Propagate to the dameon.", signum)
-
-            # signal.signal(signal.SIGINT, signal_handler)
-            # signal.signal(signal.SIGTERM, signal_handler)
-
             code.interact(banner=banner,
                           exitmsg=exit_msg,
                           # When self.local_exit is True, we overwrite the builtins so

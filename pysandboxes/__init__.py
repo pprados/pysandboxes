@@ -1,5 +1,6 @@
 from typing import Any
 
+# TODO: docstring is not accesible with this approach
 _api = {
     "sandboxes",
     "sandbox",
