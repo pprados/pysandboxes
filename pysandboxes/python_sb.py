@@ -59,14 +59,16 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
         token=token,
         init_fn=""
     )
-    asyncio.run(
-        launch_sandbox(
+    async def launch_and_wait():
+        process = await launch_sandbox(
             cmd + python_cmd,
             pipe_path,
             dict(os.environ),
             process_config,
-            wait=True,
         )
+        await process.wait()
+    asyncio.run(
+        launch_and_wait()
     )
     return 0  # Errorlevel
 

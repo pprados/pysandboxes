@@ -4,7 +4,9 @@ import os
 import pickle
 import random
 import sys
+import tempfile
 import time
+import uuid
 from abc import abstractmethod
 from asyncio.subprocess import Process
 from pathlib import Path
@@ -85,9 +87,8 @@ async def launch_sandbox(
         pipe_path:Path,
         envs: Dict[str,str],
         process_config: DaemonParameters,
-        wait:bool,
 ) -> Process:
-    os.mkfifo(pipe_path)  # FIXME FileExitError ?
+    os.mkfifo(pipe_path)
     DEBUG = False
     if DEBUG:
         Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
@@ -97,10 +98,13 @@ async def launch_sandbox(
                                       param in cmd[1:]) +
                                   "\n")
     try:
+        def preexec_fn():
+            os.umask(0o006)  # Only user:RW
+
         process = await asyncio.create_subprocess_exec(
             *cmd,
-            # umask=umask,  # FIXME
             env=envs,
+            preexec_fn=preexec_fn
         )
 
         await asyncio.sleep(1)  # FIXME
@@ -108,9 +112,6 @@ async def launch_sandbox(
         with open(pipe_path, 'wb') as fifo:
             fifo.write(pickle.dumps(process_config))
             fifo.close()
-
-        if wait:
-            await process.wait()
         return process
     finally:
         pass
@@ -241,65 +242,63 @@ class BaseSubProcessDaemon(SSESandbox):
                             stdout: bool = False) -> None:
         self._is_started = False
 
-        pipe_path=Path("/tmp/toto")
-        pipe_path.unlink(missing_ok=True)  # FIXME
-        umask = os.umask(0o002)
-        umask = os.umask(umask) & 0o007  # Only keep user flags
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
+            pipe_path.unlink(missing_ok=True)
 
-        if init_fn:
-            module, init_function_reference = get_callable_info(init_fn)
-            init_fn_ref = f"{module}:{init_function_reference}"
-        else:
-            init_fn_ref = ""
+            if init_fn:
+                module, init_function_reference = get_callable_info(init_fn)
+                init_fn_ref = f"{module}:{init_function_reference}"
+            else:
+                init_fn_ref = ""
 
-        process_config = DaemonParameters(
-            all_rules=all_rules,
-            log_level=log_level,
-            log_format=get_log_formatter(),
-            token=self._token,
-            init_fn=init_fn_ref
-        )
-
-        self._process=await launch_sandbox(
-            args + ["--_named-pipe",str(pipe_path)],
-            pipe_path=pipe_path,
-            envs=os.environ.copy(),
-            process_config=process_config,
-            wait=False,
-        )
-
-        if stdout:  # FIXME: sert à quoi ? (remove le main)
-            self._stdout_task = asyncio.create_task(
-                _read_stream(
-                    self._process.stdout,
-                    lambda line: print(line, file=sys.stdout, flush=True)
-                ),
-                name="read_stdout_stream",
-            )
-            self._stderr_task = asyncio.create_task(
-                _read_stream(
-                    self._process.stderr,
-                    lambda line: print(line, file=sys.stderr, flush=True)
-                ),
-                name="read_stderr_stream"
+            process_config = DaemonParameters(
+                all_rules=all_rules,
+                log_level=log_level,
+                log_format=get_log_formatter(),
+                token=self._token,
+                init_fn=init_fn_ref
             )
 
-        # Wait the server
-        async with aiohttp.ClientSession() as session:
-            while True:
-                try:
-                    async with session.get(PING_SERVER_URL, timeout=3) as response:
-                        if response.status == 200:
-                            break
-                        else:
-                            raise RuntimeError(
-                                f"Unexpected status {response.status} from {PING_SERVER_URL}")
-                except ClientConnectorError:
-                    pass  # Ignore and continue
+            self._process=await launch_sandbox(
+                args + ["--_named-pipe",str(pipe_path)],
+                pipe_path=pipe_path,
+                envs=os.environ.copy(),
+                process_config=process_config,
+            )
 
-                await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
+            if stdout:  # FIXME: sert à quoi ? (remove le main)
+                self._stdout_task = asyncio.create_task(
+                    _read_stream(
+                        self._process.stdout,
+                        lambda line: print(line, file=sys.stdout, flush=True)
+                    ),
+                    name="read_stdout_stream",
+                )
+                self._stderr_task = asyncio.create_task(
+                    _read_stream(
+                        self._process.stderr,
+                        lambda line: print(line, file=sys.stderr, flush=True)
+                    ),
+                    name="read_stderr_stream"
+                )
 
-        self._is_started = True
+            # Wait the server
+            async with aiohttp.ClientSession() as session:
+                while True:
+                    try:
+                        async with session.get(PING_SERVER_URL, timeout=3) as response:
+                            if response.status == 200:
+                                break
+                            else:
+                                raise RuntimeError(
+                                    f"Unexpected status {response.status} from {PING_SERVER_URL}")
+                    except ClientConnectorError:
+                        pass  # Ignore and continue
+
+                    await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
+
+            self._is_started = True
 
     async def shutdown(self) -> None:
         from . import main_sandbox
