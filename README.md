@@ -69,6 +69,19 @@ This scenario is the simplest. You just need to replace the launch of your appli
 ```shell
 python-db --learning -m my_module
 ```
+You can use it in interactive mode.
+```shell
+> python-sb
+SANDBOXES Python 3.13.5 | packaged by Anaconda, Inc. | [GCC 11.2.0] on linux
+*** APIs are LIMITED according to the rules in '.py-sandboxes' ***
+Type "help", "copyright", "credits" or "license" for more information.
+IPython 8.37.0 -- An enhanced Interactive Python. Type '?' for help.
+[TerminalIPythonApp] WARNING | File not found: '/home/philippe-prados/.pystartup'
+
+⚠ In [1]: 
+```
+
+If IPython is installed, it's used. All the standard python parameters are availables.
 
 It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example.
 
@@ -77,7 +90,11 @@ When the application is stopped, a `.pysandboxes` file is created in the current
 
 From now on, during subsequent launches, the application runs by limiting the application's capabilities to the previously learned whitelist.
 
-If you want to restart a learning session to add missing rules, activate the `learning` parameter in the file. This way, only the missing rules will be added to the file.
+If you want to restart a learning session to add missing rules:
+- activate the `learning` parameter in the file
+- Add `learning=.py-sandboxes` (or just `learning`) when you start `python-sb`
+
+This way, only the missing rules will be added to the file.
 
 ## Apply the sandbox to a part of the application.
 
@@ -143,6 +160,16 @@ async def main():
 if __name__ == "__main__":
     pysandboxes.run(main(),init_fn=init_app)  # in place of asyncio.run(main())
 
+```
+
+If you want to restart a learning session to add missing rules:
+- Add `learning='.py-sandboxes` with `sandboxes`
+- Or add `learning='.py-sandboxes` with `run()`
+
+```python
+pysandboxes.run(main(),
+                learning='.py-sandboxes'
+                )
 ```
 
 ### Executing a function in the sandbox

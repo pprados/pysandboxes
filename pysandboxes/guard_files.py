@@ -248,42 +248,44 @@ def generate_rules(
 
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
-        write = parent_level[path]
-        value = None
-        overflow = False
-        for allready_path, allready_write in allready_added:
-            if allready_path == home:
+        if (path.exists() and (path.is_file() or path.is_dir())
+                and os.access(path, os.R_OK)):
+            write = parent_level[path]
+            value = None
+            overflow = False
+            for allready_path, allready_write in allready_added:
+                if allready_path == home:
+                    continue
+                if path.is_relative_to(allready_path):
+                    if write == allready_write:
+                        overflow = True
+                        break
+            if overflow:
                 continue
-            if path.is_relative_to(allready_path):
-                if write == allready_write:
-                    overflow = True
-                    break
-        if overflow:
-            continue
 
-        for key, val in _special_home.items():
-            if path.is_relative_to(val):
-                value = f"${{{key}}}"
-                break
-        else:
-            for key, val in _special_env.items():
+            for key, val in _special_home.items():
                 if path.is_relative_to(val):
-                    if not _check_is_in_rules(path):
-                        x = "/" + str(path.relative_to(val))
-                        if x == "/.":
-                            x = ""
-                        value = f"${{{key}}}" + x
+                    value = f"${{{key}}}"
                     break
-        if not value:
-            value = str(path)
-        if value:
-            result.add(
-                "" +
-                f'{"" if write else "ro-"}bind={value},{value}'
-            )
-        if path != home:
-            allready_added.append(LearnFileRule(path, write))
-    return sorted(list(result), reverse=True)
+            else:
+                for key, val in _special_env.items():
+                    if path.is_relative_to(val):
+                        if not _check_is_in_rules(path):
+                            x = "/" + str(path.relative_to(val))
+                            if x == "/.":
+                                x = ""
+                            value = f"${{{key}}}" + x
+                        break
+            if not value:
+                value = str(path)
+            if value and value != "${HOME}":
+                result.add(
+                    "" +
+                    f'{"" if write else "ro-"}bind={value},{value}'
+                )
+            if path != home:
+                allready_added.append(LearnFileRule(path, write))
+    return sorted(list(result))
 
 
 # Helper to resolve symlinks and apply rules
@@ -591,7 +593,11 @@ def _wrap_os_path_is(func: Callable, *, write: bool) -> Callable:
         if rule:
             return False
         if remapped is None:
-            return False
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(file), False))
+                remapped = file
+            else:
+                return False
         return func(remapped, *args, **kwargs)
 
     return wrapper
@@ -1034,9 +1040,9 @@ _default_rules = rules = {
     # ALLOW os.path.join
     # ALLOW os.path.normcase
     # ALLOW os.path.normpath
-    "os.path.realpath": _f(_wrap_os_path_realpath),
+    # ALLOW os.path.realpath
     # ALLOW os.path.relpath
-    "os.path.samefile": _f(_wrap_os_path_samefile),
+    # ALLOW os.path.samefile
     # ALLOW os.path.expanduser
     # ALLOW os.path.walk (obsolette)
 

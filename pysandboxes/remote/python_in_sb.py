@@ -15,15 +15,14 @@ def _debug_log():
         level=logging.DEBUG,
         format='%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     )
-    logging.getLogger("pysandboxes").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(
-        logging.INFO)  # TODO: with parameter level ?
+    log_level=logging.WARNING
+    logging.getLogger("pysandboxes").setLevel(log_level)
+    logging.getLogger("Pysandboxes").setLevel(log_level)
 
 
 def _python_interactive(
         all_rules: AllRules,
 ):
-    # TODO: le envs final doit être injecté proprement
     exit_msg = None
     if all_rules.learning:
         sb_mode = (f'*** API calls are LEARNED and saved in '
@@ -32,9 +31,11 @@ def _python_interactive(
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
         sb_mode = (f'*** APIs are LIMITED according to the rules in '
-                   f'{str(all_rules.learning_path)!r} '
-                   f'and by the os-sandbox of type {all_rules.os_sandbox!r} ***\n'
+                   f'{str(all_rules.learning_path)!r}'
                    )
+        if all_rules.os_sandbox != "subprocess":
+            sb_mode += f' and by the os-sandbox={all_rules.os_sandbox!r}'
+        sb_mode +=" ***\n"
     else:
         sb_mode = (f'*** APIs are LIMITED only by the os-sandbox '
                    f'of type {all_rules.os_sandbox!r} ***\n'
@@ -150,6 +151,7 @@ def python_in_sb(
         python_cmd: List[str],
 ):
     try:
+        _debug_log()
         if not len(python_cmd) or python_cmd[0] == "-i" or python_cmd[0] == "-":
             _python_interactive(all_rules)
         elif python_cmd[0] == '-m':

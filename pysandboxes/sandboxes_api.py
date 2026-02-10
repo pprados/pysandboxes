@@ -200,7 +200,8 @@ class sandboxes(Protocol):
 def run(main: Coroutine[Any, Any, Any],
         *, debug=None, loop_factory=None,
         init_fn: Optional[SyncOrAsyncFunc] = None,
-        config_path: Optional[Union[Path, str]] = None) -> Any:
+        config_path: Optional[Union[Path, str]] = None,
+        **kwargs: Any) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
     It's similar to `asyncio.run()`, but with the sandbox.
@@ -214,7 +215,8 @@ def run(main: Coroutine[Any, Any, Any],
         set_sandbox_loop(asyncio.get_running_loop())
         async with sandboxes(
                 init_fn=init_fn,
-                config_path=config_path
+                config_path=config_path,
+                **kwargs,
         ):
             result = (await asyncio.create_task(main), "start sandbox in run")
             return result

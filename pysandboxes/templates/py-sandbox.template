@@ -117,6 +117,7 @@ ignore=*.log
 # Some exemples
 #bind=/,/  # Accept all file access
 #ro-bind=/,/  # Accept to read all file (add rules to write in somes directories)
+#ro-bind=${HOME}/.ipython
 
 # Here, the rules learned for files
 # <learning_guard_files>
