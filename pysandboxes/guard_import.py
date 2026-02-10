@@ -362,7 +362,7 @@ def generate_rules(
         learn: Set[Any],
 ) -> List[str]:
     # Select only parent
-    result = set()
+    result = set()  # TODO: blacklist
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         result.add(f"python-import={learn_rule.name}")
     return list(result)

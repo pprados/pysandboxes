@@ -2,10 +2,11 @@ import inspect
 import logging
 import os
 import re
+import sys
 import types
 from importlib import resources
 from pathlib import Path
-from typing import Optional, List, Dict, Set, Iterable
+from typing import Optional, List, Dict, Set, cast
 
 from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import
 from .all_rules import AllRules
@@ -13,10 +14,9 @@ from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
 from .e import ConfigSyntaxError
 from .learning import activate_learning
-from .main_logger import format_ruleref, ErrorMsg, \
-    pysandboxes_logger
+from .main_logger import format_ruleref, ErrorMsg
 from .sb_types import ConfigLines, Envs, ConfigLine
-from .tools import remove_config_comments, substitute_config_env_vars, find_config
+from .tools import remove_config_comments, substitute_config_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
     return None
 
 
-def _read_config(config_path: Path) -> ConfigLines:
+def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
     return remove_config_comments([ConfigLine(line, config_path, ln + 1) for ln, line in
                                    enumerate(config_path.read_text().splitlines())])
 
@@ -87,6 +87,7 @@ def load_and_parse_config(
     # Extra rules can be in form k=v or k=[v1,v2,...]
     extra_lines = []
     for k, all_v in extra_rules.items():
+        k = k.replace('_', '-')  # TODO: params import
         if isinstance(all_v, Set):
             extra_lines.extend([ConfigLine(f"{k}={v}", Path(), 0) for v in all_v])
         else:
@@ -95,41 +96,56 @@ def load_and_parse_config(
     if not config_path:
         config_path = Path(CONFIG_NAME)
 
-    find_config_path = find_config(str(config_path))
-    if not find_config_path:
+    if '/' not in str(config_path):
+        # Try to find config filename
+        pysb_module_name = __name__.split('.', 1)[0]
+
+        # Search the module of the caller
+        frame = sys._getframe()
+        while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
+                pysb_module_name + "."):
+            assert frame.f_back is not None
+            frame = frame.f_back
+
+        # Module of the caller
+        from importlib.resources import files
+        caller_module = frame.f_globals.get("__name__", "__main__").split('.', 1)[0]
+        resource_config = None
+        if caller_module != "__main__":
+            resource_path = files(caller_module)
+            resource_config = resource_path / config_path
+        if resource_config and resource_config.exists():
+            config_path = resource_config
+            logger.info("Use the resource %s from the caller module",
+                         config_path)
+        else:
+            # Else search in the current working directory
+            config_path = Path.cwd() / config_path
+
+    if not config_path.exists():
         # Activate the learning mode
         # Load the template, and add learning mode
         with resources.as_file(
                 resources.files(
-                    __name__.rsplit('.', maxsplit=1)[:-1][
-                        0] + '.templates') / 'py-sandbox.template'
+                    pysb_module_name + '.templates') / 'py-sandbox.template'
         ) as resource_path:
             config = (
                     extra_lines +
-                    _read_config(resource_path)
+                    _read_config_and_remove_comments(resource_path)
             )
     else:
-        if not find_config_path and Path(CONFIG_NAME).exists():
-            config_path = Path(CONFIG_NAME)
-        else:
-            config_path = Path(find_config_path)
-        config = extra_lines + _read_config(config_path)
+        config = extra_lines + _read_config_and_remove_comments(config_path)
     return parse_config(config,
+                        config_path=config_path,
                         envs=envs,
                         )
 
 
 def _parse_include(
-        rules: ConfigLines,  # FIXME: add root file in include
-) -> ConfigLines:
-    includes = set()
-    return __parse_include(includes, rules)
-
-
-def __parse_include(
         includes: Set[Path],
         rules: ConfigLines,
 ) -> ConfigLines:
+    # includes parameter is to detect the recursive includes
     others: ConfigLines = []
     pattern = re.compile(r'^include\s+"(.+)"\s*$')
     for rule in rules:
@@ -146,7 +162,7 @@ def __parse_include(
                         # Recursive include
                         includes.add(filename.absolute())
                         others.extend(
-                            __parse_include(includes, include_config))
+                            _parse_include(includes, include_config))
                 except PermissionError:
                     pass  # Ignore
         else:
@@ -156,6 +172,7 @@ def __parse_include(
 
 def parse_config(
         config: ConfigLines,
+        config_path: Path,
         *,
         envs: Optional[Dict[str, str]] = None,
 ) -> AllRules:
@@ -165,7 +182,7 @@ def parse_config(
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
-    config = _parse_include(config)
+    config = _parse_include({config_path}, config)
 
     # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, ienvs, errors)
@@ -178,14 +195,16 @@ def parse_config(
     files_rules, others = guard_files.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
 
-    # 2. If some line are ignored, log a warning
+    # 2. If some line are ignored
     if others:
         for invalide_rule in others:
-            pysandboxes_logger.warning(
-                f"%s: Ignore invalid rule '%s'.",
-                format_ruleref(invalide_rule),
-                invalide_rule.rule
-            )
+            errors.append((
+                f"{format_ruleref(invalide_rule)}: "
+                f"Invalid rule {invalide_rule.rule!r}",
+                invalide_rule.path,
+                invalide_rule.ln,
+            ))
+
     # 3. Print error
     if errors:
         errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))

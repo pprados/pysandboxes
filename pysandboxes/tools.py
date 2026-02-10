@@ -1,5 +1,4 @@
 import asyncio
-import contextvars
 import inspect
 import os
 import re
@@ -165,6 +164,7 @@ def find_config(
 
     Returns path to the file if found, or an empty string otherwise
     """
+
     # TODO: search in module of the caller
     def _is_interactive():
         """Decide whether this is running in a REPL or IPython notebook"""
@@ -207,18 +207,19 @@ def find_config(
 
 
 # %% -----------------------
-_is_in_sandbox = False
-
-_sandboxed = contextvars.ContextVar(
-    'sanboxed', default=False)
+_is_in_sandbox: int = 0
 
 
 def is_in_sandbox() -> bool:
-    return _sandboxed.get()
+    return _is_in_sandbox > 0
 
 
 def set_is_in_sandbox(value: bool) -> None:
-    _sandboxed.set(value)
+    global _is_in_sandbox
+    if value:
+        _is_in_sandbox += 1
+    else:
+        _is_in_sandbox -= 1
 
 
 SyncOrAsyncFunc = Union[

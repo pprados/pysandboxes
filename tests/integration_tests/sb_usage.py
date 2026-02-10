@@ -198,7 +198,9 @@ def main():
         # asyncio.run(async_manager())
         # # print("----------------")
         with sandboxes(async_init_sandbox,
+                       config_path="test.py-sandboxes",
                        learning=".py-sandboxes", # Learn all the times
+                        # os_sandbox="none",
                        ):
             run()
         # TODO: voir la capture d'exception

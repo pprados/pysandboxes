@@ -50,8 +50,9 @@ py-sandbox=True  # Activate the python sandbox (true by default)
 #
 # Use the `os-sandbox` parameter to select the technology from among:
 # - `subprocess` (default): Use a subprocess to invoke sandboxed functions
-# - `firejail` : A utility that allows you to restrict access to disks, networks,
+# - `firejail`: A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
+# - `none`: special provider to desactivate the `@sandbox` annotations
 
 os-sandbox=subprocess
 #os-sandbox=firejail

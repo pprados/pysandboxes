@@ -325,14 +325,3 @@ class FireJailDaemon(BaseSubProcessDaemon):
         if DEBUG:
             Path("run.sh").write_text("<.py-sandboxes " + " \\\n".join(cmd_parameters))
         return cmd_parameters
-
-    def bash_args(self, envs: Envs) -> Args:
-        args, _ = self._firejail_args(envs)
-        args.extend([
-            f"PS1={click.style('os-sandbox', fg='cyan')}]-firejail] $ ",
-            # TODO: color ?
-            # "PS1=[os-sandbox]\nfirejail $ ",
-            "/bin/bash", "--norc", "--noprofile", "-i",
-            # "wget", "-T", "1", "http://octo.com",  # FIXME
-        ])
-        return args, {}

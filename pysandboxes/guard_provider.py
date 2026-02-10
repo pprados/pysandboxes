@@ -32,7 +32,7 @@ def parse_rules(rules: ConfigLines,
                      rule.ln
                      )
                 )
-            providers_set.append(provider)
+            providers_set.append((provider, rule))
         elif rule.rule.startswith("py-sandbox="):
             value = rule.rule.split("=", 1)[1].strip().lower()
             if value in ("", "true"):
@@ -49,7 +49,7 @@ def parse_rules(rules: ConfigLines,
             if learning_path:
                 continue
             value = rule.rule.split("=", 1)[1].strip().lower()
-            if value.lower() in ("true","false","0","1"):
+            if value.lower() in ("true", "false", "0", "1"):
                 errors.append(
                     (f"{format_ruleref(rule)}: "
                      f"Invalid value {value!r} for --learning. "
@@ -71,8 +71,12 @@ def parse_rules(rules: ConfigLines,
         else:
             other_rules.append(rule)
 
-    if len(providers_set) > 1:
-        all_error_lines = [format_ruleref(rule) for rule in provider_rule]
+    # provider from command line is prioritized
+    cmd_line_provider = list(filter(lambda x: x[1].ln == 0, providers_set))
+    if len(cmd_line_provider) == 1:
+        provider = cmd_line_provider[0][0]
+    elif len(providers_set) > 1:
+        all_error_lines = [format_ruleref(rule) for _, rule in providers_set]
         errors.append(
             (
                 f"{format_error_list(all_error_lines)}: "
@@ -81,9 +85,11 @@ def parse_rules(rules: ConfigLines,
                 0
             )
         )
-        return 'errors', use_py_sandbox, learning_path, other_rules
-    if not providers_set:
-        return "subprocess", use_py_sandbox, learning_path, other_rules
+        return 'errors', use_py_sandbox, learning_path, learning, other_rules
+    elif len(providers_set) == 1:
+        provider = providers_set[0][0]
+    else:
+        provider = "subprocess"  # default value
     if not learning_path:
         learning_path = Path(CONFIG_NAME)
 
@@ -91,4 +97,4 @@ def parse_rules(rules: ConfigLines,
     if not learning_path.exists() and not learning:
         learning = True
 
-    return providers_set[0], use_py_sandbox, learning_path, learning, other_rules
+    return provider, use_py_sandbox, learning_path, learning, other_rules

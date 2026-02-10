@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import List, Dict, Union, Set
 
 from pysandboxes.learning import is_learning_mode, generate_config_from_learning
+from pysandboxes.sandboxes_api import sandboxes
+from pysandboxes.tools import set_is_in_sandbox
 from ..all_rules import AllRules
 
 logger = logging.getLogger(__name__)
@@ -15,7 +17,7 @@ def _debug_log():
         level=logging.DEBUG,
         format='%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     )
-    log_level=logging.WARNING
+    log_level = logging.WARNING
     logging.getLogger("pysandboxes").setLevel(log_level)
     logging.getLogger("Pysandboxes").setLevel(log_level)
 
@@ -35,7 +37,7 @@ def _python_interactive(
                    )
         if all_rules.os_sandbox != "subprocess":
             sb_mode += f' and by the os-sandbox={all_rules.os_sandbox!r}'
-        sb_mode +=" ***\n"
+        sb_mode += " ***\n"
     else:
         sb_mode = (f'*** APIs are LIMITED only by the os-sandbox '
                    f'of type {all_rules.os_sandbox!r} ***\n'
@@ -130,7 +132,7 @@ def _python_command(script_body: str,
     return 0
 
 
-def _convert_extra_rules(args: List[str]) -> Dict[str, Union[str, Set[str]]]:
+def convert_extra_rules(args: List[str]) -> Dict[str, Union[str, Set[str]]]:
     result = {}
     for rule in args:
         assert rule.startswith("--")
@@ -152,6 +154,7 @@ def python_in_sb(
 ):
     try:
         _debug_log()
+        set_is_in_sandbox(True)
         if not len(python_cmd) or python_cmd[0] == "-i" or python_cmd[0] == "-":
             _python_interactive(all_rules)
         elif python_cmd[0] == '-m':

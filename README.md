@@ -1,5 +1,7 @@
 # PY-SANDBOXES
 
+[Home Page](https://www.github.com/pprados/langgraph-codeagent)
+
 Modern programming often relies on code generation or API invocation by language models (LLMs).
 However, these models can be manipulated to execute malicious commands.
 The [OWASP](https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/) provides a list of risks associated with using these models.
@@ -14,6 +16,41 @@ It's time to control, as much as possible, the allowed capabilities for your app
 
 -----
 ![Sandboxes](sandboxes-small.png)
+
+# Table of Contents
+- [PY-SANDBOXES](#py-sandboxes)
+- [Principle](#principle)
+- [Usage](#usage)
+  - [Apply the sandbox to the entire application](#apply-the-sandbox-to-the-entire-application)
+  - [Apply the sandbox to a part of the application.](#apply-the-sandbox-to-a-part-of-the-application)
+    - [Launching the Sandbox](#launching-the-sandbox)
+    - [Executing a function in the sandbox](#executing-a-function-in-the-sandbox)
+- [Security Filters](#security-filters)
+- [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
+- [Integration in a module](#integration-in-a-module)
+- [FAQ](#faq)
+  - [How to display **py-sandbox** logs?](#how-to-display-py-sandbox-logs)
+  - [How to catch rule violation exceptions?](#how-to-catch-rule-violation-exceptions)
+  - [How to activate the sandbox in a notebook?](#how-to-activate-the-sandbox-in-a-notebook)
+  - [How to propagate a token to an API in the sandbox?](#how-to-propagate-a-token-to-an-api-in-the-sandbox)
+  - [How to ensure a new version of a module doesn't hide new network accesses?](#how-to-ensure-a-new-version-of-a-module-doesnt-hide-new-network-accesses)
+  - [Do I have any new rule violations since the update?](#do-i-have-any-new-rule-violations-since-the-update)
+  - [Debugging](#debugging)
+  - [OS-sandbox debugging](#os-sandbox-debugging)
+  - [How to disable py-sandbox?](#how-to-disable-py-sandbox)
+  - [How to package the project](#how-to-package-the-project)
+  - [Implementation](#implementation)
+  - [What are the weaknesses of py-sandbox?](#what-are-the-weaknesses-of-py-sandbox)
+- [Roadmap](#roadmap)
+  - [Guard some critical methods](#guard-some-critical-methods)
+  - [New **OS-sandboxes**](#new-os-sandboxes)
+  - [Denial of Service](#denial-of-service)
+  - [Regular Expressions](#regular-expressions)
+  - [Control `exec()` and `eval()`](#control-exec-and-eval)
+  - [Compile a part of code](#compile-a-part-of-code)
+  - [Propagate the tracability id](#propagate-the-tracability-id)
+- [Appendix](#appendix)
+  - [Databases](#databases)
 
 The **Py-Sandboxes** project proposes to add multiple layers of security to limit the actions of your application, and thus, indirectly, the actions caused by an LLM or a malicious user of your application.
 
@@ -247,51 +284,41 @@ The feature proposed by each technologies:
 Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
 ---
-# Roadmap
-This version is a first implementation offered to the community. It allows for testing and demonstrating the validity of the approach.
+# Integration in a module
+It is possible to use the solution to integrate it into a module. To do this, the `.py-sandboxes` file must be placed at the root of your module, as a resource.
 
-It ensures that the patches for Python functions are correct and do not cause bugs in applications. If you find a case that presents a problem, open a ticket with a scenario to reproduce it. We will provide a fix as soon as possible.
+When the sandbox is activated, the code searches for the caller's module and checks whether the resource exists. If so, it is used to apply the security rules.
+Otherwise, the same file is searched for in the working directory.
 
-It also verifies the relevance of the multiple sandbox encapsulation strategy, with only *firejail* for the moment. The latter was selected because it allows for network-level filtering, prohibits access to files matching patterns, etc. Since it does not allow renaming directories during a `bind`, the **py-sandbox** layer handles this.
+If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file
 
-We have a planned roadmap. Developments will arrive gradually, with no specific order:
+```ini
+# File my_module/.py-sandboxes
+include "${PWD}/.py-sandboxes"
+# ... specific rules
+```
 
-  - Guard some criticals methods in Python (spawn, shell, etc.)
-  - New **OS-sandboxes**
-  - Management of *Denial of Service*
-  - Management of regular expressions
-  - Control of `exec()` and `eval()`
-  - Compile a part of code
-  - Propagate the tracability id
+To create a CLI that uses **py-sanboxes**, use the following pattern:
+```python
+# File my_module/cli.py
+def main():
+    ...
 
-## Guard some critical methods
-Certain methods must be rejected, even if the package is authorized.
+# File my_module/cli_sb.py
+def main():
+    import sys
+    from pysandboxes.python_sb import main as sb_main
+    from my_module.cli import __name__ as module_name
+    sys.argv = [__file__, "-m", module_name] + sys.argv[1:]
+    sb_main()
+```
 
-## New **OS-sandboxes**
-Other OS-level sandbox solutions will be integrated, including `Docker` of course.
-
-If your application itself runs in a Docker container, it may not be able to launch a Docker in a Docker (depending on the parameters). This is also the case for solutions relying on Linux *capabilities*.
-
-Different solutions will be proposed (pre-launch of the sandbox in another container, in parallel; use of emulation solutions that do not require privileges, etc.).
-
-## Denial of Service
-Generated code may never terminate and cause a denial of service. It's not easy to manage this. Indeed, it is easy to identify that a `@sandbox` function is taking too long to respond, but it is very difficult to interrupt it. It is not possible to kill a thread, unlike a process. A simple malicious regular expression can be exploited to kill the FastAPI server (see [Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html)).
-
-We are considering a solution to identify these situations and kill the offending function if necessary.
-
-## Regular Expressions
-Certain regular expression patterns cause problems because they can cause the Python program to become unresponsive.
-We plan to add a specific filter to refuse the execution of expressions identified as *at risk*.
-
-## Control `exec()` and `eval()`
-`exec()` and `eval()` are two functions generally used to execute code generated by an LLM. **py-sandbox** and **os-sandbox** will limit the code's capabilities, but this is not enough.
-We plan to add a third level of sandboxing: **exec-sandbox**. A syntactic analysis of the code will be performed before execution. Specific rules will make it possible to forbid, for example, the use of system variables or functions (`__*__`), asynchronous syntax, and automatically add termination checks to all loops, etc.
-
-## Compile a part of code
-To strengthen security, we are considering compiling a part of the project to make it more difficult to access the standard implementations of Python functions.
-
-## Propagate the tracability id
-The protocol break prevents tracking with OpenTelemetry. We want to propagate the necessary information to get a complete trace.
+And declare it in your TOML file.
+```TOML
+[tool.poetry.scripts]
+my-script = "my_module:main_sb"
+# my-script = "my_module:main"  # Without sandboxes
+```
 
 ---
 # FAQ
@@ -319,6 +346,13 @@ try:
   ...
 except SandBoxError:
   ...  # Rule violated
+```
+
+## How to activate the sandbox in a notebook?
+In a cell, you can use `with sandboxes()` or `run()`.
+Between cells use:
+```python
+sb = sandboxes().__enter__()
 ```
 
 ## How to propagate a token to an API in the sandbox?
@@ -349,6 +383,9 @@ def call_llm():
 Using **pysandboxes** also makes you aware that a module update can also call the security rules into question.
 We invite you, after each update, to test your application without learning. This way, if a rule is violated, you will know its origin.
 
+##  Do I have any new rule violations since the update?
+Indeed, new ones can be proposed. As the approach is based on denial by default, these rules are rejected. Restart a learning session to add what is necessary.
+
 ## Debugging
 When using an external sandbox, two processes are launched. Your development environment is normally capable of handling this. A breakpoint in a `@sandbox` function will interrupt the program in the sandbox process. Stack trace analysis will not be easy, as there is no complete trace of the call.
 
@@ -358,8 +395,7 @@ Otherwise, you can temporarily remove the annotation to see more clearly.
 
 ## OS-sandbox debugging
 To know precisely the parameters used to launch an **OS-sandbox**, and to test the behavior,
-use `python -m pysandboxes.remote.bash -v --os-sandbox=firejail`. This will launch a bash in a sandbox with the correct parameters. You can then check disk and network access, see environment variables, etc.
-This bash is under Python's shell control. Some behaviors may sometimes differ from a classic bash.
+use `python-sb`.
 
 Depending on the technologies, it may be possible to connect directly to the **os-sandbox**. For example, for firejail, use `firejail --join=firejail-sandbox`.
 
@@ -370,6 +406,7 @@ Sometimes the sandbox disrupts development. There are several approaches to disa
 
   - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
   - Use the `learning=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
+  - Use the special `os-provider=none` to desactivate all the `@sandbox` annotations
 
 ## How to package the project
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.
@@ -416,6 +453,53 @@ Here are some vulnerabilities:
   - A child process, if it has the rights to read `/proc/${PPID}/environ`, can search for tokens there. **OS-sandboxes** generally prohibit this.
 
 We invite you to try out these approaches, without looking at the sources if you are gamers. This will teach you the ins and outs of Python. If you find any new vulnerabilities, we would be happy to hear about them. Note that the code is still hardened.
+---
+# Roadmap
+This version is a first implementation offered to the community. It allows for testing and demonstrating the validity of the approach.
+
+It ensures that the patches for Python functions are correct and do not cause bugs in applications. If you find a case that presents a problem, open a ticket with a scenario to reproduce it. We will provide a fix as soon as possible.
+
+It also verifies the relevance of the multiple sandbox encapsulation strategy, with only *firejail* for the moment. The latter was selected because it allows for network-level filtering, prohibits access to files matching patterns, etc. Since it does not allow renaming directories during a `bind`, the **py-sandbox** layer handles this.
+
+We have a planned roadmap. Developments will arrive gradually, with no specific order:
+
+  - Guard some criticals methods in Python (spawn, shell, etc.)
+  - New **OS-sandboxes**
+  - Management of *Denial of Service*
+  - Management of regular expressions
+  - Control of `exec()` and `eval()`
+  - Compile a part of code
+  - Propagate the tracability id
+
+## Guard some critical methods
+Certain methods must be rejected, even if the package is authorized.
+
+## New **OS-sandboxes**
+Other OS-level sandbox solutions will be integrated, including `Docker` of course.
+
+If your application itself runs in a Docker container, it may not be able to launch a Docker in a Docker (depending on the parameters). This is also the case for solutions relying on Linux *capabilities*.
+
+Different solutions will be proposed (pre-launch of the sandbox in another container, in parallel; use of emulation solutions that do not require privileges, etc.).
+
+## Denial of Service
+Generated code may never terminate and cause a denial of service. It's not easy to manage this. Indeed, it is easy to identify that a `@sandbox` function is taking too long to respond, but it is very difficult to interrupt it. It is not possible to kill a thread, unlike a process. A simple malicious regular expression can be exploited to kill the FastAPI server (see [Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html)).
+
+We are considering a solution to identify these situations and kill the offending function if necessary.
+
+## Regular Expressions
+Certain regular expression patterns cause problems because they can cause the Python program to become unresponsive.
+We plan to add a specific filter to refuse the execution of expressions identified as *at risk*.
+
+## Control `exec()` and `eval()`
+`exec()` and `eval()` are two functions generally used to execute code generated by an LLM. **py-sandbox** and **os-sandbox** will limit the code's capabilities, but this is not enough.
+We plan to add a third level of sandboxing: **exec-sandbox**. A syntactic analysis of the code will be performed before execution. Specific rules will make it possible to forbid, for example, the use of system variables or functions (`__*__`), asynchronous syntax, and automatically add termination checks to all loops, etc.
+
+## Compile a part of code
+To strengthen security, we are considering compiling a part of the project to make it more difficult to access the standard implementations of Python functions.
+
+## Propagate the tracability id
+The protocol break prevents tracking with OpenTelemetry. We want to propagate the necessary information to get a complete trace.
+
 ---
 # Appendix
 

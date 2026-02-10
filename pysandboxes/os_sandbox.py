@@ -9,6 +9,7 @@ from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
 from .all_rules import AllRules
 from .remote.firejail_daemon import FireJailDaemon
+from .remote.none_daemon import NoneDaemon
 from .remote.parameters import DELAY_FOR_STOP_DAEMON
 from .remote.subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 providers_factory: dict[str, Type] = {
     # TODO: faire un provider "transparent"
     "_task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
+    "none": NoneDaemon,
     "subprocess": SubProcessDaemon,
     # "bwrap": BWrapDaemon(),
     "firejail": FireJailDaemon,

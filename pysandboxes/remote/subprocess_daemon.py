@@ -173,10 +173,6 @@ class BaseSubProcessDaemon(SSESandbox):
         ])
         return cmd_parameters
 
-    @abstractmethod
-    def bash_args(self, envs: Envs) -> Args:
-        pass
-
     async def start(self,
                     all_rules: AllRules,
                     *,
@@ -333,10 +329,3 @@ class SubProcessDaemon(BaseSubProcessDaemon):
                      all_rules: AllRules,
                      ) -> AllRules:
         return all_rules
-
-    def bash_args(self, envs: Envs) -> Args:
-        return ["/bin/bash",
-                "-c",
-                "PS1='[os-sandbox-subprocess] $ '; "
-                "export PS1; "
-                "exec /bin/bash --norc --noprofile -i"]

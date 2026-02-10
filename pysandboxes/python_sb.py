@@ -9,7 +9,7 @@ from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
-from pysandboxes.remote.python_in_sb import _convert_extra_rules
+from pysandboxes.remote.python_in_sb import convert_extra_rules
 from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon, \
     DaemonParameters, get_log_formatter, launch_sandbox
 from pysandboxes.sb_types import Envs
@@ -24,7 +24,7 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
     """
     python_parsed_args, sandboxes_args, python_cmd = parse_python_cmd_line(sys.argv[1:])
 
-    extra_rules = _convert_extra_rules(sandboxes_args)
+    extra_rules = convert_extra_rules(sandboxes_args)
     if "learning" in extra_rules:
         v = extra_rules["learning"]
         if not v or '' in v:

@@ -15,7 +15,8 @@ from .base_daemon import BaseDaemon
 from .private_loop import set_sandbox_loop
 from .remote.parameters import DELAY_FOR_CALL_DAEMON
 from .sb_types import Envs
-from .tools import check_mixte_async_async, SyncOrAsyncFunc
+from .tools import check_mixte_async_async, SyncOrAsyncFunc, set_is_in_sandbox, \
+    is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,9 @@ class sandboxes(Protocol):
         from .e import ConfigSyntaxError
 
         logger.debug("__enter__ start...")
+        if is_in_sandbox():  # Inner call
+            set_is_in_sandbox(True)
+            return self
         check_mixte_async_async()
         log_level = logging.root.getEffectiveLevel()
         try:
@@ -137,6 +141,7 @@ class sandboxes(Protocol):
             self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
             self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
         logger.debug("__enter__ ok")
+
         return self
 
     def __exit__(self,
@@ -146,13 +151,17 @@ class sandboxes(Protocol):
         """
         Stop the sandbox daemon.
         """
+        logger.debug("__exit__ start...")
+        if is_in_sandbox():
+            set_is_in_sandbox(False)
+            return False
         self._stop_daemon()
         return False
 
     def _stop_daemon(self):
         if self._daemon:
             from pysandboxes.os_sandbox import shutdown_daemon
-            logger.debug("__exit__ start...")
+            logger.debug("_stop_daemon...")
 
             if threading.current_thread() is threading.main_thread():
                 signal.signal(signal.SIGINT, self._old_sigint)

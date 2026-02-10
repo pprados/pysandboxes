@@ -24,3 +24,5 @@ bind=${PWD},${PWD}/tests/unit_tests
 ro-bind=${PWD},${PWD}/tests
 py-sandbox=abc
 learning=True
+invalide-rule
+
