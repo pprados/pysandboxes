@@ -67,35 +67,29 @@ def test_ip4_netfilter_conv():
             ConfigLine("net=ALLOW|udp,tcp|192.168.0.1/32|*|IN", Path(), 0),
             ConfigLine("net=ALLOW|any|0.0.0.0/0|80,443|OUT", Path(), 0),
             ConfigLine("net=ALLOW|udp|0.0.0.0/0|53|OUT", Path(), 0),
+            ConfigLine("net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
         ], errors)
     ipfilter = rule_to_netfilter(rules, is_ipv6=False)
     print("\n".join(ipfilter))
     status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=False)
     assert status, msg
     assert sorted(
-        ['*filter', ':INPUT DROP [0:0]', ':FORWARD DROP [0:0]', ':OUTPUT DROP [0:0]',
+        ['*filter',
+         ':INPUT DROP [0:0]',
+         ':FORWARD DROP [0:0]',
+         ':OUTPUT DROP [0:0]',
          '-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
          '-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
-         '-A INPUT -p tcp -d 127.0.0.1/32 -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A INPUT -p tcp -d 127.0.0.1/32 -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A INPUT -p tcp -d 127.0.0.1/32 -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A INPUT -p tcp -d 192.0.0.0/8 -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A INPUT -p tcp -m multiport --dports 80 -m conntrack --ctstate NEW -j ACCEPT ',
-         '-A INPUT -p tcp -d 127.0.0.0/8 -m multiport --dports 0:65535  -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 0:65535  -j ACCEPT ',
-         '-A INPUT -p tcp -d 127.0.0.0/8 -m multiport --dports 80,443 -m conntrack --ctstate NEW -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 80,443 -j ACCEPT ',
-         '-A INPUT -p tcp -d 127.0.0.0/8 -m multiport --dports 0:65535  -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 0:65535  -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 53 -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 12:44  -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 1,3,4,5 -j ACCEPT ',
-         '-A INPUT -p tcp -d 192.168.0.1/32 -m multiport --dports 0:65535  -m conntrack --ctstate NEW -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 0:65535  -j ACCEPT ',
-         '-A INPUT -p tcp -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 80,443 -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 53 -j ACCEPT ', 'COMMIT'
-         ]) == sorted(ipfilter)
+         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 10.0.0.0/8  -m multiport --sports 0:65535  -j REJECT',
+         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.0/8  -m multiport --sports 0:65535  -j ACCEPT',
+         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.0.1/32  -m multiport --dports 0:65535  -j ACCEPT',
+         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -m multiport --sports 80,443 -j ACCEPT',
+         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 127.0.0.0/8  -m multiport --dports 80,443 -j ACCEPT',
+         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.1/32  -m multiport --sports 80,443 -j ACCEPT',
+         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.0.0.0/8  -m multiport --sports 80,443 -j ACCEPT',
+         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -m multiport --dports 80 -j ACCEPT',
+         'COMMIT']
+    ) == sorted(ipfilter)
 
 
 def test_ip6_netfilter_conv():
@@ -115,29 +109,22 @@ def test_ip6_netfilter_conv():
             ConfigLine("net=ALLOW|udp,tcp|2001:db8::/32|*|IN", Path(), 0),
             ConfigLine("net=ALLOW|any|2001:db8::/32|80,443|OUT", Path(), 0),
             ConfigLine("net=ALLOW|udp|2001:db8::/32|53|OUT", Path(), 0),
+            ConfigLine("net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
         ], errors)
     ipfilter = rule_to_netfilter(rules, is_ipv6=True)
     print("\n".join(ipfilter))
     status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=True)
     assert status, msg
     assert sorted(
-        ['*filter', ':INPUT DROP [0:0]', ':FORWARD DROP [0:0]', ':OUTPUT DROP [0:0]',
+        ['*filter',
+         ':INPUT DROP [0:0]',
+         ':FORWARD DROP [0:0]',
+         ':OUTPUT DROP [0:0]',
          '-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
          '-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
-         '-A INPUT -p tcp -d 2001:db8::/32 -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A INPUT -p tcp -d 2001:db8::/32 -m multiport --dports 80 -m conntrack --ctstate NEW -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 0:65535  -j ACCEPT ',
-         '-A INPUT -p tcp -d 2001:db8::/32 -m multiport --dports 0:65535  -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 80,443 -j ACCEPT ',
-         '-A INPUT -p tcp -d 2001:db8::/32 -m multiport --dports 80,443 -m conntrack --ctstate NEW -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 0:65535  -j ACCEPT ',
-         '-A INPUT -p tcp -d 2001:db8::/32 -m multiport --dports 0:65535  -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 53 -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 12:44  -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 1,3,4,5 -j ACCEPT ',
-         '-A INPUT -p tcp -d 2001:db8::/32 -m multiport --dports 0:65535  -m conntrack --ctstate NEW -j ACCEPT ',
-         '-A INPUT -p udp -m multiport --sports 0:65535  -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 80,443 -j ACCEPT ',
-         '-A INPUT -p tcp -d 2001:db8::/32 -m multiport --dports 80,443 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT ',
-         '-A OUTPUT -p udp -m multiport --dports 53 -j ACCEPT ',
+         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32  -m multiport --sports 0:65535  -j ACCEPT',
+         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -m multiport --dports 0:65535  -j ACCEPT',
+         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32  -m multiport --sports 80,443 -j ACCEPT',
+         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -m multiport --dports 80,443 -j ACCEPT',
+         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -m multiport --dports 80 -j ACCEPT',
          'COMMIT']) == sorted(ipfilter)

@@ -343,10 +343,9 @@ class LocalTaskDaemon(SSESandbox):
             await start_event.wait()
             while not self.uvicorn.started:
                 await asyncio.sleep(0.1)
-
+            logger.debug("Uvicorn started")
         finally:
             loop.slow_callback_duration = initial_threshold
-        logger.debug("Uvicorn started")
 
     async def shutdown(self) -> None:
         if not self.is_started:

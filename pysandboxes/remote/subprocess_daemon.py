@@ -265,7 +265,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 try:  # TODO: test in the server never response
                     async with session.get(
                             PING_SERVER_URL,
-                            timeout=INTERVAL_FOR_PING_DAEMON) as response:
+                            timeout=2) as response:
                         if response.status == 200:
                             break
                         else:

@@ -10,7 +10,10 @@ import dotenv
 import pysandboxes
 from pysandboxes import sandbox, sandboxes, SandBoxError
 
-dotenv.load_dotenv()
+try:
+    dotenv.load_dotenv()
+except PermissionError:
+    pass  # Ignore
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,9 @@ def init_log_level():
 @sandbox
 async def arun_in_sandbox():
     logger.info("Run 'arun_in_sandbox()' in sandbox")
+    _test_envs()
     _test_files()
+    _test_network()
     print(42)
     return 42
 

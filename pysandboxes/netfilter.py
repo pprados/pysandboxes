@@ -1,9 +1,9 @@
 # %%
-import ipaddress
 import socket
+from ipaddress import IPv4Network, IPv4Address, IPv6Network, IPv6Address
 from typing import List
 
-from .guard_socket import SocketRules
+from .guard_socket import SocketRules, Kind, Direction, Action
 
 _map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
 _map_netfilter_direction = {"OUT": "OUTPUT", "IN": "INPUT"}
@@ -34,12 +34,12 @@ def _build_netfilter(rule_type,
 
     network = ''
     if not ipv6:
-        if not isinstance(network_obj, ipaddress.IPv4Network):
+        if not isinstance(network_obj, IPv4Network):
             return ""
         if network_obj.compressed != '0.0.0.0/0':
             network = f'-d {network_obj.compressed} '
     else:
-        if not isinstance(network_obj, ipaddress.IPv6Network):
+        if not isinstance(network_obj, IPv6Network):
             return ""
         if network_obj.compressed != '::/0':
             network = f'-d {network_obj.compressed} '
@@ -72,15 +72,15 @@ def _build_port(rule_ports_list):
 def _build_network(network_obj, ipv6: bool):
     network = ''
     if not ipv6:
-        if not isinstance(network_obj, ipaddress.IPv4Network):
+        if not isinstance(network_obj, IPv4Network):
             return ""
         if network_obj.compressed != '0.0.0.0/0':
-            network = f'-d {network_obj.compressed} '
+            network = f'{network_obj.compressed} '
     else:
-        if not isinstance(network_obj, ipaddress.IPv6Network):
+        if not isinstance(network_obj, IPv6Network):
             return ""
         if network_obj.compressed != '::/0':
-            network = f'-d {network_obj.compressed} '
+            network = f'{network_obj.compressed} '
     return network
 
 def rule_to_netfilter(socket_rules: SocketRules,
@@ -93,76 +93,67 @@ def rule_to_netfilter(socket_rules: SocketRules,
         "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
         "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
     ]
-    if is_ipv6:
-        exclude = [socket.AF_INET, socket.IPPROTO_ICMP]
-    else:
-        exclude = [socket.AF_INET6, socket.IPPROTO_ICMPV6]
+    _map_direction = {Direction.IN: "INPUT", Direction.OUT: "OUTPUT"}
+    _map_action = {Action.ALLOW:"ACCEPT", Action.DENY:"REJECT"}
     for (action,
-         (families, rule_types, network_obj, rule_ports_list),
-         rule_direction_from_rule,_) in socket_rules:
+         (rule_kind, network, rule_ports_list),
+         rule_directions,
+         config) in socket_rules:
 
-        if not rule_types:
-            rule_types = set(SPEC_TO_TYPE_MAP.values())  # FIXME
-        for rule_type in rule_types:
+        for kind in rule_kind:
 
-            if is_ipv6 and isinstance(network_obj, ipaddress.IPv4Network):
-                continue
-            elif not is_ipv6 and isinstance(network_obj, ipaddress.IPv6Network):
-                continue
-            if rule_type in [socket.SOCK_STREAM]:
-                if rule_direction_from_rule == "OUT":
-                    s_ports = _build_port(rule_ports_list)
-                    if s_ports:
-                        multiport=f"-m multiport --dports {s_ports} "
+            # if is_ipv6 and isinstance(network_obj, ipaddress.IPv4Network):
+            #     continue
+            # elif not is_ipv6 and isinstance(network_obj, ipaddress.IPv6Network):
+            #     continue
+            for direction in rule_directions:
+                ports = _build_port(rule_ports_list)
+                if kind == Kind.TCP:
+                    if is_ipv6 and isinstance(network,
+                                              IPv6Network):
+                        network = _build_network(network, is_ipv6)
+                    elif not is_ipv6 and isinstance(network,IPv4Network):
+                        network = _build_network(network, is_ipv6)
                     else:
-                        multiport=''
-                    network = _build_network(network_obj, is_ipv6)
-                    ip_rule = (
-                            f"-A INPUT "
-                            f"-p tcp "
-                            f"{network}"
-                            f"{multiport}"
-                            f"-m conntrack --ctstate NEW,ESTABLISHED "
-                            f"-j {_map_netfilter_action[action]} "
-                    )
-                    netfilter.append(ip_rule)
-                else:
-                    d_ports = _build_port(rule_ports_list)
-                    if d_ports:
-                        multiport=f"-m multiport --dports {d_ports} "
+                        continue
+
+                    if direction == Direction.OUT:
+                        s_state="--ctstate NEW "
+                        s_ports="s"
+                        s_network=f"-d {network} " if network else ""
                     else:
-                        multiport=''
-                    network = _build_network(network_obj, is_ipv6)
-                    ip_rule = (
-                            f"-A INPUT "
-                            f"-p tcp "
-                            f"{network}"
+                        s_state="--ctstate NEW,ESTABLISHED "
+                        s_ports = "d"
+                        s_network = f"-s {network} " if network else ""
+
+                    if ports:
+                        multiport = f"-m multiport --{s_ports}ports {ports} "
+                    else:
+                        multiport = ''
+
+                    if kind == Kind.TCP:
+                        ip_rule = (
+                                f"-A {_map_direction[direction]} "
+                                f"-p tcp "
+                                f"-m conntrack "
+                                f"{s_state}"
+                                f"{s_network}"
+                                f"{multiport}"
+                                f"-j {_map_action[action]}"
+                        )
+                    elif kind == Kind.UDP:
+                        ip_rule = (
+                            f"-A {_map_direction[direction]} "
+                            f"-p udp "
+                            f"{s_network}"
                             f"{multiport}"
-                            f"-m conntrack --ctstate NEW "
-                            f"-j {_map_netfilter_action[action]} "
-                    )
-                    netfilter.append(ip_rule)
-            elif rule_type in [socket.SOCK_DGRAM]:
-                s_ports = _build_port(rule_ports_list)
-                if rule_direction_from_rule == "IN":
-                    sd="s"
-                else:
-                    sd="d"
-                if s_ports:
-                    multiport = f"-m multiport --{sd}ports {s_ports} "
-                else:
-                    multiport = ''
-                ip_rule = (
-                    f"-A {_map_netfilter_direction[rule_direction_from_rule]} "
-                    f"-p udp "
-                    f"{multiport}"
-                    f"-j {_map_netfilter_action[action]} "
-                )
-                netfilter.append(ip_rule)
-            elif rule_type in exclude:
-                pass # Ignore
-            else:
-                assert False, "Unkown kind"
+                            f"-j {_map_action[action]}"
+                        )
+                    else:
+                        assert "Internal error"
+                    # assert ip_rule not in netfilter
+                    if ip_rule not in netfilter:
+                        netfilter.append(ip_rule)
 
     netfilter.append("COMMIT")
     return netfilter

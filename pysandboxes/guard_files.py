@@ -107,10 +107,19 @@ def parse_rules(config: ConfigLines,
                     src = _Path(src).expanduser()
                     dest = _Path(dest).expanduser()
                     if not src.is_dir() or not dest.is_dir():
+                        cwd = Path.cwd()
+                        if src.is_relative_to(cwd):
+                            s_src="${PWD}/" + str(src.relative_to(cwd))
+                        else:
+                            s_src=str(src)
+                        if dest.is_relative_to(cwd):
+                            s_dest="${PWD}/" + str(dest.relative_to(cwd))
+                        else:
+                            s_dest=str(dest)
                         errors.append(
                             (
                                 f"{format_ruleref(rule)}: "
-                                f"In {rule.rule!r}, "
+                                f"In 'bind={s_src},{s_dest}', "
                                 f"source and destination must exists and be directories.",
                                 rule.path,
                                 rule.ln
@@ -137,8 +146,8 @@ def parse_rules(config: ConfigLines,
                                 break
                     else:
                         # Only one last "/"
-                        src_str = str(Path(src)) + "/" if src != "/" else "/"
-                        dest_str = str(Path(dest)) + "/" if dest != "/" else "/"
+                        src_str = str(Path(src)) + "/" if src != Path("/") else "/"
+                        dest_str = str(Path(dest)) + "/" if dest != Path("/") else "/"
                         rules_bind.append(BindRule(source=src_str,
                                                    dest=dest_str,
                                                    write=rule.rule.startswith(

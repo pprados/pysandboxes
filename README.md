@@ -324,6 +324,7 @@ The feature proposed by each technologies:
 | Vm compatible             |  ❌   |     ✅      |     ✅     |
 | Container<br/> compatible |  ❌   |     ✅      |     ❌     |
 
+>> During the learning phase, `os-sandbox` is forced to `subprocess`.
 
 >> Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 

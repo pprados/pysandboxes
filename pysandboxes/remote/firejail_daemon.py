@@ -1,20 +1,21 @@
 import importlib
 import logging
 import os
+import re
 import shlex
 import site
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Tuple, MutableSet, Any, Union, Dict
+from typing import List, Tuple, MutableSet, Any, Union, Dict, Optional
 
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, suggest_package_installation
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
-from ..sb_types import Envs, Args
-from ..tools import remove_comments, substitute_env_vars
+from ..sb_types import Envs, Args, ConfigLine
+from ..tools import remove_comments, substitute_env_vars;
 
 logger = logging.getLogger(__name__)
 
@@ -165,13 +166,13 @@ class FireJailDaemon(BaseSubProcessDaemon):
                      all_rules: AllRules,
                      envs: Envs,
                      ) -> AllRules:
-        # TODO: remove double rules. Use learning in all_rules
-        return all_rules
+        _, updated_all_rules = self._firejail_args(all_rules, envs, None)
+        return updated_all_rules
 
     def _firejail_args(self,
                        all_rules: AllRules,
-                       envs:Dict[str,str],
-                       pipe_path: Path,
+                       envs: Dict[str, str],
+                       pipe_path: Optional[Path],
                        ) -> Tuple[Args, AllRules]:
         """
         Apply the pysandboxes rules to firejail.
@@ -180,9 +181,14 @@ class FireJailDaemon(BaseSubProcessDaemon):
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
-            logger.error("And set 'restricted-network no'  in "  # FIXME: restricted-network with firejail
-                         "/etc/firejail/firejail.config")
             sys.exit(1)
+        firejail_config = Path("/etc/firejail/firejail.config")
+        restricted_network = True
+        if firejail_config.exists():
+            for line in firejail_config.read_text().split("\n"):
+                if re.match(r'restricted-network\s+no', line):
+                    restricted_network = False
+                    break
 
         need_root = False
         from importlib.resources import files
@@ -227,10 +233,11 @@ class FireJailDaemon(BaseSubProcessDaemon):
             ])
 
         # Add ignore files rules
-        for rule in filter(lambda x: isinstance(x,IgnoreRule),all_rules.file_rules):
+        keep_files_rules = []
+        for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
             args.append(f"--blacklist={rule.source}")
         for rule in sorted(
-                filter(lambda x: isinstance(x,BindRule),
+                filter(lambda x: isinstance(x, BindRule),
                        all_rules.file_rules,
                        ),
                 key=lambda x: len(x.dest),
@@ -241,71 +248,76 @@ class FireJailDaemon(BaseSubProcessDaemon):
                     whitelist.add(rule.source)
             else:
                 # Note: py-sandbox manage the alias
-                if rule.source not in whitelist:
+                if rule.source not in whitelist:  # FIXME
                     args.append(f"--whitelist={rule.source}")
                     whitelist.add(rule.source)
+                    keep_files_rules.append(rule)
                     need_root = True
             if not rule.write:
                 args.append(f"--read-only={rule.source}")
             else:
                 args.append(f"--read-write={rule.source}")
 
+        from ..guard_files import parse_rules as files_parse_rules
+        new_files_rules, _ = files_parse_rules(
+            [ConfigLine("bind=/,/", Path(), 0)], [])
+        all_rules = all_rules._replace(file_rules=tuple(new_files_rules))
+
         # Add pipe_path rule
         # with --private-tmp, need more parameters
-        args.append(f"--mkdir={str(pipe_path)}")
-        args.append(f"--whitelist={str(pipe_path)}")
-        args.append(f"--read-only={str(pipe_path)}")
+        if pipe_path:
+            args.append(f"--mkdir={str(pipe_path)}")
+            args.append(f"--whitelist={str(pipe_path)}")
+            args.append(f"--read-only={str(pipe_path)}")
 
         if all_rules.socket_rules:
-            # gw = get_default_gateway_info()
-            # if gw:  # Initialize the gateway
-            # FIXME: pour le dns, j'ai besoin de la gateway localhost
-            # C'est bon si le dns est externe et non localhost
-            # args.append(f"--defaultgw={gw[0]}")
-            # Avec --net, il n'est plus possible de se connecter8 depuis le host
-            # args.append(f"--net={gw[1]}")
-            # pass
+            if restricted_network:
+                logger.error(
+                    "Set 'restricted_network no' in %s "
+                    "to use firejail with networks rules.",
+                    repr(str(firejail_config)))
+                sys.exit(1)
 
-            net_filter4 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=False)
-            netfilter_file = tempfile.NamedTemporaryFile(mode='w+t',
-                                                         delete=False,
-                                                         # TODO: manager tmp file?
-                                                         encoding='utf-8').name
-            if DEBUG:
-                netfilter_file = "netfilter.net"
-                Path(netfilter_file).write_text("\n".join(net_filter4))
-            args.append(f"--netfilter={netfilter_file}")
+            if pipe_path:  # Update rules?
+                net_filter4 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=False)
+                netfilter_file = tempfile.NamedTemporaryFile(mode='w+t',
+                                                             delete=False,
+                                                             # TODO: manager tmp file?
+                                                             encoding='utf-8').name
+                if DEBUG:
+                    netfilter_file = "netfilter.net"
+                    Path(netfilter_file).write_text("\n".join(net_filter4))
+                args.append(f"--netfilter={netfilter_file}")
 
-            net_filter6 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=True)
-            netfilter6_file = tempfile.NamedTemporaryFile(mode='w+t',
-                                                          delete=False,
-                                                          # TODO: manager tmp file?
-                                                          encoding='utf-8').name
-            if DEBUG:
-                netfilter6_file = "netfilter6.net"
-                Path(netfilter6_file).write_text("\n".join(net_filter6))
-            args.append(f"--netfilter6={netfilter6_file}")
+                net_filter6 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=True)
+                netfilter6_file = tempfile.NamedTemporaryFile(mode='w+t',
+                                                              delete=False,
+                                                              # TODO: manager tmp file?
+                                                              encoding='utf-8').name
+                if DEBUG:
+                    netfilter6_file = "netfilter6.net"
+                    Path(netfilter6_file).write_text("\n".join(net_filter6))
+                args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove redondant sockets rules
-            socket_rules = []  # FIXME: Remove redondant sockets rules?
+            from ..guard_socket import parse_rules as socket_parse_rules
+            new_socket_rules, _ = socket_parse_rules(
+                [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
+            all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
-        # TODO: Add tmp rules
-        # --tmpfs DEST
+            # Clean env variable
+            args.extend(["env", "-i"])
+            for env, val in all_rules.envs.items():
+                args.append(f"{env}={val}")
 
-        # FIXME: use --env=name=value
-        args.extend(["env", "-i"])
-        for env, val in all_rules.envs.items():
-            args.append(f"{env}={val}")
+            if need_root:
+                logger.warning("Firejail needs root to run")
 
-        if need_root:
-            logger.warning("Firejail needs root to run")
-
-        # FIXME: ajustement des rules pour firejail ?
         return args, all_rules
 
     def subprocess_cmd(self,
                        all_rules: AllRules,
-                       envs:Dict[str,str],
+                       envs: Dict[str, str],
                        pipe_path: Path,
                        ) -> List[str]:
         run_daemon_cmd = super().subprocess_cmd(

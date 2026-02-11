@@ -239,7 +239,6 @@ def activate_sandboxes(
     if envs is None:
         envs = os.environ
     os_sandbox = all_rules.os_sandbox
-
     if os_sandbox:
         from pysandboxes.os_sandbox import providers_factory
         if os_sandbox not in providers_factory:
