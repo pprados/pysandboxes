@@ -7,7 +7,8 @@ import os
 import sys
 from importlib.abc import MetaPathFinder
 from types import ModuleType
-from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set
+from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set, \
+    Iterable
 
 from .e import RuleModuleNotFoundError
 from .immutable_dict import ImmutableDict
@@ -31,14 +32,6 @@ ImportRules = Tuple[str, ...]
 
 class LearnImportRule(NamedTuple):
     name: str
-
-
-_black_list = {
-    "ctypes",
-    "inspect",
-    "importlib",
-    "subprocess"
-}
 
 
 def _conv_patch_rules(patch_rules: Dict[str, Callable]) -> PatchRules:
@@ -247,36 +240,53 @@ def _activate_patch_import(
         global _patch_rules
         _patch_rules = patch_rules
 
-        _remove_modules()
         sys.meta_path.insert(0, _guard_finder)
-        sys.meta_path = tuple(sys.meta_path)  # Change to immutable list
         return True
     else:
-        logger.info("Guard_import was already activated.")
+        logger.debug("Guard_import was already activated.")
         return False
 
 
 # Modules to not remove from sys.modules, and to wait the lazy patch
 _not_refresh_modules: Set[str] = (
-        {
-            'importlib',
-            'concurrent',
-            'asyncio',
-            'warnings',
-            'logging',
-            '_pytest',
-            'pytest',
-            __name__.rsplit('.', maxsplit=1)[0],
-        } | set(sys.builtin_module_names)
+    {
+        'importlib',
+        'concurrent',
+        'asyncio',
+        'warnings',
+        'logging',
+        '_pytest',
+        'pytest',
+        __name__.rsplit('.', maxsplit=1)[0],
+    }  # | set(sys.builtin_module_names)
 )
 
+# sys.builtin_module_names
+xx = ('_abc', '_ast', '_codecs', '_collections', '_functools', '_imp', '_io', '_locale',
+      '_operator', '_signal',
+      '_sre', '_stat', '_string', '_suggestions', '_symtable', '_sysconfig', '_thread',
+      '_tokenize', '_tracemalloc',
+      '_typing', '_warnings', '_weakref',
+      # 'atexit',
+      'builtins',
+      # 'errno',
+      # 'faulthandler',
+      # 'gc',
+      # 'itertools',
+      # 'marshal',
+      # 'posix',
+      # 'pwd',
+      'sys',
+      # 'time'
+      )
 
-def _remove_modules() -> None:
+
+def remove_modules() -> None:
     import sys
     to_remove = set()
     for k, m in dict(sys.modules).items():
         # Detect system modules
-        if k in sys.builtin_module_names:  # Il y a builtins
+        if k in xx:  # Il y a builtins
             continue
         for special in _not_refresh_modules:
             if k == special or k.startswith(special + "."):
@@ -285,6 +295,7 @@ def _remove_modules() -> None:
             to_remove.add(k)
 
     importlib.invalidate_caches()
+    # Reload modules (may add modules with relead() )
     for k in to_remove:
         if k in sys.modules:
             if k in sys.builtin_module_names:
@@ -292,13 +303,29 @@ def _remove_modules() -> None:
                 if m:
                     importlib.reload(m)
                     pass
-            else:
+
+    # Remove modules
+    for k in to_remove:
+        if k in sys.modules:
+            if k not in sys.builtin_module_names:
                 del sys.modules[k]
-    pass
+
+    # Merge remove modules
+    # for k in to_remove:
+    #     if k in sys.modules:
+    #         if k in sys.builtin_module_names:
+    #             m = sys.modules[k]
+    #             if m:
+    #                 importlib.reload(m)
+    #                 pass
+    #         else:
+    #             del sys.modules[k]
+    # Tricky: if you use debugger, the io are reinjected
+    assert "io" not in sys.modules
 
 
 def patch_rules() -> Dict[str, Callable]:
-    return { }
+    return {}
 
 
 def activate_guard_import(
@@ -316,24 +343,146 @@ def activate_guard_import(
                 _apply_patch(builtins_module, module)
     _rules = rules
 
+_black_list = {
+    "ctypes",
+    "inspect",
+    "importlib",
+    "subprocess"
+}
 
-if "PYTEST_RUN_CONFIG" in os.environ:
-    def _deactivate_guard_import():
-        import sys
-        global _rules
-        _rules = ()
-        _remove_modules()
+_deprecated_modules = {
+    "aifc", "asynchat", "asyncore", "audioop", "cgi", "cgitb", "chunk",
+    "crypt", "distutils", "imghdr", "imp", "mailcap", "msilib", "nis",
+    "nntplib", "ossaudiodev", "pipes", "smtpd", "sndhdr", "spwd",
+    "sunau", "telnetlib", "uu", "xdrlib",
+}
+
+_std_modules = {
+    "__future__", "__main__", "_thread", "_tkinter", "abc", "argparse",
+    "array", "ast", "asyncio", "atexit", "base64", "bdb", "binascii",
+    "bisect", "builtins", "bz2", "calendar", "cmath", "cmd", "code",
+    "codecs", "codeop", "collections", "colorsys", "compileall",
+    "concurrent", "configparser", "contextlib", "contextvars", "copy",
+    "copyreg", "cProfile", "csv", "ctypes", "curses", "dataclasses",
+    "datetime", "dbm", "decimal", "difflib", "dis", "doctest", "email",
+    "encodings", "ensurepip", "enum", "errno", "faulthandler", "fcntl",
+    "filecmp", "fileinput", "fnmatch", "fractions", "ftplib",
+    "functools", "gc", "genericpath", "getopt", "getpass", "gettext",
+    "glob", "graphlib", "grp", "gzip", "hashlib", "heapq", "hmac",
+    "html", "http", "idlelib", "imaplib", "importlib", "inspect", "io",
+    "ipaddress", "itertools", "json", "keyword", "linecache", "locale",
+    "logging", "lzma", "mailbox", "marshal", "math", "mimetypes",
+    "mmap", "modulefinder", "msvcrt", "multiprocessing", "netrc",
+    "numbers", "ntpath", "operator", "optparse", "os", "pathlib", "pdb",
+    "pickle", "pickletools", "pkgutil", "platform", "plistlib",
+    "poplib", "posix", "posixpath", "pprint", "profile", "pstats",
+    "pty", "pwd", "py_compile", "pyclbr", "pydoc", "queue", "quopri",
+    "random", "re", "readline", "reprlib", "resource", "rlcompleter",
+    "runpy", "sched", "secrets", "select", "selectors", "shelve",
+    "shlex", "shutil", "signal", "site", "sitecustomize", "smtplib",
+    "socket", "socketserver", "sqlite3", "ssl", "stat", "statistics",
+    "string", "stringprep", "struct", "subprocess", "symtable", "sys",
+    "sysconfig", "syslog", "tabnanny", "tarfile", "tempfile",
+    "termios", "test", "textwrap", "threading", "time", "timeit",
+    "tkinter", "token", "tokenize", "tomllib", "trace", "traceback",
+    "tracemalloc", "tty", "turtle", "turtledemo", "types", "typing",
+    "unicodedata", "unittest", "urllib", "usercustomize", "uuid",
+    "venv", "warnings", "wave", "weakref", "webbrowser", "winreg",
+    "winsound", "wsgiref", "xml", "xmlrpc", "zipapp", "zipfile",
+    "zipimport", "zlib", "zoneinfo",
+}
+
+
+def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
+    """
+    Groups a list of strings by joining them with commas, respecting a maximum width.
+
+    Args:
+        items: The list of strings to group.
+        max_width: The maximum allowed width for each group.
+
+    Returns:
+        A list of strings, where each string is a comma-separated group.
+    """
+    if not items:
+        return []
+
+    grouped_items: List[str] = []
+    current_line: str = ""
+
+    for item in items:
+        # Check if a new line is needed
+        if not current_line:
+            current_line = item
+        else:
+            # Check if adding the new item exceeds the max width
+            # We add 2 to the length for the comma and space
+            if len(current_line) + len(item) + 2 <= max_width:
+                current_line += ", " + item
+            else:
+                # Add the current line to the list and start a new one
+                grouped_items.append(current_line)
+                current_line = item
+
+    # Append the last line if it's not empty
+    if current_line:
+        grouped_items.append(current_line)
+
+    return grouped_items
 
 
 def generate_rules(
         learn: Set[Any],
 ) -> List[str]:
     # Select only parent
-    result = set()
+    other_result = set()
+    standard_result = {
+        "socket"  # Pre-selection for daemon
+    }
+    deprecated_result = set()
     danger_result = set()
+    # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         if learn_rule.name in _black_list:
-            danger_result.add(f"python-import={learn_rule.name}  # \u26A0 Dangerous!")
+            danger_result.add(learn_rule.name)
+        elif learn_rule.name in _std_modules or learn_rule.name[0] == "_":
+            standard_result.add(learn_rule.name)
+        elif learn_rule.name in _deprecated_modules or learn_rule.name[0] == "_":
+            deprecated_result.add(learn_rule.name)
         else:
-            result.add(f"python-import={learn_rule.name}")
-    return list(danger_result) + list(result)
+            other_result.add(learn_rule.name)
+
+    # generate rules
+    width = 70
+    result =[]
+    if danger_result:
+        result.append("# \u26A0 Dangerous!")
+        result.extend(sorted(
+            [f"python-import={name}"
+             for name in _group_by_width(sorted(danger_result),width)]))
+        result.append("")
+    if standard_result:
+        result.append("# Standard Python")
+        result.extend(sorted(
+            [f"python-import={name}"
+             for name in _group_by_width(sorted(standard_result), width)]))
+        result.append("")
+    if deprecated_result:
+        result.append("# \u26A0 Deprecated Python module")
+        result.extend(sorted(
+            [f"python-import={name}"
+             for name in _group_by_width(sorted(deprecated_result), width)]))
+        result.append("")
+    if other_result:
+        result.append("# External modules (Are you sure about the origin?)")
+        result.extend(sorted(
+            [f"python-import={name}"
+             for name in sorted(other_result)]))
+    return result
+
+if "PYTEST_RUN_CONFIG" in os.environ:
+    def _deactivate_guard_import():
+        import sys
+        global _rules
+        _rules = ()
+        remove_modules()

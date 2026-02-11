@@ -48,9 +48,14 @@ def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
         guard_attributs=("meta_path",)
     )
 
-# TODO: activate guard self
 def patch_rules() -> Dict[str, Callable]:
     return {
-        "sys": _global_patch_in_sys_module,  # FIXME: bug in stdout tests
+        # "sys": _global_patch_in_sys_module,
     }
+
+
+def activate_guard() -> None:
+    import sys
+    sys.meta_path = tuple(sys.meta_path)  # Change to immutable list
+    sys.modules["sys"] = _global_patch_in_sys_module(sys.modules["sys"])
 

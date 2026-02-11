@@ -8,21 +8,17 @@ import pickle
 import sys
 import threading
 from pathlib import Path
+from sys import set_int_max_str_digits
 from typing import Optional
 
-from tblib import pickling_support
-
-from pysandboxes.remote.subprocess_daemon import DaemonParameters
 from .python_in_sb import python_in_sb
-from .tools import configure_logging_level, \
-    set_pdeathsig
+from .subprocess_daemon import DaemonParameters
+from .tools import set_pdeathsig
 from ..learning import is_learning_mode, generate_config_from_learning
 from ..private_loop import set_sandbox_loop
-from ..tools import SyncOrAsyncFunc
+from ..tools import SyncOrAsyncFunc,is_in_sandbox,set_is_in_sandbox
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
-
-pickling_support.install()
 
 
 # %%
@@ -83,9 +79,23 @@ def main() -> int:
     init_fn: Optional[SyncOrAsyncFunc] = None
     if process_config.init_fn:
         module_name, function_name = str(process_config.init_fn).split(':', 1)
+        set_is_in_sandbox(True)
+        # assert "io" not in sys.modules
+        # before=set(sys.modules)# Learn the import during the import
+        # logger.error("import init module")
         module = importlib.import_module(module_name)
-        init_fn = getattr(module, function_name)
+        # # assert "io" in sys.modules
+        # logger.error("imported and io found")
+        # from pysandboxes.guard_import import LearnImportRule
+        # from pysandboxes.learning import _learning
 
+        # xx=[x.name for x in filter(lambda x: isinstance(x, LearnImportRule), _learning)]
+        # assert "io" in xx, "verifie la capture"
+        # new_modules = set(sys.modules) - before  # Learn the import during the import
+        # logger.debug(f"{new_modules}")
+        set_is_in_sandbox(False) # Learn the import during the import
+        init_fn = getattr(module, function_name)
+        # init_fn = process_config.init_fn
     # Use python-sb command?
     if sandboxes_parsed._python_sb:
         return python_in_sb(
@@ -104,6 +114,10 @@ def main() -> int:
     task_daemon = LocalTaskDaemon(process_config.token)
     async def _run():
         try:
+            from tblib import pickling_support
+
+            pickling_support.install()
+
             set_sandbox_loop(asyncio.get_running_loop())
             await task_daemon.start(
                 all_rules=all_rules,
@@ -115,12 +129,6 @@ def main() -> int:
         finally:
             await task_daemon.shutdown()
     asyncio.run(_run())
-
-def shutdown():
-    logger.info("Shutting down... the daemon")
-    if is_learning_mode():
-        generate_config_from_learning()
-
 
 if __name__ == "__main__":
     # Kill this process when the parent is killed

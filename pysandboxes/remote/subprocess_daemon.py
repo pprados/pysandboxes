@@ -15,6 +15,7 @@ from typing import Callable, Optional, NamedTuple, List, Dict
 import aiohttp
 from aiohttp import ClientConnectorError
 
+from . import main_shutdown
 from .parameters import INTERVAL_FOR_PING_DAEMON
 from .sse_sandbox import SSESandbox, PING_SERVER_URL
 from ..all_rules import AllRules
@@ -275,7 +276,7 @@ class BaseSubProcessDaemon(SSESandbox):
     async def shutdown(self) -> None:
         from . import main_sandbox
         await self.async_call_in_sandbox(
-            main_sandbox.shutdown,
+            main_shutdown.shutdown,
             timeout=0,
         )
         if self._process:

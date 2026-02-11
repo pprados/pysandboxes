@@ -9,8 +9,6 @@ from concurrent.futures import Executor
 from functools import partial
 from typing import Any, Dict, Optional, Callable, Union
 
-import tblib
-
 from ..private_loop import get_sandbox_loop
 
 logger = logging.getLogger(__name__)
@@ -148,6 +146,8 @@ async def acatch_stdio(
                     queue.put(result)
             return result
         except Exception as e:
+            import tblib
+
             result = {
                 "exception": (e, tblib.Traceback(e.__traceback__))
             }

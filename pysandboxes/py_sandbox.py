@@ -8,11 +8,13 @@ from importlib import resources
 from pathlib import Path
 from typing import Optional, List, Dict, Set, cast
 
-from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import
+from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import, \
+    guard_self
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
 from .e import ConfigSyntaxError
+from .guard_import import remove_modules
 from .learning import activate_learning
 from .main_logger import format_ruleref, ErrorMsg
 from .sb_types import ConfigLines, Envs, ConfigLine
@@ -249,17 +251,23 @@ def activate_sandboxes(
     file_patch_rules = guard_files.patch_rules()
     socket_patch_rules = guard_socket.patch_rules()
     import_patch_rules = guard_import.patch_rules()
+    self_patch_rules = guard_self.patch_rules()
     guard_import.activate_guard_import(
         {
             **file_patch_rules,
             **socket_patch_rules,
             **env_patch_rules,
             **import_patch_rules,
+            **self_patch_rules,
         },
         all_rules.import_rules,
     )
+
+
     guard_envs.activate_guard(all_rules.envs_rules)
     guard_socket.activate_guard(all_rules.socket_rules)
     guard_files.activate_guard(all_rules.file_rules)
+    guard_self.activate_guard()
     if all_rules.learn:
         activate_learning(all_rules.learning_path)
+    remove_modules()

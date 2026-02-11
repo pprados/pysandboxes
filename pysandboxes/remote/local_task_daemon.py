@@ -19,6 +19,7 @@ from .parameters import PATH_RPC, HOST, PORT
 from .sse_sandbox import SSESandbox
 from .tools import from_b85, to_b85
 from ..all_rules import AllRules
+from ..guard_import import remove_modules
 from ..private_loop import sandbox_loop, get_sandbox_loop
 from ..sb_types import Args, Envs
 from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
@@ -293,6 +294,22 @@ class LocalTaskDaemon(SSESandbox):
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
+
+        # assert "io" not in sys.modules
+        # set_is_in_sandbox(True)
+        # s_init_fn=init_fn
+        # before=set(sys.modules)# Learn the import during the import
+        # remove_modules()
+        # assert "io" not in sys.modules
+        # removed_modules = set(sys.modules) - before  # Learn the import during the import
+        # module_name, function_name = str(s_init_fn).split(':', 1)
+        # before=set(sys.modules)# Learn the import during the import
+        # module = importlib.import_module(module_name)
+        # assert "io" in sys.modules
+        # imported_modules = set(sys.modules) - before  # Learn the import during the import
+        # logger.debug(f"{imported_modules}")
+        # # set_is_in_sandbox(False) # Learn the import during the import
+        # init_fn = getattr(module, function_name)
 
         if init_fn:
             if asyncio.iscoroutinefunction(init_fn):

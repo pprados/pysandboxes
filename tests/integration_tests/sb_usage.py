@@ -1,4 +1,5 @@
-import asyncio
+import asyncio  # FIXME protected?
+import ctypes
 import io
 import logging
 import os
@@ -45,24 +46,24 @@ def run_in_sandbox():
 
     # tcp connexion
     import socket
-    # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-    #     remote_ip = socket.gethostbyname("www.google.com")
-    #     xx = socket.gethostbyname_ex("www.google.com")
-    #     addr_infos = socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
-    #     sock.connect((remote_ip, 80))
-    #
-    # # tcp bind ipv4
-    # with socket.socket(AF_INET, SOCK_STREAM) as sock:
-    #     sock.bind(("localhost", 0))
-    #
-    # # tcp bind ipv6
-    # with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-    #     sock.bind(("::1", 0))
-    #
-    # # web connexion
-    # import requests
-    # f = requests.get("http://www.google.com/")
-    #
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        remote_ip = socket.gethostbyname("www.google.com")
+        xx = socket.gethostbyname_ex("www.google.com")
+        addr_infos = socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
+        sock.connect((remote_ip, 80))
+
+    # tcp bind ipv4
+    with socket.socket(AF_INET, SOCK_STREAM) as sock:
+        sock.bind(("localhost", 0))
+
+    # tcp bind ipv6
+    with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+        sock.bind(("::1", 0))
+
+    # web connexion
+    import requests
+    f = requests.get("http://www.google.com/")
+
     # udp connexion ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("127.0.0.1", 12345))
@@ -208,3 +209,12 @@ def main():
         print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")
+
+# from pysandboxes.sandboxes_api import sandboxes
+#
+# def init_sandbox():
+#     print("init")
+#
+# def main():
+#     with sandboxes(init_fn=init_sandbox):
+#         print("ok")

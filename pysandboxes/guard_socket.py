@@ -125,6 +125,7 @@ _rules: SocketRules = cast(SocketRules, ())
 
 def _yield_networks_from_string(input_str: str) -> Generator[
     Union[IPv4Network, IPv6Network], None, None]:
+    host_dns, _ = _read_host_file()
     try:
         # Case 1: The input is a network in CIDR notation (e.g., '192.168.1.0/24')
         network = ip_network(input_str, strict=False)
@@ -134,10 +135,13 @@ def _yield_networks_from_string(input_str: str) -> Generator[
     except ValueError:
         # Case 2: The input is a hostname (e.g., 'www.google.com')
         # Resolve all IPs for the hostname and treat each as a /32 or /128 network
-        addresses = socket.gethostbyname_ex(input_str)[2]
-        for ip_address_str in addresses:
-            ip = ip_address(ip_address_str)
-            yield ip_network(ip)
+        if input_str in host_dns:
+            yield ip_network(host_dns[input_str],strict=False)
+        else:
+            addresses = socket.gethostbyname_ex(input_str)[2]
+            for ip_address_str in addresses:
+                ip = ip_address(ip_address_str)
+                yield ip_network(ip)
 
 
 def _parse_rule(rule: ConfigLine,
@@ -473,7 +477,7 @@ def _check_address_with_rules(
                  rule_directions,
                  config) in socket_rules:
                 if action == rule_type_to_check:
-                    kind_match = (not rule_kind) or (
+                    kind_match = (rule_kind != Kind.UNKNOWN) or (
                             socket_kind in rule_kind)
 
                     if kind_match:
@@ -499,7 +503,7 @@ def _check_address_with_rules(
                                         )
                                     else:
                                         pysandboxes_logger.error(
-                                            "Connection to %s:%s "
+                                            "Connection to [%s]:%s "
                                             "DENIED by explicit rule "
                                             "'%s' from %s",
                                             ip_host, destination_port,
@@ -507,7 +511,7 @@ def _check_address_with_rules(
                                         )
                                         raise RuleSocketConnectionRefusedError(
                                             f"Guard network connection to "
-                                            f"{ip_host}:{destination_port} "
+                                            f"[{ip_host}]:{destination_port} "
                                             f"{action} by rule "
                                             f"{config.rule!r} "
                                             f"from {format_ruleref(config)})."
@@ -517,7 +521,7 @@ def _check_address_with_rules(
                                     if pysandboxes_logger.isEnabledFor(logging.DEBUG):
                                         if use_hostname:
                                             pysandboxes_logger.debug(
-                                                "Connection to '%s' (%s:%s) "
+                                                "Connection to '%s' ([%s]:%s) "
                                                 "ALLOW by explicit rule "
                                                 "'%s' from %s",
                                                 hostname, ip_host, destination_port,
@@ -525,7 +529,7 @@ def _check_address_with_rules(
                                             )
                                         else:
                                             pysandboxes_logger.debug(
-                                                "Connection to %s:%s "
+                                                "Connection to [%s]:%s "
                                                 "ALLOW by explicit rule "
                                                 "'%s' from %s",
                                                 ip_host, destination_port,
@@ -534,9 +538,9 @@ def _check_address_with_rules(
                                     return
     try:
         ip_address(hostname)
-        target = f'{hostname}:{destination_port}'
+        target = f'[{hostname}]:{destination_port}'
     except ValueError:
-        target = (f"'{hostname}:{destination_port}' "
+        target = (f"'[{hostname}]:{destination_port}' "
                   f"({' '.join([str(unique_ip) for unique_ip in unique_ips])}"
                   f"{destination_port}) ")
 
@@ -848,10 +852,10 @@ def activate_guard(rules: SocketRules) -> None:
 
 
 def _read_host_file() -> Tuple[
-    Set[str],
+    Dict[str, Union[IPv4Address, IPv6Address]],
     Dict[Union[IPv4Address, IPv6Address], str]
 ]:
-    dns: Set[str] = set()
+    dns: Dict[str, Union[IPv4Address, IPv6Address]] = {}
     inverse_dns: Dict[Union[IPv4Address, IPv6Address], str] = {}
     # Read the host file
     # Détecter le système d'exploitation pour trouver le bon chemin
@@ -878,7 +882,7 @@ def _read_host_file() -> Tuple[
                 if hosts:
                     inverse_dns[ip_address(ip)] = hosts[0]
                 for host in hosts:
-                    dns.add(host)
+                    dns[host] = ip_address(ip)
     # Force localhost
     return dns, inverse_dns
 
@@ -894,7 +898,7 @@ def generate_rules(
         if learn_rule.fn in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
             for ip in learn_rule.dns:
                 inverse_dns[ip] = learn_rule.address
-                dns.add(learn_rule.address)
+                dns[learn_rule.address]=ip
 
     # 2. Map access to dns
     by_destination = {}
@@ -930,23 +934,35 @@ def generate_rules(
                 in_out[1].append(learn_rule)
             by_destination[(destination, learn_rule.kind)] = in_out
 
+    # 3. Generate rules
+
+    # Try to find port alias
+    key_for_port={}
+    for k,v in os.environ.items():
+        if "port" in k.lower():
+            try:
+                # Look like a port?
+                int(v)
+                key_for_port[int(v)] = f"${{{k}}}"
+            except ValueError:
+                pass  # Ignore
     for (destination, kind), (in_rules_for_dest,
                               out_rules_for_dest) in by_destination.items():
         # Agregate ports
         if in_rules_for_dest:
-            in_ports = {str(rule.port) for rule in
+            in_ports = {key_for_port.get(rule.port,str(rule.port)) for rule in
                         in_rules_for_dest}  # Can not be a range
             result.add(
                 f"net=ALLOW|{learn_rule.kind.name}|"
                 f"{destination}|{','.join(in_ports)}|"
-                f"{learn_rule.direction.name}"
+                f"{Direction.IN.name}"
             )
         if out_rules_for_dest:
-            out_ports = {str(rule.port) for rule in
-                         out_rules_for_dest}  # Can not be a range
+            out_ports = {key_for_port.get(rule.port,str(rule.port)) for rule in
+                        out_rules_for_dest}  # Can not be a range
             result.add(
                 f"net=ALLOW|{learn_rule.kind.name}|"
                 f"{destination}|{','.join(out_ports)}|"
-                f"{learn_rule.direction.name}"
+                f"{Direction.OUT.name}"
             )
     return sorted(list(result))
