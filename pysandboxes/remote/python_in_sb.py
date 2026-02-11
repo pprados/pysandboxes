@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Dict, Union, Set
 
 from pysandboxes.learning import is_learning_mode, generate_config_from_learning
-from pysandboxes.sandboxes_api import sandboxes
 from pysandboxes.tools import set_is_in_sandbox
 from ..all_rules import AllRules
 
@@ -105,6 +104,7 @@ def _python_interactive(
 
 
 def _python_module(mod_name: str) -> int:
+    # FIX The sys.exit() is not propagated from remote
     import runpy
     runpy.run_module(mod_name, run_name="__main__")
     return 0
@@ -151,7 +151,7 @@ def convert_extra_rules(args: List[str]) -> Dict[str, Union[str, Set[str]]]:
 def python_in_sb(
         all_rules: AllRules,
         python_cmd: List[str],
-):
+) -> int:
     try:
         _debug_log()
         set_is_in_sandbox(True)
@@ -187,15 +187,26 @@ def python_in_sb(
         else:
             # Run a script
             _python_script(Path(python_cmd[0]), python_cmd[1:])
+        return 0
     finally:
         if is_learning_mode():
             generate_config_from_learning()
 
 
-if __name__ == "__main__":  # FIXME: for debug only
+if __name__ == "__main__":  # FIX_RELEASE: for debug only
     from ..all_rules import EmptyRules
+    rc = 0
+    try:
+        all_rules = EmptyRules
+        rc = python_in_sb(all_rules,
+                        [],
+                        )
+    except SystemExit as e:
+        rc = int(e.code)
+    except KeyboardInterrupt:
+        rc = 0
+    except Exception as e:
+        logger.error(f"Exception: {e}", exc_info=True)
+        rc = -1
+    sys.exit(rc)
 
-    all_rules = EmptyRules
-    python_in_sb(all_rules,
-                 [],
-                 )

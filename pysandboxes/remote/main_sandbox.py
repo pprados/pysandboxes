@@ -136,4 +136,4 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Exception: {e}", exc_info=True)
         rc = -1
-    sys.exit(rc)
+    os._exit(rc)

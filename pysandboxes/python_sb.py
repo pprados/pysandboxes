@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -41,49 +42,66 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
         sys.exit(-1)
 
     token = str(uuid.uuid4())
+    log_level = logging.getLogger().getEffectiveLevel()
 
     os_provider: BaseSubProcessDaemon = providers_factory[all_rules.os_sandbox](
         token,
         python_args=python_parsed_args
     )
+    if not isinstance(os_provider, BaseSubProcessDaemon):
+        async def run_locally():
+            try:
+                await os_provider.start(
+                    all_rules,
+                    log_level=log_level,
+                    envs=None,
+                    init_fn=None
+                )
+                from .remote.python_in_sb import python_in_sb
+                python_in_sb(all_rules, python_cmd)
+            finally:
+                await os_provider.shutdown()
+            return 0
+
+        return asyncio.run(run_locally())
     cmd = os_provider.subprocess_cmd(
         all_rules,
         envs=dict(all_rules.envs)  # Use the transformed version
     )
-    pipe_path = Path("/tmp/toto")  # FIXME
-    pipe_path.unlink(missing_ok=True)
-    python_cmd.extend(
-        ["--_named-pipe", str(pipe_path),
-         "--_python-sb"
-         ])
-    token = str(uuid.uuid4())
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
+        pipe_path.unlink(missing_ok=True)
+        python_cmd.extend(
+            ["--_named-pipe", str(pipe_path),
+             "--_python-sb"
+             ])
+        token = str(uuid.uuid4())
 
-    log_level = logging.getLogger().getEffectiveLevel()
-    process_config = DaemonParameters(
-        all_rules=all_rules,
-        log_level=log_level,
-        log_format=get_log_formatter(),
-        token=token,
-        init_fn=""
-    )
-    if all_rules.learning:
-        env = {**os.environ, **all_rules.envs}
-    else:
-        env = all_rules.envs
-
-    async def launch_and_wait():
-        process = await launch_sandbox(
-            cmd + python_cmd,
-            pipe_path,
-            envs=Envs(env),
-            process_config=process_config,
+        process_config = DaemonParameters(
+            all_rules=all_rules,
+            log_level=log_level,
+            log_format=get_log_formatter(),
+            token=token,
+            init_fn=""
         )
-        await process.wait()
+        if all_rules.learning:
+            env = {**os.environ, **all_rules.envs}
+        else:
+            env = all_rules.envs
 
-    asyncio.run(
-        launch_and_wait()
-    )
-    return 0  # Errorlevel
+        async def launch_and_wait():
+            process = await launch_sandbox(
+                cmd + python_cmd,
+                pipe_path,
+                envs=Envs(env),
+                process_config=process_config,
+            )
+            return await process.wait()
+
+        return_code = asyncio.run(
+            launch_and_wait()
+        )
+        return return_code
 
 
 if __name__ == "__main__":
@@ -97,4 +115,4 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Exception: {e}", exc_info=True)
         rc = -1
-    sys.exit(rc)
+    os._exit(rc)

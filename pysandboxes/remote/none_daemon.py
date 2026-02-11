@@ -30,7 +30,7 @@ class NoneDaemon(BaseDaemon):
     async def shutdown(self) -> None:
         set_is_in_sandbox(False)
         self._is_started = False
-        pass
+
 
 
     def update_rules(self,
