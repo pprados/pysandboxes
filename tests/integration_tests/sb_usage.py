@@ -1,5 +1,4 @@
 import asyncio  # FIXME protected?
-import ctypes
 import io
 import logging
 import os
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def init_log_level():
     level = logging.DEBUG
-    if True:  # TODO "PYTEST_RUN_CONFIG" in os.environ:
+    if True:  # FIX_RELEASE "PYTEST_RUN_CONFIG" in os.environ:
         format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     else:
         format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s: %(message)s'
@@ -83,13 +82,6 @@ def run_in_sandbox():
         sock.bind(("::1", 0))
 
     # ---------- File
-
-    # with open("README.md", "r"):
-    #     pass
-    # os.path.exists("./README.md")
-
-    # assert pathlib.Path("README.md").is_file()
-    # pathlib.Path("README.md").read_text()
 
     try:
         with io.open("tmp/test.remove", "w") as f:
@@ -201,7 +193,7 @@ def main():
         # # print("----------------")
         with sandboxes(async_init_sandbox,
                        # config_path="test.py-sandboxes",
-                       # learn=".py-sandboxes", # Learn all the times
+                       learn=".py-sandboxes", # Learn all the times
                        # os_sandbox="none",
                        ):
             run()

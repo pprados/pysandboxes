@@ -5,6 +5,7 @@ import importlib.util
 import logging
 import os
 import sys
+from importlib import resources
 from importlib.abc import MetaPathFinder
 from types import ModuleType
 from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set, \
@@ -74,25 +75,24 @@ def _apply_patch(module, name: str):
     logger.debug(f"Apply patch {name=} {module=}")
     all_patch = _patch_rules[name]
     for patch in all_patch:
-        cur_module = module
+        parent_object = None
+        cur_object = module
         if patch.module_name != "":
             paths = patch.module_name.split('.')
             for node in paths[:-1]:
-                cur_module = cur_module.__dict__[node]
-            if isinstance(cur_module.__dict__[paths[-1]], ModuleType):
-                sys.modules[name] = patch.patch_factory(cur_module)
-            else:
-                new_value = patch.patch_factory(cur_module.__dict__[paths[-1]])
-                assert not hasattr(cur_module.__dict__[paths[-1]],
+                parent_object = cur_object
+                cur_object = cur_object.__dict__[node]
+                new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
+                assert not hasattr(new_value,
                                    "__pysandbox__"), "Double injection"
                 if __debug__ and isinstance(new_value,
                                             type(
                                                 _apply_patch)):  # Fake kinds.FunctionType
                     new_value.__pysandbox__ = True  # Add a marker
-                cur_module.__dict__[paths[-1]] = new_value
+                setattr(cur_object, paths[-1], new_value)
         else:
             # Patch the entire module
-            sys.modules[name] = patch.patch_factory(cur_module)
+            sys.modules[name] = patch.patch_factory(cur_object)
 
 
 class GuardLoader(importlib.abc.Loader):
@@ -123,7 +123,7 @@ class GuardLoader(importlib.abc.Loader):
         This is where we add our custom logic after the standard loading.
         """
 
-        if not module:
+        if module is None:
             return
         if not is_learning_mode():
             if _rules and _rules[0] != "*":
@@ -252,32 +252,12 @@ _not_refresh_modules: Set[str] = (
         'importlib',
         'concurrent',
         'asyncio',
-        'warnings',
-        'logging',
-        '_pytest',
-        'pytest',
+        # 'warnings',
+        # '_pytest',
+        # 'pytest',
         __name__.rsplit('.', maxsplit=1)[0],
-    }  # | set(sys.builtin_module_names)
+    }
 )
-
-# sys.builtin_module_names
-xx = ('_abc', '_ast', '_codecs', '_collections', '_functools', '_imp', '_io', '_locale',
-      '_operator', '_signal',
-      '_sre', '_stat', '_string', '_suggestions', '_symtable', '_sysconfig', '_thread',
-      '_tokenize', '_tracemalloc',
-      '_typing', '_warnings', '_weakref',
-      # 'atexit',
-      'builtins',
-      # 'errno',
-      # 'faulthandler',
-      # 'gc',
-      # 'itertools',
-      # 'marshal',
-      # 'posix',
-      # 'pwd',
-      'sys',
-      # 'time'
-      )
 
 
 def remove_modules() -> None:
@@ -285,8 +265,6 @@ def remove_modules() -> None:
     to_remove = set()
     for k, m in dict(sys.modules).items():
         # Detect system modules
-        if k in xx:  # Il y a builtins
-            continue
         for special in _not_refresh_modules:
             if k == special or k.startswith(special + "."):
                 break
@@ -308,18 +286,6 @@ def remove_modules() -> None:
         if k in sys.modules:
             if k not in sys.builtin_module_names:
                 del sys.modules[k]
-
-    # Merge remove modules
-    # for k in to_remove:
-    #     if k in sys.modules:
-    #         if k in sys.builtin_module_names:
-    #             m = sys.modules[k]
-    #             if m:
-    #                 importlib.reload(m)
-    #                 pass
-    #         else:
-    #             del sys.modules[k]
-    # Tricky: if you use debugger, the io are reinjected
     assert "io" not in sys.modules
 
 
@@ -342,54 +308,7 @@ def activate_guard_import(
                 _apply_patch(builtins_module, module)
     _rules = rules
 
-_black_list = {
-    "ctypes",
-    "inspect",
-    "importlib",
-    "subprocess"
-}
 
-_deprecated_modules = {
-    "aifc", "asynchat", "asyncore", "audioop", "cgi", "cgitb", "chunk",
-    "crypt", "distutils", "imghdr", "imp", "mailcap", "msilib", "nis",
-    "nntplib", "ossaudiodev", "pipes", "smtpd", "sndhdr", "spwd",
-    "sunau", "telnetlib", "uu", "xdrlib",
-}
-
-_std_modules = {
-    "__future__", "__main__", "_thread", "_tkinter", "abc", "argparse",
-    "array", "ast", "asyncio", "atexit", "base64", "bdb", "binascii",
-    "bisect", "builtins", "bz2", "calendar", "cmath", "cmd", "code",
-    "codecs", "codeop", "collections", "colorsys", "compileall",
-    "concurrent", "configparser", "contextlib", "contextvars", "copy",
-    "copyreg", "cProfile", "csv", "ctypes", "curses", "dataclasses",
-    "datetime", "dbm", "decimal", "difflib", "dis", "doctest", "email",
-    "encodings", "ensurepip", "enum", "errno", "faulthandler", "fcntl",
-    "filecmp", "fileinput", "fnmatch", "fractions", "ftplib",
-    "functools", "gc", "genericpath", "getopt", "getpass", "gettext",
-    "glob", "graphlib", "grp", "gzip", "hashlib", "heapq", "hmac",
-    "html", "http", "idlelib", "imaplib", "importlib", "inspect", "io",
-    "ipaddress", "itertools", "json", "keyword", "linecache", "locale",
-    "logging", "lzma", "mailbox", "marshal", "math", "mimetypes",
-    "mmap", "modulefinder", "msvcrt", "multiprocessing", "netrc",
-    "numbers", "ntpath", "operator", "optparse", "os", "pathlib", "pdb",
-    "pickle", "pickletools", "pkgutil", "platform", "plistlib",
-    "poplib", "posix", "posixpath", "pprint", "profile", "pstats",
-    "pty", "pwd", "py_compile", "pyclbr", "pydoc", "queue", "quopri",
-    "random", "re", "readline", "reprlib", "resource", "rlcompleter",
-    "runpy", "sched", "secrets", "select", "selectors", "shelve",
-    "shlex", "shutil", "signal", "site", "sitecustomize", "smtplib",
-    "socket", "socketserver", "sqlite3", "ssl", "stat", "statistics",
-    "string", "stringprep", "struct", "subprocess", "symtable", "sys",
-    "sysconfig", "syslog", "tabnanny", "tarfile", "tempfile",
-    "termios", "test", "textwrap", "threading", "time", "timeit",
-    "tkinter", "token", "tokenize", "tomllib", "trace", "traceback",
-    "tracemalloc", "tty", "turtle", "turtledemo", "types", "typing",
-    "unicodedata", "unittest", "urllib", "usercustomize", "uuid",
-    "venv", "warnings", "wave", "weakref", "webbrowser", "winreg",
-    "winsound", "wsgiref", "xml", "xmlrpc", "zipapp", "zipfile",
-    "zipimport", "zlib", "zoneinfo",
-}
 
 
 def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
@@ -433,6 +352,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
 def generate_rules(
         learn: Set[Any],
 ) -> List[str]:
+    # FIXME: fichier pour std package FIXME: windows path
     # Select only parent
     other_result = set()
     standard_result = {
@@ -440,25 +360,28 @@ def generate_rules(
     }
     deprecated_result = set()
     danger_result = set()
+    black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())
+    std_modules = set(resources.read_text(__name__, "modules_standard.txt").split())
+    deprecated_modules = set(resources.read_text(__name__, "modules_deprecated.txt").split())
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
-        if learn_rule.name in _black_list:
+        if learn_rule.name in black_list:
             danger_result.add(learn_rule.name)
-        elif learn_rule.name in _std_modules or learn_rule.name[0] == "_":
+        elif learn_rule.name in std_modules or learn_rule.name[0] == "_":
             standard_result.add(learn_rule.name)
-        elif learn_rule.name in _deprecated_modules or learn_rule.name[0] == "_":
+        elif learn_rule.name in deprecated_modules or learn_rule.name[0] == "_":
             deprecated_result.add(learn_rule.name)
         else:
             other_result.add(learn_rule.name)
 
     # generate rules
     width = 70
-    result =[]
+    result = []
     if danger_result:
         result.append("# \u26A0 Dangerous!")
         result.extend(sorted(
             [f"python-import={name}"
-             for name in _group_by_width(sorted(danger_result),width)]))
+             for name in _group_by_width(sorted(danger_result), width)]))
         result.append("")
     if standard_result:
         result.append("# Standard Python")
@@ -478,6 +401,7 @@ def generate_rules(
             [f"python-import={name}"
              for name in sorted(other_result)]))
     return result
+
 
 if "PYTEST_RUN_CONFIG" in os.environ:
     def _deactivate_guard_import():

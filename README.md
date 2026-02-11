@@ -120,7 +120,7 @@ IPython 8.37.0 -- An enhanced Interactive Python. Type '?' for help.
 
 If IPython is installed, it's used. All the standard python parameters are availables.
 
-It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example.
+It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
 
 During the first launch, noting that there is no `.pysandboxes` parameter file, the application starts in learning mode. Use your application in all its capacities, so that the solution learns network and disk usage, imported modules, usage of environment variables, etc.
 When the application is stopped, a `.pysandboxes` file is created in the current directory. It has been populated with all the learned rules. We invite you to review this file to make any necessary adjustments.
@@ -141,6 +141,30 @@ In this scenario, your application will be split into two parts:
 
   - The core of the application, with all privileges.
   - A sandbox, where the code annotated with `@sandbox` will be executed.
+
+```mermaid
+flowchart TD
+    subgraph MainApplicationFullPrivileges [Main Application Full Privileges]
+        direction LR
+        A[Caller Code]
+    end
+
+    subgraph SandboxEnvironment [Sandbox Environment]
+        direction LR
+        B(SSE<br/>Server)
+        subgraph OSSandbox [OS Sandbox e.g. firejail]
+            subgraph PySandbox [Py Sandbox Child Process]
+                C["@sandbox<br/>my_function(...)"]
+            end
+        end
+    end
+
+    A -- "1- my_function(param)" --> B
+    B -- "2- Execute via IPC (Pickle)" --> C
+    C -- "3- Return result/exception" --> B
+    B -- "4- Propagate to caller" --> A
+
+```
 
 ### Launching the Sandbox
 

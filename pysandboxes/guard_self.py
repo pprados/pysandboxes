@@ -48,21 +48,19 @@ class GuardModule(ModuleType):
 
 def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
     # Note: PEP726 is rejeted
-    import sys
     # sys.modules = AppendOnlyDict(
     #     module.modules,
     #     onetime_set={"sys"})
-    # guard_module = GuardModule(
-    #     module.__name__,
-    #     original=module,
-    #     guard_attributs=("meta_path", "modules")
-    # )
-    # return guard_module
-    return module
+    guard_module = GuardModule(
+        module.__name__,
+        original=module,
+        guard_attributs=("meta_path", "modules")
+    )
+    return guard_module
+    # return module
 
 def patch_rules() -> Dict[str, Callable]:
     return {
-        # "sys": _global_patch_in_sys_module,
     }
 
 

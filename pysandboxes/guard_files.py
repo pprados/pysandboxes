@@ -1122,12 +1122,6 @@ def patch_rules() -> Dict[str, Callable]:
 
 
 # %%
-if "PYTEST_RUN_CONFIG" in os.environ:
-    def _deactivate_guard_files():
-        global _rules
-        _rules = ()
-
-
 def activate_guard(
         rules: FileRules
 ) -> None:
@@ -1141,3 +1135,10 @@ def activate_guard(
     if _rules:
         logger.debug("Guard_files was already activated.")
     _rules = rules
+
+if "PYTEST_RUN_CONFIG" in os.environ:
+    def _deactivate_guard_files():
+        global _rules
+        _rules = ()
+
+

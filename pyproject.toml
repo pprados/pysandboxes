@@ -38,8 +38,10 @@ dependencies = [
 ]
 
 [project.scripts]
-#python-sb = "pysandboxes.python_sb:main"
-#python3-sb = "pysandboxes.python_sb:main"
+python-sb = "pysandboxes.python_sb:main"
+python3-sb = "pysandboxes.python_sb:main"
+ipython-sb = "pysandboxes.python_sb:main"
+ipython3-sb = "pysandboxes.python_sb:main"
 
 [tool.poetry.group.dev]
 optional = true

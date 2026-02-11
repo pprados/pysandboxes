@@ -1,5 +1,18 @@
 import logging
+import traceback
 from typing import Any, Mapping, Set
+
+
+def _check_called_by_imporlib(key) -> bool:
+    return True
+    import sys
+    frame = sys._getframe()
+    while frame and not frame.f_globals.get("__name__").startswith("importlib"):
+        frame = frame.f_back
+    if not frame:
+        return False
+    print(f"called by importlib for {key=}")
+    return True
 
 
 class AppendOnlyDict(dict):
@@ -7,54 +20,78 @@ class AppendOnlyDict(dict):
     A dictionary that only allows adding new key-value pairs.
     Deletion and modification of existing items are not permitted.
     """
-    def __init__(self,copy:dict,onetime_set:Set[str]):
-        super().__init__(copy)
-        self._onetime_set=onetime_set
+    # def __init__(self,copy:dict,onetime_set:Set[str]):
+    #     super().__init__(copy)
+    #     self._onetime_set=onetime_set
+    #     self._delay_change_order={}
 
-    def __setitem__(self, key: Any, value: Any) -> None:
-        """
-        Sets a new key-value pair.
-        Prevents modification of existing keys.
-        """
-        if key in self._onetime_set:
-            self._onetime_set.remove(key)
-            return super().__setitem__(key, value)
-
-        if key not in self:
-            super().__setitem__(key, value)
-        else:
-            print("Ignore set %s",repr(key))
-
-    def __delitem__(self, key: Any) -> None:
-        """
-        Prevents deletion of items.
-        """
-        print("Ignore del %s", repr(key))
-        pass  # Ignore
-
-    def pop(self, key: Any, *args: Any) -> Any:
-        """
-        Prevents popping items.
-        """
-        print("Ignore pop %s", repr(key))
-        pass  # Ignore
-
-    def update(self, other: Any, **kwargs: Any) -> None:
-        """
-        Updates the dictionary with another dictionary.
-        Prevents modification of existing keys.
-        """
-        if isinstance(other, Mapping):
-            for key,val in other.items():
-                if key not in self:
-                      self[key] = val
-                else:
-                    print("Ignore update %s",repr(key))
-            return
-        if kwargs:
-            for key,val in kwargs.items():
-                if key not in self:
-                    self[key]=val
-                else:
-                    print("Ignore update %s", repr(key))
-        return
+    # def __setitem__(self, key: Any, value: Any) -> None:
+    #     """
+    #     Sets a new key-value pair.
+    #     Prevents modification of existing keys.
+    #     """
+    #     # if key in self._delay_change_order:
+    #     #     previous_val=self._delay_change_order[key]
+    #     #     if value is previous_val:  # Detect a move order
+    #     #         del self._delay_change_order[key]
+    #     #         print(f"delay change order {key=}")
+    #     #         super().pop(key)
+    #     #         super().__setitem__(key, value)
+    #     #     return
+    #
+    #     if not _check_called_by_imporlib(key):
+    #         if key in self._onetime_set:
+    #             self._onetime_set.remove(key)
+    #             return super().__setitem__(key, value)
+    #
+    #         if key not in self:
+    #             super().__setitem__(key, value)
+    #         else:
+    #             print("Ignore set %s",repr(key))
+    #     else:
+    #         return super().__setitem__(key,value)
+    #
+    # def __delitem__(self, key: Any) -> None:
+    #     """
+    #     Prevents deletion of items.
+    #     """
+    #     if not _check_called_by_imporlib(key):
+    #         print("Ignore del %s", repr(key))
+    #         pass  # Ignore
+    #         self._delay_change_order[key]=self[key]
+    #     else:
+    #         return super().__delitem__(key)
+    #
+    # def pop(self, key: Any, *args: Any) -> Any:
+    #     """
+    #     Prevents popping items.
+    #     """
+    #     if not _check_called_by_imporlib(key):
+    #         print("Ignore pop %s", repr(key))
+    #         self._delay_change_order[key]=self[key]
+    #         return self[key]
+    #     else:
+    #         return super().pop(key)
+    #
+    # def update(self, other: Any, **kwargs: Any) -> None:
+    #     """
+    #     Updates the dictionary with another dictionary.
+    #     Prevents modification of existing keys.
+    #     """
+    #     if not _check_called_by_imporlib(None):
+    #         if isinstance(other, Mapping):
+    #             for key,val in other.items():
+    #                 if key not in self:
+    #                       self[key] = val
+    #                 else:
+    #                     print("Ignore update %s",repr(key))
+    #             return
+    #         if kwargs:
+    #             for key,val in kwargs.items():
+    #                 if key not in self:
+    #                     self[key]=val
+    #                 else:
+    #                     print("Ignore update %s", repr(key))
+    #         return
+    #     else:
+    #         return super().update(other, **kwargs)
