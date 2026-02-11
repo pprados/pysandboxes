@@ -89,8 +89,7 @@ async def launch_sandbox(
         process_config: DaemonParameters,
 ) -> Process:
     os.mkfifo(pipe_path)
-    DEBUG = False  # FIXME
-    if DEBUG:
+    if False:
         Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
                                   cmd[0] + " " +
                                   " \\\n  ".join(
@@ -157,7 +156,6 @@ class BaseSubProcessDaemon(SSESandbox):
 
     def subprocess_cmd(self,
                        all_rules: AllRules,
-                       envs: Envs,
                        ) -> Args:
         from . import main_sandbox
         cmd_parameters = [
@@ -177,14 +175,10 @@ class BaseSubProcessDaemon(SSESandbox):
                     all_rules: AllRules,
                     *,
                     log_level: int,
-                    envs: Optional[Envs],
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
-        if envs is None:
-            envs = dict(os.environ)
         self.restart = 0
         await self._re_start(all_rules,
-                             envs=envs,
                              log_level=log_level,
                              init_fn=init_fn,
                              first=True,
@@ -193,7 +187,6 @@ class BaseSubProcessDaemon(SSESandbox):
     async def _re_start(self,
                         all_rules: AllRules,
                         *,
-                        envs: Envs,
                         log_level: int,
                         init_fn: Optional[SyncOrAsyncFunc],
                         first: bool = False) -> None:
@@ -204,7 +197,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 os_sandbox=all_rules.os_sandbox,
                 use_py_sandbox=all_rules.use_py_sandbox,
                 learning_path=all_rules.learning_path,
-                learning=all_rules.learning,
+                learn=all_rules.learn,
                 envs_rules=(),
                 socket_rules=(),
                 file_rules=(),
@@ -214,7 +207,6 @@ class BaseSubProcessDaemon(SSESandbox):
                 all_rules,
                 self.subprocess_cmd(
                     all_rules=short_all_rules,
-                    envs=envs,
                 ),
                 log_level=log_level,
                 init_fn=init_fn,
@@ -251,7 +243,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 init_fn=init_fn_ref
             )
 
-            if all_rules.learning:
+            if all_rules.learn:
                 env = {**os.environ, **all_rules.envs}
             else:
                 env = all_rules.envs
@@ -317,7 +309,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 await asyncio.sleep(wait_time)
                 await self.shutdown()
                 self._last_reset = time.time()
-                await self._re_start()
+                await self._re_start()  # FIXME: mauvais parametres
         return errorlevel
 
 

@@ -19,21 +19,28 @@ from .remote.parse_cpython_args import parse_python_cmd_line
 logger = logging.getLogger(__name__)
 
 
-def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
+def main() -> int:  # FIXME: vérifier sauvegarde en cas de learn
     """
     Parses command-line arguments and run the cpython in sandbox
     """
     python_parsed_args, sandboxes_args, python_cmd = parse_python_cmd_line(sys.argv[1:])
 
     extra_rules = convert_extra_rules(sandboxes_args)
-    if "learning" in extra_rules:
-        v = extra_rules["learning"]
-        if not v or '' in v:
-            extra_rules["learning"] = CONFIG_NAME
+    config_path = Path(tuple(extra_rules.get("learn", CONFIG_NAME))[0])
 
     try:
+        if not '/' in str(config_path) and len(python_cmd) >= 2 and python_cmd[0] == "-m":
+            # learn is a filename, not a full filename
+            # and use -m syntax. So search the config file in the module
+            from importlib.resources import files
+            caller_module = python_cmd[1].split('.', 1)[0]
+            resource_path = files(caller_module)
+            resource_config = resource_path / config_path
+            if resource_config and resource_config.exists():
+                config_path = resource_config
+
         all_rules = load_and_parse_config(
-            config_path=Path(extra_rules.get("learning", CONFIG_NAME)),
+            config_path=config_path,
             envs=dict(os.environ),  # Use current environ
             **extra_rules
         )
@@ -66,7 +73,7 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
         return asyncio.run(run_locally())
     cmd = os_provider.subprocess_cmd(
         all_rules,
-        envs=dict(all_rules.envs)  # Use the transformed version
+        envs=all_rules.envs
     )
     with tempfile.TemporaryDirectory() as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
@@ -84,7 +91,7 @@ def main() -> int:  # FIXME: vérifier sauvegarde en cas de learning
             token=token,
             init_fn=""
         )
-        if all_rules.learning:
+        if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
         else:
             env = all_rules.envs

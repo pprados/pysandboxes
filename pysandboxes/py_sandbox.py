@@ -61,12 +61,12 @@ def load_and_parse_config(
     The function follows this logic to find and process the configuration:
     - If `config_path` is not provided, it defaults to "./.py-sandboxes".
     - If the configuration file does not exist at the specified or default path,
-      the sandbox enters learning mode. At the end of the execution, it will
+      the sandbox enters learn mode. At the end of the execution, it will
       create a new configuration file at "./.py-sandboxes" based on the
       activities observed.
     - If `config_path` points to an existing file, that file is used for
       configuration.
-    - If the configuration file contains a `--learning` directive pointing to
+    - If the configuration file contains a `--learn` directive pointing to
       itself, any new rules generated during the run are appended to the end of
       the file. The original file is backed up with a `.old` suffix before
       being modified.
@@ -123,8 +123,8 @@ def load_and_parse_config(
             config_path = Path.cwd() / config_path
 
     if not config_path.exists():
-        # Activate the learning mode
-        # Load the template, and add learning mode
+        # Activate the learn mode
+        # Load the template, and add learn mode
         with resources.as_file(
                 resources.files(
                     pysb_module_name + '.templates') / 'py-sandbox.template'
@@ -189,7 +189,7 @@ def parse_config(
     others = substitute_config_env_vars(others, ienvs)  # with main envs
 
     # 3. Parse others rules
-    os_sandbox, use_py_sandbox, learning_path, learning, others = guard_provider.parse_rules(
+    os_sandbox, use_py_sandbox, learning_path, learn, others = guard_provider.parse_rules(
         others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
@@ -217,7 +217,7 @@ def parse_config(
                     os_sandbox=os_sandbox,
                     use_py_sandbox=use_py_sandbox,
                     learning_path=learning_path,
-                    learning=learning,
+                    learn=learn,
                     envs_rules=envs_rules,
                     socket_rules=socket_rules,
                     file_rules=files_rules,
@@ -261,5 +261,5 @@ def activate_sandboxes(
     guard_envs.activate_guard(all_rules.envs_rules)
     guard_socket.activate_guard(all_rules.socket_rules)
     guard_files.activate_guard(all_rules.file_rules)
-    if all_rules.learning:
+    if all_rules.learn:
         activate_learning(all_rules.learning_path)

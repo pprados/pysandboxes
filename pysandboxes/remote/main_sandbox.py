@@ -108,7 +108,6 @@ def main() -> int:
             await task_daemon.start(
                 all_rules=all_rules,
                 log_level=process_config.log_level,
-                envs=None,
                 init_fn=init_fn,
             )
             await task_daemon.join()
@@ -135,5 +134,5 @@ if __name__ == "__main__":
         rc = 0
     except Exception as e:
         logger.error(f"Exception: {e}", exc_info=True)
-        rc = -1
+        rc = 1
     os._exit(rc)

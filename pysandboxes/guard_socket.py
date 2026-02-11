@@ -756,7 +756,7 @@ def patch_rules() -> Dict[str, Callable]:
         "socket.socket":
             lambda x: Guard_socket,
         # FIXME: Use patch for method?
-        # FIXME: patch gethostbyname() only if learning ?
+        # FIXME: patch gethostbyname() only if learn ?
         "socket.gethostbyname": _wrap_socket_gethostbyname,
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "socket.getaddrinfo": _wrap_socket_getaddrinfo,

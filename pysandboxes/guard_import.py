@@ -15,6 +15,7 @@ from .immutable_dict import ImmutableDict
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import ErrorMsg
 from .sb_types import ConfigLines
+from .tools import is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,14 @@ ImportRules = Tuple[str, ...]
 
 class LearnImportRule(NamedTuple):
     name: str
+
+
+_black_list = {
+    "ctypes",
+    "inspect",
+    "importlib",
+    "subprocess"
+}
 
 
 def _conv_patch_rules(patch_rules: Dict[str, Callable]) -> PatchRules:
@@ -78,14 +87,15 @@ def _apply_patch(module, name: str):
             paths = patch.module_name.split('.')
             for node in paths[:-1]:
                 cur_module = cur_module.__dict__[node]
-            if isinstance(cur_module.__dict__[paths[-1]],ModuleType):
+            if isinstance(cur_module.__dict__[paths[-1]], ModuleType):
                 sys.modules[name] = patch.patch_factory(cur_module)
             else:
                 new_value = patch.patch_factory(cur_module.__dict__[paths[-1]])
                 assert not hasattr(cur_module.__dict__[paths[-1]],
                                    "__pysandbox__"), "Double injection"
                 if __debug__ and isinstance(new_value,
-                                            type(_apply_patch)):  # Fake types.FunctionType
+                                            type(
+                                                _apply_patch)):  # Fake types.FunctionType
                     new_value.__pysandbox__ = True  # Add a marker
                 cur_module.__dict__[paths[-1]] = new_value
         else:
@@ -123,10 +133,7 @@ class GuardLoader(importlib.abc.Loader):
 
         if not module:
             return
-        if is_learning_mode():
-            if module.__name__ not in _rules:
-                add_learning_rule(LearnImportRule(module.__name__))
-        else:
+        if not is_learning_mode():
             if _rules and _rules[0] != "*":
                 module_name = module.__name__
                 if module_name not in _rules:
@@ -214,6 +221,14 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     )
             else:
                 new_spec = original_spec
+            if is_learning_mode() and is_in_sandbox():
+                module_name = fullname.split('.', 1)[0]
+                if module_name not in _rules and module_name != "pysandboxes":
+                    add_learning_rule(LearnImportRule(module_name))
+                    logger.error("Add %s", repr(module_name))
+            else:
+                # logger.error("Ignore %s",repr(fullname))
+                pass
             return new_spec
 
         # For all other imports, return None to let the standard import
@@ -279,6 +294,7 @@ def _remove_modules() -> None:
                     pass
             else:
                 del sys.modules[k]
+    pass
 
 
 class GuardModule(ModuleType):
@@ -299,7 +315,7 @@ class GuardModule(ModuleType):
             super().__init__(name)
             GuardModule._states[self] = ImmutableDict({})
         else:
-            assert(original)
+            assert (original)
             super().__init__(original.__name__)
             GuardModule._states[self] = ImmutableDict(
                 {
@@ -308,7 +324,7 @@ class GuardModule(ModuleType):
             self.__dict__.update(original.__dict__)
 
     def __setattr__(self, name: str, value: object) -> None:
-        guard_attributs = GuardModule._states[self].get("guard_attributs",set())
+        guard_attributs = GuardModule._states[self].get("guard_attributs", set())
         if name in guard_attributs:
             raise RuleAttributeError(
                 f"Cannot set attribute {self.__name__ + "." + name!r}")
@@ -321,7 +337,8 @@ def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
         module.__name__,
         original=module,
         guard_attributs=("meta_path",)
-                       )
+    )
+
 
 def patch_rules() -> Dict[str, Callable]:
     return {
@@ -350,19 +367,18 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         import sys
         global _rules
         _rules = ()
-        import sys
-        # if _guard_finder in sys.meta_path:
-        if True:  # FIXME
-            #     logger.debug("Remove in meta-path")
-            #     sys.meta_path.remove(_guard_finder)
-            _remove_modules()
+        _remove_modules()
 
 
 def generate_rules(
         learn: Set[Any],
 ) -> List[str]:
     # Select only parent
-    result = set()  # TODO: blacklist
+    result = set()
+    danger_result = set()
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
-        result.add(f"python-import={learn_rule.name}")
-    return list(result)
+        if learn_rule.name in _black_list:
+            danger_result.add(f"python-import={learn_rule.name}  # \u26A0 Dangerous!")
+        else:
+            result.add(f"python-import={learn_rule.name}")
+    return list(danger_result) + list(result)

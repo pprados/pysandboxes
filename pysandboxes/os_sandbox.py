@@ -87,7 +87,6 @@ async def _async_start_daemon(all_rules: AllRules,
             await os_provider.start(
                 all_rules,
                 log_level=log_level,
-                envs=Envs(os.environ),
                 init_fn=init_fn
             )
             _current_daemon = os_provider

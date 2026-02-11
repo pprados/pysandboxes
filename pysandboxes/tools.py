@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import inspect
 import os
 import re
@@ -207,19 +208,28 @@ def find_config(
 
 
 # %% -----------------------
+_is_in_sandbox = False
+
+# Use a context to separete the thread with the sandbox and the thread in the differents layers
+_sandboxed = contextvars.ContextVar(
+    'sanboxed', default=0)
 _is_in_sandbox: int = 0
 
 
 def is_in_sandbox() -> bool:
-    return _is_in_sandbox > 0
+    global _is_in_sandbox
+    return _sandboxed.get() > 0
+    # return _is_in_sandbox > 0
 
 
 def set_is_in_sandbox(value: bool) -> None:
     global _is_in_sandbox
     if value:
-        _is_in_sandbox += 1
+        _sandboxed.set(_sandboxed.get() + 1)
+        # _is_in_sandbox += 1
     else:
-        _is_in_sandbox -= 1
+        _sandboxed.set(_sandboxed.get() - 1)
+        # _is_in_sandbox -= 1
 
 
 SyncOrAsyncFunc = Union[

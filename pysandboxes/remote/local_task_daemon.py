@@ -59,6 +59,7 @@ async def sandbox_daemon(
         loop = asyncio.get_event_loop()
 
         module_name, function_name = function_id.split(':', 1)
+        set_is_in_sandbox(True)
         module = importlib.import_module(module_name)
         try:
             function = getattr(module, function_name)
@@ -137,6 +138,9 @@ async def sandbox_daemon(
     except Exception as e:
         logger.exception("(%s) ... error %s", session_id, repr(e))
         yield json.dumps({"session_id": session_id, "error": repr(e)})
+    finally:
+        set_is_in_sandbox(False)
+
 
 
 def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
@@ -163,14 +167,12 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         and stream back structured results (stdout, stderr, result).
         """
 
-        set_is_in_sandbox(True)
         logger.debug(request.headers["Authorization"])
         if ("Authorization" not in request.headers or
                 request.headers["Authorization"] != f"Bearer {token}"):
             logger.error(
                 "Invalid token")
             raise HTTPException(status_code=401, detail="Invalid token")
-        assert is_in_sandbox()
         # Pass the code and authenticated user_id to the event generator
         return StreamingResponse(
             sandbox_daemon(
@@ -279,7 +281,7 @@ class LocalTaskDaemon(SSESandbox):
                         os_sandbox="",
                         use_py_sandbox=all_rules.use_py_sandbox,
                         learning_path=all_rules.learning_path,
-                        learning=all_rules.learning,
+                        learn=all_rules.learn,
                         envs_rules=(),  # FIXME: pourquoi épurer?
                         socket_rules=(),  # TODO: need short copy for AllRules?
                         file_rules=(),
@@ -289,12 +291,9 @@ class LocalTaskDaemon(SSESandbox):
                     all_rules: AllRules,
                     *,
                     log_level: int,
-                    envs: Optional[Envs],
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
 
-        if envs is None:
-            envs = os.environ
         if init_fn:
             if asyncio.iscoroutinefunction(init_fn):
                 await init_fn()
@@ -305,7 +304,6 @@ class LocalTaskDaemon(SSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            set_is_in_sandbox(True)
             self.uvicorn = create_uvicorn_daemon(self.token)
 
             start_event = asyncio.Event()

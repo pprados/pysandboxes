@@ -15,7 +15,7 @@ class AllRules(NamedTuple):
     os_sandbox: str
     use_py_sandbox: bool
     learning_path: Path
-    learning: bool
+    learn: bool
     envs_rules: EnvsRules
     socket_rules: SocketRules
     file_rules: FileRules
@@ -28,7 +28,7 @@ EmptyRules = AllRules(
     os_sandbox="subprocess",
     use_py_sandbox=False,
     learning_path=Path(CONFIG_NAME),
-    learning=False,
+    learn=False,
     envs_rules=(),
     socket_rules=(),
     file_rules=(),

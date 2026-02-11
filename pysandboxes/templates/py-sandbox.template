@@ -20,7 +20,7 @@
 # parameter with the name of the file to be fed.
 
 # Uncomment the next line to remain in learning mode at all times.
-#learning=.py-sandboxes  # Default filename: '.py-sandboxes'
+#learn=.py-sandboxes  # Default filename: '.py-sandboxes'
 
 #######################################################################################
 # It's possible to include user, global or others parameters files. If the file is not
@@ -131,6 +131,7 @@ ignore=*.log
 # Use `net` to add a new rule. The format is:
 # net=<ALLOW|DENY>|<tcp|udp|*>|<network>|<port list>|<IN,OUT>
 
+# TODO: test ALLOW|*|*|*|*
 #net=ALLOW|*|0.0.0.0/0|*|IN  # Accept all incoming IPV4 connexion
 #net=ALLOW|*|0.0.0.0/0|*|OUT  # Accept all IPV4 connexion
 #net=ALLOW|*|::1/0|*|IN  # Accept all incoming IPV6 connexion

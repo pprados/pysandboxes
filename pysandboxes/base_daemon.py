@@ -40,7 +40,6 @@ class BaseDaemon(ABC):
                     all_rules:"AllRules",
                     *,
                     log_level: int,
-                    envs: Optional[Envs],
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
         raise NotImplementedError

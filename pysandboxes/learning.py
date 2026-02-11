@@ -63,7 +63,7 @@ def generate_config_from_learning() -> None:
         all_socket_rules = None
 
     replaces = {
-        # "learning_repeat": f"learning={learning_path}",
+        # "learning_repeat": f"learn={learning_path}",
         "learning_guard_envs": all_env_rules,
         "learning_guard_import": all_import_rules,
         "learning_guard_files": all_file_rules,
@@ -87,7 +87,7 @@ def generate_config_from_learning() -> None:
             all_lines = resource_path.read_text().split('\n')
 
     # Insert new rules in the file
-    pattern: str = r'^# XX</([^\}]+)>'  # FIXME: XX pour forcer à la fin du fichier
+    pattern: str = r'^# XX</([^\}]+)>'  # FIX_RELEASE: XX pour forcer à la fin du fichier
     for i, line in enumerate(all_lines):
         match = re.search(pattern, line)
         if match and match.group(1) in replaces:
@@ -109,8 +109,8 @@ def generate_config_from_learning() -> None:
             if v:
                 all_lines.append(v + "\n")
                 update_file = True
-    if list(filter(lambda line: line.startswith("learning"), all_lines)):
-        find_learning = " Remove the --learning parameter to use the sandboxes."
+    if list(filter(lambda line: line.startswith("learn"), all_lines)):
+        find_learning = " Remove the 'learn' parameter to use the sandboxes. "
     else:
         find_learning = ""
 
@@ -119,12 +119,12 @@ def generate_config_from_learning() -> None:
         old_level = pysandboxes_logger.level
         pysandboxes_logger.setLevel(logging.INFO)
         msg = (
-                "\nWrite all learning rules in '%s'.%s" %
+                "\nWrite all learning rules in '%s'. %s" %
                 (learning_path.relative_to(Path()),
                  find_learning)
         )
         if old_learning_path:
-            msg += (" The old '%s' is renamed to '%s'. " %
+            msg += ("The old '%s' is renamed to '%s'. " %
                     (learning_path, old_learning_path))
             learning_path.rename(old_learning_path)
 

@@ -45,14 +45,14 @@ def parse_rules(rules: ConfigLines,
                      f"Invalid value {value!r} for py-sandbox. Use true or false.",
                      rule.path, rule.ln)
                 )
-        elif rule.rule.startswith("learning="):
+        elif rule.rule.startswith("learn="):
             if learning_path:
                 continue
             value = rule.rule.split("=", 1)[1].strip().lower()
             if value.lower() in ("true", "false", "0", "1"):
                 errors.append(
                     (f"{format_ruleref(rule)}: "
-                     f"Invalid value {value!r} for --learning. "
+                     f"Invalid value {value!r} for 'learn'. "
                      f"Use the filename instead.",
                      rule.path, rule.ln)
                 )
@@ -62,7 +62,7 @@ def parse_rules(rules: ConfigLines,
                     learning_path = None
                     errors.append(
                         (f"{format_ruleref(rule)}: "
-                         f"Invalid value {value!r} for --learning. "
+                         f"Invalid value {value!r} for 'lear'. "
                          f"The parent path must exist.",
                          rule.path, rule.ln)
                     )
@@ -93,7 +93,7 @@ def parse_rules(rules: ConfigLines,
     if not learning_path:
         learning_path = Path(CONFIG_NAME)
 
-    # Force learning mode if the file not exists
+    # Force learn mode if the file not exists
     if not learning_path.exists() and not learning:
         learning = True
 

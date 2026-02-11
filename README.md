@@ -104,7 +104,7 @@ There are two usage modes:
 
 This scenario is the simplest. You just need to replace the launch of your application (`python -m xxx`) with a launch in the sandbox (`python-sb -m xxx`). It's possible to add some parameters, at the beginning:
 ```shell
-python-db --learning -m my_module
+python-db --learn -m my_module
 ```
 You can use it in interactive mode.
 ```shell
@@ -128,8 +128,8 @@ When the application is stopped, a `.pysandboxes` file is created in the current
 From now on, during subsequent launches, the application runs by limiting the application's capabilities to the previously learned whitelist.
 
 If you want to restart a learning session to add missing rules:
-- activate the `learning` parameter in the file
-- Add `learning=.py-sandboxes` (or just `learning`) when you start `python-sb`
+- activate the `learn` parameter in the file
+- Add `learn=.py-sandboxes` (or just `learn`) when you start `python-sb`
 
 This way, only the missing rules will be added to the file.
 
@@ -200,12 +200,12 @@ if __name__ == "__main__":
 ```
 
 If you want to restart a learning session to add missing rules:
-- Add `learning='.py-sandboxes` with `sandboxes`
-- Or add `learning='.py-sandboxes` with `run()`
+- Add `learn='.py-sandboxes` with `sandboxes`
+- Or add `learn='.py-sandboxes` with `run()`
 
 ```python
 pysandboxes.run(main(),
-                learning='.py-sandboxes'
+                learn='.py-sandboxes'
                 )
 ```
 
@@ -266,19 +266,20 @@ We offer several implementations to encapsulate the Python sandbox:
 
 The feature proposed by each technologies:
 
-| Guard                     | py-sandbox |  firejail  |
-|---------------------------|:----------:|:----------:|
-| Python code               |     ✅      |     ❌      |
-| Compiled code             |     ❌      |     ✅      |
-| env                       |     ✅      |      ❌      |
-| bind=a,a                  |     ✅      |     ✅      |
-| bind=a,b                  |     ✅      |     ❌      |
-| ignore=*                  |     ✅      |     ✅      |
-| network                   |     ✅      |     ✅      |
-| import                    |     ✅      |     ❌      |
-| OS-sandbox                |     ❌      |     ✅      |
-| Vm compatible             |     ✅      |     ✅      |
-| Container<br/> compatible |     ✅      |     ❌      |
+| Guard                     | py-sandbox | firejail  |
+|---------------------------|:----------:|:---------:|
+| Isolation                 |  Process   | Container |
+| Python code               |     ✅      |     ❌     |
+| Compiled code             |     ❌      |     ✅     |
+| env                       |     ✅      |     ❌     |
+| bind=a,a                  |     ✅      |     ✅     |
+| bind=a,b                  |     ✅      |     ❌     |
+| ignore=*                  |     ✅      |     ✅     |
+| network                   |     ✅      |     ✅     |
+| import                    |     ✅      |     ❌     |
+| OS-sandbox                |     ❌      |     ✅     |
+| Vm compatible             |     ✅      |     ✅     |
+| Container<br/> compatible |     ✅      |     ❌     |
 
 
 Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
@@ -405,9 +406,19 @@ Consult the corresponding documentation.
 Sometimes the sandbox disrupts development. There are several approaches to disabling the sandbox while adjusting the code.
 
   - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
-  - Use the `learning=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
+  - Use the `learn=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
   - Use the special `os-provider=none` to desactivate all the `@sandbox` annotations
 
+To disable only one rule family, use the generic acceptance settings.
+- `env=*=${*}`
+- `bind=/,/`
+```python
+net=ALLOW|*|0.0.0.0/0|*|IN
+net=ALLOW|*|0.0.0.0/0|*|OUT
+net=ALLOW|*|::1/0|*|IN
+net=ALLOW|*|::1/0|*|OUT
+
+```
 ## How to package the project
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.
 The file must also be published in the project's launch directory.

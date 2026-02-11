@@ -568,12 +568,12 @@ def _wrap_os_path_exists(func: Callable, *, write: bool) -> Callable:
         remapped, rule = _apply_dest_to_src_rules(file, write=write)
         if rule:
             return False
-        if is_learning_mode():
-            # exist is not learn.
-            # add_learning_rule(LearnFileRule(Path(file), False))
+        if not remapped:
             remapped = file
-        if remapped is None:
-                return False
+        # if is_learning_mode():
+        #     exist is not learn.
+        #     add_learning_rule(LearnFileRule(Path(file), False))
+        #     remapped = file
         return func(remapped, *args, **kwargs)
 
     return wrapper

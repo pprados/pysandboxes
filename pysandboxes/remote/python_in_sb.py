@@ -25,7 +25,7 @@ def _python_interactive(
         all_rules: AllRules,
 ):
     exit_msg = None
-    if all_rules.learning:
+    if all_rules.learn:
         sb_mode = (f'*** API calls are LEARNED and saved in '
                    f'{str(all_rules.learning_path)!r} at the '
                    f'end of the session. ***\n')
@@ -55,7 +55,6 @@ def _python_interactive(
         # Hack for IPython
         sys.modules["__main__"] = ModuleType("__main__")
         import IPython
-        # raise ImportError()  # FIXME: force Python
         from traitlets.config import get_config
         c = get_config()
 
@@ -104,7 +103,7 @@ def _python_interactive(
 
 
 def _python_module(mod_name: str) -> int:
-    # FIX The sys.exit() is not propagated from remote
+    # FIXME chercher le conf du module?
     import runpy
     runpy.run_module(mod_name, run_name="__main__")
     return 0

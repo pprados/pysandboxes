@@ -90,7 +90,7 @@ class sandboxes(Protocol):
         self.config_path = config_path
         if envs is None:
             envs = os.environ
-        self.envs = Envs(envs)
+        self.envs = envs
         self.extra_rules = extra_rules
         self.learning_path = None
         self.python_args = python_args

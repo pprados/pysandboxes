@@ -33,7 +33,7 @@ class ImmutableDict(
         else:
             if isinstance(data, Mapping):
                 from pysandboxes.guard_envs import LearnEnviron
-                # Hack to detect the learning phase.
+                # Hack to detect the learn phase.
                 # We don't want to learn all keys
                 if isinstance(data, LearnEnviron):
                     data = dict(data)

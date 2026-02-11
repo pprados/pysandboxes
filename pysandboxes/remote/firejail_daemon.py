@@ -177,7 +177,6 @@ class FireJailDaemon(BaseSubProcessDaemon):
         return all_rules
 
     def _firejail_args(self,
-                       envs: Envs,
                        all_rules: AllRules,
                        ) -> Tuple[Args, AllRules]:
         """
@@ -297,15 +296,12 @@ class FireJailDaemon(BaseSubProcessDaemon):
 
     def subprocess_cmd(self,
                        all_rules: AllRules,
-                       envs: Envs,
                        ) -> List[str]:
         run_daemon = super().subprocess_cmd(
             all_rules,
-            envs,
         )
 
-        cmd_parameters, _ = self._firejail_args(envs=envs,
-                                                all_rules=all_rules)
+        cmd_parameters, _ = self._firejail_args(all_rules=all_rules)
         cmd_parameters.extend(run_daemon)
         # cmd_parameters.extend([
         #     sys.executable,

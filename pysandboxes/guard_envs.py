@@ -6,6 +6,7 @@ from typing import Dict, Tuple, List, Any, Optional, Callable, NamedTuple, cast
 
 from .main_logger import format_ruleref, ErrorMsg
 from .sb_types import ConfigLines, ConfigLine, Envs
+from .tools import is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -167,14 +168,16 @@ class LearnEnviron(os._Environ):
     def __getitem__(self, key: str) -> str:
         try:
             result = super(LearnEnviron, self).__getitem__(key)
-            self._keys_used.add(key)
+            if is_in_sandbox():
+                self._keys_used.add(key)
             return result
         except KeyError:
             raise
 
     def __setitem__(self, key: str, value: str) -> None:
         super(LearnEnviron, self).__setitem__(key, value)
-        self._keys_used.add(key)
+        if is_in_sandbox():
+            self._keys_used.add(key)
 
     def _clone(self):
         return {k: v for k, v in super().items()}
