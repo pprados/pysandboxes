@@ -286,7 +286,8 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
 
 
 mixed_sync_and_async_error = (
-    "It's impossible to mixte synchronize and asynchronize sandbox function.")
+    "It's impossible to mix synchronous and asynchronous sandbox functions. "
+    "Only use annotated asynchronous functions with an asynchronous sandbox.")
 
 
 def check_mixte_async_async():

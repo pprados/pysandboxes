@@ -168,7 +168,7 @@ def _follow_links_executable(executable: Path, whitelist: WhiteList) -> None:
 
 
 class FireJailDaemon(BaseSubProcessDaemon):
-    def update_rules(self,
+    def update_rules(self,  # TODO: remove double rules
                      *,
                      envs: Envs,
                      all_rules: AllRules) -> AllRules:

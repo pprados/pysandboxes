@@ -87,7 +87,7 @@ A learning mechanism allows for continuous improvement of security rules and rap
 To install the component:
 
 ```bash
-pip install pysandboxes
+ pip install pysandboxes
 ```
 We propose only four think:
 - A Command Line Interface: `python-sb`
@@ -110,10 +110,9 @@ You can use it in interactive mode.
 ```shell
 > python-sb
 SANDBOXES Python 3.13.5 | packaged by Anaconda, Inc. | [GCC 11.2.0] on linux
-*** APIs are LIMITED according to the rules in '.py-sandboxes' ***
+**APIs are LIMITED according to the rules in '.py-sandboxes'**
 Type "help", "copyright", "credits" or "license" for more information.
 IPython 8.37.0 -- An enhanced Interactive Python. Type '?' for help.
-[TerminalIPythonApp] WARNING | File not found: '/home/philippe-prados/.pystartup'
 
 ⚠ In [1]: 
 ```
@@ -123,13 +122,13 @@ If IPython is installed, it's used. All the standard python parameters are avail
 It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
 
 During the first launch, noting that there is no `.pysandboxes` parameter file, the application starts in learning mode. Use your application in all its capacities, so that the solution learns network and disk usage, imported modules, usage of environment variables, etc.
-When the application is stopped, a `.pysandboxes` file is created in the current directory. It has been populated with all the learned rules. We invite you to review this file to make any necessary adjustments.
+When the application is stopped, a `.pysandboxes` file is created in the current directory. It has been populated with all the learned rules. **We invite you to review this file to make any necessary adjustments.**
 
 From now on, during subsequent launches, the application runs by limiting the application's capabilities to the previously learned whitelist.
 
 If you want to restart a learning session to add missing rules:
 - activate the `learn` parameter in the file
-- Add `learn=.py-sandboxes` (or just `learn`) when you start `python-sb`
+- or add `--learn=.py-sandboxes` (or just `--learn`) when you start `python-sb`
 
 This way, only the missing rules will be added to the file.
 
@@ -192,6 +191,25 @@ The `init_fn` parameter is optional. It can contain a function that will be invo
   - opening database connection pools
   - all important initializations that need to be done on the sandbox side.
 
+```python
+def init_log_level():
+    sandboxes_level = logging.WARNING
+    format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
+    logging.basicConfig(
+        level=min(sandboxes_level, logging.INFO),
+        format=format
+    )
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
+    logging.getLogger("pysandboxes").setLevel(logging.WARNING)
+    logging.getLogger("Pysandboxes").setLevel(sandboxes_level)
+
+def init_fn():
+    init_log_level()
+    ...
+```
 For asynchronous use, you can more simply initialize your application this way:
 
 ```python
@@ -215,6 +233,7 @@ async def init_app():
 # main script
 import pysandboxes
 from init import init_app
+
 async def main():
     await init_app()
     
@@ -273,8 +292,8 @@ Our solution offers multiple layers of security:
   - a sandbox at the Python API level (**py-sandbox**)
   - another sandbox at the OS level (**os-sandbox**)
 
-The Python sandbox can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel.
-For example, database access is often done via compiled C drivers. See the appendix for more details.
+The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel.
+For example, database access is ften done via compiled C drivers. See the appendix for more details.
 Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. We want to prevent abusive use of our code.
 
 Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.
@@ -290,27 +309,29 @@ We offer several implementations to encapsulate the Python sandbox:
 
 The feature proposed by each technologies:
 
-| Guard                     | py-sandbox | firejail  |
-|---------------------------|:----------:|:---------:|
-| Isolation                 |  Process   | Container |
-| Python code               |     ✅      |     ❌     |
-| Compiled code             |     ❌      |     ✅     |
-| env                       |     ✅      |     ❌     |
-| bind=a,a                  |     ✅      |     ✅     |
-| bind=a,b                  |     ✅      |     ❌     |
-| ignore=*                  |     ✅      |     ✅     |
-| network                   |     ✅      |     ✅     |
-| import                    |     ✅      |     ❌     |
-| OS-sandbox                |     ❌      |     ✅     |
-| Vm compatible             |     ✅      |     ✅     |
-| Container<br/> compatible |     ✅      |     ❌     |
+| Guard                     | none | py-sandbox | firejail  |
+|---------------------------|:----:|:----------:|:---------:|
+| Isolation                 |  ❌   |  Process   | Container |
+| Python code               |  ❌   |     ✅      |     ❌     |
+| Compiled code             |  ❌   |     ❌      |     ✅     |
+| env                       |  ❌   |     ✅      |     ❌     |
+| bind=a,a                  |  ❌   |     ✅      |     ✅     |
+| bind=a,b                  |  ❌   |     ✅      |     ❌     |
+| ignore=*                  |  ❌   |     ✅      |     ✅     |
+| network                   |  ❌   |     ✅      |     ✅     |
+| import                    |  ❌   |     ✅      |     ❌     |
+| OS-sandbox                |  ❌   |     ❌      |     ✅     |
+| Vm compatible             |  ❌   |     ✅      |     ✅     |
+| Container<br/> compatible |  ❌   |     ✅      |     ❌     |
 
 
-Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
+>> Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
 ---
 # Integration in a module
 It is possible to use the solution to integrate it into a module. To do this, the `.py-sandboxes` file must be placed at the root of your module, as a resource.
+
+**TODO: code and check**
 
 When the sandbox is activated, the code searches for the caller's module and checks whether the resource exists. If so, it is used to apply the security rules.
 Otherwise, the same file is searched for in the working directory.
@@ -332,10 +353,11 @@ def main():
 # File my_module/cli_sb.py
 def main():
     import sys
+    import os
     from pysandboxes.python_sb import main as sb_main
     from my_module.cli import __name__ as module_name
     sys.argv = [__file__, "-m", module_name] + sys.argv[1:]
-    sb_main()
+    os._exit(sb_main())
 ```
 
 And declare it in your TOML file.
@@ -443,93 +465,21 @@ To disable only one rule family, use the generic acceptance settings.
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.
 The file must also be published in the project's launch directory.
 
+But, the best practice it to build a wheel, with your rules.
+```toml
+include = [
+    { include = "my-package/.py-sanboxes" }
+]
+```
 ## Implementation
-Here is a brief description of the implementation. You will find more details by consulting the code.
-
-  - The parameter files are consulted.
-  - The `os-sandbox` parameter is extracted.
-  - The parameters are converted into specific parameters for **os-sandbox**.
-  - The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `bind` on directories is not relevant.
-  - A subprocess is launched with the selected **os-sandbox**.
-  - The sandbox's parameters, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
-  - An HTTP FastAPI server is launched.
-      - It implements the SSE protocol.
-      - The sandbox is activated.
-          - A Finder/Loader pair is added to `sys.meta_path`.
-          - All modules (except some critical ones) are uninstalled.
-          - From now on, when a module is loaded, it undergoes *on-the-fly* modifications.
-          - Critical functions and methods are re-implemented to follow the security rules.
-      - Upon receiving an SSE request:
-          - The token is verified.
-          - A specific context is created to capture *stdout* and *stderr*.
-          - The module corresponding to the function is imported.
-          - The `@sandbox` function is invoked.
-          - It detects that it is already running in a sandbox and then starts the normal execution.
-          - A message stream goes up to the client with the uses of *stdout* and *stderr*.
-          - The function's return or exception goes back to the caller.
-          - If an exception is raised, the remote stack trace is injected, and the exception is propagated again.
-          - The connection is terminated.
-      - If the sandbox falls (the process dies), it is restarted. The `init_fn` function is executed again, then communication resumes.
-      - If an SSE request fails, it is retried after a delay.
+see [here](wiki/implementation.md)
 
 ## What are the weaknesses of py-sandbox?
-There are several vulnerabilities in the proposed implementation. We are perfectly aware of them. The goal is not to execute unhealthy code, but to limit the malicious uses of our application.
+See [here](wiki/weaknesses.md)
 
-Here are some vulnerabilities:
-
-  - Each function or method patch must keep a link to the original method. An advanced introspection analysis can find it and invoke it outside of the security rules.
-  - All classes are available via `object().__subclasses__()` and therefore also all modules. By analyzing this, it is possible to find the rules and modify them.
-  - The variable `sys.meta_path` may be updated to remove the sandbox loader.
-  - Any compiled code can have access to the entire Python memory and therefore find all secrets. A vulnerability in a Python library using compiled code can be exploited.
-  - A child process, if it has the rights to read `/proc/${PPID}/environ`, can search for tokens there. **OS-sandboxes** generally prohibit this.
-
-We invite you to try out these approaches, without looking at the sources if you are gamers. This will teach you the ins and outs of Python. If you find any new vulnerabilities, we would be happy to hear about them. Note that the code is still hardened.
 ---
 # Roadmap
-This version is a first implementation offered to the community. It allows for testing and demonstrating the validity of the approach.
-
-It ensures that the patches for Python functions are correct and do not cause bugs in applications. If you find a case that presents a problem, open a ticket with a scenario to reproduce it. We will provide a fix as soon as possible.
-
-It also verifies the relevance of the multiple sandbox encapsulation strategy, with only *firejail* for the moment. The latter was selected because it allows for network-level filtering, prohibits access to files matching patterns, etc. Since it does not allow renaming directories during a `bind`, the **py-sandbox** layer handles this.
-
-We have a planned roadmap. Developments will arrive gradually, with no specific order:
-
-  - Guard some criticals methods in Python (spawn, shell, etc.)
-  - New **OS-sandboxes**
-  - Management of *Denial of Service*
-  - Management of regular expressions
-  - Control of `exec()` and `eval()`
-  - Compile a part of code
-  - Propagate the tracability id
-
-## Guard some critical methods
-Certain methods must be rejected, even if the package is authorized.
-
-## New **OS-sandboxes**
-Other OS-level sandbox solutions will be integrated, including `Docker` of course.
-
-If your application itself runs in a Docker container, it may not be able to launch a Docker in a Docker (depending on the parameters). This is also the case for solutions relying on Linux *capabilities*.
-
-Different solutions will be proposed (pre-launch of the sandbox in another container, in parallel; use of emulation solutions that do not require privileges, etc.).
-
-## Denial of Service
-Generated code may never terminate and cause a denial of service. It's not easy to manage this. Indeed, it is easy to identify that a `@sandbox` function is taking too long to respond, but it is very difficult to interrupt it. It is not possible to kill a thread, unlike a process. A simple malicious regular expression can be exploited to kill the FastAPI server (see [Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html)).
-
-We are considering a solution to identify these situations and kill the offending function if necessary.
-
-## Regular Expressions
-Certain regular expression patterns cause problems because they can cause the Python program to become unresponsive.
-We plan to add a specific filter to refuse the execution of expressions identified as *at risk*.
-
-## Control `exec()` and `eval()`
-`exec()` and `eval()` are two functions generally used to execute code generated by an LLM. **py-sandbox** and **os-sandbox** will limit the code's capabilities, but this is not enough.
-We plan to add a third level of sandboxing: **exec-sandbox**. A syntactic analysis of the code will be performed before execution. Specific rules will make it possible to forbid, for example, the use of system variables or functions (`__*__`), asynchronous syntax, and automatically add termination checks to all loops, etc.
-
-## Compile a part of code
-To strengthen security, we are considering compiling a part of the project to make it more difficult to access the standard implementations of Python functions.
-
-## Propagate the tracability id
-The protocol break prevents tracking with OpenTelemetry. We want to propagate the necessary information to get a complete trace.
+See [here](wiki/roadmap.md)
 
 ---
 # Appendix

@@ -8,10 +8,9 @@ import sys
 import tempfile
 import time
 import uuid
-from abc import abstractmethod
 from asyncio.subprocess import Process
 from pathlib import Path
-from typing import Callable, Optional, NamedTuple, List, Dict
+from typing import Callable, Optional, NamedTuple, List
 
 import aiohttp
 from aiohttp import ClientConnectorError
@@ -87,7 +86,7 @@ class DaemonParameters(NamedTuple):
 
 async def launch_sandbox(
         cmd: List[str],
-        pipe_path:Path,
+        pipe_path: Path,
         envs: Envs,
         process_config: DaemonParameters,
 ) -> Process:
@@ -138,8 +137,10 @@ class BaseSubProcessDaemon(SSESandbox):
                  token: str,
                  *,
                  python_args: Optional[List[str]] = None,
-                 max_attempts: int = RETRY_MAX_ATTEMPTS,  # Maximum number of retry _attempts
-                 base_delay: float = RETRY_BASE_DELAY,  # Initial delay in seconds (e.g., 100 ms)
+                 max_attempts: int = RETRY_MAX_ATTEMPTS,
+                 # Maximum number of retry _attempts
+                 base_delay: float = RETRY_BASE_DELAY,
+                 # Initial delay in seconds (e.g., 100 ms)
                  factor: float = RETRY_FACTOR,  # Exponential increase _factor
                  max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
                  reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
@@ -165,8 +166,13 @@ class BaseSubProcessDaemon(SSESandbox):
         cmd_parameters = [
             sys.executable,
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
+            # "-m", "pdb",
             "-P",
-            "-u",
+            "-u",  # Unbuffered output
+            "-d",  # Mode debug à la sortie
+            # "-X","importtime", # FIXME
+            # "-B", # FIXME: no pyc
+            # "-v", # FIXME
         ]
         cmd_parameters.extend(self._python_args)
         cmd_parameters.extend([
@@ -252,8 +258,8 @@ class BaseSubProcessDaemon(SSESandbox):
             else:
                 env = all_rules.envs
 
-            self._process=await launch_sandbox(
-                args + ["--_named-pipe",str(pipe_path)],
+            self._process = await launch_sandbox(
+                args + ["--_named-pipe", str(pipe_path)],
                 pipe_path=pipe_path,
                 envs=Envs(env),
                 process_config=process_config,
@@ -263,8 +269,10 @@ class BaseSubProcessDaemon(SSESandbox):
             gc.collect()
             async with aiohttp.ClientSession() as session:
                 while True:
-                    try:
-                        async with session.get(PING_SERVER_URL, timeout=3) as response:
+                    try:  # TODO: test in the server never response
+                        async with session.get(
+                                PING_SERVER_URL,
+                                timeout=INTERVAL_FOR_PING_DAEMON) as response:
                             if response.status == 200:
                                 break
                             else:
@@ -278,7 +286,6 @@ class BaseSubProcessDaemon(SSESandbox):
             self._is_started = True
 
     async def shutdown(self) -> None:
-        from . import main_sandbox
         await self.async_call_in_sandbox(
             main_shutdown.shutdown,
         )
@@ -291,7 +298,7 @@ class BaseSubProcessDaemon(SSESandbox):
         self._is_started = False
         logger.debug("shutdown")
 
-    async def join(self) -> int:
+    async def join(self) -> int:  # FIXME: utilisé ? Utilisable ?
         errorlevel = -1
         while errorlevel != 0:
             errorlevel = await self._process.wait()
@@ -306,7 +313,7 @@ class BaseSubProcessDaemon(SSESandbox):
                 current_base_backoff: float = min(self._max_delay,
                                                   self._base_delay * (
                                                           self._factor ** (
-                                                              self._attempts - 1)))
+                                                          self._attempts - 1)))
 
                 wait_time: float = random.uniform(current_base_backoff * 0.9,
                                                   current_base_backoff)

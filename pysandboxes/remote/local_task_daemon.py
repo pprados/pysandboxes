@@ -58,11 +58,7 @@ async def sandbox_daemon(
         loop = asyncio.get_event_loop()
 
         module_name, function_name = function_id.split(':', 1)
-        logger.error(f"avant {is_in_sandbox()}")
-        await asyncio.sleep(1)
         set_is_in_sandbox(True)
-        logger.error(f"apres {is_in_sandbox()}")
-        logger.error(f"Try to import {module_name=}")
         module = importlib.import_module(module_name)
         try:
             function = getattr(module, function_name)

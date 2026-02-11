@@ -11,6 +11,8 @@ homepage = "https://www.github.com/pprados/langgraph-codeagent"
 requires-python = ">=3.10,<4.0"
 packages = [
   { include = "pysandboxes" },
+  # FIXME
+  { include = "my-package/.py-sandboxes" from=".py-sandboxes" },
 ]
 
 dependencies = [

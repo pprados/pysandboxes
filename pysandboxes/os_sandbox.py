@@ -162,7 +162,7 @@ def start_daemon(
                 _start_daemon_and_signal(),
                 name="Start daemon")
         )
-        if not start_event.wait():
+        if not start_event.wait(2000):  # FIXME
             raise RuntimeError("Import to start the sandbox")
         assert _current_daemon
 
@@ -227,7 +227,8 @@ def call_in_sandbox(
     global _current_daemon
     if is_in_sandbox():
         return func(*args, **kwargs)
-    assert _current_daemon is not None, "Daemon not started"
+    assert _current_daemon is not None, ("Daemon not started. Use 'with sandboxes()' "
+                                         "or 'pysandboxes.run()'")
     check_mixte_async_async()
 
     return _current_daemon.call_in_sandbox(func, *args, **kwargs)

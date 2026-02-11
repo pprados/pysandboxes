@@ -258,6 +258,7 @@ _not_refresh_modules: Set[str] = (
         'concurrent',
         'importlib',
         'warnings',
+        'logging',
         '_pytest',
         'pytest',
         'pathlib',

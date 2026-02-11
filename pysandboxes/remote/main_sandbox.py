@@ -21,7 +21,7 @@ logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 # %%
 
-def main() -> int:
+def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
     threading.main_thread().name = "DaemonMainThread"
     logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
