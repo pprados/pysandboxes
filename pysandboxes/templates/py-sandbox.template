@@ -129,9 +129,10 @@ ignore=*.log
 # In a sandbox, it is possible to limit the network access, like a firewall.
 # There are two strategies: "allow" and "deny". By default, all connections are denied.
 # Use `net` to add a new rule. The format is:
-# net=<ALLOW|DENY>|<tcp|udp|*>|<network>|<port list>|<IN,OUT>
+# net=<ALLOW|DENY>|<tcp|udp|*>|<network|*>|<port list|*>|<IN|OUT|*>
+#
+# To accept all network connexion, use  ̀net=ALLOW|*|*|*|*`
 
-# TODO: test ALLOW|*|*|*|*
 #net=ALLOW|*|0.0.0.0/0|*|IN  # Accept all incoming IPV4 connexion
 #net=ALLOW|*|0.0.0.0/0|*|OUT  # Accept all IPV4 connexion
 #net=ALLOW|*|::1/0|*|IN  # Accept all incoming IPV6 connexion
@@ -158,7 +159,6 @@ ignore=*.log
 
 # here, the rules learned for socket
 # <learning_guard_socket>
-
 # </learning_guard_socket>
 
 #######################################################################################

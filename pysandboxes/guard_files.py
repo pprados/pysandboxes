@@ -233,6 +233,7 @@ def generate_rules(
 ) -> List[str]:
     # Select only parent
     global _special_env, _special_home
+    learn = learn.copy()
     parent_level: Dict[Path, bool] = {}
     for learn_rule in filter(lambda x: isinstance(x, LearnFileRule), learn):
         parent = learn_rule.path.absolute()
@@ -241,7 +242,7 @@ def generate_rules(
         if not parent_level.get(parent, False) and learn_rule.write:
             parent_level[parent] = True
         else:
-            parent_level[parent] = False
+            parent_level[parent] = parent_level.get(parent, False)
 
     result: Set[str] = set()
     home = Path.home().absolute()
@@ -594,11 +595,13 @@ def _wrap_os_path_is(func: Callable, *, write: bool) -> Callable:
             return False
         if remapped is None:
             if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), False))
                 remapped = file
             else:
                 return False
-        return func(remapped, *args, **kwargs)
+        result = func(remapped, *args, **kwargs)
+        if result and is_learning_mode():
+            add_learning_rule(LearnFileRule(Path(file), False))
+        return result
 
     return wrapper
 
@@ -729,7 +732,7 @@ def _wrap_os_readlink(func: Callable) -> Callable:
 
 class _ScanDirContextManager:
     """
-    A context manager that wraps os.scandir and implements the context manager protocol.
+    A context manager that wraps os.scandir and implements the context manager kind.
     """
 
     __slot__ = ("directory", "real_directory", "scanner")
@@ -800,7 +803,7 @@ class _ScanDirContextManager:
                         pass  # Ignore
                     elif dest_path is not None:
                         _entry = _DirEntry(entry, dest_path)
-                        return cast(os.DirEntry,_entry)
+                        return cast(os.DirEntry, _entry)
             except StopIteration:
                 raise
 

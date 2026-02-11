@@ -3,12 +3,10 @@ import io
 import logging
 import os
 import tempfile
-from functools import partial
 from socket import AF_INET, SOCK_STREAM, AF_INET6, SOCK_DGRAM
 
 import dotenv
 
-import pysandboxes
 from pysandboxes import sandbox, sandboxes, SandBoxError
 
 dotenv.load_dotenv()
@@ -17,20 +15,21 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level():
-    if True: # TODO "PYTEST_RUN_CONFIG" in os.environ:
+    level = logging.DEBUG
+    if True:  # TODO "PYTEST_RUN_CONFIG" in os.environ:
         format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     else:
         format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s: %(message)s'
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format=format
     )
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
-    logging.getLogger("pysandboxes").setLevel(logging.INFO)
+    logging.getLogger("Pysandboxes").setLevel(level)
+    logging.getLogger("pysandboxes").setLevel(level)
 
 
 @sandbox
@@ -44,14 +43,12 @@ async def arun_in_sandbox():
 def run_in_sandbox():
     logger.info("Run 'run_in_sandbox()' in sandbox")
 
-    import inspect  # Danger
-
-    # # tcp connexion
-    # import socket
+    # tcp connexion
+    import socket
     # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
     #     remote_ip = socket.gethostbyname("www.google.com")
-    #     xx=socket.gethostbyname_ex("www.google.com")
-    #     addr_infos = socket.getaddrinfo("www.google.com",None,family=socket.AF_UNSPEC)
+    #     xx = socket.gethostbyname_ex("www.google.com")
+    #     addr_infos = socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
     #     sock.connect((remote_ip, 80))
     #
     # # tcp bind ipv4
@@ -66,21 +63,23 @@ def run_in_sandbox():
     # import requests
     # f = requests.get("http://www.google.com/")
     #
-    # # udp connexion ipv4
-    # with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-    #     sock.sendto(b"hello", ("127.0.0.1", 12345))
-    #
-    # # udp connexion ipv6
-    # with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
-    #     sock.sendto(b"hello", ("::1", 12345))
-    #
-    # # udp bind ipv4
-    # with socket.socket(AF_INET, SOCK_DGRAM) as sock:
-    #     sock.bind(("localhost", 12345))
-    #
-    # # udp bind ipv6
-    # with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-    #     sock.bind(("::1", 0))
+    # udp connexion ipv4
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.sendto(b"hello", ("127.0.0.1", 12345))
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.sendto(b"hello", ("127.0.0.1", 12346))
+
+    # udp connexion ipv6
+    with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
+        sock.sendto(b"hello", ("::1", 12345))
+
+    # udp bind ipv4
+    with socket.socket(AF_INET, SOCK_DGRAM) as sock:
+        sock.bind(("localhost", 12345))
+
+    # udp bind ipv6
+    with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+        sock.bind(("::1", 0))
 
     # ---------- File
 
@@ -97,7 +96,6 @@ def run_in_sandbox():
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except SandBoxError as e:
         print(e)
-
 
     try:
         with io.open("tst_wasm/factorial.wasm", "r") as f:
@@ -164,6 +162,7 @@ def init_sandbox():
     logger.debug("INIT Daemon")
     init_log_level()
 
+
 async def async_init_sandbox():
     await asyncio.sleep(0)
     init_sandbox()
@@ -191,18 +190,18 @@ def _call_llm(token: str):
 def call_llm():
     _call_llm(token=os.environ["USER"])
 
+
 def main():
     init_log_level()
-    os.environ["LLM_TOKEN"]="abc"
-
+    os.environ["LLM_TOKEN"] = "abc"
 
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # print("----------------")
         with sandboxes(async_init_sandbox,
-                       config_path="test.py-sandboxes",
-                       learn=".py-sandboxes", # Learn all the times
-                        # os_sandbox="none",
+                       # config_path="test.py-sandboxes",
+                       # learn=".py-sandboxes", # Learn all the times
+                       # os_sandbox="none",
                        ):
             run()
         # TODO: voir la capture d'exception

@@ -37,10 +37,9 @@ dependencies = [
 "logging (>=0.4.9.6,<0.5.0.0)"
 ]
 
-[tool.poetry.scripts]
-python-sb = "pysandboxes.python_sb:main"
-python3-sb = "pysandboxes.python_sb:main"
-my-script = "tst_script:main"
+[project.scripts]
+#python-sb = "pysandboxes.python_sb:main"
+#python3-sb = "pysandboxes.python_sb:main"
 
 [tool.poetry.group.dev]
 optional = true

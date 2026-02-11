@@ -8,9 +8,8 @@ import sys
 from importlib.abc import MetaPathFinder
 from types import ModuleType
 from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set
-from weakref import WeakKeyDictionary
 
-from .e import RuleModuleNotFoundError, RuleAttributeError
+from .e import RuleModuleNotFoundError
 from .immutable_dict import ImmutableDict
 from .learning import is_learning_mode, add_learning_rule
 from .main_logger import ErrorMsg
@@ -95,7 +94,7 @@ def _apply_patch(module, name: str):
                                    "__pysandbox__"), "Double injection"
                 if __debug__ and isinstance(new_value,
                                             type(
-                                                _apply_patch)):  # Fake types.FunctionType
+                                                _apply_patch)):  # Fake kinds.FunctionType
                     new_value.__pysandbox__ = True  # Add a marker
                 cur_module.__dict__[paths[-1]] = new_value
         else:
@@ -137,6 +136,7 @@ class GuardLoader(importlib.abc.Loader):
             if _rules and _rules[0] != "*":
                 module_name = module.__name__
                 if module_name not in _rules:
+                    # FIXME: tester tous les imports de bases depuis le départ
                     raise RuleModuleNotFoundError(
                         f"Module named {module_name!r} is not allowed by a rule"
                     )
@@ -297,53 +297,8 @@ def _remove_modules() -> None:
     pass
 
 
-class GuardModule(ModuleType):
-    _states: Dict[
-        ModuleType, ImmutableDict[str, Any]] = WeakKeyDictionary()
-
-    __slot__ = ()
-
-    def __init__(self,
-                 name,
-                 *,
-                 original: ModuleType = None,
-                 guard_attributs: Tuple[str, ...] = None):
-        if not original:
-            assert name == "empty_module"
-            # Special case for sys module, use by pytest to
-            # initialize IGNORED_ATTRIBUTES
-            super().__init__(name)
-            GuardModule._states[self] = ImmutableDict({})
-        else:
-            assert (original)
-            super().__init__(original.__name__)
-            GuardModule._states[self] = ImmutableDict(
-                {
-                    "guard_attributs": guard_attributs,
-                })
-            self.__dict__.update(original.__dict__)
-
-    def __setattr__(self, name: str, value: object) -> None:
-        guard_attributs = GuardModule._states[self].get("guard_attributs", set())
-        if name in guard_attributs:
-            raise RuleAttributeError(
-                f"Cannot set attribute {self.__name__ + "." + name!r}")
-        super().__setattr__(name, value)
-
-
-def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
-    # Not PEP726 is rejeted
-    return GuardModule(
-        module.__name__,
-        original=module,
-        guard_attributs=("meta_path",)
-    )
-
-
 def patch_rules() -> Dict[str, Callable]:
-    return {
-        # "sys": _global_patch_in_sys_module,  # FIXME: bug in stdout tests
-    }
+    return { }
 
 
 def activate_guard_import(

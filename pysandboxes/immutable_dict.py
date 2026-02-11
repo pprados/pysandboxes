@@ -13,7 +13,7 @@ class ImmutableDict(
     collections.abc.Mapping, Generic[KeyType, ValueType]):
     """
     An immutable dictionary-like object built on a tuple of tuples.
-    This class is compatible with the collections.abc.Mapping protocol.
+    This class is compatible with the collections.abc.Mapping kind.
     """
     __slot__ = ()
 
@@ -62,7 +62,7 @@ class ImmutableDict(
     def _values(self) -> Tuple[ValueType, ...]:
         return tuple.__getitem__(self, 1)  # type: ignore[index]
 
-    # Mapping protocol
+    # Mapping kind
     def __getitem__(self, key: KeyType) -> ValueType:
         if isinstance(key,slice):
             return self._keys[key]

@@ -44,6 +44,6 @@ def test_syntax_error(caplog):
             'syntax-error(16): In \'net=ALLOW|tcp||8000|IN\', network part must be set.',
             'syntax-error(18): In \'net=ALLOW|tcp|acme.acme|*|IN\', invalid network specification. That does not resolve to any network.',
             'syntax-error(19): In \'net=ALLOW|tcp|0.0.0.0/0|a,b|IN\', invalide port list.',
-            'syntax-error(20): In \'net=ALLOW|tcp|0.0.0.0/0|*|\', direction is not \'IN\' or \'OUT\'.',
+            'syntax-error(20): In \'net=ALLOW|tcp|0.0.0.0/0|*|\', directions is not \'IN\' or \'OUT\'.',
             'syntax-error(25): Invalid value \'abc\' for py-sandbox. Use true or false.'
         ]

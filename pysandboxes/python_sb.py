@@ -19,7 +19,7 @@ from .remote.parse_cpython_args import parse_python_cmd_line
 logger = logging.getLogger(__name__)
 
 
-def main() -> int:  # FIXME: vérifier sauvegarde en cas de learn
+def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """

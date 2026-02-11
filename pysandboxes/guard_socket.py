@@ -43,11 +43,12 @@ import os
 import socket
 import sys
 from collections.abc import Buffer
+from enum import IntEnum, Enum
 from ipaddress import IPv4Network, IPv6Network, ip_network, IPv4Address, IPv6Address, \
     ip_address
 from pathlib import Path
 from typing import Tuple, Optional, Union, List, Dict, NamedTuple, cast, Any, Callable, \
-    TypeAlias, Set
+    TypeAlias, Set, Generator
 
 from .e import RuleSocketConnectionRefusedError
 from .learning import is_learning_mode, add_learning_rule
@@ -70,18 +71,33 @@ Adresse_Type = Union[
 ]
 
 
+class Action(IntEnum):
+    DENY = 1  # Action to deny a connection
+    ALLOW = 0  # Action to allow a connection
+
+
+class Direction(IntEnum):
+    OUT = 1  # Direction for outgoing connections (e.g., client-side connect)
+    IN = 0  # Direction for incoming connections (e.g., server-side bind)
+
+
+class Kind(Enum):
+    TCP = socket.SOCK_STREAM
+    UDP = socket.SOCK_DGRAM
+    UNKNOWN = socket.SOCK_DGRAM
+
+
 # Parsed rule format used internally:
 class SocketMask(NamedTuple):
-    families: Tuple[str, ...]
-    types: Tuple[int, ...]
+    kinds: Tuple[Kind, ...]
     network: Union[IPv4Network, IPv6Network]
     ports: Union[Tuple[int, ...], range]
 
 
 class SocketRule(NamedTuple):
-    action: str
+    action: Action
     mask: SocketMask
-    direction: str
+    directions: Tuple[Direction, ...]
     config: ConfigLine
 
 
@@ -90,18 +106,14 @@ SocketRules = Tuple[SocketRule, ...]
 
 class LearnSocketRule(NamedTuple):
     fn: str
-    protocol: str
+    kind: Kind
     address: str
     port: int
-    direction: Optional[str]
+    direction: Optional[Direction]
     dns: Tuple[Union[IPv4Address, IPv6Address], ...]
 
 
-
-DENY = "DENY"  # Action to deny a connection
-ALLOW = "ALLOW"  # Action to allow a connection
-IN = "IN"  # Direction for incoming connections (e.g., server-side bind)
-OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
+_all_networks = ["0.0.0.0/0", "::1/0"]
 
 # Rule string format: "net=ACTION|SOCKET_SPECS|NETWORK_STR|PORT_SPEC_STR|DIRECTION_STR"
 # Example: "net=ALLOW|ipv4,tcp|192.168.1.0/24|80,443|OUT"
@@ -110,10 +122,22 @@ OUT = "OUT"  # Direction for outgoing connections (e.g., client-side connect)
 
 _rules: SocketRules = cast(SocketRules, ())
 
-SPEC_TO_TYPE_MAP: Dict[str, int] = {
-    "tcp": socket.SOCK_STREAM,
-    "udp": socket.SOCK_DGRAM,
-}
+
+def _yield_networks_from_string(input_str: str) -> Generator[
+    Union[IPv4Network, IPv6Network], None, None]:
+    try:
+        # Case 1: The input is a network in CIDR notation (e.g., '192.168.1.0/24')
+        network = ip_network(input_str, strict=False)
+        yield network
+        # for subnet in network.subnets():
+        #     yield subnet
+    except ValueError:
+        # Case 2: The input is a hostname (e.g., 'www.google.com')
+        # Resolve all IPs for the hostname and treat each as a /32 or /128 network
+        addresses = socket.gethostbyname_ex(input_str)[2]
+        for ip_address_str in addresses:
+            ip = ip_address(ip_address_str)
+            yield ip_network(ip)
 
 
 def _parse_rule(rule: ConfigLine,
@@ -129,8 +153,8 @@ def _parse_rule(rule: ConfigLine,
                 f"{rule.rule!r} has incorrect number of parts separated by '|'. "
                 f"Expected 5, got {len(rule_components)}. "
                 f"Format: "
-                f"<{ALLOW}, {DENY}>|"
-                f"<{','.join(SPEC_TO_TYPE_MAP)} list or any>|"
+                f"<{','.join(Action)}>|"
+                f"<{','.join([k.name for k in Kind])} list or *>|"
                 f"<ip/mask>, *|"
                 f"<port list>|"
                 f"<IN, OUT>.",
@@ -138,25 +162,24 @@ def _parse_rule(rule: ConfigLine,
                 rule.ln
             )
         )
-        return None
-    action, socket_specs_str, network_str, port_spec_str, direction = rule_components
-    if action not in (DENY, ALLOW):
+    action, socket_specs_str, network_str, port_spec_str, directions = rule_components
+    if action not in (Action.DENY.name, Action.ALLOW.name):
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
                 f"{rule.rule!r} "
-                f"use an invalide action. Must be {ALLOW!r} or {DENY!r}.",
+                f"use an invalide action. Must be {Action.ALLOW.name!r} "
+                f"or {Action.DENY.name!r}.",
                 rule.path,
                 rule.ln
             )
         )
-        return None
 
     # Parse SOCKET_SPECS
-    parsed_rule_types: List[int] = []
-    specs_input = [s.strip().lower() for s in socket_specs_str.split(',') if
-                   s.strip()]
-    if not specs_input:
+    parsed_rule_kinds: List[Kind] = []
+    kind_input = [s.strip().lower() for s in socket_specs_str.split(',') if
+                  s.strip()]
+    if not kind_input:
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
@@ -166,11 +189,11 @@ def _parse_rule(rule: ConfigLine,
                 rule.ln
             )
         )
-        return None
     else:
-        for spec_part in specs_input:
-            if spec_part in ["any", "*"]:
-                if len(specs_input) > 1:
+        for spec_part in kind_input:
+            spec_part = spec_part.upper()
+            if spec_part in ["ANY", "*"]:
+                if len(kind_input) > 1:
                     errors.append(
                         (
                             f"{format_ruleref(rule)}: "
@@ -181,25 +204,23 @@ def _parse_rule(rule: ConfigLine,
                             rule.ln
                         )
                     )
-                    return []
-                parsed_rule_types = []
+                else:
+                    parsed_rule_kinds = list(Kind)
 
-            elif spec_part in SPEC_TO_TYPE_MAP:
-                parsed_rule_types.append(SPEC_TO_TYPE_MAP[spec_part])
+            elif spec_part in [k.name for k in Kind]:
+                parsed_rule_kinds.append(Kind[spec_part])
             else:
                 errors.append(
                     (
                         f"{format_ruleref(rule)}: "
                         f"{rule.rule!r} "
                         f"has unknown socket specifier {spec_part!r}. "
-                        f"Valid specifiers: any, {', '.join(SPEC_TO_TYPE_MAP.keys())}.",
+                        f"Valid specifiers: any, {', '.join([k.name for k in Kind])}.",
                         rule.path,
                         rule.ln
                     )
                 )
-                return None
 
-        parsed_rule_types = sorted(list(set(parsed_rule_types)))
     if not isinstance(network_str, str) or not network_str.strip():
         errors.append(
             (
@@ -210,7 +231,6 @@ def _parse_rule(rule: ConfigLine,
                 rule.ln
             )
         )
-        return None
     if not isinstance(port_spec_str, str):
         errors.append(
             (
@@ -221,18 +241,23 @@ def _parse_rule(rule: ConfigLine,
                 rule.ln
             )
         )
-        return None
-    if direction not in (IN, OUT):
+    split_directions = directions.split(',')
+    if not set(split_directions).issubset({Direction.IN.name, Direction.OUT.name, "*"}):
         errors.append(
             (
                 f"{format_ruleref(rule)}: "
                 f"In {rule.rule!r}, "
-                f"direction is not {IN!r} or {OUT!r}.",
+                f"direction is not {Direction.IN.name!r} "
+                f"or {Direction.OUT.name!r}.",
                 rule.path,
                 rule.ln
             )
         )
-        return None
+    if "*" in split_directions:
+        parser_directions = tuple(Direction)
+    else:
+        parser_directions = tuple([Direction[d] for d in split_directions])
+
     try:
         ports_list_or_range = _convert_ports_range(port_spec_str)
     except ValueError:
@@ -245,42 +270,41 @@ def _parse_rule(rule: ConfigLine,
                 rule.ln
             )
         )
-        return None
     if network_str in ("*",):
-        network_str = "0.0.0.0/0"
+        networks = _all_networks
+    else:
+        networks = [network_str]
 
-    def _for_each_networks(network: Union[IPv4Network, IPv6Network]):
-        return SocketRule(action,
-                          SocketMask(
-                              tuple(specs_input),
-                              tuple(parsed_rule_types),
-                              # May not be resolved
-                              network,
-                              ports_list_or_range),
-                          direction,
-                          config=rule)
+    if errors:
+        return None
+
+    def _for_each_networks():
+        for network in networks:
+            for network in _yield_networks_from_string(network):
+                yield SocketRule(Action[action],
+                                 SocketMask(
+                                     tuple(parsed_rule_kinds),
+                                     # May not be resolved
+                                     network,
+                                     ports_list_or_range),
+                                 parser_directions,
+                                 config=rule)
 
     try:
-        return [
-            _for_each_networks(ip_network(network_str, strict=False))
-        ]
-    except ValueError:
-        try:
-            networks = socket.getaddrinfo(network_str, None)
-            return [_for_each_networks(ip_network(network[4][0], strict=False)) for
-                    network in networks]
-        except socket.gaierror:
-            errors.append(
-                (
-                    f"{format_ruleref(rule)}: "
-                    f"In {rule.rule!r}, "
-                    f"invalid network specification. "
-                    f"That does not resolve to any network.",
-                    rule.path,
-                    rule.ln
-                )
+        r = list(_for_each_networks())
+        return r
+    except socket.gaierror:
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: "
+                f"In {rule.rule!r}, "
+                f"invalid network specification. "
+                f"That does not resolve to any network.",
+                rule.path,
+                rule.ln
             )
-            return None
+        )
+        return None
 
 
 def parse_rules(rules: ConfigLines,
@@ -296,7 +320,12 @@ def parse_rules(rules: ConfigLines,
             ignore_rules.append(rule)
 
     # Remove duplicates and sort for consistency
-    sorted_rules = set(socket_rules)
+    sorted_rules = sorted(set(socket_rules),
+                          key=lambda rule: (rule.action,
+                                            len(rule.mask.kinds),
+                                            len(rule.mask.ports),
+                                            len(rule.directions)
+                                            ), reverse=True)
     return tuple(sorted_rules), ignore_rules
 
 
@@ -334,7 +363,7 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                     start = int(start_str)
                 except ValueError:
                     raise ValueError(
-                        f"Invalid start port number {start_str!r}' in range {element!r}.")
+                        f"Invalid start port number {start_str!r} in range {element!r}.")
                 if not (0 <= start <= max_port):
                     raise ValueError(
                         f"Start port {start} in range {element!r} is out of valid range (0-{max_port}).")
@@ -384,32 +413,34 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
 
 def _check_address_with_rules(
         socket_rules: SocketRules,
-        socket_instance_type: int,
+        socket_kind: Kind,
         address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
-        conn_direction: str):  # Expect IN or OUT constants
+        conn_direction: Direction):  # Expect IN or OUT constants
     """
-    Checks if a given address and port are allowed for the specified connection direction
+    Checks if a given address and port are allowed for the specified connection directions
     based on the configured rules and the derived implicit default policy.
     (Docstring needs update for new socket_instance_family, socket_instance_proto args)
     """
-    logger.debug(
-        "_check_address_with_rules(address=%s, conn_direction=%s, type=%s)",
-        address, conn_direction, socket_instance_type)
+    # logger.debug(
+    #     "_check_address_with_rules(address=%s, conn_direction=%s, kind=%s)",
+    #     address, conn_direction.name, socket_kind.name)
     hostname, destination_port = address
 
+    # TODO: cache?
     if not isinstance(destination_port, int) or not (
             0 <= destination_port <= 65535):
         raise ValueError(f"Invalid port number: {destination_port}")
 
     unique_ips: List[Union[IPv4Address, IPv6Address]]
+    use_hostname = False
     try:
 
         unique_ips = [ip_address(hostname)]
     except ValueError:
         try:
             # Resolve hostname to IP addresses using the socket instance's family, type, and proto
-            infos = socket.getaddrinfo(hostname, None,
-                                       type=socket_instance_type)
+            infos = socket.getaddrinfo(hostname, None)
+            use_hostname = True
         except socket.gaierror:
             # Fallback if the specific proto causes issues, try with proto=0 (OS default for family/type)
             # This might happen if self.proto is something specific but getaddrinfo needs a more general hint
@@ -417,7 +448,7 @@ def _check_address_with_rules(
                 logger.debug(
                     "getaddrinfo failed with specific proto %s, retrying with proto=0")
                 infos = socket.getaddrinfo(hostname, None,
-                                           type=socket_instance_type, proto=0)
+                                           type=socket_kind, proto=0)
             except socket.gaierror:
                 raise ValueError(
                     f"Invalid hostname or IP address (resolution failed): {hostname}")
@@ -431,54 +462,75 @@ def _check_address_with_rules(
 
         unique_ips = list(dict.fromkeys(ip_objects))
     if not unique_ips:
-        raise ValueError(
+        raise ValueError(  # TODO: TU for that
             f"Invalid hostname or IP address (resolution failed): {hostname}")
 
     # %% Analyse rules
-    for rule_type_to_check in (DENY, ALLOW):
+    for rule_type_to_check in (Action.DENY, Action.ALLOW):
         for ip_host in unique_ips:
             for (action,
-                 (rule_families, rule_types, network_obj, rule_ports_list),
-                 rule_direction_from_rule,
+                 (rule_kind, network_list, rule_ports_list),
+                 rule_directions,
                  config) in socket_rules:
                 if action == rule_type_to_check:
-                    type_match = (not rule_types) or (
-                            socket_instance_type in rule_types)
+                    kind_match = (not rule_kind) or (
+                            socket_kind in rule_kind)
 
-                    if type_match:
-                        if rule_direction_from_rule == conn_direction:
-                            if ip_host in network_obj and destination_port in rule_ports_list:
+                    if kind_match:
+                        if conn_direction in rule_directions:
+                            if ip_host in network_list and destination_port in rule_ports_list:
 
-                                pysandboxes_logger.debug(
-                                    "Connection to '%s' (%s:%s) %s by explicit "
-                                    "rule '%s' from %s",
-                                    hostname, ip_host, destination_port, action,
-                                    config.rule, format_ruleref(config)
-                                )
-                                if action == DENY:
-                                    pysandboxes_logger.error(
-                                        "Connection to '%s' (%s:%s) "
-                                        "DENIED by explicit rule "
-                                        "'%s' from %s",
-                                        hostname, ip_host, destination_port,
-                                        config.rule, format_ruleref(config)
-                                    )
-                                    raise RuleSocketConnectionRefusedError(
-                                        f"Guard network connection to "
-                                        f"{hostname!r} "
-                                        f"({ip_host}:{destination_port}) "
-                                        f"{action} by rule "
-                                        f"{config.rule!r} "
-                                        f"from {format_ruleref(config)})."
-                                    )
-                                elif action == ALLOW:
-                                    pysandboxes_logger.debug(
-                                        "Connection to '%s' (%s:%s) "
-                                        "ALLOW by explicit rule "
-                                        "'%s' from %s",
-                                        hostname, ip_host, destination_port,
-                                        config.rule, format_ruleref(config)
-                                    )
+                                if action == Action.DENY:
+                                    if use_hostname:
+                                        pysandboxes_logger.error(
+                                            "Connection to '%s' (%s:%s) "
+                                            "DENIED by explicit rule "
+                                            "'%s' from %s",
+                                            hostname, ip_host, destination_port,
+                                            config.rule, format_ruleref(config)
+                                        )
+                                        raise RuleSocketConnectionRefusedError(
+                                            f"Guard network connection to "
+                                            f"{hostname!r} "
+                                            f"({ip_host}:{destination_port}) "
+                                            f"{action} by rule "
+                                            f"{config.rule!r} "
+                                            f"from {format_ruleref(config)})."
+                                        )
+                                    else:
+                                        pysandboxes_logger.error(
+                                            "Connection to %s:%s "
+                                            "DENIED by explicit rule "
+                                            "'%s' from %s",
+                                            ip_host, destination_port,
+                                            config.rule, format_ruleref(config)
+                                        )
+                                        raise RuleSocketConnectionRefusedError(
+                                            f"Guard network connection to "
+                                            f"{ip_host}:{destination_port} "
+                                            f"{action} by rule "
+                                            f"{config.rule!r} "
+                                            f"from {format_ruleref(config)})."
+                                        )
+
+                                elif action == Action.ALLOW:
+                                    if pysandboxes_logger.isEnabledFor(logging.DEBUG):
+                                        if use_hostname:
+                                            pysandboxes_logger.debug(
+                                                "Connection to '%s' (%s:%s) "
+                                                "ALLOW by explicit rule "
+                                                "'%s' from %s",
+                                                hostname, ip_host, destination_port,
+                                                config.rule, format_ruleref(config)
+                                            )
+                                        else:
+                                            pysandboxes_logger.debug(
+                                                "Connection to %s:%s "
+                                                "ALLOW by explicit rule "
+                                                "'%s' from %s",
+                                                ip_host, destination_port,
+                                                config.rule, format_ruleref(config)
+                                            )
                                     return
     try:
         ip_address(hostname)
@@ -494,7 +546,7 @@ def _check_address_with_rules(
         target
     )
     raise RuleSocketConnectionRefusedError(
-        f"Guard network connection to {target} "
+        f"Guard network connection to {str(target)!r} "
         f"DENIED by implicit default policy."
     )
 
@@ -506,12 +558,17 @@ ReadableBuffer: TypeAlias = Buffer  # stable
 _Address: TypeAlias = tuple[Any, ...] | str | ReadableBuffer
 _RetAddress: TypeAlias = Any
 
-_map_socket_type = {
+_map_kind_to_str = {
     socket.SOCK_DGRAM: "udp",
     socket.SOCK_STREAM: "tcp",
 }
+_map_str_to_kind = {
+    "udp": socket.SOCK_DGRAM,
+    "tcp": socket.SOCK_STREAM,
+}
 
 
+# Not used
 def _get_fammily(ip: str) -> int:
     ip_object = ip_address(ip)
     if ip_object.version == 4:
@@ -531,8 +588,12 @@ class Guard_socket(socket.socket):
     SOCKET_SPECS: "any", "tcp", "udp", or comma-separated combinations.
     """
 
-    def _check_address(self, address: Tuple[str, int], conn_direction: str):
-        _check_address_with_rules(_rules, self.type, address,
+    def _check_address(self,
+                       address: Tuple[str, int],
+                       conn_direction: Direction):
+        _check_address_with_rules(_rules,
+                                  Kind(self.type),
+                                  address,
                                   conn_direction)
 
     def __init__(self,
@@ -557,16 +618,18 @@ class Guard_socket(socket.socket):
                 add_learning_rule(
                     LearnSocketRule(
                         "bind",
-                        _map_socket_type.get(self.type, ""),
+                        Kind(self.type),
                         address[0],
-                        address[1],
-                        IN,
-                        (),
+                        int(address[1]),
+                        Direction.IN,
+                        (),  # dns
                     )
                 )
             else:
-                self._check_address((str(address[0]), int(address[1])),
-                                    conn_direction=IN)
+                self._check_address((
+                    str(address[0]),
+                    int(address[1])),
+                    conn_direction=Direction.IN)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
                 "Allowing bind to AF_UNIX address (not subject to IP rules): %s",
@@ -585,16 +648,18 @@ class Guard_socket(socket.socket):
                 add_learning_rule(
                     LearnSocketRule(
                         "connect",
-                        "tcp",
+                        Kind(self.type),
                         address[0],
-                        address[1],
-                        OUT,
-                        ()
+                        int(address[1]),
+                        Direction.OUT,
+                        ()  # dns
                     )
                 )
             else:
-                self._check_address((str(address[0]), int(address[1])),
-                                    conn_direction=OUT)
+                self._check_address((
+                    str(address[0]),
+                    int(address[1])),
+                    conn_direction=Direction.OUT)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
                 "Allowing connect to AF_UNIX address (not subject to IP rules): %s",
@@ -603,6 +668,9 @@ class Guard_socket(socket.socket):
             logger.warning(
                 "Unexpected address format for connect: %s. Skipping IP rule check.",
                 address)
+            # FIX_RELEASE: unknown socket format
+            assert False, (f"Unexpected address format for connect: "
+                           f"{address}. Skipping IP rule check.")
         super().connect(address)
 
     def connect_ex(self, address: Adresse_Type) -> int:
@@ -612,16 +680,18 @@ class Guard_socket(socket.socket):
                 add_learning_rule(
                     LearnSocketRule(
                         "connect_ex",
-                        "tcp",
+                        Kind(self.type),
                         address[0],
-                        address[1],
-                        OUT,
-                        ()
+                        int(address[1]),
+                        Direction.OUT,
+                        ()  # dns
                     )
                 )
             else:
-                self._check_address((str(address[0]), int(address[1])),
-                                    conn_direction=OUT)
+                self._check_address((
+                    str(address[0]),
+                    int(address[1])),
+                    conn_direction=Direction.OUT)
         elif isinstance(address, str):  # AF_UNIX
             logger.debug(
                 "Allowing connect_ex to AF_UNIX address (not subject to IP rules): %s",
@@ -635,20 +705,25 @@ class Guard_socket(socket.socket):
     def sendto(self, data: ReadableBuffer, address: _Address, /) -> int:
         if isinstance(address, tuple) and len(address) >= 2 and isinstance(
                 address[0], str) and isinstance(address[1], int):
-            if is_learning_mode():
-                add_learning_rule(
-                    LearnSocketRule(
-                        "sendto",
-                        "udp",
-                        address[0],
-                        address[1],
-                        OUT,
-                        ()
+            if self.type == Kind.UDP.value:
+                if is_learning_mode():
+                    add_learning_rule(
+                        LearnSocketRule(
+                            "sendto",
+                            Kind(self.type),
+                            address[0],
+                            int(address[1]),
+                            Direction.OUT,
+                            ()  # dns
+                        )
                     )
-                )
+                else:
+                    self._check_address((
+                        str(address[0]),
+                        int(address[1])),
+                        conn_direction=Direction.OUT)
             else:
-                self._check_address((str(address[0]), int(address[1])),
-                                    conn_direction=OUT)
+                logger.debug("Invalide usage of sendto")
         return super().sendto(data, address)
 
     # def recvfrom(self, bufsize: int, flags: int = ..., /) -> tuple[bytes, _RetAddress]:
@@ -685,10 +760,10 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
             add_learning_rule(
                 LearnSocketRule(
                     "gethostbyname",
-                    "",
+                    Kind.UNKNOWN,
                     name,
                     0,
-                    None,
+                    Direction.OUT,
                     (ip_address(result),),
                 )
             )
@@ -706,10 +781,10 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
             add_learning_rule(
                 LearnSocketRule(
                     "gethostbyname_ex",
-                    "",
+                    Kind.UNKNOWN,
                     name,
                     0,
-                    None,
+                    Direction.OUT,
                     tuple(result[2])
                 )
             )
@@ -739,10 +814,10 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
             add_learning_rule(
                 LearnSocketRule(
                     "getaddrinfo",
-                    "",
+                    Kind.UNKNOWN,
                     host,
                     int(port) if port is not None else 0,
-                    None,
+                    Direction.OUT,
                     tuple({ip_address(info[4][0]) for info in result})
                 )
             )
@@ -822,6 +897,7 @@ def generate_rules(
                 dns.add(learn_rule.address)
 
     # 2. Map access to dns
+    by_destination = {}
     for learn_rule in filter(lambda x: isinstance(x, LearnSocketRule), learn):
         if learn_rule.fn not in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
             if learn_rule.address in dns:
@@ -841,9 +917,36 @@ def generate_rules(
                         destination = f"{learn_rule.address}/{mask}"
                     else:
                         destination = learn_rule.address
+            # Search alias in env
+            port = str(learn_rule.port)  # FIXME: alias of port in env
+            for k, v in os.environ.items():
+                if v == destination:
+                    destination = f"${{{k}}}"
+            # Split by direction
+            in_out = by_destination.get((destination, learn_rule.kind), ([], []))
+            if learn_rule.direction is Direction.IN:
+                in_out[0].append(learn_rule)
+            else:
+                in_out[1].append(learn_rule)
+            by_destination[(destination, learn_rule.kind)] = in_out
+
+    for (destination, kind), (in_rules_for_dest,
+                              out_rules_for_dest) in by_destination.items():
+        # Agregate ports
+        if in_rules_for_dest:
+            in_ports = {str(rule.port) for rule in
+                        in_rules_for_dest}  # Can not be a range
             result.add(
-                f"net=ALLOW|{learn_rule.protocol}|"
-                f"{destination}|{learn_rule.port}|"
-                f"{learn_rule.direction}"
+                f"net=ALLOW|{learn_rule.kind.name}|"
+                f"{destination}|{','.join(in_ports)}|"
+                f"{learn_rule.direction.name}"
+            )
+        if out_rules_for_dest:
+            out_ports = {str(rule.port) for rule in
+                         out_rules_for_dest}  # Can not be a range
+            result.add(
+                f"net=ALLOW|{learn_rule.kind.name}|"
+                f"{destination}|{','.join(out_ports)}|"
+                f"{learn_rule.direction.name}"
             )
     return sorted(list(result))

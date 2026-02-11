@@ -3,7 +3,7 @@ import ipaddress
 import socket
 from typing import List
 
-from .guard_socket import SPEC_TO_TYPE_MAP, SocketRules
+from .guard_socket import SocketRules
 
 _map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
 _map_netfilter_direction = {"OUT": "OUTPUT", "IN": "INPUT"}
@@ -102,7 +102,7 @@ def rule_to_netfilter(socket_rules: SocketRules,
          rule_direction_from_rule,_) in socket_rules:
 
         if not rule_types:
-            rule_types = set(SPEC_TO_TYPE_MAP.values())
+            rule_types = set(SPEC_TO_TYPE_MAP.values())  # FIXME
         for rule_type in rule_types:
 
             if is_ipv6 and isinstance(network_obj, ipaddress.IPv4Network):
@@ -162,7 +162,7 @@ def rule_to_netfilter(socket_rules: SocketRules,
             elif rule_type in exclude:
                 pass # Ignore
             else:
-                assert False, "Unkown protocol"
+                assert False, "Unkown kind"
 
     netfilter.append("COMMIT")
     return netfilter

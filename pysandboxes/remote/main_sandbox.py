@@ -20,7 +20,7 @@ from ..learning import is_learning_mode, generate_config_from_learning
 from ..private_loop import set_sandbox_loop
 from ..tools import SyncOrAsyncFunc
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 pickling_support.install()
 

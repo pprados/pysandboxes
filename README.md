@@ -412,13 +412,9 @@ Sometimes the sandbox disrupts development. There are several approaches to disa
 To disable only one rule family, use the generic acceptance settings.
 - `env=*=${*}`
 - `bind=/,/`
-```python
-net=ALLOW|*|0.0.0.0/0|*|IN
-net=ALLOW|*|0.0.0.0/0|*|OUT
-net=ALLOW|*|::1/0|*|IN
-net=ALLOW|*|::1/0|*|OUT
+- `net=ALLOW|*|*|*|*`
+- `import=*`
 
-```
 ## How to package the project
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.
 The file must also be published in the project's launch directory.

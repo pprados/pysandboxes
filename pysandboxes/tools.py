@@ -229,6 +229,7 @@ def set_is_in_sandbox(value: bool) -> None:
         # _is_in_sandbox += 1
     else:
         _sandboxed.set(_sandboxed.get() - 1)
+        assert _sandboxed.get() >=0
         # _is_in_sandbox -= 1
 
 
