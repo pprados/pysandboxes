@@ -267,7 +267,7 @@ def activate_sandboxes(
     guard_envs.activate_guard(all_rules.envs_rules)
     guard_socket.activate_guard(all_rules.socket_rules)
     guard_files.activate_guard(all_rules.file_rules)
-    guard_self.activate_guard()
     if all_rules.learn:
         activate_learning(all_rules.learning_path)
     remove_modules()
+    guard_self.activate_guard()

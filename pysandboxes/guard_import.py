@@ -218,7 +218,6 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                 module_name = fullname.split('.', 1)[0]
                 if module_name not in _rules and module_name != "pysandboxes":
                     add_learning_rule(LearnImportRule(module_name))
-                    logger.error("Add %s", repr(module_name))
             else:
                 # logger.error("Ignore %s",repr(fullname))
                 pass

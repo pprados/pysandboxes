@@ -25,6 +25,7 @@ def _python_interactive(
         all_rules: AllRules,
 ):
     exit_msg = None
+    # FIXME: add color for banner
     if all_rules.learn:
         sb_mode = (f'*** API calls are LEARNED and saved in '
                    f'{str(all_rules.learning_path)!r} at the '
@@ -53,7 +54,7 @@ def _python_interactive(
         from types import ModuleType
 
         # Hack for IPython
-        sys.modules["__main__"] = ModuleType("__main__")
+        sys.modules["__main__"] = ModuleType(name="__main__")
         import IPython
         from traitlets.config import get_config
         c = get_config()

@@ -2,9 +2,13 @@ from types import ModuleType
 from typing import Dict, Any, Tuple, Callable
 from weakref import WeakKeyDictionary
 
+from .appendonly_dict import AppendOnlyDict
 from .e import RuleAttributeError
 from .immutable_dict import ImmutableDict
 
+
+# TODO: limit recursion
+# TODO: limit memory
 
 class GuardModule(ModuleType):
     _states: Dict[
@@ -12,25 +16,27 @@ class GuardModule(ModuleType):
 
     __slot__ = ()
 
+    def __new__(cls, name: str, *args, **kwargs):
+        if "original" in kwargs and "guard_attributs" in kwargs:
+            return super().__new__(GuardModule)
+        else:
+            # Return, not guarded module
+            obj = super().__new__(ModuleType)
+            obj.__init__(name)
+            return obj
+
     def __init__(self,
                  name,
                  *,
-                 original: ModuleType = None,
-                 guard_attributs: Tuple[str, ...] = None):
-        if not original:
-            assert name == "empty_module"
-            # Special case for sys module, use by pytest to
-            # initialize IGNORED_ATTRIBUTES
-            super().__init__(name)
-            GuardModule._states[self] = ImmutableDict({})
-        else:
-            assert (original)
-            super().__init__(original.__name__)
-            GuardModule._states[self] = ImmutableDict(
-                {
-                    "guard_attributs": guard_attributs,
-                })
-            self.__dict__.update(original.__dict__)
+                 original: ModuleType,
+                 guard_attributs: Tuple[str, ...]):
+        assert (original)
+        super().__init__(original.__name__)
+        GuardModule._states[self] = ImmutableDict(
+            {
+                "guard_attributs": guard_attributs,
+            })
+        self.__dict__.update(original.__dict__)
 
     def __setattr__(self, name: str, value: object) -> None:
         guard_attributs = GuardModule._states[self].get("guard_attributs", set())
@@ -41,12 +47,18 @@ class GuardModule(ModuleType):
 
 
 def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
-    # Not PEP726 is rejeted
-    return GuardModule(
-        module.__name__,
-        original=module,
-        guard_attributs=("meta_path",)
-    )
+    # Note: PEP726 is rejeted
+    import sys
+    # sys.modules = AppendOnlyDict(
+    #     module.modules,
+    #     onetime_set={"sys"})
+    # guard_module = GuardModule(
+    #     module.__name__,
+    #     original=module,
+    #     guard_attributs=("meta_path", "modules")
+    # )
+    # return guard_module
+    return module
 
 def patch_rules() -> Dict[str, Callable]:
     return {
@@ -58,4 +70,3 @@ def activate_guard() -> None:
     import sys
     sys.meta_path = tuple(sys.meta_path)  # Change to immutable list
     sys.modules["sys"] = _global_patch_in_sys_module(sys.modules["sys"])
-

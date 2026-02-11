@@ -26,10 +26,13 @@ def main() -> int:
     python_parsed_args, sandboxes_args, python_cmd = parse_python_cmd_line(sys.argv[1:])
 
     extra_rules = convert_extra_rules(sandboxes_args)
-    config_path = Path(tuple(extra_rules.get("learn", CONFIG_NAME))[0])
+    if list(extra_rules.get("learn", set([""])))[0] == "":
+        extra_rules["learn"] = {CONFIG_NAME}
+    config_path = Path(tuple(extra_rules["learn"])[0])
 
     try:
-        if not '/' in str(config_path) and len(python_cmd) >= 2 and python_cmd[0] == "-m":
+        if not '/' in str(config_path) and len(python_cmd) >= 2 and python_cmd[
+            0] == "-m":
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
             from importlib.resources import files
@@ -73,7 +76,6 @@ def main() -> int:
         return asyncio.run(run_locally())
     cmd = os_provider.subprocess_cmd(
         all_rules,
-        envs=all_rules.envs
     )
     with tempfile.TemporaryDirectory() as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
