@@ -210,7 +210,6 @@ def get_token() -> str:
 
 async def async_call_in_sandbox(
         func: Callable[..., Any],
-        timeout: float,
         *args: Any,
         **kwargs: Any) -> Any:
     global _current_daemon
@@ -218,12 +217,11 @@ async def async_call_in_sandbox(
         return await func(*args, **kwargs)
 
     assert _current_daemon is not None, "Daemon not started"
-    return await _current_daemon.async_call_in_sandbox(func, timeout, *args, **kwargs)
+    return await _current_daemon.async_call_in_sandbox(func,  *args, **kwargs)
 
 
 def call_in_sandbox(
         func: Callable[..., Any],
-        timeout: float,
         *args: Any,
         **kwargs: Any) -> Any:
     global _current_daemon
@@ -232,4 +230,4 @@ def call_in_sandbox(
     assert _current_daemon is not None, "Daemon not started"
     check_mixte_async_async()
 
-    return _current_daemon.call_in_sandbox(func, timeout, *args, **kwargs)
+    return _current_daemon.call_in_sandbox(func, *args, **kwargs)

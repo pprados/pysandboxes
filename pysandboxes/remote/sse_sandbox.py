@@ -31,7 +31,7 @@ PING_SERVER_URL: str = os.environ.get(
 def _get_rpc_params(args: Any,
                     func: Callable[..., Any],
                     kwargs: Any,
-                    timeout: float) -> Dict[str, Any]:
+                    ) -> Dict[str, Any]:
     """
     Get the parameters for the RPC call.
     """
@@ -39,7 +39,6 @@ def _get_rpc_params(args: Any,
     module_name, callable_name = get_callable_info(func)
     params = {
         "session_id": "123",  # FIXME: session_id (correlation id?)
-        "timeout": timeout,
         "function": f"{module_name}:{callable_name}",
         "args": to_b85(args),
         "kwargs": to_b85(kwargs),
@@ -56,7 +55,6 @@ class SSESandbox(BaseDaemon):
 
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
-                                    timeout: float,
                                     *args: Any,
                                     **kwargs: Any) -> Any:
         if is_in_sandbox():
@@ -65,7 +63,7 @@ class SSESandbox(BaseDaemon):
 
         try:
             token = get_token()
-            params = _get_rpc_params(args, func, kwargs, timeout)
+            params = _get_rpc_params(args, func, kwargs)
             logger.debug("Try to call to %s", SANDBOX_SERVER_URL)
             async with sse_client.EventSource(
                     SANDBOX_SERVER_URL,
@@ -76,9 +74,7 @@ class SSESandbox(BaseDaemon):
                         "Accept": "text/event-stream",
                         "Authorization": f"Bearer {token}"
                     },
-                    timeout=None,  # keep-alive
-                    reconnection_time=
-                    timedelta(
+                    reconnection_time=timedelta(
                         seconds=0.2
                     ),
             ) as event_source:
@@ -113,7 +109,6 @@ class SSESandbox(BaseDaemon):
     @sandbox_loop
     def call_in_sandbox(self,
                         func: Callable[..., Any],
-                        timeout: float,
                         *args: Any,
                         **kwargs: Any) -> Any:
         if is_in_sandbox():
@@ -121,5 +116,5 @@ class SSESandbox(BaseDaemon):
         loop = asyncio.get_event_loop()  # Get the current running loop. May be != sandbox loop
 
         return asyncio.run_coroutine_threadsafe(
-            self.async_call_in_sandbox(func, timeout, *args, **kwargs),
+            self.async_call_in_sandbox(func, *args, **kwargs),
             loop).result()

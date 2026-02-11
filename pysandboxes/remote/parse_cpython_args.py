@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 def _split_python_cmd(args: List[str]) -> Tuple[List[str], List[str]]:
     for idx, arg in enumerate(args):
-        if arg in ("-c", "-m", "-i") or not arg.startswith("-"):
+        if arg in ("-c", "-m") or not arg.startswith("-"):
             python_args, other_args = args[:idx], args[idx:]
             break
     else:
@@ -100,6 +100,8 @@ def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[s
     parser.add_argument("-E", action="store_true",
                         help="Ignore all PYTHON* environment variables, e.g. PYTHONPATH and PYTHONHOME, that might be set.")
 
+    parser.add_argument("-i", action="store_true",
+                       help="Enter interactive mode after execution.")
     parser.add_argument("-I", action="store_true",
                         help="Run Python in isolated mode.")
     parser.add_argument("-O", action="store_true",
@@ -136,8 +138,6 @@ def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[s
                             help="Add some Py-sandboxes parameters.")
         group = parser.add_mutually_exclusive_group()
 
-        group.add_argument("-i", action="store_true",
-                            help="Enter interactive mode after execution.")
         group.add_argument("-m", action="store", metavar="mod", dest="module",
                             help="Run library module as a script (terminates option list).")
         group.add_argument("-c", action="store", metavar="cmd", dest="command",

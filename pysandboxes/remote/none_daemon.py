@@ -52,14 +52,12 @@ class NoneDaemon(BaseDaemon):
 
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
-                                    timeout: float,
                                     *args: Any,
                                     **kwargs: Any) -> Any:
         raise NotImplementedError
 
     def call_in_sandbox(self,
                         func: Callable[..., Any],
-                        timeout: float,
                         *args: Any,
                         **kwargs: Any) -> Any:
         raise NotImplementedError

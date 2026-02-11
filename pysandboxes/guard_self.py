@@ -17,29 +17,34 @@ class GuardModule(ModuleType):
     __slot__ = ()
 
     def __new__(cls, name: str, *args, **kwargs):
-        if "original" in kwargs and "guard_attributs" in kwargs:
-            return super().__new__(GuardModule)
+        if "_original" in kwargs and "_guard_attributs" in kwargs:
+            return super().__new__(GuardModule,*args,**kwargs)
         else:
-            # Return, not guarded module
-            obj = super().__new__(ModuleType)
-            obj.__init__(name)
-            return obj
+            if cls == GuardModule:
+                # Return, not guarded module
+                obj = super().__new__(ModuleType)
+                obj.__init__(name)
+                return obj
+            else:
+                obj = super().__new__(cls)
+                super(ModuleType,obj).__init__(name)
+                return obj
 
     def __init__(self,
                  name,
                  *,
-                 original: ModuleType,
-                 guard_attributs: Tuple[str, ...]):
-        assert (original)
-        super().__init__(original.__name__)
-        GuardModule._states[self] = ImmutableDict(
-            {
-                "guard_attributs": guard_attributs,
-            })
-        self.__dict__.update(original.__dict__)
+                 _original: ModuleType=None,
+                 _guard_attributs: Tuple[str, ...]=None):
+        super().__init__(name)
+        if _original:
+            GuardModule._states[self] = ImmutableDict(
+                {
+                    "_guard_attributs": _guard_attributs,
+                })
+            self.__dict__.update(_original.__dict__)
 
     def __setattr__(self, name: str, value: object) -> None:
-        guard_attributs = GuardModule._states[self].get("guard_attributs", set())
+        guard_attributs = GuardModule._states[self].get("_guard_attributs", set())
         if name in guard_attributs:
             raise RuleAttributeError(
                 f"Cannot set attribute {self.__name__ + "." + name!r}")
@@ -51,13 +56,14 @@ def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
     # sys.modules = AppendOnlyDict(
     #     module.modules,
     #     onetime_set={"sys"})
-    guard_module = GuardModule(
-        module.__name__,
-        original=module,
-        guard_attributs=("meta_path", "modules")
-    )
-    return guard_module
-    # return module
+    # TODO GuardModule not working
+    # guard_module = GuardModule(
+    #     module.__name__,
+    #     _original=module,
+    #     _guard_attributs=("meta_path", "modules")
+    # )
+    # return guard_module
+    return module
 
 def patch_rules() -> Dict[str, Callable]:
     return {

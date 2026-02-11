@@ -124,8 +124,8 @@ def generate_config_from_learning() -> None:
                  find_learning)
         )
         if old_learning_path:
-            msg += ("The old '%s' is renamed to '%s'. " %
-                    (learning_path, old_learning_path))
+            msg += ("The old version is here '%s'. " %
+                    (old_learning_path,))
             learning_path.rename(old_learning_path)
 
         msg += "Check and update this file to validate the rules."

@@ -1,5 +1,6 @@
 import importlib
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import List, Dict, Union, Set
@@ -16,20 +17,34 @@ def _debug_log():
         level=logging.DEBUG,
         format='%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     )
-    log_level = logging.WARNING
+    log_level = logging.INFO
     logging.getLogger("pysandboxes").setLevel(log_level)
     logging.getLogger("Pysandboxes").setLevel(log_level)
 
 
 def _python_interactive(
         all_rules: AllRules,
-):
+        ban: bool,
+) -> int:
     exit_msg = None
-    # FIXME: add color for banner
+    term = os.environ.get('TERM')
+    if (
+            sys.stdout.isatty() and
+            (
+                    (term and ('color' in term or '256' in term or 'true' in term)) or
+                    (sys.platform == 'win32' and 'ANSICON' in os.environ)
+            )
+    ):
+        BOLD = '\033[1m'
+        RESET = '\033[0m'
+    else:
+        BOLD = '*** '
+        RESET = ' ***'
+
     if all_rules.learn:
-        sb_mode = (f'*** API calls are LEARNED and saved in '
+        sb_mode = (f'{BOLD}API calls are LEARNED and saved in '
                    f'{str(all_rules.learning_path)!r} at the '
-                   f'end of the session. ***\n')
+                   f'end of the session.{RESET}\n')
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
         sb_mode = (f'*** APIs are LIMITED according to the rules in '
@@ -73,7 +88,8 @@ def _python_interactive(
 
         c.TerminalIPythonApp.display_banner = False
         # c.InteractiveShellApp.exit_msg=exit_msg
-        print(banner)
+        if ban:
+            print(banner)
         print(
             f"IPython {IPython.__version__} -- An enhanced Interactive Python. "
             f"Type '?' for help.")
@@ -81,6 +97,8 @@ def _python_interactive(
                               config=c,
                               )
     except ImportError:
+        import traceback
+        traceback.print_exc()
         # Fallback to the standard Python REPL if IPython is not installed
         import code
 
@@ -92,7 +110,7 @@ def _python_interactive(
 
         # Start the standard interactive console
         try:
-            code.interact(banner=banner,
+            code.interact(banner=banner if ban else "",
                           exitmsg=exit_msg,
                           # When self.local_exit is True, we overwrite the builtins so
                           # exit() and quit() only raises SystemExit and we can catch that
@@ -101,22 +119,29 @@ def _python_interactive(
                           )
         except SystemExit as e:
             pass
-
-
-def _python_module(mod_name: str) -> int:
-    # FIXME chercher le conf du module?
-    import runpy
-    runpy.run_module(mod_name, run_name="__main__")
     return 0
 
 
-def _python_script(script: Path,
-                   args: List[str]
-                   ) -> int:
+def _python_module(all_rules: AllRules,
+                   mod_name: str) -> int:
+    import runpy
+    runpy.run_module(mod_name, run_name="__main__")
+    if sys.flags.inspect:
+        return _python_interactive(all_rules=all_rules, ban=False)
+    return 0
+
+
+def _python_script(
+        all_rules: AllRules,
+        script: Path,
+        args: List[str]
+) -> int:
     try:
         script_body = script.read_text()
         sys.argv = [str(script)] + args
         exec(script_body)
+        if sys.flags.inspect:
+            return _python_interactive(all_rules=all_rules, ban=False)
         return 0
     except FileNotFoundError:
         print(f"python: can't open file {str(script)!r}: "
@@ -124,11 +149,15 @@ def _python_script(script: Path,
         return 2
 
 
-def _python_command(script_body: str,
-                    args: List[str]
-                    ) -> int:
+def _python_command(
+        all_rules: AllRules,
+        script_body: str,
+        args: List[str]
+) -> int:
     sys.argv = args
     exec(script_body)
+    if sys.flags.inspect:
+        return _python_interactive(all_rules=all_rules, ban=False)
     return 0
 
 
@@ -155,8 +184,8 @@ def python_in_sb(
     try:
         _debug_log()
         set_is_in_sandbox(True)
-        if not len(python_cmd) or python_cmd[0] == "-i" or python_cmd[0] == "-":
-            _python_interactive(all_rules)
+        if not len(python_cmd):
+            _python_interactive(all_rules, True)
         elif python_cmd[0] == '-m':
             # Case: Execute a module
             if len(python_cmd) > 1:
@@ -164,8 +193,13 @@ def python_in_sb(
                 python_cmd.pop(0)  # Remove -m
                 python_cmd.pop(0)  # Remove module name
                 spec = importlib.util.find_spec(mod_name)
-                sys.argv = [spec.origin] + python_cmd
-                return _python_module(mod_name)
+                print(f"{mod_name=}")
+                print(f"{spec=}")
+                if spec:
+                    sys.argv = [spec.origin] + python_cmd
+                else:
+                    sys.argv = [""] + python_cmd
+                return _python_module(all_rules, mod_name)
             else:
                 # Error case for '-m' without a module name
                 print("Argument expected for -m option\n"
@@ -178,7 +212,7 @@ def python_in_sb(
             if len(python_cmd) > 1:
                 script_body = python_cmd[1]
                 python_cmd.pop(1)
-                return _python_command(script_body, python_cmd)
+                return _python_command(all_rules, script_body, python_cmd)
             else:
                 print("Argument expected for -c option\n"
                       "usage: python-sb [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
@@ -186,27 +220,8 @@ def python_in_sb(
                       file=sys.stderr)
         else:
             # Run a script
-            _python_script(Path(python_cmd[0]), python_cmd[1:])
+            _python_script(all_rules, Path(python_cmd[0]), python_cmd[1:])
         return 0
     finally:
         if is_learning_mode():
             generate_config_from_learning()
-
-
-if __name__ == "__main__":  # FIX_RELEASE: for debug only
-    from ..all_rules import EmptyRules
-    rc = 0
-    try:
-        all_rules = EmptyRules
-        rc = python_in_sb(all_rules,
-                        [],
-                        )
-    except SystemExit as e:
-        rc = int(e.code)
-    except KeyboardInterrupt:
-        rc = 0
-    except Exception as e:
-        logger.error(f"Exception: {e}", exc_info=True)
-        rc = -1
-    sys.exit(rc)
-

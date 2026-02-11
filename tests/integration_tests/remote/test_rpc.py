@@ -75,13 +75,3 @@ async def test_async_function_with_error():
         await async_function_with_error(10, 0)
 
 
-@sandbox(timeout=0.5)
-async def async_function_with_timeout() -> str:
-    await asyncio.sleep(3)
-    return "This should not be returned"
-
-
-@pytest.mark.skip(reason="TODO")
-async def test_async_function_with_timeout():
-    with pytest.raises(TimeoutError):
-        await async_function_with_timeout()

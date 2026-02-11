@@ -7,6 +7,7 @@ from socket import AF_INET, SOCK_STREAM, AF_INET6, SOCK_DGRAM
 
 import dotenv
 
+import pysandboxes
 from pysandboxes import sandbox, sandboxes, SandBoxError
 
 dotenv.load_dotenv()
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level():
-    level = logging.DEBUG
+    level = logging.WARNING
     if True:  # FIX_RELEASE "PYTEST_RUN_CONFIG" in os.environ:
         format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     else:
@@ -157,7 +158,6 @@ def init_sandbox():
 
 
 async def async_init_sandbox():
-    await asyncio.sleep(0)
     init_sandbox()
 
 
@@ -190,16 +190,16 @@ def main():
 
     for i in range(0, 1):
         # asyncio.run(async_manager())
-        # # print("----------------")
-        with sandboxes(async_init_sandbox,
-                       # config_path="test.py-sandboxes",
-                       learn=".py-sandboxes", # Learn all the times
-                       # os_sandbox="none",
-                       ):
-            run()
+        # # # print("----------------")
+        # with sandboxes(async_init_sandbox,
+        #                # config_path="test.py-sandboxes",
+        #                learn=".py-sandboxes", # Learn all the times
+        #                # os_sandbox="none",
+        #                ):
+        #     run()
         # TODO: voir la capture d'exception
-        print("----------------")
-        # pysandboxes.run(arun(),init_fn=init_sandbox)
+        # print("----------------")
+        pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")
 
 # from pysandboxes.sandboxes_api import sandboxes

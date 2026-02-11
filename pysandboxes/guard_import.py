@@ -97,19 +97,19 @@ def _apply_patch(module, name: str):
 
 class GuardLoader(importlib.abc.Loader):
     """
-    A custom loader that wraps an original loader to modify a module after it
+    A custom loader that wraps an _original loader to modify a module after it
     has been created and executed.
     """
     __slots__ = ("original_spec", "original_loader")
 
     def __init__(self, original_spec: importlib.util.spec_from_file_location):
-        # Store the original spec and loader
+        # Store the _original spec and loader
         self.original_spec: importlib.util.spec_from_file_location = original_spec
         self.original_loader: importlib.abc.Loader = original_spec.loader
 
     def create_module(self, spec: importlib.util.spec_from_file_location) -> ModuleType:
         """
-        Delegates the module creation to the original loader.
+        Delegates the module creation to the _original loader.
         This gets the base module object from the standard import process.
         """
         logger.debug(f"create_module({spec=}")
@@ -118,7 +118,7 @@ class GuardLoader(importlib.abc.Loader):
 
     def exec_module(self, module: ModuleType) -> None:
         """
-        Executes the module code using the original loader, then performs
+        Executes the module code using the _original loader, then performs
         custom modifications.
         This is where we add our custom logic after the standard loading.
         """
@@ -128,11 +128,12 @@ class GuardLoader(importlib.abc.Loader):
         if not is_learning_mode():
             if _rules and _rules[0] != "*":
                 module_name = module.__name__
-                if module_name not in _rules:
-                    # FIXME: tester tous les imports de bases depuis le départ
-                    raise RuleModuleNotFoundError(
-                        f"Module named {module_name!r} is not allowed by a rule"
-                    )
+                # Reactiver le filtre de module
+                # if module_name not in _rules:
+                #     # FIXME: tester tous les imports de bases depuis le départ
+                #     raise RuleModuleNotFoundError(
+                #         f"Module named {module_name!r} is not allowed by a rule"
+                #     )
         # logger.debug(f"exec_module({module.__name__})...")
         self.original_loader.exec_module(module)
 
@@ -164,7 +165,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         """
         # logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
-        # Delegate to the rest of the chain to find the original module spec
+        # Delegate to the rest of the chain to find the _original module spec
         # We skip our own finder by checking sys.meta_path from the next index
         # import builtins;builtins.print(f"finder {fullname}")
         for finder in sys.meta_path:
@@ -175,16 +176,17 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             if original_spec:
                 break
         else:
-            if not original_spec:
-                if fullname in "sys.modules":
-                    original_spec = sys.modules[fullname].__spec__
+            return None
+            # if not original_spec:
+            #     if fullname in "sys.modules":
+            #         original_spec = sys.modules[fullname].__spec__
         if original_spec:
             # logger.debug(
-            #     f"GuardFinder: Found original spec via {type(finder).__name__!r}.")
-            # Create a new spec using our custom GuardLoader, but with the original spec's data
+            #     f"GuardFinder: Found _original spec via {type(finder).__name__!r}.")
+            # Create a new spec using our custom GuardLoader, but with the _original spec's data
 
             # logger.debug(
-            #     f"GuardFinder: Found original spec {original_spec.name} via {type(finder).__name__!r}.")
+            #     f"GuardFinder: Found _original spec {original_spec.name} via {type(finder).__name__!r}.")
             if original_spec.name in _patch_rules:
 
                 # logger.debug(f"Inject loader for {original_spec.name!r}")
@@ -221,6 +223,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             else:
                 # logger.error("Ignore %s",repr(fullname))
                 pass
+            if fullname == "pysandboxes_run":
+                logger.error(f"Pour pysandboxes_run {new_spec=}")
             return new_spec
 
         # For all other imports, return None to let the standard import
@@ -249,12 +253,15 @@ def _activate_patch_import(
 # Modules to not remove from sys.modules, and to wait the lazy patch
 _not_refresh_modules: Set[str] = (
     {
-        'importlib',
-        'concurrent',
         'asyncio',
-        # 'warnings',
-        # '_pytest',
-        # 'pytest',
+        'builtins',
+        'concurrent',
+        'importlib',
+        'warnings',
+        '_pytest',
+        'pytest',
+        'pathlib',
+        'subprocess',
         __name__.rsplit('.', maxsplit=1)[0],
     }
 )
@@ -287,6 +294,82 @@ def remove_modules() -> None:
             if k not in sys.builtin_module_names:
                 del sys.modules[k]
     assert "io" not in sys.modules
+
+# FIXME: remove version
+# _not_refresh_modules: Set[str] = (
+#     {
+#         'importlib',
+#         'concurrent',
+#         'asyncio',
+#         'warnings',
+#         'logging',
+#         '_pytest',
+#         'pytest',
+#         __name__.rsplit('.', maxsplit=1)[0],
+#     }  # | set(sys.builtin_module_names)
+# )
+#
+# # sys.builtin_module_names
+# xx = ('_abc', '_ast', '_codecs', '_collections', '_functools', '_imp', '_io', '_locale',
+#       '_operator', '_signal',
+#       '_sre', '_stat', '_string', '_suggestions', '_symtable', '_sysconfig', '_thread',
+#       '_tokenize', '_tracemalloc',
+#       '_typing', '_warnings', '_weakref',
+#       # 'atexit',
+#       'builtins',
+#       # 'errno',
+#       # 'faulthandler',
+#       # 'gc',
+#       # 'itertools',
+#       # 'marshal',
+#       # 'posix',
+#       # 'pwd',
+#       'sys',
+#       # 'time'
+#       )
+#
+#
+# def remove_modules() -> None:
+#     import sys
+#     to_remove = set()
+#     for k, m in dict(sys.modules).items():
+#         # Detect system modules
+#         if k in xx:  # Il y a builtins
+#             continue
+#         for special in _not_refresh_modules:
+#             if k == special or k.startswith(special + "."):
+#                 break
+#         else:
+#             to_remove.add(k)
+#
+#     importlib.invalidate_caches()
+#     # Reload modules (may add modules with relead() )
+#     for k in to_remove:
+#         if k in sys.modules:
+#             if k in sys.builtin_module_names:
+#                 m = sys.modules[k]
+#                 if m:
+#                     importlib.reload(m)
+#                     pass
+#
+#     # Remove modules
+#     for k in to_remove:
+#         if k in sys.modules:
+#             if k not in sys.builtin_module_names:
+#                 del sys.modules[k]
+#
+#     # Merge remove modules
+#     # for k in to_remove:
+#     #     if k in sys.modules:
+#     #         if k in sys.builtin_module_names:
+#     #             m = sys.modules[k]
+#     #             if m:
+#     #                 importlib.reload(m)
+#     #                 pass
+#     #         else:
+#     #             del sys.modules[k]
+#     # Tricky: if you use debugger, the io are reinjected
+#     assert "io" not in sys.modules
 
 
 def patch_rules() -> Dict[str, Callable]:

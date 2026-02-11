@@ -66,7 +66,6 @@ class BaseDaemon(ABC):
     @abstractmethod
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
-                                    timeout: float,
                                     *args: Any,
                                     **kwargs: Any) -> Any:
         raise NotImplementedError
@@ -74,7 +73,6 @@ class BaseDaemon(ABC):
     @abstractmethod
     def call_in_sandbox(self,
                         func: Callable[..., Any],
-                        timeout: float,
                         *args: Any,
                         **kwargs: Any) -> Any:
         raise NotImplementedError

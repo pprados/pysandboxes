@@ -14,11 +14,11 @@ def reset_rules():
 
 
 def test_escape_with_closure():
-    # Find the original version of io.open (possible if the code is in Python)
+    # Find the _original version of io.open (possible if the code is in Python)
     import io
     assert hasattr(io.open, "__closure__"), "Not in a pysandbox"
     original_open = io.open.__closure__[0].cell_contents
-    assert original_open.__module__ == "_io", "Not the original io.open"
+    assert original_open.__module__ == "_io", "Not the _original io.open"
 
 
 def test_escape_with_subclasses():

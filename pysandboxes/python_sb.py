@@ -31,11 +31,11 @@ def main() -> int:
     config_path = Path(tuple(extra_rules["learn"])[0])
 
     try:
+        from importlib.resources import files
         if not '/' in str(config_path) and len(python_cmd) >= 2 and python_cmd[
             0] == "-m":
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
-            from importlib.resources import files
             caller_module = python_cmd[1].split('.', 1)[0]
             resource_path = files(caller_module)
             resource_config = resource_path / config_path

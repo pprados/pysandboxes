@@ -6,7 +6,7 @@ import sys
 import types
 from importlib import resources
 from pathlib import Path
-from typing import Optional, List, Dict, Set, cast
+from typing import Optional, List, Dict, Set, cast, Tuple
 
 from . import guard_envs, guard_provider, guard_socket, guard_files, guard_import, \
     guard_self
@@ -70,7 +70,7 @@ def load_and_parse_config(
       configuration.
     - If the configuration file contains a `--learn` directive pointing to
       itself, any new rules generated during the run are appended to the end of
-      the file. The original file is backed up with a `.old` suffix before
+      the file. The _original file is backed up with a `.old` suffix before
       being modified.
 
     Args:
@@ -79,7 +79,6 @@ def load_and_parse_config(
               Defaults to `os.environ`.
         extra_rules: A list of additional rule strings to parse. Mays be string
          or Iterable of strings for the same key
-        exit_on_error: If True, the program will exit if a parsing error occurs.
 
     Returns:
         An `AllRules` object containing the parsed configuration.
@@ -99,30 +98,7 @@ def load_and_parse_config(
         config_path = Path(CONFIG_NAME)
 
     if '/' not in str(config_path):
-        # Try to find config filename
-        pysb_module_name = __name__.split('.', 1)[0]
-
-        # Search the module of the caller
-        frame = sys._getframe()
-        while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
-                pysb_module_name + "."):
-            assert frame.f_back is not None
-            frame = frame.f_back
-
-        # Module of the caller
-        from importlib.resources import files
-        caller_module = frame.f_globals.get("__name__", "__main__").split('.', 1)[0]
-        resource_config = None
-        if caller_module != "__main__":
-            resource_path = files(caller_module)
-            resource_config = resource_path / config_path
-        if resource_config and resource_config.exists():
-            config_path = resource_config
-            logger.info("Use the resource %s from the caller module",
-                         config_path)
-        else:
-            # Else search in the current working directory
-            config_path = Path.cwd() / config_path
+        config_path, pysb_module_name = _search_module_config(config_path)
 
     if not config_path.exists():
         # Activate the learn mode
@@ -141,6 +117,32 @@ def load_and_parse_config(
                         config_path=config_path,
                         envs=envs,
                         )
+
+
+def _search_module_config(config_path:Optional[Path]) -> Tuple[Path, str]:
+    # Try to find config filename
+    pysb_module_name = __name__.split('.', 1)[0]
+    # Search the module of the caller
+    frame = sys._getframe()
+    while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
+            pysb_module_name + "."):
+        assert frame.f_back is not None
+        frame = frame.f_back
+    # Module of the caller
+    from importlib.resources import files
+    caller_module = frame.f_globals.get("__name__", "__main__").split('.', 1)[0]
+    resource_config = None
+    if caller_module != "__main__":
+        resource_path = files(caller_module)
+        resource_config = resource_path / config_path
+    if resource_config and resource_config.exists():
+        config_path = resource_config
+        logger.info("Use the resource %s from the caller module",
+                    config_path)
+    else:
+        # Else search in the current working directory
+        config_path = Path.cwd() / config_path
+    return config_path, pysb_module_name
 
 
 def _parse_include(

@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RPCPayload(object):
     session_id: str
-    timeout: float
     function: str
     args: str
     kwargs: str
@@ -43,7 +42,6 @@ def _sse_msg(data: str):
 async def sandbox_daemon(
         session_id: str,
         function_id: str,
-        timeout: float,  # TODO: implementes timeout
         args: Args,
         kwargs: Dict[str, Any],
 ) -> AsyncGenerator[str, None]:
@@ -60,7 +58,11 @@ async def sandbox_daemon(
         loop = asyncio.get_event_loop()
 
         module_name, function_name = function_id.split(':', 1)
+        logger.error(f"avant {is_in_sandbox()}")
+        await asyncio.sleep(1)
         set_is_in_sandbox(True)
+        logger.error(f"apres {is_in_sandbox()}")
+        logger.error(f"Try to import {module_name=}")
         module = importlib.import_module(module_name)
         try:
             function = getattr(module, function_name)
@@ -80,7 +82,6 @@ async def sandbox_daemon(
         if use_async:
             async def _set_sandbox_and_catch_stdio() -> Any:
                 from .catch_stdio import catch_stdio, acatch_stdio
-                # FIXME: vérifier pourquoi c'est différent que l'async
                 rc = await acatch_stdio(
                     stdio_queue,
                     function, kwargs, *args)
@@ -179,7 +180,6 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
             sandbox_daemon(
                 payload.session_id,
                 payload.function,
-                payload.timeout,
                 from_b85(payload.args),
                 from_b85(payload.kwargs),
             ),

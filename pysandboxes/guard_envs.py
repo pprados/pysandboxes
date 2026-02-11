@@ -75,7 +75,7 @@ def parse_rules(
 
     Args:
         rules: A list of rule strings, e.g., ["key=value", "key2=${source_key}"].
-        source_vars: The original dictionary of variables to draw from.
+        source_vars: The _original dictionary of variables to draw from.
 
     Returns:
         A new dictionary with the applied rules.
@@ -153,7 +153,7 @@ class LearnEnviron(os._Environ):
         return cls._instance
 
     def __init__(self):
-        # Initialize with the original environment data
+        # Initialize with the _original environment data
         if not hasattr(self, '_keys_used'):
             # super().__init__(original_environ)
             encodekey = os.environ.encodekey

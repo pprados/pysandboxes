@@ -25,14 +25,16 @@ _lock = Lock()
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def sandbox(_func: Optional[F] = None, *,
-            timeout: float = DELAY_FOR_CALL_DAEMON) -> Callable[..., Any]:
+def _check__main__coroutine(coroutine):
+    if inspect.getmodule(coroutine.cr_frame).__name__ == "__main__":
+        raise ValueError("The coroutine must be declared in a module "
+                         "other than __main__.")
+
+def sandbox(_func: Optional[F] = None,
+            ) -> Callable[..., Any]:
     """
     Decorator to run a function in a sandbox.y
     The function can be either synchronous or asynchronous.
-    The timeout parameter is used to set the maximum execution time of the function.
-    Raises a TimeoutError if the function execution exceeds the timeout.
-    Return the result of the function if it completes within the timeout.
     Reraises any exception raised by the function.
     """
     from pysandboxes.os_sandbox import call_in_sandbox, async_call_in_sandbox
@@ -40,11 +42,11 @@ def sandbox(_func: Optional[F] = None, *,
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            return await async_call_in_sandbox(func, timeout, *args, **kwargs)
+            return await async_call_in_sandbox(func, *args, **kwargs)
 
         @functools.wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            return call_in_sandbox(func, timeout, *args, **kwargs)
+            return call_in_sandbox(func, *args, **kwargs)
 
         if inspect.iscoroutinefunction(func):
             return async_wrapper
@@ -64,7 +66,6 @@ class sandboxes(Protocol):
         'config_path',
         'envs',
         'extra_rules',
-        'timeout',
         'learning_path',
         'python_args',
         "_old_sigint"
@@ -180,19 +181,20 @@ class sandboxes(Protocol):
         """
         Start the sandbox daemon.
         """
-        from .py_sandbox import load_and_parse_config
-        from pysandboxes.os_sandbox import async_start_daemon
-        log_level = logging.root.getEffectiveLevel()
-        all_rules = load_and_parse_config(
-            self.config_path,
-            envs=self.envs,
-            exit_on_error=False,
-            **self.extra_rules,
-        )
-        return await async_start_daemon(
-            all_rules,
-            log_level=log_level,
-            init_fn=self.init_fn)
+        if not is_in_sandbox():
+            from .py_sandbox import load_and_parse_config
+            from pysandboxes.os_sandbox import async_start_daemon
+            log_level = logging.root.getEffectiveLevel()
+            all_rules = load_and_parse_config(
+                self.config_path,
+                envs=self.envs,
+                **self.extra_rules,
+            )
+            return await async_start_daemon(
+                all_rules,
+                log_level=log_level,
+                init_fn=self.init_fn)
+        return self
 
     async def __aexit__(self,
                         exc_type: Optional[type[BaseException]],
@@ -201,8 +203,9 @@ class sandboxes(Protocol):
         """
         Stop the sandbox daemon.
         """
-        from pysandboxes.os_sandbox import async_shutdown_daemon
-        await async_shutdown_daemon()
+        if not is_in_sandbox():
+            from pysandboxes.os_sandbox import async_shutdown_daemon
+            await async_shutdown_daemon()
         return False
 
 
@@ -216,6 +219,7 @@ def run(main: Coroutine[Any, Any, Any],
     It's similar to `asyncio.run()`, but with the sandbox.
     The parameters are the same as `asyncio.run()`.
     """
+    _check__main__coroutine(main)
 
     async def _run():
         # In this context, use the standard running loop.

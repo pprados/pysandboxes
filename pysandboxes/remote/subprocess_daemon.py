@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import logging
 import os
 import pickle
@@ -16,7 +17,8 @@ import aiohttp
 from aiohttp import ClientConnectorError
 
 from . import main_shutdown
-from .parameters import INTERVAL_FOR_PING_DAEMON
+from .parameters import INTERVAL_FOR_PING_DAEMON, RETRY_RESET_DELAY, RETRY_MAX_DELAY, \
+    RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS
 from .sse_sandbox import SSESandbox, PING_SERVER_URL
 from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
@@ -107,11 +109,12 @@ async def launch_sandbox(
             preexec_fn=preexec_fn
         )
 
-        await asyncio.sleep(1)  # FIXME: remove sleep avec signal?
-
+        # It's a good time for that
+        gc.collect()
         with open(pipe_path, 'wb') as fifo:
             fifo.write(pickle.dumps(process_config))
             fifo.close()
+        pipe_path.unlink()
         return process
     finally:
         pass
@@ -135,11 +138,11 @@ class BaseSubProcessDaemon(SSESandbox):
                  token: str,
                  *,
                  python_args: Optional[List[str]] = None,
-                 max_attempts: int = 5,  # Maximum number of retry _attempts
-                 base_delay: float = 0.1,  # Initial delay in seconds (e.g., 100 ms)
-                 factor: float = 2.0,  # Exponential increase _factor
-                 max_delay: float = 10.0,  # Maximum delay in seconds
-                 reset_delay: float = 120.0,  # delay to reset attemps
+                 max_attempts: int = RETRY_MAX_ATTEMPTS,  # Maximum number of retry _attempts
+                 base_delay: float = RETRY_BASE_DELAY,  # Initial delay in seconds (e.g., 100 ms)
+                 factor: float = RETRY_FACTOR,  # Exponential increase _factor
+                 max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
+                 reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
                  **kwargs,
                  ):
         super().__init__(token)
@@ -257,6 +260,7 @@ class BaseSubProcessDaemon(SSESandbox):
             )
 
             # Wait the server
+            gc.collect()
             async with aiohttp.ClientSession() as session:
                 while True:
                     try:
@@ -277,7 +281,6 @@ class BaseSubProcessDaemon(SSESandbox):
         from . import main_sandbox
         await self.async_call_in_sandbox(
             main_shutdown.shutdown,
-            timeout=0,
         )
         if self._process:
             if self._process.returncode is None:

@@ -52,7 +52,6 @@ async def async_sanboxes(config_path: Path) -> None:
 
 
 async def bridge_async_to_sync(config_path: Path) -> None:
-    await asyncio.sleep(0)
     sync_sanboxes(config_path)
 
 @sandbox
