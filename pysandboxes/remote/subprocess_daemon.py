@@ -10,7 +10,7 @@ import time
 import uuid
 from asyncio.subprocess import Process
 from pathlib import Path
-from typing import Callable, Optional, NamedTuple, List
+from typing import Callable, Optional, NamedTuple, List, Dict
 
 import aiohttp
 from aiohttp import ClientConnectorError
@@ -91,7 +91,7 @@ async def launch_sandbox(
         process_config: DaemonParameters,
 ) -> Process:
     os.mkfifo(pipe_path)
-    if False:
+    if True:
         Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
                                   cmd[0] + " " +
                                   " \\\n  ".join(
@@ -161,18 +161,16 @@ class BaseSubProcessDaemon(SSESandbox):
 
     def subprocess_cmd(self,
                        all_rules: AllRules,
+                       envs:Dict[str,str],
+                       pipe_path: Path,
                        ) -> Args:
         from . import main_sandbox
         cmd_parameters = [
             sys.executable,
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
-            # "-m", "pdb",
             "-P",
             "-u",  # Unbuffered output
             "-d",  # Mode debug à la sortie
-            # "-X","importtime", # FIXME
-            # "-B", # FIXME: no pyc
-            # "-v", # FIXME
         ]
         cmd_parameters.extend(self._python_args)
         cmd_parameters.extend([
@@ -184,11 +182,13 @@ class BaseSubProcessDaemon(SSESandbox):
     async def start(self,
                     all_rules: AllRules,
                     *,
+                    envs:Dict[str,str],
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
         self.restart = 0
         await self._re_start(all_rules,
+                             envs=envs,
                              log_level=log_level,
                              init_fn=init_fn,
                              first=True,
@@ -197,30 +197,26 @@ class BaseSubProcessDaemon(SSESandbox):
     async def _re_start(self,
                         all_rules: AllRules,
                         *,
+                        envs:Dict[str,str],
                         log_level: int,
                         init_fn: Optional[SyncOrAsyncFunc],
                         first: bool = False) -> None:
         if first:
-            short_all_rules = AllRules(  # TODO: why short copy of AllRules?
-                config=all_rules.config,
-                envs=all_rules.envs,
-                os_sandbox=all_rules.os_sandbox,
-                use_py_sandbox=all_rules.use_py_sandbox,
-                learning_path=all_rules.learning_path,
-                learn=all_rules.learn,
-                envs_rules=(),
-                socket_rules=(),
-                file_rules=(),
-                import_rules=(),  # all_rules.import_rules,
-            )
-            await self._re_start_cmd(
-                all_rules,
-                self.subprocess_cmd(
-                    all_rules=short_all_rules,
-                ),
-                log_level=log_level,
-                init_fn=init_fn,
-            )
+            with tempfile.TemporaryDirectory() as tmpdir:
+                pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
+                pipe_path.unlink(missing_ok=True)
+
+                await self._re_start_cmd(
+                    all_rules,
+                    self.subprocess_cmd(
+                        all_rules=all_rules,
+                        envs=envs,
+                        pipe_path=pipe_path,
+                    ),
+                    pipe_path=pipe_path,
+                    log_level=log_level,
+                    init_fn=init_fn,
+                )
 
             pysandboxes_logger.info("started")
         else:
@@ -229,61 +225,58 @@ class BaseSubProcessDaemon(SSESandbox):
     async def _re_start_cmd(self,
                             all_rules: AllRules,
                             args: Args,
+                            pipe_path: Path,
                             *,
                             log_level: int,
                             init_fn: Optional[SyncOrAsyncFunc],
                             ) -> None:
         self._is_started = False
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
-            pipe_path.unlink(missing_ok=True)
+        if init_fn:
+            module, init_function_reference = get_callable_info(init_fn)
+            init_fn_ref = f"{module}:{init_function_reference}"
+        else:
+            init_fn_ref = ""
 
-            if init_fn:
-                module, init_function_reference = get_callable_info(init_fn)
-                init_fn_ref = f"{module}:{init_function_reference}"
-            else:
-                init_fn_ref = ""
+        process_config = DaemonParameters(
+            all_rules=all_rules,
+            log_level=log_level,
+            log_format=get_log_formatter(),
+            token=self._token,
+            init_fn=init_fn_ref
+        )
 
-            process_config = DaemonParameters(
-                all_rules=all_rules,
-                log_level=log_level,
-                log_format=get_log_formatter(),
-                token=self._token,
-                init_fn=init_fn_ref
-            )
+        if all_rules.learn:
+            env = {**os.environ, **all_rules.envs}
+        else:
+            env = all_rules.envs
 
-            if all_rules.learn:
-                env = {**os.environ, **all_rules.envs}
-            else:
-                env = all_rules.envs
+        self._process = await launch_sandbox(
+            args + ["--_named-pipe", str(pipe_path)],
+            pipe_path=pipe_path,
+            envs=Envs(env),
+            process_config=process_config,
+        )
 
-            self._process = await launch_sandbox(
-                args + ["--_named-pipe", str(pipe_path)],
-                pipe_path=pipe_path,
-                envs=Envs(env),
-                process_config=process_config,
-            )
+        # Wait the server
+        gc.collect()
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:  # TODO: test in the server never response
+                    async with session.get(
+                            PING_SERVER_URL,
+                            timeout=INTERVAL_FOR_PING_DAEMON) as response:
+                        if response.status == 200:
+                            break
+                        else:
+                            raise RuntimeError(
+                                f"Unexpected status {response.status} from {PING_SERVER_URL}")
+                except ClientConnectorError:
+                    pass  # Ignore and continue
 
-            # Wait the server
-            gc.collect()
-            async with aiohttp.ClientSession() as session:
-                while True:
-                    try:  # TODO: test in the server never response
-                        async with session.get(
-                                PING_SERVER_URL,
-                                timeout=INTERVAL_FOR_PING_DAEMON) as response:
-                            if response.status == 200:
-                                break
-                            else:
-                                raise RuntimeError(
-                                    f"Unexpected status {response.status} from {PING_SERVER_URL}")
-                    except ClientConnectorError:
-                        pass  # Ignore and continue
+                await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
-                    await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
-
-            self._is_started = True
+        self._is_started = True
 
     async def shutdown(self) -> None:
         await self.async_call_in_sandbox(

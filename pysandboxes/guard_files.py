@@ -714,9 +714,7 @@ def _wrap_os_readlink(func: Callable) -> Callable:
         if not remapped_first:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(Path(file), False))
-                remapped_first = file
-            else:
-                return None, None
+            remapped_first = file
         remapped = func(remapped_first, *args, **kwargs)
         if not remapped.startswith(os.path.sep):
             remapped = os.path.dirname(remapped_first) + os.path.sep + remapped

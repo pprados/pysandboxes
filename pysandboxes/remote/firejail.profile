@@ -18,11 +18,10 @@
 --deterministic-shutdown
 --protocol=inet,inet6
 --env=PYTHONSTARTUP=
---rmenv=SDL_GAMECONTROLLERCONFIG
 --private-tmp
 --noexec=/tmp
 
-# Disable extras
+# Disable extras FIXME
 #--x11=none
 #--restrict-namespaces
 #--nogroups

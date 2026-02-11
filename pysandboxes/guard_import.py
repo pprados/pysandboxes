@@ -71,7 +71,7 @@ def parse_rules(config: ConfigLines,
     return tuple(white_list), ignore_rules
 
 
-def _apply_patch(module, name: str):
+def _apply_patch(module, name: str) -> None:
     logger.debug(f"Apply patch {name=} {module=}")
     all_patch = _patch_rules[name]
     for patch in all_patch:
@@ -82,18 +82,17 @@ def _apply_patch(module, name: str):
             for node in paths[:-1]:
                 parent_object = cur_object
                 cur_object = cur_object.__dict__[node]
-                new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
-                assert not hasattr(new_value,
-                                   "__pysandbox__"), "Double injection"
-                if __debug__ and isinstance(new_value,
-                                            type(
-                                                _apply_patch)):  # Fake kinds.FunctionType
-                    new_value.__pysandbox__ = True  # Add a marker
-                setattr(cur_object, paths[-1], new_value)
+            new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
+            assert not hasattr(new_value,
+                               "__pysandbox__"), "Double injection"
+            if __debug__ and isinstance(new_value,
+                                        type(
+                                            _apply_patch)):  # Fake kinds.FunctionType
+                new_value.__pysandbox__ = True  # Add a marker
+            setattr(cur_object, paths[-1], new_value)
         else:
             # Patch the entire module
             sys.modules[name] = patch.patch_factory(cur_object)
-
 
 class GuardLoader(importlib.abc.Loader):
     """
@@ -112,7 +111,7 @@ class GuardLoader(importlib.abc.Loader):
         Delegates the module creation to the _original loader.
         This gets the base module object from the standard import process.
         """
-        logger.debug(f"create_module({spec=}")
+        # logger.debug(f"create_module({spec=}")
         module = self.original_loader.create_module(self.original_spec)
         return module  # Not initialized
 
@@ -129,11 +128,10 @@ class GuardLoader(importlib.abc.Loader):
             if _rules and _rules[0] != "*":
                 module_name = module.__name__
                 # Reactiver le filtre de module
-                # if module_name not in _rules:
-                #     # FIXME: tester tous les imports de bases depuis le départ
-                #     raise RuleModuleNotFoundError(
-                #         f"Module named {module_name!r} is not allowed by a rule"
-                #     )
+                if module_name not in _rules:
+                    raise RuleModuleNotFoundError(
+                        f"Module named {module_name!r} is not allowed by a rule"
+                    )
         # logger.debug(f"exec_module({module.__name__})...")
         self.original_loader.exec_module(module)
 
@@ -295,7 +293,7 @@ def remove_modules() -> None:
             if k not in sys.builtin_module_names:
                 del sys.modules[k]
     assert "io" not in sys.modules
-
+#
 # FIXME: remove version
 # _not_refresh_modules: Set[str] = (
 #     {

@@ -16,11 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level():
-    level = logging.WARNING
-    if True:  # FIX_RELEASE "PYTEST_RUN_CONFIG" in os.environ:
-        format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
-    else:
-        format = '%(asctime)s %(levelname)-5s [%(process)d] %(name)s: %(message)s'
+    level = logging.DEBUG
+    format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     logging.basicConfig(
         level=level,
         format=format
@@ -31,11 +28,13 @@ def init_log_level():
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
     logging.getLogger("Pysandboxes").setLevel(level)
     logging.getLogger("pysandboxes").setLevel(level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
 
 
 @sandbox
 async def arun_in_sandbox():
     logger.info("Run 'arun_in_sandbox()' in sandbox")
+    _test_files()
     print(42)
     return 42
 
@@ -44,6 +43,33 @@ async def arun_in_sandbox():
 def run_in_sandbox():
     logger.info("Run 'run_in_sandbox()' in sandbox")
 
+    _test_network()
+
+    _test_files()
+
+    _test_envs()
+
+    print(42)
+    return 42
+
+
+def _test_envs():
+    if "PYENV_ROOT" in os.environ:
+        try:
+            os.listdir(os.environ.get("PYENV_ROOT"))
+            # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+        except SandBoxError as e:
+            print(e)
+    if "VIRTUAL_ENV" in os.environ:
+        try:
+            os.listdir(os.environ.get("VIRTUAL_ENV"))
+            # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+        except SandBoxError as e:
+            print(e)
+    assert os.environ["HOME"]
+
+
+def _test_network():
     # tcp connexion
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -51,94 +77,67 @@ def run_in_sandbox():
         xx = socket.gethostbyname_ex("www.google.com")
         addr_infos = socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
         sock.connect((remote_ip, 80))
-
     # tcp bind ipv4
     with socket.socket(AF_INET, SOCK_STREAM) as sock:
         sock.bind(("localhost", 0))
-
     # tcp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
         sock.bind(("::1", 0))
-
     # web connexion
     import requests
     f = requests.get("http://www.google.com/")
-
     # udp connexion ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("127.0.0.1", 12345))
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("127.0.0.1", 12346))
-
     # udp connexion ipv6
     with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("::1", 12345))
-
     # udp bind ipv4
     with socket.socket(AF_INET, SOCK_DGRAM) as sock:
         sock.bind(("localhost", 12345))
-
     # udp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
         sock.bind(("::1", 0))
 
-    # ---------- File
 
+def _test_files():
     try:
         with io.open("tmp/test.remove", "w") as f:
             pass
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except SandBoxError as e:
         print(e)
-
     try:
         with io.open("tst_wasm/factorial.wasm", "r") as f:
             pass
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except SandBoxError as e:
         print(e)
-
-    try:
-        with io.open("pysandboxes/__init__.py", "r") as f:
-            pass
-        # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    except SandBoxError as e:
-        print(e)
-
-    if "PYENV_ROOT" in os.environ:
-        try:
-            os.listdir(os.environ.get("PYENV_ROOT"))
-            # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-        except SandBoxError as e:
-            print(e)
-
-    if "VIRTUAL_ENV" in os.environ:
-        try:
-            os.listdir(os.environ.get("VIRTUAL_ENV"))
-            # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-        except SandBoxError as e:
-            print(e)
-
-    assert os.environ["HOME"]
-
+    # try:
+    #     with io.open("pysandboxes/__init__.py", "r") as f:
+    #         pass
+    #     # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    # except SandBoxError as e:
+    #     print(e)
     with os.scandir("docs") as entries:
         for entry in entries:
             print(entry.name)
 
-    try:
-        with tempfile.TemporaryFile(mode='w+') as temp_file:
-            pass
-    except SandBoxError as e:
-        print(e)
+    # FIXME: test avec et sans firejail
+    # try:
+    #     with tempfile.TemporaryFile(mode='w+') as temp_file:
+    #         pass
+    # except SandBoxError as e:
+    #     print(e)
+    #
+    # try:
+    #     with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
+    #         pass
+    # except SandBoxError as e:
+    #     print(e)
 
-    try:
-        with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
-            pass
-    except SandBoxError as e:
-        print(e)
-
-    print(42)
-    return 42
 
 
 async def ainit_sandbox():
@@ -153,7 +152,7 @@ async def async_manager():
 
 # %% --------------------------------------
 def init_sandbox():
-    logger.debug("INIT Daemon")
+    logger.debug("INIT sandbox")
     init_log_level()
 
 
@@ -184,22 +183,22 @@ def call_llm():
     _call_llm(token=os.environ["USER"])
 
 
-def main():
+async def main():
     init_log_level()
     os.environ["LLM_TOKEN"] = "abc"
 
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # # print("----------------")
-        # with sandboxes(async_init_sandbox,
-        #                # config_path="test.py-sandboxes",
-        #                learn=".py-sandboxes", # Learn all the times
-        #                # os_sandbox="none",
-        #                ):
-        #     run()
+        async with sandboxes(async_init_sandbox,
+                       # config_path="test.py-sandboxes",
+                       # learn=".py-sandboxes", # Learn all the times
+                       # os_sandbox="none",
+                       ):
+            await arun()
         # TODO: voir la capture d'exception
         # print("----------------")
-        pysandboxes.run(arun(),init_fn=init_sandbox)
+        # pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")
 
 # from pysandboxes.sandboxes_api import sandboxes

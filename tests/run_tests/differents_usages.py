@@ -7,7 +7,7 @@ from pysandboxes.sandboxes_api import sandbox, sandboxes
 logger = logging.getLogger(__name__)
 
 def init_log_level():
-    sandboxes_level = logging.WARNING
+    sandboxes_level = logging.DEBUG
     format = '%(levelname)-5s [%(process)d] %(message)s'
     logging.basicConfig(
         level=min(sandboxes_level, logging.INFO),

@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Dict
 
 from .local_task_daemon import LocalTaskDaemon
 from ..all_rules import AllRules
@@ -14,6 +14,7 @@ class TaskDaemon(LocalTaskDaemon):
     async def start(self,
                     all_rules:AllRules,
                     *,
+                    envs: Dict[str, str],
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:

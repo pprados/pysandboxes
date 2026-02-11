@@ -216,6 +216,9 @@ def parse_config(
             f"Syntax error in config files.",
             [error[0] for error in errors])
 
+    if learn:
+        # Force os_sandbox to subprocess
+        os_sandbox = "subprocess"
     return AllRules(config=config,
                     envs=sandbox_env,
                     os_sandbox=os_sandbox,

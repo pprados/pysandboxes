@@ -8,7 +8,7 @@ import pickle
 import sys
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 from .python_in_sb import python_in_sb
 from .subprocess_daemon import DaemonParameters
@@ -55,7 +55,7 @@ def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
     handler.setFormatter(logging.Formatter(process_config.log_format))
     root_logger.addHandler(handler)
     root_logger.setLevel(process_config.log_level)
-    logger.debug("config body and token successfully read from stdin")
+    logger.debug("config body and token successfully read from named pipe")
 
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
@@ -108,6 +108,7 @@ def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
             set_sandbox_loop(asyncio.get_running_loop())
             await task_daemon.start(
                 all_rules=all_rules,
+                envs=cast(dict,os.environ),
                 log_level=process_config.log_level,
                 init_fn=init_fn,
             )

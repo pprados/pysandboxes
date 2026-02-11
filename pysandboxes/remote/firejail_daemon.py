@@ -1,3 +1,4 @@
+import importlib
 import logging
 import os
 import shlex
@@ -5,15 +6,12 @@ import site
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Tuple, MutableSet, Any, Union
-
-import click
+from typing import List, Tuple, MutableSet, Any, Union, Dict
 
 from .subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, suggest_package_installation
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
-from ..main_logger import pysandboxes_logger
 from ..netfilter import rule_to_netfilter
 from ..sb_types import Envs, Args
 from ..tools import remove_comments, substitute_env_vars
@@ -34,7 +32,7 @@ class WhiteList(MutableSet):
     prefixed by an existing path, it is not added.
     """
 
-    def __init__(self, directories: list[str] = []) -> None:
+    def __init__(self) -> None:
         """
         Initializes the WhiteList with an optional list of directory paths.
 
@@ -42,9 +40,6 @@ class WhiteList(MutableSet):
             directories (list[str]): A list of initial directory paths to add.
         """
         self._set: set[str] = set()
-        # Add initial directories, applying the whitelist logic.
-        for directory in directories:
-            self.add(directory)
 
     def __contains__(self, item: Any) -> bool:
         """
@@ -57,9 +52,6 @@ class WhiteList(MutableSet):
             bool: True if the item is a string and is in the internal set or is a
                   sub-directory of an existing path, False otherwise.
         """
-        # Ensure the item is a string before proceeding.
-        if not isinstance(item, str):
-            return False
 
         # Ensure the path ends with a separator for consistent prefix checking.
         if not item.endswith('/'):
@@ -168,16 +160,18 @@ def _follow_links_executable(executable: Path, whitelist: WhiteList) -> None:
 
 
 class FireJailDaemon(BaseSubProcessDaemon):
-    def update_rules(self,  # TODO: remove double rules
+    def update_rules(self,
                      *,
+                     all_rules: AllRules,
                      envs: Envs,
-                     all_rules: AllRules) -> AllRules:
-        _, all_rules = self._firejail_args(envs,
-                                           all_rules)
+                     ) -> AllRules:
+        # TODO: remove double rules. Use learning in all_rules
         return all_rules
 
     def _firejail_args(self,
                        all_rules: AllRules,
+                       envs:Dict[str,str],
+                       pipe_path: Path,
                        ) -> Tuple[Args, AllRules]:
         """
         Apply the pysandboxes rules to firejail.
@@ -186,7 +180,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
-            logger.error("And set 'restricted-network no'  in "
+            logger.error("And set 'restricted-network no'  in "  # FIXME: restricted-network with firejail
                          "/etc/firejail/firejail.config")
             sys.exit(1)
 
@@ -195,12 +189,15 @@ class FireJailDaemon(BaseSubProcessDaemon):
 
         args = [str(which_command("firejail"))]
 
-        if pysandboxes_logger.getEffectiveLevel() > logging.INFO:
+        if logger.getEffectiveLevel() > logging.INFO:
             args.append("--quiet")
+        else:
+            logger.info("Activate Firejail's output (to remove, "
+                        "change the level of this logger)")
 
         # Add default parameters
-        firejail_conf = remove_comments(
-            Path(files(__name__).joinpath('firejail.profile')).read_text().splitlines())
+        firejail_path = importlib.resources.files(__name__) / 'firejail.profile'
+        firejail_conf = remove_comments(firejail_path.read_text().splitlines())
         firejail_conf = substitute_env_vars(firejail_conf, envs)
 
         for line in firejail_conf:
@@ -213,10 +210,10 @@ class FireJailDaemon(BaseSubProcessDaemon):
         # Manage sys.executable
         _follow_links_executable(Path(sys.executable), whitelist)
 
-        for p in sys.path:
-            if os.path.isdir(p):
-                if p not in whitelist:
-                    _follow_links(p, whitelist)
+        # for p in sys.path:
+        #     if os.path.isdir(p):
+        #         if p not in whitelist:
+        #             _follow_links(p, whitelist)
 
         for p in site.getsitepackages():
             if os.path.isdir(p):
@@ -229,23 +226,35 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 f"--read-only={white}",
             ])
 
-        # Add files rules
-        for rule in all_rules.file_rules:
-            if isinstance(rule, BindRule):
-                if rule.source == rule.dest:
-                    if rule.source not in whitelist:
-                        args.append(f"--whitelist={rule.source}")
-                        whitelist.add(rule.source)
-                else:
-                    # Note: de py-sandbox manager the alias
-                    if rule.source not in whitelist:
-                        args.append(f"--whitelist={rule.source}")
-                        whitelist.add(rule.source)
+        # Add ignore files rules
+        for rule in filter(lambda x: isinstance(x,IgnoreRule),all_rules.file_rules):
+            args.append(f"--blacklist={rule.source}")
+        for rule in sorted(
+                filter(lambda x: isinstance(x,BindRule),
+                       all_rules.file_rules,
+                       ),
+                key=lambda x: len(x.dest),
+        ):
+            if rule.source == rule.dest:
+                if rule.write or rule.source not in whitelist:
+                    args.append(f"--whitelist={rule.source}")
+                    whitelist.add(rule.source)
+            else:
+                # Note: py-sandbox manage the alias
+                if rule.source not in whitelist:
+                    args.append(f"--whitelist={rule.source}")
+                    whitelist.add(rule.source)
                     need_root = True
-                    if not rule.write:
-                        args.append(f"--read-only={rule.source}")
-            elif isinstance(rule, IgnoreRule):
-                args.append(f"--blacklist={rule.source}")
+            if not rule.write:
+                args.append(f"--read-only={rule.source}")
+            else:
+                args.append(f"--read-write={rule.source}")
+
+        # Add pipe_path rule
+        # with --private-tmp, need more parameters
+        args.append(f"--mkdir={str(pipe_path)}")
+        args.append(f"--whitelist={str(pipe_path)}")
+        args.append(f"--read-only={str(pipe_path)}")
 
         if all_rules.socket_rules:
             # gw = get_default_gateway_info()
@@ -296,28 +305,18 @@ class FireJailDaemon(BaseSubProcessDaemon):
 
     def subprocess_cmd(self,
                        all_rules: AllRules,
+                       envs:Dict[str,str],
+                       pipe_path: Path,
                        ) -> List[str]:
-        run_daemon = super().subprocess_cmd(
+        run_daemon_cmd = super().subprocess_cmd(
             all_rules,
+            envs,
+            pipe_path,
         )
 
-        cmd_parameters, _ = self._firejail_args(all_rules=all_rules)
-        cmd_parameters.extend(run_daemon)
-        # cmd_parameters.extend([
-        #     sys.executable,
-        #     "-P",
-        #     # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
-        #
-        #     # "-u",  # FIXME unbuffered stdout and stderr
-        #     "-m",
-        #     run_daemon.__name__,
-        # ])
-        # verbose = return_level_parameter(log_level)
-        # if verbose:
-        #     cmd_parameters.append(verbose)
-        # cmd_parameters.extend([
-        #     "--outer-sandbox", "firejail",
-        # ])
-        if DEBUG:
-            Path("run.sh").write_text("<.py-sandboxes " + " \\\n".join(cmd_parameters))
+        cmd_parameters, _ = self._firejail_args(
+            all_rules=all_rules,
+            envs=envs,
+            pipe_path=pipe_path)
+        cmd_parameters.extend(run_daemon_cmd)
         return cmd_parameters

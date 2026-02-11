@@ -54,8 +54,8 @@ py-sandbox=True  # Activate the python sandbox (true by default)
 #   capacity, system calls, etc.
 # - `none`: special provider to desactivate the `@sandbox` annotations
 
-os-sandbox=subprocess
-#os-sandbox=firejail
+#os-sandbox=subprocess  # FIXME
+os-sandbox=firejail
 
 #######################################################################################
 # In the sandbox, only a selected set of environment variables are accessible.
@@ -119,8 +119,8 @@ ignore=*.log
 # Some exemples
 #bind=/,/  # Accept all file access
 #ro-bind=/,/  # Accept to read all file (add rules to write in somes directories)
-#ro-bind=${HOME}/.ipython
 
+ro-bind=${PWD},${PWD}  # By default, always read the current directori
 # Here, the rules learned for files
 # <learning_guard_files>
 

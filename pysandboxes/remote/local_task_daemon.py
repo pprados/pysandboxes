@@ -287,6 +287,7 @@ class LocalTaskDaemon(SSESandbox):
     async def start(self,
                     all_rules: AllRules,
                     *,
+                    envs:Dict[str,str],
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:

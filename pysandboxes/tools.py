@@ -5,7 +5,7 @@ import os
 import re
 import sys
 from typing import Optional, Union, Callable, Awaitable, Any, Tuple, List, \
-    Iterator
+    Iterator, Dict
 
 from .sb_types import ConfigLines, ConfigLine, Envs
 
@@ -49,7 +49,7 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Envs) -> ConfigLine
             lines]
 
 
-def substitute_env_vars(lines: List[str], env_vars: Envs) -> List[str]:
+def substitute_env_vars(lines: List[str], env_vars: Dict[str,str]) -> List[str]:
     pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
 
     def substitute(match: re.Match) -> str:

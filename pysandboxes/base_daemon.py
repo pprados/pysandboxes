@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional, TYPE_CHECKING, Dict
 
 from .tools import SyncOrAsyncFunc
 from .sb_types import Envs
@@ -39,6 +39,7 @@ class BaseDaemon(ABC):
     async def start(self,
                     all_rules:"AllRules",
                     *,
+                    envs:Dict[str,str],
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:

@@ -123,6 +123,7 @@ class sandboxes(Protocol):
         except ConfigSyntaxError as e:
             raise e.with_traceback(None)
         self._daemon = start_daemon(all_rules,
+                                    envs=self.envs,
                                     log_level=log_level,
                                     init_fn=self.init_fn,
                                     python_args=self.python_args,
@@ -192,6 +193,7 @@ class sandboxes(Protocol):
             )
             return await async_start_daemon(
                 all_rules,
+                envs=self.envs,
                 log_level=log_level,
                 init_fn=self.init_fn)
         return self

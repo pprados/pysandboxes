@@ -3,7 +3,7 @@ import logging
 import os
 import threading
 import uuid
-from typing import Any, Callable, Optional, Type, cast
+from typing import Any, Callable, Optional, Type, cast, Dict
 
 from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
@@ -43,6 +43,7 @@ _startup_counter = 0  # Number of time the daemon has been started
 @sandbox_loop
 async def async_start_daemon(all_rules: AllRules,
                              *,
+                             envs:Dict[str,str],
                              log_level: int,
                              init_fn: Optional[SyncOrAsyncFunc],
                              python_args: Optional[list[str]] = None,
@@ -51,7 +52,10 @@ async def async_start_daemon(all_rules: AllRules,
     Asynchronize version to start daemon by name.
     Returns daemon object when is starred
     """
-    return await _async_start_daemon(all_rules, log_level, init_fn,
+    return await _async_start_daemon(all_rules,
+                                     envs=envs,
+                                     log_level=log_level,
+                                     init_fn=init_fn,
                                      python_args=python_args)
 
 
@@ -60,6 +64,7 @@ _start_lock = threading.Lock()
 
 
 async def _async_start_daemon(all_rules: AllRules,
+                              envs:Dict[str,str],
                               log_level: int,
                               init_fn: Optional[SyncOrAsyncFunc],
                               python_args: Optional[list[str]] = None,
@@ -86,6 +91,7 @@ async def _async_start_daemon(all_rules: AllRules,
             )
             await os_provider.start(
                 all_rules,
+                envs=envs,
                 log_level=log_level,
                 init_fn=init_fn
             )
@@ -126,6 +132,7 @@ async def async_shutdown_daemon():
 
 def start_daemon(
         all_rules: AllRules,
+        envs:Dict[str,str],
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc] = None,
         python_args: Optional[list[str]] = None,
@@ -150,6 +157,7 @@ def start_daemon(
 
         async def _start_daemon_and_signal():
             await _async_start_daemon(all_rules,
+                                      envs=envs,
                                       log_level=log_level,
                                       init_fn=init_fn,
                                       python_args=python_args,
