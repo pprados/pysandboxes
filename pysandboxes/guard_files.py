@@ -608,8 +608,9 @@ def _wrap_os_path_is(func: Callable, *, write: bool) -> Callable:
             else:
                 return False
         result = func(remapped, *args, **kwargs)
-        if result and is_learning_mode():
-            add_learning_rule(LearnFileRule(Path(file), False))
+        # FIXME: no learn?
+        # if result and is_learning_mode():
+        #     add_learning_rule(LearnFileRule(Path(file), False))
         return result
 
     return wrapper
@@ -642,6 +643,30 @@ def _wrap_os_open(func: Callable) -> Callable:
         return func(remapped, flags, *args, **kwargs)
 
     return wrapper
+
+def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
+    @functools.wraps(func)
+    def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
+        # Detect call from posixpath
+        if _special_caller():
+            return func(file, *args, **kwargs)
+        if isinstance(file, int):
+            return func(file, *args, **kwargs)
+        if isinstance(file, _DirEntry):
+            file = file.path
+        remapped, rule = _apply_dest_to_src_rules(file, write=write)
+        if rule:
+            return False
+        if not remapped:
+            remapped = file
+        # if is_learning_mode():
+        #     exist is not learn.
+        #     add_learning_rule(LearnFileRule(Path(file), False))
+        #     remapped = file
+        return func(remapped, *args, **kwargs)
+
+    return wrapper
+
 
 
 def _wrap_os_getcwd(func: Callable) -> Callable:
@@ -957,7 +982,7 @@ _default_rules = rules = {
     "os.getcwdb": _f(_wrap_os_getcwdb),
     # ALLOW os.fdopen
     "os.open": _f(_wrap_os_open),
-    "os.access": _f(_wrap_filename, write=False),
+    "os.access": _f(_wrap_os_access, write=False),
     "os.chmod": _f(_wrap_filename, write=True),
     "os.chroot": _f(_wrap_filename, write=False),
     "os.link": _f(_wrap_two_filenames),

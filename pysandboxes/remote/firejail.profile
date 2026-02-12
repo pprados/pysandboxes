@@ -23,20 +23,20 @@
 
 # Disable extras FIXME
 #--x11=none
-#--restrict-namespaces
-#--nogroups
-#--nonewprivs
-#--noprinters
-#--noroot
-#--nosound
-#--notv
-#--nou2f
-#--novideo
-#--oom=900
-#--disable-mnt
-#--nodvd
-#--memory-deny-write-execute
-#--no3d  # Disable 3D hardware acceleration.
+--restrict-namespaces
+--nogroups
+--nonewprivs
+--noprinters
+--noroot
+--nosound
+--notv
+--nou2f
+--novideo
+--oom=900
+--disable-mnt
+--nodvd
+--memory-deny-write-execute
+--no3d  # Disable 3D hardware acceleration.
 
 #--blacklist=/etc/hosts
 #--blacklist=/etc/resolv.conf
@@ -44,13 +44,13 @@
 
 
 # *** Limits ***
-#--rlimit-as=${FIREJAIL_RELIMIT:=2g}
-#--rlimit-cpu=${FIREJAIL_CPU:=5}
-#--rlimit-fsize=${FIREJAIL_FSIZE:=100k}
-#--rlimit-nproc=${FIREJAIL_NPROC:=10}
-#--rlimit-nofile=${FIREJAIL_NOFILE:=50}
-#--rlimit-sigpending=${FIREJAIL_SIGPENDING:=1}
-#--nice=${NICE:=2}
+--rlimit-as=${FIREJAIL_RELIMIT:=2g}
+--rlimit-cpu=${FIREJAIL_CPU:=5}
+--rlimit-fsize=${FIREJAIL_FSIZE:=100k}
+--rlimit-nproc=${FIREJAIL_NPROC:=10}
+--rlimit-nofile=${FIREJAIL_NOFILE:=50}
+--rlimit-sigpending=${FIREJAIL_SIGPENDING:=1}
+--nice=${NICE:=2}
 
 # *** Network ***
 # public DNS servers

@@ -5,6 +5,7 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
+from typing import Dict, cast
 
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
@@ -19,16 +20,37 @@ from .remote.parse_cpython_args import parse_python_cmd_line
 logger = logging.getLogger(__name__)
 
 
+def _debug_log():
+    level = logging.WARNING  # FIX_RELEASE
+    format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
+    logging.basicConfig(
+        level=level,
+        format=format
+    )
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
+    logging.getLogger("Pysandboxes").setLevel(level)
+    logging.getLogger("pysandboxes").setLevel(level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
+
+
+
+
 def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
+    _debug_log()
     python_parsed_args, sandboxes_args, python_cmd = parse_python_cmd_line(sys.argv[1:])
 
     extra_rules = convert_extra_rules(sandboxes_args)
-    if list(extra_rules.get("learn", set([""])))[0] == "":
-        extra_rules["learn"] = {CONFIG_NAME}
-    config_path = Path(tuple(extra_rules["learn"])[0])
+    config_path = Path()
+    if len(extra_rules.get("learn", [])):
+        config_path = Path(list(extra_rules["learn"])[0])
+    if config_path == Path():
+        config_path = Path(CONFIG_NAME)
 
     try:
         from importlib.resources import files
@@ -74,12 +96,14 @@ def main() -> int:
             return 0
 
         return asyncio.run(run_locally())
-    cmd = os_provider.subprocess_cmd(
-        all_rules,
-    )
     with tempfile.TemporaryDirectory() as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
+        cmd = os_provider.subprocess_cmd(
+            all_rules,
+            envs=cast(Dict[str, str], os.environ),
+            pipe_path=pipe_path,
+        )
         python_cmd.extend(
             ["--_named-pipe", str(pipe_path),
              "--_python-sb"

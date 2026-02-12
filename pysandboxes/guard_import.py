@@ -216,7 +216,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                 new_spec = original_spec
             if is_learning_mode() and is_in_sandbox():
                 module_name = fullname.split('.', 1)[0]
-                if module_name not in _rules and module_name != "pysandboxes":
+                if "*" not in _rules and module_name not in _rules and module_name != "pysandboxes":
                     add_learning_rule(LearnImportRule(module_name))
             else:
                 # logger.error("Ignore %s",repr(fullname))
@@ -437,9 +437,11 @@ def generate_rules(
     # FIXME: fichier pour std package FIXME: windows path
     # Select only parent
     other_result = set()
-    standard_result = {
-        "socket"  # Pre-selection for daemon
-    }
+    standard_result = \
+        set()
+       #  {  FIXME: attention à l'import systématique a chaque fois
+       # "socket"  # Pre-selection for daemon
+       #  }
     deprecated_result = set()
     danger_result = set()
     black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())

@@ -13,13 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log():
+    level = logging.WARNING  # FIX_RELEASE
+    format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(levelname)-5s [%(process)d] %(name)s: %(message)s'
+        level=level,
+        format=format
     )
-    log_level = logging.INFO
-    logging.getLogger("pysandboxes").setLevel(log_level)
-    logging.getLogger("Pysandboxes").setLevel(log_level)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
+    logging.getLogger("Pysandboxes").setLevel(level)
+    logging.getLogger("pysandboxes").setLevel(level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
 
 
 def _python_interactive(
@@ -36,9 +42,11 @@ def _python_interactive(
             )
     ):
         BOLD = '\033[1m'
+        RED = '\033[1m\033[31m'
         RESET = '\033[0m'
     else:
         BOLD = '*** '
+        RED = ''
         RESET = ' ***'
 
     if all_rules.learn:
@@ -47,18 +55,18 @@ def _python_interactive(
                    f'end of the session.{RESET}\n')
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
-        sb_mode = (f'*** APIs are LIMITED according to the rules in '
-                   f'{str(all_rules.learning_path)!r}'
+        sb_mode = (f'{BOLD}APIs are LIMITED according to the rules in '
+                   f'{str(all_rules.learning_path)!r} '
                    )
         if all_rules.os_sandbox != "subprocess":
-            sb_mode += f' and by the os-sandbox={all_rules.os_sandbox!r}'
-        sb_mode += " ***\n"
+            sb_mode += f'and by the os-sandbox={all_rules.os_sandbox!r}'
+        sb_mode += f"{RESET}\n"
     else:
         sb_mode = (f'*** APIs are LIMITED only by the os-sandbox '
                    f'of type {all_rules.os_sandbox!r} ***\n'
                    )
     banner = (
-        f'SANDBOXES Python {sys.version} on {sys.platform}\n'
+        f'{RED}SANDBOXES Python{RESET} {sys.version} on {sys.platform}\n'
         f'{sb_mode}'
         'Type "help", "copyright", "credits" or "license" for more information.'
     )

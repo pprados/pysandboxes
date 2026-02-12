@@ -216,10 +216,10 @@ class FireJailDaemon(BaseSubProcessDaemon):
         # Manage sys.executable
         _follow_links_executable(Path(sys.executable), whitelist)
 
-        # for p in sys.path:
-        #     if os.path.isdir(p):
-        #         if p not in whitelist:
-        #             _follow_links(p, whitelist)
+        for p in sys.path:
+            if os.path.isdir(p):
+                if p not in whitelist:
+                    _follow_links(p, whitelist)
 
         for p in site.getsitepackages():
             if os.path.isdir(p):

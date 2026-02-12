@@ -320,6 +320,7 @@ The feature proposed by each technologies:
 | ignore=*                  |  ❌   |     ✅      |     ✅     |
 | network                   |  ❌   |     ✅      |     ✅     |
 | import                    |  ❌   |     ✅      |     ❌     |
+| Resource limits           |  ❌   |     ❌      |     ✅     |
 | OS-sandbox                |  ❌   |     ❌      |     ✅     |
 | Vm compatible             |  ❌   |     ✅      |     ✅     |
 | Container<br/> compatible |  ❌   |     ✅      |     ❌     |

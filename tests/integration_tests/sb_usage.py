@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level():
-    level = logging.DEBUG
+    level = logging.WARNING
     format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     logging.basicConfig(
         level=level,
