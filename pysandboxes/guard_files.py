@@ -109,13 +109,13 @@ def parse_rules(config: ConfigLines,
                     if not src.is_dir() or not dest.is_dir():
                         cwd = Path.cwd()
                         if src.is_relative_to(cwd):
-                            s_src="${PWD}/" + str(src.relative_to(cwd))
+                            s_src = "${PWD}/" + str(src.relative_to(cwd))
                         else:
-                            s_src=str(src)
+                            s_src = str(src)
                         if dest.is_relative_to(cwd):
-                            s_dest="${PWD}/" + str(dest.relative_to(cwd))
+                            s_dest = "${PWD}/" + str(dest.relative_to(cwd))
                         else:
-                            s_dest=str(dest)
+                            s_dest = str(dest)
                         errors.append(
                             (
                                 f"{format_ruleref(rule)}: "
@@ -357,7 +357,11 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
         if isinstance(rule, BindRule):
             if rule.source != rule.dest and fake_path.startswith(
                     rule.source[:-1]) and not accept_source:
-                return None, rule
+                fake_basename = fake_path[len(rule.source[:-1]):]
+                new_path = os.path.join(rule.dest, fake_basename)
+                if fake_path.endswith("/"):
+                    new_path += "/"
+                return new_path, None
             if fake_path.startswith(rule.dest) or fake_path == rule.dest[:-1]:
                 if fake_path == rule.dest[:-1]:
                     fake_path_dir = rule.dest
@@ -644,6 +648,7 @@ def _wrap_os_open(func: Callable) -> Callable:
 
     return wrapper
 
+
 def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
@@ -666,7 +671,6 @@ def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
         return func(remapped, *args, **kwargs)
 
     return wrapper
-
 
 
 def _wrap_os_getcwd(func: Callable) -> Callable:
@@ -1168,9 +1172,8 @@ def activate_guard(
         logger.debug("Guard_files was already activated.")
     _rules = rules
 
+
 if "PYTEST_RUN_CONFIG" in os.environ:
     def _deactivate_guard_files():
         global _rules
         _rules = ()
-
-

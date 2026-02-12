@@ -6,7 +6,7 @@ from typing import Dict, Tuple, List, Any, Optional, Callable, NamedTuple, cast
 
 from .main_logger import format_ruleref, ErrorMsg
 from .sb_types import ConfigLines, ConfigLine, Envs
-from .tools import is_in_sandbox
+from .tools import is_in_sandbox, resolve_env_variables
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +88,7 @@ def parse_rules(
 
     def substitute_value(value_pattern: str) -> str:
         """Resolves a single value pattern, e.g., ${VAR:=default}."""
-        return subst_pattern.sub(
-            lambda m: source_vars.get(m.group(1),
-                                      m.group(2) if m.group(2) is not None else ""),
-            value_pattern
-        )
+        return resolve_env_variables(value_pattern,source_vars)
 
     envs_rules = set()
     for orule in rules:

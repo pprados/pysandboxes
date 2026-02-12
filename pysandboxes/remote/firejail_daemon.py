@@ -6,6 +6,8 @@ import shlex
 import site
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
 from typing import List, Tuple, MutableSet, Any, Union, Dict, Optional
 
@@ -178,6 +180,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
         Apply the pysandboxes rules to firejail.
         TODO: expliquer si on modifie
         """
+        _replace = False  # FIXME: _replace=True
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
@@ -240,28 +243,30 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 filter(lambda x: isinstance(x, BindRule),
                        all_rules.file_rules,
                        ),
-                key=lambda x: len(x.dest),
+                key=lambda x: len(x.source),
         ):
             if rule.source == rule.dest:
                 if rule.write or rule.source not in whitelist:
-                    args.append(f"--whitelist={rule.source}")
+                    if rule.source != "/tmp/":
+                        args.append(f"--whitelist={rule.source}")
                     whitelist.add(rule.source)
             else:
                 # Note: py-sandbox manage the alias
-                if rule.source not in whitelist:  # FIXME
-                    args.append(f"--whitelist={rule.source}")
-                    whitelist.add(rule.source)
-                    keep_files_rules.append(rule)
-                    need_root = True
+                # TOTRY, with root, use --bind
+                # args.append(f"--whitelist={rule.source}")
+                whitelist.add(rule.source)
+                keep_files_rules.append(rule)
+                need_root = False
             if not rule.write:
                 args.append(f"--read-only={rule.source}")
             else:
                 args.append(f"--read-write={rule.source}")
 
-        from ..guard_files import parse_rules as files_parse_rules
-        new_files_rules, _ = files_parse_rules(
-            [ConfigLine("bind=/,/", Path(), 0)], [])
-        all_rules = all_rules._replace(file_rules=tuple(new_files_rules))
+        if _replace:
+            from ..guard_files import parse_rules as files_parse_rules
+            new_files_rules, _ = files_parse_rules(
+                [ConfigLine("bind=/,/", Path(), 0)], [])
+            all_rules = all_rules._replace(file_rules=tuple(new_files_rules))
 
         # Add pipe_path rule
         # with --private-tmp, need more parameters
@@ -280,30 +285,47 @@ class FireJailDaemon(BaseSubProcessDaemon):
 
             if pipe_path:  # Update rules?
                 net_filter4 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=False)
-                netfilter_file = tempfile.NamedTemporaryFile(mode='w+t',
-                                                             delete=False,
-                                                             # TODO: manager tmp file?
-                                                             encoding='utf-8').name
+                netfilter_tmp_file = tempfile.NamedTemporaryFile(delete=False,
+                                                                 suffix='.fifo')
+                netfilter_file = Path(netfilter_tmp_file.name)
+                netfilter_tmp_file.close()
+                netfilter_file.unlink(missing_ok=True)
                 if DEBUG:
                     netfilter_file = "netfilter.net"
-                    Path(netfilter_file).write_text("\n".join(net_filter4))
+                else:
+                    os.mkfifo(netfilter_file)
+
+                def publich_netfilter():
+                    netfilter_file.write_text("\n".join(net_filter4))
+                    if not DEBUG:
+                        netfilter_file.unlink()
+                threading.Thread(target=publich_netfilter, daemon=True).start()
+
                 args.append(f"--netfilter={netfilter_file}")
 
                 net_filter6 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=True)
-                netfilter6_file = tempfile.NamedTemporaryFile(mode='w+t',
-                                                              delete=False,
-                                                              # TODO: manager tmp file?
-                                                              encoding='utf-8').name
+                netfilter6_tmp_file = tempfile.NamedTemporaryFile(delete=False,
+                                                                 suffix='.fifo')
+                netfilter6_file = Path(netfilter_tmp_file.name)
+                netfilter6_tmp_file.close()
+                netfilter6_file.unlink(missing_ok=True)
                 if DEBUG:
                     netfilter6_file = "netfilter6.net"
-                    Path(netfilter6_file).write_text("\n".join(net_filter6))
+                else:
+                    os.mkfifo(netfilter6_file)
+                def publich_netfilter6():
+                    netfilter6_file.write_text("\n".join(net_filter4))
+                    if not DEBUG:
+                        netfilter_file.unlink()
+                threading.Thread(target=publich_netfilter6, daemon=True).start()
                 args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove redondant sockets rules
-            from ..guard_socket import parse_rules as socket_parse_rules
-            new_socket_rules, _ = socket_parse_rules(
-                [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
-            all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
+            if _replace:
+                from ..guard_socket import parse_rules as socket_parse_rules
+                new_socket_rules, _ = socket_parse_rules(
+                    [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
+                all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
             # Clean env variable
             args.extend(["env", "-i"])

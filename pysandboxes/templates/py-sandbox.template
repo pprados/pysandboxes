@@ -93,6 +93,7 @@ os-sandbox=subprocess
 #env=*_API_KEY=${*_API_KEY}  # Add access to all API_KEY :-(
 #unenv=OPENAI_API_KEY
 env=SB_PORT=${SP_PORT:=8000}
+#env=TEMP=${TEMP:=${TMP}}  # Accept to use the temp files
 
 # Here, the rules learned for os.environ
 # <learning_guard_envs>

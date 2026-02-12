@@ -89,6 +89,11 @@ To install the component:
 ```bash
  pip install pysandboxes
 ```
+or
+```bash
+pip install git+https://github.com/pprados/pysandboxes.git
+```
+
 We propose only four think:
 - A Command Line Interface: `python-sb`
 - A function: `run`
@@ -309,21 +314,21 @@ We offer several implementations to encapsulate the Python sandbox:
 
 The feature proposed by each technologies:
 
-| Guard                     | none | py-sandbox | firejail  |
-|---------------------------|:----:|:----------:|:---------:|
-| Isolation                 |  ❌   |  Process   | Container |
-| Python code               |  ❌   |     ✅      |     ❌     |
-| Compiled code             |  ❌   |     ❌      |     ✅     |
-| env                       |  ❌   |     ✅      |     ❌     |
-| bind=a,a                  |  ❌   |     ✅      |     ✅     |
-| bind=a,b                  |  ❌   |     ✅      |     ❌     |
-| ignore=*                  |  ❌   |     ✅      |     ✅     |
-| network                   |  ❌   |     ✅      |     ✅     |
-| import                    |  ❌   |     ✅      |     ❌     |
-| Resource limits           |  ❌   |     ❌      |     ✅     |
-| OS-sandbox                |  ❌   |     ❌      |     ✅     |
-| Vm compatible             |  ❌   |     ✅      |     ✅     |
-| Container<br/> compatible |  ❌   |     ✅      |     ❌     |
+| Guard                     | none  | py-sandbox | firejail  |
+|---------------------------|:-----:|:----------:|:---------:|
+| Isolation                 | ❌    |  Process   | Container |
+| Python code               | ❌    |     ✅      |    ❌     |
+| Compiled code             | ❌    |     ❌     |     ✅     |
+| env                       | ❌    |     ✅      |    ❌     |
+| bind=a,a                  | ❌    |     ✅      |     ✅     |
+| bind=a,b                  | ❌    |     ✅      |    ❌     |
+| ignore=*                  | ❌    |     ✅      |     ✅     |
+| network                   | ❌    |     ✅      |     ✅     |
+| import                    | ❌    |     ✅      |    ❌     |
+| Resource limits           | ❌    |     ❌     |    ✅      |
+| OS-sandbox                | ❌    |     ❌     |     ✅     |
+| Vm compatible             | ❌    |     ✅      |     ✅     |
+| Container<br/> compatible | ❌    |     ✅      |    ❌     |
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
 
@@ -490,19 +495,19 @@ See [here](wiki/roadmap.md)
 Here are details on the driver implementations for different databases. **py-sandbox** does not control access to databases using non-Python code. It may be necessary to add specific rules for this.
 
 | Database                       | Common Python Library                     | Implementation                                                     | Needs External Driver?             | Notes                                          |
-| ------------------------------ | ----------------------------------------- | ------------------------------------------------------------------ | ---------------------------------- | ---------------------------------------------- |
-| **SQLite** | `sqlite3` (stdlib)                        | Built-in C library in Python                                       | ✔️ No                              | Self-contained, included with Python.          |
-| **PostgreSQL** | `psycopg2`, `asyncpg`                     | C wrapper (`psycopg2`), pure Python/Cython (`asyncpg`)             | ✘ for psycopg2 / ✔️ for asyncpg    | `asyncpg` speaks PostgreSQL protocol directly. |
-| **MySQL / MariaDB** | `mysqlclient`, `PyMySQL`                  | C wrapper (`mysqlclient`), pure Python (`PyMySQL`)                 | ✘ for mysqlclient / ✔️ for PyMySQL | Native driver = better performance.            |
-| **Oracle** | `cx_Oracle` (`oracledb`)                  | C wrapper                                                          | ✘ Yes                              | Needs Oracle Instant Client.                   |
-| **SQL Server** | `pyodbc`, `pymssql`                       | C wrapper (ODBC)                                                   | ✘ Yes                              | Requires ODBC driver (`msodbcsql`).            |
-| **IBM DB2 / Informix** | `ibm_db`                                  | C wrapper                                                          | ✘ Yes                              | Requires IBM Data Server Driver.               |
-| **MongoDB** | `pymongo`                                 | Pure Python (with optional C extensions)                           | ✔️ No                              | Implements MongoDB wire protocol.              |
-| **Redis** | `redis-py`                                | Pure Python                                                        | ✔️ No                              | Direct RESP protocol over TCP.                 |
-| **Cassandra** | `cassandra-driver`                        | Cython + C libraries                                               | ✘ Yes                              | Uses Datastax native libs.                     |
-| **Elasticsearch / OpenSearch** | `elasticsearch-py`                        | Pure Python                                                        | ✔️ No                              | Communicates over HTTP/REST.                   |
-| **CouchDB** | `couchdb-python`                          | Pure Python                                                        | ✔️ No                              | HTTP REST API client.                          |
-| **Neo4j** | `neo4j` (official)                        | Pure Python                                                        | ✔️ No                              | Uses Bolt protocol in Python.                  |
-| **DuckDB** | `duckdb`                                  | C wrapper                                                          | ✔️ No (embedded library bundled)   | Works like SQLite, ships with libduckdb.       |
-| **ClickHouse** | `clickhouse-driver`, `clickhouse-connect` | C driver (`clickhouse-driver`), pure Python (`clickhouse-connect`) | ✘ for driver / ✔️ for connect      | Supports TCP or HTTP.                          |
-| **Generic ODBC** | `pyodbc`                                  | C wrapper                                                          | ✘ Yes                              | Needs ODBC system driver.                      |
+|--------------------------------| ----------------------------------------- | ------------------------------------------------------------------ | ---------------------------------- | ---------------------------------------------- |
+| **SQLite**                     | `sqlite3` (stdlib)                        | Built-in C library in Python                                       | ✅ No                              | Self-contained, included with Python.          |
+| **PostgreSQL**                 | `psycopg2`, `asyncpg`                     | C wrapper (`psycopg2`), pure Python/Cython (`asyncpg`)             | ❌ for psycopg2 / ✅ for asyncpg    | `asyncpg` speaks PostgreSQL protocol directly. |
+| **MySQL $/ MariaDB**           | `mysqlclient`, `PyMySQL`                  | C wrapper (`mysqlclient`), pure Python (`PyMySQL`)                 | ❌ for mysqlclient / ✅ for PyMySQL | Native driver = better performance.            |
+| **Oracle**                     | `cx_Oracle` (`oracledb`)                  | C wrapper                                                          | ❌ Yes                              | Needs Oracle Instant Client.                   |
+| **SQL Server**                 | `pyodbc`, `pymssql`                       | C wrapper (ODBC)                                                   | ❌ Yes                              | Requires ODBC driver (`msodbcsql`).            |
+| **IBM DB2 / Informix**         | `ibm_db`                                  | C wrapper                                                          | ❌ Yes                              | Requires IBM Data Server Driver.               |
+| **MongoDB**                    | `pymongo`                                 | Pure Python (with optional C extensions)                           | ✅ No                              | Implements MongoDB wire protocol.              |
+| **Redis**                      | `redis-py`                                | Pure Python                                                        | ✅ No                              | Direct RESP protocol over TCP.                 |
+| **Cassandra**                  | `cassandra-driver`                        | Cython + C libraries                                               | ❌ Yes                              | Uses Datastax native libs.                     |
+| **Elasticsearch / OpenSearch** | `elasticsearch-py`                        | Pure Python                                                        | ✅ No                              | Communicates over HTTP/REST.                   |
+| **CouchDB**                    | `couchdb-python`                          | Pure Python                                                        | ✅ No                              | HTTP REST API client.                          |
+| **Neo4j**                      | `neo4j` (official)                        | Pure Python                                                        | ✅ No                              | Uses Bolt protocol in Python.                  |
+| **DuckDB**                     | `duckdb`                                  | C wrapper                                                          | ✅ No (embedded library bundled)   | Works like SQLite, ships with libduckdb.       |
+| **ClickHouse**                 | `clickhouse-driver`, `clickhouse-connect` | C driver (`clickhouse-driver`), pure Python (`clickhouse-connect`) | ❌ for driver / ✅ for connect      | Supports TCP or HTTP.                          |
+| **Generic ODBC**               | `pyodbc`                                  | C wrapper                                                          | ❌ Yes                              | Needs ODBC system driver.                      |

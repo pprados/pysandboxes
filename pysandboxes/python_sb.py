@@ -46,6 +46,17 @@ def main() -> int:
     python_parsed_args, sandboxes_args, python_cmd = parse_python_cmd_line(sys.argv[1:])
 
     extra_rules = convert_extra_rules(sandboxes_args)
+
+    # Add extra to manage ipython
+    try:
+        import IPython
+
+        binds=extra_rules.get("bind",set())# bind=~/.ipython,~/.ipython
+        binds.add("~/.ipython,~/.ipython")
+        extra_rules["bind"]=binds
+    except ImportError:
+        pass  # Ignore. IPython not found
+
     config_path = Path()
     if len(extra_rules.get("learn", [])):
         config_path = Path(list(extra_rules["learn"])[0])

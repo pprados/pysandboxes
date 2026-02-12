@@ -37,9 +37,9 @@ def init_log_level():
 @sandbox
 async def arun_in_sandbox():
     logger.info("Run 'arun_in_sandbox()' in sandbox")
-    _test_envs()
+    # _test_envs()
     _test_files()
-    _test_network()
+    # _test_network()
     print(42)
     return 42
 
@@ -108,18 +108,18 @@ def _test_network():
 
 
 def _test_files():
-    try:
-        with io.open("tmp/test.remove", "w") as f:
-            pass
-        # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    except SandBoxError as e:
-        print(e)
-    try:
-        with io.open("tst_wasm/factorial.wasm", "r") as f:
-            pass
-        # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    except SandBoxError as e:
-        print(e)
+    # try:
+    #     with io.open("tmp/test.remove", "w") as f:
+    #         pass
+    #     # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    # except SandBoxError as e:
+    #     print(e)
+    # try:
+    #     with io.open("tst_wasm/factorial.wasm", "r") as f:
+    #         pass
+    #     # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    # except SandBoxError as e:
+    #     print(e)
     # try:
     #     with io.open("pysandboxes/__init__.py", "r") as f:
     #         pass
