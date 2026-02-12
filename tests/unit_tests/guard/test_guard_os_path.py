@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, _activate_guard, _reset_rules
+from .test_guard_io import files, activate_guard_files_rules, _reset_rules
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def test_os_path_abspath(files):
         ConfigLine(f"ignore=*.log",Path(),0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.path.abspath(files["path"] / "visible.txt") == str(
@@ -32,7 +32,7 @@ def test_os_path_exists_and_lexists(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.path.exists(files["path"] / "visible.txt")
@@ -47,7 +47,7 @@ def test_os_path_islink(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert not os.path.islink(files["path"] / "visible.txt")
@@ -61,7 +61,7 @@ def test_os_path_isdir(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.path.isdir(files["path"])
@@ -74,7 +74,7 @@ def test_os_path_isfile(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.path.isfile(files["path"] / "visible.txt")
@@ -87,7 +87,7 @@ def test_os_path_samefile(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.path.samefile(files["path"] / "visible.txt",
@@ -104,7 +104,7 @@ def test_os_path_realpath(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.path.realpath(files["path"] / "visible.txt") == str(
@@ -119,7 +119,7 @@ def test_os_path_atime_mtime_ctime_and_size(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",Path(),0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.path.getatime(files["path"] / "visible.txt")

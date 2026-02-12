@@ -2,7 +2,7 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, _activate_guard, _reset_rules
+from .test_guard_io import files, activate_guard_files_rules, _reset_rules
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +19,7 @@ def test_gzip(files):
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
 
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import gzip
     import pathlib

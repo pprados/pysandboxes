@@ -97,7 +97,7 @@ def files(tmp_path) -> Dict[str, Path]:
     }
 
 
-def _activate_guard(rules: ConfigLines) -> None:
+def activate_guard_files_rules(rules: ConfigLines) -> None:
     errors = []
     file_rules, _ = parse_rules(rules, errors)
     activate_guard(file_rules)
@@ -108,7 +108,7 @@ def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
     rules = [
         ConfigLine(f"ignore={files['ignore']}", Path(), 0)
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     with pytest.raises(RuleFileNotFoundError):
@@ -119,7 +119,7 @@ def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, 
     rules = [
         ConfigLine(f"ignore={files['ignore']}", Path(), 0)
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     with pytest.raises(RuleFileNotFoundError):
@@ -130,7 +130,7 @@ def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]):
     rules = [
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     # Access using the dest path should redirect to src
     target_path = files['bind_dest'] / "bound_file.txt"
 
@@ -144,7 +144,7 @@ def test_io_open_write(files: Dict[str, Path]):
     rules = [
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     target_path = files['bind_dest'] / "write.txt"
 
     import io
@@ -158,7 +158,7 @@ def test_io_open_refuse_write(files: Dict[str, Path]):
     rules = [
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     target_path = files['bind_dest'] / "write.txt"
 
     import io
@@ -173,7 +173,7 @@ def test_io_open_visible_and_invisible_files(files: Dict[str, Path]):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     with io.open(files['visible']) as f:
@@ -197,7 +197,7 @@ def test_io_FileIO(files: Dict[str, Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     with io.FileIO(files['visible'], "r") as f:

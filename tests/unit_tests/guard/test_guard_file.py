@@ -1,1 +1,132 @@
-# TODO: _apply_dest_to_src_rules et inverse, avec des maps sur sous fichier et répertoire direct
+from pathlib import Path
+
+import pytest
+
+from pysandboxes.guard_files import _apply_dest_to_src_rules, _apply_src_to_dest_rules
+from pysandboxes.sb_types import ConfigLine
+from .test_guard_io import activate_guard_files_rules, _reset_rules
+
+
+@pytest.fixture(autouse=True)
+def reset_rules():
+    yield from _reset_rules()
+
+
+def test_apply_dest_to_src_rule():
+    # TODO: test tous les chemsins, dont path=""
+
+    cwd = str(Path.cwd())
+    src_dir = f"{cwd}/tests"
+    dst_dir = f"{cwd}/pysandboxes"
+    rules = [
+        ConfigLine(f"bind={cwd},{cwd}", Path(), 0),
+        ConfigLine(f"bind={src_dir},{dst_dir}", Path(), 0),
+        ConfigLine(f"ignore=c*", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    # Test with filename
+    assert (
+            _apply_dest_to_src_rules(f"{cwd}/a.txt",
+                                     write=False,
+                                     accept_source=False) ==
+            (f"{cwd}/a.txt", None)
+    ), "Accept a file with a bind rule"
+    assert (
+            _apply_dest_to_src_rules(f"{src_dir}/a.txt",
+                                     write=False,
+                                     accept_source=False) ==
+            (f"{dst_dir}/a.txt", None)
+    ), "Accept a file with a bind rule with alias"
+
+    ignore_result = _apply_dest_to_src_rules(f"c.txt",
+                                             write=False,
+                                             accept_source=False)
+    assert ignore_result[0] == None, "Ignore must detected"
+    assert ignore_result[1] != None, "Ignore must detected"
+
+    # Test with directories
+    assert (
+            _apply_dest_to_src_rules(f"{cwd}",
+                                     write=False,
+                                     accept_source=False) ==
+            (f"{cwd}", None)
+    ), "Accept a directory with a bind rule"
+    assert (
+            _apply_dest_to_src_rules(f"{cwd}/",
+                                     write=False,
+                                     accept_source=False) ==
+            (f"{cwd}/", None)
+    ), "Accept a directory/ with a bind rule"
+    assert (
+            _apply_dest_to_src_rules(f"{src_dir}",
+                                     write=False,
+                                     accept_source=False) ==
+            (f"{dst_dir}", None)
+    ), "Accept a directory with a bind rule and alias"
+    assert (
+            _apply_dest_to_src_rules(f"{src_dir}/",
+                                     write=False,
+                                     accept_source=False) ==
+            (f"{dst_dir}/", None)
+    ), "Accept a directory/ with a bind rule and alias"
+
+    assert (_apply_dest_to_src_rules(f"/refuse.txt",
+                                     write=False,
+                                     accept_source=False) ==
+            (None, None)
+            ), "Refuse find without rules"
+
+
+def test_apply_src_to_dest_rules():
+    cwd = str(Path.cwd())
+    src_dir = f"{cwd}/tests"
+    dst_dir = f"{cwd}/pysandboxes"
+    rules = [
+        ConfigLine(f"bind={cwd},{cwd}", Path(), 0),
+        ConfigLine(f"bind={src_dir},{dst_dir}", Path(), 0),
+        ConfigLine(f"ignore=c*", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    # Test with file
+    assert (
+            _apply_src_to_dest_rules(f"{cwd}/a.txt", accept_dest=False) ==
+            (f"{cwd}/a.txt", None)
+    )
+
+    assert (
+            _apply_src_to_dest_rules(f"{src_dir}/a.txt", accept_dest=False) ==
+            (f"{dst_dir}/a.txt", None)
+    )
+    refuse_error = _apply_src_to_dest_rules(f"{dst_dir}/a.txt", accept_dest=False)
+    assert refuse_error[0] is None
+    assert refuse_error[1] is not None
+
+    assert (
+            _apply_src_to_dest_rules(f"{dst_dir}/a.txt", accept_dest=True) ==
+            (f"{dst_dir}/a.txt", None)
+    )
+
+    # Test with directories
+    assert (
+            _apply_src_to_dest_rules(f"{cwd}", accept_dest=False) ==
+            (f"{cwd}", None)
+    )
+    assert (
+            _apply_src_to_dest_rules(f"{cwd}/", accept_dest=False) ==
+            (f"{cwd}/", None)
+    )
+    assert (
+            _apply_src_to_dest_rules(f"{src_dir}", accept_dest=False) ==
+            (f"{dst_dir}", None)
+    )
+
+    refuse_error=_apply_src_to_dest_rules(f"{dst_dir}/", accept_dest=False)
+    assert refuse_error[0] is None
+    assert refuse_error[1] is not None
+
+    assert (
+        _apply_src_to_dest_rules(f"{dst_dir}/", accept_dest=True),
+        (f"{dst_dir}", None)
+    )

@@ -8,7 +8,7 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, _activate_guard, _reset_rules
+from .test_guard_io import files, activate_guard_files_rules, _reset_rules
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +23,7 @@ def test_os_listdir_filters_ignored_files_and_bind(files:Dict[str,Path]) -> None
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     entries = os.listdir(files['path'])
@@ -45,7 +45,7 @@ def test_os_statand_stat_and_lstat(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.stat(files['visible'])
@@ -74,7 +74,7 @@ def test_os_listxattr(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.listxattr(files['visible']) == []
@@ -91,7 +91,7 @@ def test_os_xattr(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     os.setxattr(files['visible'], "user.comment", b"comment")
@@ -115,7 +115,7 @@ def test_os_link_symlink_and_readlink(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.readlink(files['home_link']) == str(files['visible'])
@@ -161,7 +161,7 @@ def test_os_remove(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     (files["path"] / "to_remove.txt").write_text("To remove")
@@ -188,7 +188,7 @@ def test_os_remove_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     with pytest.raises(RulePermissionError):
@@ -201,7 +201,7 @@ def test_os_mkdir_removedirs_and_rmdir(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     os.mkdir(files["path"] / "dir_to_remove")
@@ -228,7 +228,7 @@ def test_os_mkdir_removedirs_and_rmdir_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     os.mkdir(files["bind_dest"] / "dir_to_remove")
@@ -244,7 +244,7 @@ def test_os_rename(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     import os
@@ -272,7 +272,7 @@ def test_os_rename_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     with pytest.raises(RulePermissionError):
@@ -288,7 +288,7 @@ def test_os_chdir_and_getcwd(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     old_dir = os.getcwd()
@@ -309,7 +309,7 @@ def test_os_getcwdb(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     cwd = os.getcwdb()
@@ -323,7 +323,7 @@ def test_os_open_readonly(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     fd = -1
@@ -348,7 +348,7 @@ def test_os_open_writeonly(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     fd = -1
@@ -373,7 +373,7 @@ def test_os_open_writeonly_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     with pytest.raises(RulePermissionError):
@@ -391,7 +391,7 @@ def test_os_open_readwrite(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     fd = -1
@@ -413,7 +413,7 @@ def test_os_open_readwrite_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     with pytest.raises(RulePermissionError):
@@ -431,7 +431,7 @@ def test_os_access_read_write(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.access(files["path"], os.R_OK | os.W_OK)
@@ -448,7 +448,7 @@ def test_os_access_read_only(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.access(files["path"], os.R_OK | os.W_OK)
@@ -466,7 +466,7 @@ def test_os_chflags_and_lchflags(files:Dict[str,Path]) -> None:
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     assert os.chflags(files["path"], stat.SF_ARCHIVED)
@@ -484,7 +484,7 @@ def test_os_chmod_and_lchmod(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     mode = os.stat(files["path"]).st_mode
@@ -514,7 +514,7 @@ def test_os_chmod_and_lchmod_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     mode = os.stat(files["bound_file"]).st_mode
@@ -535,7 +535,7 @@ def test_os_chown_and_lchown(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     uid = os.stat(files["path"]).st_uid
@@ -567,7 +567,7 @@ def test_os_chown_and_lchown_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     uid = os.stat(files["path"]).st_uid
@@ -585,7 +585,7 @@ def test_os_replace(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     import os
@@ -612,7 +612,7 @@ def test_os_replace_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     with pytest.raises(RulePermissionError):
@@ -626,7 +626,7 @@ def test_os_truncate(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     import os
@@ -651,7 +651,7 @@ def test_os_truncate_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     with pytest.raises(RulePermissionError):
@@ -664,7 +664,7 @@ def test_os_utime(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     now = time.time()
     yesterday = now - 86400
@@ -686,7 +686,7 @@ def test_os_utime_refused(files:Dict[str,Path]) -> None:
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     now = time.time()
@@ -702,7 +702,7 @@ def test_os_scandir(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     with os.scandir(files["path"]) as entries:
@@ -729,7 +729,7 @@ def test_os_walk(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     rc = list(os.walk(files["path"]))
@@ -749,7 +749,7 @@ def test_os_makedirs_and_removedirs(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     os.makedirs(files["path"] / "dir_to_remove" / "inner")
@@ -770,7 +770,7 @@ def test_os_renames(files:Dict[str,Path]) -> None:
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import io
     import os
@@ -786,7 +786,7 @@ def test_os_walk_and_fwalk(files:Dict[str,Path]) -> None:
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import os
     root,dirs,dir_files = next(os.walk(files["path"],topdown=True))

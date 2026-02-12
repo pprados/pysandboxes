@@ -299,7 +299,7 @@ def generate_rules(
 
 
 # Helper to resolve symlinks and apply rules
-def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Tuple[
+def _apply_src_to_dest_rules(path: str, accept_dest: bool = False) -> Tuple[
     Optional[str],
     Optional[FilesRule]
 ]:
@@ -315,14 +315,21 @@ def _apply_src_to_dest_rules(path: str, accept_src: bool = False) -> Tuple[
 
     for rule in _rules:
         if isinstance(rule, BindRule):
+            if (rule.source != rule.dest and
+                    (real_path.startswith(rule.dest) or real_path == rule.dest[:-1])
+                    and not accept_dest):
+                return None,rule
             if real_path.startswith(rule.source) or real_path == rule.source[:-1]:
-                if not accept_src and real_path == rule.source[:-1]:
+                if (rule.source != rule.dest and not accept_dest and real_path == rule.dest[:-1]):
                     return None, rule
                 relative = os.path.relpath(real_path, rule.source)
                 if relative != ".":
                     new_path = os.path.join(rule.dest, relative)
                 else:
                     new_path = rule.dest
+                    if not path.endswith("/"):
+                        new_path = new_path[:-1]
+
                 return new_path, None
         elif isinstance(rule, IgnoreRule):
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
@@ -345,22 +352,22 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
     Otherwise, returns the potentially remapped path.
     """
     if not path:
-        return None
+        return None, None
     if isinstance(path, _DirEntry):
         path = path.path
     fake_path = _os_path_abspath(path)
-    # if str(path).endswith("/"):
-    #     fake_path = fake_path + "/"
+    if str(path).endswith("/"):
+        fake_path = fake_path + "/"
     original_path = path
 
     for rule in _rules:
         if isinstance(rule, BindRule):
             if rule.source != rule.dest and fake_path.startswith(
                     rule.source[:-1]) and not accept_source:
-                fake_basename = fake_path[len(rule.source[:-1]):]
-                new_path = os.path.join(rule.dest, fake_basename)
-                if fake_path.endswith("/"):
-                    new_path += "/"
+                relative = fake_path[len(rule.source):]
+                new_path = os.path.join(rule.dest, relative)
+                if not fake_path.endswith("/") and relative == "":
+                    new_path = new_path[:-1]
                 return new_path, None
             if fake_path.startswith(rule.dest) or fake_path == rule.dest[:-1]:
                 if fake_path == rule.dest[:-1]:
@@ -379,6 +386,8 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
                 if relative == ".":
                     relative = ""
                 new_path = os.path.join(rule.source, relative)
+                if not fake_path.endswith("/") and relative == "":
+                    new_path = new_path[:-1]
                 return new_path, None
         elif isinstance(rule, IgnoreRule):
             if rule.source[0] == "/":
@@ -682,7 +691,7 @@ def _wrap_os_getcwd(func: Callable) -> Callable:
         if not new_dir.endswith("/"):
             new_dir = new_dir + "/"
 
-        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_src=True)
+        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_dest=True)
         # remapped, rule = _apply_dest_to_src_rules(new_dir,write=False, accept_source=True)
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
@@ -702,7 +711,7 @@ def _wrap_os_getcwdb(func: Callable) -> Callable:
         if not new_dir.endswith("/"):
             new_dir = new_dir + "/"
 
-        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_src=True)
+        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_dest=True)
         # remapped, rule = _apply_dest_to_src_rules(new_dir,write=False, accept_source=True)
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
@@ -834,7 +843,7 @@ class _ScanDirContextManager:
                 while True:
                     entry = next(self.scanner)
                     dest_path, rule = _apply_src_to_dest_rules(entry.path,
-                                                               accept_src=False)
+                                                               accept_dest=False)
                     if rule:
                         pass  # Ignore
                     elif dest_path is not None:

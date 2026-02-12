@@ -298,7 +298,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 def publich_netfilter():
                     netfilter_file.write_text("\n".join(net_filter4))
                     if not DEBUG:
-                        netfilter_file.unlink()
+                        netfilter_file.unlink(missing_ok=True)
                 threading.Thread(target=publich_netfilter, daemon=True).start()
 
                 args.append(f"--netfilter={netfilter_file}")
@@ -316,7 +316,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 def publich_netfilter6():
                     netfilter6_file.write_text("\n".join(net_filter4))
                     if not DEBUG:
-                        netfilter_file.unlink()
+                        netfilter_file.unlink(missing_ok=True)
                 threading.Thread(target=publich_netfilter6, daemon=True).start()
                 args.append(f"--netfilter6={netfilter6_file}")
 

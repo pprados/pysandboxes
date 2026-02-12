@@ -5,7 +5,7 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, _activate_guard, _reset_rules
+from .test_guard_io import files, activate_guard_files_rules, _reset_rules
 
 import pathlib as opl
 
@@ -23,7 +23,7 @@ def test_pathlib_open(files):
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
 
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     with pathlib.Path(files["visible"]).open() as f:  # Need to use new Path() implementation
@@ -39,7 +39,7 @@ def test_pathlib_read_write_text(files):
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
 
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     
     import pathlib
     pathlib.Path(files["path"] / "to_write.txt").write_text("To write")
@@ -54,7 +54,7 @@ def test_pathlib_read_write_bytes(files):
         ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     
     import pathlib
     (files["path"] / "to_write.txt").write_bytes("To write".encode())
@@ -69,7 +69,7 @@ def test_pathlib_is(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     
     import pathlib
     assert pathlib.Path(files["path"] / "to_write.txt").is_absolute()
@@ -105,7 +105,7 @@ def test_pathlib_info(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     
     import pathlib
     assert pathlib.Path(files["path"]).owner()
@@ -120,7 +120,7 @@ def test_pathlib_glob(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     result = [pathlib.Path(f).name for f in pathlib.Path(files['path']).glob("*")]
@@ -137,7 +137,7 @@ def test_pathlib_rglob(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     
     import pathlib
     result = list(pathlib.Path(files['path']).rglob("*"))
@@ -152,7 +152,7 @@ def test_pathlib_iterdir(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     result = [f.name for f in pathlib.Path(files['path']).iterdir()]
@@ -170,7 +170,7 @@ def test_pathlib_chmod_and_lchmod(files):
         ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     mode = pathlib.Path(files["path"]).stat().st_mode
@@ -188,7 +188,7 @@ def test_pathlib_statand_stat_and_lstat(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
     
     import pathlib
     assert pathlib.Path(files['visible']).stat()
@@ -207,7 +207,7 @@ def test_pathlib_mkdir_removedirs_and_rmdir(files):
         ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     pathlib.Path(files["path"] / "dir_to_remove").mkdir()
@@ -230,7 +230,7 @@ def test_pathlib_link_symlink_and_readlink(files):
         ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0)
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     assert pathlib.Path(files['home_link']).readlink() == pathlib.Path(files['visible'])
@@ -273,7 +273,7 @@ def test_pathlib_link_symlink_and_readlink_refused(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     with pytest.raises(PermissionError):
@@ -286,7 +286,7 @@ def test_pathlib_touch(files):
         ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     assert pathlib.Path(files["path"]).touch() is None
@@ -303,7 +303,7 @@ def test_pathlib_touch_refused(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     with pytest.raises(PermissionError):
@@ -316,7 +316,7 @@ def test_pathlib_rename(files):
         ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     pathlib.Path(files["to_rename"]).write_text("To rename")
@@ -341,7 +341,7 @@ def test_pathlib_rename_refused(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     with pytest.raises(PermissionError):
@@ -354,7 +354,7 @@ def test_pathlib_replace(files):
         ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     pathlib.Path(files["to_replace"]).write_text("To replace")
@@ -378,7 +378,7 @@ def test_pathlib_replace_refused(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     with pytest.raises(PermissionError):
@@ -391,7 +391,7 @@ def test_pathlib_resolve(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     assert pathlib.Path(files["bind_dest"] / ".." / "visible.txt").resolve() == pathlib.Path(files["visible"])
@@ -403,7 +403,7 @@ def test_pathlib_samefile(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     assert pathlib.Path(files["visible"]).samefile(pathlib.Path(files["visible"]))
@@ -418,7 +418,7 @@ def test_pathlib_walk(files):
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}",NonePath,0),
     ]
-    _activate_guard(rules)
+    activate_guard_files_rules(rules)
 
     import pathlib
     rc = list(pathlib.Path(files["path"]).walk())

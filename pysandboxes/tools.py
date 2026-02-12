@@ -21,10 +21,10 @@ def resolve_env_variables(s: str, envs: Union[Dict[str, str], Envs]):
         while '${' in var_name:
             var_name = resolve_env_variables(var_name, envs)
 
-        value = envs.get(var_name)
-        return value if value is not None else default_value
+        value = envs.get(var_name, default_value)
+        return value
 
-    while '${' in s:
+    while re.search(r'\${.*}', s):
         s = pattern.sub(replace, s)
     return s
 

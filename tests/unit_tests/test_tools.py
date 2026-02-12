@@ -1,6 +1,6 @@
 from typing import List
 
-from pysandboxes.tools import _remove_comment
+from pysandboxes.tools import _remove_comment, resolve_env_variables
 
 
 def test_remove_comment_basic() -> None:
@@ -33,3 +33,20 @@ def test_remove_comment_with_quotes() -> None:
     for input_line, expected in test_cases:
         result: str = _remove_comment(input_line)
         assert result == expected
+
+
+def test_resolve_env_variables():
+    assert resolve_env_variables("[${A}]", {"A": "val_a"}) == "[val_a]"
+    # Without ref
+    assert resolve_env_variables("[${Z}]", {"A": "val_a"}) == "[]"
+    # Recursive variable
+    assert resolve_env_variables("[${A${B}}]", {"AB": "val_ab", "B": "B"}) == "[val_ab]"
+    # Break recursive variable
+    assert resolve_env_variables("[${A${B}]", {"AB": "val_ab", "B": "B"}) == "[${AB]"
+
+    assert resolve_env_variables("${A${B}}", {"B": "B"}) == ""
+
+    # test with defaut value
+    assert resolve_env_variables("[${A:=def}]", {"A": "val_a"}) == "[val_a]"
+    assert resolve_env_variables("[${A:=def}]", {}) == "[def]"
+    assert resolve_env_variables("[${A:=${B}}]", {"B": "val_b"}) == "[val_b]"
