@@ -3,7 +3,7 @@
 --name=firejail-sandbox
 --caps.drop=all
 # --caps.keep=net_admin
-#--private # Any files created in this directory will be deleted when you shutdown the sandbox
+#--private # Any files created in this directory will be deleted when you daemon_shutdown the sandbox
 --noprofile
 --include=/etc/firejail/allow-python3.inc
 --include=/etc/firejail/disable-common.inc
@@ -15,7 +15,7 @@
 # See /usr/share/doc/firejail/syscalls.txt
 # --seccomp=mkdir,@debug,@mount,@reboot,@raw-io,@setuid,@keyring
 --hostname=firejail-sandbox
---deterministic-shutdown
+--deterministic-daemon_shutdown
 --protocol=inet,inet6
 --env=PYTHONSTARTUP=
 --private-tmp

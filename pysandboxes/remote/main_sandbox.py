@@ -13,7 +13,7 @@ from typing import Optional, cast
 from pysandboxes.base_daemon import BaseDaemon
 from pysandboxes.os_sandbox import providers_factory
 from .python_in_sb import python_in_sb
-from .subprocess_daemon import DaemonParameters
+from .sse_client_subprocess_daemon import DaemonParameters
 from .tools import set_pdeathsig
 from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 

@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import List, Tuple, MutableSet, Any, Union, Dict, Optional
 
-from .subprocess_daemon import BaseSubProcessDaemon
+from .sse_client_subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command, suggest_package_installation
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
@@ -166,7 +166,7 @@ def _follow_links_executable(executable: Path, whitelist: WhiteList) -> None:
                                sys.executable)
 
 
-class FireJailDaemon(BaseSubProcessDaemon):
+class FireJailSSEDaemon(BaseSubProcessDaemon):
     def update_rules(self,
                      *,
                      all_rules: AllRules,

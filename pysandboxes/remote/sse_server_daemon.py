@@ -15,7 +15,7 @@ from typing import Dict
 from uvicorn import Server
 
 from .parameters import PATH_RPC, HOST, TIMEOUT_GRACEFUL_SHUTDOWN, POLLING_DELAY
-from .sse_sandbox import SSESandbox
+from .sse_base_daemon import BaseSSESandbox
 from .tools import from_b85, to_b85
 from ..all_rules import AllRules
 from ..private_loop import sandbox_loop, get_sandbox_loop
@@ -269,7 +269,7 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
     return uvicorn_server
 
 
-class SSEServerDaemon(SSESandbox):
+class SSEServerDaemon(BaseSSESandbox):
     __slots__ = ("uvicorn", "task", "port", "stopped")
 
     def __init__(self, token: str, *, port: int):
@@ -336,7 +336,7 @@ class SSEServerDaemon(SSESandbox):
                                 timeout=TIMEOUT_GRACEFUL_SHUTDOWN,
                             )
                         except asyncio.TimeoutError:
-                            logger.warning(f"Timeout during uvicorn shutdown. Force exit")
+                            logger.warning(f"Timeout during uvicorn daemon_shutdown. Force exit")
                             self.uvicorn.force_exit = True
                         self.uvicorn.started = False
                 except SystemExit:
@@ -355,7 +355,7 @@ class SSEServerDaemon(SSESandbox):
 
     async def stop(self, max_pending: int) -> None:
         """ End all current jobs """
-        logger.debug("Remote shutdown calling")
+        logger.debug("Remote daemon_shutdown calling")
         if not self.is_started:
             logger.warning("Server not started")
             return
@@ -370,7 +370,7 @@ class SSEServerDaemon(SSESandbox):
         logger.debug("All request are complete")
         self.stopped = True
 
-    async def shutdown(self) -> None:
+    async def shutdown(self,graceful_shutdown:bool = True) -> None:
         logger.debug("SSEServerDaemon.shutdown()")
         await self.stop(max_pending=0)
         self.task.cancel()

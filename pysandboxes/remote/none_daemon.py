@@ -30,7 +30,7 @@ class NoneDaemon(BaseDaemon):
     async def stop(self,max_pending:int) -> None:
         pass
 
-    async def shutdown(self) -> None:
+    async def shutdown(self,graceful_shutdown:bool=True) -> None:
         set_is_in_sandbox(False)
         self._is_started = False
 

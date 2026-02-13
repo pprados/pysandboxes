@@ -51,7 +51,7 @@ class BaseDaemon(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def shutdown(self) -> None:
+    async def shutdown(self,graceful_shutdown:bool = True) -> None:
         raise NotImplementedError
 
     @abstractmethod

@@ -19,12 +19,12 @@ from aiohttp import ClientConnectorError
 
 from . import main_shutdown
 from .parameters import INTERVAL_FOR_PING_DAEMON, RETRY_RESET_DELAY, RETRY_MAX_DELAY, \
-    RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS, TIMEOUT_BEFORE_KILL_SUBPROCESS, \
-    TIMEOUT_FOR_PING, DELAY_FOR_STOP_DAEMON
-from .sse_sandbox import SSESandbox, PING_SERVER_URL
+    RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS, TIMEOUT_FOR_PING, \
+    DELAY_FOR_STOP_DAEMON
+from .sse_base_daemon import BaseSSESandbox, PING_SERVER_URL
 from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
-from ..private_loop import get_sandbox_loop, sandbox_loop
+from ..private_loop import sandbox_loop
 from ..sb_types import Args, Envs
 from ..tools import SyncOrAsyncFunc, get_callable_info
 
@@ -148,7 +148,7 @@ def find_free_port() -> Optional[int]:
         return None
 
 
-class BaseSubProcessDaemon(SSESandbox):
+class BaseSubProcessDaemon(BaseSSESandbox):
     __slots__ = ('_is_started', '_token',
                  '_process',
                  '_attempts',
@@ -325,24 +325,32 @@ class BaseSubProcessDaemon(SSESandbox):
         pass  # FIXME:
 
     # @sandbox_loop
-    async def shutdown(self) -> None:
+    async def shutdown(self, graceful_shutdown: bool = True) -> None:
         self._accept_incoming = False
-        loop = get_sandbox_loop()
-        logger.debug("Call remote shutdown...")
+
+        logger.debug("Call remote daemon_shutdown...")
         await self.async_call_in_sandbox(
-            main_shutdown.shutdown,  # Call remote sandbox shutdown
-            True
+            main_shutdown.daemon_shutdown,  # Call remote sandbox daemon_shutdown
+            True,
+            graceful_shutdown,
         )
-        if self._process:
-            try:
-                await asyncio.wait_for(
-                    self._process.wait(),
-                    timeout=DELAY_FOR_STOP_DAEMON)
-            except asyncio.TimeoutError:
-                logger.warning("Kill the sandbox daemon")
-                self._process.kill()
-            logger.debug("Sandbox daemon is terminated")
+        if graceful_shutdown:
+            if self._process:
+                try:
+                    await asyncio.wait_for(
+                        self._process.wait(),
+                        timeout=DELAY_FOR_STOP_DAEMON)
+                except asyncio.TimeoutError:
+                    logger.warning("Kill the sandbox daemon")
+                    self._process.kill()
+                logger.debug("Sandbox daemon is terminated")
+                self._process = None
+        else:
+            logger.info("Kill the sandbox daemon (graceful_shutdown=%s)",
+                        graceful_shutdown)
+            self._process.kill()
             self._process = None
+
         self._is_started = False
 
     async def join(self) -> int:  # FIXME: utilisé ? Utilisable ?

@@ -24,6 +24,6 @@ class TaskDaemon(SSEServerDaemon):
                             )
         logger.info("Sandbox Daemon in async task is started")
 
-    async def shutdown(self) -> None:
-        await super().shutdown()
-        logger.info("Sandbox Daemon is shutdown")
+    async def shutdown(self,graceful_shutdown:bool = True) -> None:
+        await super().shutdown(graceful_shutdown)
+        logger.info("Sandbox Daemon is daemon_shutdown")

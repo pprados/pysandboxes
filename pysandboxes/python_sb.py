@@ -12,7 +12,7 @@ from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.python_in_sb import convert_extra_rules
-from pysandboxes.remote.subprocess_daemon import BaseSubProcessDaemon, \
+from pysandboxes.remote.sse_client_subprocess_daemon import BaseSubProcessDaemon, \
     DaemonParameters, get_log_formatter, launch_sandbox
 from pysandboxes.sb_types import Envs
 from .remote.parse_cpython_args import parse_python_cmd_line
@@ -103,7 +103,7 @@ def main() -> int:
                 from .remote.python_in_sb import python_in_sb
                 python_in_sb(all_rules, python_cmd)
             finally:
-                await os_provider.shutdown()
+                await os_provider.shutdown(graceful_shutdown=True)
             return 0
 
         return asyncio.run(run_locally())

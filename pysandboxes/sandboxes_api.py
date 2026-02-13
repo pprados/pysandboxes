@@ -13,8 +13,7 @@ from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
 from .e import ConfigSyntaxError
-from .os_sandbox import async_shutdown_daemon
-from .private_loop import set_sandbox_loop, sandbox_loop
+from .private_loop import set_sandbox_loop, sandbox_loop, get_sandbox_loop
 from .tools import check_mixte_async_async, SyncOrAsyncFunc, set_is_in_sandbox, \
     is_in_sandbox
 
@@ -69,10 +68,11 @@ class sandboxes(Protocol):
         'extra_rules',
         'learning_path',
         'python_args',
+        'graceful_shutdown',
         "_old_sigint"
         "_old_sigterm"
         "_old_sigquit"
-        "_daemon"
+        "_daemon",
     )
     """
     Context manager to start and stop the sandbox daemon.
@@ -87,6 +87,7 @@ class sandboxes(Protocol):
                  *,
                  envs: Optional[Dict[str, str]] = None,
                  python_args: Optional[List[str]] = None,
+                 graceful_shutdown: bool = True,
                  **extra_rules,
                  ) -> None:
         self.init_fn = init_fn
@@ -100,6 +101,7 @@ class sandboxes(Protocol):
         self.extra_rules = extra_rules
         self.learning_path = None
         self.python_args = python_args
+        self.graceful_shutdown = graceful_shutdown
         self._old_sigint = None
         self._old_sigterm = None
         self._old_sigquit = None
@@ -113,7 +115,6 @@ class sandboxes(Protocol):
         from .py_sandbox import load_and_parse_config
         from .os_sandbox import start_daemon
         from .e import ConfigSyntaxError
-
 
         if not is_in_sandbox():  # Inner call
             check_mixte_async_async()
@@ -141,7 +142,10 @@ class sandboxes(Protocol):
                 """
                 # Iterate through all child processes and send them SIGTERM
                 logger.debug("Catch signal %s. Propagate to the dameon.", signum)
-                self._stop_daemon()
+                loop = get_sandbox_loop()
+                loop.call_soon_threadsafe(  # FIXME: a vérifier
+                    lambda: loop.create_task(self._stop_daemon())
+                )
 
             if threading.current_thread() is threading.main_thread():
                 self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
@@ -149,7 +153,6 @@ class sandboxes(Protocol):
                 self._old_sigquit = signal.signal(signal.SIGQUIT, signal_handler)
 
         return self._daemon
-
 
     def __exit__(self,
                  exc_type: Optional[type[BaseException]],
@@ -162,27 +165,29 @@ class sandboxes(Protocol):
         if is_in_sandbox():
             set_is_in_sandbox(False)
             return False
-        self._stop_daemon()
+
+        asyncio.run_coroutine_threadsafe(
+            self._daemon.shutdown(self.graceful_shutdown),
+            get_sandbox_loop()).result()
         return False
 
     async def _stop_daemon(self):
-        if self._daemon:
-            from pysandboxes.os_sandbox import shutdown_daemon
+        if self._daemon and self._daemon.is_started:
             logger.debug("_stop_daemon...")
-
             if threading.current_thread() is threading.main_thread():
                 # Restore signal handler
                 signal.signal(signal.SIGINT, self._old_sigint)
                 signal.signal(signal.SIGTERM, self._old_sigterm)
                 signal.signal(signal.SIGQUIT, self._old_sigquit)
 
-            self._daemon = None
             self.learning_path = False
-            await async_shutdown_daemon()
+            await self._daemon.stop(max_pending=0)
             logger.debug("daemon stopped")
 
     def __delete__(self, instance):
-        self._stop_daemon()  # FIXME: ne fonctionne pas en async
+        asyncio.run_coroutine_threadsafe(
+            self._stop_daemon(),
+            get_sandbox_loop()).result()
 
     # ── asynchronous API ───────────────────────────────
     async def __aenter__(self) -> BaseDaemon:  # FIXME: compare avec enter() et TU
@@ -215,6 +220,7 @@ class sandboxes(Protocol):
                 """
                 # Iterate through all child processes and send them SIGTERM
                 logger.debug("Catch signal %s. Propagate to the dameon.", signum)
+                logger.debug("Signal lance stop_daemon")
                 asyncio.get_running_loop().create_task(
                     self._stop_daemon()
                 )
@@ -234,8 +240,7 @@ class sandboxes(Protocol):
         Stop the sandbox daemon.
         """
         if not is_in_sandbox() and self._daemon:
-            from pysandboxes.os_sandbox import async_shutdown_daemon
-            await async_shutdown_daemon()
+            await self._daemon.shutdown(self.graceful_shutdown)
         return False
 
 

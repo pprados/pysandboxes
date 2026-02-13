@@ -46,7 +46,7 @@ def _get_rpc_params(args: Any,
     return params
 
 
-class SSESandbox(BaseDaemon):
+class BaseSSESandbox(BaseDaemon):
     def __init__(self,
                  token: str,
                  **kwargs,
@@ -126,5 +126,5 @@ class SSESandbox(BaseDaemon):
         loop = asyncio.get_event_loop()  # Get the current running loop. May be != sandbox loop
 
         return asyncio.run_coroutine_threadsafe(
-            self.async_call_in_sandbox(func, *args, **kwargs),
+            self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs),
             loop).result()

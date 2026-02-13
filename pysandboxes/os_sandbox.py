@@ -8,11 +8,11 @@ from typing import Any, Callable, Optional, Type, cast, Dict
 from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
 from .all_rules import AllRules
-from .remote.firejail_daemon import FireJailDaemon
+from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
 from .remote.none_daemon import NoneDaemon
 from .remote.parameters import DELAY_FOR_STOP_DAEMON
-from .remote.subprocess_daemon import SubProcessDaemon
+from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
 from .tools import is_in_sandbox, check_mixte_async_async, SyncOrAsyncFunc
 from .sb_types import Envs
@@ -26,7 +26,7 @@ providers_factory: dict[str, Type] = {
     "none": NoneDaemon,
     "subprocess": SubProcessDaemon,
     # "bwrap": BWrapDaemon(),
-    "firejail": FireJailDaemon,
+    "firejail": FireJailSSEDaemon,
     # TODO: podman, https://www.redhat.com/en/blog/podman-inside-container https://www.redhat.com/en/blog/podman-inside-kubernetes
     #  docker, lxc, ...
     # docker alternative
@@ -38,7 +38,7 @@ providers_factory: dict[str, Type] = {
 DEFAULT_OS_SANDBOX = "subprocess"
 
 # Singleton with the current daemon used by the sandbox
-_current_daemon: Optional[BaseDaemon] = None
+_current_daemon: Optional[BaseDaemon] = None  # TODO: use context?
 _startup_counter = 0  # Number of time the daemon has been started
 
 async def stop_incoming_call() -> None:
@@ -115,8 +115,8 @@ async def _async_start_daemon(all_rules: AllRules,
 
 async def async_stop_daemon(max_pending:int=0):
     """
-    Asynchronize version to shutdown the current daemon.
-    Return when the daemon is shutdown.
+    Asynchronize version to daemon_shutdown the current daemon.
+    Return when the daemon is daemon_shutdown.
     """
     global _current_daemon, _startup_counter
     async with _async_start_lock:
@@ -126,25 +126,25 @@ async def async_stop_daemon(max_pending:int=0):
 
         await _current_daemon.stop(max_pending)
 
-async def async_shutdown_daemon():
+async def async_shutdown_daemon(graceful_shutdown:bool = True):
     """
-    Asynchronize version to shutdown the current daemon.
-    Return when the daemon is shutdown.
+    Asynchronize version to daemon_shutdown the current daemon.
+    Return when the daemon is daemon_shutdown.
     """
     global _current_daemon, _startup_counter
     async with _async_start_lock:
         if not _current_daemon:
-            logger.info("Daemon not started when shutdown")
+            logger.info("Daemon not started when daemon_shutdown")
             _startup_counter -= 1
             if _startup_counter < 0:
-                raise ValueError("Daemon shutdown more times than started")
+                raise ValueError("Daemon daemon_shutdown more times than started")
             return
 
         if _startup_counter > 1:
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return
-        await _current_daemon.shutdown()
+        await _current_daemon.shutdown(graceful_shutdown)
         assert not _current_daemon.is_started
         _current_daemon = None
         _startup_counter -= 1
@@ -209,16 +209,16 @@ def _set_current_daemon(daemon:BaseDaemon) -> None:
 # FIXME a virer? @sandbox_loop
 def shutdown_daemon() -> None:  # FIXME: a revoir en mode synchrone
     """
-    Synchronize version to shutdown the current daemon.
-    Return when the daemon is shutdown.
+    Synchronize version to daemon_shutdown the current daemon.
+    Return when the daemon is daemon_shutdown.
     """
     global _current_daemon, _startup_counter
     with _start_lock:
         if not _current_daemon:
-            logger.info("Daemon not started when shutdown")
+            logger.info("Daemon not started when daemon_shutdown")
             _startup_counter -= 1
             if _startup_counter < 0:
-                raise ValueError("Daemon shutdown more times than started")
+                raise ValueError("Daemon daemon_shutdown more times than started")
             return
         loop = get_sandbox_loop()
         stop_event = threading.Event()
@@ -231,9 +231,9 @@ def shutdown_daemon() -> None:  # FIXME: a revoir en mode synchrone
 
         # FIXME: appelé ou?
         loop.call_soon_threadsafe(
-            lambda: loop.create_task(_async_shutdown_daemon(), name="shutdown daemon"))
+            lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
         if not stop_event.wait(timeout=DELAY_FOR_STOP_DAEMON):
-            raise RuntimeError("Impossible to shutdown the sandbox")
+            raise RuntimeError("Impossible to daemon_shutdown the sandbox")
 
 
 def get_token() -> str:

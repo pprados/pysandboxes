@@ -35,8 +35,13 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
             loop = _background_loop_ref()
             if loop is not None and loop.is_running():
                 return loop
+        try:
+            loop= asyncio.get_running_loop()
+            _background_loop_ref = weakref.ref(loop)
+            return loop
+        except RuntimeError:
+            logger.debug("Create a private event loop for sandbox without async call")
 
-        logger.debug("Create a private event loop for sandbox")
         loop = asyncio.new_event_loop()
         loop.__pysandbox__ = True
         _background_loop_ref = weakref.ref(loop)
@@ -85,8 +90,8 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
         asyncio.set_event_loop(loop)
 
         result = func(*args, **kwargs)
-
-        asyncio.set_event_loop(old_loop)
+        if old_loop:
+            asyncio.set_event_loop(old_loop)
         return result
 
     return wrapper
@@ -101,7 +106,7 @@ def reset_sandbox_loop():
 
 def get_sandbox_loop() -> AbstractEventLoop:
     # Reuse private loop?
-    loop = _ensure_background_loop(new_loop=False)  # TODO: vérifer new_loop
+    loop = _ensure_background_loop(new_loop=True)  # TODO: vérifer new_loop
     if loop:
         # logger.debug("Reuse the private event loop")
         return loop
