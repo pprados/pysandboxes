@@ -13,8 +13,6 @@ from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
 from .private_loop import set_sandbox_loop
-from .remote.parameters import DELAY_FOR_CALL_DAEMON
-from .sb_types import Envs
 from .tools import check_mixte_async_async, SyncOrAsyncFunc, set_is_in_sandbox, \
     is_in_sandbox
 
@@ -29,6 +27,7 @@ def _check__main__coroutine(coroutine):
     if inspect.getmodule(coroutine.cr_frame).__name__ == "__main__":
         raise ValueError("The coroutine must be declared in a module "
                          "other than __main__.")
+
 
 def sandbox(_func: Optional[F] = None,
             ) -> Callable[..., Any]:
@@ -88,7 +87,10 @@ class sandboxes(Protocol):
                  **extra_rules,
                  ) -> None:
         self.init_fn = init_fn
-        self.config_path = config_path
+        self.config_path = (
+            config_path if isinstance(config_path, Path)
+            else Path(config_path)
+        )
         if envs is None:
             envs = os.environ
         self.envs = envs

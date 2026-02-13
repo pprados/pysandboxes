@@ -1,1 +1,16 @@
-include "${PWD}/.py-sandboxes"
+
+
+#learn=./test-learn.py-sandboxes
+
+#os-sandbox=subprocess
+os-sandbox=firejail
+python-import=*
+
+# TODO: temp for sb ?
+env=TEMP=${PWD}/tmp
+bind=${PWD}/tmp,${PWD}/tmp
+
+# Alias
+ro-bind=${PWD}/tests/data,${PWD}/tests/alias
+
+# include "${PWD}/.py-sandboxes.test"

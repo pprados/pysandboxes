@@ -165,7 +165,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
         and stream back structured results (stdout, stderr, result).
         """
 
-        logger.debug(request.headers["Authorization"])
+        # logger.debug(request.headers["Authorization"])
         if ("Authorization" not in request.headers or
                 request.headers["Authorization"] != f"Bearer {token}"):
             logger.error(

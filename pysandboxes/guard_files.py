@@ -400,7 +400,7 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
                             Path(fake_path).name, rule.source)):
                     return None, rule
         else:
-            assert False, "Invalide guard_files rules"
+            assert False, f"Invalide guard_files rules {type(rule)=}"
     return None, None
 
 
@@ -947,6 +947,13 @@ def _wrap_pathlib(func: Callable) -> Callable:
 
     return wrapper
 
+def _wrap_tempfile__os(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs
+                ):
+        import os
+        return os
+    return wrapper
 
 class Guard_FileIO(FileIO):
     @staticmethod  # known case of __new__
@@ -1143,6 +1150,8 @@ _default_rules = rules = {
     # ALLOW shutil.move
     # ALLOW shutil.rmtree
     # ALLOW shutil.which
+
+    "tempfile._os": _f(_wrap_tempfile__os),
 
     # builtins
     "builtins.open": _f(_wrap_buitins_open),

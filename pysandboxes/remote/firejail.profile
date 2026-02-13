@@ -44,7 +44,7 @@
 
 
 # *** Limits ***
---rlimit-as=${FIREJAIL_RELIMIT:=2g}
+#--rlimit-as=${FIREJAIL_RELIMIT:=5m}
 --rlimit-cpu=${FIREJAIL_CPU:=5}
 --rlimit-fsize=${FIREJAIL_FSIZE:=100k}
 --rlimit-nproc=${FIREJAIL_NPROC:=10}

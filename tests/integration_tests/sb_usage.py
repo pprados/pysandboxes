@@ -1,25 +1,23 @@
-import asyncio  # FIXME protected?
 import io
 import logging
 import os
 import tempfile
+from pathlib import Path
+from pprint import pprint
 from socket import AF_INET, SOCK_STREAM, AF_INET6, SOCK_DGRAM
+from typing import Dict
 
 import dotenv
 
-import pysandboxes
 from pysandboxes import sandbox, sandboxes, SandBoxError
-
-try:
-    dotenv.load_dotenv()
-except PermissionError:
-    pass  # Ignore
+from pysandboxes.learning import is_learning_mode
+from pysandboxes.remote.python_in_sb import convert_extra_rules
 
 logger = logging.getLogger(__name__)
 
 
 def init_log_level():
-    level = logging.WARNING
+    level = logging.DEBUG
     format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
     logging.basicConfig(
         level=level,
@@ -37,7 +35,7 @@ def init_log_level():
 @sandbox
 async def arun_in_sandbox():
     logger.info("Run 'arun_in_sandbox()' in sandbox")
-    # _test_envs()
+    # FIXME _test_envs()
     _test_files()
     # _test_network()
     print(42)
@@ -63,8 +61,10 @@ def _test_envs():
         try:
             os.listdir(os.environ.get("PYENV_ROOT"))
             # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+        except FileNotFoundError as e:
+            print("Error catch by os-sandbox")
         except SandBoxError as e:
-            print(e)
+            print("Error catch by pysandboxes")
     if "VIRTUAL_ENV" in os.environ:
         try:
             os.listdir(os.environ.get("VIRTUAL_ENV"))
@@ -108,41 +108,63 @@ def _test_network():
 
 
 def _test_files():
-    # try:
-    #     with io.open("tmp/test.remove", "w") as f:
-    #         pass
-    #     # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    # except SandBoxError as e:
-    #     print(e)
-    # try:
-    #     with io.open("tst_wasm/factorial.wasm", "r") as f:
-    #         pass
-    #     # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    # except SandBoxError as e:
-    #     print(e)
-    # try:
-    #     with io.open("pysandboxes/__init__.py", "r") as f:
-    #         pass
-    #     # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    # except SandBoxError as e:
-    #     print(e)
-    with os.scandir("docs") as entries:
-        for entry in entries:
-            print(entry.name)
+    print("---- Test files")
+    learning = is_learning_mode()
+    try:
+        with io.open("tmp/test.remove", "w") as f:
+            pass
+        # assert not learning, "Must be stopped by pysandbox"
+    except Exception as e:
+        logger.exception(e)
+    except SandBoxError as e:
+        if learning:
+            logger.exception(e)
 
-    # FIXME: test avec et sans firejail
-    # try:
-    #     with tempfile.TemporaryFile(mode='w+') as temp_file:
-    #         pass
-    # except SandBoxError as e:
-    #     print(e)
-    #
-    # try:
-    #     with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
-    #         pass
-    # except SandBoxError as e:
-    #     print(e)
+    try:
+        with io.open("tst_wasm/factorial.wasm", "r") as f:
+            pass
+        logger.error("Must be stopped by pysandbox")
+    except SandBoxError as e:
+        assert not is_learning_mode()
+    except Exception as e:
+        logger.exception(e)
 
+    try:
+        with io.open("pysandboxes/__init__.py", "r") as f:
+            pass
+        # assert is_learning_mode() or False, "Must be stopped by pysandbox"
+    except SandBoxError as e:
+        assert not is_learning_mode()
+    except Exception as e:
+        logger.exception(e)
+
+    print("---- Test scandir docs")
+    use_alias_rule = True
+    if use_alias_rule:
+        datas = "tests/alias"
+    else:
+        datas = "tests/data"
+    all_entries = []
+    with os.scandir(datas) as entries:
+        all_entries = [entry.name for entry in entries]
+    pprint(all_entries)
+    assert "data.txt" in all_entries
+
+    try:
+        with tempfile.TemporaryFile(mode='w+') as temp_file:
+            pass
+    except SandBoxError as e:
+        logger.exception()
+    except Exception as e:
+        logger.exception()
+
+    try:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
+            pass
+    except SandBoxError as e:
+        logger.exception()
+    except Exception as e:
+        logger.exception()
 
 
 async def ainit_sandbox():
@@ -188,18 +210,27 @@ def call_llm():
     _call_llm(token=os.environ["USER"])
 
 
-async def main():
+async def main(argv: Dict[str, str]) -> int:
     init_log_level()
     os.environ["LLM_TOKEN"] = "abc"
+
+    extra_rules = convert_extra_rules(argv[1:])
+    config_path = Path("tests/test.py-sandboxes")
+    if "learn" in extra_rules:
+        learning_path,*_ = extra_rules.get("learn", [''])
+        if not learning_path:
+            learning_path = ".py-sandboxes.test"
+        extra_rules["learn"] = learning_path
 
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # # print("----------------")
         async with sandboxes(async_init_sandbox,
-                       # config_path="test.py-sandboxes",
-                       # learn=".py-sandboxes", # Learn all the times
-                       # os_sandbox="none",
-                       ):
+                             config_path=config_path,
+                             # learn=".py-sandboxes", # Learn all the times
+                             # os_sandbox="none",
+                             **extra_rules
+                             ):
             await arun()
         # TODO: voir la capture d'exception
         # print("----------------")

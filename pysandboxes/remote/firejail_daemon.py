@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 DEBUG = False
 
+# Replace rules to delegate the filter to firejail.
+# The exception are differents
+REPLACE = True
+
 
 class WhiteList(MutableSet):
     """
@@ -180,7 +184,9 @@ class FireJailDaemon(BaseSubProcessDaemon):
         Apply the pysandboxes rules to firejail.
         TODO: expliquer si on modifie
         """
-        _replace = False  # FIXME: _replace=True
+
+        # Replace the rules.
+        # The code never raise a RuleError
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
@@ -262,11 +268,14 @@ class FireJailDaemon(BaseSubProcessDaemon):
             else:
                 args.append(f"--read-write={rule.source}")
 
-        if _replace:
+        if REPLACE:
             from ..guard_files import parse_rules as files_parse_rules
             new_files_rules, _ = files_parse_rules(
                 [ConfigLine("bind=/,/", Path(), 0)], [])
-            all_rules = all_rules._replace(file_rules=tuple(new_files_rules))
+            selected_rules=[rule for rule in all_rules.file_rules
+                         if isinstance(rule,BindRule) and rule.source != rule.dest]
+            selected_rules.extend(new_files_rules)  # Respect the order
+            all_rules = all_rules._replace(file_rules=tuple(selected_rules))
 
         # Add pipe_path rule
         # with --private-tmp, need more parameters
@@ -321,7 +330,7 @@ class FireJailDaemon(BaseSubProcessDaemon):
                 args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove redondant sockets rules
-            if _replace:
+            if REPLACE:
                 from ..guard_socket import parse_rules as socket_parse_rules
                 new_socket_rules, _ = socket_parse_rules(
                     [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])

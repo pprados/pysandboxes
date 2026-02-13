@@ -293,82 +293,6 @@ def remove_modules() -> None:
             if k not in sys.builtin_module_names:
                 del sys.modules[k]
     assert "io" not in sys.modules
-#
-# FIXME: remove version
-# _not_refresh_modules: Set[str] = (
-#     {
-#         'importlib',
-#         'concurrent',
-#         'asyncio',
-#         'warnings',
-#         'logging',
-#         '_pytest',
-#         'pytest',
-#         __name__.rsplit('.', maxsplit=1)[0],
-#     }  # | set(sys.builtin_module_names)
-# )
-#
-# # sys.builtin_module_names
-# xx = ('_abc', '_ast', '_codecs', '_collections', '_functools', '_imp', '_io', '_locale',
-#       '_operator', '_signal',
-#       '_sre', '_stat', '_string', '_suggestions', '_symtable', '_sysconfig', '_thread',
-#       '_tokenize', '_tracemalloc',
-#       '_typing', '_warnings', '_weakref',
-#       # 'atexit',
-#       'builtins',
-#       # 'errno',
-#       # 'faulthandler',
-#       # 'gc',
-#       # 'itertools',
-#       # 'marshal',
-#       # 'posix',
-#       # 'pwd',
-#       'sys',
-#       # 'time'
-#       )
-#
-#
-# def remove_modules() -> None:
-#     import sys
-#     to_remove = set()
-#     for k, m in dict(sys.modules).items():
-#         # Detect system modules
-#         if k in xx:  # Il y a builtins
-#             continue
-#         for special in _not_refresh_modules:
-#             if k == special or k.startswith(special + "."):
-#                 break
-#         else:
-#             to_remove.add(k)
-#
-#     importlib.invalidate_caches()
-#     # Reload modules (may add modules with relead() )
-#     for k in to_remove:
-#         if k in sys.modules:
-#             if k in sys.builtin_module_names:
-#                 m = sys.modules[k]
-#                 if m:
-#                     importlib.reload(m)
-#                     pass
-#
-#     # Remove modules
-#     for k in to_remove:
-#         if k in sys.modules:
-#             if k not in sys.builtin_module_names:
-#                 del sys.modules[k]
-#
-#     # Merge remove modules
-#     # for k in to_remove:
-#     #     if k in sys.modules:
-#     #         if k in sys.builtin_module_names:
-#     #             m = sys.modules[k]
-#     #             if m:
-#     #                 importlib.reload(m)
-#     #                 pass
-#     #         else:
-#     #             del sys.modules[k]
-#     # Tricky: if you use debugger, the io are reinjected
-#     assert "io" not in sys.modules
 
 
 def patch_rules() -> Dict[str, Callable]:
@@ -380,7 +304,7 @@ def activate_guard_import(
         rules: ImportRules,
 ) -> None:
     global _rules
-    patch_rules = _conv_patch_rules(patch_rules)
+    patch_rules:PatchRules = _conv_patch_rules(patch_rules)
     if _rules:
         logger.debug("Guard_files was already activated.")
     if _activate_patch_import(patch_rules):

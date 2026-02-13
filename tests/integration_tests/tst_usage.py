@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import os
+import sys
 from pprint import pprint
 
 from pysandboxes import guard_files
@@ -12,4 +13,4 @@ if __name__ == "__main__":
 
     from tests.integration_tests.sb_usage import main
     # main()
-    asyncio.run(main())
+    asyncio.run(main(sys.argv))
