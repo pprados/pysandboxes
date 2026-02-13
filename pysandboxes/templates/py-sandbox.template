@@ -60,7 +60,6 @@ os-sandbox=subprocess
 #######################################################################################
 # In the sandbox, only a selected set of environment variables are accessible.
 #
-# FIXME: use env= in place of env ?
 # By using `env`, you can control and manage the environment variables available
 # within your sandbox, ensuring that your applications have the necessary configuration.
 #
@@ -170,3 +169,6 @@ ignore=*.log
 # <learning_guard_import>
 
 # </learning_guard_import>
+
+# FIXME
+python-import=*

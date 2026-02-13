@@ -147,24 +147,24 @@ def _test_files():
     all_entries = []
     with os.scandir(datas) as entries:
         all_entries = [entry.name for entry in entries]
-    pprint(all_entries)
+    pprint(all_entries)  # FIXME
     assert "data.txt" in all_entries
 
     try:
         with tempfile.TemporaryFile(mode='w+') as temp_file:
             pass
     except SandBoxError as e:
-        logger.exception()
+        logger.exception("tempfile.TemporaryFile")
     except Exception as e:
-        logger.exception()
+        logger.exception("tempfile.TemporaryFile")
 
     try:
         with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
             pass
     except SandBoxError as e:
-        logger.exception()
+        logger.exception("tempfile.NamedTemporaryFile")
     except Exception as e:
-        logger.exception()
+        logger.exception("tempfile.NamedTemporaryFile")
 
 
 async def ainit_sandbox():

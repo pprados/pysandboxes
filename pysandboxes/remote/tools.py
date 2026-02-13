@@ -204,7 +204,7 @@ def create_daemon_task(
 
     # Ensure exception retrieval → no "Task exception was never retrieved"
     def is_canceled(t: asyncio.Task[object]):
-        logger.debug(f"{t.cancelled()}")
+        logger.debug(f"{t.cancelled()}")  # FIXME
 
     # task.add_done_callback(lambda t: t.exception())
     task.add_done_callback(is_canceled)
@@ -239,7 +239,7 @@ def to_b85(obj: Any) -> str:
                                            protocol=pickle.HIGHEST_PROTOCOL
                                            )).decode("ascii")
     assert pickle.loads(
-        base64.b85decode(result.encode("ascii"))) == obj  # FIXME
+        base64.b85decode(result.encode("ascii"))) == obj
     return result
 
 

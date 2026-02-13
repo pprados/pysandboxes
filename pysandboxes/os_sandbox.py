@@ -9,6 +9,7 @@ from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
 from .all_rules import AllRules
 from .remote.firejail_daemon import FireJailDaemon
+from .remote.sse_server_daemon import SSEServerDaemon
 from .remote.none_daemon import NoneDaemon
 from .remote.parameters import DELAY_FOR_STOP_DAEMON
 from .remote.subprocess_daemon import SubProcessDaemon
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 providers_factory: dict[str, Type] = {
     # TODO: faire un provider "transparent"
     "_task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
+    "_sse_server": SSEServerDaemon,  # Impossible to activate py-sandbox in this mode.
     "none": NoneDaemon,
     "subprocess": SubProcessDaemon,
     # "bwrap": BWrapDaemon(),
@@ -39,6 +41,13 @@ DEFAULT_OS_SANDBOX = "subprocess"
 _current_daemon: Optional[BaseDaemon] = None
 _startup_counter = 0  # Number of time the daemon has been started
 
+async def stop_incoming_call() -> None:
+    # Stop to accept incoming call and wait the end of the current call
+    _current_daemon._accept_incoming = False
+
+def is_accept_incoming_call() -> bool:
+    return (is_daemon_started()
+            and _current_daemon._accept_incoming)
 
 @sandbox_loop
 async def async_start_daemon(all_rules: AllRules,
@@ -96,7 +105,7 @@ async def _async_start_daemon(all_rules: AllRules,
                 init_fn=init_fn
             )
             _current_daemon = os_provider
-            assert os_provider.is_started == True
+            assert os_provider.is_started
             _startup_counter += 1
             return os_provider
         except Exception as e:
@@ -104,7 +113,19 @@ async def _async_start_daemon(all_rules: AllRules,
             raise e
 
 
-# @sandbox_loop
+async def async_stop_daemon(max_pending:int=0):
+    """
+    Asynchronize version to shutdown the current daemon.
+    Return when the daemon is shutdown.
+    """
+    global _current_daemon, _startup_counter
+    async with _async_start_lock:
+        if not _current_daemon:
+            logger.info("Daemon not started when stopping")
+            return
+
+        await _current_daemon.stop(max_pending)
+
 async def async_shutdown_daemon():
     """
     Asynchronize version to shutdown the current daemon.
@@ -170,7 +191,7 @@ def start_daemon(
                 _start_daemon_and_signal(),
                 name="Start daemon")
         )
-        if not start_event.wait(2000):  # FIXME
+        if not start_event.wait():
             raise RuntimeError("Import to start the sandbox")
         assert _current_daemon
 
@@ -181,9 +202,12 @@ def is_daemon_started() -> bool:
     global _current_daemon
     return _current_daemon and _current_daemon.is_started
 
+def _set_current_daemon(daemon:BaseDaemon) -> None:
+    global _current_daemon
+    _current_daemon = daemon
 
-@sandbox_loop  # FIXME: a virer ?
-def shutdown_daemon() -> None:
+# FIXME a virer? @sandbox_loop
+def shutdown_daemon() -> None:  # FIXME: a revoir en mode synchrone
     """
     Synchronize version to shutdown the current daemon.
     Return when the daemon is shutdown.
@@ -199,15 +223,17 @@ def shutdown_daemon() -> None:
         loop = get_sandbox_loop()
         stop_event = threading.Event()
 
+        @sandbox_loop
         async def _async_shutdown_daemon():
             await async_shutdown_daemon()
             stop_event.set()
+            reset_sandbox_loop()
 
+        # FIXME: appelé ou?
         loop.call_soon_threadsafe(
             lambda: loop.create_task(_async_shutdown_daemon(), name="shutdown daemon"))
         if not stop_event.wait(timeout=DELAY_FOR_STOP_DAEMON):
             raise RuntimeError("Impossible to shutdown the sandbox")
-        reset_sandbox_loop()
 
 
 def get_token() -> str:
@@ -225,7 +251,9 @@ async def async_call_in_sandbox(
         return await func(*args, **kwargs)
 
     assert _current_daemon is not None, "Daemon not started"
-    return await _current_daemon.async_call_in_sandbox(func,  *args, **kwargs)
+    return await _current_daemon.async_call_in_sandbox(func,
+                                                       False,
+                                                       *args, **kwargs)
 
 
 def call_in_sandbox(
@@ -239,4 +267,6 @@ def call_in_sandbox(
                                          "or 'pysandboxes.run()'")
     check_mixte_async_async()
 
-    return _current_daemon.call_in_sandbox(func, *args, **kwargs)
+    return _current_daemon.call_in_sandbox(func,
+                                           False,
+                                           *args, **kwargs)

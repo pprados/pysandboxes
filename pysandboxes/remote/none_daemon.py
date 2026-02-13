@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Callable, Any
 
-from .local_task_daemon import LocalTaskDaemon
+from .sse_server_daemon import SSEServerDaemon
 from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
 from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
@@ -26,6 +26,9 @@ class NoneDaemon(BaseDaemon):
                     ) -> None:
         self._is_started = True
         set_is_in_sandbox(True)  # Simulate the presence of sandbox
+
+    async def stop(self,max_pending:int) -> None:
+        pass
 
     async def shutdown(self) -> None:
         set_is_in_sandbox(False)
@@ -58,6 +61,7 @@ class NoneDaemon(BaseDaemon):
 
     def call_in_sandbox(self,
                         func: Callable[..., Any],
+                        _force_incoming:bool,
                         *args: Any,
                         **kwargs: Any) -> Any:
         raise NotImplementedError

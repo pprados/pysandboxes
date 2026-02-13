@@ -358,14 +358,9 @@ def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
 def generate_rules(
         learn: Set[Any],
 ) -> List[str]:
-    # FIXME: fichier pour std package FIXME: windows path
     # Select only parent
     other_result = set()
-    standard_result = \
-        set()
-       #  {  FIXME: attention à l'import systématique a chaque fois
-       # "socket"  # Pre-selection for daemon
-       #  }
+    standard_result = set()
     deprecated_result = set()
     danger_result = set()
     black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())

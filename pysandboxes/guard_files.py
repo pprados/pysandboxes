@@ -621,7 +621,7 @@ def _wrap_os_path_is(func: Callable, *, write: bool) -> Callable:
             else:
                 return False
         result = func(remapped, *args, **kwargs)
-        # FIXME: no learn?
+        # no learn because if it's valide, it's may be used later
         # if result and is_learning_mode():
         #     add_learning_rule(LearnFileRule(Path(file), False))
         return result

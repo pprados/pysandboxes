@@ -1,3 +1,4 @@
+import asyncio
 
 import pysandboxes
 from .differents_usages import *
@@ -10,6 +11,8 @@ async def main():
                 init_fn=async_init_sandbox
         ):
             await asynchronize_function()
+            # os.kill(os.getpid(), 2)  # FIXME
+            # await asyncio.sleep(2)
 
 if __name__ == "__main__":
     asyncio.run(main())

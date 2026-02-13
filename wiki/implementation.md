@@ -5,9 +5,10 @@ Here is a brief description of the implementation. You will find more details by
   - The `os-sandbox` parameter is extracted.
   - The parameters are converted into specific parameters for **os-sandbox**.
   - The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `bind` on directories is not relevant.
+  - A free TCP port is selected
   - A subprocess is launched with the selected **os-sandbox**.
-  - The sandbox's parameters, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
-  - An HTTP FastAPI server is launched.
+  - The sandbox's parameters, port, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
+  - An HTTP FastAPI server is launched with the selected port.
       - It implements the SSE protocol.
       - The sandbox is activated.
           - A Finder/Loader pair is added to `sys.meta_path`.

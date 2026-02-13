@@ -7,16 +7,16 @@ from pysandboxes.sandboxes_api import sandbox, sandboxes
 logger = logging.getLogger(__name__)
 
 def init_log_level():
-    sandboxes_level = logging.WARNING
-    format = '%(levelname)-5s [%(process)d] %(message)s'
+    sandboxes_level = logging.DEBUG
+    format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
     logging.basicConfig(
         level=min(sandboxes_level, logging.INFO),
         format=format
     )
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.DEBUG)
+    logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.DEBUG)
     logging.getLogger("Pysandboxes").setLevel(sandboxes_level)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logger.setLevel(logging.INFO)

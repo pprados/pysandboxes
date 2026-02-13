@@ -19,14 +19,18 @@ from aiohttp import ClientConnectorError
 
 from . import main_shutdown
 from .parameters import INTERVAL_FOR_PING_DAEMON, RETRY_RESET_DELAY, RETRY_MAX_DELAY, \
-    RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS
+    RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS, TIMEOUT_BEFORE_KILL_SUBPROCESS, \
+    TIMEOUT_FOR_PING, DELAY_FOR_STOP_DAEMON
 from .sse_sandbox import SSESandbox, PING_SERVER_URL
 from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
+from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..sb_types import Args, Envs
 from ..tools import SyncOrAsyncFunc, get_callable_info
 
 logger = logging.getLogger(__name__)
+
+DEBUG = False
 
 
 def get_log_formatter():
@@ -87,6 +91,7 @@ class DaemonParameters(NamedTuple):
     init_fn: str
 
 
+@sandbox_loop
 async def launch_sandbox(
         cmd: List[str],
         pipe_path: Path,
@@ -94,8 +99,8 @@ async def launch_sandbox(
         process_config: DaemonParameters,
 ) -> Process:
     os.mkfifo(pipe_path)
-    if True:
-        Path("run.sh").write_text("#!/bin/bash\n" +  # FIXME: create run.sh to debug
+    if DEBUG:
+        Path("run.sh").write_text("#!/bin/bash\n" +
                                   cmd[0] + " " +
                                   " \\\n  ".join(
                                       param if " " not in param else repr(param) for
@@ -259,6 +264,7 @@ class BaseSubProcessDaemon(SSESandbox):
                             init_fn: Optional[SyncOrAsyncFunc],
                             ) -> None:
         self._is_started = False
+        self._accept_incoming = False
 
         if init_fn:
             module, init_function_reference = get_callable_info(init_fn)
@@ -289,37 +295,55 @@ class BaseSubProcessDaemon(SSESandbox):
 
         # Wait the server
         gc.collect()
-        ping_server_url=PING_SERVER_URL.replace("{PORT}",str(port))
+        ping_server_url = PING_SERVER_URL.replace("{PORT}", str(port))
         async with aiohttp.ClientSession() as session:
             while True:
                 try:  # TODO: test in the server never response
                     async with session.get(
                             ping_server_url,
-                            timeout=2) as response:
+                            timeout=TIMEOUT_FOR_PING) as response:
                         if response.status == 200:
                             break
                         else:
                             raise RuntimeError(
                                 f"Unexpected status {response.status} from {PING_SERVER_URL}")
+                except TimeoutError:
+                    pass  # Ignore and continue
                 except ClientConnectorError:
                     pass  # Ignore and continue
 
+                logger.debug(f"sleep {INTERVAL_FOR_PING_DAEMON}")
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
+        # One more time
+        logger.debug(f"sleep {INTERVAL_FOR_PING_DAEMON}")
+        await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
         self._is_started = True
+        self._accept_incoming = True
 
+    async def stop(self, max_pending: int) -> None:
+        pass  # FIXME:
+
+    # @sandbox_loop
     async def shutdown(self) -> None:
+        self._accept_incoming = False
+        loop = get_sandbox_loop()
+        logger.debug("Call remote shutdown...")
         await self.async_call_in_sandbox(
-            main_shutdown.shutdown,
+            main_shutdown.shutdown,  # Call remote sandbox shutdown
+            True
         )
         if self._process:
-            if self._process.returncode is None:
-                # Child process receive SIGINT
-                self._process.terminate()
-                await self._process.wait()
+            try:
+                await asyncio.wait_for(
+                    self._process.wait(),
+                    timeout=DELAY_FOR_STOP_DAEMON)
+            except asyncio.TimeoutError:
+                logger.warning("Kill the sandbox daemon")
+                self._process.kill()
+            logger.debug("Sandbox daemon is terminated")
             self._process = None
         self._is_started = False
-        logger.debug("shutdown")
 
     async def join(self) -> int:  # FIXME: utilisé ? Utilisable ?
         errorlevel = -1

@@ -38,7 +38,7 @@ def _get_rpc_params(args: Any,
 
     module_name, callable_name = get_callable_info(func)
     params = {
-        "session_id": "123",  # FIXME: session_id (correlation id?)
+        "session_id": "123",  # TODO: session_id with correlation id?
         "function": f"{module_name}:{callable_name}",
         "args": to_b85(args),
         "kwargs": to_b85(kwargs),
@@ -56,13 +56,16 @@ class SSESandbox(BaseDaemon):
 
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
+                                    _force_incomming:bool,
                                     *args: Any,
                                     **kwargs: Any) -> Any:
         if is_in_sandbox():
             return await func(*args, **kwargs)
-        from pysandboxes.os_sandbox import get_token
+        if not _force_incomming and not self._accept_incoming:
+            raise RuntimeError("The sandbox demon is being stopped.")
 
         try:
+            from pysandboxes.os_sandbox import get_token
             token = get_token()
             params = _get_rpc_params(args, func, kwargs)
             sandbox_server_url = SANDBOX_SERVER_URL.replace("{PORT}",
@@ -78,7 +81,7 @@ class SSESandbox(BaseDaemon):
                         "Authorization": f"Bearer {token}"
                     },
                     reconnection_time=timedelta(
-                        seconds=0.2
+                        seconds=0.2  # FIXME
                     ),
             ) as event_source:
                 async for event in event_source:
@@ -112,10 +115,14 @@ class SSESandbox(BaseDaemon):
     @sandbox_loop
     def call_in_sandbox(self,
                         func: Callable[..., Any],
+                        _force_incomming:bool,
                         *args: Any,
                         **kwargs: Any) -> Any:
         if is_in_sandbox():
             return func(*args, **kwargs)
+        if not _force_incomming and not self._accept_incoming:
+            raise RuntimeError("The sandbox demon is being stopped.")
+
         loop = asyncio.get_event_loop()  # Get the current running loop. May be != sandbox loop
 
         return asyncio.run_coroutine_threadsafe(

@@ -10,16 +10,55 @@ import threading
 from pathlib import Path
 from typing import Optional, cast
 
+from pysandboxes.base_daemon import BaseDaemon
+from pysandboxes.os_sandbox import providers_factory
 from .python_in_sb import python_in_sb
 from .subprocess_daemon import DaemonParameters
 from .tools import set_pdeathsig
-from ..private_loop import set_sandbox_loop
 from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 
 # %%
+
+async def run_server(process_config: DaemonParameters):
+    from pysandboxes.main_logger import pysandboxes_logger
+    # Call init function
+    # Note: the init_function is called AFTER the activation of the python sandbox
+    init_fn: Optional[SyncOrAsyncFunc] = None
+    if process_config.init_fn:
+        module_name, function_name = str(process_config.init_fn).split(':', 1)
+        set_is_in_sandbox(True)
+        module = importlib.import_module(module_name)
+        set_is_in_sandbox(False)  # Learn the import during the import
+        init_fn = getattr(module, function_name)
+
+    # Else, start the daemon
+    all_rules = process_config.all_rules
+    os_sandbox = all_rules.os_sandbox
+    assert os_sandbox in ("subprocess", "firejail")
+    if all_rules.use_py_sandbox:
+        pysandboxes_logger.info(
+            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")
+    else:
+        pysandboxes_logger.info(
+            f"Start ONLY an os-sandox of type {os_sandbox!r}")
+
+    from pysandboxes.os_sandbox import _set_current_daemon
+    task_daemon: BaseDaemon = providers_factory["_sse_server"](
+        process_config.token,
+        port=process_config.port,
+    )
+    _set_current_daemon(task_daemon)  # FIXME
+    await task_daemon.start(process_config.all_rules,
+                            envs=cast(dict, os.environ),
+                            log_level=process_config.log_level,
+                            init_fn=init_fn
+                            )
+    await task_daemon.join()
+    return 0
+
 
 def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
     threading.main_thread().name = "DaemonMainThread"
@@ -53,18 +92,19 @@ def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
     root_logger.handlers.clear()
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(process_config.log_format))
+    handler.setFormatter(logging.Formatter(
+        '[%(process)d] %(levelname)-5s %(name)s %(message)s'))  # FIXME
     root_logger.addHandler(handler)
-    root_logger.setLevel(process_config.log_level)
+    # FIXME root_logger.setLevel(process_config.log_level)
+    root_logger.setLevel(logging.DEBUG)  # FIXME
     logger.debug("config body and token successfully read from named pipe")
 
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
-    use_py_sandbox = all_rules.use_py_sandbox
 
     # In this case, use the standard loop in place of the private sandbox loop
 
-    from pysandboxes.main_logger import pysandboxes_logger
-    if use_py_sandbox:
+    if all_rules.use_py_sandbox:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
         activate_sandboxes(
@@ -72,52 +112,14 @@ def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
             dict(os.environ)
         )
 
-    # Call init function
-    # Note: the init_function is called AFTER the activation of the python sandbox
-    init_fn: Optional[SyncOrAsyncFunc] = None
-    if process_config.init_fn:
-        module_name, function_name = str(process_config.init_fn).split(':', 1)
-        set_is_in_sandbox(True)
-        module = importlib.import_module(module_name)
-        set_is_in_sandbox(False)  # Learn the import during the import
-        init_fn = getattr(module, function_name)
-
     # Use python-sb command?
     if sandboxes_parsed._python_sb:
         return python_in_sb(
             all_rules,
             sandboxes_args)
 
-    # Else, start the daemon
-    if use_py_sandbox:
-        pysandboxes_logger.info(
-            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")
-    else:
-        pysandboxes_logger.info(
-            f"Start ONLY an os-sandox of type {os_sandbox!r}")
-
-    from .local_task_daemon import LocalTaskDaemon
-    task_daemon = LocalTaskDaemon(process_config.token, process_config.port)
-
-    async def _run():
-        try:
-            from tblib import pickling_support
-
-            pickling_support.install()
-
-            set_sandbox_loop(asyncio.get_running_loop())
-            await task_daemon.start(
-                all_rules=all_rules,
-                envs=cast(dict,os.environ),
-                log_level=process_config.log_level,
-                init_fn=init_fn,
-            )
-            await task_daemon.join()
-            return 0
-        finally:
-            await task_daemon.shutdown()
-
-    asyncio.run(_run())
+    # Elsen start the server
+    return asyncio.run(run_server(process_config))
 
 
 if __name__ == "__main__":
@@ -136,4 +138,5 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Exception: {e}", exc_info=True)
         rc = 1
+    logger.debug("main_sandbox exit with errorlevel=%s", rc)
     os._exit(rc)

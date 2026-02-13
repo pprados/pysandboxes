@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Dict
 
-from .local_task_daemon import LocalTaskDaemon
+from .sse_server_daemon import SSEServerDaemon
 from ..all_rules import AllRules
 from ..tools import SyncOrAsyncFunc
 from ..sb_types import Envs
@@ -9,7 +9,7 @@ from ..sb_types import Envs
 logger = logging.getLogger(__name__)
 
 
-class TaskDaemon(LocalTaskDaemon):
+class TaskDaemon(SSEServerDaemon):
 
     async def start(self,
                     all_rules:AllRules,

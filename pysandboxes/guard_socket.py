@@ -893,7 +893,6 @@ def generate_rules(
                     else:
                         destination = learn_rule.address
             # Search alias in env
-            port = str(learn_rule.port)  # FIXME: alias of port in env
             for k, v in os.environ.items():
                 if v == destination:
                     destination = f"${{{k}}}"

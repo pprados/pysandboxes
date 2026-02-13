@@ -14,7 +14,7 @@ _mixed_sync_and_async_error = ("Cannot call the synchronize sandbox function "
                                "from another sandbox async function")
 
 class BaseDaemon(ABC):
-    __slots__ = ('_is_started', '_token')
+    __slots__ = ('_is_started', '_token','_accept_incoming')
 
     def __init__(self,
                  token: str,
@@ -22,6 +22,7 @@ class BaseDaemon(ABC):
                  ):
         self._is_started = False
         self._token = token
+        self._accept_incoming = False
 
     @abstractmethod
     def update_rules(self,
@@ -46,6 +47,10 @@ class BaseDaemon(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def stop(self,max_pending:int) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     async def shutdown(self) -> None:
         raise NotImplementedError
 
@@ -67,6 +72,7 @@ class BaseDaemon(ABC):
     @abstractmethod
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
+                                    _force_incomming:bool,
                                     *args: Any,
                                     **kwargs: Any) -> Any:
         raise NotImplementedError
@@ -74,6 +80,7 @@ class BaseDaemon(ABC):
     @abstractmethod
     def call_in_sandbox(self,
                         func: Callable[..., Any],
+                        _force_incomming: bool,
                         *args: Any,
                         **kwargs: Any) -> Any:
         raise NotImplementedError

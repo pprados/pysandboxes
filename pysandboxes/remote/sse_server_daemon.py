@@ -14,7 +14,7 @@ from typing import Dict
 
 from uvicorn import Server
 
-from .parameters import PATH_RPC, HOST
+from .parameters import PATH_RPC, HOST, TIMEOUT_GRACEFUL_SHUTDOWN, POLLING_DELAY
 from .sse_sandbox import SSESandbox
 from .tools import from_b85, to_b85
 from ..all_rules import AllRules
@@ -23,6 +23,8 @@ from ..sb_types import Args, Envs
 from ..tools import set_is_in_sandbox, SyncOrAsyncFunc
 
 logger = logging.getLogger(__name__)
+
+_active_requests = 0
 
 
 @dataclass
@@ -51,7 +53,10 @@ async def sandbox_daemon(
     """
     import pickle
 
+    global _active_requests
     try:
+        _active_requests += 1
+
         loop = asyncio.get_event_loop()
 
         module_name, function_name = function_id.split(':', 1)
@@ -134,6 +139,7 @@ async def sandbox_daemon(
         logger.exception("(%s) ... error %s", session_id, repr(e))
         yield json.dumps({"session_id": session_id, "error": repr(e)})
     finally:
+        _active_requests -= 1
         set_is_in_sandbox(False)
 
 
@@ -144,6 +150,8 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
     from fastapi.responses import StreamingResponse
 
     app = FastAPI()
+
+    active_requests = 0
 
     @app.get("/ping")
     async def ping(
@@ -160,6 +168,7 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
         SSE endpoint to process a given code string, authenticated by a token,
         and stream back structured results (stdout, stderr, result).
         """
+        from ..os_sandbox import is_accept_incoming_call,is_daemon_started,_current_daemon
 
         # logger.debug(request.headers["Authorization"])
         if ("Authorization" not in request.headers or
@@ -167,6 +176,9 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
             logger.error(
                 "Invalid token")
             raise HTTPException(status_code=401, detail="Invalid token")
+        if not is_accept_incoming_call():
+            raise HTTPException(status_code=503,
+                                detail="The sandbox demon is being stopped.")
         # Pass the code and authenticated user_id to the event generator
         return StreamingResponse(
             sandbox_daemon(
@@ -252,19 +264,25 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
         use_colors=None,
         log_config=logging_confg,
         access_log=True,
-        # loop="asyncio",
+        timeout_graceful_shutdown=TIMEOUT_GRACEFUL_SHUTDOWN,
     ))
     return uvicorn_server
 
 
-class LocalTaskDaemon(SSESandbox):
-    __slots__ = ("task", "uvicorn")
+class SSEServerDaemon(SSESandbox):
+    __slots__ = ("uvicorn", "task", "port", "stopped")
 
-    def __init__(self, token: str, port: int):
+    def __init__(self, token: str, *, port: int):
         super().__init__(token)
         self.uvicorn: Optional[Server] = None
         self.task = None
         self.port = port
+        self.stopped = True
+
+    @property
+    def active_request(self) -> int:
+        global _active_request
+        return _active_request
 
     def update_rules(self,
                      *,
@@ -309,33 +327,57 @@ class LocalTaskDaemon(SSESandbox):
                     assert asyncio.get_running_loop() == get_sandbox_loop()
                     await self.uvicorn.serve()
                 except asyncio.CancelledError as e:
+                    # logger.debug("Receive cancel server")
+                    self._accept_incoming = False
                     if self.uvicorn:
                         try:
-                            await self.uvicorn.shutdown()
-                        except Exception as e:
-                            logger.warning(f"Ignore error during uvicorn shutdown: {e}")
+                            await asyncio.wait_for(
+                                self.uvicorn.shutdown(),
+                                timeout=TIMEOUT_GRACEFUL_SHUTDOWN,
+                            )
+                        except asyncio.TimeoutError:
+                            logger.warning(f"Timeout during uvicorn shutdown. Force exit")
+                            self.uvicorn.force_exit = True
                         self.uvicorn.started = False
                 except SystemExit:
                     raise
 
             self.task = loop.create_task(_run_daemon(), name="ServerTask")
 
-            # Warning: the server is not yet ready to accept connections. Wait a small delay
             await start_event.wait()
             while not self.uvicorn.started:
                 await asyncio.sleep(0.1)
+            self._accept_incoming = True
+            self.stopped = False
             logger.debug("Uvicorn started")
         finally:
             loop.slow_callback_duration = initial_threshold
 
-    async def shutdown(self) -> None:
+    async def stop(self, max_pending: int) -> None:
+        """ End all current jobs """
+        logger.debug("Remote shutdown calling")
         if not self.is_started:
             logger.warning("Server not started")
             return
+        if self.stopped:
+            return
+        self._accept_incoming = False
+        logger.debug("Refuse new incoming call")
+        # wait for task completed
+        global _active_requests
+        while _active_requests > max_pending:
+            await asyncio.sleep(POLLING_DELAY)
+        logger.debug("All request are complete")
+        self.stopped = True
+
+    async def shutdown(self) -> None:
+        logger.debug("SSEServerDaemon.shutdown()")
+        await self.stop(max_pending=0)
         self.task.cancel()
         await self.task
         self.uvicorn = None
         self.task = None
+        logger.debug("Remote shutdowned")
 
     @property
     def is_started(self) -> bool:
