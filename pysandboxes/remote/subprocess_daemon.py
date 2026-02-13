@@ -4,11 +4,13 @@ import logging
 import os
 import pickle
 import random
+import socket
 import sys
 import tempfile
 import time
 import uuid
 from asyncio.subprocess import Process
+from contextlib import closing
 from pathlib import Path
 from typing import Callable, Optional, NamedTuple, List, Dict
 
@@ -81,6 +83,7 @@ class DaemonParameters(NamedTuple):
     log_level: int
     log_format: str
     token: str
+    port: int
     init_fn: str
 
 
@@ -117,6 +120,27 @@ async def launch_sandbox(
         return process
     finally:
         pass
+
+
+def find_free_port() -> Optional[int]:
+    """
+    Finds and returns an available TCP port.
+
+    Returns:
+        The number of a free TCP port, or None if no port could be found.
+    """
+    # Use contextlib.closing to ensure the socket is properly closed
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            # The port number 0 tells the OS to find an ephemeral port
+            s.bind(('', 0))
+            # Set SO_REUSEADDR option to allow reuse of the address
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # Return the port number assigned by the OS
+            return s.getsockname()[1]
+    except socket.error as e:
+        print(f"Error finding a free port: {e}")
+        return None
 
 
 class BaseSubProcessDaemon(SSESandbox):
@@ -161,7 +185,7 @@ class BaseSubProcessDaemon(SSESandbox):
 
     def subprocess_cmd(self,
                        all_rules: AllRules,
-                       envs:Dict[str,str],
+                       envs: Dict[str, str],
                        pipe_path: Path,
                        ) -> Args:
         from . import main_sandbox
@@ -182,7 +206,7 @@ class BaseSubProcessDaemon(SSESandbox):
     async def start(self,
                     all_rules: AllRules,
                     *,
-                    envs:Dict[str,str],
+                    envs: Dict[str, str],
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
@@ -197,7 +221,7 @@ class BaseSubProcessDaemon(SSESandbox):
     async def _re_start(self,
                         all_rules: AllRules,
                         *,
-                        envs:Dict[str,str],
+                        envs: Dict[str, str],
                         log_level: int,
                         init_fn: Optional[SyncOrAsyncFunc],
                         first: bool = False) -> None:
@@ -205,6 +229,8 @@ class BaseSubProcessDaemon(SSESandbox):
             with tempfile.TemporaryDirectory() as tmpdir:
                 pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
                 pipe_path.unlink(missing_ok=True)
+
+                self.port = find_free_port()
 
                 await self._re_start_cmd(
                     all_rules,
@@ -214,6 +240,7 @@ class BaseSubProcessDaemon(SSESandbox):
                         pipe_path=pipe_path,
                     ),
                     pipe_path=pipe_path,
+                    port=self.port,
                     log_level=log_level,
                     init_fn=init_fn,
                 )
@@ -226,6 +253,7 @@ class BaseSubProcessDaemon(SSESandbox):
                             all_rules: AllRules,
                             args: Args,
                             pipe_path: Path,
+                            port: int,
                             *,
                             log_level: int,
                             init_fn: Optional[SyncOrAsyncFunc],
@@ -243,6 +271,7 @@ class BaseSubProcessDaemon(SSESandbox):
             log_level=log_level,
             log_format=get_log_formatter(),
             token=self._token,
+            port=port,
             init_fn=init_fn_ref
         )
 
@@ -260,11 +289,12 @@ class BaseSubProcessDaemon(SSESandbox):
 
         # Wait the server
         gc.collect()
+        ping_server_url=PING_SERVER_URL.replace("{PORT}",str(port))
         async with aiohttp.ClientSession() as session:
             while True:
                 try:  # TODO: test in the server never response
                     async with session.get(
-                            PING_SERVER_URL,
+                            ping_server_url,
                             timeout=2) as response:
                         if response.status == 200:
                             break

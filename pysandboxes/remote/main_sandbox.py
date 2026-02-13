@@ -97,7 +97,7 @@ def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
             f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
     from .local_task_daemon import LocalTaskDaemon
-    task_daemon = LocalTaskDaemon(process_config.token)
+    task_daemon = LocalTaskDaemon(process_config.token, process_config.port)
 
     async def _run():
         try:

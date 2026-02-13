@@ -10,7 +10,7 @@ from typing import Any, Dict, Callable
 from aiohttp import ClientPayloadError, ClientConnectorError
 from aiohttp_sse_client import client as sse_client
 
-from .parameters import HOST, PORT, PATH_RPC
+from .parameters import HOST, PATH_RPC
 from .tools import to_b85, from_b85
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 # URL de votre serveur SSE
 SANDBOX_SERVER_URL: str = os.environ.get(
     "SANDBOX_SERVER_URL",
-    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}{PATH_RPC}")
+    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{{PORT}}{PATH_RPC}")
 
 PING_SERVER_URL: str = os.environ.get(
     "SANDBOX_SERVER_URL",
-    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{PORT}/ping")
+    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{{PORT}}/ping")
 
 
 def _get_rpc_params(args: Any,
@@ -52,6 +52,7 @@ class SSESandbox(BaseDaemon):
                  **kwargs,
                  ):
         super().__init__(token)
+        self.port = 0
 
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
@@ -64,9 +65,11 @@ class SSESandbox(BaseDaemon):
         try:
             token = get_token()
             params = _get_rpc_params(args, func, kwargs)
-            logger.debug("Try to call to %s", SANDBOX_SERVER_URL)
+            sandbox_server_url = SANDBOX_SERVER_URL.replace("{PORT}",
+                                                            str(self.port))
+            logger.debug("Try to call to %s", sandbox_server_url)
             async with sse_client.EventSource(
-                    SANDBOX_SERVER_URL,
+                    sandbox_server_url,
                     # session=session,  # TODO: Use a correlationid?
                     option={"method": "POST"},
                     json=params,

@@ -4,7 +4,6 @@ import importlib
 import inspect
 import json
 import logging
-import os
 import sys
 import traceback
 from asyncio import CancelledError
@@ -15,14 +14,13 @@ from typing import Dict
 
 from uvicorn import Server
 
-from .parameters import PATH_RPC, HOST, PORT
+from .parameters import PATH_RPC, HOST
 from .sse_sandbox import SSESandbox
 from .tools import from_b85, to_b85
 from ..all_rules import AllRules
-from ..guard_import import remove_modules
 from ..private_loop import sandbox_loop, get_sandbox_loop
 from ..sb_types import Args, Envs
-from ..tools import set_is_in_sandbox, is_in_sandbox, SyncOrAsyncFunc
+from ..tools import set_is_in_sandbox, SyncOrAsyncFunc
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +50,6 @@ async def sandbox_daemon(
     The exception is also sent back to the client.
     """
     import pickle
-
 
     try:
         loop = asyncio.get_event_loop()
@@ -140,8 +137,7 @@ async def sandbox_daemon(
         set_is_in_sandbox(False)
 
 
-
-def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
+def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
     import uvicorn
 
     from fastapi import FastAPI, Request, Body, HTTPException
@@ -252,7 +248,7 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
     uvicorn_server = uvicorn.Server(uvicorn.Config(
         app,
         host=HOST,
-        port=PORT,
+        port=port,
         use_colors=None,
         log_config=logging_confg,
         access_log=True,
@@ -264,10 +260,11 @@ def create_uvicorn_daemon(token: str) -> 'uvicorn.Server':
 class LocalTaskDaemon(SSESandbox):
     __slots__ = ("task", "uvicorn")
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, port: int):
         super().__init__(token)
         self.uvicorn: Optional[Server] = None
         self.task = None
+        self.port = port
 
     def update_rules(self,
                      *,
@@ -287,26 +284,10 @@ class LocalTaskDaemon(SSESandbox):
     async def start(self,
                     all_rules: AllRules,
                     *,
-                    envs:Dict[str,str],
+                    envs: Dict[str, str],
                     log_level: int,
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
-
-        # assert "io" not in sys.modules
-        # set_is_in_sandbox(True)
-        # s_init_fn=init_fn
-        # before=set(sys.modules)# Learn the import during the import
-        # remove_modules()
-        # assert "io" not in sys.modules
-        # removed_modules = set(sys.modules) - before  # Learn the import during the import
-        # module_name, function_name = str(s_init_fn).split(':', 1)
-        # before=set(sys.modules)# Learn the import during the import
-        # module = importlib.import_module(module_name)
-        # assert "io" in sys.modules
-        # imported_modules = set(sys.modules) - before  # Learn the import during the import
-        # logger.debug(f"{imported_modules}")
-        # # set_is_in_sandbox(False) # Learn the import during the import
-        # init_fn = getattr(module, function_name)
 
         if init_fn:
             if asyncio.iscoroutinefunction(init_fn):
@@ -318,7 +299,7 @@ class LocalTaskDaemon(SSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            self.uvicorn = create_uvicorn_daemon(self.token)
+            self.uvicorn = create_uvicorn_daemon(self.token, self.port)
 
             start_event = asyncio.Event()
 
