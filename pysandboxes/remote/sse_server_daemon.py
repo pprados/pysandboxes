@@ -14,7 +14,7 @@ from typing import Dict
 
 from uvicorn import Server
 
-from .parameters import PATH_RPC, HOST, TIMEOUT_GRACEFUL_SHUTDOWN, POLLING_DELAY
+from .parameters import TIMEOUT_GRACEFUL_SHUTDOWN, POLLING_DELAY
 from .sse_base_daemon import BaseSSESandbox
 from .tools import from_b85, to_b85
 from ..all_rules import AllRules
@@ -143,7 +143,9 @@ async def sandbox_daemon(
         set_is_in_sandbox(False)
 
 
-def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
+def create_uvicorn_daemon(token: str,
+                          host:str,
+                          port: int) -> 'uvicorn.Server':
     import uvicorn
 
     from fastapi import FastAPI, Request, Body, HTTPException
@@ -158,7 +160,7 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
     ):
         return {"message": "OK"}
 
-    @app.post(PATH_RPC)
+    @app.post("/rpc")
     async def rpc_endpoint(
             request: Request,
             payload: RPCPayload = Body(...,
@@ -168,7 +170,7 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
         SSE endpoint to process a given code string, authenticated by a token,
         and stream back structured results (stdout, stderr, result).
         """
-        from ..os_sandbox import is_accept_incoming_call,is_daemon_started,_current_daemon
+        from ..os_sandbox import is_accept_incoming_call
 
         # logger.debug(request.headers["Authorization"])
         if ("Authorization" not in request.headers or
@@ -259,7 +261,7 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
 
     uvicorn_server = uvicorn.Server(uvicorn.Config(
         app,
-        host=HOST,
+        host=host,
         port=port,
         use_colors=None,
         log_config=logging_confg,
@@ -270,13 +272,14 @@ def create_uvicorn_daemon(token: str, port: int) -> 'uvicorn.Server':
 
 
 class SSEServerDaemon(BaseSSESandbox):
-    __slots__ = ("uvicorn", "task", "port", "stopped")
+    __slots__ = ("uvicorn", "task", "port", "hostname", "stopped")
 
     def __init__(self, token: str, *, port: int):
         super().__init__(token)
         self.uvicorn: Optional[Server] = None
         self.task = None
         self.port = port
+        self.hostname="localhost"
         self.stopped = True
 
     @property
@@ -317,7 +320,9 @@ class SSEServerDaemon(BaseSSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            self.uvicorn = create_uvicorn_daemon(self.token, self.port)
+            self.uvicorn = create_uvicorn_daemon(self.token,
+                                                 self.hostname,
+                                                 self.port)
 
             start_event = asyncio.Event()
 
@@ -346,7 +351,7 @@ class SSEServerDaemon(BaseSSESandbox):
 
             await start_event.wait()
             while not self.uvicorn.started:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(POLLING_DELAY)
             self._accept_incoming = True
             self.stopped = False
             logger.debug("Uvicorn started")

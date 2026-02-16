@@ -92,11 +92,8 @@ def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
     root_logger.handlers.clear()
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(process_config.log_format))
-    handler.setFormatter(logging.Formatter(
-        '[%(process)d] %(levelname)-5s %(name)s %(message)s'))  # FIXME
     root_logger.addHandler(handler)
-    # FIXME root_logger.setLevel(process_config.log_level)
-    root_logger.setLevel(logging.DEBUG)  # FIXME
+    root_logger.setLevel(process_config.log_level)
     logger.debug("config body and token successfully read from named pipe")
 
     all_rules = process_config.all_rules

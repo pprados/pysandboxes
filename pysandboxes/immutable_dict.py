@@ -1,6 +1,6 @@
 import collections
 from typing import ItemsView, Hashable, Iterator, Generic, TypeVar, Tuple, Union, \
-    Mapping, Iterable, KeysView, ValuesView, Dict, Any
+    Mapping, Iterable, KeysView, ValuesView, Dict
 
 KeyType = TypeVar('KeyType', bound=Hashable)
 ValueType = TypeVar('ValueType')

@@ -2,7 +2,6 @@ from types import ModuleType
 from typing import Dict, Any, Tuple, Callable
 from weakref import WeakKeyDictionary
 
-from .appendonly_dict import AppendOnlyDict
 from .e import RuleAttributeError
 from .immutable_dict import ImmutableDict
 

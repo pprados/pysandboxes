@@ -20,8 +20,8 @@ from aiohttp import ClientConnectorError
 from . import main_shutdown
 from .parameters import INTERVAL_FOR_PING_DAEMON, RETRY_RESET_DELAY, RETRY_MAX_DELAY, \
     RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS, TIMEOUT_FOR_PING, \
-    DELAY_FOR_STOP_DAEMON
-from .sse_base_daemon import BaseSSESandbox, PING_SERVER_URL
+    TIMEOUT_FOR_STOP_DAEMON
+from .sse_base_daemon import BaseSSESandbox
 from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
@@ -188,6 +188,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self._is_started = False
         self.restart = 0
 
+
     def subprocess_cmd(self,
                        all_rules: AllRules,
                        envs: Dict[str, str],
@@ -295,18 +296,18 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         # Wait the server
         gc.collect()
-        ping_server_url = PING_SERVER_URL.replace("{PORT}", str(port))
+        ping_url = self.base_url.replace("{PORT}", str(port)) +"/ping"
         async with aiohttp.ClientSession() as session:
             while True:
                 try:  # TODO: test in the server never response
                     async with session.get(
-                            ping_server_url,
+                            ping_url,
                             timeout=TIMEOUT_FOR_PING) as response:
                         if response.status == 200:
                             break
                         else:
                             raise RuntimeError(
-                                f"Unexpected status {response.status} from {PING_SERVER_URL}")
+                                f"Unexpected status {response.status} from {ping_url}")
                 except TimeoutError:
                     pass  # Ignore and continue
                 except ClientConnectorError:
@@ -339,7 +340,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 try:
                     await asyncio.wait_for(
                         self._process.wait(),
-                        timeout=DELAY_FOR_STOP_DAEMON)
+                        timeout=TIMEOUT_FOR_STOP_DAEMON)
                 except asyncio.TimeoutError:
                     logger.warning("Kill the sandbox daemon")
                     self._process.kill()

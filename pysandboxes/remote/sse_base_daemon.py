@@ -2,7 +2,6 @@
 import asyncio
 import json
 import logging
-import os
 import sys
 from datetime import timedelta
 from typing import Any, Dict, Callable
@@ -10,23 +9,12 @@ from typing import Any, Dict, Callable
 from aiohttp import ClientPayloadError, ClientConnectorError
 from aiohttp_sse_client import client as sse_client
 
-from .parameters import HOST, PATH_RPC
 from .tools import to_b85, from_b85
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
 from ..tools import is_in_sandbox, get_callable_info
 
 logger = logging.getLogger(__name__)
-
-# URL de votre serveur SSE
-SANDBOX_SERVER_URL: str = os.environ.get(
-    "SANDBOX_SERVER_URL",
-    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{{PORT}}{PATH_RPC}")
-
-PING_SERVER_URL: str = os.environ.get(
-    "SANDBOX_SERVER_URL",
-    f"http://{"[" + HOST + "]" if "::" in HOST else HOST}:{{PORT}}/ping")
-
 
 def _get_rpc_params(args: Any,
                     func: Callable[..., Any],
@@ -47,16 +35,23 @@ def _get_rpc_params(args: Any,
 
 
 class BaseSSESandbox(BaseDaemon):
+    __slots__ = (
+        "port", "base_url"
+    )
+
     def __init__(self,
                  token: str,
+                 *,
+                 host: str = "localhost",
                  **kwargs,
                  ):
         super().__init__(token)
         self.port = 0
+        self.base_url = f"http://{host}:{{PORT}}"
 
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
-                                    _force_incomming:bool,
+                                    _force_incomming: bool,
                                     *args: Any,
                                     **kwargs: Any) -> Any:
         if is_in_sandbox():
@@ -68,8 +63,9 @@ class BaseSSESandbox(BaseDaemon):
             from pysandboxes.os_sandbox import get_token
             token = get_token()
             params = _get_rpc_params(args, func, kwargs)
-            sandbox_server_url = SANDBOX_SERVER_URL.replace("{PORT}",
-                                                            str(self.port))
+
+            sandbox_server_url = self.base_url.replace("{PORT}",
+                                    str(self.port))+"/rpc"
             logger.debug("Try to call to %s", sandbox_server_url)
             async with sse_client.EventSource(
                     sandbox_server_url,
@@ -115,7 +111,7 @@ class BaseSSESandbox(BaseDaemon):
     @sandbox_loop
     def call_in_sandbox(self,
                         func: Callable[..., Any],
-                        _force_incomming:bool,
+                        _force_incomming: bool,
                         *args: Any,
                         **kwargs: Any) -> Any:
         if is_in_sandbox():

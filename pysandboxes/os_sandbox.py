@@ -1,21 +1,19 @@
 import asyncio
 import logging
-import os
 import threading
 import uuid
 from typing import Any, Callable, Optional, Type, cast, Dict
 
+from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .private_loop import sandbox_loop, reset_sandbox_loop, get_sandbox_loop
-from .all_rules import AllRules
+from .remote.none_daemon import NoneDaemon
+from .remote.parameters import TIMEOUT_FOR_STOP_DAEMON
+from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
-from .remote.none_daemon import NoneDaemon
-from .remote.parameters import DELAY_FOR_STOP_DAEMON
-from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.task_daemon import TaskDaemon
 from .tools import is_in_sandbox, check_mixte_async_async, SyncOrAsyncFunc
-from .sb_types import Envs
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +230,7 @@ def shutdown_daemon() -> None:  # FIXME: a revoir en mode synchrone
         # FIXME: appelé ou?
         loop.call_soon_threadsafe(
             lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
-        if not stop_event.wait(timeout=DELAY_FOR_STOP_DAEMON):
+        if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
             raise RuntimeError("Impossible to daemon_shutdown the sandbox")
 
 

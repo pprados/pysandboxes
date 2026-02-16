@@ -4,7 +4,6 @@ from typing import Optional, Dict
 from .sse_server_daemon import SSEServerDaemon
 from ..all_rules import AllRules
 from ..tools import SyncOrAsyncFunc
-from ..sb_types import Envs
 
 logger = logging.getLogger(__name__)
 

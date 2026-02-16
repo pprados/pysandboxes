@@ -1,22 +1,22 @@
-import asyncio
 import logging
 import os
 
-from pysandboxes.sandboxes_api import sandbox, sandboxes
+from pysandboxes.sandboxes_api import sandbox
 
 logger = logging.getLogger(__name__)
 
 def init_log_level():
-    sandboxes_level = logging.DEBUG
+    sandboxes_level = logging.WARNING
+    uvicorn_level = logging.WARNING
     format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
     logging.basicConfig(
         level=min(sandboxes_level, logging.INFO),
         format=format
     )
-    logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn").setLevel(logging.DEBUG)
-    logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.DEBUG)
+    logging.getLogger("asyncio").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
     logging.getLogger("Pysandboxes").setLevel(sandboxes_level)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logger.setLevel(logging.INFO)
@@ -33,7 +33,6 @@ async def async_init_sandbox():
 async def arun_in_sandbox(called_pid:int):
     logger.info("async: annotated 'arun_in_sandbox()' called in a sandbox")
     assert called_pid != os.getpid()
-    await asyncio.sleep(2)
     return 42
 
 async def asynchronize_function():

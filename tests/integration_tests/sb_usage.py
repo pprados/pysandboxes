@@ -7,8 +7,6 @@ from pprint import pprint
 from socket import AF_INET, SOCK_STREAM, AF_INET6, SOCK_DGRAM
 from typing import Dict
 
-import dotenv
-
 from pysandboxes import sandbox, sandboxes, SandBoxError
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules

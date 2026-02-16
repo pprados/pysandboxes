@@ -1,5 +1,5 @@
 
-import pysandboxes
+from pysandboxes import sandboxes
 from .differents_usages import *
 
 async def main():

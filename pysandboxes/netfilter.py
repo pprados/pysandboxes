@@ -1,6 +1,6 @@
 # %%
 import socket
-from ipaddress import IPv4Network, IPv4Address, IPv6Network, IPv6Address
+from ipaddress import IPv4Network, IPv6Network
 from typing import List
 
 from .guard_socket import SocketRules, Kind, Direction, Action

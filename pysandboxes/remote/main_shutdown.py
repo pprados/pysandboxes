@@ -1,9 +1,8 @@
 import logging
-import sys
-import threading
 import time
 
 from pysandboxes.learning import is_learning_mode, generate_config_from_learning
+from pysandboxes.remote.parameters import POLLING_DELAY
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ async def daemon_shutdown(graceful_shutdown:bool) -> None:
         await async_stop_daemon(max_pending=1)  # 1 for me
 
         async def _delay_for_send_the_response():
-            time.sleep(0.3)  # FIXME
+            time.sleep(POLLING_DELAY)
             # And after, daemon_shutdown the daemon and exit
             await async_shutdown_daemon()
 
