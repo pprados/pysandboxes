@@ -15,19 +15,20 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level():
-    level = logging.DEBUG
-    format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
+    sandboxes_level = logging.WARNING
+    uvicorn_level = logging.WARNING
+    format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
     logging.basicConfig(
-        level=level,
+        level=min(sandboxes_level, logging.INFO),
         format=format
     )
-    logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(level)
-    logging.getLogger("pysandboxes").setLevel(level)
-    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
+    logging.getLogger("asyncio").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
+    logging.getLogger("Pysandboxes").setLevel(uvicorn_level)
+    logging.getLogger("pysandboxes").setLevel(sandboxes_level)
+    logger.setLevel(logging.INFO)
 
 
 @sandbox
@@ -215,7 +216,7 @@ async def main(argv: Dict[str, str]) -> int:
     extra_rules = convert_extra_rules(argv[1:])
     config_path = Path("tests/test.py-sandboxes")
     if "learn" in extra_rules:
-        learning_path,*_ = extra_rules.get("learn", [''])
+        learning_path, *_ = extra_rules.get("learn", [''])
         if not learning_path:
             learning_path = ".py-sandboxes.test"
         extra_rules["learn"] = learning_path

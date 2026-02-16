@@ -17,7 +17,7 @@ def init_log_level():
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
-    logging.getLogger("Pysandboxes").setLevel(sandboxes_level)
+    logging.getLogger("Pysandboxes").setLevel(uvicorn_level)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logger.setLevel(logging.INFO)
 
