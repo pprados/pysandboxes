@@ -14,7 +14,8 @@ from typing import Dict
 
 from uvicorn import Server
 
-from .parameters import TIMEOUT_GRACEFUL_SHUTDOWN, POLLING_DELAY
+from .parameters import TIMEOUT_GRACEFUL_SHUTDOWN, POLLING_DELAY, \
+    TIMEOUT_FOR_STOP_DAEMON
 from .sse_base_daemon import BaseSSESandbox
 from .tools import from_b85, to_b85
 from ..all_rules import AllRules
@@ -370,7 +371,13 @@ class SSEServerDaemon(BaseSSESandbox):
         logger.debug("Refuse new incoming call")
         # wait for task completed
         global _active_requests
+        start_time = asyncio.get_event_loop().time()
         while _active_requests > max_pending:
+            if ((asyncio.get_event_loop().time() - start_time) >=
+                    TIMEOUT_FOR_STOP_DAEMON):
+                logger.info("Impossible to stop %i the current request",
+                            _active_requests - max_pending)
+                break
             await asyncio.sleep(POLLING_DELAY)
         logger.debug("All request are complete")
         self.stopped = True

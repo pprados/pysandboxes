@@ -107,6 +107,22 @@ There are two usage modes:
 
 ## Apply the sandbox to the entire application
 
+```mermaid
+flowchart TD
+    subgraph SandboxEnvironment [OS-sandbox e.g. firejail]
+        direction LR
+        subgraph OSSandbox [Python Sandbox in a Child Process]
+
+        A[Caller Code]
+                C["@sandbox<br/>my_function(...)"]
+        end
+    end
+
+    A -- "1- my_function(param)" --> C
+    C -- "4- Propagate to caller" --> A
+```
+
+
 This scenario is the simplest. You just need to replace the launch of your application (`python -m xxx`) with a launch in the sandbox (`python-sb -m xxx`). It's possible to add some parameters, at the beginning:
 ```shell
 python-db --learn -m my_module
@@ -153,22 +169,22 @@ flowchart TD
         A[Caller Code]
     end
 
-    subgraph SandboxEnvironment [Sandbox Environment]
+    subgraph SandboxEnvironment [OS-sandbox e.g. firejail]
         direction LR
-        B(SSE<br/>Server)
-        subgraph OSSandbox [OS Sandbox e.g. firejail]
-            subgraph PySandbox [Py Sandbox Child Process]
+        subgraph OSSandbox [Python Sandbox in a Child Process]
+            B(SSE<br/>Server)
+
                 C["@sandbox<br/>my_function(...)"]
-            end
         end
     end
 
     A -- "1- my_function(param)" --> B
     B -- "2- Execute via IPC (Pickle)" --> C
-    C -- "3- Return result/exception" --> B
+    C -- "3- Return result/<br/>exception" --> B
     B -- "4- Propagate to caller" --> A
 
 ```
+
 
 ### Launching the Sandbox
 
