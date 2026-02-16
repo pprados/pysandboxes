@@ -13,7 +13,7 @@ from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 from pysandboxes.remote.sse_client_subprocess_daemon import BaseSubProcessDaemon, \
-    DaemonParameters, get_log_formatter, launch_sandbox
+    DaemonParameters, get_log_formatter, launch_sandbox, find_free_port
 from pysandboxes.sb_types import Envs
 from .remote.parse_cpython_args import parse_python_cmd_line
 
@@ -126,6 +126,7 @@ def main() -> int:
             log_level=log_level,
             log_format=get_log_formatter(),
             token=token,
+            port=0,
             init_fn=""
         )
         if all_rules.learn:
