@@ -8,7 +8,6 @@ MAX_CONNECT_RETRY = 5  # Else, raise a RuntimeError
 TIMEOUT_GRACEFUL_SHUTDOWN = 1  # After, force the exit
 TIMEOUT_FOR_STOP_DAEMON = TIMEOUT_GRACEFUL_SHUTDOWN * 2
 TIMEOUT_FOR_PING = 1  # Delay between ping
-TIMEOUT_BEFORE_KILL_DAEMON = 1  # FIXME
 
 RETRY_RESET_DELAY = 3*60  # delay to reset attemps
 RETRY_MAX_ATTEMPTS = 5  # Maximum number of retry in RETRY_RESET_DELAY else exit(-1)

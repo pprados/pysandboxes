@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -7,20 +8,27 @@ from pysandboxes.tools import is_in_sandbox
 logger = logging.getLogger(__name__)
 
 def init_log_level():
-    sandboxes_level = logging.DEBUG
-    uvicorn_level = logging.DEBUG
+    sandboxes_level = logging.WARNING
+    uvicorn_level = logging.WARNING
     format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
     if is_in_sandbox():
-        # Ident logs inside the sandbox
-        root_logger = logging.getLogger()
-        root_logger.setLevel(min(sandboxes_level, logging.INFO))
-        root_logger.handlers[0].setFormatter(logging.Formatter("  " + format))
+        format = "  "+ format
+    logging.basicConfig(
+        level=min(sandboxes_level, logging.INFO),
+        format=format
+    )
+
+    # if is_in_sandbox():
+    #     # Ident logs inside the sandbox
+    #     root_logger = logging.getLogger()
+    #     root_logger.setLevel(min(sandboxes_level, logging.INFO))
+    #     root_logger.handlers[0].setFormatter(logging.Formatter("  " + format))
 
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
-    logging.getLogger("Pysandboxes").setLevel(uvicorn_level)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logger.setLevel(logging.INFO)
 
@@ -36,25 +44,18 @@ async def async_init_sandbox():
 async def arun_in_sandbox(called_pid:int):
     logger.info("async: annotated 'arun_in_sandbox()' called in a sandbox")
     assert called_pid != os.getpid()
-    import sys
-    logger.debug("************** Force Daemon exited with 99")
-    # FIXME sys.exit(1)
-    os._exit(99)
     return 42
 
 @sandbox
-async def arun_exit(called_pid:int):
+async def arun_exit():
     logger.debug("************** Force Daemon exited with 99")
-    # FIXME sys.exit(1)
     os._exit(99)
     return 42
 
 async def asynchronize_function():
     logger.info("async: Call 'asynchronize_function()'")
     # rc = await arun_in_sandbox(os.getpid())
-    rc = await arun_exit(os.getpid())
-    if rc != 42:
-        logger.error(f"{rc=}")
+    rc = await arun_exit()
     assert rc == 42
 
 @sandbox

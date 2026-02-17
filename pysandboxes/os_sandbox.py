@@ -204,35 +204,34 @@ def _set_current_daemon(daemon:BaseDaemon) -> None:
     global _current_daemon
     _current_daemon = daemon
 
-# FIXME a virer? @sandbox_loop
-def shutdown_daemon() -> None:  # FIXME: a revoir en mode synchrone
-    """
-    Synchronize version to daemon_shutdown the current daemon.
-    Return when the daemon is daemon_shutdown.
-    """
-    global _current_daemon, _startup_counter
-    with _start_lock:
-        if not _current_daemon:
-            logger.info("Daemon not started when daemon_shutdown")
-            _startup_counter -= 1
-            if _startup_counter < 0:
-                raise ValueError("Daemon daemon_shutdown more times than started")
-            return
-        loop = get_sandbox_loop()
-        stop_event = threading.Event()
-
-        @sandbox_loop
-        async def _async_shutdown_daemon():
-            await async_shutdown_daemon()
-            stop_event.set()
-            reset_sandbox_loop()
-
-        # FIXME: appelé ou?
-        loop.call_soon_threadsafe(
-            lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
-        if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
-            raise RuntimeError("Impossible to daemon_shutdown the sandbox")
-
+# def shutdown_daemon() -> None: FIXME: a virer si pas nécessaire
+#     """
+#     Synchronize version to daemon_shutdown the current daemon.
+#     Return when the daemon is daemon_shutdown.
+#     """
+#     global _current_daemon, _startup_counter
+#     with _start_lock:
+#         if not _current_daemon:
+#             logger.info("Daemon not started when daemon_shutdown")
+#             _startup_counter -= 1
+#             if _startup_counter < 0:
+#                 raise ValueError("Daemon daemon_shutdown more times than started")
+#             return
+#         loop = get_sandbox_loop()
+#         stop_event = threading.Event()
+#
+#         @sandbox_loop
+#         async def _async_shutdown_daemon():
+#             await async_shutdown_daemon()
+#             stop_event.set()
+#             reset_sandbox_loop()
+#
+#         # FIXME: appelé ou?
+#         loop.call_soon_threadsafe(
+#             lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
+#         if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
+#             raise RuntimeError("Impossible to daemon_shutdown the sandbox")
+#
 
 def get_token() -> str:
     global _current_daemon

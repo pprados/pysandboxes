@@ -309,9 +309,9 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             )
 
         if first:
-            pysandboxes_logger.info("started")
+            pysandboxes_logger.info("Child Sandbox started")
         else:
-            pysandboxes_logger.warning("re-started")
+            pysandboxes_logger.warning("Child Sandbox re-started")
 
     async def _re_start_cmd(self,
                             all_rules: AllRules,

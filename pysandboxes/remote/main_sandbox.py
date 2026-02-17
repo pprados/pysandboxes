@@ -46,21 +46,21 @@ async def run_server(process_config: DaemonParameters):
             f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
     from pysandboxes.os_sandbox import _set_current_daemon
-    task_daemon: BaseDaemon = providers_factory["_sse_server"](
+    server_daemon: BaseDaemon = providers_factory["_sse_server"](
         process_config.token,
         port=process_config.port,
     )
-    _set_current_daemon(task_daemon)  # FIXME
-    await task_daemon.start(process_config.all_rules,
+    _set_current_daemon(server_daemon)
+    await server_daemon.start(process_config.all_rules,
                             envs=cast(dict, os.environ),
                             log_level=process_config.log_level,
                             init_fn=init_fn
                             )
-    await task_daemon.join()
+    await server_daemon.join()
     return 0
 
 
-def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
+def main() -> int:
     threading.main_thread().name = "DaemonMainThread"
 
     parser = argparse.ArgumentParser(
@@ -90,9 +90,9 @@ def main() -> int:  # FIXME: mieux gérer le cycle de vie en cas de crash
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
     handler = logging.StreamHandler()
-    #handler.setFormatter(logging.Formatter(process_config.log_format))
+    # handler.setFormatter(logging.Formatter(process_config.log_format))
     # FIX_RELEASE
-    handler.setFormatter(logging.Formatter("  " + process_config.log_format))  # FIXME
+    handler.setFormatter(logging.Formatter("  " + process_config.log_format))
     root_logger.addHandler(handler)
     root_logger.setLevel(process_config.log_level)
     logger.debug("config body and token successfully read from named pipe")
