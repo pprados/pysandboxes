@@ -9,6 +9,7 @@ from typing import Any, Dict, Callable
 from aiohttp import ClientPayloadError, ClientConnectorError
 from aiohttp_sse_client import client as sse_client
 
+from .parameters import INTERVAL_FOR_RETRY_CONNECTION, MAX_CONNECT_RETRY
 from .tools import to_b85, from_b85
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
@@ -36,18 +37,20 @@ def _get_rpc_params(args: Any,
 
 class BaseSSESandbox(BaseDaemon):
     __slots__ = (
-        "port", "base_url"
+        "port", "base_url","max_connect_retry"
     )
 
     def __init__(self,
                  token: str,
                  *,
-                 host: str = "localhost",
+                 host: str,
+                 max_connect_retry:int,
                  **kwargs,
                  ):
         super().__init__(token)
         self.port = 0
         self.base_url = f"http://{host}:{{PORT}}"
+        self.max_connect_retry=max_connect_retry
 
     async def async_call_in_sandbox(self,
                                     func: Callable[..., Any],
@@ -59,54 +62,65 @@ class BaseSSESandbox(BaseDaemon):
         if not _force_incomming and not self._accept_incoming:
             raise RuntimeError("The sandbox demon is being stopped.")
 
-        try:
-            from pysandboxes.os_sandbox import get_token
-            token = get_token()
-            params = _get_rpc_params(args, func, kwargs)
+        retry = self.max_connect_retry
+        while (retry > 0):
+            try:
+                from pysandboxes.os_sandbox import get_token
+                token = get_token()
+                params = _get_rpc_params(args, func, kwargs)
 
-            sandbox_server_url = self.base_url.replace("{PORT}",
-                                    str(self.port))+"/rpc"
-            logger.debug("Try to call to %s", sandbox_server_url)
-            async with sse_client.EventSource(
-                    sandbox_server_url,
-                    # session=session,  # TODO: Use a correlationid?
-                    option={"method": "POST"},
-                    json=params,
-                    headers={
-                        "Accept": "text/event-stream",
-                        "Authorization": f"Bearer {token}"
-                    },
-                    reconnection_time=timedelta(
-                        seconds=0.2  # FIXME
-                    ),
-            ) as event_source:
-                async for event in event_source:
-                    msg = json.loads(event.data)
-                    if "result" in msg:
-                        return from_b85(msg["result"])
-                    if "exception" in msg:
-                        exception, serial_traceback = from_b85(msg["exception"])
-                        traceback = serial_traceback.as_traceback()
-                        remove = 3
-                        while remove:
-                            remove -= 1
-                            if traceback.tb_next:
-                                traceback = traceback.tb_next
-                            else:
-                                break
-                        raise exception.with_traceback(traceback)
+                sandbox_server_url = self.base_url.replace("{PORT}",
+                                        str(self.port))+"/rpc"
+                logger.debug("Try to call to %s", sandbox_server_url)
+                async with sse_client.EventSource(
+                        sandbox_server_url,
+                        # session=session,  # TODO: Use a correlationid?
+                        option={"method": "POST"},
+                        json=params,
+                        headers={
+                            "Accept": "text/event-stream",
+                            "Authorization": f"Bearer {token}"
+                        },
+                        reconnection_time=timedelta(
+                            seconds=INTERVAL_FOR_RETRY_CONNECTION
+                        ),
+                        max_connect_retry=self.max_connect_retry,
+                ) as event_source:
+                    async for event in event_source:
+                        msg = json.loads(event.data)
+                        if "result" in msg:
+                            return from_b85(msg["result"])
+                        if "exception" in msg:
+                            exception, serial_traceback = from_b85(msg["exception"])
+                            traceback = serial_traceback.as_traceback()
+                            remove = 3
+                            while remove:
+                                remove -= 1
+                                if traceback.tb_next:
+                                    traceback = traceback.tb_next
+                                else:
+                                    break
+                            raise exception.with_traceback(traceback)
 
-                    if "stdout" in msg:
-                        print(msg["stdout"], end="")
-                    if "stderr" in msg:
-                        print(msg["stderr"], end="", file=sys.stderr)
-                raise RuntimeError("No result received from the sandbox")
-        except ClientPayloadError:
-            raise RuntimeError("No result received from the sandbox")
-        except ClientConnectorError:
-            raise RuntimeError("Impossible to connect to the sandbox")
-        except SystemExit:
-            raise
+                        if "stdout" in msg:
+                            print(msg["stdout"], end="")
+                        if "stderr" in msg:
+                            print(msg["stderr"], end="", file=sys.stderr)
+                    raise RuntimeError("No result received from the sandbox")
+            except (ClientPayloadError,ClientConnectorError,ConnectionRefusedError):
+                logger.debug("Connection error. Retry")
+                retry -= 1
+                continue
+            except ClientConnectorError:
+                raise RuntimeError("Impossible to connect to the sandbox")
+            except SystemExit:
+                raise
+            except Exception as e:
+                logger.exception("Unknown error")
+                assert e is None, "Unknown error"
+                raise
+
+        raise RuntimeError("No result received from the sandbox")
 
     @sandbox_loop
     def call_in_sandbox(self,

@@ -55,10 +55,6 @@ class BaseDaemon(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def join(self) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
     def update_rules(self,
                      *,
                      envs: Envs,

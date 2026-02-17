@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import uuid
+from asyncio import CancelledError
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
@@ -20,7 +21,7 @@ from aiohttp import ClientConnectorError
 from . import main_shutdown
 from .parameters import INTERVAL_FOR_PING_DAEMON, RETRY_RESET_DELAY, RETRY_MAX_DELAY, \
     RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS, TIMEOUT_FOR_PING, \
-    TIMEOUT_FOR_STOP_DAEMON
+    TIMEOUT_FOR_STOP_DAEMON, MAX_CONNECT_RETRY
 from .sse_base_daemon import BaseSSESandbox
 from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
@@ -149,8 +150,10 @@ def find_free_port() -> Optional[int]:
 
 
 class BaseSubProcessDaemon(BaseSSESandbox):
-    __slots__ = ('_is_started', '_token',
+    __slots__ = ('_is_started',
+                 '_token',
                  '_process',
+                 '_watchdog',
                  '_attempts',
                  '_base_delay',
                  '_factor',
@@ -158,14 +161,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                  '_max_attempts',
                  '_reset_delay',
                  '_last_reset',
-                 '_is_started'
+                 '_is_started',
+                 '_python_args',
                  'restart',
                  )
 
     def __init__(self,
                  token: str,
                  *,
+                 host: str = "localhost",
                  python_args: Optional[List[str]] = None,
+                 max_connect_retry: int = MAX_CONNECT_RETRY,
                  max_attempts: int = RETRY_MAX_ATTEMPTS,
                  # Maximum number of retry _attempts
                  base_delay: float = RETRY_BASE_DELAY,
@@ -175,9 +181,13 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                  reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
                  **kwargs,
                  ):
-        super().__init__(token)
+        super().__init__(
+            token,
+            host=host,
+            max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
         self._process = None
+        self._watchdog = None
         self._attempts = 0
         self._base_delay = base_delay
         self._factor = factor
@@ -187,7 +197,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self._last_reset = time.time()
         self._is_started = False
         self.restart = 0
-
 
     def subprocess_cmd(self,
                        all_rules: AllRules,
@@ -217,12 +226,63 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
         self.restart = 0
+        self.port = find_free_port()
+
         await self._re_start(all_rules,
                              envs=envs,
                              log_level=log_level,
                              init_fn=init_fn,
                              first=True,
                              )
+        self._watchdog = asyncio.create_task(
+            self.watchdog(
+                all_rules, envs=envs, log_level=log_level, init_fn=init_fn
+            ),
+            name="ControlDaemon")
+
+    async def watchdog(self,
+                       all_rules: AllRules,
+                       *,
+                       envs: Dict[str, str],
+                       log_level: int,
+                       init_fn: Optional[SyncOrAsyncFunc],
+                       ) -> None:
+        errorlevel = -1
+        try:
+            self._attempts = 0
+            while errorlevel != 0:
+                errorlevel = await self._process.wait()
+                # Process is dead
+                if not self._accept_incoming:
+                    break  # Detect legitimate shutdown
+
+                if errorlevel != 0:
+                    logger.info("watchdog: subprocess exited with %s", errorlevel)
+                    if time.time() - self._last_reset > self._reset_delay:
+                        self._attempts = 0
+                    self._attempts += 1
+                    if self._attempts > self._max_attempts:
+                        import os
+                        logger.error("Too many demon shutdowns")
+                        os._exit(-2)
+                    # Calculate the base delay for this attempt
+                    current_base_backoff: float = min(self._max_delay,
+                                                      self._base_delay * (
+                                                              self._factor ** (
+                                                              self._attempts - 1)))
+
+                    wait_time: float = random.uniform(current_base_backoff * 0.9,
+                                                      current_base_backoff)
+                    logger.debug("watchdog sleep %i", wait_time)
+                    await asyncio.sleep(wait_time)
+                    # await self.shutdown()
+                    self._last_reset = time.time()
+                    await self._re_start(all_rules,
+                                         envs=envs,
+                                         log_level=log_level,
+                                         init_fn=init_fn)
+        except CancelledError:
+            pass  # Ignore
 
     async def _re_start(self,
                         all_rules: AllRules,
@@ -231,26 +291,24 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                         log_level: int,
                         init_fn: Optional[SyncOrAsyncFunc],
                         first: bool = False) -> None:
-        if first:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
-                pipe_path.unlink(missing_ok=True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
+            pipe_path.unlink(missing_ok=True)
 
-                self.port = find_free_port()
-
-                await self._re_start_cmd(
-                    all_rules,
-                    self.subprocess_cmd(
-                        all_rules=all_rules,
-                        envs=envs,
-                        pipe_path=pipe_path,
-                    ),
+            await self._re_start_cmd(
+                all_rules,
+                self.subprocess_cmd(
+                    all_rules=all_rules,
+                    envs=envs,
                     pipe_path=pipe_path,
-                    port=self.port,
-                    log_level=log_level,
-                    init_fn=init_fn,
-                )
+                ),
+                pipe_path=pipe_path,
+                port=self.port,
+                log_level=log_level,
+                init_fn=init_fn,
+            )
 
+        if first:
             pysandboxes_logger.info("started")
         else:
             pysandboxes_logger.warning("re-started")
@@ -266,7 +324,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                             ) -> None:
         self._is_started = False
         self._accept_incoming = False
-
         if init_fn:
             module, init_function_reference = get_callable_info(init_fn)
             init_fn_ref = f"{module}:{init_function_reference}"
@@ -287,6 +344,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         else:
             env = all_rules.envs
 
+        logger.debug("Launch process...")
         self._process = await launch_sandbox(
             args + ["--_named-pipe", str(pipe_path)],
             pipe_path=pipe_path,
@@ -296,7 +354,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         # Wait the server
         gc.collect()
-        ping_url = self.base_url.replace("{PORT}", str(port)) +"/ping"
+        ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
         async with aiohttp.ClientSession() as session:
             while True:
                 try:  # TODO: test in the server never response
@@ -313,71 +371,59 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 except ClientConnectorError:
                     pass  # Ignore and continue
 
-                logger.debug(f"sleep {INTERVAL_FOR_PING_DAEMON}")
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
         # One more time
-        logger.debug(f"sleep {INTERVAL_FOR_PING_DAEMON}")
+        # logger.debug(
+        #     f"sleep {INTERVAL_FOR_PING_DAEMON}")  # FIXME: nécessaire? Sinon erreur 503
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
         self._is_started = True
         self._accept_incoming = True
+        logger.debug(f"{self._accept_incoming=}")
 
     async def stop(self, max_pending: int) -> None:
-        pass  # FIXME:
+        if self._watchdog:
+            self._watchdog.cancel()
+            self._watchdog = None
 
-    # @sandbox_loop
     async def shutdown(self, graceful_shutdown: bool = True) -> None:
         self._accept_incoming = False
+        self.max_connect_retry = 0
 
         logger.debug("Call remote daemon_shutdown...")
-        await self.async_call_in_sandbox(
-            main_shutdown.daemon_shutdown,  # Call remote sandbox daemon_shutdown
-            True,
-            graceful_shutdown,
-        )
-        if graceful_shutdown:
-            if self._process:
-                try:
-                    await asyncio.wait_for(
-                        self._process.wait(),
-                        timeout=TIMEOUT_FOR_STOP_DAEMON)
-                except asyncio.TimeoutError:
-                    logger.warning("Kill the sandbox daemon")
-                    self._process.kill()
-                logger.debug("Sandbox daemon is terminated")
-                self._process = None
-        else:
-            logger.info("Kill the sandbox daemon (graceful_shutdown=%s)",
-                        graceful_shutdown)
-            self._process.kill()
+        try:
+            await self.async_call_in_sandbox(
+                main_shutdown.daemon_shutdown,  # Call remote sandbox daemon_shutdown
+                True,
+                graceful_shutdown,
+            )
+            if graceful_shutdown:
+                if self._process:
+                    try:
+                        await asyncio.wait_for(
+                            self._process.wait(),
+                            timeout=TIMEOUT_FOR_STOP_DAEMON)
+                    except asyncio.TimeoutError:
+                        logger.warning("Kill the sandbox daemon")
+                        self._process.kill()
+                    logger.debug("Sandbox daemon is terminated")
+                    self._process = None
+            else:
+                logger.info("Kill the sandbox daemon (graceful_shutdown=%s)",
+                            graceful_shutdown)
+                self._process.kill()
+        except OSError:
+            pass
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except RuntimeError:
+            pass  # Ignore
+        except Exception as e:
+            logger.exception("Unknown error in shutdown")
+            assert e is None,"Unknown error in shutdown"
+        finally:
             self._process = None
-
-        self._is_started = False
-
-    async def join(self) -> int:  # FIXME: utilisé ? Utilisable ?
-        errorlevel = -1
-        while errorlevel != 0:
-            errorlevel = await self._process.wait()
-            if errorlevel != 0:
-                logger.warning("subprocess exited with %s", errorlevel)
-                if time.time() - self._last_reset > self._reset_delay:
-                    self._attempts = 0
-                self._attempts += 1
-                if self._attempts > self._max_attempts:
-                    return errorlevel
-                # Calculate the base delay for this attempt
-                current_base_backoff: float = min(self._max_delay,
-                                                  self._base_delay * (
-                                                          self._factor ** (
-                                                          self._attempts - 1)))
-
-                wait_time: float = random.uniform(current_base_backoff * 0.9,
-                                                  current_base_backoff)
-                await asyncio.sleep(wait_time)
-                await self.shutdown()
-                self._last_reset = time.time()
-                await self._re_start()  # FIXME: mauvais parametres
-        return errorlevel
+            self._is_started = False
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):

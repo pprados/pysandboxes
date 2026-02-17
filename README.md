@@ -109,9 +109,9 @@ There are two usage modes:
 
 ```mermaid
 flowchart TD
-    subgraph SandboxEnvironment [OS-sandbox e.g. firejail]
+    subgraph SandboxEnvironment ["OS-sandbox"]
         direction LR
-        subgraph OSSandbox [Python Sandbox in a Child Process]
+        subgraph OSSandbox [Python Sandbox]
 
         A[Caller Code]
                 C["@sandbox<br/>my_function(...)"]
@@ -121,7 +121,6 @@ flowchart TD
     A -- "1- my_function(param)" --> C
     C -- "4- Propagate to caller" --> A
 ```
-
 
 This scenario is the simplest. You just need to replace the launch of your application (`python -m xxx`) with a launch in the sandbox (`python-sb -m xxx`). It's possible to add some parameters, at the beginning:
 ```shell
@@ -164,12 +163,12 @@ In this scenario, your application will be split into two parts:
 
 ```mermaid
 flowchart TD
-    subgraph MainApplicationFullPrivileges [Main Application Full Privileges]
+    subgraph MainApplicationFullPrivileges [Main Application]
         direction LR
         A[Caller Code]
     end
 
-    subgraph SandboxEnvironment [OS-sandbox e.g. firejail]
+    subgraph SandboxEnvironment ["OS-sandbox (Docker,...)"]
         direction LR
         subgraph OSSandbox [Python Sandbox in a Child Process]
             B(SSE<br/>Server)

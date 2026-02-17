@@ -1,6 +1,7 @@
 from typing import Any
 
 # TODO: docstring is not accesible with this approach
+# TODO: ajouter is_in_sandbox()
 _api = {
     "sandboxes",
     "sandbox",

@@ -12,7 +12,7 @@ async def main():
                 graceful_shutdown=True,
         ):
             await asynchronize_function()
-            os.kill(os.getpid(), 2)  # FIXME
+        logger.debug("'main()' terminate'")
 
 if __name__ == "__main__":
     asyncio.run(main())

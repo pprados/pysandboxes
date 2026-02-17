@@ -15,7 +15,7 @@ from typing import Dict
 from uvicorn import Server
 
 from .parameters import TIMEOUT_GRACEFUL_SHUTDOWN, POLLING_DELAY, \
-    TIMEOUT_FOR_STOP_DAEMON
+    TIMEOUT_FOR_STOP_DAEMON, MAX_CONNECT_RETRY
 from .sse_base_daemon import BaseSSESandbox
 from .tools import from_b85, to_b85
 from ..all_rules import AllRules
@@ -145,7 +145,7 @@ async def sandbox_daemon(
 
 
 def create_uvicorn_daemon(token: str,
-                          host:str,
+                          host: str,
                           port: int) -> 'uvicorn.Server':
     import uvicorn
 
@@ -276,11 +276,11 @@ class SSEServerDaemon(BaseSSESandbox):
     __slots__ = ("uvicorn", "task", "port", "hostname", "stopped")
 
     def __init__(self, token: str, *, port: int):
-        super().__init__(token)
+        super().__init__(token, host="localhost", max_connect_retry=MAX_CONNECT_RETRY)
         self.uvicorn: Optional[Server] = None
         self.task = None
         self.port = port
-        self.hostname="localhost"
+        self.hostname = "localhost"
         self.stopped = True
 
     @property
@@ -311,6 +311,7 @@ class SSEServerDaemon(BaseSSESandbox):
                     init_fn: Optional[SyncOrAsyncFunc],
                     ) -> None:
 
+        set_is_in_sandbox(True)
         if init_fn:
             if asyncio.iscoroutinefunction(init_fn):
                 await init_fn()
@@ -342,7 +343,8 @@ class SSEServerDaemon(BaseSSESandbox):
                                 timeout=TIMEOUT_GRACEFUL_SHUTDOWN,
                             )
                         except asyncio.TimeoutError:
-                            logger.warning(f"Timeout during uvicorn daemon_shutdown. Force exit")
+                            logger.warning(
+                                f"Timeout during uvicorn daemon_shutdown. Force exit")
                             self.uvicorn.force_exit = True
                         self.uvicorn.started = False
                 except SystemExit:
@@ -361,6 +363,7 @@ class SSEServerDaemon(BaseSSESandbox):
 
     async def stop(self, max_pending: int) -> None:
         """ End all current jobs """
+        set_is_in_sandbox(False)
         logger.debug("Remote daemon_shutdown calling")
         if not self.is_started:
             logger.warning("Server not started")
@@ -382,7 +385,7 @@ class SSEServerDaemon(BaseSSESandbox):
         logger.debug("All request are complete")
         self.stopped = True
 
-    async def shutdown(self,graceful_shutdown:bool = True) -> None:
+    async def shutdown(self, graceful_shutdown: bool = True) -> None:
         logger.debug("SSEServerDaemon.shutdown()")
         await self.stop(max_pending=0)
         self.task.cancel()
