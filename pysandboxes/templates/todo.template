@@ -1,5 +1,10 @@
 
 #######################################################################################
+# TODO: The dns use the libc implementation, without Python
+#net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
+#net=ALLOW|udp|0.0.0.0/0|53|IN
+
+
 # TODO Limit syntax and features when executing python code (very useful for controlling LLM-generated code)
 #python-exec-provider=interpreter
 #python-exec-import=ALLOW:threads

@@ -143,7 +143,7 @@ class sandboxes(Protocol):
                 # Iterate through all child processes and send them SIGTERM
                 logger.debug("Catch signal %s. Propagate to the dameon.", signum)
                 loop = get_sandbox_loop()
-                loop.call_soon_threadsafe(  # FIXME: a vérifier
+                loop.call_soon_threadsafe(
                     lambda: loop.create_task(self._stop_daemon())
                 )
 

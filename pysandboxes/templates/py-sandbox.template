@@ -16,7 +16,7 @@
 # the system enters learning mode and a first version is produced. Use your
 # application in all its dimensions to feed it.
 #
-# You can modify it manually, or reactivate learning mode by adding a `learning`
+# You can modify it manually, or reactivate learning mode by adding a `learn`
 # parameter with the name of the file to be fed.
 
 # Uncomment the next line to remain in learning mode at all times.
@@ -90,8 +90,7 @@ os-sandbox=subprocess
 #env=HOME=.
 #env=USER=pysandbox
 #env=*_API_KEY=${*_API_KEY}  # Add access to all API_KEY :-(
-#unenv=OPENAI_API_KEY
-env=SB_PORT=${SP_PORT:=8000}
+#unenv=OPENAI_API_KEY  # but remove OPENAI api key ;-)
 #env=TEMP=${TEMP:=${TMP}}  # Accept to use the temp files
 
 # Here, the rules learned for os.environ
@@ -141,12 +140,8 @@ ignore=*.log
 #net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services for all network
 #net=ALLOW|tcp|0.0.0.0/0|80|OUT  # Can call HTTP services for all network
 
-# TODO: The dns use the libc implementation, without Python
-#net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
-#net=ALLOW|udp|0.0.0.0/0|53|IN
-
 #net=DENY|tcp|localhost|*|IN  # Deny locahost
-#net=ALLOW|tcp|ip6-localhost|${PORT:=8000}|IN  # Allow ${PORT} or 8000 to locahost
+#net=ALLOW|tcp|ip6-localhost|${PORT:=8000}|IN  # Allow ${PORT} or 8000 to ip6-locahost
 
 
 # Denied intranet
@@ -159,16 +154,15 @@ ignore=*.log
 
 # here, the rules learned for socket
 # <learning_guard_socket>
+
 # </learning_guard_socket>
 
 #######################################################################################
 # Limit python features in the sandbox
+# You can limit the import to a white list.
 #python-import=a,b,c
 #python-import=*  # Accept all import
 
 # <learning_guard_import>
 
 # </learning_guard_import>
-
-# FIXME
-python-import=*
