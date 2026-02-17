@@ -37,18 +37,16 @@ Other OS-level sandbox solutions will be integrated, including `Docker` of cours
 
 If your application itself runs in a container, it may not be able to launch another inside (depending on the parameters). This is also the case for solutions relying on Linux *capabilities*.
 
-| Solution          |   Privileges Required    | Docker Socket Mount |  Security   |  Isolation  |
-|-------------------|:------------------------:|:-------------------:|:-----------:|:-----------:|
-| Docker-in-Docker  | Yes<br/> (--privileged)  |     Optional        | Low         | HighMedium  |
-| Podman            |            No            |         No          |    High     |    High     |
-| Kubernetes (DinD) |     Yes (privileged)     |      Optional       |     Low     |   Medium    |
-| Kaniko            |            No            |         No          |    High     |    High     |
-| Buildah           |            No            |         No          |    High     |    High     |
+| Solution          |   Privileges Required    | Docker Socket Mount | Security |  Isolation  |
+|-------------------|:------------------------:|:-------------------:|:--------:|:-----------:|
+| Docker-in-Docker  | Yes<br/> (--privileged)  |     Optional        |   Low    | High/Medium |
+| Podman            |            No            |         No          |   High   |    High     |
+| Kubernetes (DinD) |     Yes (privileged)     |      Optional       |   Low    |   Medium    |
 
-Different solutions will be proposed (pre-launch of the sandbox in another container, in parallel; use of emulation solutions, like qemu, that do not require privileges, etc.).
+Different solutions will be proposed (pre-launch of the sandbox in another container, in parallel; use of emulation solutions, like *qemu*, that do not require privileges, etc.).
 
 ## Denial of Service
-Generated code may never terminate and cause a denial of service. It's not easy to manage this. Indeed, it is easy to identify that a `@sandbox` function is taking too long to respond, but it is very difficult to interrupt it. It is not possible to kill a thread, unlike a process. A simple malicious regular expression can be exploited to kill the FastAPI server (see [Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html)).
+Generated code may never terminate and cause a denial of service. It's not easy to manage this. Indeed, it is easy to identify that a `@sandbox` function is taking too long to respond, but it is very difficult to interrupt it. It is not possible *to kill a thread*, unlike a process. A simple malicious regular expression can be exploited to kill the FastAPI server (see [Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html)).
 
 We are considering a solution to identify these situations and kill the offending function if necessary.
 

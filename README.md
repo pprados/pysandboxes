@@ -73,8 +73,9 @@ Our solution helps reduce the following risks:
   - [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
   - [X] **Token Theft**: Accessible files are filtered.
   - [X] **Remote Access**: Network and code actions are limited.
-  - [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (not yet implemented).
   - [ ] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules (not yet implemented).
+  - [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (not yet implemented).
+  - [ ] **Malicious syntax**: The syntax of python code may be filtered
 
 ---
 # Principle
@@ -147,7 +148,7 @@ When the application is stopped, a `.pysandboxes` file is created in the current
 From now on, during subsequent launches, the application runs by limiting the application's capabilities to the previously learned whitelist.
 
 If you want to restart a learning session to add missing rules:
-- activate the `learn` parameter in the file
+- activate the `learn` parameter in the configuration file
 - or add `--learn=.py-sandboxes` (or just `--learn`) when you start `python-sb`
 
 This way, only the missing rules will be added to the file.
@@ -214,17 +215,21 @@ The `init_fn` parameter is optional. It can contain a function that will be invo
 ```python
 def init_log_level():
     sandboxes_level = logging.WARNING
-    format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
+    uvicorn_level = logging.WARNING
+    format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
+    if is_in_sandbox():
+        format = "  " + format
     logging.basicConfig(
         level=min(sandboxes_level, logging.INFO),
         format=format
     )
-    logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("pysandboxes").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(sandboxes_level)
+    logging.getLogger("asyncio").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
+    logging.getLogger("pysandboxes").setLevel(sandboxes_level)
+    logger.setLevel(logging.INFO)
 
 def init_fn():
     init_log_level()
@@ -239,7 +244,7 @@ async def main():
     ...
 
 if __name__ == "__main__":
- pysandboxes.run(main())  # in place of asyncio.run(main())
+  pysandboxes.run(main())  # in place of asyncio.run(main())
 ```
 
 Note the following pattern, which involves calling the same initialization function in `main()` and in the sandbox.
@@ -258,17 +263,17 @@ async def main():
     await init_app()
     
 if __name__ == "__main__":
-    pysandboxes.run(main(),init_fn=init_app)  # in place of asyncio.run(main())
+    pysandboxes.run(main(), init_fn=init_app)  # in place of asyncio.run(main())
 
 ```
 
 If you want to restart a learning session to add missing rules:
-- Add `learn='.py-sandboxes` with `sandboxes`
-- Or add `learn='.py-sandboxes` with `run()`
+- Add `learn='.py-sandboxes'` with `sandboxes`
+- Or add `learn='.py-sandboxes'` with `run()`
 
 ```python
 pysandboxes.run(main(),
-                learn='.py-sandboxes'
+                learn='.py-sandboxes',
                 )
 ```
 
@@ -281,7 +286,7 @@ To declare that a function must run in the sandbox, simply annotate it with `@sa
 from pysandboxes import sandbox
 
 @sandbox
-def my_function_in_sandbox(param) -> Any:
+def my_function_in_sandbox(param):
     ...
 ```
 
@@ -313,8 +318,8 @@ Our solution offers multiple layers of security:
   - another sandbox at the OS level (**os-sandbox**)
 
 The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel.
-For example, database access is ften done via compiled C drivers. See the appendix for more details.
-Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. We want to prevent abusive use of our code.
+For example, database access is often done via compiled C drivers. See the appendix for more details.
+Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your .project without ensuring it is safe. We want to prevent abusive use of our code.
 
 Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.
 
@@ -351,12 +356,9 @@ The feature proposed by each technologies:
 
 ---
 # Integration in a module
-It is possible to use the solution to integrate it into a module. To do this, the `.py-sandboxes` file must be placed at the root of your module, as a resource.
+It is possible to use the solution to integrate it into a module, when you install your *wheel*. To do this, the `.py-sandboxes` file must be placed at the root of your module, as a resource.
 
-**TODO: code and check**
-
-When the sandbox is activated, the code searches for the caller's module and checks whether the resource exists. If so, it is used to apply the security rules.
-Otherwise, the same file is searched for in the working directory.
+When the sandbox is activated, the code searches for the caller's module and checks whether the resource exists. If so, it is used to apply the security rules. Otherwise, the same file is searched for in the working directory.
 
 If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file
 
@@ -417,8 +419,11 @@ except SandBoxError:
   ...  # Rule violated
 ```
 
+> Exceptions are thrown if violations are detected by *py-sandbox* and not by *os-sandbox*. 
+
 ## How to activate the sandbox in a notebook?
 In a cell, you can use `with sandboxes()` or `run()`.
+
 Between cells use:
 ```python
 sb = sandboxes().__enter__()
@@ -454,15 +459,14 @@ We invite you, after each update, to test your application without learning. Thi
 
 ##  Do I have any new rule violations since the update?
 Indeed, new ones can be proposed. As the approach is based on denial by default, these rules are rejected. Restart a learning session to add what is necessary.
+Use the minor version to fix the version to used. The minor version is incremeted for each new rules.
 
 ## Debugging
-When using an external sandbox, two processes are launched. Your development environment is normally capable of handling this. A breakpoint in a `@sandbox` function will interrupt the program in the sandbox process. Stack trace analysis will not be easy, as there is no complete trace of the call.
+When using an external sandbox, two processes are launched. Your development environment is normally capable of handling this, if you use `os-sandbox=subprocess`. A breakpoint in a `@sandbox` function will interrupt the program in the sandbox process. Stack trace analysis will not be easy, as there is no complete trace of the call.
 
 If an exception is generated at this level, the stack trace will be adjusted to show the direct path, abstracting the communication layer.
 
-Otherwise, you can temporarily remove the annotation to see more clearly.
-
-## OS-sandbox debugging
+### OS-sandbox debugging
 To know precisely the parameters used to launch an **OS-sandbox**, and to test the behavior,
 use `python-sb`.
 
@@ -470,18 +474,19 @@ Depending on the technologies, it may be possible to connect directly to the **o
 
 Consult the corresponding documentation.
 
-## How to disable py-sandbox?
+### How to disable py-sandbox?
 Sometimes the sandbox disrupts development. There are several approaches to disabling the sandbox while adjusting the code.
-
-  - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
-  - Use the `learn=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
-  - Use the special `os-provider=none` to desactivate all the `@sandbox` annotations
 
 To disable only one rule family, use the generic acceptance settings.
 - `env=*=${*}`
 - `bind=/,/`
 - `net=ALLOW|*|*|*|*`
 - `import=*`
+
+Or
+- Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
+- Use the `learn=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
+- Use the special `os-provider=none` to desactivate all the `@sandbox` annotations
 
 ## How to package the project
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.
