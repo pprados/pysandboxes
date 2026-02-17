@@ -1,5 +1,6 @@
 import logging
-import os
+import shutil
+import sys
 from pathlib import Path
 from typing import Dict, List
 
@@ -21,24 +22,25 @@ def _deactivate_all_rules():
     _deactivate_guard_import()
 
 
-def _activate_guard_import():
+def _activate_guard_import_for_tests():
     from pysandboxes.guard_import import activate_guard_import, \
         patch_rules as import_path_rules
     from pysandboxes.guard_files import patch_rules as file_patch_rules
     from pysandboxes.guard_socket import patch_rules as socket_path_rules
     remove_modules()  # FIXME: nécessaire ?
+    assert "io" not in sys.modules
     activate_guard_import(
         {
             **file_patch_rules(),
             **socket_path_rules(),
             **import_path_rules(),
         },
-        tuple(["*"]),  # Import all modules
+        ("*",),  # Import all modules
     )
 
 
 def _reset_rules():
-    _activate_guard_import()  # FIXME: doublon
+    _activate_guard_import_for_tests()  # FIXME: doublon
     yield
     _deactivate_all_rules()
 
@@ -71,8 +73,9 @@ def files(tmp_path) -> Dict[str, Path]:
     # It's executer without patch.
     init_log_level()
     _deactivate_all_rules()
-    _activate_guard_import()
+    _activate_guard_import_for_tests()
     tmp_path = Path("/tmp/test")
+    shutil.rmtree(tmp_path)
     tmp_path.mkdir(exist_ok=True)
     (tmp_path / "visible.txt").write_text("Visible")
     (tmp_path / "ignore.log").write_text("Should be ignored")
@@ -134,6 +137,7 @@ def files(tmp_path) -> Dict[str, Path]:
     }
 
 
+import os
 if "PYTEST_RUN_CONFIG" in os.environ:
     def activate_guard_files_rules(rules: ConfigLines) -> None:
         errors = []
@@ -155,6 +159,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
                 config=ConfigLine("Hack for pytest", Path(), 0)
             ))
 
+        import os
         username = pwd.getpwuid(os.getuid())[0]
         new_file_rules.append(BindRule(
             source=f"/tmp/pytest-of-{username}/",

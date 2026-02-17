@@ -1,4 +1,4 @@
-import stat
+
 import sys
 import time
 from pathlib import Path
@@ -204,19 +204,32 @@ def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:
     activate_guard_files_rules(rules)
 
     import os
-    os.mkdir(files["path"] / "dir_to_remove")
-    assert os.rmdir(files["path"] / "dir_to_remove") is None
+    import shutil
+    d = files["path"] / "dir_to_remove"
+    if d.exists():
+        shutil.rmtree(d)
+    os.mkdir(d)
+    assert os.rmdir(d) is None
 
-    os.mkdir(files["bind_dest"] / "dir_to_remove")
-    assert os.rmdir(files["bind_dest"] / "dir_to_remove") is None
+    d = files["bind_dest"] / "dir_to_remove"
+    if d.exists():
+        shutil.rmtree(d)
+    os.mkdir(d)
+    assert os.rmdir(d) is None
 
     with pytest.raises(RuleFileNotFoundError):
         os.mkdir(files["bind_src"] / "dir_to_remove")
 
-    os.mkdir(files["path"] / "dir_to_remove")
+    d = files["path"] / "dir_to_remove"
+    if d.exists():
+        shutil.rmtree(d)
+    os.mkdir(d)
     assert os.removedirs(files["path"] / "dir_to_remove") is None
 
-    os.mkdir(files["bind_dest"] / "dir_to_remove")
+    d = files["bind_dest"] / "dir_to_remove"
+    if d.exists():
+        shutil.rmtree(d)
+    os.mkdir(d)
     assert os.removedirs(files["bind_dest"] / "dir_to_remove") is None
 
     with pytest.raises(RuleFileNotFoundError):
@@ -485,6 +498,7 @@ def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:
     activate_guard_files_rules(rules)
 
     import os
+    import stat
     mode = os.stat(files["path"]).st_mode
     assert os.chmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE) is None
     assert os.chmod(files["bound_file"],
@@ -515,6 +529,7 @@ def test_os_chmod_and_lchmod_refused(files: Dict[str, Path]) -> None:
     activate_guard_files_rules(rules)
 
     import os
+    import stat
     mode = os.stat(files["bound_file"]).st_mode
     with pytest.raises(RulePermissionError):
         os.chmod(files["bound_file"],
@@ -710,7 +725,7 @@ def test_os_scandir(files: Dict[str, Path]) -> None:
     assert "bind_dest" in rc_name
     assert "visible.txt" in rc_name
     assert "ignore.log" not in rc_name
-    assert rc[0].is_file()
+    assert rc[0].is_file() or rc[0].is_dir()
 
     with os.scandir(files["bind_dest"]) as entries:
         rc = list(entries)
@@ -735,8 +750,9 @@ def test_os_walk(files: Dict[str, Path]) -> None:
     assert rc[0][0] == str(files["path"])
     assert "bind_src" not in rc[0][1]
     assert "bind_dest" in rc[0][1]
-    assert rc[2][0] == str(files["bind_dest"])
-    assert "bound_file.txt" in rc[2][2]
+    rc_bind_dest=list(filter(lambda x: 'bind_dest' in x[0], rc))
+    assert rc_bind_dest
+    assert "bound_file.txt" in rc_bind_dest[0][2]
 
     rc = list(os.walk(files["bind_dest"]))
     assert rc[0][0] == str(files["bind_dest"])

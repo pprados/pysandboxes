@@ -77,7 +77,7 @@ def test_pathlib_is(files):
     assert not pathlib.Path(files["bind_dest"] / "to_write.txt").is_fifo()
     assert pathlib.Path(files["path"]).is_dir()
     assert pathlib.Path(files["bind_dest"]).is_dir()
-    assert pathlib.Path(files["path"] / "to_write.txt").is_file()
+    assert pathlib.Path(files["path"] / "visible.txt").is_file()
     assert pathlib.Path(files["bind_dest"] / "bound_file.txt").is_file()
     assert not pathlib.Path(files["path"]).is_mount()
     assert not pathlib.Path(files["bind_dest"]).is_mount()
@@ -114,14 +114,19 @@ def test_pathlib_glob(files):
         ConfigLine(f"ignore=*.log", NonePath, 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"ro-bind=./pysandboxes,./pysandboxes", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
     import pathlib
+    result = [f for f in pathlib.Path("pysandboxes").glob("**/*.template")]
+    assert pathlib.Path("templates/py-sandbox.template") in result
+
     result = [pathlib.Path(f).name for f in pathlib.Path(files['path']).glob("*")]
     assert "ignore.log" not in result
     assert "bound.txt" in result
     assert "visible.txt" in result
+
     result = [pathlib.Path(f).name for f in pathlib.Path(files['bind_dest']).glob("*")]
     assert "bound_file.txt" in result
 
@@ -438,8 +443,8 @@ def test_pathlib_walk(files):
     assert rc[0][0] == pathlib.Path(files["path"])
     assert "bind_src" not in rc[0][1]
     assert "bind_dest" in rc[0][1]
-    assert rc[2][0] == pathlib.Path(files["bind_dest"])
-    assert "bound_file.txt" in rc[2][2]
+    assert rc[1][0] == pathlib.Path(files["bind_dest"])
+    assert "bound_file.txt" in rc[1][2]
 
     rc = list(pathlib.Path(files["bind_dest"]).walk())
     assert rc[0][0] == pathlib.Path(files["bind_dest"])

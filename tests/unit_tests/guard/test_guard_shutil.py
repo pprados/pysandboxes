@@ -110,7 +110,8 @@ def test_shutil_copytree_and_move(files):
     activate_guard_files_rules(rules)
 
     import shutil
-    (files["path"] / "tmp").rmdir()
+    if (files["path"] / "tmp").exists():
+        (files["path"] / "tmp").rmdir()
     shutil.copytree(files["bind_dest"], files["path"] / "tmp") is None
     shutil.move(files["path"] / "tmp", files["path"] / "tmp2") is None
     shutil.rmtree(files["path"] / "tmp2")
@@ -142,3 +143,41 @@ def test_shutil_make_archive(files):
         format="zip",
         root_dir=files["bind_dest"]  # dossier à compresser
     )
+
+def test_shutil_rmtree(files):
+    rules = [
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import shutil
+    import os
+    d = files["path"] / "dir_to_remove"
+    d.mkdir()
+    (d / "inner").mkdir()
+    shutil.rmtree(d,ignore_errors=False, onerror=None, onexc=None, dir_fd=None)
+
+    import os
+    d = files["bind_dest"] / "dir_to_remove"
+    d.mkdir()
+    (d / "inner").mkdir()
+    shutil.rmtree(d,ignore_errors=False, onerror=None, onexc=None, dir_fd=None)
+
+
+def test_shutil_move(files):
+    rules = [
+        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
+        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import shutil
+    import os
+    s = files["path"] / "dir_to_move"
+    d = files["path"] / "dir_moved"
+    s.mkdir()
+    (s / "inner").mkdir()
+    shutil.move(s,d,copy_function=shutil.copy2)

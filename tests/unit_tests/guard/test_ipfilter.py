@@ -9,7 +9,7 @@ from pysandboxes.guard_socket import parse_rules
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
 from pysandboxes.sb_types import ConfigLine
-from unit_tests.guard.test_guard_io import _deactivate_all_rules, _activate_guard_import
+from unit_tests.guard.test_guard_io import _deactivate_all_rules, _activate_guard_import_for_tests
 
 
 @pytest.fixture(autouse=True)
@@ -18,7 +18,7 @@ def reset() -> None:
     # It's executer without patch.
     init_log_level()
     _deactivate_all_rules()
-    _activate_guard_import()
+    _activate_guard_import_for_tests()
 
 
 def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tuple[

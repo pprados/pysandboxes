@@ -1,6 +1,4 @@
---set-env=*=${*}
---bind=/,/
---net=ALLOW|any|0.0.0.0/0|*|OUT
---net=ALLOW|any|0.0.0.0/0|*|IN
---python-api=ALLOW:*
---python-api-import=ALLOW:*
+set-env=*=${*}
+bind=/,/
+net=ALLOW|*|*|*|*
+python-import=*

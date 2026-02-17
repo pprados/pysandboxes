@@ -424,6 +424,7 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
 
 
 def _special_caller():
+    return False  # FIXME
     frame = sys._getframe(2)
     filename = None
     if inspect.isframe(frame):
@@ -562,7 +563,7 @@ def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
                 remapped = path
             else:
                 _raise_access(path)
-        return func(path=path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+        return func(path=remapped, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
 
     return wrapper
 
@@ -673,6 +674,51 @@ def _wrap_pathlib_Path_iterdir(func: Callable) -> Callable:  # FIXME
     def wrapper(self):
         # result = func(self)  # FIXME: pour recherche de bug
         return func
+
+    return wrapper
+
+
+def _wrap_pathlib_Path_glob(func: Callable) -> Callable:  # FIXME
+    @functools.wraps(func)
+    def wrapper(self, pattern, *, case_sensitive=None, recurse_symlinks=False):
+
+        remapped, rule = _apply_dest_to_src_rules(self, write=False)
+        if not remapped:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(self, write=False))
+                remapped = self
+            else:
+                _raise_access(self)
+
+        def filter(it):
+            abs_remapper=os.path.realpath(remapped)
+            for name in it:
+                remapped_filter, rule = _apply_src_to_dest_rules(
+                    str(name),
+                    accept_src=False,accept_dest=True)
+                if remapped_filter:
+                    if not str(self).startswith("/"):
+                        remapped_filter=remapped_filter[len(abs_remapper)+1:]
+                    if remapped_filter == "":
+                        remapped_filter="."
+                    # yield Path(remapped_filter).relative_to(self)
+                    yield Path(remapped_filter)
+
+        do_filter = filter(
+            func(Path(remapped),
+                 pattern=pattern,
+                 case_sensitive=case_sensitive,
+                 recurse_symlinks=recurse_symlinks))
+        return do_filter
+        # x = list(filter(
+        #              func(Path(remapped),pattern=pattern,
+        #                                  case_sensitive=case_sensitive,
+        #                                  recurse_symlinks=recurse_symlinks)))
+        # z = list(x)
+        # return func(self, pattern=pattern, case_sensitive=case_sensitive,
+        #             recurse_symlinks=recurse_symlinks).map(
+        #
+        # )
 
     return wrapper
 
@@ -1041,9 +1087,10 @@ def _wrap_pathlib(func: Callable) -> Callable:
 
 
 def _wrap__os(module: ModuleType) -> ModuleType:
-    # FIXME del sys.modules["os"]
+    if "os" in sys.modules:
+        del sys.modules["os"]
     import os
-    assert os.open.__pysandbox__ == True
+    assert os.open.__pysandbox__
     return os
 
 
@@ -1052,7 +1099,7 @@ def _wrap__io(module: ModuleType) -> ModuleType:
         if "io" in sys.modules:
             del sys.modules["io"]  # FIXME: nécessaire ?
         import io
-        assert io.open.__pysandbox__ == True
+        assert io.open.__pysandbox__
         return io
     return module
 
@@ -1180,18 +1227,18 @@ _default_rules = rules = {
     # ALLOW os.path.abspath
     # ALLOW os.path.basename
     # ALLOW os.path.dirname
-    "os.path.exists": _f(_wrap_os_path_exists, write=False),
-    "os.path.lexists": _f(_wrap_filename, write=False),
+    # "os.path.exists": _f(_wrap_os_path_exists, write=False),
+    # "os.path.lexists": _f(_wrap_filename, write=False),
     # ALLOW os.path.expanduser
     # ALLOW os.path.expandvars
-    "os.path.getatime": _f(_wrap_filename, write=False),
-    "os.path.getmtime": _f(_wrap_filename, write=False),
-    "os.path.getctime": _f(_wrap_filename, write=False),
-    "os.path.getsize": _f(_wrap_filename, write=False),
+    #     "os.path.getatime": _f(_wrap_filename, write=False),
+    #     "os.path.getmtime": _f(_wrap_filename, write=False),
+    #     "os.path.getctime": _f(_wrap_filename, write=False),
+    #     "os.path.getsize": _f(_wrap_filename, write=False),
     # ALLOW os.path.isabs
-    "os.path.isfile": _f(_wrap_os_path_is, write=False),
-    "os.path.isdir": _f(_wrap_os_path_is, write=False),
-    "os.path.islink": _f(_wrap_os_path_is, write=False),
+    #     "os.path.isfile": _f(_wrap_os_path_is, write=False),
+    #     "os.path.isdir": _f(_wrap_os_path_is, write=False),
+    #     "os.path.islink": _f(_wrap_os_path_is, write=False),
     # ALLOW os.path.ismount
     # ALLOW os.path.join
     # ALLOW os.path.normcase
@@ -1222,7 +1269,7 @@ _default_rules = rules = {
     # ALLOW pathlib.Path.write_bytes
     # ALLOW pathlib.Path.write_text
     # ALLOW pathlib.Path.iterdir
-    # ALLOW pathlib.Path.glob
+    "pathlib.Path.glob": _f(_wrap_pathlib_Path_glob),
     # ALLOW pathlib.Path.rglob
     # ALLOW pathlib.Path.walk
     # ALLOW pathlib.Path.relative_to
@@ -1249,12 +1296,13 @@ _default_rules = rules = {
     # ALLOW shutil.disk_usage
     # ALLOW shutil.make_archive
     # ALLOW shutil.move
-    # ALLOW shutil.rmtree
+    # "shutil.rmtree": _f(_wrap_filename, write=True),
     # ALLOW shutil.which
 
     "tempfile._os": _f(_wrap__os),
     "pathlib._local.io": _f(_wrap__io),
     "pathlib._local.os": _f(_wrap__os),
+    "shutil.os": _f(_wrap__os),
 
     # builtins
     "builtins.open": _f(_wrap_buitins_open),

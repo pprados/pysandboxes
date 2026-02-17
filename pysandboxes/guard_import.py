@@ -233,25 +233,30 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
 _guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
 
-
+_activated=False  # FIXME
 def _activate_patch_import(
         patch_rules: PatchRules,
 ) -> bool:
+    global _activated
     import sys
     if _guard_finder not in sys.meta_path:
         global _patch_rules
+        assert not _activated
         _patch_rules = patch_rules
 
         sys.meta_path.insert(0, _guard_finder)
+        _activated = True
         return True
     else:
         logger.debug("Guard_import was already activated.")
+        assert _activated
         return False
 
 
 # Modules to not remove from sys.modules, and to wait the lazy patch
 _not_refresh_modules: Set[str] = (
     {
+        'sys',
         'asyncio',
         'builtins',
         'concurrent',
@@ -270,6 +275,7 @@ _not_refresh_modules: Set[str] = (
 
 def remove_modules() -> None:
     import sys
+    logger.debug("Remove modules")
     to_remove = set()
     for k, m in dict(sys.modules).items():
         if k.startswith("_pytest") or k.startswith("pytest"):
@@ -296,7 +302,7 @@ def remove_modules() -> None:
         if k in sys.modules:
             if k not in sys.builtin_module_names:
                 del sys.modules[k]
-    # FIXME assert "io" not in sys.modules (il revient avec les patchs de pathlib
+    assert "io" not in sys.modules
 
 
 def patch_rules() -> Dict[str, Callable]:
@@ -308,9 +314,11 @@ def activate_guard_import(
         rules: ImportRules,
 ) -> None:
     global _rules
+    global _activated
     patch_rules:PatchRules = _conv_patch_rules(patch_rules)
-    if _rules:
+    if _activated:
         logger.debug("Guard_files was already activated.")
+        return
     if _activate_patch_import(patch_rules):
         for module in _not_refresh_modules:
             if module in patch_rules:
@@ -414,5 +422,5 @@ if "PYTEST_RUN_CONFIG" in os.environ:
     def _deactivate_guard_import():
         import sys
         global _rules
-        _rules = ()
+        _rules = ("*",)
         remove_modules()
