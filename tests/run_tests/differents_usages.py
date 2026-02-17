@@ -54,8 +54,8 @@ async def arun_exit():
 
 async def asynchronize_function():
     logger.info("async: Call 'asynchronize_function()'")
-    # rc = await arun_in_sandbox(os.getpid())
-    rc = await arun_exit()
+    rc = await arun_in_sandbox(os.getpid())
+    # rc = await arun_exit()
     assert rc == 42
 
 @sandbox

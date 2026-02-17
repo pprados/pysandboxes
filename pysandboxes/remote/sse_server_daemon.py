@@ -298,9 +298,9 @@ class SSEServerDaemon(BaseSSESandbox):
                         use_py_sandbox=all_rules.use_py_sandbox,
                         learning_path=all_rules.learning_path,
                         learn=all_rules.learn,
-                        envs_rules=(),  # FIXME: pourquoi épurer?
-                        socket_rules=(),  # TODO: need short copy for AllRules?
-                        file_rules=(),
+                        envs_rules=(),
+                        socket_rules=all_rules.socket_rules,
+                        file_rules=all_rules.file_rules,
                         )
 
     async def start(self,
@@ -378,7 +378,7 @@ class SSEServerDaemon(BaseSSESandbox):
         while _active_requests > max_pending:
             if ((asyncio.get_event_loop().time() - start_time) >=
                     TIMEOUT_FOR_STOP_DAEMON):
-                logger.info("Impossible to stop %i the current request",
+                logger.info("Impossible to stop %i current request",
                             _active_requests - max_pending)
                 break
             await asyncio.sleep(POLLING_DELAY)

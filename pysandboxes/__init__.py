@@ -1,11 +1,14 @@
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-# TODO: docstring is not accesible with this approach
-# TODO: ajouter is_in_sandbox()
+if TYPE_CHECKING:
+    from .e import *
+    from .sandboxes_api import sandboxes,run,sandbox,is_in_sandbox
+
 _api = {
     "sandboxes",
     "sandbox",
     "run",
+    "is_in_sandbox"
 }
 _exception = {
     "SandBoxError",
