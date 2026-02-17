@@ -4,8 +4,9 @@ import inspect
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Optional, Union, Callable, Awaitable, Any, Tuple, List, \
-    Iterator, Dict
+    Iterator, Dict, Set
 
 from .sb_types import ConfigLines, ConfigLine, Envs
 
@@ -276,3 +277,22 @@ def check_mixte_async_async():
             pass  # Ignore
         else:
             raise
+
+def follow_links_executable(executable: Path,
+                            all_paths:Set[Path]) -> None:
+    if executable.parents[0].name == "bin":
+        if str(executable.parent.parent) not in all_paths:
+            all_paths.add(executable.parent.parent)
+        else:
+            return all_paths
+    else:
+        if executable not in all_paths:
+            all_paths.add(executable)
+        else:
+            return
+    if executable.is_symlink():
+        try:
+            follow_links_executable(executable.resolve(strict=True), all_paths)
+        except FileNotFoundError:
+            raise RuntimeError("Impossible to resolve the sys.executable `%s`",
+                               sys.executable)

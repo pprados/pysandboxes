@@ -6,12 +6,6 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import files, activate_guard_files_rules, _reset_rules
 
 
-@pytest.fixture(autouse=True)
-def reset_rules():
-    yield  from _reset_rules()
-
-
-
 def test_os_path_abspath(files):
     rules = [
         ConfigLine(f"ignore=*.log",Path(),0),
@@ -92,6 +86,7 @@ def test_os_path_samefile(files):
     import os
     assert os.path.samefile(files["path"] / "visible.txt",
                             files["path"] / "visible.txt") is True
+    os.stat(files["bind_dest"] / "bound_file.txt")
     assert os.path.samefile(files["bind_dest"] / "bound_file.txt",
                             files["bind_dest"] / "bound_file.txt") is True
     assert os.path.samefile(files["path"] / "visible.txt",

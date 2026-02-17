@@ -1,18 +1,32 @@
+import logging
+import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 import pytest
 
 from pysandboxes import RuleFileNotFoundError
-from pysandboxes.guard_files import activate_guard, parse_rules
+from pysandboxes.guard_files import activate_guard, parse_rules, BindRule
+from pysandboxes.guard_import import remove_modules
 from pysandboxes.sb_types import ConfigLines, ConfigLine
+from pysandboxes.tools import follow_links_executable
 
 
-def _reset_rules():
-    from pysandboxes.guard_import import _deactivate_guard_import, \
-        activate_guard_import, patch_rules as import_path_rules
-    from pysandboxes.guard_files import _deactivate_guard_files, patch_rules as file_patch_rules
-    from pysandboxes.guard_socket import _deactivate_guard_sockets, patch_rules as socket_path_rules
+def _deactivate_all_rules():
+    from pysandboxes.guard_import import _deactivate_guard_import
+    from pysandboxes.guard_files import _deactivate_guard_files
+    from pysandboxes.guard_socket import _deactivate_guard_sockets
+    _deactivate_guard_files()
+    _deactivate_guard_sockets()
+    _deactivate_guard_import()
+
+
+def _activate_guard_import():
+    from pysandboxes.guard_import import activate_guard_import, \
+        patch_rules as import_path_rules
+    from pysandboxes.guard_files import patch_rules as file_patch_rules
+    from pysandboxes.guard_socket import patch_rules as socket_path_rules
+    remove_modules()  # FIXME: nécessaire ?
     activate_guard_import(
         {
             **file_patch_rules(),
@@ -21,10 +35,12 @@ def _reset_rules():
         },
         tuple(["*"]),  # Import all modules
     )
+
+
+def _reset_rules():
+    _activate_guard_import()  # FIXME: doublon
     yield
-    _deactivate_guard_files()
-    _deactivate_guard_sockets()
-    _deactivate_guard_import()
+    _deactivate_all_rules()
 
 
 @pytest.fixture(autouse=True)
@@ -32,10 +48,30 @@ def reset_rules():
     _reset_rules()
 
 
+def init_log_level():
+    sandboxes_level = logging.DEBUG
+    uvicorn_level = logging.WARNING
+    format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
+    logging.basicConfig(
+        level=min(sandboxes_level, logging.INFO),
+        format=format
+    )
+
+    logging.getLogger("asyncio").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn").setLevel(uvicorn_level)
+    logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
+    logging.getLogger("pysandboxes").setLevel(sandboxes_level)
+
+
 @pytest.fixture
 def files(tmp_path) -> Dict[str, Path]:
     # Create test files and symlinks
     # It's executer without patch.
+    init_log_level()
+    _deactivate_all_rules()
+    _activate_guard_import()
     tmp_path = Path("/tmp/test")
     tmp_path.mkdir(exist_ok=True)
     (tmp_path / "visible.txt").write_text("Visible")
@@ -68,6 +104,7 @@ def files(tmp_path) -> Dict[str, Path]:
             follow_symlinks=False):
         (tmp_path / "bind_src/link_relative_to_bind_src").symlink_to("bound_file.txt")
 
+    # TODO: yield and remove ?
     return {
         "path": tmp_path,
         "visible": tmp_path / "visible.txt",
@@ -97,11 +134,36 @@ def files(tmp_path) -> Dict[str, Path]:
     }
 
 
-def activate_guard_files_rules(rules: ConfigLines) -> None:
-    errors = []
-    file_rules, _ = parse_rules(rules, errors)
-    activate_guard(file_rules)
-    assert not errors
+if "PYTEST_RUN_CONFIG" in os.environ:
+    def activate_guard_files_rules(rules: ConfigLines) -> None:
+        errors = []
+        _deactivate_all_rules()
+        file_rules, _ = parse_rules(rules, errors)
+        assert not errors
+
+        # Add more rules for pytests
+        import pwd
+        import sys
+        new_file_rules:List[BindRule]=[]
+        exe_paths=set()
+        follow_links_executable(Path(sys.executable), exe_paths)
+        for p in exe_paths:
+            new_file_rules.append(BindRule(
+                source=str(p),
+                dest=str(p),
+                write=True,
+                config=ConfigLine("Hack for pytest", Path(), 0)
+            ))
+
+        username = pwd.getpwuid(os.getuid())[0]
+        new_file_rules.append(BindRule(
+            source=f"/tmp/pytest-of-{username}/",
+            dest=f"/tmp/pytest-of-{username}/",
+            write=True,
+            config=ConfigLine("Hack for pytest", Path(), 0)
+        ))
+        # activate_guard(tuple(list(file_rules) + new_file_rules))
+        activate_guard(tuple(list(file_rules) + new_file_rules))
 
 
 def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):

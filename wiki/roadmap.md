@@ -11,6 +11,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [X] Controle import list
 - [X] Controle file and network access
 - [X] Controle life cycle of the daemon (restart if necessary)
+- [ ] Use sys.audit
 - [ ] Guard some criticals methods in Python (spawn, shell, etc.)
 - [ ] New **OS-sandboxes**
   - [X] None 

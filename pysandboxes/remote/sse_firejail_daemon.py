@@ -147,6 +147,7 @@ def _follow_links(filename: Union[str, Path], whitelist: WhiteList) -> None:
                            sys.executable)
 
 
+# FIXME: remove
 def _follow_links_executable(executable: Path, whitelist: WhiteList) -> None:
     if executable.parents[0].name == "bin":
         if str(executable.parent.parent) not in whitelist:

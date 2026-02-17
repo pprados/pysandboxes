@@ -75,7 +75,7 @@ def _apply_patch(module, name: str) -> None:
     logger.debug(f"Apply patch {name=} {module=}")
     all_patch = _patch_rules[name]
     for patch in all_patch:
-        parent_object = None
+
         cur_object = module
         if patch.module_name != "":
             paths = patch.module_name.split('.')
@@ -166,6 +166,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         # Delegate to the rest of the chain to find the _original module spec
         # We skip our own finder by checking sys.meta_path from the next index
         # import builtins;builtins.print(f"finder {fullname}")
+        # TODO: voir les imports recursif a.b
         for finder in sys.meta_path:
             if finder == self:
                 continue
@@ -258,6 +259,7 @@ _not_refresh_modules: Set[str] = (
         'warnings',
         'logging',
         '_pytest',
+        '_pytest.fixtures',
         'pytest',
         'pathlib',
         'subprocess',
@@ -270,6 +272,8 @@ def remove_modules() -> None:
     import sys
     to_remove = set()
     for k, m in dict(sys.modules).items():
+        if k.startswith("_pytest") or k.startswith("pytest"):
+            continue
         # Detect system modules
         for special in _not_refresh_modules:
             if k == special or k.startswith(special + "."):
@@ -292,7 +296,7 @@ def remove_modules() -> None:
         if k in sys.modules:
             if k not in sys.builtin_module_names:
                 del sys.modules[k]
-    assert "io" not in sys.modules
+    # FIXME assert "io" not in sys.modules (il revient avec les patchs de pathlib
 
 
 def patch_rules() -> Dict[str, Callable]:

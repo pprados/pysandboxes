@@ -8,11 +8,6 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import files, activate_guard_files_rules, _reset_rules
 
 
-@pytest.fixture(autouse=True)
-def reset_rules():
-    yield from _reset_rules()
-
-
 def test_fileinput_input(files):
     errors = []
     rules = [
@@ -24,7 +19,8 @@ def test_fileinput_input(files):
     activate_guard_files_rules(rules)
 
     shutil.copy2(files["visible"], files["new_replace"])
-    with fileinput.input(files=[files["new_replace"]], inplace=True,
+    with fileinput.input(files=[files["new_replace"]],
+                         inplace=True,
                          backup=".bak") as f:
         for line in f:
             print(line.replace("Visible", "in place"), end="")

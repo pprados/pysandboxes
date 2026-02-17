@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from socket import socket
 from typing import Union, List, \
     Tuple  # Added Tuple and Any for mock_getaddrinfo clarity
 from unittest.mock import patch
@@ -17,12 +16,6 @@ from pysandboxes.guard_socket import (
 from pysandboxes.guard_socket import _deactivate_guard_sockets, \
     parse_rules
 from pysandboxes.sb_types import ConfigLine
-
-
-@pytest.fixture(autouse=True)
-def reset_rules():
-    yield
-    _deactivate_guard_sockets()
 
 
 @pytest.fixture
@@ -400,6 +393,8 @@ def test_invalid_sendTo():
     """
     Test if a invalide sendTo continue to raise an exception
     """
+    import socket
+
     with pytest.raises(BrokenPipeError):
         with socket.socket(socket.AF_INET,
                            socket.SOCK_STREAM  # Invalide type

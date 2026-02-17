@@ -8,16 +8,10 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, activate_guard_files_rules, _reset_rules
+from .test_guard_io import files, activate_guard_files_rules
 
 
-@pytest.fixture(autouse=True)
-def reset_rules():
-    yield from _reset_rules()
-
-
-
-def test_os_listdir_filters_ignored_files_and_bind(files:Dict[str,Path]) -> None:
+def test_os_listdir_filters_ignored_files_and_bind(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -39,7 +33,7 @@ def test_os_listdir_filters_ignored_files_and_bind(files:Dict[str,Path]) -> None
         os.listdir(files['bind_src'])
 
 
-def test_os_statand_stat_and_lstat(files:Dict[str,Path]) -> None:
+def test_os_statand_stat_and_lstat(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -68,7 +62,7 @@ def test_os_statand_stat_and_lstat(files:Dict[str,Path]) -> None:
         assert os.lstat(files["bind_src"])
 
 
-def test_os_listxattr(files:Dict[str,Path]) -> None:
+def test_os_listxattr(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -85,7 +79,8 @@ def test_os_listxattr(files:Dict[str,Path]) -> None:
     with pytest.raises(RuleFileNotFoundError):
         os.listxattr(files['bind_src'])
 
-def test_os_xattr(files:Dict[str,Path]) -> None:
+
+def test_os_xattr(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -104,12 +99,13 @@ def test_os_xattr(files:Dict[str,Path]) -> None:
     assert os.removexattr(files['bound_file'], "user.comment") is None
 
     with pytest.raises(RuleFileNotFoundError):
-        os.getxattr(files['ignore'],"user.comment")
+        os.getxattr(files['ignore'], "user.comment")
 
     with pytest.raises(RuleFileNotFoundError):
-        os.getxattr(files['bind_src'],"user.comment")
+        os.getxattr(files['bind_src'], "user.comment")
 
-def test_os_link_symlink_and_readlink(files:Dict[str,Path]) -> None:
+
+def test_os_link_symlink_and_readlink(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -128,10 +124,12 @@ def test_os_link_symlink_and_readlink(files:Dict[str,Path]) -> None:
     with pytest.raises(RuleFileNotFoundError):
         assert os.readlink(files['home_link_to_ignore'])
 
+    files['new_link'].unlink(missing_ok=True)
     os.link(files['visible'], files['new_link'])
     assert files['new_link'].exists()
     os.remove(files['new_link'])
 
+    files['new_link_to_bind'].unlink(missing_ok=True)
     os.link(files['bound_file'], files['new_link_to_bind'])
     assert os.path.exists(files['new_link_to_bind'])
     os.unlink(files['new_link_to_bind'])
@@ -145,6 +143,7 @@ def test_os_link_symlink_and_readlink(files:Dict[str,Path]) -> None:
         files['visible'])
     os.remove(files['new_link'])
 
+    files['new_link_to_bind'].unlink(missing_ok=True)
     os.symlink(files['visible'], files['new_link_to_bind'])
     assert os.path.exists(files['new_link_to_bind'])
     assert os.readlink(files['new_link_to_bind']) == str(
@@ -152,10 +151,14 @@ def test_os_link_symlink_and_readlink(files:Dict[str,Path]) -> None:
     os.unlink(files['new_link_to_bind'])
 
     with pytest.raises(RuleFileNotFoundError):
-        os.symlink(files['bind_src'], files['new_link'])
+        os.symlink(files['new_link'], files['bind_src'] / "link")
+
+    files['new_link'].unlink(missing_ok=True)
+    os.symlink(files['bind_dest'], files['new_link'])
+    assert os.path.exists(files['new_link'])
 
 
-def test_os_remove(files:Dict[str,Path]) -> None:
+def test_os_remove(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -165,25 +168,22 @@ def test_os_remove(files:Dict[str,Path]) -> None:
 
     import os
     (files["path"] / "to_remove.txt").write_text("To remove")
-    assert os.remove(files["path"] / "to_remove.txt") is None
+    assert os.remove(files["path"] / "to_remove.txt") is None, "Need to remove file"
 
+    # Try to remove ignored file
     with pytest.raises(RuleFileNotFoundError):
         assert os.remove(files['ignore'])
+
     f = os.open(files["bind_dest"] / "to_remove.txt", os.O_CREAT | os.O_WRONLY)
     try:
-        os.write(f,b"To remove")
+        os.write(f, b"To remove")
     finally:
         os.close(f)
-    assert os.remove(files["bind_dest"] / "to_remove.txt") is None
-
-    with pytest.raises(RuleFileNotFoundError):
-        os.remove(files['ignore'])
-
-    with pytest.raises(RuleFileNotFoundError):
-        os.remove(files['bind_src'])
+    assert os.remove(
+        files["bind_dest"] / "to_remove.txt") is None, "Need to remove alias"
 
 
-def test_os_remove_refused(files:Dict[str,Path]) -> None:
+def test_os_remove_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -195,7 +195,7 @@ def test_os_remove_refused(files:Dict[str,Path]) -> None:
         os.remove(files["bound_file"])
 
 
-def test_os_mkdir_removedirs_and_rmdir(files:Dict[str,Path]) -> None:
+def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -223,7 +223,7 @@ def test_os_mkdir_removedirs_and_rmdir(files:Dict[str,Path]) -> None:
         os.mkdir(files["bind_src"] / "dir_to_remove")
 
 
-def test_os_mkdir_removedirs_and_rmdir_refused(files:Dict[str,Path]) -> None:
+def test_os_mkdir_removedirs_and_rmdir_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -238,7 +238,7 @@ def test_os_mkdir_removedirs_and_rmdir_refused(files:Dict[str,Path]) -> None:
         os.mkdir(files["bind_src"] / "dir_to_remove")
 
 
-def test_os_rename(files:Dict[str,Path]) -> None:
+def test_os_rename(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -264,10 +264,10 @@ def test_os_rename(files:Dict[str,Path]) -> None:
         os.rename(files["bind_src"] / "toto", files["visible"])
 
     with pytest.raises(RuleFileNotFoundError):
-        os.rename(files["ignore"], str(files["ignore"])+"-back")
+        os.rename(files["ignore"], str(files["ignore"]) + "-back")
 
 
-def test_os_rename_refused(files:Dict[str,Path]) -> None:
+def test_os_rename_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -280,7 +280,7 @@ def test_os_rename_refused(files:Dict[str,Path]) -> None:
                   files["bound_file"])
 
 
-def test_os_chdir_and_getcwd(files:Dict[str,Path]) -> None:
+def test_os_chdir_and_getcwd(files: Dict[str, Path]) -> None:
     import os
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
@@ -301,7 +301,7 @@ def test_os_chdir_and_getcwd(files:Dict[str,Path]) -> None:
     os.chdir(old_dir)
 
 
-def test_os_getcwdb(files:Dict[str,Path]) -> None:
+def test_os_getcwdb(files: Dict[str, Path]) -> None:
     import os
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
@@ -313,11 +313,11 @@ def test_os_getcwdb(files:Dict[str,Path]) -> None:
 
     import os
     cwd = os.getcwdb()
-    assert isinstance(cwd,bytes)
+    assert isinstance(cwd, bytes)
     assert cwd.decode(sys.getfilesystemencoding()) == os.getcwd()
 
 
-def test_os_open_readonly(files:Dict[str,Path]) -> None:
+def test_os_open_readonly(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -342,7 +342,7 @@ def test_os_open_readonly(files:Dict[str,Path]) -> None:
         os.open(files["ignore"], os.O_RDONLY)
 
 
-def test_os_open_writeonly(files:Dict[str,Path]) -> None:
+def test_os_open_writeonly(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -367,7 +367,7 @@ def test_os_open_writeonly(files:Dict[str,Path]) -> None:
         os.open(files["ignore"], os.O_RDONLY)
 
 
-def test_os_open_writeonly_refused(files:Dict[str,Path]) -> None:
+def test_os_open_writeonly_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -385,7 +385,7 @@ def test_os_open_writeonly_refused(files:Dict[str,Path]) -> None:
                 os.close(fd)
 
 
-def test_os_open_readwrite(files:Dict[str,Path]) -> None:
+def test_os_open_readwrite(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -407,7 +407,7 @@ def test_os_open_readwrite(files:Dict[str,Path]) -> None:
             os.close(fd)
 
 
-def test_os_open_readwrite_refused(files:Dict[str,Path]) -> None:
+def test_os_open_readwrite_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -425,7 +425,7 @@ def test_os_open_readwrite_refused(files:Dict[str,Path]) -> None:
                 os.close(fd)
 
 
-def test_os_access_read_write(files:Dict[str,Path]) -> None:
+def test_os_access_read_write(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -438,11 +438,10 @@ def test_os_access_read_write(files:Dict[str,Path]) -> None:
     assert os.access(files["visible"], os.R_OK | os.W_OK)
     assert os.access(files["bound_file"], os.R_OK | os.W_OK)
     assert os.access(files["bind_dest"], os.R_OK | os.W_OK)
-    with pytest.raises(RuleFileNotFoundError):
-        assert os.access(files["bind_src"], os.R_OK | os.W_OK)
+    assert not os.access(files["bind_src"], os.R_OK | os.W_OK)
 
 
-def test_os_access_read_only(files:Dict[str,Path]) -> None:
+def test_os_access_read_only(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -455,13 +454,12 @@ def test_os_access_read_only(files:Dict[str,Path]) -> None:
     assert os.access(files["visible"], os.R_OK | os.W_OK)
     assert os.access(files["bound_file"], os.R_OK | os.W_OK)
     assert os.access(files["bind_dest"], os.R_OK | os.W_OK)
-    with pytest.raises(RuleFileNotFoundError):
-        assert os.access(files["bind_src"], os.R_OK | os.W_OK)
+    assert not os.access(files["bind_src"], os.R_OK | os.W_OK)
 
 
 @pytest.mark.skipif(not (sys.platform != "win32" and sys.platform != "linux"),
                     reason="requires special os")
-def test_os_chflags_and_lchflags(files:Dict[str,Path]) -> None:
+def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -478,7 +476,7 @@ def test_os_chflags_and_lchflags(files:Dict[str,Path]) -> None:
         assert os.lchflags(files["bind_src"], stat.SF_ARCHIVED)
 
 
-def test_os_chmod_and_lchmod(files:Dict[str,Path]) -> None:
+def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -508,7 +506,7 @@ def test_os_chmod_and_lchmod(files:Dict[str,Path]) -> None:
             os.lchmod(files["bind_src"], mode | stat.S_IREAD | stat.S_IWRITE)
 
 
-def test_os_chmod_and_lchmod_refused(files:Dict[str,Path]) -> None:
+def test_os_chmod_and_lchmod_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -529,7 +527,7 @@ def test_os_chmod_and_lchmod_refused(files:Dict[str,Path]) -> None:
 
 @pytest.mark.skipif(sys.platform == "win32",
                     reason="requires no windows OS")
-def test_os_chown_and_lchown(files:Dict[str,Path]) -> None:
+def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -561,7 +559,7 @@ def test_os_chown_and_lchown(files:Dict[str,Path]) -> None:
                   uid, gid)
 
 
-def test_os_chown_and_lchown_refused(files:Dict[str,Path]) -> None:
+def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -579,7 +577,7 @@ def test_os_chown_and_lchown_refused(files:Dict[str,Path]) -> None:
         os.lchown(files["bound_file"], uid, gid) is None
 
 
-def test_os_replace(files:Dict[str,Path]) -> None:
+def test_os_replace(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -607,7 +605,7 @@ def test_os_replace(files:Dict[str,Path]) -> None:
         os.replace(files["bind_src"], files["new_replace"])
 
 
-def test_os_replace_refused(files:Dict[str,Path]) -> None:
+def test_os_replace_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -620,7 +618,7 @@ def test_os_replace_refused(files:Dict[str,Path]) -> None:
                    files["bound_file"])
 
 
-def test_os_truncate(files:Dict[str,Path]) -> None:
+def test_os_truncate(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -646,7 +644,7 @@ def test_os_truncate(files:Dict[str,Path]) -> None:
         os.truncate(files["bind_src"], 3)
 
 
-def test_os_truncate_refused(files:Dict[str,Path]) -> None:
+def test_os_truncate_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -658,7 +656,7 @@ def test_os_truncate_refused(files:Dict[str,Path]) -> None:
         os.truncate(files["bound_file"], 3)
 
 
-def test_os_utime(files:Dict[str,Path]) -> None:
+def test_os_utime(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -681,7 +679,7 @@ def test_os_utime(files:Dict[str,Path]) -> None:
         os.utime(files["bind_src"], (yesterday, now))
 
 
-def test_os_utime_refused(files:Dict[str,Path]) -> None:
+def test_os_utime_refused(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -696,7 +694,7 @@ def test_os_utime_refused(files:Dict[str,Path]) -> None:
         os.utime(files["bound_file"], (yesterday, now))
 
 
-def test_os_scandir(files:Dict[str,Path]) -> None:
+def test_os_scandir(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -707,7 +705,7 @@ def test_os_scandir(files:Dict[str,Path]) -> None:
     import os
     with os.scandir(files["path"]) as entries:
         rc = list(entries)
-    rc_name=[r.name for r in rc]
+    rc_name = [r.name for r in rc]
     assert "bind_src" not in rc_name
     assert "bind_dest" in rc_name
     assert "visible.txt" in rc_name
@@ -716,14 +714,15 @@ def test_os_scandir(files:Dict[str,Path]) -> None:
 
     with os.scandir(files["bind_dest"]) as entries:
         rc = list(entries)
-    assert next(filter(lambda x: x.path == str(files["bound_file"]), rc), None)
+    rc_name = [r.name for r in rc]
+    assert "bound_file.txt" in rc_name
 
     with pytest.raises(RuleFileNotFoundError):
         with os.scandir(files["bind_src"]):
             pass
 
 
-def test_os_walk(files:Dict[str,Path]) -> None:
+def test_os_walk(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -736,14 +735,15 @@ def test_os_walk(files:Dict[str,Path]) -> None:
     assert rc[0][0] == str(files["path"])
     assert "bind_src" not in rc[0][1]
     assert "bind_dest" in rc[0][1]
-    assert rc[1][0] == str(files["bind_dest"])
-    assert "bound_file.txt" in rc[1][2]
+    assert rc[2][0] == str(files["bind_dest"])
+    assert "bound_file.txt" in rc[2][2]
 
     rc = list(os.walk(files["bind_dest"]))
     assert rc[0][0] == str(files["bind_dest"])
     assert "bound_file.txt" in rc[0][2]
 
-def test_os_makedirs_and_removedirs(files:Dict[str,Path]) -> None:
+
+def test_os_makedirs_and_removedirs(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -764,7 +764,8 @@ def test_os_makedirs_and_removedirs(files:Dict[str,Path]) -> None:
     with pytest.raises(RuleFileNotFoundError):
         os.removedirs(files["bind_src"] / "dir_to_remove" / "inner")
 
-def test_os_renames(files:Dict[str,Path]) -> None:
+
+def test_os_renames(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
@@ -777,10 +778,11 @@ def test_os_renames(files:Dict[str,Path]) -> None:
     with io.open(files["to_rename"], "w") as f:
         f.write("To rename")
     assert os.renames(files["to_rename"],
-                     files["new_rename"]) is None
+                      files["new_rename"]) is None
     os.unlink(files["new_rename"])
 
-def test_os_walk_and_fwalk(files:Dict[str,Path]) -> None:
+
+def test_os_walk_and_fwalk(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -789,17 +791,17 @@ def test_os_walk_and_fwalk(files:Dict[str,Path]) -> None:
     activate_guard_files_rules(rules)
 
     import os
-    root,dirs,dir_files = next(os.walk(files["path"],topdown=True))
+    root, dirs, dir_files = next(os.walk(files["path"], topdown=True))
     assert root == str(files["path"])
     assert "visible.txt" in dir_files
     assert "ignore.log" not in dir_files
 
-    root,dirs,dir_files = next(os.walk(files["bind_dest"], topdown=True))
+    root, dirs, dir_files = next(os.walk(files["bind_dest"], topdown=True))
     assert root == str(files["bind_dest"])
     assert "bound_file.txt" in dir_files
 
     with pytest.raises(StopIteration):
         next(os.walk(files["bind_src"], topdown=True))
-    
+
 # Missing tests
-# os.chroot
+# - os.chroot

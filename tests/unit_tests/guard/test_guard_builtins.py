@@ -5,11 +5,6 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import files, _reset_rules, activate_guard_files_rules
 
 
-@pytest.fixture(autouse=True)
-def reset_rules():
-    yield from _reset_rules()
-
-
 def test_builtins_open(files):
     from pathlib import Path
 

@@ -6,11 +6,6 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import files, activate_guard_files_rules, _reset_rules
 
 
-@pytest.fixture(autouse=True)
-def reset_rules():
-    yield  from _reset_rules()
-
-
 @pytest.mark.skip(reason="not implemented")
 def test_shutil_chown(files):
     rules = [
@@ -115,6 +110,7 @@ def test_shutil_copytree_and_move(files):
     activate_guard_files_rules(rules)
 
     import shutil
+    (files["path"] / "tmp").rmdir()
     shutil.copytree(files["bind_dest"], files["path"] / "tmp") is None
     shutil.move(files["path"] / "tmp", files["path"] / "tmp2") is None
     shutil.rmtree(files["path"] / "tmp2")

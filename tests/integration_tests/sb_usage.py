@@ -213,6 +213,11 @@ async def main(argv: Dict[str, str]) -> int:
     init_log_level()
     os.environ["LLM_TOKEN"] = "abc"
 
+    def audit_hook(event, args):
+        logger.info(f"Audit event: {event}, args: {args}")
+    import sys
+    sys.addaudithook(audit_hook)
+
     extra_rules = convert_extra_rules(argv[1:])
     config_path = Path("tests/test.py-sandboxes")
     if "learn" in extra_rules:
