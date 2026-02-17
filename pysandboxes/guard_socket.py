@@ -440,18 +440,17 @@ def _check_address_with_rules(
             # Resolve hostname to IP addresses using the socket instance's family, type, and proto
             infos = socket.getaddrinfo(hostname, None)
             use_hostname = True
-        except socket.gaierror:
+        except socket.gaierror as e:
             # Fallback if the specific proto causes issues, try with proto=0 (OS default for family/type)
             # This might happen if self.proto is something specific but getaddrinfo needs a more general hint
             try:
                 logger.debug(
                     "getaddrinfo failed with specific proto %s, retrying with proto=0")
                 infos = socket.getaddrinfo(hostname, None,
-                                           type=socket_kind, proto=0)
+                                           type=socket_kind.value, proto=0)
             except socket.gaierror:
                 raise ValueError(
                     f"Invalid hostname or IP address (resolution failed): {hostname}")
-
         # %% Analyse ips
         ip_objects = []
         for res_family, _, _, _, sockaddr in infos:
@@ -842,7 +841,7 @@ def _read_host_file() -> Tuple[
         hosts_file = Path("/etc/hosts")
     else:
         return {}
-    if hosts_file.exists():
+    if hosts_file.exists() and hosts_file.is_file() and os.access(hosts_file, os.R_OK):
         host_lines = hosts_file.read_text().split("\n")
         for line in host_lines:
             if line.startswith("#"):

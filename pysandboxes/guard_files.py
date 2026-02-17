@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from collections import OrderedDict
+from errno import ENOENT
 from io import FileIO
 from os import scandir as _scandir
 from pathlib import Path as _Path, Path
@@ -450,7 +451,9 @@ def _raise_access(file: Union[str, bytes, os.PathLike, int]) -> NoReturn:
         f = str(path.absolute())
     except ValueError:
         f = str(path)
-    raise RuleFileNotFoundError(f"Access to {f}' must be accepted by a rule.")
+    ex = RuleFileNotFoundError(f"Access to {f}' must be accepted by a rule.")
+    ex.errno = ENOENT
+    raise ex
 
 
 # %% Generic wrapper
@@ -538,6 +541,28 @@ def _wrap_two_filenames(func: Callable, *,
         if remapped_src is None:
             _raise_ignore(src, rule1)
         return func(str(remapped_src), str(remapped_dest), *args, **kwargs)
+
+    return wrapper
+
+
+def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
+    @functools.wraps(func)
+    def wrapper(path: Union[str, bytes, os.PathLike, int],
+                *,
+                dir_fd=None,
+                follow_symlinks=True
+                ):
+        # Detect call from posixpath
+        remapped, rule = _apply_dest_to_src_rules(path, write=write)
+        if rule:
+            _raise_ignore(path, rule)
+        if not remapped:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(path), write))
+                remapped = path
+            else:
+                _raise_access(path)
+        return func(path=path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
 
     return wrapper
 
@@ -829,7 +854,8 @@ def _wrap_os_symlink(func: Callable) -> Callable:
             else:
                 _raise_access(dst)
         if str(src).startswith("/"):
-            remapped_src, _ = _apply_dest_to_src_rules(src, write=False, accept_src=True)
+            remapped_src, _ = _apply_dest_to_src_rules(src, write=False,
+                                                       accept_src=True)
         else:
             remapped_src = src  # Relative link
 
@@ -1094,7 +1120,7 @@ _default_rules = rules = {
     "os.replace": _f(_wrap_two_filenames, in_write=True, out_write=True),
     "os.rmdir": _f(_wrap_filename, write=True),
     "os.scandir": _f(_wrap_os_scandir),
-    "os.stat": _f(_wrap_filename, write=False),
+    "os.stat": _f(_wrap_os_stat, write=False),
     # ALLOW os.statvfs = _wrap_filename(os.statvfs)
     "os.lstat": _f(_wrap_filename, write=False),
     # ALLOW os.stat_float_times

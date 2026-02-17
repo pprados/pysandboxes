@@ -2,10 +2,23 @@ import subprocess
 from pathlib import Path
 from typing import List
 
+import pytest
+
+from integration_tests.sb_usage import init_log_level
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
 from pysandboxes.sb_types import ConfigLine
+from unit_tests.guard.test_guard_io import _deactivate_all_rules, _activate_guard_import
+
+
+@pytest.fixture(autouse=True)
+def reset() -> None:
+    # Create test files and symlinks
+    # It's executer without patch.
+    init_log_level()
+    _deactivate_all_rules()
+    _activate_guard_import()
 
 
 def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tuple[
@@ -70,7 +83,6 @@ def test_ip4_netfilter_conv():
             ConfigLine("net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
         ], errors)
     ipfilter = rule_to_netfilter(rules, is_ipv6=False)
-    print("\n".join(ipfilter))
     status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=False)
     assert status, msg
     assert sorted(
@@ -112,7 +124,6 @@ def test_ip6_netfilter_conv():
             ConfigLine("net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
         ], errors)
     ipfilter = rule_to_netfilter(rules, is_ipv6=True)
-    print("\n".join(ipfilter))
     status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=True)
     assert status, msg
     assert sorted(
