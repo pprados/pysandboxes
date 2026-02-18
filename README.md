@@ -164,19 +164,19 @@ In this scenario, your application will be split into two parts:
 
 ```mermaid
 flowchart TD
-    subgraph MainApplicationFullPrivileges [Main Application]
-        direction LR
-        A[Caller Code]
-    end
-
     subgraph SandboxEnvironment ["OS-sandbox (Docker,...)"]
-        direction LR
+        direction TB
         subgraph OSSandbox [Python Sandbox in a Child Process]
             B(SSE<br/>Server)
 
                 C["@sandbox<br/>my_function(...)"]
         end
     end
+    subgraph MainApplicationFullPrivileges [Main Application]
+        direction TB
+        A[Caller Code]
+    end
+
 
     A -- "1- my_function(param)" --> B
     B -- "2- Execute via IPC (Pickle)" --> C

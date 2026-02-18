@@ -50,30 +50,10 @@ def reset_rules():
     _reset_rules()
 
 
-def init_log_level():
-    sandboxes_level = logging.DEBUG
-    uvicorn_level = logging.WARNING
-    format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
-    logging.basicConfig(
-        level=min(sandboxes_level, logging.INFO),
-        format=format
-    )
-
-    logging.getLogger("asyncio").setLevel(uvicorn_level)
-    logging.getLogger("uvicorn").setLevel(uvicorn_level)
-    logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
-    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
-    logging.getLogger("pysandboxes").setLevel(sandboxes_level)
-
-
 @pytest.fixture
 def files(tmp_path) -> Dict[str, Path]:
     # Create test files and symlinks
     # It's executer without patch.
-    init_log_level()
-    _deactivate_all_rules()
-    _activate_guard_import_for_tests()
     tmp_path = Path("/tmp/test")
     shutil.rmtree(tmp_path)
     tmp_path.mkdir(exist_ok=True)

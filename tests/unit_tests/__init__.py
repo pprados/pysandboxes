@@ -3,6 +3,12 @@ import sys
 from types import ModuleType
 from typing import Dict, Any, Set
 
+import pytest
+
+from unit_tests.guard.test_guard_io import _deactivate_all_rules, \
+    _activate_guard_import_for_tests
+
+
 
 def save_default_values(
         memory: Dict[str, Any],

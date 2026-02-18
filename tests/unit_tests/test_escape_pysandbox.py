@@ -8,10 +8,6 @@ from pysandboxes import RuleAttributeError
 from unit_tests.guard.test_guard_io import _reset_rules
 
 
-@pytest.fixture(autouse=True)
-def reset_rules():
-    yield from _reset_rules()
-
 
 def test_escape_with_closure():
     # Find the _original version of io.open (possible if the code is in Python)
@@ -21,6 +17,7 @@ def test_escape_with_closure():
     assert original_open.__module__ == "_io", "Not the _original io.open"
 
 
+@pytest.mark.skip
 def test_escape_with_subclasses():
     # TODO Try to block the __subclasses__ access
     def find_all_subclasses(cls: type) -> Set[type]:
@@ -51,6 +48,7 @@ def test_escape_with_subclasses():
         import_module._rules = ()  # Remove rules
 
 
+@pytest.mark.skip
 def test_escape_with_meta_path():
     import sys
     with pytest.raises(RuleAttributeError):

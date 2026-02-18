@@ -152,7 +152,7 @@ def _parse_rule(rule: ConfigLine,
                 f"{rule.rule!r} has incorrect number of parts separated by '|'. "
                 f"Expected 5, got {len(rule_components)}. "
                 f"Format: "
-                f"<{','.join(Action)}>|"
+                f"<{','.join([a.name for a in Action])}>|"
                 f"<{','.join([k.name for k in Kind])} list or *>|"
                 f"<ip/mask>, *|"
                 f"<port list>|"
@@ -161,6 +161,7 @@ def _parse_rule(rule: ConfigLine,
                 rule.ln
             )
         )
+        return None
     action, socket_specs_str, network_str, port_spec_str, directions = rule_components
     if action not in (Action.DENY.name, Action.ALLOW.name):
         errors.append(
@@ -252,10 +253,12 @@ def _parse_rule(rule: ConfigLine,
                 rule.ln
             )
         )
-    if "*" in split_directions:
-        parser_directions = tuple(Direction)
+        parser_directions = "ERROR"
     else:
-        parser_directions = tuple([Direction[d] for d in split_directions])
+        if "*" in split_directions:
+            parser_directions = tuple(Direction)
+        else:
+            parser_directions = tuple([Direction[d] for d in split_directions])
 
     try:
         ports_list_or_range = _convert_ports_range(port_spec_str)
@@ -936,8 +939,8 @@ def generate_rules(
             )
     return sorted(list(result))
 
+
 if "PYTEST_RUN_CONFIG" in os.environ:
     def _deactivate_guard_sockets():
         global _rules
         _rules = ()
-
