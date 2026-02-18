@@ -8,14 +8,12 @@ from pysandboxes import sandbox, sandboxes_api
 
 logger = logging.getLogger(__name__)
 
-config_path = Path(__file__).parent / "py-sandbox-test.profile"
+config_path = Path(__file__).parent.parent / "config" / "test.py-sandboxes"
 assert config_path.exists()
 
 
-def init_sandbox() -> None:
-    pass  # FIXME: implémenter et invoquer init_sandbox()
-
-
+def init_sandbox():
+    logger.info("init_sandbox called")
 
 @sandbox
 async def arun_in_sandbox() -> int:

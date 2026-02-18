@@ -12,5 +12,6 @@ bind=${PWD}/tmp,${PWD}/tmp
 
 # Alias
 ro-bind=${PWD}/tests/data,${PWD}/tests/alias
+ro-bind=${PWD}/tests/config,${PWD}/tests/config
 
 # include "${PWD}/.py-sandboxes.test"

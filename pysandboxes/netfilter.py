@@ -60,8 +60,8 @@ def _build_netfilter(rule_type,
 
 def _build_port(rule_ports_list):
     if isinstance(rule_ports_list, range):
-        if rule_ports_list != range(65535):
-            s_port = f'{rule_ports_list._start}:{rule_ports_list._stop - 1} '
+        if rule_ports_list != range(65536):
+            s_port = f'{rule_ports_list.start}:{rule_ports_list.stop - 1} '
         else:
             s_port = None
     else:

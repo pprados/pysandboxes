@@ -7,6 +7,8 @@ from pysandboxes.tools import is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
+SIZE_OF_LOOP=1  # Try multiple calls
+
 def init_log_level():
     sandboxes_level = logging.WARNING
     uvicorn_level = logging.WARNING
@@ -52,7 +54,7 @@ async def arun_exit():
     os._exit(99)
     return 42
 
-async def asygnchronize_function():
+async def asynchronize_function():
     logger.info("async: Call 'asynchronize_function()'")
     rc = await arun_in_sandbox(os.getpid())
     # rc = await arun_exit()

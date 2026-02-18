@@ -17,11 +17,11 @@ from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
 from ..sb_types import Envs, Args, ConfigLine
-from ..tools import remove_comments, substitute_env_vars;
+from ..tools import remove_comments, substitute_env_vars, follow_links_executable;
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
+DEBUG = True
 
 # Replace rules to delegate the filter to firejail.
 # The exception are differents
@@ -147,26 +147,6 @@ def _follow_links(filename: Union[str, Path], whitelist: WhiteList) -> None:
                            sys.executable)
 
 
-# FIXME: remove
-def _follow_links_executable(executable: Path, whitelist: WhiteList) -> None:
-    if executable.parents[0].name == "bin":
-        if str(executable.parent.parent) not in whitelist:
-            whitelist.add(str(executable.parent.parent))
-        else:
-            return
-    else:
-        if str(executable) not in whitelist:
-            whitelist.add(str(executable))
-        else:
-            return
-    if executable.is_symlink():
-        try:
-            _follow_links_executable(executable.resolve(strict=True), whitelist)
-        except FileNotFoundError:
-            raise RuntimeError("Impossible to resolve the sys.executable `%s`",
-                               sys.executable)
-
-
 class FireJailSSEDaemon(BaseSubProcessDaemon):
     def update_rules(self,
                      *,
@@ -224,7 +204,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         whitelist = WhiteList()
 
         # Manage sys.executable
-        _follow_links_executable(Path(sys.executable), whitelist)
+        bin_path=set()
+        follow_links_executable(Path(sys.executable), bin_path)
+        for p in bin_path:
+            _follow_links(p, whitelist)
 
         for p in sys.path:
             if os.path.isdir(p):

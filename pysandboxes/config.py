@@ -1,2 +1,2 @@
-OPTIMIZE:bool = False  # With True, remove some wrapper
-CONFIG_NAME=".py-sandboxes"
+OPTIMIZE: bool = False  # With True, remove some wrapper
+CONFIG_NAME = ".py-sandboxes"

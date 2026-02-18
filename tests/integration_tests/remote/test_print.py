@@ -1,9 +1,9 @@
 # %% Test print
 import _pytest
 
-from ..sample import async_print_stdin_stdout, init_sandbox, \
-    sync_print_stdin_stdout, config_path
 from pysandboxes import sandboxes
+from ..sample import async_print_stdin_stdout, \
+    sync_print_stdin_stdout, config_path, init_sandbox
 
 
 def test_sync_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixture):
@@ -26,4 +26,3 @@ async def test_async_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixt
         captured_output = capsys.readouterr()
         assert captured_output.out == "hello\n"
         assert captured_output.err == "world\n"
-

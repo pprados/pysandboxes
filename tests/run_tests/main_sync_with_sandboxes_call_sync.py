@@ -3,7 +3,8 @@ from pysandboxes import sandboxes
 
 def main():
     init_log_level()
-    for i in range(0, 1):
+    logger.info("--------- Sync Run with sandboxes call Sync")
+    for i in range(0, SIZE_OF_LOOP):
         logger.info("Use 'with sandboxes'")
         with sandboxes(
                 init_fn=async_init_sandbox,

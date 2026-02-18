@@ -201,8 +201,6 @@ def python_in_sb(
                 python_cmd.pop(0)  # Remove -m
                 python_cmd.pop(0)  # Remove module name
                 spec = importlib.util.find_spec(mod_name)
-                print(f"{mod_name=}")
-                print(f"{spec=}")
                 if spec:
                     sys.argv = [spec.origin] + python_cmd
                 else:

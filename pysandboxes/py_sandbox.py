@@ -97,8 +97,10 @@ def load_and_parse_config(
     if not config_path:
         config_path = Path(CONFIG_NAME)
 
+    pysb_module_name = __name__.split('.', 1)[0]
+
     if '/' not in str(config_path):
-        config_path, pysb_module_name = _search_module_config(config_path)
+        config_path = _search_module_config(config_path)
 
     if not config_path.exists():
         # Activate the learn mode
@@ -119,7 +121,9 @@ def load_and_parse_config(
                         )
 
 
-def _search_module_config(config_path:Optional[Path]) -> Tuple[Path, str]:
+def _search_module_config(config_path:Optional[Path]) -> Path:
+    if not config_path:
+        config_path = CONFIG_NAME
     # Try to find config filename
     pysb_module_name = __name__.split('.', 1)[0]
     # Search the module of the caller
@@ -131,9 +135,9 @@ def _search_module_config(config_path:Optional[Path]) -> Tuple[Path, str]:
     # Module of the caller
     from importlib.resources import files
     caller_module = frame.f_globals.get("__name__", "__main__").split('.', 1)[0]
-    resource_config = None
+    resource_config:Optional[Path] = None
     if caller_module != "__main__":
-        resource_path = files(caller_module)
+        resource_path = cast(Path,files(caller_module))  # FIXME: semble y avoir un pb
         resource_config = resource_path / config_path
     if resource_config and resource_config.exists():
         config_path = resource_config
@@ -142,7 +146,7 @@ def _search_module_config(config_path:Optional[Path]) -> Tuple[Path, str]:
     else:
         # Else search in the current working directory
         config_path = Path.cwd() / config_path
-    return config_path, pysb_module_name
+    return config_path
 
 
 def _parse_include(

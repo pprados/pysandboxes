@@ -54,7 +54,7 @@ class BaseDaemon(ABC):
     @abstractmethod
     async def _shutdown(self, graceful_shutdown:bool = True) -> None:
         """ Muse be called via async_shutdown_daemon()"""
-        raise NotImplementedError
+        self._accept_incoming = False
 
     @abstractmethod
     def update_rules(self,

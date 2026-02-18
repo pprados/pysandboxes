@@ -1,7 +1,7 @@
 # %% Test exception
 import pytest
 
-from tests.integration_tests.sample import init_sandbox, config_path
+from ..sample import config_path, init_sandbox
 from pysandboxes import sandbox, sandboxes
 
 

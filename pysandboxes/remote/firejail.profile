@@ -15,7 +15,7 @@
 # See /usr/share/doc/firejail/syscalls.txt
 # --seccomp=mkdir,@debug,@mount,@reboot,@raw-io,@setuid,@keyring
 --hostname=firejail-sandbox
---deterministic-daemon_shutdown
+--deterministic-shutdown
 --protocol=inet,inet6
 --env=PYTHONSTARTUP=
 --private-tmp

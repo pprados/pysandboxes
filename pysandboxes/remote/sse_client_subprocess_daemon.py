@@ -387,8 +387,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             self._watchdog = None
 
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
-        super()._shutdown(graceful_shutdown)
-        self._accept_incoming = False
+        await super()._shutdown(graceful_shutdown)
         self.max_connect_retry = 1  # Try only one time for remote _shutdown
 
         logger.debug("Call remote daemon_shutdown...")
