@@ -1,9 +1,9 @@
 # %% Test ressource manager
 import pytest
 
-from pysandboxes import sandboxes_api
+from pysandboxes import sandboxes
 from pysandboxes.tools import mixed_sync_and_async_error
-from integration_tests.sample import async_forty_two, sync_forty_two, init_sandbox, config_path
+from ..sample import async_forty_two, sync_forty_two, init_sandbox, config_path
 
 
 async def test_async_run_sandboxes_twice() -> None:

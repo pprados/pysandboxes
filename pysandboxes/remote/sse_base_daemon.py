@@ -115,10 +115,7 @@ class BaseSSESandbox(BaseDaemon):
                 raise RuntimeError("Impossible to connect to the sandbox")
             except SystemExit:
                 raise
-            except Exception as e:
-                logger.exception("Unknown error")
-                assert e is None, "Unknown error"
-                raise
+            # Other exceptions are from the called function
 
         raise RuntimeError("No result received from the sandbox")
 

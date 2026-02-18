@@ -1,8 +1,9 @@
 import asyncio
 import logging
+import os
 import threading
 import uuid
-from typing import Any, Callable, Optional, Type, cast, Dict
+from typing import Any, Callable, Optional, Type, cast, Dict, Union
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
@@ -47,7 +48,6 @@ def is_accept_incoming_call() -> bool:
     return (is_daemon_started()
             and _current_daemon._accept_incoming)
 
-@sandbox_loop
 async def async_start_daemon(all_rules: AllRules,
                              *,
                              envs:Dict[str,str],
@@ -56,7 +56,7 @@ async def async_start_daemon(all_rules: AllRules,
                              python_args: Optional[list[str]] = None,
                              ) -> BaseDaemon:
     """
-    Asynchronize version to start daemon by name.
+    Asynchronize version to _start daemon by name.
     Returns daemon object when is starred
     """
     return await _async_start_daemon(all_rules,
@@ -96,7 +96,7 @@ async def _async_start_daemon(all_rules: AllRules,
                 token,
                 python_args=python_args
             )
-            await os_provider.start(
+            await os_provider._start(
                 all_rules,
                 envs=envs,
                 log_level=log_level,
@@ -122,7 +122,7 @@ async def async_stop_daemon(max_pending:int=0):
             logger.info("Daemon not started when stopping")
             return
 
-        await _current_daemon.stop(max_pending)
+        await _current_daemon._stop(max_pending)
 
 async def async_shutdown_daemon(graceful_shutdown:bool = True):
     """
@@ -142,7 +142,7 @@ async def async_shutdown_daemon(graceful_shutdown:bool = True):
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return
-        await _current_daemon.shutdown(graceful_shutdown)
+        await _current_daemon._shutdown(graceful_shutdown)
         assert not _current_daemon.is_started
         _current_daemon = None
         _startup_counter -= 1
@@ -151,17 +151,19 @@ async def async_shutdown_daemon(graceful_shutdown:bool = True):
 
 def start_daemon(
         all_rules: AllRules,
-        envs:Dict[str,str],
+        envs:Union[Dict[str,str],os._Environ],
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc] = None,
         python_args: Optional[list[str]] = None,
 ) -> BaseDaemon:
     """
-    Synchronize version to start daemon by name.
+    Synchronize version to _start daemon by name.
     Returns daemon object when is starred
     """
     assert all_rules.os_sandbox
     global _current_daemon, _startup_counter
+
+    check_mixte_async_async()
     with _start_lock:
         if _current_daemon is not None:
             logger.info("Daemon already started")
@@ -175,6 +177,7 @@ def start_daemon(
         start_event = threading.Event()
 
         async def _start_daemon_and_signal():
+            logger.debug("_start_daemon_and_signal")
             await _async_start_daemon(all_rules,
                                       envs=envs,
                                       log_level=log_level,
@@ -190,7 +193,7 @@ def start_daemon(
                 name="Start daemon")
         )
         if not start_event.wait():
-            raise RuntimeError("Import to start the sandbox")
+            raise RuntimeError("Import to _start the sandbox")
         assert _current_daemon
 
         return cast(BaseDaemon, _current_daemon)
@@ -204,34 +207,34 @@ def _set_current_daemon(daemon:BaseDaemon) -> None:
     global _current_daemon
     _current_daemon = daemon
 
-# def shutdown_daemon() -> None: FIXME: a virer si pas nécessaire
-#     """
-#     Synchronize version to daemon_shutdown the current daemon.
-#     Return when the daemon is daemon_shutdown.
-#     """
-#     global _current_daemon, _startup_counter
-#     with _start_lock:
-#         if not _current_daemon:
-#             logger.info("Daemon not started when daemon_shutdown")
-#             _startup_counter -= 1
-#             if _startup_counter < 0:
-#                 raise ValueError("Daemon daemon_shutdown more times than started")
-#             return
-#         loop = get_sandbox_loop()
-#         stop_event = threading.Event()
-#
-#         @sandbox_loop
-#         async def _async_shutdown_daemon():
-#             await async_shutdown_daemon()
-#             stop_event.set()
-#             reset_sandbox_loop()
-#
-#         # FIXME: appelé ou?
-#         loop.call_soon_threadsafe(
-#             lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
-#         if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
-#             raise RuntimeError("Impossible to daemon_shutdown the sandbox")
-#
+def shutdown_daemon(graceful_shutdown:bool = True) -> None:
+    """
+    Synchronize version to daemon_shutdown the current daemon.
+    Return when the daemon is daemon_shutdown.
+    """
+    global _current_daemon, _startup_counter
+    with _start_lock:
+        if not _current_daemon:
+            logger.info("Daemon not started when daemon_shutdown")
+            _startup_counter -= 1
+            if _startup_counter < 0:
+                raise ValueError("Daemon daemon_shutdown more times than started")
+            return
+        loop = get_sandbox_loop()
+        stop_event = threading.Event()
+
+        @sandbox_loop
+        async def _async_shutdown_daemon():
+            await async_shutdown_daemon()
+            stop_event.set()
+            reset_sandbox_loop()
+
+        # FIXME: appelé ou?
+        loop.call_soon_threadsafe(
+            lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
+        if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
+            raise RuntimeError("Impossible to daemon_shutdown the sandbox")
+
 
 def get_token() -> str:
     global _current_daemon

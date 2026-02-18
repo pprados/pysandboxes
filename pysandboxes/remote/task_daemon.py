@@ -10,19 +10,19 @@ logger = logging.getLogger(__name__)
 
 class TaskDaemon(SSEServerDaemon):
 
-    async def start(self,
-                    all_rules:AllRules,
-                    *,
-                    envs: Dict[str, str],
-                    log_level: int,
-                    init_fn: Optional[SyncOrAsyncFunc],
-                    ) -> None:
-        await super().start(all_rules,
-                            log_level=log_level,
-                            init_fn=init_fn
-                            )
+    async def _start(self,
+                     all_rules:AllRules,
+                     *,
+                     envs: Dict[str, str],
+                     log_level: int,
+                     init_fn: Optional[SyncOrAsyncFunc],
+                     ) -> None:
+        await super()._start(all_rules,
+                             log_level=log_level,
+                             init_fn=init_fn
+                             )
         logger.info("Sandbox Daemon in async task is started")
 
-    async def shutdown(self,graceful_shutdown:bool = True) -> None:
-        await super().shutdown(graceful_shutdown)
+    async def _shutdown(self, graceful_shutdown:bool = True) -> None:
+        await super()._shutdown(graceful_shutdown)
         logger.info("Sandbox Daemon is daemon_shutdown")

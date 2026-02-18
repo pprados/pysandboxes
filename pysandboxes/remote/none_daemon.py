@@ -16,20 +16,20 @@ class NoneDaemon(BaseDaemon):
     #              **kwargs):
     #     super().__init__(token,**kwargs)
 
-    async def start(self,
-                    all_rules:AllRules,
-                    *,
-                    log_level: int,
-                    envs: Optional[Envs],
-                    init_fn: Optional[SyncOrAsyncFunc],
-                    ) -> None:
+    async def _start(self,
+                     all_rules:AllRules,
+                     *,
+                     log_level: int,
+                     envs: Optional[Envs],
+                     init_fn: Optional[SyncOrAsyncFunc],
+                     ) -> None:
         self._is_started = True
         set_is_in_sandbox(True)  # Simulate the presence of sandbox
 
-    async def stop(self,max_pending:int) -> None:
+    async def _stop(self, max_pending:int) -> None:
         pass
 
-    async def shutdown(self,graceful_shutdown:bool=True) -> None:
+    async def _shutdown(self, graceful_shutdown:bool=True) -> None:
         set_is_in_sandbox(False)
         self._is_started = False
 

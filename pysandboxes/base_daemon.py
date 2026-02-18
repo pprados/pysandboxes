@@ -37,21 +37,23 @@ class BaseDaemon(ABC):
         return self._is_started
 
     @abstractmethod
-    async def start(self,
-                    all_rules:"AllRules",
-                    *,
-                    envs:Dict[str,str],
-                    log_level: int,
-                    init_fn: Optional[SyncOrAsyncFunc],
-                    ) -> None:
+    async def _start(self,
+                     all_rules:"AllRules",
+                     *,
+                     envs:Dict[str,str],
+                     log_level: int,
+                     init_fn: Optional[SyncOrAsyncFunc],
+                     ) -> None:
+        """ Muse be called via async_start_daemon()"""
         raise NotImplementedError
 
     @abstractmethod
-    async def stop(self,max_pending:int) -> None:
+    async def _stop(self, max_pending:int) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    async def shutdown(self,graceful_shutdown:bool = True) -> None:
+    async def _shutdown(self, graceful_shutdown:bool = True) -> None:
+        """ Muse be called via async_shutdown_daemon()"""
         raise NotImplementedError
 
     @abstractmethod

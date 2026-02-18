@@ -356,7 +356,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
             if len(current_line) + len(item) + 2 <= max_width:
                 current_line += ", " + item
             else:
-                # Add the current line to the list and start a new one
+                # Add the current line to the list and _start a new one
                 grouped_items.append(current_line)
                 current_line = item
 

@@ -149,7 +149,7 @@ From now on, during subsequent launches, the application runs by limiting the ap
 
 If you want to restart a learning session to add missing rules:
 - activate the `learn` parameter in the configuration file
-- or add `--learn=.py-sandboxes` (or just `--learn`) when you start `python-sb`
+- or add `--learn=.py-sandboxes` (or just `--learn`) when you _start `python-sb`
 
 This way, only the missing rules will be added to the file.
 

@@ -1,9 +1,10 @@
 # %% run
+import logging
 
 import pytest
 
 from pysandboxes.tools import mixed_sync_and_async_error
-from integration_tests.sample import config_path, async_forty_two, \
+from ..sample import config_path, async_forty_two, \
     async_sanboxes, bridge_async_to_sync
 from pysandboxes import run
 

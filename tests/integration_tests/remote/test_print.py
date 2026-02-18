@@ -1,9 +1,9 @@
 # %% Test print
 import _pytest
 
-from integration_tests.sample import async_print_stdin_stdout, init_sandbox, \
+from ..sample import async_print_stdin_stdout, init_sandbox, \
     sync_print_stdin_stdout, config_path
-from pysandboxes import sandboxes_api
+from pysandboxes import sandboxes
 
 
 def test_sync_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixture):

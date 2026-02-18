@@ -43,11 +43,11 @@ Here is a brief description of the implementation. You will find more details by
         - If the sandbox falls (the process dies)
           - it is restarted.
           - The `init_fn` function is executed again, then communication resumes.
-        - If a shutdown of the daemon is requested
+        - If a _shutdown of the daemon is requested
           - All future incomming request are block
           - Waiting the end of all current request
           - Say it's done for the main process
-          - Start to shutdown the daemon
+          - Start to _shutdown the daemon
     - If the daemon is stopped, a watchdog can detect this situation
       - The child process is restarted
       - The current requests are retry multiple times to be reconected to the new child process.

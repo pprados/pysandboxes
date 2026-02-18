@@ -34,7 +34,7 @@ async def run_server(process_config: DaemonParameters):
         set_is_in_sandbox(False)  # Learn the import during the import
         init_fn = getattr(module, function_name)
 
-    # Else, start the daemon
+    # Else, _start the daemon
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
     assert os_sandbox in ("subprocess", "firejail")
@@ -51,11 +51,11 @@ async def run_server(process_config: DaemonParameters):
         port=process_config.port,
     )
     _set_current_daemon(server_daemon)
-    await server_daemon.start(process_config.all_rules,
-                            envs=cast(dict, os.environ),
-                            log_level=process_config.log_level,
-                            init_fn=init_fn
-                            )
+    await server_daemon._start(process_config.all_rules,
+                               envs=cast(dict, os.environ),
+                               log_level=process_config.log_level,
+                               init_fn=init_fn
+                               )
     await server_daemon.join()
     return 0
 
@@ -117,7 +117,7 @@ def main() -> int:
             all_rules,
             sandboxes_args)
 
-    # Elsen start the server
+    # Elsen _start the server
     return asyncio.run(run_server(process_config))
 
 

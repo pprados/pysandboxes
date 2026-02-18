@@ -31,7 +31,7 @@ from ..tools import SyncOrAsyncFunc, get_callable_info
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
+DEBUG = True
 
 
 def get_log_formatter():
@@ -218,13 +218,13 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         ])
         return cmd_parameters
 
-    async def start(self,
-                    all_rules: AllRules,
-                    *,
-                    envs: Dict[str, str],
-                    log_level: int,
-                    init_fn: Optional[SyncOrAsyncFunc],
-                    ) -> None:
+    async def _start(self,
+                     all_rules: AllRules,
+                     *,
+                     envs: Dict[str, str],
+                     log_level: int,
+                     init_fn: Optional[SyncOrAsyncFunc],
+                     ) -> None:
         self.restart = 0
         self.port = find_free_port()
 
@@ -254,7 +254,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 errorlevel = await self._process.wait()
                 # Process is dead
                 if not self._accept_incoming:
-                    break  # Detect legitimate shutdown
+                    break  # Detect legitimate _shutdown
 
                 if errorlevel != 0:
                     logger.info("watchdog: subprocess exited with %s", errorlevel)
@@ -275,7 +275,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                                                       current_base_backoff)
                     logger.debug("watchdog sleep %i", wait_time)
                     await asyncio.sleep(wait_time)
-                    # await self.shutdown()
+                    # await self._shutdown()
                     self._last_reset = time.time()
                     await self._re_start(all_rules,
                                          envs=envs,
@@ -381,14 +381,15 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self._accept_incoming = True
         logger.debug(f"{self._accept_incoming=}")
 
-    async def stop(self, max_pending: int) -> None:
+    async def _stop(self, max_pending: int) -> None:
         if self._watchdog:
             self._watchdog.cancel()
             self._watchdog = None
 
-    async def shutdown(self, graceful_shutdown: bool = True) -> None:
+    async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        super()._shutdown(graceful_shutdown)
         self._accept_incoming = False
-        self.max_connect_retry = 0
+        self.max_connect_retry = 1  # Try only one time for remote _shutdown
 
         logger.debug("Call remote daemon_shutdown...")
         try:
@@ -397,6 +398,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 True,
                 graceful_shutdown,
             )
+            logger.debug("Call remote daemon_shutdown done")
             if graceful_shutdown:
                 if self._process:
                     try:
@@ -419,8 +421,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         except RuntimeError:
             pass  # Ignore
         except Exception as e:
-            logger.exception("Unknown error in shutdown")
-            assert e is None,"Unknown error in shutdown"
+            logger.exception("Unknown error in _shutdown")
+            assert e is None,"Unknown error in _shutdown"
         finally:
             self._process = None
             self._is_started = False

@@ -920,7 +920,7 @@ class _ScanDirContextManager:
 
     def close(self):
         if self.scanner:
-            self.scanner.shutdown()
+            self.scanner._shutdown()
 
     def __init__(self, directory: str):
         self.directory = directory

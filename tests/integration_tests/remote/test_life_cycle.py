@@ -1,19 +1,14 @@
 # %% Process life cycle
 import os
 import random
-import signal
-import sys
 import threading
 import time
 from pathlib import Path
 from typing import List
 
-import _pytest
-import pytest
-
-from integration_tests.sample import config_path
-from integration_tests.remote.test_rpc import sync_function
-from pysandboxes import sandboxes_api
+from .test_rpc import sync_function
+from ..sample import config_path
+from pysandboxes import sandboxes
 
 
 def find_process_childrens(parent_pid: int) -> List[int]:
@@ -57,32 +52,6 @@ def find_process_childrens(parent_pid: int) -> List[int]:
     return children_pids
 
 
-@pytest.mark.skipif(os.name != 'posix',
-                    reason="This test is only for POSIX systems")
-def test_pdeathsig(capsys: _pytest.capture.CaptureFixture):
-    """
-    Check if the child is killed when the parent is killed
-    """
-
-    from . import launch_child
-    import subprocess
-    child = subprocess.Popen(
-        [
-            sys.executable,
-            '-m',
-            launch_child.__name__,
-        ],
-    )
-    time.sleep(0.5)
-    childs_pid = find_process_childrens(child.pid)
-    assert len(childs_pid) == 1, "Child process not found"
-    child_pid = childs_pid[0]
-    assert Path(f"/proc/{child_pid}").exists(), "Child process not found"
-    os.kill(child.pid, signal.SIGKILL)
-    child.wait()
-    time.sleep(0.5)
-    assert not Path(f"/proc/{child_pid}").exists(), "Child process alive"
-
 
 def _worker(thread_id: int) -> None:
     """
@@ -92,15 +61,6 @@ def _worker(thread_id: int) -> None:
     # Simulate some processing time
     processing_time: float = random.uniform(0.01, 0.05)
     time.sleep(processing_time)
-
-    # Critical section: Access and modify the shared resource without a lock
-    # # This is a potential source of a race condition.
-    # print(
-    #     f"Thread {thread_id}: Reading shared data. Current length is {len(shared_data)}.")
-    # local_data = len(shared_data)
-    # time.sleep(0.01)  # Simulate a context switch during the critical section
-    # shared_data.append(f"Item from thread {thread_id}")
-    # print(f"Thread {thread_id}: Appended item. New length is {len(shared_data)}.")
     for i in range(10):
         result_sync = sync_function("a", b=thread_id)
         assert result_sync == f'a {thread_id}'

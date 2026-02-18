@@ -1,35 +1,30 @@
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Iterator
 
 import pytest
 
-from pysandboxes.os_sandbox import start_daemon
-from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes import sandbox
+from pysandboxes.os_sandbox import start_daemon, shutdown_daemon
+from pysandboxes.py_sandbox import load_and_parse_config
 
-
-# See https://github.com/tortoise/tortoise-orm/issues/638
-@pytest.yield_fixture(scope='module')
-def event_loop(request):
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 @pytest.fixture(scope="module", autouse=True)
-async def start_daemon_for_tests() -> Iterator[None]:
+def start_daemon_for_tests() -> Iterator[None]:
     config_path = Path(__file__).parent.parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
     all_rules = load_and_parse_config(config_path=config_path)
-    all_rules = all_rules._replace(os_sandbox="firejail")
-    daemon= start_daemon(all_rules,
-                 log_level,
-                 init_fn=None,
-                 )
+    # FIXME all_rules = all_rules._replace(os_sandbox="firejail")f
+    start_daemon(all_rules,
+                          envs=os.environ,
+                          log_level=log_level,
+                          init_fn=None,
+                          )
     yield
-    await daemon.shutdown(graceful_shutdown=False)
+    shutdown_daemon(graceful_shutdown=False)
 
 
 @sandbox()
@@ -72,5 +67,3 @@ async def async_function_with_error(a: int, b: int) -> str:
 async def test_async_function_with_error():
     with pytest.raises(ZeroDivisionError):
         await async_function_with_error(10, 0)
-
-

@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 async def daemon_shutdown(graceful_shutdown:bool) -> None:
     from pysandboxes.os_sandbox import async_stop_daemon, async_shutdown_daemon
 
+    global _current_daemon
     if is_learning_mode():
         generate_config_from_learning()
 

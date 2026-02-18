@@ -94,7 +94,7 @@ def main() -> int:
     if not isinstance(os_provider, BaseSubProcessDaemon):
         async def run_locally():
             try:
-                await os_provider.start(
+                await os_provider._start(
                     all_rules,
                     log_level=log_level,
                     envs=None,
@@ -103,7 +103,7 @@ def main() -> int:
                 from .remote.python_in_sb import python_in_sb
                 python_in_sb(all_rules, python_cmd)
             finally:
-                await os_provider.shutdown(graceful_shutdown=True)
+                await os_provider._shutdown(graceful_shutdown=True)
             return 0
 
         return asyncio.run(run_locally())

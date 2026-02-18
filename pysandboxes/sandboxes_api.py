@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 from .base_daemon import BaseDaemon
 from .e import ConfigSyntaxError
+from .os_sandbox import async_stop_daemon, async_shutdown_daemon
 from .private_loop import set_sandbox_loop, sandbox_loop, get_sandbox_loop
 from .tools import check_mixte_async_async, SyncOrAsyncFunc, set_is_in_sandbox, \
     is_in_sandbox
@@ -75,7 +76,7 @@ class sandboxes(Protocol):
         "_daemon",
     )
     """
-    Context manager to start and stop the sandbox daemon.
+    Context manager to _start and _stop the sandbox daemon.
     The parameter `init_fn` is a function that will be called when the daemon starts,
     inside the daemon process. It's a good place to initialize the database connection,
     or to load some data.
@@ -85,7 +86,7 @@ class sandboxes(Protocol):
                  init_fn: Optional[SyncOrAsyncFunc] = None,
                  config_path: Optional[Union[Path, str]] = None,
                  *,
-                 envs: Optional[Dict[str, str]] = None,
+                 envs: Union[None, Dict[str, str], os._Environ] = None,
                  python_args: Optional[List[str]] = None,
                  graceful_shutdown: bool = True,
                  **extra_rules,
@@ -161,13 +162,13 @@ class sandboxes(Protocol):
         """
         Stop the sandbox daemon.
         """
-        logger.debug("__exit__ start...")
+        logger.debug("__exit__ _start...")
         if is_in_sandbox():
             set_is_in_sandbox(False)
             return False
 
         asyncio.run_coroutine_threadsafe(
-            self._daemon.shutdown(self.graceful_shutdown),
+            async_shutdown_daemon(self.graceful_shutdown),
             get_sandbox_loop()).result()
         return False
 
@@ -181,7 +182,7 @@ class sandboxes(Protocol):
                 signal.signal(signal.SIGQUIT, self._old_sigquit)
 
             self.learning_path = False
-            await self._daemon.stop(max_pending=0)
+            await self._daemon._stop(max_pending=0)
             logger.debug("daemon stopped")
 
     def __delete__(self, instance):
@@ -240,7 +241,9 @@ class sandboxes(Protocol):
         Stop the sandbox daemon.
         """
         if not is_in_sandbox() and self._daemon:
-            await self._daemon.shutdown(self.graceful_shutdown)
+            await async_shutdown_daemon(
+                self.graceful_shutdown
+            )
         return False
 
 
@@ -266,7 +269,7 @@ def run(main: Coroutine[Any, Any, Any],
                 config_path=config_path,
                 **kwargs,
         ):
-            result = (await asyncio.create_task(main), "start sandbox in run")
+            result = (await asyncio.create_task(main), "_start sandbox in run")
             return result
 
     result = asyncio.run(_run())

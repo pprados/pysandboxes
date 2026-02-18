@@ -62,11 +62,11 @@ async def sandbox_daemon(
 
         module_name, function_name = function_id.split(':', 1)
         set_is_in_sandbox(True)
-        module = importlib.import_module(module_name)
         try:
+            module = importlib.import_module(module_name)
             function = getattr(module, function_name)
-        except AttributeError:
-            logger.warning("Function %s.%s() not found", module, function_name)
+        except (AttributeError,ModuleNotFoundError):
+            logger.warning("Function %s.%s() not found", module_name, function_name)
             return
         use_async = inspect.iscoroutinefunction(function)
         logger.debug(f"(%s) calling %s%s.%s(%s,%s)...",
@@ -303,13 +303,13 @@ class SSEServerDaemon(BaseSSESandbox):
                         file_rules=all_rules.file_rules,
                         )
 
-    async def start(self,
-                    all_rules: AllRules,
-                    *,
-                    envs: Dict[str, str],
-                    log_level: int,
-                    init_fn: Optional[SyncOrAsyncFunc],
-                    ) -> None:
+    async def _start(self,
+                     all_rules: AllRules,
+                     *,
+                     envs: Dict[str, str],
+                     log_level: int,
+                     init_fn: Optional[SyncOrAsyncFunc],
+                     ) -> None:
 
         set_is_in_sandbox(True)
         if init_fn:
@@ -361,33 +361,33 @@ class SSEServerDaemon(BaseSSESandbox):
         finally:
             loop.slow_callback_duration = initial_threshold
 
-    async def stop(self, max_pending: int) -> None:
+    async def _stop(self, max_pending: int) -> None:
         """ End all current jobs """
-        set_is_in_sandbox(False)
         logger.debug("Remote daemon_shutdown calling")
+        set_is_in_sandbox(False)
+        logger.debug("Refuse new incoming call")
+        self._accept_incoming=False
         if not self.is_started:
             logger.warning("Server not started")
             return
         if self.stopped:
             return
-        self._accept_incoming = False
-        logger.debug("Refuse new incoming call")
         # wait for task completed
         global _active_requests
         start_time = asyncio.get_event_loop().time()
         while _active_requests > max_pending:
             if ((asyncio.get_event_loop().time() - start_time) >=
                     TIMEOUT_FOR_STOP_DAEMON):
-                logger.info("Impossible to stop %i current request",
+                logger.info("Impossible to _stop %i current request",
                             _active_requests - max_pending)
                 break
             await asyncio.sleep(POLLING_DELAY)
         logger.debug("All request are complete")
         self.stopped = True
 
-    async def shutdown(self, graceful_shutdown: bool = True) -> None:
-        logger.debug("SSEServerDaemon.shutdown()")
-        await self.stop(max_pending=0)
+    async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        logger.debug("SSEServerDaemon._shutdown()")
+        await self._stop(max_pending=0)
         self.task.cancel()
         await self.task
         self.uvicorn = None

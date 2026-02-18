@@ -360,12 +360,12 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                 start_str, end_str = limits[0].strip(), limits[1].strip()
                 if not start_str:
                     raise ValueError(
-                        f"Invalid range format: {element!r}. Range start cannot be empty.")
+                        f"Invalid range format: {element!r}. Range _start cannot be empty.")
                 try:
                     start = int(start_str)
                 except ValueError:
                     raise ValueError(
-                        f"Invalid start port number {start_str!r} in range {element!r}.")
+                        f"Invalid _start port number {start_str!r} in range {element!r}.")
                 if not (0 <= start <= max_port):
                     raise ValueError(
                         f"Start port {start} in range {element!r} is out of valid range (0-{max_port}).")
@@ -387,7 +387,7 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                     ports.add(range(start, end + 1))
                 else:
                     raise ValueError(
-                        f"Invalid range: start port {start} is greater than end port {end} in {element!r}.")
+                        f"Invalid range: _start port {start} is greater than end port {end} in {element!r}.")
             else:
                 raise ValueError(
                     f"Invalid range format: {element!r}. Unexpected hyphen usage.")

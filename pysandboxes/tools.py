@@ -102,7 +102,7 @@ def _remove_comment(line: str) -> str:
                 result.append(ch)
         # If we find a # and we're not inside quotes
         elif ch == '#' and not in_quotes:
-            # Stop here, this is the start of the comment
+            # Stop here, this is the _start of the comment
             break
         else:
             result.append(ch)
