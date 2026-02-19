@@ -1,28 +1,41 @@
 import collections
-from typing import ItemsView, Hashable, Iterator, Generic, TypeVar, Tuple, Union, \
-    Mapping, Iterable, KeysView, ValuesView, Dict
+from typing import (
+    Dict,
+    Generic,
+    Hashable,
+    ItemsView,
+    Iterable,
+    Iterator,
+    KeysView,
+    Mapping,
+    Tuple,
+    TypeVar,
+    Union,
+    ValuesView,
+)
 
-KeyType = TypeVar('KeyType', bound=Hashable)
-ValueType = TypeVar('ValueType')
+KeyType = TypeVar("KeyType", bound=Hashable)
+ValueType = TypeVar("ValueType")
 
-def _restore_picle(data:Dict[KeyType,ValueType]) -> 'ImmutableDict[KeyType,ValueType]':
+
+def _restore_picle(
+    data: Dict[KeyType, ValueType]
+) -> "ImmutableDict[KeyType,ValueType]":
     return ImmutableDict(data)
 
-class ImmutableDict(
-    tuple,
-    collections.abc.Mapping, Generic[KeyType, ValueType]):
+
+class ImmutableDict(tuple, collections.abc.Mapping, Generic[KeyType, ValueType]):
     """
     An immutable dictionary-like object built on a tuple of tuples.
     This class is compatible with the collections.abc.Mapping kind.
     """
+
     __slot__ = ()
 
     # construction accepts either a Mapping or an iterable of (key, value) pairs
     def __new__(
-            cls,
-            data: Union[
-                Mapping[KeyType, ValueType],
-                Iterable[Tuple[KeyType, ValueType]]],
+        cls,
+        data: Union[Mapping[KeyType, ValueType], Iterable[Tuple[KeyType, ValueType]]],
     ) -> "ImmutableDict[KeyType, ValueType]":
         # Normalize incoming data to an iterable of pairs
         keys: Tuple[KeyType, ...]
@@ -33,6 +46,7 @@ class ImmutableDict(
         else:
             if isinstance(data, Mapping):
                 from pysandboxes.guard_envs import LearnEnviron
+
                 # Hack to detect the learn phase.
                 # We don't want to learn all keys
                 if isinstance(data, LearnEnviron):
@@ -52,7 +66,7 @@ class ImmutableDict(
         return obj
 
     def __reduce__(self):
-        return (_restore_picle,(dict(self),))
+        return (_restore_picle, (dict(self),))
 
     @property
     def _keys(self) -> Tuple[KeyType, ...]:
@@ -64,7 +78,7 @@ class ImmutableDict(
 
     # Mapping kind
     def __getitem__(self, key: KeyType) -> ValueType:
-        if isinstance(key,slice):
+        if isinstance(key, slice):
             return self._keys[key]
         else:
             try:

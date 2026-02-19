@@ -13,8 +13,7 @@ class ConfigSyntaxError(SandBoxError):
         self.errors = errors
 
     def __str__(self):
-        return (self.message + "\n" +
-                "\n".join(self.errors))
+        return self.message + "\n" + "\n".join(self.errors)
 
 
 class RuleFileNotFoundError(FileNotFoundError, SandBoxError):

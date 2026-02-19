@@ -13,21 +13,29 @@ from asyncio import CancelledError
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
-from typing import Callable, Optional, NamedTuple, List, Dict
+from typing import Callable, Dict, List, NamedTuple, Optional
 
 import aiohttp
 from aiohttp import ClientConnectorError
 
-from . import main_shutdown
-from .parameters import INTERVAL_FOR_PING_DAEMON, RETRY_RESET_DELAY, RETRY_MAX_DELAY, \
-    RETRY_FACTOR, RETRY_BASE_DELAY, RETRY_MAX_ATTEMPTS, TIMEOUT_FOR_PING, \
-    TIMEOUT_FOR_STOP_DAEMON, MAX_CONNECT_RETRY
-from .sse_base_daemon import BaseSSESandbox
 from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, Envs
 from ..tools import SyncOrAsyncFunc, get_callable_info
+from . import main_shutdown
+from .parameters import (
+    INTERVAL_FOR_PING_DAEMON,
+    MAX_CONNECT_RETRY,
+    RETRY_BASE_DELAY,
+    RETRY_FACTOR,
+    RETRY_MAX_ATTEMPTS,
+    RETRY_MAX_DELAY,
+    RETRY_RESET_DELAY,
+    TIMEOUT_FOR_PING,
+    TIMEOUT_FOR_STOP_DAEMON,
+)
+from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +54,11 @@ def get_log_formatter():
     return fmt._fmt
 
 
-async def _write_stream(
-        child_stdin_writer: asyncio.StreamWriter
-) -> None:
+async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
     import pty
     import termios
     import tty
+
     master_fd, slave_fd = pty.openpty()
     old_settings = termios.tcgetattr(sys.stdin.fileno())
     try:
@@ -62,7 +69,7 @@ async def _write_stream(
                 line: str = await asyncio.to_thread(sys.stdin.readline)
                 if not line:  # EOF (End Of File)
                     break
-                child_stdin_writer.write(line.encode('utf-8'))
+                child_stdin_writer.write(line.encode("utf-8"))
                 await child_stdin_writer.drain()
             except Exception as e:
                 break
@@ -73,12 +80,12 @@ async def _write_stream(
 
 
 async def _read_stream(
-        stream: asyncio.StreamReader,
-        callback: Callable[[str], None]) -> None:
+    stream: asyncio.StreamReader, callback: Callable[[str], None]
+) -> None:
     while True:
         line: bytes = await stream.readline()
         if line:
-            callback(line.decode('utf-8').strip())
+            callback(line.decode("utf-8").strip())
         else:
             break
 
@@ -94,32 +101,34 @@ class DaemonParameters(NamedTuple):
 
 @sandbox_loop
 async def launch_sandbox(
-        cmd: List[str],
-        pipe_path: Path,
-        envs: Envs,
-        process_config: DaemonParameters,
+    cmd: List[str],
+    pipe_path: Path,
+    envs: Envs,
+    process_config: DaemonParameters,
 ) -> Process:
     os.mkfifo(pipe_path)
     if DEBUG:
-        Path("run.sh").write_text("#!/bin/bash\n" +
-                                  cmd[0] + " " +
-                                  " \\\n  ".join(
-                                      param if " " not in param else repr(param) for
-                                      param in cmd[1:]) +
-                                  "\n")
+        Path("run.sh").write_text(
+            "#!/bin/bash\n"
+            + cmd[0]
+            + " "
+            + " \\\n  ".join(
+                param if " " not in param else repr(param) for param in cmd[1:]
+            )
+            + "\n"
+        )
     try:
+
         def preexec_fn():
             os.umask(0o006)  # Only user:RW
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            env=dict(envs),
-            preexec_fn=preexec_fn
+            *cmd, env=dict(envs), preexec_fn=preexec_fn
         )
 
         # It's a good time for that
         gc.collect()
-        with open(pipe_path, 'wb') as fifo:
+        with open(pipe_path, "wb") as fifo:
             fifo.write(pickle.dumps(process_config))
             fifo.close()
         pipe_path.unlink()
@@ -139,7 +148,7 @@ def find_free_port() -> Optional[int]:
     try:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
             # The port number 0 tells the OS to find an ephemeral port
-            s.bind(('', 0))
+            s.bind(("", 0))
             # Set SO_REUSEADDR option to allow reuse of the address
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             # Return the port number assigned by the OS
@@ -150,41 +159,40 @@ def find_free_port() -> Optional[int]:
 
 
 class BaseSubProcessDaemon(BaseSSESandbox):
-    __slots__ = ('_is_started',
-                 '_token',
-                 '_process',
-                 '_watchdog',
-                 '_attempts',
-                 '_base_delay',
-                 '_factor',
-                 '_max_delay',
-                 '_max_attempts',
-                 '_reset_delay',
-                 '_last_reset',
-                 '_is_started',
-                 '_python_args',
-                 'restart',
-                 )
+    __slots__ = (
+        "_is_started",
+        "_token",
+        "_process",
+        "_watchdog",
+        "_attempts",
+        "_base_delay",
+        "_factor",
+        "_max_delay",
+        "_max_attempts",
+        "_reset_delay",
+        "_last_reset",
+        "_is_started",
+        "_python_args",
+        "restart",
+    )
 
-    def __init__(self,
-                 token: str,
-                 *,
-                 host: str = "localhost",
-                 python_args: Optional[List[str]] = None,
-                 max_connect_retry: int = MAX_CONNECT_RETRY,
-                 max_attempts: int = RETRY_MAX_ATTEMPTS,
-                 # Maximum number of retry _attempts
-                 base_delay: float = RETRY_BASE_DELAY,
-                 # Initial delay in seconds (e.g., 100 ms)
-                 factor: float = RETRY_FACTOR,  # Exponential increase _factor
-                 max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
-                 reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
-                 **kwargs,
-                 ):
-        super().__init__(
-            token,
-            host=host,
-            max_connect_retry=max_connect_retry)
+    def __init__(
+        self,
+        token: str,
+        *,
+        host: str = "localhost",
+        python_args: Optional[List[str]] = None,
+        max_connect_retry: int = MAX_CONNECT_RETRY,
+        max_attempts: int = RETRY_MAX_ATTEMPTS,
+        # Maximum number of retry _attempts
+        base_delay: float = RETRY_BASE_DELAY,
+        # Initial delay in seconds (e.g., 100 ms)
+        factor: float = RETRY_FACTOR,  # Exponential increase _factor
+        max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
+        reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
+        **kwargs,
+    ):
+        super().__init__(token, host=host, max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
         self._process = None
         self._watchdog = None
@@ -198,12 +206,14 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self._is_started = False
         self.restart = 0
 
-    def subprocess_cmd(self,
-                       all_rules: AllRules,
-                       envs: Dict[str, str],
-                       pipe_path: Path,
-                       ) -> Args:
+    def subprocess_cmd(
+        self,
+        all_rules: AllRules,
+        envs: Dict[str, str],
+        pipe_path: Path,
+    ) -> Args:
         from . import main_sandbox
+
         cmd_parameters = [
             sys.executable,
             # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
@@ -212,41 +222,45 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             "-d",  # Mode debug à la sortie
         ]
         cmd_parameters.extend(self._python_args)
-        cmd_parameters.extend([
-            "-m",
-            main_sandbox.__name__,
-        ])
+        cmd_parameters.extend(
+            [
+                "-m",
+                main_sandbox.__name__,
+            ]
+        )
         return cmd_parameters
 
-    async def _start(self,
-                     all_rules: AllRules,
-                     *,
-                     envs: Dict[str, str],
-                     log_level: int,
-                     init_fn: Optional[SyncOrAsyncFunc],
-                     ) -> None:
+    async def _start(
+        self,
+        all_rules: AllRules,
+        *,
+        envs: Dict[str, str],
+        log_level: int,
+        init_fn: Optional[SyncOrAsyncFunc],
+    ) -> None:
         self.restart = 0
         self.port = find_free_port()
 
-        await self._re_start(all_rules,
-                             envs=envs,
-                             log_level=log_level,
-                             init_fn=init_fn,
-                             first=True,
-                             )
+        await self._re_start(
+            all_rules,
+            envs=envs,
+            log_level=log_level,
+            init_fn=init_fn,
+            first=True,
+        )
         self._watchdog = asyncio.create_task(
-            self.watchdog(
-                all_rules, envs=envs, log_level=log_level, init_fn=init_fn
-            ),
-            name="ControlDaemon")
+            self.watchdog(all_rules, envs=envs, log_level=log_level, init_fn=init_fn),
+            name="ControlDaemon",
+        )
 
-    async def watchdog(self,
-                       all_rules: AllRules,
-                       *,
-                       envs: Dict[str, str],
-                       log_level: int,
-                       init_fn: Optional[SyncOrAsyncFunc],
-                       ) -> None:
+    async def watchdog(
+        self,
+        all_rules: AllRules,
+        *,
+        envs: Dict[str, str],
+        log_level: int,
+        init_fn: Optional[SyncOrAsyncFunc],
+    ) -> None:
         errorlevel = -1
         try:
             self._attempts = 0
@@ -263,34 +277,37 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     self._attempts += 1
                     if self._attempts > self._max_attempts:
                         import os
+
                         logger.error("Too many demon shutdowns")
                         os._exit(-2)
                     # Calculate the base delay for this attempt
-                    current_base_backoff: float = min(self._max_delay,
-                                                      self._base_delay * (
-                                                              self._factor ** (
-                                                              self._attempts - 1)))
+                    current_base_backoff: float = min(
+                        self._max_delay,
+                        self._base_delay * (self._factor ** (self._attempts - 1)),
+                    )
 
-                    wait_time: float = random.uniform(current_base_backoff * 0.9,
-                                                      current_base_backoff)
+                    wait_time: float = random.uniform(
+                        current_base_backoff * 0.9, current_base_backoff
+                    )
                     logger.debug("watchdog sleep %i", wait_time)
                     await asyncio.sleep(wait_time)
                     # await self._shutdown()
                     self._last_reset = time.time()
-                    await self._re_start(all_rules,
-                                         envs=envs,
-                                         log_level=log_level,
-                                         init_fn=init_fn)
+                    await self._re_start(
+                        all_rules, envs=envs, log_level=log_level, init_fn=init_fn
+                    )
         except CancelledError:
             pass  # Ignore
 
-    async def _re_start(self,
-                        all_rules: AllRules,
-                        *,
-                        envs: Dict[str, str],
-                        log_level: int,
-                        init_fn: Optional[SyncOrAsyncFunc],
-                        first: bool = False) -> None:
+    async def _re_start(
+        self,
+        all_rules: AllRules,
+        *,
+        envs: Dict[str, str],
+        log_level: int,
+        init_fn: Optional[SyncOrAsyncFunc],
+        first: bool = False,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
             pipe_path.unlink(missing_ok=True)
@@ -313,15 +330,16 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         else:
             pysandboxes_logger.warning("Child Sandbox re-started")
 
-    async def _re_start_cmd(self,
-                            all_rules: AllRules,
-                            args: Args,
-                            pipe_path: Path,
-                            port: int,
-                            *,
-                            log_level: int,
-                            init_fn: Optional[SyncOrAsyncFunc],
-                            ) -> None:
+    async def _re_start_cmd(
+        self,
+        all_rules: AllRules,
+        args: Args,
+        pipe_path: Path,
+        port: int,
+        *,
+        log_level: int,
+        init_fn: Optional[SyncOrAsyncFunc],
+    ) -> None:
         self._is_started = False
         self._accept_incoming = False
         if init_fn:
@@ -336,7 +354,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             log_format=get_log_formatter(),
             token=self._token,
             port=port,
-            init_fn=init_fn_ref
+            init_fn=init_fn_ref,
         )
 
         if all_rules.learn:
@@ -359,13 +377,14 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             while True:
                 try:  # TODO: test in the server never response
                     async with session.get(
-                            ping_url,
-                            timeout=TIMEOUT_FOR_PING) as response:
+                        ping_url, timeout=TIMEOUT_FOR_PING
+                    ) as response:
                         if response.status == 200:
                             break
                         else:
                             raise RuntimeError(
-                                f"Unexpected status {response.status} from {ping_url}")
+                                f"Unexpected status {response.status} from {ping_url}"
+                            )
                 except TimeoutError:
                     pass  # Ignore and continue
                 except ClientConnectorError:
@@ -400,16 +419,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 if self._process:
                     try:
                         await asyncio.wait_for(
-                            self._process.wait(),
-                            timeout=TIMEOUT_FOR_STOP_DAEMON)
+                            self._process.wait(), timeout=TIMEOUT_FOR_STOP_DAEMON
+                        )
                     except asyncio.TimeoutError:
                         logger.warning("Kill the sandbox daemon")
                         self._process.kill()
                     logger.debug("Sandbox daemon is terminated")
                     self._process = None
             else:
-                logger.info("Kill the sandbox daemon (graceful_shutdown=%s)",
-                            graceful_shutdown)
+                logger.info(
+                    "Kill the sandbox daemon (graceful_shutdown=%s)", graceful_shutdown
+                )
                 self._process.kill()
         except OSError:
             pass
@@ -419,17 +439,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             pass  # Ignore
         except Exception as e:
             logger.exception("Unknown error in _shutdown")
-            assert e is None,"Unknown error in _shutdown"
+            assert e is None, "Unknown error in _shutdown"
         finally:
             self._process = None
             self._is_started = False
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
-
-    def update_rules(self,
-                     *,
-                     envs: Envs,
-                     all_rules: AllRules,
-                     ) -> AllRules:
+    def update_rules(
+        self,
+        *,
+        envs: Envs,
+        all_rules: AllRules,
+    ) -> AllRules:
         return all_rules

@@ -12,9 +12,15 @@ from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.python_in_sb import convert_extra_rules
-from pysandboxes.remote.sse_client_subprocess_daemon import BaseSubProcessDaemon, \
-    DaemonParameters, get_log_formatter, launch_sandbox, find_free_port
+from pysandboxes.remote.sse_client_subprocess_daemon import (
+    BaseSubProcessDaemon,
+    DaemonParameters,
+    find_free_port,
+    get_log_formatter,
+    launch_sandbox,
+)
 from pysandboxes.sb_types import Envs
+
 from .remote.parse_cpython_args import parse_python_cmd_line
 
 logger = logging.getLogger(__name__)
@@ -22,11 +28,8 @@ logger = logging.getLogger(__name__)
 
 def _debug_log():
     level = logging.WARNING  # FIX_RELEASE
-    format = '%(levelname)-5s [%(process)d] %(name)s: %(message)s'
-    logging.basicConfig(
-        level=level,
-        format=format
-    )
+    format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+    logging.basicConfig(level=level, format=format)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
@@ -34,8 +37,6 @@ def _debug_log():
     logging.getLogger("Pysandboxes").setLevel(level)
     logging.getLogger("pysandboxes").setLevel(level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
-
-
 
 
 def main() -> int:
@@ -51,9 +52,9 @@ def main() -> int:
     try:
         import IPython
 
-        binds=extra_rules.get("bind",set())# bind=~/.ipython,~/.ipython
+        binds = extra_rules.get("bind", set())  # bind=~/.ipython,~/.ipython
         binds.add("~/.ipython,~/.ipython")
-        extra_rules["bind"]=binds
+        extra_rules["bind"] = binds
     except ImportError:
         pass  # Ignore. IPython not found
 
@@ -65,11 +66,15 @@ def main() -> int:
 
     try:
         from importlib.resources import files
-        if not '/' in str(config_path) and len(python_cmd) >= 2 and python_cmd[
-            0] == "-m":
+
+        if (
+            not "/" in str(config_path)
+            and len(python_cmd) >= 2
+            and python_cmd[0] == "-m"
+        ):
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
-            caller_module = python_cmd[1].split('.', 1)[0]
+            caller_module = python_cmd[1].split(".", 1)[0]
             resource_path = files(caller_module)
             resource_config = resource_path / config_path
             if resource_config and resource_config.exists():
@@ -78,7 +83,7 @@ def main() -> int:
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=dict(os.environ),  # Use current environ
-            **extra_rules
+            **extra_rules,
         )
     except ConfigSyntaxError as e:
         print(str(e), file=sys.stderr)
@@ -88,19 +93,17 @@ def main() -> int:
     log_level = logging.getLogger().getEffectiveLevel()
 
     os_provider: BaseSubProcessDaemon = providers_factory[all_rules.os_sandbox](
-        token,
-        python_args=python_parsed_args
+        token, python_args=python_parsed_args
     )
     if not isinstance(os_provider, BaseSubProcessDaemon):
+
         async def run_locally():
             try:
                 await os_provider._start(
-                    all_rules,
-                    log_level=log_level,
-                    envs=None,
-                    init_fn=None
+                    all_rules, log_level=log_level, envs=None, init_fn=None
                 )
                 from .remote.python_in_sb import python_in_sb
+
                 python_in_sb(all_rules, python_cmd)
             finally:
                 await os_provider._shutdown(graceful_shutdown=True)
@@ -115,10 +118,7 @@ def main() -> int:
             envs=cast(Dict[str, str], os.environ),
             pipe_path=pipe_path,
         )
-        python_cmd.extend(
-            ["--_named-pipe", str(pipe_path),
-             "--_python-sb"
-             ])
+        python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
         token = str(uuid.uuid4())
 
         process_config = DaemonParameters(
@@ -127,7 +127,7 @@ def main() -> int:
             log_format=get_log_formatter(),
             token=token,
             port=0,
-            init_fn=""
+            init_fn="",
         )
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
@@ -143,9 +143,7 @@ def main() -> int:
             )
             return await process.wait()
 
-        return_code = asyncio.run(
-            launch_and_wait()
-        )
+        return_code = asyncio.run(launch_and_wait())
         return return_code
 
 

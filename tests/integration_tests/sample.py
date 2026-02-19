@@ -1,10 +1,8 @@
-from pysandboxes import sandboxes
+import logging
 import sys
 from pathlib import Path
 
-import logging
-
-from pysandboxes import sandbox, sandboxes_api
+from pysandboxes import sandbox, sandboxes, sandboxes_api
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +12,7 @@ assert config_path.exists()
 
 def init_sandbox():
     logger.info("init_sandbox called")
+
 
 @sandbox
 async def arun_in_sandbox() -> int:
@@ -52,6 +51,7 @@ async def async_sanboxes(config_path: Path) -> None:
 async def bridge_async_to_sync(config_path: Path) -> None:
     sync_sanboxes(config_path)
 
+
 @sandbox
 def sync_print_stdin_stdout():
     print("hello")
@@ -62,5 +62,3 @@ def sync_print_stdin_stdout():
 async def async_print_stdin_stdout():
     print("hello")
     print("world", file=sys.stderr)
-
-

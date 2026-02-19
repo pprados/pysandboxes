@@ -5,27 +5,37 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Optional, Union, Callable, Awaitable, Any, Tuple, List, \
-    Iterator, Dict, Set
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
-from .sb_types import ConfigLines, ConfigLine, Envs
+from .sb_types import ConfigLine, ConfigLines, Envs
 
 
 def resolve_env_variables(s: str, envs: Union[Dict[str, str], Envs]):
     # Motif pour capturer les expressions ${VAR} ou ${VAR:=default}
-    pattern = re.compile(r'\$\{([^{}:=]+)(?::=([^{}]*))?\}')
+    pattern = re.compile(r"\$\{([^{}:=]+)(?::=([^{}]*))?\}")
 
     def replace(match):
         var_name = match.group(1)
         default_value = match.group(2)
 
-        while '${' in var_name:
+        while "${" in var_name:
             var_name = resolve_env_variables(var_name, envs)
 
         value = envs.get(var_name, default_value)
         return value
 
-    while re.search(r'\${.*}', s):
+    while re.search(r"\${.*}", s):
         s = pattern.sub(replace, s)
     return s
 
@@ -35,8 +45,10 @@ def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]
 
 
 def substitute_config_env_vars(lines: ConfigLines, env_vars: Envs) -> ConfigLines:
-    return [ConfigLine(resolve_env_variables(line, env_vars), path, ln)
-            for line, path, ln in lines]
+    return [
+        ConfigLine(resolve_env_variables(line, env_vars), path, ln)
+        for line, path, ln in lines
+    ]
 
 
 def remove_config_comments(config: ConfigLines) -> ConfigLines:
@@ -94,14 +106,14 @@ def _remove_comment(line: str) -> str:
             result.append(ch)
         elif ch == quote_char and in_quotes:
             # Check if the quote is escaped
-            if i > 0 and line[i - 1] == '\\':
+            if i > 0 and line[i - 1] == "\\":
                 result.append(ch)
             else:
                 in_quotes = False
                 quote_char = None
                 result.append(ch)
         # If we find a # and we're not inside quotes
-        elif ch == '#' and not in_quotes:
+        elif ch == "#" and not in_quotes:
             # Stop here, this is the _start of the comment
             break
         else:
@@ -110,7 +122,7 @@ def _remove_comment(line: str) -> str:
         i += 1
 
     # Remove trailing whitespace
-    return ''.join(result).rstrip()
+    return "".join(result).rstrip()
 
 
 def _walk_to_base(path: str, base: str) -> Iterator[str]:
@@ -134,9 +146,9 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 
 def find_config(
-        filename: str,
-        raise_error_if_not_found: bool = False,
-        usecwd: bool = False,
+    filename: str,
+    raise_error_if_not_found: bool = False,
+    usecwd: bool = False,
 ) -> str:
     """
     Search in increasingly higher folders for the given file
@@ -167,7 +179,7 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-                frame.f_code.co_filename
+            frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back
@@ -189,8 +201,7 @@ def find_config(
 _is_in_sandbox = False
 
 # Use a context to separete the thread with the sandbox and the thread in the differents layers
-_sandboxed = contextvars.ContextVar(
-    'sanboxed', default=0)
+_sandboxed = contextvars.ContextVar("sanboxed", default=0)
 _is_in_sandbox: int = 0
 
 
@@ -213,7 +224,7 @@ def set_is_in_sandbox(value: bool) -> None:
 
 SyncOrAsyncFunc = Union[
     Callable[[], None],  # Fonction synchrone
-    Callable[[], Awaitable[None]]  # Fonction asynchrone
+    Callable[[], Awaitable[None]],  # Fonction asynchrone
 ]
 
 
@@ -243,19 +254,19 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
     # __qualname__ provides the dotted path from the module to the callable,
     # useful for nested functions or methods within classes.
     # __name__ provides just the simple name.
-    if hasattr(func, '__qualname__'):
+    if hasattr(func, "__qualname__"):
         callable_name = func.__qualname__
-    elif hasattr(func, '__name__'):
+    elif hasattr(func, "__name__"):
         callable_name = func.__name__
     elif inspect.ismethod(func):
         # For bound methods, func.__func__ gives the underlying function
-        if hasattr(func.__func__, '__qualname__'):
+        if hasattr(func.__func__, "__qualname__"):
             callable_name = func.__func__.__qualname__
-        elif hasattr(func.__func__, '__name__'):
+        elif hasattr(func.__func__, "__name__"):
             callable_name = func.__func__.__name__
     elif isinstance(func, type):  # It's a class
         callable_name = func.__qualname__
-    elif hasattr(func, '__class__') and hasattr(func.__class__, '__call__'):
+    elif hasattr(func, "__class__") and hasattr(func.__class__, "__call__"):
         # It's an instance of a class with a __call__ method
         callable_name = func.__class__.__qualname__
         if callable_name:
@@ -265,7 +276,8 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
 
 mixed_sync_and_async_error = (
     "It's impossible to mix synchronous and asynchronous sandbox functions. "
-    "Only use annotated asynchronous functions with an asynchronous sandbox.")
+    "Only use annotated asynchronous functions with an asynchronous sandbox."
+)
 
 
 def check_mixte_async_async():
@@ -278,8 +290,8 @@ def check_mixte_async_async():
         else:
             raise
 
-def follow_links_executable(executable: Path,
-                            all_paths:Set[Path]) -> None:
+
+def follow_links_executable(executable: Path, all_paths: Set[Path]) -> None:
     if executable.parents[0].name == "bin":
         if str(executable.parent.parent) not in all_paths:
             all_paths.add(executable.parent.parent)
@@ -294,5 +306,6 @@ def follow_links_executable(executable: Path,
         try:
             follow_links_executable(executable.resolve(strict=True), all_paths)
         except FileNotFoundError:
-            raise RuntimeError("Impossible to resolve the sys.executable `%s`",
-                               sys.executable)
+            raise RuntimeError(
+                "Impossible to resolve the sys.executable `%s`", sys.executable
+            )

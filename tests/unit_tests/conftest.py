@@ -1,18 +1,14 @@
 import logging
 
 import pytest
-
-from unit_tests import _deactivate_all_rules, _activate_guard_import_for_tests
+from unit_tests import _activate_guard_import_for_tests, _deactivate_all_rules
 
 
 def init_log_level():
     sandboxes_level = logging.DEBUG
     uvicorn_level = logging.WARNING
-    format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
-    logging.basicConfig(
-        level=min(sandboxes_level, logging.INFO),
-        format=format
-    )
+    format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
+    logging.basicConfig(level=min(sandboxes_level, logging.INFO), format=format)
 
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)

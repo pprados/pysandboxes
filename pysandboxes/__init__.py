@@ -1,15 +1,10 @@
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .e import *
-    from .sandboxes_api import sandboxes,run,sandbox,is_in_sandbox
+    from .sandboxes_api import is_in_sandbox, run, sandbox, sandboxes
 
-_api = {
-    "sandboxes",
-    "sandbox",
-    "run",
-    "is_in_sandbox"
-}
+_api = {"sandboxes", "sandbox", "run", "is_in_sandbox"}
 _exception = {
     "SandBoxError",
     "ConfigSyntaxError",
@@ -20,7 +15,7 @@ _exception = {
     "RuleAttributeError",
 }
 
-_cli={
+_cli = {
     "cli",
 }
 
@@ -42,11 +37,12 @@ class LazySandboxesProxy:
         """
         if not self.modules:
             import importlib
+
             module_api = importlib.import_module(".sandboxes_api", package=__name__)
             module_exception = importlib.import_module(".e", package=__name__)
             self.modules = {
                 **{api: module_api for api in _api},
-                **{api: module_exception for api in _exception}
+                **{api: module_exception for api in _exception},
             }
         if name in self.modules:
             return getattr(self.modules[name], name)

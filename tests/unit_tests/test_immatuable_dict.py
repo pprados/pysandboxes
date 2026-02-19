@@ -9,7 +9,7 @@ def test_immutable_dict():
     my_immutable_dict = ImmutableDict(original_dict)
 
     # Access a value
-    assert my_immutable_dict['b'] == original_dict['b']
+    assert my_immutable_dict["b"] == original_dict["b"]
 
     # Access list of keys
     assert list(original_dict) == list(my_immutable_dict)
@@ -33,5 +33,6 @@ def test_empty_immutable_dict():
     my_immutable_dict.keys()
     my_immutable_dict.values()
     import pickle
+
     p = pickle.dumps(my_immutable_dict)
     pickle.loads(p)

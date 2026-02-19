@@ -3,7 +3,8 @@ import pytest
 
 from pysandboxes import sandboxes
 from pysandboxes.tools import mixed_sync_and_async_error
-from ..sample import async_forty_two, sync_forty_two, init_sandbox, config_path
+
+from ..sample import async_forty_two, config_path, init_sandbox, sync_forty_two
 
 
 async def test_async_run_sandboxes_twice() -> None:
@@ -32,5 +33,3 @@ def test_sync_sandboxes_twice() -> None:
     for i in range(0, 2):
         with sandboxes(init_sandbox, config_path=config_path):
             assert sync_forty_two() == 42
-
-

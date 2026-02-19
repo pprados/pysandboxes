@@ -2,7 +2,8 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, activate_guard_files_rules
+
+from .test_guard_io import activate_guard_files_rules, files
 
 
 def test_gzip(files):
@@ -16,26 +17,26 @@ def test_gzip(files):
     activate_guard_files_rules(rules)
 
     from pysandboxes.guard_files import _rules
+
     assert _rules
 
+    import builtins
     import gzip
     import pathlib
-    import builtins
 
     assert pathlib._local.io.open.__pysandbox__, "Sandbox not applied"
     assert builtins.open.__pysandbox__, "Sandbox not applied"
 
     source = pathlib.Path(files["bind_dest"] / "bound_file.txt")
     compressed = source.with_suffix(".gz")
-    with (source.open("rb") as f_in,
-          gzip.open(compressed, "wb") as f_out):
+    with source.open("rb") as f_in, gzip.open(compressed, "wb") as f_out:
         f_out.writelines(f_in)
     compressed.unlink()
 
     with pytest.raises(RuleFileNotFoundError):
         source = pathlib.Path(files["bind_dest"] / "bound_file.txt")
         compressed = pathlib.Path(files["bind_src"] / "bound_file.txt").with_suffix(
-            ".gz")
-        with (source.open("rb"),
-              gzip.open(compressed, "wb")):
+            ".gz"
+        )
+        with source.open("rb"), gzip.open(compressed, "wb"):
             pass

@@ -2,12 +2,12 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Iterator, Any
+from typing import Any, Iterator
 
 import pytest
 
 from pysandboxes import sandbox
-from pysandboxes.os_sandbox import start_daemon, shutdown_daemon
+from pysandboxes.os_sandbox import shutdown_daemon, start_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 
 
@@ -15,17 +15,19 @@ from pysandboxes.py_sandbox import load_and_parse_config
 def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
     pass
 
+
 @pytest.fixture(scope="module", autouse=True)
 def start_daemon_for_tests() -> Iterator[None]:
     config_path = Path(__file__).parent.parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
     all_rules = load_and_parse_config(config_path=config_path)
-    start_daemon(all_rules,
-                          envs=os.environ,
-                          log_level=log_level,
-                          init_fn=None,
-                          )
+    start_daemon(
+        all_rules,
+        envs=os.environ,
+        log_level=log_level,
+        init_fn=None,
+    )
     yield
     shutdown_daemon(graceful_shutdown=False)
 
@@ -37,19 +39,20 @@ def sync_function(a: str, b: str) -> str:
 
 def test_sync_function():
     result_sync = sync_function("a", b="b")
-    assert result_sync == 'a b'
+    assert result_sync == "a b"
 
 
 @sandbox()
 async def async_function(a: str, b: str) -> str:
     import asyncio
+
     await asyncio.sleep(0)  # Simule une opération asynchrone
     return f"{a} {b}"
 
 
 async def test_async_function():
     result_async = await async_function("a", b="b")
-    assert result_async == 'a b'
+    assert result_async == "a b"
 
 
 @sandbox()

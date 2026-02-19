@@ -1,18 +1,20 @@
 import logging
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import List, Optional, Tuple
 
 from .config import CONFIG_NAME
-from .main_logger import format_ruleref, format_error_list, ErrorMsg
+from .main_logger import ErrorMsg, format_error_list, format_ruleref
 from .sb_types import ConfigLines
 
 logger = logging.getLogger(__name__)
 
 
-def parse_rules(rules: ConfigLines,
-                errors: List[ErrorMsg],
-                ) -> Tuple[str, bool, Optional[Path], bool, ConfigLines]:
+def parse_rules(
+    rules: ConfigLines,
+    errors: List[ErrorMsg],
+) -> Tuple[str, bool, Optional[Path], bool, ConfigLines]:
     from .os_sandbox import providers_factory
+
     other_rules = []
     provider_rule: ConfigLines = []
     providers_set = []
@@ -23,14 +25,14 @@ def parse_rules(rules: ConfigLines,
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
             provider_rule.append(rule)
-            provider = rule.rule[len("os-sandbox="):].strip()
+            provider = rule.rule[len("os-sandbox=") :].strip()
             if provider not in providers_factory:
                 errors.append(
-                    (f"{format_ruleref(rule)}: "
-                     f"Invalid os-sandbox {provider!r}.",
-                     rule.path,
-                     rule.ln
-                     )
+                    (
+                        f"{format_ruleref(rule)}: " f"Invalid os-sandbox {provider!r}.",
+                        rule.path,
+                        rule.ln,
+                    )
                 )
             providers_set.append((provider, rule))
         elif rule.rule.startswith("py-sandbox="):
@@ -41,9 +43,12 @@ def parse_rules(rules: ConfigLines,
                 use_py_sandbox = False
             else:
                 errors.append(
-                    (f"{format_ruleref(rule)}: "
-                     f"Invalid value {value!r} for py-sandbox. Use true or false.",
-                     rule.path, rule.ln)
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"Invalid value {value!r} for py-sandbox. Use true or false.",
+                        rule.path,
+                        rule.ln,
+                    )
                 )
         elif rule.rule.startswith("learn="):
             if learning_path:
@@ -51,20 +56,26 @@ def parse_rules(rules: ConfigLines,
             value = rule.rule.split("=", 1)[1].strip().lower()
             if value.lower() in ("true", "false", "0", "1"):
                 errors.append(
-                    (f"{format_ruleref(rule)}: "
-                     f"Invalid value {value!r} for 'learn'. "
-                     f"Use the filename instead.",
-                     rule.path, rule.ln)
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"Invalid value {value!r} for 'learn'. "
+                        f"Use the filename instead.",
+                        rule.path,
+                        rule.ln,
+                    )
                 )
             else:
                 learning_path = Path(value) if value else Path(CONFIG_NAME)
                 if not learning_path.parent.exists():
                     learning_path = None
                     errors.append(
-                        (f"{format_ruleref(rule)}: "
-                         f"Invalid value {value!r} for 'lear'. "
-                         f"The parent path must exist.",
-                         rule.path, rule.ln)
+                        (
+                            f"{format_ruleref(rule)}: "
+                            f"Invalid value {value!r} for 'lear'. "
+                            f"The parent path must exist.",
+                            rule.path,
+                            rule.ln,
+                        )
                     )
                 learning = True
 
@@ -82,10 +93,10 @@ def parse_rules(rules: ConfigLines,
                 f"{format_error_list(all_error_lines)}: "
                 f"Multiple os-sandbox parameters.",
                 Path(""),
-                0
+                0,
             )
         )
-        return 'errors', use_py_sandbox, learning_path, learning, other_rules
+        return "errors", use_py_sandbox, learning_path, learning, other_rules
     elif len(providers_set) == 1:
         provider = providers_set[0][0]
     else:

@@ -2,7 +2,8 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, _reset_rules, activate_guard_files_rules
+
+from .test_guard_io import _reset_rules, activate_guard_files_rules, files
 
 
 def test_builtins_open(files):
@@ -17,11 +18,12 @@ def test_builtins_open(files):
     activate_guard_files_rules(rules)
 
     import builtins
-    with builtins.open(files['bind_dest'] / "bound_file.txt"):
+
+    with builtins.open(files["bind_dest"] / "bound_file.txt"):
         pass
 
     with pytest.raises(RuleFileNotFoundError):
-        builtins.open(files['ignore'])
+        builtins.open(files["ignore"])
 
     with pytest.raises(RuleFileNotFoundError):
-        builtins.open(files['bind_src'] / "bound_file.txt")
+        builtins.open(files["bind_src"] / "bound_file.txt")

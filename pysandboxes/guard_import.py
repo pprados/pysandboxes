@@ -8,14 +8,24 @@ import os
 import sys
 from importlib import resources
 from importlib.abc import MetaPathFinder
-from importlib.metadata import DistributionFinder, PathDistribution, Prepared, FastPath
+from importlib.metadata import DistributionFinder, FastPath, PathDistribution, Prepared
 from types import ModuleType
-from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set, \
-    Iterable
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    cast,
+)
 
 from .e import RuleModuleNotFoundError
 from .immutable_dict import ImmutableDict
-from .learning import is_learning_mode, add_learning_rule
+from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg
 from .sb_types import ConfigLines
 from .tools import is_in_sandbox
@@ -56,16 +66,17 @@ _rules: ImportRules = cast(ImportRules, ())
 _patch_rules: PatchRules = cast(PatchRules, ())
 
 
-def parse_rules(config: ConfigLines,
-                errors: List[ErrorMsg],
-                ) -> Tuple[ImportRules, ConfigLines]:
+def parse_rules(
+    config: ConfigLines,
+    errors: List[ErrorMsg],
+) -> Tuple[ImportRules, ConfigLines]:
     white_list: List[str] = []
     ignore_rules: ConfigLines = []
     for rule in config:
         if rule.rule.startswith("python-import="):
-            value = rule.rule.split('=', 1)[1]
+            value = rule.rule.split("=", 1)[1]
             # Accept multiple --python-import rules
-            white_list.extend([r.strip() for r in value.split(',')])
+            white_list.extend([r.strip() for r in value.split(",")])
         else:
             ignore_rules.append(rule)
     if "*" in white_list:
@@ -77,19 +88,17 @@ def _apply_patch(module, name: str) -> None:
     logger.debug(f"Apply patch {name=} {module=}")
     all_patch = _patch_rules[name]
     for patch in all_patch:
-
         cur_object = module
         if patch.module_name != "":
-            paths = patch.module_name.split('.')
+            paths = patch.module_name.split(".")
             for node in paths[:-1]:
                 parent_object = cur_object
                 cur_object = cur_object.__dict__[node]
             new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
-            assert not hasattr(new_value,
-                               "__pysandbox__"), "Double injection"
-            if __debug__ and isinstance(new_value,
-                                        type(
-                                            _apply_patch)):  # Fake kinds.FunctionType
+            assert not hasattr(new_value, "__pysandbox__"), "Double injection"
+            if __debug__ and isinstance(
+                new_value, type(_apply_patch)
+            ):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # Add a marker
             setattr(cur_object, paths[-1], new_value)
         else:
@@ -102,6 +111,7 @@ class GuardLoader(importlib.abc.Loader):
     A custom loader that wraps an _original loader to modify a module after it
     has been created and executed.
     """
+
     __slots__ = ("original_spec", "original_loader")
 
     def __init__(self, original_spec: importlib.util.spec_from_file_location):
@@ -147,10 +157,9 @@ class GuardLoader(importlib.abc.Loader):
 
 # Define the custom finder class
 class GuardFinder(importlib.abc.MetaPathFinder):
-
     @classmethod
     def find_distributions(
-            cls, context=DistributionFinder.Context()
+        cls, context=DistributionFinder.Context()
     ) -> Iterable[PathDistribution]:
         """
         Find distributions.
@@ -171,7 +180,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             path.search(prepared) for path in map(FastPath, paths)
         )
 
-    __slots__ = ("_finders")
+    __slots__ = "_finders"
 
     def __init__(self, finders: MetaPathFinder):
         self._finders = finders
@@ -180,11 +189,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
     A custom finder that locates our special module.
     """
 
-    def find_spec(self,
-                  fullname: str,
-                  path: list[str],
-                  target: ModuleType = None
-                  ) -> Optional[importlib.util.spec_from_file_location]:
+    def find_spec(
+        self, fullname: str, path: list[str], target: ModuleType = None
+    ) -> Optional[importlib.util.spec_from_file_location]:
         """
         Finds the specification for a module.
         """
@@ -198,7 +205,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             if finder == self:
                 continue
             original_spec: importlib.util.spec_from_file_location = finder.find_spec(
-                fullname, path, target)
+                fullname, path, target
+            )
             if original_spec:
                 break
         else:
@@ -214,14 +222,13 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             # logger.debug(
             #     f"GuardFinder: Found _original spec {original_spec.name} via {type(finder).__name__!r}.")
             if original_spec.name in _patch_rules:
-
                 # logger.debug(f"Inject loader for {original_spec.name!r}")
                 if original_spec.parent:
                     # Use __init__
                     if original_spec.submodule_search_locations:
                         init_file = os.path.join(
-                            original_spec.submodule_search_locations[0],
-                            "__init__.py")
+                            original_spec.submodule_search_locations[0], "__init__.py"
+                        )
                     else:
                         init_file = original_spec.origin
                     assert os.path.isfile(init_file), "module without __init__.py"
@@ -230,8 +237,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                         fullname,
                         init_file,
                         loader=GuardLoader(original_spec),
-                        submodule_search_locations=
-                        original_spec.submodule_search_locations,
+                        submodule_search_locations=original_spec.submodule_search_locations,
                     )
                 else:
                     new_spec = importlib.machinery.ModuleSpec(
@@ -243,8 +249,12 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             else:
                 new_spec = original_spec
             if is_learning_mode() and is_in_sandbox():
-                module_name = fullname.split('.', 1)[0]
-                if "*" not in _rules and module_name not in _rules and module_name != "pysandboxes":
+                module_name = fullname.split(".", 1)[0]
+                if (
+                    "*" not in _rules
+                    and module_name not in _rules
+                    and module_name != "pysandboxes"
+                ):
                     add_learning_rule(LearnImportRule(module_name))
             else:
                 # logger.error("Ignore %s",repr(fullname))
@@ -264,10 +274,11 @@ _activated = False
 
 
 def _activate_patch_import(
-        patch_rules: PatchRules,
+    patch_rules: PatchRules,
 ) -> bool:
     global _activated
     import sys
+
     if _guard_finder not in sys.meta_path:
         global _patch_rules
         assert not _activated
@@ -283,27 +294,26 @@ def _activate_patch_import(
 
 
 # Modules to not remove from sys.modules, and to wait the lazy patch
-_not_refresh_modules: Set[str] = (
-    {
-        'sys',
-        'asyncio',
-        'builtins',
-        'concurrent',
-        'importlib',
-        'warnings',
-        'logging',
-        '_pytest',
-        '_pytest.fixtures',
-        'pytest',
-        'pathlib',
-        'subprocess',
-        __name__.rsplit('.', maxsplit=1)[0],
-    }
-)
+_not_refresh_modules: Set[str] = {
+    "sys",
+    "asyncio",
+    "builtins",
+    "concurrent",
+    "importlib",
+    "warnings",
+    "logging",
+    "_pytest",
+    "_pytest.fixtures",
+    "pytest",
+    "pathlib",
+    "subprocess",
+    __name__.rsplit(".", maxsplit=1)[0],
+}
 
 
 def remove_modules() -> None:
     import sys
+
     logger.debug("Remove modules")
     to_remove = set()
     for k, m in dict(sys.modules).items():
@@ -339,8 +349,8 @@ def patch_rules() -> Dict[str, Callable]:
 
 
 def activate_guard_import(
-        patch_rules: Dict[str, Callable],
-        rules: ImportRules,
+    patch_rules: Dict[str, Callable],
+    rules: ImportRules,
 ) -> None:
     global _rules
     global _activated
@@ -395,7 +405,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
 
 
 def generate_rules(
-        learn: Set[Any],
+    learn: Set[Any],
 ) -> List[str]:
     # Select only parent
     other_result = set()
@@ -405,7 +415,8 @@ def generate_rules(
     black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())
     std_modules = set(resources.read_text(__name__, "modules_standard.txt").split())
     deprecated_modules = set(
-        resources.read_text(__name__, "modules_deprecated.txt").split())
+        resources.read_text(__name__, "modules_deprecated.txt").split()
+    )
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         if learn_rule.name in black_list:
@@ -422,33 +433,50 @@ def generate_rules(
     result = []
     if danger_result:
         result.append("# \u26A0 Dangerous!")
-        result.extend(sorted(
-            [f"python-import={name}"
-             for name in _group_by_width(sorted(danger_result), width)]))
+        result.extend(
+            sorted(
+                [
+                    f"python-import={name}"
+                    for name in _group_by_width(sorted(danger_result), width)
+                ]
+            )
+        )
         result.append("")
     if standard_result:
         result.append("# Standard Python")
-        result.extend(sorted(
-            [f"python-import={name}"
-             for name in _group_by_width(sorted(standard_result), width)]))
+        result.extend(
+            sorted(
+                [
+                    f"python-import={name}"
+                    for name in _group_by_width(sorted(standard_result), width)
+                ]
+            )
+        )
         result.append("")
     if deprecated_result:
         result.append("# \u26A0 Deprecated Python module")
-        result.extend(sorted(
-            [f"python-import={name}"
-             for name in _group_by_width(sorted(deprecated_result), width)]))
+        result.extend(
+            sorted(
+                [
+                    f"python-import={name}"
+                    for name in _group_by_width(sorted(deprecated_result), width)
+                ]
+            )
+        )
         result.append("")
     if other_result:
         result.append("# External modules (Are you sure about the origin?)")
-        result.extend(sorted(
-            [f"python-import={name}"
-             for name in sorted(other_result)]))
+        result.extend(
+            sorted([f"python-import={name}" for name in sorted(other_result)])
+        )
     return result
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:
+
     def _deactivate_guard_import():
         import sys
+
         global _rules
         _rules = ("*",)
         remove_modules()

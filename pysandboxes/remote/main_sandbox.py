@@ -12,28 +12,33 @@ from typing import Optional, cast
 
 from pysandboxes.base_daemon import BaseDaemon
 from pysandboxes.os_sandbox import providers_factory
+
+from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 from .python_in_sb import python_in_sb
 from .sse_client_subprocess_daemon import DaemonParameters
 from .tools import set_pdeathsig
-from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 
 # %%
 
+
 async def run_server(process_config: DaemonParameters):
     from pysandboxes.main_logger import pysandboxes_logger
+
     # Call init function
     # Note: the init_function is called AFTER the activation of the python sandbox
     init_fn: Optional[SyncOrAsyncFunc] = None
     if process_config.init_fn:
-        module_name, function_name = str(process_config.init_fn).split(':', 1)
+        module_name, function_name = str(process_config.init_fn).split(":", 1)
         set_is_in_sandbox(True)
         try:
             module = importlib.import_module(module_name)
         except ImportError:
-            pysandboxes_logger.error("Impossible to import the module %s",repr(module_name))
+            pysandboxes_logger.error(
+                "Impossible to import the module %s", repr(module_name)
+            )
             sys.exit(-1)
         set_is_in_sandbox(False)  # Learn the import during the import
         init_fn = getattr(module, function_name)
@@ -44,22 +49,24 @@ async def run_server(process_config: DaemonParameters):
     assert os_sandbox in ("subprocess", "firejail")
     if all_rules.use_py_sandbox:
         pysandboxes_logger.info(
-            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")
+            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}"
+        )
     else:
-        pysandboxes_logger.info(
-            f"Start ONLY an os-sandox of type {os_sandbox!r}")
+        pysandboxes_logger.info(f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
     from pysandboxes.os_sandbox import _set_current_daemon
+
     server_daemon: BaseDaemon = providers_factory["_sse_server"](
         process_config.token,
         port=process_config.port,
     )
     _set_current_daemon(server_daemon)
-    await server_daemon._start(process_config.all_rules,
-                               envs=cast(dict, os.environ),
-                               log_level=process_config.log_level,
-                               init_fn=init_fn
-                               )
+    await server_daemon._start(
+        process_config.all_rules,
+        envs=cast(dict, os.environ),
+        log_level=process_config.log_level,
+        init_fn=init_fn,
+    )
     await server_daemon.join()
     return 0
 
@@ -71,13 +78,11 @@ def main() -> int:
         description="Start a Python-sandbox daemon inside os-sandbox."
     )
 
-    parser.add_argument("--_python-sb",
-                        action='store_true',
-                        default=False,
-                        help="_internal parameter")
+    parser.add_argument(
+        "--_python-sb", action="store_true", default=False, help="_internal parameter"
+    )
 
-    parser.add_argument("--_named-pipe",
-                        help="_internal parameter")
+    parser.add_argument("--_named-pipe", help="_internal parameter")
 
     # Parse the arguments provided by the user
     sandboxes_parsed, sandboxes_args = parser.parse_known_args()
@@ -101,7 +106,9 @@ def main() -> int:
     root_logger.setLevel(process_config.log_level)
     logger.debug("config body and token successfully read from named pipe")
 
-    logging.getLogger('aiohttp_sse_client.client').setLevel(logging.DEBUG)  # FIX_RELEASE
+    logging.getLogger("aiohttp_sse_client.client").setLevel(
+        logging.DEBUG
+    )  # FIX_RELEASE
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
 
@@ -110,16 +117,12 @@ def main() -> int:
     if all_rules.use_py_sandbox:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
-        activate_sandboxes(
-            all_rules,
-            dict(os.environ)
-        )
+
+        activate_sandboxes(all_rules, dict(os.environ))
 
     # Use python-sb command?
     if sandboxes_parsed._python_sb:
-        return python_in_sb(
-            all_rules,
-            sandboxes_args)
+        return python_in_sb(all_rules, sandboxes_args)
 
     # Elsen _start the server
     return asyncio.run(run_server(process_config))

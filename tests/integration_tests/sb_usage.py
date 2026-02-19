@@ -4,10 +4,10 @@ import os
 import tempfile
 from pathlib import Path
 from pprint import pprint
-from socket import AF_INET, SOCK_STREAM, AF_INET6, SOCK_DGRAM
+from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
 from typing import Dict
 
-from pysandboxes import sandbox, sandboxes, SandBoxError
+from pysandboxes import SandBoxError, sandbox, sandboxes
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
@@ -17,11 +17,8 @@ logger = logging.getLogger(__name__)
 def init_log_level():
     sandboxes_level = logging.WARNING
     uvicorn_level = logging.WARNING
-    format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
-    logging.basicConfig(
-        level=min(sandboxes_level, logging.INFO),
-        format=format
-    )
+    format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
+    logging.basicConfig(level=min(sandboxes_level, logging.INFO), format=format)
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
@@ -76,6 +73,7 @@ def _test_envs():
 def _test_network():
     # tcp connexion
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         remote_ip = socket.gethostbyname("www.google.com")
         xx = socket.gethostbyname_ex("www.google.com")
@@ -89,6 +87,7 @@ def _test_network():
         sock.bind(("::1", 0))
     # web connexion
     import requests
+
     f = requests.get("http://www.google.com/")
     # udp connexion ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -149,7 +148,7 @@ def _test_files():
     assert "data.txt" in all_entries
 
     try:
-        with tempfile.TemporaryFile(mode='w+') as temp_file:
+        with tempfile.TemporaryFile(mode="w+") as temp_file:
             pass
     except SandBoxError as e:
         logger.exception("tempfile.TemporaryFile")
@@ -157,7 +156,7 @@ def _test_files():
         logger.exception("tempfile.TemporaryFile")
 
     try:
-        with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
+        with tempfile.NamedTemporaryFile(mode="w+", delete=True) as temp_file:
             pass
     except SandBoxError as e:
         logger.exception("tempfile.NamedTemporaryFile")
@@ -220,7 +219,7 @@ async def main(argv: Dict[str, str]) -> int:
     extra_rules = convert_extra_rules(argv[1:])
     config_path = Path("tests/test.py-sandboxes")
     if "learn" in extra_rules:
-        learning_path, *_ = extra_rules.get("learn", [''])
+        learning_path, *_ = extra_rules.get("learn", [""])
         if not learning_path:
             learning_path = ".py-sandboxes.test"
         extra_rules["learn"] = learning_path
@@ -228,17 +227,19 @@ async def main(argv: Dict[str, str]) -> int:
     for i in range(0, 1):
         # asyncio.run(async_manager())
         # # # print("----------------")
-        async with sandboxes(async_init_sandbox,
-                             config_path=config_path,
-                             # learn=".py-sandboxes", # Learn all the times
-                             # os_sandbox="none",
-                             **extra_rules
-                             ):
+        async with sandboxes(
+            async_init_sandbox,
+            config_path=config_path,
+            # learn=".py-sandboxes", # Learn all the times
+            # os_sandbox="none",
+            **extra_rules,
+        ):
             await arun()
         # TODO: voir la capture d'exception
         # print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")
+
 
 # from pysandboxes.sandboxes_api import sandboxes
 #

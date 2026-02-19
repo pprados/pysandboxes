@@ -75,77 +75,156 @@ def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[s
         prog="python-sb",
         description="Run a Python program in a SANBOX.",
         add_help=False,  # We'll add -h manually for full control
-        formatter_class=CustomHelpFormatter
+        formatter_class=CustomHelpFormatter,
     )
-    parser.add_argument("-h", "-?", "--help", action="store_true",
-                        help="Print a short description of all command line options and corresponding environment variables and exit.")
-    parser.add_argument("--help-env", action="store_true",
-                        help="Print a short description of Python-specific environment variables and exit.")
-    parser.add_argument("--help-xoptions", action="store_true",
-                        help="Print a description of implementation-specific -X options and exit.")
-    parser.add_argument("--help-all", action="store_true",
-                        help="Print complete usage information and exit.")
-    parser.add_argument("-V", "--version", action="store_true",
-                        help="Print the Python version number and exit.")
+    parser.add_argument(
+        "-h",
+        "-?",
+        "--help",
+        action="store_true",
+        help="Print a short description of all command line options and corresponding environment variables and exit.",
+    )
+    parser.add_argument(
+        "--help-env",
+        action="store_true",
+        help="Print a short description of Python-specific environment variables and exit.",
+    )
+    parser.add_argument(
+        "--help-xoptions",
+        action="store_true",
+        help="Print a description of implementation-specific -X options and exit.",
+    )
+    parser.add_argument(
+        "--help-all",
+        action="store_true",
+        help="Print complete usage information and exit.",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="store_true",
+        help="Print the Python version number and exit.",
+    )
 
-    parser.add_argument("-b", action="store_true",
-                        help="Issue a warning when converting bytes or bytearray to str without specifying encoding or comparing bytes or bytearray with str or bytes with int. Issue an error when the option is given twice (-bb).")
-    parser.add_argument("-B", action="store_true",
-                        help="If given, Python won’t try to write .pyc files on the import of source modules. See also PYTHONDONTWRITEBYTECODE.")
-    parser.add_argument("--check-hash-based-pycs", action="store_true",
-                        # default|always|never
-                        help="Control the validation behavior of hash-based .pyc files.")
-    parser.add_argument("-d", action="store_true",
-                        help="Turn on parser debugging output (for expert only)")
-    parser.add_argument("-E", action="store_true",
-                        help="Ignore all PYTHON* environment variables, e.g. PYTHONPATH and PYTHONHOME, that might be set.")
+    parser.add_argument(
+        "-b",
+        action="store_true",
+        help="Issue a warning when converting bytes or bytearray to str without specifying encoding or comparing bytes or bytearray with str or bytes with int. Issue an error when the option is given twice (-bb).",
+    )
+    parser.add_argument(
+        "-B",
+        action="store_true",
+        help="If given, Python won’t try to write .pyc files on the import of source modules. See also PYTHONDONTWRITEBYTECODE.",
+    )
+    parser.add_argument(
+        "--check-hash-based-pycs",
+        action="store_true",
+        # default|always|never
+        help="Control the validation behavior of hash-based .pyc files.",
+    )
+    parser.add_argument(
+        "-d",
+        action="store_true",
+        help="Turn on parser debugging output (for expert only)",
+    )
+    parser.add_argument(
+        "-E",
+        action="store_true",
+        help="Ignore all PYTHON* environment variables, e.g. PYTHONPATH and PYTHONHOME, that might be set.",
+    )
 
-    parser.add_argument("-i", action="store_true",
-                       help="Enter interactive mode after execution.")
-    parser.add_argument("-I", action="store_true",
-                        help="Run Python in isolated mode.")
-    parser.add_argument("-O", action="store_true",
-                        help="Remove assert statements and any code conditional on the value of __debug__.")
-    parser.add_argument("-OO", action="store_true",
-                        help="Do -O and also discard docstrings. ")
-    parser.add_argument("-P", action="store_true",
-                        help="Don’t prepend a potentially unsafe path to sys.path")
-    parser.add_argument("-q", action="store_true",
-                        help="Don’t display the copyright and version messages even in interactive mode.")
-    parser.add_argument("-R", action="store_true",
-                        help="Turn on hash randomization.")
-    parser.add_argument("-s", action="store_true",
-                        help="Don’t add the user site-packages directory to sys.path.")
-    parser.add_argument("-S", action="store_true",
-                        help="Disable the import of the module site and the site-dependent manipulations of sys.path that it entails. ")
-    parser.add_argument("-u", action="store_true",
-                        help="Force the stdout and stderr streams to be unbuffered. ")
-    parser.add_argument("-v", action="store_true",
-                        help="Print a message each time a module is initialized, showing the place (filename or built-in module) from which it is loaded. ")
-    parser.add_argument("-W", action="append", metavar="arg", dest="warnings",
-                        help="Warning control. Python’s warning machinery by default prints warning messages to sys.stderr.")
-    parser.add_argument("-x", action="store_true",
-                        help="Skip first line of source, allowing use of non-Unix forms of #!.")
-    parser.add_argument("-X", action="store", metavar="opt", dest="xoptions",
-                        help="Reserved for various implementation-specific options. ")
+    parser.add_argument(
+        "-i", action="store_true", help="Enter interactive mode after execution."
+    )
+    parser.add_argument("-I", action="store_true", help="Run Python in isolated mode.")
+    parser.add_argument(
+        "-O",
+        action="store_true",
+        help="Remove assert statements and any code conditional on the value of __debug__.",
+    )
+    parser.add_argument(
+        "-OO", action="store_true", help="Do -O and also discard docstrings. "
+    )
+    parser.add_argument(
+        "-P",
+        action="store_true",
+        help="Don’t prepend a potentially unsafe path to sys.path",
+    )
+    parser.add_argument(
+        "-q",
+        action="store_true",
+        help="Don’t display the copyright and version messages even in interactive mode.",
+    )
+    parser.add_argument("-R", action="store_true", help="Turn on hash randomization.")
+    parser.add_argument(
+        "-s",
+        action="store_true",
+        help="Don’t add the user site-packages directory to sys.path.",
+    )
+    parser.add_argument(
+        "-S",
+        action="store_true",
+        help="Disable the import of the module site and the site-dependent manipulations of sys.path that it entails. ",
+    )
+    parser.add_argument(
+        "-u",
+        action="store_true",
+        help="Force the stdout and stderr streams to be unbuffered. ",
+    )
+    parser.add_argument(
+        "-v",
+        action="store_true",
+        help="Print a message each time a module is initialized, showing the place (filename or built-in module) from which it is loaded. ",
+    )
+    parser.add_argument(
+        "-W",
+        action="append",
+        metavar="arg",
+        dest="warnings",
+        help="Warning control. Python’s warning machinery by default prints warning messages to sys.stderr.",
+    )
+    parser.add_argument(
+        "-x",
+        action="store_true",
+        help="Skip first line of source, allowing use of non-Unix forms of #!.",
+    )
+    parser.add_argument(
+        "-X",
+        action="store",
+        metavar="opt",
+        dest="xoptions",
+        help="Reserved for various implementation-specific options. ",
+    )
 
     python_parsed, sandboxes_args = parser.parse_known_args(args=python_args)
     python_parsed_args = [arg for arg in python_args if arg not in sandboxes_args]
 
     if python_parsed.help:
         # Add extra parameter before generate the help
-        parser.add_argument("--<sb-option>=<value>", action="store_true", dest="config",
-                            help="Add some Py-sandboxes parameters.")
+        parser.add_argument(
+            "--<sb-option>=<value>",
+            action="store_true",
+            dest="config",
+            help="Add some Py-sandboxes parameters.",
+        )
         group = parser.add_mutually_exclusive_group()
 
-        group.add_argument("-m", action="store", metavar="mod", dest="module",
-                            help="Run library module as a script (terminates option list).")
-        group.add_argument("-c", action="store", metavar="cmd", dest="command",
-                            help="Program passed in as a string.")
+        group.add_argument(
+            "-m",
+            action="store",
+            metavar="mod",
+            dest="module",
+            help="Run library module as a script (terminates option list).",
+        )
+        group.add_argument(
+            "-c",
+            action="store",
+            metavar="cmd",
+            dest="command",
+            help="Program passed in as a string.",
+        )
 
         parser.print_help()
         sys.exit(0)
 
     return python_parsed_args, sandboxes_args, python_cmd
-
-

@@ -9,7 +9,7 @@ import sys  # Import the sys module to access system-specific parameters and fun
 import textwrap
 from ctypes import cdll
 from pathlib import Path
-from typing import Any, Optional, Dict, Tuple, Awaitable
+from typing import Any, Awaitable, Dict, Optional, Tuple
 
 import netifaces
 
@@ -37,7 +37,7 @@ def get_venv() -> str | None:
         venv_path = sys.prefix
         return venv_path
     else:
-        return os.environ.get('VIRTUAL_ENV')
+        return os.environ.get("VIRTUAL_ENV")
 
 
 def configure_logging_level(verbose_count: int) -> int:
@@ -72,18 +72,17 @@ def get_default_gateway_info() -> Optional[Tuple[str, str]]:
 
     # Retrieve default IPv4 gateway
     try:
-        if netifaces.AF_INET in gws['default']:
+        if netifaces.AF_INET in gws["default"]:
             # The structure for default gateway
             # is (gateway_ip, interface_name, is_primary)
-            ipv4_gateway_data = gws['default'][netifaces.AF_INET]
+            ipv4_gateway_data = gws["default"][netifaces.AF_INET]
             return ipv4_gateway_data
 
         # Retrieve default IPv6 gateway
-        if netifaces.AF_INET6 in gws['default']:
+        if netifaces.AF_INET6 in gws["default"]:
             # The structure for default gateway
             # is (gateway_ip, interface_name, is_primary)
-            ipv6_gateway_data = gws['default'][
-                netifaces.AF_INET6]
+            ipv6_gateway_data = gws["default"][netifaces.AF_INET6]
             return ipv6_gateway_data
     except KeyError:
         # No default gateway found for the specified address family
@@ -101,39 +100,40 @@ def suggest_package_installation(package_name: str) -> str:
     """
     system: str = sys.platform
 
-    if system.startswith('linux'):
+    if system.startswith("linux"):
         # Try to identify the specific Linux distribution
         distro_info: dict[str, str] = {}
         try:
             # Read /etc/os-release for detailed distribution information
-            with open('/etc/os-release', 'r') as f:
+            with open("/etc/os-release", "r") as f:
                 for line in f:
                     line = line.strip()
-                    if '=' in line:
-                        key, value = line.split('=', 1)
+                    if "=" in line:
+                        key, value = line.split("=", 1)
                         distro_info[key] = value.strip('"')
         except FileNotFoundError:
             # Fallback for older systems that might use /etc/lsb-release
             try:
-                with open('/etc/lsb-release', 'r') as f:
+                with open("/etc/lsb-release", "r") as f:
                     for line in f:
                         line = line.strip()
-                        if '=' in line:
-                            key, value = line.split('=', 1)
+                        if "=" in line:
+                            key, value = line.split("=", 1)
                             distro_info[key] = value.strip('"')
             except FileNotFoundError:
                 pass  # No specific distro info found
 
-        distro_id: str = distro_info.get('ID',
-                                         '').lower()  # Get the ID of the distribution
+        distro_id: str = distro_info.get(
+            "ID", ""
+        ).lower()  # Get the ID of the distribution
 
-        if distro_id == 'ubuntu' or distro_id == 'debian':
+        if distro_id == "ubuntu" or distro_id == "debian":
             return f"sudo apt update && sudo apt install {package_name}"
-        elif distro_id == 'fedora':
+        elif distro_id == "fedora":
             return f"sudo dnf install {package_name}"
-        elif distro_id == 'centos' or distro_id == 'rhel':
+        elif distro_id == "centos" or distro_id == "rhel":
             return f"sudo yum install {package_name}"
-        elif distro_id == 'arch':
+        elif distro_id == "arch":
             return f"sudo pacman -S {package_name}"
         else:
             # Fallback for unknown or other Linux distributions
@@ -145,28 +145,35 @@ def suggest_package_installation(package_name: str) -> str:
                 sudo dnf install {package_name}          (Fedora based systems)
                 sudo pacman -S {package_name}            (Arch Linux based systems)
                 Please refer to your distribution's documentation for the correct command.
-                """).strip()  # noqa
+                """
+            ).strip()  # noqa
 
-    elif system == 'darwin':
+    elif system == "darwin":
         # For macOS, suggest Homebrew
-        return textwrap.dedent(f"""
+        return textwrap.dedent(
+            f"""
             /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
             brew install {package_name}
-            """).strip()  # noqa
-    elif system == 'win32':
+            """
+        ).strip()  # noqa
+    elif system == "win32":
         # For Windows, suggest Winget or Chocolatey
-        return textwrap.dedent(f"""
+        return textwrap.dedent(
+            f"""
             You can try installing {package_name!r} using:")
               winget install {package_name}            (Windows Package Manager)
               choco install {package_name}             (Chocolatey - if installed)
             You might need to install Winget or Chocolatey first if you don't have them.
-            """).strip()
+            """
+        ).strip()
     else:
         # For other or unknown systems
-        return textwrap.dedent(f"""
+        return textwrap.dedent(
+            f"""
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for {package_name!r} to find installation instructions for your system.
-            """).strip()  # noqa
+            """
+        ).strip()  # noqa
 
 
 def return_level_parameter(log_level: int) -> str:
@@ -188,7 +195,7 @@ def set_pdeathsig() -> None:
     Sets the PR_SET_PDEATHSIG option for the current process,
     so it receives SIGTERM if its parent dies.
     """
-    if os.name != 'posix':
+    if os.name != "posix":
         logger.warning("set_pdeathsig() not supported on non-POSIX systems.")
         return
     try:
@@ -196,18 +203,18 @@ def set_pdeathsig() -> None:
         libc = cdll.LoadLibrary("libc.so.6")
         result = libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
         if result != 0:
-            logging.warning("prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s",
-                            result)
+            logging.warning(
+                "prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s", result
+            )
     except OSError:
         logging.warning("prctl not available (not Linux or libc not found).")
 
 
 def to_b85(obj: Any) -> str:
-    result = base64.b85encode(pickle.dumps(obj,
-                                           protocol=pickle.HIGHEST_PROTOCOL
-                                           )).decode("ascii")
-    assert pickle.loads(
-        base64.b85decode(result.encode("ascii"))) == obj
+    result = base64.b85encode(
+        pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+    ).decode("ascii")
+    assert pickle.loads(base64.b85decode(result.encode("ascii"))) == obj
     return result
 
 

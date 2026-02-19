@@ -1,14 +1,14 @@
 import logging
 import time
 
-from pysandboxes.learning import is_learning_mode, generate_config_from_learning
+from pysandboxes.learning import generate_config_from_learning, is_learning_mode
 from pysandboxes.remote.parameters import POLLING_DELAY
 
 logger = logging.getLogger(__name__)
 
 
-async def daemon_shutdown(graceful_shutdown:bool) -> None:
-    from pysandboxes.os_sandbox import async_stop_daemon, async_shutdown_daemon
+async def daemon_shutdown(graceful_shutdown: bool) -> None:
+    from pysandboxes.os_sandbox import async_shutdown_daemon, async_stop_daemon
 
     global _current_daemon
     if is_learning_mode():
@@ -24,6 +24,7 @@ async def daemon_shutdown(graceful_shutdown:bool) -> None:
             await async_shutdown_daemon()
 
         from pysandboxes.private_loop import get_sandbox_loop
+
         loop = get_sandbox_loop()
         loop.create_task(_delay_for_send_the_response())
     logger.debug("Remote daemon_shutdown process executing")

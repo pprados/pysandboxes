@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import files, activate_guard_files_rules, _reset_rules
+
+from .test_guard_io import _reset_rules, activate_guard_files_rules, files
 
 
 def test_fileinput_input(files):
@@ -19,9 +20,9 @@ def test_fileinput_input(files):
     activate_guard_files_rules(rules)
 
     shutil.copy2(files["visible"], files["new_replace"])
-    with fileinput.input(files=[files["new_replace"]],
-                         inplace=True,
-                         backup=".bak") as f:
+    with fileinput.input(
+        files=[files["new_replace"]], inplace=True, backup=".bak"
+    ) as f:
         for line in f:
             print(line.replace("Visible", "in place"), end="")
     with open(files["new_replace"]) as f:

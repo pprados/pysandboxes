@@ -7,7 +7,7 @@ import queue
 import sys
 from concurrent.futures import Executor
 from functools import partial
-from typing import Any, Dict, Optional, Callable, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 from ..private_loop import get_sandbox_loop
 
@@ -22,13 +22,13 @@ class QueueStringIO(io.StringIO):
     and also writes to an underlying StringIO buffer.
     """
 
-    def __init__(self,
-                 type: str,
-                 queue: Optional[TQueue]):
+    def __init__(self, type: str, queue: Optional[TQueue]):
         super().__init__()
         self.type = type
         self._message_queue: Optional[TQueue] = queue
-        self._buffer: io.StringIO = io.StringIO()  # Underlying buffer for aggregated content
+        self._buffer: io.StringIO = (
+            io.StringIO()
+        )  # Underlying buffer for aggregated content
 
     def write(self, s: str) -> int:
         """
@@ -56,8 +56,7 @@ class QueueStringIO(io.StringIO):
 
 
 class WrapperIO(io.TextIOBase):
-    def __init__(self,
-                 context: contextvars.ContextVar):
+    def __init__(self, context: contextvars.ContextVar):
         self._context = context
         self._old = None
 
@@ -91,31 +90,28 @@ class WrapperIO(io.TextIOBase):
         self._context.get().flush()
 
 
-sys.stdout = WrapperIO(contextvars.ContextVar(
-    'current_stdout', default=sys.stdout))
-sys.stderr = WrapperIO(contextvars.ContextVar(
-    'current_stderr', default=sys.stderr))
+sys.stdout = WrapperIO(contextvars.ContextVar("current_stdout", default=sys.stdout))
+sys.stderr = WrapperIO(contextvars.ContextVar("current_stderr", default=sys.stderr))
 
 
 def catch_stdio(
-        queue: Optional[TQueue],
-        fn: Callable,
-        kwargs: Dict[str, Any],
-        *args: Any,
+    queue: Optional[TQueue],
+    fn: Callable,
+    kwargs: Dict[str, Any],
+    *args: Any,
 ) -> Dict[str, Any]:
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
     result = asyncio.run_coroutine_threadsafe(
-        acatch_stdio(queue, fn, kwargs, *args),
-        asyncio.get_event_loop()
+        acatch_stdio(queue, fn, kwargs, *args), asyncio.get_event_loop()
     )
     return result.result()
 
 
 async def acatch_stdio(
-        queue: Optional[TQueue],
-        fn: Callable,
-        kwargs: Dict[str, Any],
-        *args: Any,
+    queue: Optional[TQueue],
+    fn: Callable,
+    kwargs: Dict[str, Any],
+    *args: Any,
 ) -> Dict[str, Any]:
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=queue)
@@ -148,9 +144,7 @@ async def acatch_stdio(
         except Exception as e:
             import tblib
 
-            result = {
-                "exception": (e, tblib.Traceback(e.__traceback__))
-            }
+            result = {"exception": (e, tblib.Traceback(e.__traceback__))}
 
             if isinstance(queue, asyncio.Queue):
                 queue.put_nowait(result)
@@ -166,20 +160,21 @@ async def acatch_stdio(
 
 
 def _thread_catch_stream(
-        fn: Callable,
-        code_string: str,
-        *,
-        globals_dict: dict = None,
-        locals_dict: dict = None,
-        executor: Executor
+    fn: Callable,
+    code_string: str,
+    *,
+    globals_dict: dict = None,
+    locals_dict: dict = None,
+    executor: Executor,
 ) -> None:
     stream_queue = queue.Queue()
-    fut = executor.submit(fn,
-                          code_string,
-                          globals_dict=globals_dict,
-                          locals_dict=locals_dict,
-                          queue=stream_queue,
-                          )
+    fut = executor.submit(
+        fn,
+        code_string,
+        globals_dict=globals_dict,
+        locals_dict=locals_dict,
+        queue=stream_queue,
+    )
     while stream_queue:
         msg = stream_queue.get()
 

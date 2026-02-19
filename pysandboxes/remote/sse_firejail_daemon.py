@@ -9,15 +9,15 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import List, Tuple, MutableSet, Any, Union, Dict, Optional
+from typing import Any, Dict, List, MutableSet, Optional, Tuple, Union
 
-from .sse_client_subprocess_daemon import BaseSubProcessDaemon
-from .tools import which_command, suggest_package_installation
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
-from ..sb_types import Envs, Args, ConfigLine
-from ..tools import remove_comments, substitute_env_vars, follow_links_executable;
+from ..sb_types import Args, ConfigLine, Envs
+from ..tools import follow_links_executable, remove_comments, substitute_env_vars
+from .sse_client_subprocess_daemon import BaseSubProcessDaemon
+from .tools import suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +61,8 @@ class WhiteList(MutableSet):
         """
 
         # Ensure the path ends with a separator for consistent prefix checking.
-        if not item.endswith('/'):
-            item += '/'
+        if not item.endswith("/"):
+            item += "/"
 
         # Check if the item itself is in the set, or if an existing directory is
         # a prefix of the item. This means the item is a subdirectory of a
@@ -101,8 +101,8 @@ class WhiteList(MutableSet):
             directory (str): The directory path to add.
         """
         # Ensure the path ends with a separator to simplify prefix checks.
-        if not directory.endswith('/'):
-            directory += '/'
+        if not directory.endswith("/"):
+            directory += "/"
 
         # Check if an existing directory already prefixes the new one.
         for existing_dir in self._set:
@@ -132,8 +132,8 @@ class WhiteList(MutableSet):
             directory (str): The directory path to remove.
         """
         # Ensure the path ends with a separator for consistency.
-        if not directory.endswith('/'):
-            directory += '/'
+        if not directory.endswith("/"):
+            directory += "/"
         self._set.discard(directory)
 
 
@@ -143,24 +143,27 @@ def _follow_links(filename: Union[str, Path], whitelist: WhiteList) -> None:
         if Path(filename).is_symlink():
             whitelist.add(str(Path(filename).resolve(strict=True)))
     except FileNotFoundError:
-        raise RuntimeError("Impossible to resolve the sys.executable `%s`",
-                           sys.executable)
+        raise RuntimeError(
+            "Impossible to resolve the sys.executable `%s`", sys.executable
+        )
 
 
 class FireJailSSEDaemon(BaseSubProcessDaemon):
-    def update_rules(self,
-                     *,
-                     all_rules: AllRules,
-                     envs: Envs,
-                     ) -> AllRules:
+    def update_rules(
+        self,
+        *,
+        all_rules: AllRules,
+        envs: Envs,
+    ) -> AllRules:
         _, updated_all_rules = self._firejail_args(all_rules, envs, None)
         return updated_all_rules
 
-    def _firejail_args(self,
-                       all_rules: AllRules,
-                       envs: Dict[str, str],
-                       pipe_path: Optional[Path],
-                       ) -> Tuple[Args, AllRules]:
+    def _firejail_args(
+        self,
+        all_rules: AllRules,
+        envs: Dict[str, str],
+        pipe_path: Optional[Path],
+    ) -> Tuple[Args, AllRules]:
         """
         Apply the pysandboxes rules to firejail.
         TODO: expliquer si on modifie
@@ -176,7 +179,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         restricted_network = True
         if firejail_config.exists():
             for line in firejail_config.read_text().split("\n"):
-                if re.match(r'restricted-network\s+no', line):
+                if re.match(r"restricted-network\s+no", line):
                     restricted_network = False
                     break
 
@@ -188,11 +191,13 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         if logger.getEffectiveLevel() > logging.INFO:
             args.append("--quiet")
         else:
-            logger.info("Activate Firejail's output (to remove, "
-                        "change the level of this logger)")
+            logger.info(
+                "Activate Firejail's output (to remove, "
+                "change the level of this logger)"
+            )
 
         # Add default parameters
-        firejail_path = importlib.resources.files(__name__) / 'firejail.profile'
+        firejail_path = importlib.resources.files(__name__) / "firejail.profile"
         firejail_conf = remove_comments(firejail_path.read_text().splitlines())
         firejail_conf = substitute_env_vars(firejail_conf, envs)
 
@@ -204,7 +209,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         whitelist = WhiteList()
 
         # Manage sys.executable
-        bin_path=set()
+        bin_path = set()
         follow_links_executable(Path(sys.executable), bin_path)
         for p in bin_path:
             _follow_links(p, whitelist)
@@ -220,20 +225,23 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     _follow_links(p, whitelist)
 
         for white in whitelist:
-            args.extend([
-                f"--whitelist={white}",
-                f"--read-only={white}",
-            ])
+            args.extend(
+                [
+                    f"--whitelist={white}",
+                    f"--read-only={white}",
+                ]
+            )
 
         # Add ignore files rules
         keep_files_rules = []
         for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
             args.append(f"--blacklist={rule.source}")
         for rule in sorted(
-                filter(lambda x: isinstance(x, BindRule),
-                       all_rules.file_rules,
-                       ),
-                key=lambda x: len(x.source),
+            filter(
+                lambda x: isinstance(x, BindRule),
+                all_rules.file_rules,
+            ),
+            key=lambda x: len(x.source),
         ):
             if rule.source == rule.dest:
                 if rule.write or rule.source not in whitelist:
@@ -254,10 +262,15 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         if REPLACE:
             from ..guard_files import parse_rules as files_parse_rules
+
             new_files_rules, _ = files_parse_rules(
-                [ConfigLine("bind=/,/", Path(), 0)], [])
-            selected_rules=[rule for rule in all_rules.file_rules
-                         if isinstance(rule,BindRule) and rule.source != rule.dest]
+                [ConfigLine("bind=/,/", Path(), 0)], []
+            )
+            selected_rules = [
+                rule
+                for rule in all_rules.file_rules
+                if isinstance(rule, BindRule) and rule.source != rule.dest
+            ]
             selected_rules.extend(new_files_rules)  # Respect the order
             all_rules = all_rules._replace(file_rules=tuple(selected_rules))
 
@@ -273,13 +286,15 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 logger.error(
                     "Set 'restricted_network no' in %s "
                     "to use firejail with networks rules.",
-                    repr(str(firejail_config)))
+                    repr(str(firejail_config)),
+                )
                 sys.exit(1)
 
             if pipe_path:  # Update rules?
                 net_filter4 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=False)
-                netfilter_tmp_file = tempfile.NamedTemporaryFile(delete=False,
-                                                                 suffix='.fifo')
+                netfilter_tmp_file = tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".fifo"
+                )
                 netfilter_file = Path(netfilter_tmp_file.name)
                 netfilter_tmp_file.close()
                 netfilter_file.unlink(missing_ok=True)
@@ -292,13 +307,15 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     netfilter_file.write_text("\n".join(net_filter4))
                     if not DEBUG:
                         netfilter_file.unlink(missing_ok=True)
+
                 threading.Thread(target=publich_netfilter, daemon=True).start()
 
                 args.append(f"--netfilter={netfilter_file}")
 
                 net_filter6 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=True)
-                netfilter6_tmp_file = tempfile.NamedTemporaryFile(delete=False,
-                                                                 suffix='.fifo')
+                netfilter6_tmp_file = tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".fifo"
+                )
                 netfilter6_file = Path(netfilter_tmp_file.name)
                 netfilter6_tmp_file.close()
                 netfilter6_file.unlink(missing_ok=True)
@@ -306,18 +323,22 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     netfilter6_file = "netfilter6.net"
                 else:
                     os.mkfifo(netfilter6_file)
+
                 def publich_netfilter6():
                     netfilter6_file.write_text("\n".join(net_filter4))
                     if not DEBUG:
                         netfilter_file.unlink(missing_ok=True)
+
                 threading.Thread(target=publich_netfilter6, daemon=True).start()
                 args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove redondant sockets rules
             if REPLACE:
                 from ..guard_socket import parse_rules as socket_parse_rules
+
                 new_socket_rules, _ = socket_parse_rules(
-                    [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
+                    [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], []
+                )
                 all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
             # Clean env variable
@@ -330,11 +351,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         return args, all_rules
 
-    def subprocess_cmd(self,
-                       all_rules: AllRules,
-                       envs: Dict[str, str],
-                       pipe_path: Path,
-                       ) -> List[str]:
+    def subprocess_cmd(
+        self,
+        all_rules: AllRules,
+        envs: Dict[str, str],
+        pipe_path: Path,
+    ) -> List[str]:
         run_daemon_cmd = super().subprocess_cmd(
             all_rules,
             envs,
@@ -342,8 +364,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         )
 
         cmd_parameters, _ = self._firejail_args(
-            all_rules=all_rules,
-            envs=envs,
-            pipe_path=pipe_path)
+            all_rules=all_rules, envs=envs, pipe_path=pipe_path
+        )
         cmd_parameters.extend(run_daemon_cmd)
         return cmd_parameters

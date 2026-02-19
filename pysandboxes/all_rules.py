@@ -32,5 +32,5 @@ EmptyRules = AllRules(
     envs_rules=(),
     socket_rules=(),
     file_rules=(),
-    import_rules=()
+    import_rules=(),
 )

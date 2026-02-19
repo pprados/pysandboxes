@@ -3,9 +3,10 @@ import functools
 import logging
 import threading
 import weakref
-from _weakref import ReferenceType
 from asyncio import AbstractEventLoop
-from typing import Optional, Any, Callable
+from typing import Any, Callable, Optional
+
+from _weakref import ReferenceType
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,9 @@ def set_sandbox_loop(loop: AbstractEventLoop) -> None:
     global _background_loop_ref
     _background_loop_ref = weakref.ref(loop)
 
-_thread:Optional[threading.Thread] = None
+
+_thread: Optional[threading.Thread] = None
+
 
 def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoop]:
     global _background_loop_ref
@@ -37,7 +40,7 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
             if loop is not None and loop.is_running():
                 return loop
         try:
-            loop= asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()
             _background_loop_ref = weakref.ref(loop)
             return loop
         except RuntimeError:
@@ -60,18 +63,18 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
                 logger.debug("Stop thread for sandbox event loop")
             except SystemExit as e:
                 import os
+
                 logger.error("Exit sandbox")
                 os._exit(e.args[0])
             except Exception:
                 import os
+
                 logger.exception("Exception unknown in run_forever")
                 os._exit(-1)
 
         global _thread
         _thread = threading.Thread(
-            target=_start_background_loop,
-            daemon=True,
-            name="Sandbox Private loop"
+            target=_start_background_loop, daemon=True, name="Sandbox Private loop"
         )
         _thread.start()
         start_event.wait()
@@ -100,7 +103,7 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def reset_sandbox_loop():
-    """ Remove the sandbox loop """
+    """Remove the sandbox loop"""
     global _background_loop_ref
     with _lock:
         _background_loop_ref = None

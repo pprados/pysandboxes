@@ -9,18 +9,19 @@ pysandboxes_logger = logging.getLogger("Pysandboxes")
 ErrorMsg = Tuple[str, Path, int]
 
 
-def make_relative_path(path:Path) -> str:
+def make_relative_path(path: Path) -> str:
     try:
         rel_path = str(path.absolute().relative_to(Path.cwd()))
     except ValueError:
         # File not relative to cwd
         try:
             path.absolute().relative_to(Path.home())
-            rel_path = "~" + str(path.absolute())[len(str(Path.home())):]
+            rel_path = "~" + str(path.absolute())[len(str(Path.home())) :]
         except ValueError:
             # File not in home
             rel_path = str(path.absolute())
     return rel_path
+
 
 def format_ruleref(rule: ConfigLine) -> str:
     if rule.path == Path():
@@ -35,6 +36,5 @@ def format_ruleref(rule: ConfigLine) -> str:
 
 def format_error_list(errors: Sequence[str]) -> str:
     return (
-        errors[0] if len(errors) == 1
-        else ', '.join(errors[:-1]) + " and " + errors[-1]
+        errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]
     )

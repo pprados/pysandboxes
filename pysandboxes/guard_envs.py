@@ -2,10 +2,10 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Dict, Tuple, List, Any, Optional, Callable, NamedTuple, cast
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, cast
 
-from .main_logger import format_ruleref, ErrorMsg
-from .sb_types import ConfigLines, ConfigLine, Envs
+from .main_logger import ErrorMsg, format_ruleref
+from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import is_in_sandbox, resolve_env_variables
 
 logger = logging.getLogger(__name__)
@@ -23,9 +23,8 @@ EnvsRules = Tuple[EnvRule, ...]
 # Internal state for the file filter
 _rules: EnvsRules = cast(EnvsRules, ())
 
-def _read_and_substitute_lines(
-        path: Path, env_vars: Dict[str, str]
-) -> ConfigLines:
+
+def _read_and_substitute_lines(path: Path, env_vars: Dict[str, str]) -> ConfigLines:
     """
     Reads a file, filters out empty lines and comments, and performs variable
     substitution on the remaining lines.
@@ -52,8 +51,9 @@ def _read_and_substitute_lines(
     def substitute(match: re.Match) -> str:
         var_name = match.group(1)
         default_value = match.group(2)
-        return env_vars.get(var_name,
-                            default_value if default_value is not None else "")
+        return env_vars.get(
+            var_name, default_value if default_value is not None else ""
+        )
 
     processed_lines: ConfigLines = []
     with open(path, "r", encoding="utf-8") as f:
@@ -66,9 +66,9 @@ def _read_and_substitute_lines(
 
 
 def parse_rules(
-        rules: ConfigLines,
-        source_vars: Dict[str, str],
-        errors: List[ErrorMsg],
+    rules: ConfigLines,
+    source_vars: Dict[str, str],
+    errors: List[ErrorMsg],
 ) -> Tuple[EnvsRules, Envs, ConfigLines]:
     """
     Processes a list of rules to create a new dictionary of variables.
@@ -88,13 +88,13 @@ def parse_rules(
 
     def substitute_value(value_pattern: str) -> str:
         """Resolves a single value pattern, e.g., ${VAR:=default}."""
-        return resolve_env_variables(value_pattern,source_vars)
+        return resolve_env_variables(value_pattern, source_vars)
 
     envs_rules = set()
     for orule in rules:
         if orule.rule.startswith("env="):
             # Remove prefix
-            rule = ConfigLine(orule.rule[len("env="):], orule.path, orule.ln)
+            rule = ConfigLine(orule.rule[len("env=") :], orule.path, orule.ln)
 
             if "=" not in rule.rule:
                 errors.append(
@@ -102,7 +102,7 @@ def parse_rules(
                         f"{format_ruleref(orule)}: "
                         f"Detect a missing '=' in rule: {orule.rule}.",
                         rule.path,
-                        rule.ln
+                        rule.ln,
                     )
                 )
                 continue
@@ -112,8 +112,7 @@ def parse_rules(
             # Case: Wildcard rule like *_API_KEY=${*_API_KEY}
             if "*" in key_pattern:
                 # Convert wildcard to regex pattern
-                regex_key = re.compile(
-                    re.escape(key_pattern).replace("\\*", ".*"))
+                regex_key = re.compile(re.escape(key_pattern).replace("\\*", ".*"))
                 envs_rules.add(EnvRule(regex_key, False, orule))
                 for source_key, source_value in source_vars.items():
                     if regex_key.match(source_key):
@@ -122,9 +121,11 @@ def parse_rules(
             # Case: Simple rule like key=value or key=${VAR}
             else:
                 new_vars[key_pattern] = substitute_value(value_pattern)
-                envs_rules.add(EnvRule(re.compile(re.escape(key_pattern)), False, orule))
+                envs_rules.add(
+                    EnvRule(re.compile(re.escape(key_pattern)), False, orule)
+                )
         elif orule.rule.startswith("unenv="):
-            remove_key = orule.rule[len("unenv="):]
+            remove_key = orule.rule[len("unenv=") :]
             new_vars.pop(remove_key, None)
             envs_rules.add(EnvRule(re.compile(re.escape(remove_key)), True, orule))
         else:
@@ -139,10 +140,11 @@ class LearnEnviron(os._Environ):
     # while behaving like a standard dictionary.
     # """
 
-    _instance: 'LearnEnviron' = None
+    _instance: "LearnEnviron" = None
 
-    def __new__(cls,
-                ) -> 'LearnEnviron':
+    def __new__(
+        cls,
+    ) -> "LearnEnviron":
         # Implement a singleton
         if cls._instance is None:
             cls._instance = super(LearnEnviron, cls).__new__(cls)
@@ -150,7 +152,7 @@ class LearnEnviron(os._Environ):
 
     def __init__(self):
         # Initialize with the _original environment data
-        if not hasattr(self, '_keys_used'):
+        if not hasattr(self, "_keys_used"):
             # super().__init__(original_environ)
             encodekey = os.environ.encodekey
             decodekey = os.environ.decodekey
@@ -193,9 +195,7 @@ class LearnEnviron(os._Environ):
             return False
 
 
-
-def generate_rules(
-) -> List[str]:  # TODO: search in envs for url, port, etc.
+def generate_rules() -> List[str]:  # TODO: search in envs for url, port, etc.
     global _rules
     learn_env = LearnEnviron()  # Get singleton
     result = []
@@ -203,21 +203,21 @@ def generate_rules(
         find = False
         for pat in _rules:
             if pat.pattern.match(key):
-                find=True
+                find = True
                 break
         if not find:
             result.append(f"env={key}=${{{key}}}")
     return result
 
-def activate_guard(
-        rules: EnvsRules
-) -> None:
+
+def activate_guard(rules: EnvsRules) -> None:
     global _rules
-    _rules=rules
+    _rules = rules
 
 
 def patch_rules(learning_path: Optional[Path]) -> Dict[str, Callable]:
     if learning_path:
+
         def activate_learning_env_factory(x):
             return LearnEnviron()
 

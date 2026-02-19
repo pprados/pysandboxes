@@ -1,17 +1,17 @@
 import inspect
 from types import ModuleType
-from typing import Set, Tuple, Dict
+from typing import Dict, Set, Tuple
 
 import pytest
-
-from pysandboxes import RuleAttributeError
 from unit_tests.guard.test_guard_io import _reset_rules
 
+from pysandboxes import RuleAttributeError
 
 
 def test_escape_with_closure():
     # Find the _original version of io.open (possible if the code is in Python)
     import io
+
     assert hasattr(io.open, "__closure__"), "Not in a pysandbox"
     original_open = io.open.__closure__[0].cell_contents
     assert original_open.__module__ == "_io", "Not the _original io.open"
@@ -28,14 +28,14 @@ def test_escape_with_subclasses():
             all_subclasses.update(find_all_subclasses(subclass))
         return all_subclasses
 
-    def get_subclasses_modules(subclasses: Set[type]) -> Dict[str,ModuleType]:
-        modules: Dict[str,ModuleType] = {}
+    def get_subclasses_modules(subclasses: Set[type]) -> Dict[str, ModuleType]:
+        modules: Dict[str, ModuleType] = {}
         for cls in subclasses:
-            if inspect.isclass(cls) and hasattr(cls, '__module__'):
+            if inspect.isclass(cls) and hasattr(cls, "__module__"):
                 try:
                     module = inspect.getmodule(cls)
                     if module is not None:
-                        modules[module.__name__]=module
+                        modules[module.__name__] = module
                 except ImportError:
                     # Handle cases where the module might not be importable anymore
                     continue
@@ -51,6 +51,7 @@ def test_escape_with_subclasses():
 @pytest.mark.skip
 def test_escape_with_meta_path():
     import sys
+
     with pytest.raises(RuleAttributeError):
         new_list = list(sys.meta_path)[1:]
         sys.meta_path = new_list

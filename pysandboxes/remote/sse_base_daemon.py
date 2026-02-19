@@ -4,23 +4,25 @@ import json
 import logging
 import sys
 from datetime import timedelta
-from typing import Any, Dict, Callable
+from typing import Any, Callable, Dict
 
-from aiohttp import ClientPayloadError, ClientConnectorError
+from aiohttp import ClientConnectorError, ClientPayloadError
 from aiohttp_sse_client import client as sse_client
 
-from .parameters import INTERVAL_FOR_RETRY_CONNECTION, MAX_CONNECT_RETRY
-from .tools import to_b85, from_b85
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
-from ..tools import is_in_sandbox, get_callable_info
+from ..tools import get_callable_info, is_in_sandbox
+from .parameters import INTERVAL_FOR_RETRY_CONNECTION, MAX_CONNECT_RETRY
+from .tools import from_b85, to_b85
 
 logger = logging.getLogger(__name__)
 
-def _get_rpc_params(args: Any,
-                    func: Callable[..., Any],
-                    kwargs: Any,
-                    ) -> Dict[str, Any]:
+
+def _get_rpc_params(
+    args: Any,
+    func: Callable[..., Any],
+    kwargs: Any,
+) -> Dict[str, Any]:
     """
     Get the parameters for the RPC call.
     """
@@ -36,55 +38,56 @@ def _get_rpc_params(args: Any,
 
 
 class BaseSSESandbox(BaseDaemon):
-    __slots__ = (
-        "port", "base_url","max_connect_retry"
-    )
+    __slots__ = ("port", "base_url", "max_connect_retry")
 
-    def __init__(self,
-                 token: str,
-                 *,
-                 host: str,
-                 max_connect_retry:int,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        token: str,
+        *,
+        host: str,
+        max_connect_retry: int,
+        **kwargs,
+    ):
         super().__init__(token)
         self.port = 0
         self.base_url = f"http://{host}:{{PORT}}"
-        self.max_connect_retry=max_connect_retry
+        self.max_connect_retry = max_connect_retry
 
-    async def async_call_in_sandbox(self,
-                                    func: Callable[..., Any],
-                                    _force_incomming: bool,
-                                    *args: Any,
-                                    **kwargs: Any) -> Any:
+    async def async_call_in_sandbox(
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         if is_in_sandbox():
             return await func(*args, **kwargs)
         if not _force_incomming and not self._accept_incoming:
             raise RuntimeError("The sandbox demon is being stopped.")
 
         retry = self.max_connect_retry
-        while (retry > 0):
+        while retry > 0:
             try:
                 from pysandboxes.os_sandbox import get_token
+
                 token = get_token()
                 params = _get_rpc_params(args, func, kwargs)
 
-                sandbox_server_url = self.base_url.replace("{PORT}",
-                                        str(self.port))+"/rpc"
+                sandbox_server_url = (
+                    self.base_url.replace("{PORT}", str(self.port)) + "/rpc"
+                )
                 logger.debug("Try to call to %s", sandbox_server_url)
                 async with sse_client.EventSource(
-                        sandbox_server_url,
-                        # session=session,  # TODO: Use a correlationid?
-                        option={"method": "POST"},
-                        json=params,
-                        headers={
-                            "Accept": "text/event-stream",
-                            "Authorization": f"Bearer {token}"
-                        },
-                        reconnection_time=timedelta(
-                            seconds=INTERVAL_FOR_RETRY_CONNECTION
-                        ),
-                        max_connect_retry=self.max_connect_retry,
+                    sandbox_server_url,
+                    # session=session,  # TODO: Use a correlationid?
+                    option={"method": "POST"},
+                    json=params,
+                    headers={
+                        "Accept": "text/event-stream",
+                        "Authorization": f"Bearer {token}",
+                    },
+                    reconnection_time=timedelta(seconds=INTERVAL_FOR_RETRY_CONNECTION),
+                    max_connect_retry=self.max_connect_retry,
                 ) as event_source:
                     async for event in event_source:
                         msg = json.loads(event.data)
@@ -107,7 +110,7 @@ class BaseSSESandbox(BaseDaemon):
                         if "stderr" in msg:
                             print(msg["stderr"], end="", file=sys.stderr)
                     raise RuntimeError("No result received from the sandbox")
-            except (ClientPayloadError,ClientConnectorError,ConnectionRefusedError):
+            except (ClientPayloadError, ClientConnectorError, ConnectionRefusedError):
                 logger.debug("Connection error. Retry")
                 retry -= 1
                 continue
@@ -120,18 +123,22 @@ class BaseSSESandbox(BaseDaemon):
         raise RuntimeError("No result received from the sandbox")
 
     @sandbox_loop
-    def call_in_sandbox(self,
-                        func: Callable[..., Any],
-                        _force_incomming: bool,
-                        *args: Any,
-                        **kwargs: Any) -> Any:
+    def call_in_sandbox(
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         if is_in_sandbox():
             return func(*args, **kwargs)
         if not _force_incomming and not self._accept_incoming:
             raise RuntimeError("The sandbox demon is being stopped.")
 
-        loop = asyncio.get_event_loop()  # Get the current running loop. May be != sandbox loop
+        loop = (
+            asyncio.get_event_loop()
+        )  # Get the current running loop. May be != sandbox loop
 
         return asyncio.run_coroutine_threadsafe(
-            self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs),
-            loop).result()
+            self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs), loop
+        ).result()

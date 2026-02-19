@@ -1,6 +1,7 @@
 def _check_called_by_imporlib(key) -> bool:
     return True
     import sys
+
     frame = sys._getframe()
     while frame and not frame.f_globals.get("__name__").startswith("importlib"):
         frame = frame.f_back
@@ -15,6 +16,7 @@ class AppendOnlyDict(dict):
     A dictionary that only allows adding new key-value pairs.
     Deletion and modification of existing items are not permitted.
     """
+
     # def __init__(self,copy:dict,onetime_set:Set[str]):
     #     super().__init__(copy)
     #     self._onetime_set=onetime_set
