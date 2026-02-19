@@ -31,7 +31,7 @@ from ..tools import SyncOrAsyncFunc, get_callable_info
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True
+DEBUG = False
 
 
 def get_log_formatter():

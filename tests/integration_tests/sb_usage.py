@@ -138,7 +138,7 @@ def _test_files():
         logger.exception(e)
 
     print("---- Test scandir docs")
-    use_alias_rule = True
+    use_alias_rule = False
     if use_alias_rule:
         datas = "tests/alias"
     else:
@@ -146,7 +146,6 @@ def _test_files():
     all_entries = []
     with os.scandir(datas) as entries:
         all_entries = [entry.name for entry in entries]
-    pprint(all_entries)  # FIXME
     assert "data.txt" in all_entries
 
     try:
@@ -213,10 +212,10 @@ async def main(argv: Dict[str, str]) -> int:
     init_log_level()
     os.environ["LLM_TOKEN"] = "abc"
 
-    def audit_hook(event, args):
-        logger.info(f"Audit event: {event}, args: {args}")
-    import sys
-    sys.addaudithook(audit_hook)
+    # def audit_hook(event, args):
+    #     logger.debug(f'Audit event: {event} {" XX ,".join(map(repr, args))}')
+    # import sys
+    # sys.addaudithook(audit_hook)
 
     extra_rules = convert_extra_rules(argv[1:])
     config_path = Path("tests/test.py-sandboxes")

@@ -2,11 +2,13 @@
 import importlib
 import importlib.abc
 import importlib.util
+import itertools
 import logging
 import os
 import sys
 from importlib import resources
 from importlib.abc import MetaPathFinder
+from importlib.metadata import DistributionFinder, PathDistribution, Prepared, FastPath
 from types import ModuleType
 from typing import Optional, NamedTuple, Callable, Tuple, Dict, List, cast, Any, Set, \
     Iterable
@@ -144,6 +146,30 @@ class GuardLoader(importlib.abc.Loader):
 
 # Define the custom finder class
 class GuardFinder(importlib.abc.MetaPathFinder):
+
+    @classmethod
+    def find_distributions(
+        cls, context=DistributionFinder.Context()
+    ) -> Iterable[PathDistribution]:
+        """
+        Find distributions.
+
+        Return an iterable of all Distribution instances capable of
+        loading the metadata for packages matching ``context.name``
+        (or all names if ``None`` indicated) along the paths in the list
+        of directories ``context.path``.
+        """
+        found = cls._search_paths(context.name, context.path)
+        return map(PathDistribution, found)
+
+    @classmethod
+    def _search_paths(cls, name, paths):
+        """Find metadata directories in paths heuristically."""
+        prepared = Prepared(name)
+        return itertools.chain.from_iterable(
+            path.search(prepared) for path in map(FastPath, paths)
+        )
+
     __slots__ = ("_finders")
 
     def __init__(self, finders: MetaPathFinder):

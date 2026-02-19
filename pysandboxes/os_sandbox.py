@@ -177,7 +177,7 @@ def start_daemon(
         start_event = threading.Event()
 
         async def _start_daemon_and_signal():
-            logger.debug("_start_daemon_and_signal")
+
             await _async_start_daemon(all_rules,
                                       envs=envs,
                                       log_level=log_level,

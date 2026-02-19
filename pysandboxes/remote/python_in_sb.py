@@ -78,6 +78,12 @@ def _python_interactive(
 
         # Hack for IPython
         sys.modules["__main__"] = ModuleType(name="__main__")
+
+        def audit_hook(event, args):
+            logger.debug(f'Audit event: {event} {",".join(map(repr, args))}')
+
+        sys.addaudithook(audit_hook)
+
         import IPython
         from traitlets.config import get_config
         c = get_config()

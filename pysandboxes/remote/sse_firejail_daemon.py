@@ -21,7 +21,7 @@ from ..tools import remove_comments, substitute_env_vars, follow_links_executabl
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True
+DEBUG = False
 
 # Replace rules to delegate the filter to firejail.
 # The exception are differents
