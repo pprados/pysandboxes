@@ -18,6 +18,7 @@ def set_sandbox_loop(loop: AbstractEventLoop) -> None:
     global _background_loop_ref
     _background_loop_ref = weakref.ref(loop)
 
+_thread:Optional[threading.Thread] = None
 
 def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoop]:
     global _background_loop_ref
@@ -66,12 +67,13 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
                 logger.exception("Exception unknown in run_forever")
                 os._exit(-1)
 
-        thread = threading.Thread(
+        global _thread
+        _thread = threading.Thread(
             target=_start_background_loop,
             daemon=True,
             name="Sandbox Private loop"
         )
-        thread.start()
+        _thread.start()
         start_event.wait()
     return loop
 

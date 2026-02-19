@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Any
 
 import pytest
 
@@ -10,6 +10,10 @@ from pysandboxes import sandbox
 from pysandboxes.os_sandbox import start_daemon, shutdown_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
+    pass
 
 @pytest.fixture(scope="module", autouse=True)
 def start_daemon_for_tests() -> Iterator[None]:

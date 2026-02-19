@@ -424,16 +424,16 @@ def _apply_dest_to_src_rules(path: Union[str, os.PathLike, _DirEntry],
 
 
 def _special_caller():
-    return False  # FIXME
-    frame = sys._getframe(2)
-    filename = None
-    if inspect.isframe(frame):
-        code = frame.f_code
-        filename = code.co_filename
-    for wl in _white_list:
-        if filename.endswith(wl):
-            return True
     return False
+    # frame = sys._getframe(2)
+    # filename = None
+    # if inspect.isframe(frame):
+    #     code = frame.f_code
+    #     filename = code.co_filename
+    # for wl in _white_list:
+    #     if filename.endswith(wl):
+    #         return True
+    # return False
 
 
 def _raise_ignore(file: Union[str, bytes, os.PathLike, int],
@@ -458,14 +458,14 @@ def _raise_access(file: Union[str, bytes, os.PathLike, int]) -> NoReturn:
 
 
 # %% Generic wrapper
-def _wrap_empty(func: Callable) -> Callable:
-    return func
+# def _wrap_empty(func: Callable) -> Callable:
+#     return func
 
 
-def _wrap_reload_module(func: Callable, *, name: str) -> ModuleType:
-    # Use _f(_wrap_reload_module, name="io") to refresh a module in another module
-    import sys
-    return sys.modules[name]
+# def _wrap_reload_module(func: Callable, *, name: str) -> ModuleType:
+#     # Use _f(_wrap_reload_module, name="io") to refresh a module in another module
+#     import sys
+#     return sys.modules[name]
 
 
 def _wrap_buitins_open(func: Callable) -> Callable:
@@ -618,67 +618,58 @@ def _wrap_dir(func: Callable, *, write: bool) -> Callable:
     return wrapper
 
 
-def _wrap_os_path_exists(func: Callable, *, write: bool) -> Callable:
-    @functools.wraps(func)
-    def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
-        # Detect call from posixpath
-        if _special_caller():
-            return func(file, *args, **kwargs)
-        if isinstance(file, int):
-            return func(file, *args, **kwargs)
-        if isinstance(file, _DirEntry):
-            file = file.path
-        remapped, rule = _apply_dest_to_src_rules(file, write=write)
-        if rule:
-            return False
-        if not remapped:
-            remapped = file
-        # if is_learning_mode():
-        #     exist is not learn.
-        #     add_learning_rule(LearnFileRule(Path(file), False))
-        #     remapped = file
-        return func(remapped, *args, **kwargs)
-
-    return wrapper
-
-
-def _wrap_os_path_is(func: Callable, *, write: bool) -> Callable:
-    @functools.wraps(func)
-    def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
-        # Detect call from posixpath
-        if _special_caller():
-            return func(file, *args, **kwargs)
-        if isinstance(file, int):
-            return func(file, *args, **kwargs)
-        if isinstance(file, _DirEntry):
-            file = file.path
-        remapped, rule = _apply_dest_to_src_rules(file, write=write)
-        if rule:
-            return False
-        if remapped is None:
-            if is_learning_mode():
-                remapped = file
-            else:
-                return False
-        result = func(remapped, *args, **kwargs)
-        # no learn because if it's valide, it's may be used later
-        # if result and is_learning_mode():
-        #     add_learning_rule(LearnFileRule(Path(file), False))
-        return result
-
-    return wrapper
+# def _wrap_os_path_exists(func: Callable, *, write: bool) -> Callable:
+#     @functools.wraps(func)
+#     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
+#         # Detect call from posixpath
+#         if _special_caller():
+#             return func(file, *args, **kwargs)
+#         if isinstance(file, int):
+#             return func(file, *args, **kwargs)
+#         if isinstance(file, _DirEntry):
+#             file = file.path
+#         remapped, rule = _apply_dest_to_src_rules(file, write=write)
+#         if rule:
+#             return False
+#         if not remapped:
+#             remapped = file
+#         # if is_learning_mode():
+#         #     exist is not learn.
+#         #     add_learning_rule(LearnFileRule(Path(file), False))
+#         #     remapped = file
+#         return func(remapped, *args, **kwargs)
+#
+#     return wrapper
 
 
-def _wrap_pathlib_Path_iterdir(func: Callable) -> Callable:  # FIXME
-    @functools.wraps(func)
-    def wrapper(self):
-        # result = func(self)  # FIXME: pour recherche de bug
-        return func
+# def _wrap_os_path_is(func: Callable, *, write: bool) -> Callable:
+#     @functools.wraps(func)
+#     def wrapper(file: Union[str, bytes, os.PathLike, int], *args, **kwargs):
+#         # Detect call from posixpath
+#         if _special_caller():
+#             return func(file, *args, **kwargs)
+#         if isinstance(file, int):
+#             return func(file, *args, **kwargs)
+#         if isinstance(file, _DirEntry):
+#             file = file.path
+#         remapped, rule = _apply_dest_to_src_rules(file, write=write)
+#         if rule:
+#             return False
+#         if remapped is None:
+#             if is_learning_mode():
+#                 remapped = file
+#             else:
+#                 return False
+#         result = func(remapped, *args, **kwargs)
+#         # no learn because if it's valide, it's may be used later
+#         # if result and is_learning_mode():
+#         #     add_learning_rule(LearnFileRule(Path(file), False))
+#         return result
+#
+#     return wrapper
 
-    return wrapper
 
-
-def _wrap_pathlib_Path_glob(func: Callable) -> Callable:  # FIXME
+def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self, pattern, *, case_sensitive=None, recurse_symlinks=False):
 
@@ -719,15 +710,6 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:  # FIXME
         #             recurse_symlinks=recurse_symlinks).map(
         #
         # )
-
-    return wrapper
-
-
-def _wrap_posix_scandir(func: Callable) -> Callable:  # FIXME
-    @functools.wraps(func)
-    def wrapper(path):
-        result = func(path)  # FIXME: pour recherche de bug
-        return result
 
     return wrapper
 
@@ -1006,38 +988,38 @@ def _wrap_os_scandir(func: Callable) -> Callable:
 
 
 # %% os.path wrapper
-def _wrap_os_path_realpath(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
-        # Detect call from posixpath
-        frame = sys._getframe(1)
-        filename = None
-        if inspect.isframe(frame):
-            code = frame.f_code
-            filename = code.co_filename
-        for wl in _white_list:
-            if filename.endswith(wl):
-                return func(*args, **kwargs)
-        remapped, rule = _apply_dest_to_src_rules(file, write=False)
-        if rule:
-            _raise_ignore(file, rule)
-        if not remapped:
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), False))
-                remapped = file
-            else:
-                _raise_access(file)
-        file = func(remapped, *args, **kwargs)
-        remapped, rule = _apply_src_to_dest_rules(os.fspath(file))
-        if remapped is None:
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), False))
-                remapped = os.fspath(file)
-            else:
-                _raise_access(file)
-        return remapped
-
-    return wrapper
+# def _wrap_os_path_realpath(func: Callable) -> Callable:
+#     @functools.wraps(func)
+#     def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
+#         # Detect call from posixpath
+#         frame = sys._getframe(1)
+#         filename = None
+#         if inspect.isframe(frame):
+#             code = frame.f_code
+#             filename = code.co_filename
+#         for wl in _white_list:
+#             if filename.endswith(wl):
+#                 return func(*args, **kwargs)
+#         remapped, rule = _apply_dest_to_src_rules(file, write=False)
+#         if rule:
+#             _raise_ignore(file, rule)
+#         if not remapped:
+#             if is_learning_mode():
+#                 add_learning_rule(LearnFileRule(Path(file), False))
+#                 remapped = file
+#             else:
+#                 _raise_access(file)
+#         file = func(remapped, *args, **kwargs)
+#         remapped, rule = _apply_src_to_dest_rules(os.fspath(file))
+#         if remapped is None:
+#             if is_learning_mode():
+#                 add_learning_rule(LearnFileRule(Path(file), False))
+#                 remapped = os.fspath(file)
+#             else:
+#                 _raise_access(file)
+#         return remapped
+#
+#     return wrapper
 
 
 # %% io wrapper
@@ -1070,20 +1052,20 @@ def _wrap_io_open(func: Callable) -> Callable:
 
 
 # %% pathlib wrapper
-def _wrap_pathlib(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
-        remapped, rule = _apply_dest_to_src_rules(file, write=False)
-        if rule:
-            _raise_ignore(file, rule)
-        if remapped is None:
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), False))
-            else:
-                _raise_access(file)
-        return func(Path(remapped), *args, **kwargs)
-
-    return wrapper
+# def _wrap_pathlib(func: Callable) -> Callable:
+#     @functools.wraps(func)
+#     def wrapper(file: Union[str, bytes, os.PathLike], *args, **kwargs):
+#         remapped, rule = _apply_dest_to_src_rules(file, write=False)
+#         if rule:
+#             _raise_ignore(file, rule)
+#         if remapped is None:
+#             if is_learning_mode():
+#                 add_learning_rule(LearnFileRule(Path(file), False))
+#             else:
+#                 _raise_access(file)
+#         return func(Path(remapped), *args, **kwargs)
+#
+#     return wrapper
 
 
 def _wrap__os(module: ModuleType) -> ModuleType:
@@ -1101,6 +1083,8 @@ def _wrap__io(module: ModuleType) -> ModuleType:
         import io
         assert io.open.__pysandbox__
         return io
+    else:
+        pass
     return module
 
 
@@ -1138,10 +1122,6 @@ def _f(func, *args, **kwargs):
 
     return wrapper()
 
-
-# _f(_wrap_filename,write=True)(toto)("abc")
-# def _wrap_filename(*args,**kwargs):
-#     return _f(wrap_filename,*args,**kwargs)
 
 _default_rules = rules = {
     "os.chdir": _f(_wrap_dir, write=False),
@@ -1306,10 +1286,6 @@ _default_rules = rules = {
 
     # builtins
     "builtins.open": _f(_wrap_buitins_open),
-
-    # "pathlib.Path.iterdir": _f(_wrap_pathlib_Path_iterdir), FIXME
-    # "posix.scandir": _f(_wrap_posix_scandir),FIXME
-
 }
 
 
