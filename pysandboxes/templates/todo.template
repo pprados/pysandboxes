@@ -17,3 +17,4 @@
 # TODO: dns=1.1.1.1,4,4,4,4
 # TODO: python-api=ALLOW:threads
 # TODO: python-api-import=ALLOW:numpy.*,pandas.*
+# TODO: python-recursion-limit=500

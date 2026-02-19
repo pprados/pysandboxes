@@ -27,7 +27,6 @@ def _activate_guard_import_for_tests():
         patch_rules as import_path_rules
     from pysandboxes.guard_files import patch_rules as file_patch_rules
     from pysandboxes.guard_socket import patch_rules as socket_path_rules
-    remove_modules()  # FIXME: nécessaire ?
     assert "io" not in sys.modules
     activate_guard_import(
         {
@@ -40,7 +39,6 @@ def _activate_guard_import_for_tests():
 
 
 def _reset_rules():
-    _activate_guard_import_for_tests()  # FIXME: doublon?
     yield
     _deactivate_all_rules()
 

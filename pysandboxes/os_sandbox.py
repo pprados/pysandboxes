@@ -229,7 +229,6 @@ def shutdown_daemon(graceful_shutdown:bool = True) -> None:
             stop_event.set()
             reset_sandbox_loop()
 
-        # FIXME: appelé ou?
         loop.call_soon_threadsafe(
             lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
         if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):

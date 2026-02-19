@@ -374,8 +374,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
         # One more time
-        # logger.debug(
-        #     f"sleep {INTERVAL_FOR_PING_DAEMON}")  # FIXME: nécessaire? Sinon erreur 503
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
         self._is_started = True
         self._accept_incoming = True

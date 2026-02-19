@@ -1077,15 +1077,11 @@ def _wrap__os(module: ModuleType) -> ModuleType:
 
 
 def _wrap__io(module: ModuleType) -> ModuleType:
-    if not hasattr(module.open, "__pysandbox__"):  # FIXME
-        if "io" in sys.modules:
-            del sys.modules["io"]  # FIXME: nécessaire ?
-        import io
-        assert io.open.__pysandbox__
-        return io
-    else:
-        pass
-    return module
+    if "io" in sys.modules:
+        del sys.modules["io"]
+    import io
+    assert io.open.__pysandbox__
+    return io
 
 
 class Guard_FileIO(FileIO):
