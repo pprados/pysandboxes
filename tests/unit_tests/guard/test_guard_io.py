@@ -40,7 +40,7 @@ def _activate_guard_import_for_tests():
 
 
 def _reset_rules():
-    _activate_guard_import_for_tests()  # FIXME: doublon
+    _activate_guard_import_for_tests()  # FIXME: doublon?
     yield
     _deactivate_all_rules()
 

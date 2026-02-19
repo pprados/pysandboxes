@@ -191,7 +191,7 @@ class sandboxes(Protocol):
             get_sandbox_loop()).result()
 
     # ── asynchronous API ───────────────────────────────
-    async def __aenter__(self) -> BaseDaemon:  # FIXME: compare avec enter() et TU
+    async def __aenter__(self) -> BaseDaemon:
         """
         Start the sandbox daemon.
         """

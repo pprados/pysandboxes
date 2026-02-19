@@ -12,23 +12,9 @@ def test_gzip(files):
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
-        # ConfigLine(f"bind=tests,tests", Path(), 0),
-        # ConfigLine(f"bind=.venv,.venv", Path(), 0),
-        # ConfigLine(f"bind=.pytest_cache,.pytest_cache", Path(), 0),
-        # ConfigLine(f"bind=/tmp/pytest-of-philippe-prados/,/tmp/pytest-of-philippe-prados/", Path(), 0),
-        # ConfigLine(f"bind='/home/philippe-prados/miniconda3,/home/philippe-prados/miniconda3", Path(), 0),
     ]
-    # FIXME: nettoyer
-    # from pysandboxes.py_sandbox import parse_config
-    # from pysandboxes.py_sandbox import activate_sandboxes
-    # all_rules=parse_config(rules,
-    #              config_path=".",
-    #              envs={},
-    #              )
-    # activate_sandboxes(all_rules,{})
     activate_guard_files_rules(rules)
 
-    # FIXME: test pour debug
     from pysandboxes.guard_files import _rules
     assert _rules
 

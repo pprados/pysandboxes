@@ -137,7 +137,7 @@ def _search_module_config(config_path:Optional[Path]) -> Path:
     caller_module = frame.f_globals.get("__name__", "__main__").split('.', 1)[0]
     resource_config:Optional[Path] = None
     if caller_module != "__main__":
-        resource_path = cast(Path,files(caller_module))  # FIXME: semble y avoir un pb
+        resource_path = cast(Path,files(caller_module))
         resource_config = resource_path / config_path
     if resource_config and resource_config.exists():
         config_path = resource_config

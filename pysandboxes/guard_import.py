@@ -96,6 +96,7 @@ def _apply_patch(module, name: str) -> None:
             # Patch the entire module
             sys.modules[name] = patch.patch_factory(cur_object)
 
+
 class GuardLoader(importlib.abc.Loader):
     """
     A custom loader that wraps an _original loader to modify a module after it
@@ -149,7 +150,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
     @classmethod
     def find_distributions(
-        cls, context=DistributionFinder.Context()
+            cls, context=DistributionFinder.Context()
     ) -> Iterable[PathDistribution]:
         """
         Find distributions.
@@ -259,7 +260,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
 _guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
 
-_activated=False  # FIXME
+_activated = False
+
+
 def _activate_patch_import(
         patch_rules: PatchRules,
 ) -> bool:
@@ -341,7 +344,7 @@ def activate_guard_import(
 ) -> None:
     global _rules
     global _activated
-    patch_rules:PatchRules = _conv_patch_rules(patch_rules)
+    patch_rules: PatchRules = _conv_patch_rules(patch_rules)
     if _activated:
         logger.debug("Guard_files was already activated.")
         return
@@ -351,8 +354,6 @@ def activate_guard_import(
                 builtins_module = sys.modules[module]
                 _apply_patch(builtins_module, module)
     _rules = rules
-
-
 
 
 def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
@@ -403,7 +404,8 @@ def generate_rules(
     danger_result = set()
     black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())
     std_modules = set(resources.read_text(__name__, "modules_standard.txt").split())
-    deprecated_modules = set(resources.read_text(__name__, "modules_deprecated.txt").split())
+    deprecated_modules = set(
+        resources.read_text(__name__, "modules_deprecated.txt").split())
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         if learn_rule.name in black_list:

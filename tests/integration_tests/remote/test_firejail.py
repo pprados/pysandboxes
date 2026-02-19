@@ -7,7 +7,8 @@ from typing import Iterator
 import pytest
 
 from pysandboxes import sandbox
-from pysandboxes.os_sandbox import start_daemon, shutdown_daemon
+from pysandboxes.os_sandbox import async_start_daemon, \
+    async_shutdown_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.tools import which_command
 
@@ -21,19 +22,19 @@ def event_loop(request):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def start_daemon_for_tests() -> Iterator[None]:  # FIXME: tester en async partout
+async def start_daemon_for_tests() -> Iterator[None]:
     config_path = Path(__file__).parent.parent / "test.py-sandboxes"
 
     log_level = logging.root.getEffectiveLevel()
     all_rules = load_and_parse_config(config_path=config_path)
     all_rules = all_rules._replace(os_sandbox="firejail")
-    start_daemon(all_rules,
-                          envs=os.environ,
-                          log_level=log_level,
-                          init_fn=None,
-                          )
+    await async_start_daemon(all_rules,
+                             envs=os.environ,
+                             log_level=log_level,
+                             init_fn=None,
+                             )
     yield
-    shutdown_daemon(graceful_shutdown=False)
+    await async_shutdown_daemon(graceful_shutdown=False)
 
 
 @sandbox()

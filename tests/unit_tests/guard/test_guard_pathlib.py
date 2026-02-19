@@ -217,13 +217,6 @@ def test_pathlib_mkdir_removedirs_and_rmdir(files):
     pathlib.Path(files["bind_dest"] / "dir_to_remove").mkdir()
     assert pathlib.Path(files["bind_dest"] / "dir_to_remove").rmdir() is None
 
-    # FIXME: add test mkdir
-    # (files["path"] / "dir_to_remove").mkdir()
-    # assert os.removedirs(files["path"] / "dir_to_remove") is None
-    #
-    # os.mkdir(files["bind_dest"] / "dir_to_remove")
-    # assert os.removedirs(files["bind_dest"] / "dir_to_remove") is None
-
 
 def test_pathlib_link_symlink_and_readlink(files):
     rules = [

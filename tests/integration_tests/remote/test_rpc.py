@@ -21,7 +21,6 @@ def start_daemon_for_tests() -> Iterator[None]:
 
     log_level = logging.root.getEffectiveLevel()
     all_rules = load_and_parse_config(config_path=config_path)
-    # FIXME all_rules = all_rules._replace(os_sandbox="firejail")f
     start_daemon(all_rules,
                           envs=os.environ,
                           log_level=log_level,

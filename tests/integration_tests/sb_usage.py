@@ -34,7 +34,7 @@ def init_log_level():
 @sandbox
 async def arun_in_sandbox():
     logger.info("Run 'arun_in_sandbox()' in sandbox")
-    # FIXME _test_envs()
+    _test_envs()
     _test_files()
     # _test_network()
     print(42)
