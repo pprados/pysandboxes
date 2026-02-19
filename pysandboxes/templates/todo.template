@@ -1,0 +1,20 @@
+
+#######################################################################################
+# TODO: The dns use the libc implementation, without Python
+#net=ALLOW|udp|0.0.0.0/0|53|OUT  # Can call all DNS services
+#net=ALLOW|udp|0.0.0.0/0|53|IN
+
+
+# TODO Limit syntax and features when executing python code (very useful for controlling LLM-generated code)
+#python-exec-provider=interpreter
+#python-exec-import=ALLOW:threads
+#python-exec=ALLOW:annotations,async,class,def
+
+# TODO: include "~/.config/pysanboxes/user-py-sandboxes"
+# TODO: build=file  pour apprentissage (ou verbe utilisé dans AppArmor)
+# TODO: no-dotenv
+# TODO: firejail=file.template
+# TODO: dns=1.1.1.1,4,4,4,4
+# TODO: python-api=ALLOW:threads
+# TODO: python-api-import=ALLOW:numpy.*,pandas.*
+# TODO: python-recursion-limit=500

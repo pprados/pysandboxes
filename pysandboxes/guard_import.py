@@ -1,0 +1,506 @@
+# Define the custom loader class
+import importlib
+import importlib.abc
+import importlib.util
+import itertools
+import logging
+import os
+import sys
+from importlib import resources
+from importlib.abc import Loader
+from importlib.machinery import ModuleSpec
+from importlib.metadata import DistributionFinder
+from types import ModuleType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    cast,
+)
+
+from .e import RuleModuleNotFoundError
+from .immutable_dict import ImmutableDict
+from .learning import add_learning_rule, is_learning_mode
+from .main_logger import ErrorMsg
+from .sb_types import ConfigLines
+from .tools import is_in_sandbox
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
+
+    from _typeshed.importlib import MetaPathFinderProtocol
+else:
+    Prepared = Any  # FIXME
+    FastPath = Any
+    MetaPathFinderProtocol = Any
+
+
+class PatchRule(NamedTuple):
+    module_name: str
+    patch_factory: Callable
+
+
+PatchRules = ImmutableDict[str, Tuple[PatchRule, ...]]
+
+ImportRules = Tuple[str, ...]
+
+
+class LearnImportRule(NamedTuple):
+    name: str
+
+
+def _conv_patch_rules(patch_rules: Dict[str, Callable]) -> PatchRules:
+    rules: MutableMapping[str, List[PatchRule]] = {}
+    # Split path by first module
+    for k, v in patch_rules.items():
+        if "." in k:
+            module, path = k.split(".", maxsplit=1)
+        else:
+            module, path = k, ""
+        patch_list: List[PatchRule] = rules.get(module, [])
+        patch_list.append(PatchRule(path, v))
+        rules[module] = patch_list
+
+    return PatchRules({k: tuple(v) for k, v in rules.items()})
+
+
+_rules: ImportRules = cast(ImportRules, ())
+_patch_rules: PatchRules = ImmutableDict({})
+
+
+def parse_rules(
+    config: ConfigLines,
+    errors: List[ErrorMsg],
+) -> Tuple[ImportRules, ConfigLines]:
+    white_list: List[str] = []
+    ignore_rules: ConfigLines = []
+    for rule in config:
+        if rule.rule.startswith("python-import="):
+            value = rule.rule.split("=", 1)[1]
+            # Accept multiple --python-import rules
+            white_list.extend([r.strip() for r in value.split(",")])
+        else:
+            ignore_rules.append(rule)
+    if "*" in white_list:
+        white_list = ["*"]
+    return tuple(white_list), ignore_rules
+
+
+def _apply_patch(module: ModuleType, name: str) -> None:
+    logger.debug(f"Apply patch {name=} {module=}")
+    all_patch = cast(Tuple[PatchRule, ...], _patch_rules[name])
+    for patch in all_patch:
+        cur_object = module
+        if patch.module_name != "":
+            paths = patch.module_name.split(".")
+            for node in paths[:-1]:
+                cur_object = cur_object.__dict__[node]
+            new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
+            assert not hasattr(new_value, "__pysandbox__"), "Double injection"
+            if __debug__ and isinstance(
+                new_value, type(_apply_patch)
+            ):  # Fake kinds.FunctionType
+                new_value.__pysandbox__ = True  # type: ignore[attr-defined]
+            setattr(cur_object, paths[-1], new_value)
+        else:
+            # Patch the entire module
+            sys.modules[name] = patch.patch_factory(cur_object)
+
+
+class GuardLoader(Loader):
+    """
+    A custom loader that wraps an _original loader to modify a module after it
+    has been created and executed.
+    """
+
+    __slots__ = ("original_spec", "original_loader")
+
+    def __init__(self, original_spec: ModuleSpec):
+        # Store the _original spec and loader
+        self.original_spec: ModuleSpec = original_spec
+        self.original_loader: Loader | None = original_spec.loader
+
+    def create_module(self, spec: ModuleSpec) -> ModuleType | None:
+        """
+        Delegates the module creation to the _original loader.
+        This gets the base module object from the standard import process.
+        """
+        # logger.debug(f"create_module({spec=}")
+        if self.original_loader is None:
+            return None
+        module = self.original_loader.create_module(self.original_spec)
+        return module  # Not initialized
+
+    def exec_module(self, module: ModuleType) -> None:
+        """
+        Executes the module code using the _original loader, then performs
+        custom modifications.
+        This is where we add our custom logic after the standard loading.
+        """
+
+        if module is None:
+            return
+        if not is_learning_mode():
+            if _rules and _rules[0] != "*":
+                module_name = module.__name__
+                # Reactiver le filtre de module
+                if module_name not in _rules:
+                    raise RuleModuleNotFoundError(
+                        f"Module named {module_name!r} is not allowed by a rule"
+                    )
+        # logger.debug(f"exec_module({module.__name__})...")
+        if not self.original_loader:
+            return
+        self.original_loader.exec_module(module)
+
+        # if not self.done and self.original_spec.name in _rules:
+        if self.original_spec.name in _patch_rules:
+            _apply_patch(module, self.original_spec.name)
+
+            # logger.error(f"GuardLoader: Injected patch into {module.__name__!r}.")
+
+
+# Define the custom finder class
+class GuardFinder(importlib.abc.MetaPathFinder):
+    @classmethod
+    def find_distributions(
+        cls, context: DistributionFinder.Context = DistributionFinder.Context()
+    ) -> Iterable[importlib.metadata.PathDistribution]:
+        """
+        Find distributions.
+
+        Return an iterable of all Distribution instances capable of
+        loading the metadata for packages matching ``context.name``
+        (or all names if ``None`` indicated) along the paths in the list
+        of directories ``context.path``.
+        """
+        from importlib.metadata import PathDistribution
+
+        if context.name and context.path:
+            found = cls._search_paths(context.name, context.path)
+        else:
+            found = iter([])
+        return map(PathDistribution, found)
+
+    @classmethod
+    def _search_paths(cls, name: str | None, paths: list[str]) -> Iterator[FastPath]:
+        """Find metadata directories in paths heuristically."""
+        from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
+
+        prepared = Prepared(name)
+        return itertools.chain.from_iterable(
+            path.search(prepared) for path in map(FastPath, paths)
+        )
+
+    __slots__ = ("_finders",)
+
+    def __init__(self, finders: List[MetaPathFinderProtocol]):
+        self._finders = finders
+
+    """
+    A custom finder that locates our special module.
+    """
+
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
+    ) -> Optional[ModuleSpec]:
+        """
+        Finds the specification for a module.
+        """
+        # logger.debug(f"find_spec({fullname=},{path=},{target=})")
+
+        # Delegate to the rest of the chain to find the _original module spec
+        # We skip our own finder by checking sys.meta_path from the next index
+        # import builtins;builtins.print(f"finder {fullname}")
+        # TODO: voir les imports recursif a.b
+        for finder in sys.meta_path:
+            if finder == cast(MetaPathFinderProtocol, self):
+                continue
+            original_spec = finder.find_spec(fullname, path, target)
+            if original_spec:
+                break
+        else:
+            return None
+            # if not original_spec:
+            #     if fullname in "sys.modules":
+            #         original_spec = sys.modules[fullname].__spec__
+        if original_spec:
+            # logger.debug(
+            #     f"GuardFinder: Found _original spec via {type(finder).__name__!r}.")
+            # Create a new spec using our custom GuardLoader,
+            # but with the _original spec's data
+
+            if original_spec.name in _patch_rules:
+                # logger.debug(f"Inject loader for {original_spec.name!r}")
+                if original_spec.parent:
+                    # Use __init__
+                    if original_spec.submodule_search_locations:
+                        init_file = os.path.join(
+                            original_spec.submodule_search_locations[0], "__init__.py"
+                        )
+                    else:
+                        if original_spec.origin is None:
+                            return None
+                        init_file = original_spec.origin
+                    assert os.path.isfile(init_file), "module without __init__.py"
+                    logger.debug(f"Inject loader for {original_spec.name!r}")
+                    new_spec = importlib.util.spec_from_file_location(
+                        fullname,
+                        init_file,
+                        loader=GuardLoader(original_spec),
+                        submodule_search_locations=original_spec.submodule_search_locations,
+                    )
+                else:
+                    new_spec = importlib.machinery.ModuleSpec(
+                        name=original_spec.name,
+                        loader=GuardLoader(original_spec),
+                        origin=original_spec.origin,
+                        loader_state=original_spec.loader_state,
+                    )
+            else:
+                new_spec = original_spec
+            if is_learning_mode() and is_in_sandbox():
+                module_name = fullname.split(".", 1)[0]
+                if (
+                    "*" not in _rules
+                    and module_name not in _rules
+                    and module_name != "pysandboxes"
+                ):
+                    add_learning_rule(LearnImportRule(module_name))
+            else:
+                # logger.error("Ignore %s",repr(fullname))
+                pass
+            if fullname == "pysandboxes_run":
+                logger.error(f"Pour pysandboxes_run {new_spec=}")
+            return new_spec
+
+        # For all other imports, return None to let the standard import
+        # mechanism handle them
+        return None
+
+
+_guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
+
+_activated = False
+
+
+def _activate_patch_import(
+    patch_rules: PatchRules,
+) -> bool:
+    global _activated
+    import sys
+
+    if _guard_finder not in sys.meta_path:
+        global _patch_rules
+        assert not _activated
+        _patch_rules = patch_rules
+
+        sys.meta_path.insert(0, _guard_finder)
+        _activated = True
+        return True
+    else:
+        logger.debug("Guard_import was already activated.")
+        assert _activated
+        return False
+
+
+# Modules to not remove from sys.modules, and to wait the lazy patch
+_not_refresh_modules: Set[str] = {
+    "sys",
+    "asyncio",
+    "builtins",
+    "concurrent",
+    "importlib",
+    "warnings",
+    "logging",
+    "_pytest",
+    "_pytest.fixtures",
+    "pytest",
+    "pathlib",
+    "subprocess",
+    __name__.rsplit(".", maxsplit=1)[0],
+}
+
+
+def remove_modules() -> None:
+    import sys
+
+    logger.debug("Remove modules")
+    to_remove = set()
+    for k, m in dict(sys.modules).items():
+        if k.startswith("_pytest") or k.startswith("pytest"):
+            continue
+        # Detect system modules
+        for special in _not_refresh_modules:
+            if k == special or k.startswith(special + "."):
+                break
+        else:
+            to_remove.add(k)
+
+    importlib.invalidate_caches()
+    # Reload modules (may add modules with relead() )
+    for k in to_remove:
+        if k in sys.modules:
+            if k in sys.builtin_module_names:
+                m = sys.modules[k]
+                if m:
+                    importlib.reload(m)
+                    pass
+
+    # Remove modules
+    for k in to_remove:
+        if k in sys.modules:
+            if k not in sys.builtin_module_names:
+                del sys.modules[k]
+    assert "io" not in sys.modules
+
+
+def patch_rules() -> Dict[str, Callable]:
+    return {}
+
+
+def activate_guard_import(
+    str_patch_rules: Dict[str, Callable],
+    rules: ImportRules,
+) -> None:
+    global _rules
+    global _activated
+    patch_rules: PatchRules = _conv_patch_rules(str_patch_rules)
+    if _activated:
+        logger.debug("Guard_files was already activated.")
+        return
+    if _activate_patch_import(patch_rules):
+        for module in _not_refresh_modules:
+            if module in patch_rules:
+                builtins_module = sys.modules[module]
+                _apply_patch(builtins_module, module)
+    _rules = rules
+
+
+def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
+    """
+    Groups a list of strings by joining them with commas, respecting a maximum width.
+
+    Args:
+        items: The list of strings to group.
+        max_width: The maximum allowed width for each group.
+
+    Returns:
+        A list of strings, where each string is a comma-separated group.
+    """
+    if not items:
+        return []
+
+    grouped_items: List[str] = []
+    current_line: str = ""
+
+    for item in items:
+        # Check if a new line is needed
+        if not current_line:
+            current_line = item
+        else:
+            # Check if adding the new item exceeds the max width
+            # We add 2 to the length for the comma and space
+            if len(current_line) + len(item) + 2 <= max_width:
+                current_line += ", " + item
+            else:
+                # Add the current line to the list and _start a new one
+                grouped_items.append(current_line)
+                current_line = item
+
+    # Append the last line if it's not empty
+    if current_line:
+        grouped_items.append(current_line)
+
+    return grouped_items
+
+
+def generate_rules(
+    learn: Set[Any],
+) -> List[str]:
+    # Select only parent
+    other_result = set()
+    standard_result = set()
+    deprecated_result = set()
+    danger_result = set()
+    black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())
+    std_modules = set(resources.read_text(__name__, "modules_standard.txt").split())
+    deprecated_modules = set(
+        resources.read_text(__name__, "modules_deprecated.txt").split()
+    )
+    # Classify rules
+    for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
+        if learn_rule.name in black_list:
+            danger_result.add(learn_rule.name)
+        elif learn_rule.name in std_modules or learn_rule.name[0] == "_":
+            standard_result.add(learn_rule.name)
+        elif learn_rule.name in deprecated_modules or learn_rule.name[0] == "_":
+            deprecated_result.add(learn_rule.name)
+        else:
+            other_result.add(learn_rule.name)
+
+    # generate rules
+    width = 70
+    result = []
+    if danger_result:
+        result.append("# \u26A0 Dangerous!")
+        result.extend(
+            sorted(
+                [
+                    f"python-import={name}"
+                    for name in _group_by_width(sorted(danger_result), width)
+                ]
+            )
+        )
+        result.append("")
+    if standard_result:
+        result.append("# Standard Python")
+        result.extend(
+            sorted(
+                [
+                    f"python-import={name}"
+                    for name in _group_by_width(sorted(standard_result), width)
+                ]
+            )
+        )
+        result.append("")
+    if deprecated_result:
+        result.append("# \u26A0 Deprecated Python module")
+        result.extend(
+            sorted(
+                [
+                    f"python-import={name}"
+                    for name in _group_by_width(sorted(deprecated_result), width)
+                ]
+            )
+        )
+        result.append("")
+    if other_result:
+        result.append("# External modules (Are you sure about the origin?)")
+        result.extend(
+            sorted([f"python-import={name}" for name in sorted(other_result)])
+        )
+    return result
+
+
+if "PYTEST_RUN_CONFIG" in os.environ:
+
+    def _deactivate_guard_import() -> None:
+        global _rules
+        _rules = ("*",)
+        remove_modules()
