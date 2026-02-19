@@ -9,12 +9,17 @@ import pytest
 from pysandboxes import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.sb_types import ConfigLine
 
-from .test_guard_io import activate_guard_files_rules, files
+from .test_guard_io import (
+    activate_guard_files_rules,
+    files,  # noqa: F401
+)
 
 
-def test_os_listdir_filters_ignored_files_and_bind(files: Dict[str, Path]) -> None:
+def test_os_listdir_filters_ignored_files_and_bind(
+    files: Dict[str, Path]  # noqa: F811
+) -> None:
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -35,9 +40,9 @@ def test_os_listdir_filters_ignored_files_and_bind(files: Dict[str, Path]) -> No
         os.listdir(files["bind_src"])
 
 
-def test_os_statand_stat_and_lstat(files: Dict[str, Path]) -> None:
+def test_os_statand_stat_and_lstat(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -65,9 +70,9 @@ def test_os_statand_stat_and_lstat(files: Dict[str, Path]) -> None:
         assert os.lstat(files["bind_src"])
 
 
-def test_os_listxattr(files: Dict[str, Path]) -> None:
+def test_os_listxattr(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -84,9 +89,9 @@ def test_os_listxattr(files: Dict[str, Path]) -> None:
         os.listxattr(files["bind_src"])
 
 
-def test_os_xattr(files: Dict[str, Path]) -> None:
+def test_os_xattr(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -110,9 +115,9 @@ def test_os_xattr(files: Dict[str, Path]) -> None:
         os.getxattr(files["bind_src"], "user.comment")
 
 
-def test_os_link_symlink_and_readlink(files: Dict[str, Path]) -> None:
+def test_os_link_symlink_and_readlink(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -162,9 +167,9 @@ def test_os_link_symlink_and_readlink(files: Dict[str, Path]) -> None:
     assert os.path.exists(files["new_link"])
 
 
-def test_os_remove(files: Dict[str, Path]) -> None:
+def test_os_remove(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -187,10 +192,9 @@ def test_os_remove(files: Dict[str, Path]) -> None:
     os.remove(files["bind_dest"] / "to_remove.txt")
 
 
-
-def test_os_remove_refused(files: Dict[str, Path]) -> None:
+def test_os_remove_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
@@ -201,9 +205,9 @@ def test_os_remove_refused(files: Dict[str, Path]) -> None:
         os.remove(files["bound_file"])
 
 
-def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:
+def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -243,9 +247,11 @@ def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:
         os.mkdir(files["bind_src"] / "dir_to_remove")
 
 
-def test_os_mkdir_removedirs_and_rmdir_refused(files: Dict[str, Path]) -> None:
+def test_os_mkdir_removedirs_and_rmdir_refused(
+    files: Dict[str, Path]  # noqa: F811
+) -> None:
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
@@ -259,9 +265,9 @@ def test_os_mkdir_removedirs_and_rmdir_refused(files: Dict[str, Path]) -> None:
         os.mkdir(files["bind_src"] / "dir_to_remove")
 
 
-def test_os_rename(files: Dict[str, Path]) -> None:
+def test_os_rename(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -287,9 +293,9 @@ def test_os_rename(files: Dict[str, Path]) -> None:
         os.rename(files["ignore"], str(files["ignore"]) + "-back")
 
 
-def test_os_rename_refused(files: Dict[str, Path]) -> None:
+def test_os_rename_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
@@ -300,11 +306,11 @@ def test_os_rename_refused(files: Dict[str, Path]) -> None:
         os.rename(files["to_rename"], files["bound_file"])
 
 
-def test_os_chdir_and_getcwd(files: Dict[str, Path]) -> None:
+def test_os_chdir_and_getcwd(files: Dict[str, Path]) -> None:  # noqa: F811
     import os
 
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={os.environ['PWD']},{os.environ['PWD']}", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -323,11 +329,11 @@ def test_os_chdir_and_getcwd(files: Dict[str, Path]) -> None:
     os.chdir(old_dir)
 
 
-def test_os_getcwdb(files: Dict[str, Path]) -> None:
+def test_os_getcwdb(files: Dict[str, Path]) -> None:  # noqa: F811
     import os
 
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={os.environ['PWD']},{os.environ['PWD']}", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -341,9 +347,9 @@ def test_os_getcwdb(files: Dict[str, Path]) -> None:
     assert cwd.decode(sys.getfilesystemencoding()) == os.getcwd()
 
 
-def test_os_open_readonly(files: Dict[str, Path]) -> None:
+def test_os_open_readonly(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -367,9 +373,9 @@ def test_os_open_readonly(files: Dict[str, Path]) -> None:
         os.open(files["ignore"], os.O_RDONLY)
 
 
-def test_os_open_writeonly(files: Dict[str, Path]) -> None:
+def test_os_open_writeonly(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -393,9 +399,9 @@ def test_os_open_writeonly(files: Dict[str, Path]) -> None:
         os.open(files["ignore"], os.O_RDONLY)
 
 
-def test_os_open_writeonly_refused(files: Dict[str, Path]) -> None:
+def test_os_open_writeonly_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -412,9 +418,9 @@ def test_os_open_writeonly_refused(files: Dict[str, Path]) -> None:
                 os.close(fd)
 
 
-def test_os_open_readwrite(files: Dict[str, Path]) -> None:
+def test_os_open_readwrite(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -435,9 +441,9 @@ def test_os_open_readwrite(files: Dict[str, Path]) -> None:
             os.close(fd)
 
 
-def test_os_open_readwrite_refused(files: Dict[str, Path]) -> None:
+def test_os_open_readwrite_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -454,9 +460,9 @@ def test_os_open_readwrite_refused(files: Dict[str, Path]) -> None:
                 os.close(fd)
 
 
-def test_os_access_read_write(files: Dict[str, Path]) -> None:
+def test_os_access_read_write(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -471,9 +477,9 @@ def test_os_access_read_write(files: Dict[str, Path]) -> None:
     assert not os.access(files["bind_src"], os.R_OK | os.W_OK)
 
 
-def test_os_access_read_only(files: Dict[str, Path]) -> None:
+def test_os_access_read_only(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -492,9 +498,9 @@ def test_os_access_read_only(files: Dict[str, Path]) -> None:
     not (sys.platform != "win32" and sys.platform != "linux"),
     reason="requires special os",
 )
-def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:
+def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
@@ -510,9 +516,9 @@ def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:
         assert os.lchflags(files["bind_src"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
 
 
-def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:
+def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -537,9 +543,9 @@ def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:
             os.lchmod(files["bind_src"], mode | stat.S_IREAD | stat.S_IWRITE)
 
 
-def test_os_chmod_and_lchmod_refused(files: Dict[str, Path]) -> None:
+def test_os_chmod_and_lchmod_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -558,9 +564,9 @@ def test_os_chmod_and_lchmod_refused(files: Dict[str, Path]) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="requires no windows OS")
-def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:
+def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -584,9 +590,9 @@ def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:
         os.lchown(files["bind_src"], uid, gid)
 
 
-def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:
+def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -603,9 +609,9 @@ def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:
         os.lchown(files["bound_file"], uid, gid)
 
 
-def test_os_replace(files: Dict[str, Path]) -> None:
+def test_os_replace(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -630,9 +636,9 @@ def test_os_replace(files: Dict[str, Path]) -> None:
         os.replace(files["bind_src"], files["new_replace"])
 
 
-def test_os_replace_refused(files: Dict[str, Path]) -> None:
+def test_os_replace_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
@@ -643,9 +649,9 @@ def test_os_replace_refused(files: Dict[str, Path]) -> None:
         os.replace(files["bound_file"], files["bound_file"])
 
 
-def test_os_truncate(files: Dict[str, Path]) -> None:
+def test_os_truncate(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -670,9 +676,9 @@ def test_os_truncate(files: Dict[str, Path]) -> None:
         os.truncate(files["bind_src"], 3)
 
 
-def test_os_truncate_refused(files: Dict[str, Path]) -> None:
+def test_os_truncate_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
@@ -683,9 +689,9 @@ def test_os_truncate_refused(files: Dict[str, Path]) -> None:
         os.truncate(files["bound_file"], 3)
 
 
-def test_os_utime(files: Dict[str, Path]) -> None:
+def test_os_utime(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -707,9 +713,9 @@ def test_os_utime(files: Dict[str, Path]) -> None:
         os.utime(files["bind_src"], (yesterday, now))
 
 
-def test_os_utime_refused(files: Dict[str, Path]) -> None:
+def test_os_utime_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
@@ -723,9 +729,9 @@ def test_os_utime_refused(files: Dict[str, Path]) -> None:
         os.utime(files["bound_file"], (yesterday, now))
 
 
-def test_os_scandir(files: Dict[str, Path]) -> None:
+def test_os_scandir(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -752,9 +758,9 @@ def test_os_scandir(files: Dict[str, Path]) -> None:
             pass
 
 
-def test_os_walk(files: Dict[str, Path]) -> None:
+def test_os_walk(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -775,9 +781,9 @@ def test_os_walk(files: Dict[str, Path]) -> None:
     assert "bound_file.txt" in rc[0][2]
 
 
-def test_os_makedirs_and_removedirs(files: Dict[str, Path]) -> None:
+def test_os_makedirs_and_removedirs(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -798,9 +804,9 @@ def test_os_makedirs_and_removedirs(files: Dict[str, Path]) -> None:
         os.removedirs(files["bind_src"] / "dir_to_remove" / "inner")
 
 
-def test_os_renames(files: Dict[str, Path]) -> None:
+def test_os_renames(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -815,9 +821,9 @@ def test_os_renames(files: Dict[str, Path]) -> None:
     os.unlink(files["new_rename"])
 
 
-def test_os_walk_and_fwalk(files: Dict[str, Path]) -> None:
+def test_os_walk_and_fwalk(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]

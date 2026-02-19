@@ -11,10 +11,11 @@ from typing import (
     Callable,
     Iterator,
     List,
+    Mapping,
     Optional,
     Set,
     Tuple,
-    Union, Mapping,
+    Union,
 )
 
 from .sb_types import ConfigLine, ConfigLines
@@ -41,14 +42,11 @@ def resolve_env_variables(s: str, envs: Environ) -> str:
     return s
 
 
-def substitute_env_vars(lines: List[str],
-                        env_vars: Environ
-                        ) -> List[str]:
+def substitute_env_vars(lines: List[str], env_vars: Environ) -> List[str]:
     return [resolve_env_variables(line, env_vars) for line in lines]
 
 
-def substitute_config_env_vars(lines: ConfigLines,
-                               env_vars: Environ) -> ConfigLines:
+def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigLines:
     return [
         ConfigLine(resolve_env_variables(line, env_vars), path, ln)
         for line, path, ln in lines
@@ -150,9 +148,9 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 
 def find_config(
-        filename: str,
-        raise_error_if_not_found: bool = False,
-        usecwd: bool = False,
+    filename: str,
+    raise_error_if_not_found: bool = False,
+    usecwd: bool = False,
 ) -> str:
     """
     Search in increasingly higher folders for the given file
@@ -183,7 +181,7 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-                frame.f_code.co_filename
+            frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back

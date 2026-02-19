@@ -6,7 +6,7 @@ import sys
 import types
 from importlib import resources
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, cast, Any, Mapping
+from typing import Any, List, Mapping, Optional, Set, cast
 
 from . import (
     guard_envs,
@@ -24,7 +24,7 @@ from .guard_import import remove_modules
 from .learning import activate_learning
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
-from .tools import remove_config_comments, substitute_config_env_vars, Environ
+from .tools import Environ, remove_config_comments, substitute_config_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def load_and_parse_config(
     config_path: Optional[Path] = None,
     *,
     envs: Optional[Environ] = None,
-    **extra_rules:Mapping[str,Any],
+    **extra_rules: Mapping[str, Any],
 ) -> AllRules:
     """
     Reads and parses the configuration file for the sandbox.
@@ -235,7 +235,7 @@ def parse_config(
     if errors:
         errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))
         raise ConfigSyntaxError(
-            f"Syntax error in config files.", [error[0] for error in errors]
+            "Syntax error in config files.", [error[0] for error in errors]
         )
 
     if learn:

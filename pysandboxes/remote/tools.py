@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import logging
 import os
@@ -9,7 +8,7 @@ import sys  # Import the sys module to access system-specific parameters and fun
 import textwrap
 from ctypes import cdll
 from pathlib import Path
-from typing import Any, Awaitable, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import netifaces
 
@@ -145,7 +144,7 @@ def suggest_package_installation(package_name: str) -> str:
                 sudo dnf install {package_name}          (Fedora based systems)
                 sudo pacman -S {package_name}            (Arch Linux based systems)
                 Please refer to your distribution's documentation for the correct command.
-                """
+                """  # noqa: E501
             ).strip()  # noqa
 
     elif system == "darwin":
@@ -172,8 +171,8 @@ def suggest_package_installation(package_name: str) -> str:
             f"""
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for {package_name!r} to find installation instructions for your system.
-            """
-        ).strip()  # noqa
+            """  # noqa: E501
+        ).strip()
 
 
 def return_level_parameter(log_level: int) -> str:

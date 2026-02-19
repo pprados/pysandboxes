@@ -1,5 +1,3 @@
-import os
-
 # all times are in second
 POLLING_DELAY = 0.1  # For all polling, delay between retry
 INTERVAL_FOR_PING_DAEMON = POLLING_DELAY * 2

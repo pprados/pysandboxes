@@ -1,4 +1,4 @@
-def _check_called_by_imporlib(key:str) -> bool:
+def _check_called_by_imporlib(key: str) -> bool:
     return True
     import sys
 

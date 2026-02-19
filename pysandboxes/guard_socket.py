@@ -58,6 +58,7 @@ from typing import (
     Callable,
     Dict,
     Generator,
+    Iterator,
     List,
     NamedTuple,
     Optional,
@@ -65,7 +66,7 @@ from typing import (
     Tuple,
     TypeAlias,
     Union,
-    cast, Iterator,
+    cast,
 )
 
 from .e import RuleSocketConnectionRefusedError
@@ -137,7 +138,7 @@ _rules: SocketRules = cast(SocketRules, ())
 
 
 def _yield_networks_from_string(
-        input_str: str,
+    input_str: str,
 ) -> Generator[Union[IPv4Network, IPv6Network], None, None]:
     host_dns, _ = _read_host_file()
     try:
@@ -159,11 +160,11 @@ def _yield_networks_from_string(
 
 
 def _parse_rule(
-        rule: ConfigLine, errors: List[Tuple[str, Path, int]]
+    rule: ConfigLine, errors: List[Tuple[str, Path, int]]
 ) -> Optional[List[SocketRule]]:
     if not rule.rule.startswith("net="):
         return []
-    value_part = rule.rule[len("net="):]
+    value_part = rule.rule[len("net=") :]
     rule_components = value_part.split("|", 4)  # Maxsplit is 4 for 5 parts
     if len(rule_components) != 5:
         errors.append(
@@ -333,7 +334,7 @@ def _parse_rule(
 
 
 def parse_rules(
-        rules: ConfigLines, errors: List[ErrorMsg]
+    rules: ConfigLines, errors: List[ErrorMsg]
 ) -> Tuple[SocketRules, ConfigLines]:
     socket_rules = []
     ignore_rules = []
@@ -381,7 +382,8 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
 
     Returns:
         A sorted list of integers representing individual ports and expanded ranges,
-        or a range(0, 65535) if '*' is specified. Returns an empty list for invalid syntax.
+        or a range(0, 65535) if '*' is specified. Returns an empty list for
+        invalid syntax.
     """
     use_range = False
     max_port = 65535  # Maximum valid port number
@@ -401,17 +403,20 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                 start_str, end_str = limits[0].strip(), limits[1].strip()
                 if not start_str:
                     raise ValueError(
-                        f"Invalid range format: {element!r}. Range _start cannot be empty."
+                        f"Invalid range format: {element!r}. "
+                        f"Range _start cannot be empty."
                     )
                 try:
                     start = int(start_str)
                 except ValueError:
                     raise ValueError(
-                        f"Invalid _start port number {start_str!r} in range {element!r}."
+                        f"Invalid _start port number {start_str!r} "
+                        f"in range {element!r}."
                     )
                 if not (0 <= start <= max_port):
                     raise ValueError(
-                        f"Start port {start} in range {element!r} is out of valid range (0-{max_port})."
+                        f"Start port {start} in range {element!r} is out of "
+                        f"valid range (0-{max_port})."
                     )
 
                 if end_str == "":  # Handles open-ended ranges like "8000-"
@@ -425,7 +430,8 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                         )
                     if not (0 <= end <= max_port):
                         raise ValueError(
-                            f"End port {end} in range {element!r} is out of valid range (0-{max_port})."
+                            f"End port {end} in range {element!r} is out of "
+                            f"valid range (0-{max_port})."
                         )
                 if start == end:
                     ports.add(start)
@@ -439,7 +445,8 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                             ports.add(p)
                 else:
                     raise ValueError(
-                        f"Invalid range: _start port {start} is greater than end port {end} in {element!r}."
+                        f"Invalid range: _start port {start} is greater than "
+                        f"end port {end} in {element!r}."
                     )
             else:
                 raise ValueError(
@@ -450,7 +457,8 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
                 port = int(element)
                 if not (0 <= port <= max_port):
                     raise ValueError(
-                        f"Port number {port} in {element!r} is out of valid range (0-{max_port})."
+                        f"Port number {port} in {element!r} is out of "
+                        f"valid range (0-{max_port})."
                     )
                 ports.add(port)
             except ValueError:
@@ -463,14 +471,14 @@ def _convert_ports_range(syntax: str) -> Union[Tuple[int, ...], range]:
 
 
 def _check_address_with_rules(
-        socket_rules: SocketRules,
-        socket_kind: Kind,
-        address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
-        conn_direction: Direction,
+    socket_rules: SocketRules,
+    socket_kind: Kind,
+    address: Tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
+    conn_direction: Direction,
 ) -> None:  # Expect IN or OUT constants
     """
-    Checks if a given address and port are allowed for the specified connection directions
-    based on the configured rules and the derived implicit default policy.
+    Checks if a given address and port are allowed for the specified connection
+    directions based on the configured rules and the derived implicit default policy.
     (Docstring needs update for new socket_instance_family, socket_instance_proto args)
     """
     # logger.debug(
@@ -488,16 +496,16 @@ def _check_address_with_rules(
         unique_ips = [ip_address(hostname)]
     except ValueError:
         try:
-            # Resolve hostname to IP addresses using the socket instance's family, type, and proto
+            # Resolve hostname to IP addresses using the socket instance's family,
+            # type, and proto
             infos = socket.getaddrinfo(hostname, None)
             use_hostname = True
-        except socket.gaierror as e:
-            # Fallback if the specific proto causes issues, try with proto=0 (OS default for family/type)
-            # This might happen if self.proto is something specific but getaddrinfo needs a more general hint
+        except socket.gaierror:
+            # Fallback if the specific proto causes issues, try with
+            # proto=0 (OS default for family/type)
+            # This might happen if self.proto is something specific but
+            # getaddrinfo needs a more general hint
             try:
-                logger.debug(
-                    "getaddrinfo failed with specific proto %s, retrying with proto=0"
-                )
                 infos = socket.getaddrinfo(
                     hostname, None, type=socket_kind.value, proto=0
                 )
@@ -522,21 +530,21 @@ def _check_address_with_rules(
     for rule_type_to_check in (Action.DENY, Action.ALLOW):
         for ip_host in unique_ips:
             for (
-                    action,
-                    (rule_kind, network_list, rule_ports_list),
-                    rule_directions,
-                    config,
+                action,
+                (rule_kind, network_list, rule_ports_list),
+                rule_directions,
+                config,
             ) in socket_rules:
                 if action == rule_type_to_check:
                     kind_match = (rule_kind != Kind.UNKNOWN) or (
-                            socket_kind in rule_kind
+                        socket_kind in rule_kind
                     )
 
                     if kind_match:
                         if conn_direction in rule_directions:
                             if (
-                                    ip_host in network_list
-                                    and destination_port in rule_ports_list
+                                ip_host in network_list
+                                and destination_port in rule_ports_list
                             ):
                                 if action == Action.DENY:
                                     if use_hostname:
@@ -681,13 +689,14 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
 def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            host: bytes | str | None,
-            port: bytes | str | int | None,
-            family: int = 0,
-            type: int = 0,
-            proto: int = 0,
-            flags: int = 0,
-            *args: Any, **kwargs: Dict[str, Any]
+        host: bytes | str | None,
+        port: bytes | str | int | None,
+        family: int = 0,
+        type: int = 0,
+        proto: int = 0,
+        flags: int = 0,
+        *args: Any,
+        **kwargs: Dict[str, Any],
     ) -> list[
         tuple[
             socket.AddressFamily,
@@ -714,8 +723,9 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
     return wrapper
 
 
-def _check_address(self: Any, address: Tuple[str, int],
-                   conn_direction: Direction) -> None:
+def _check_address(
+    self: Any, address: Tuple[str, int], conn_direction: Direction
+) -> None:
     _check_address_with_rules(_rules, Kind(self.type), address, conn_direction)
 
 
@@ -723,10 +733,10 @@ def _wrap_socket_bind(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> None:
         if (
-                isinstance(address, tuple)
-                and len(address) >= 2
-                and isinstance(address[0], str)
-                and isinstance(address[1], int)
+            isinstance(address, tuple)
+            and len(address) >= 2
+            and isinstance(address[0], str)
+            and isinstance(address[1], int)
         ):
             if is_learning_mode():
                 add_learning_rule(
@@ -764,10 +774,10 @@ def _wrap_socket_connect(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> None:
         if (
-                isinstance(address, tuple)
-                and len(address) >= 2
-                and isinstance(address[0], str)
-                and isinstance(address[1], int)
+            isinstance(address, tuple)
+            and len(address) >= 2
+            and isinstance(address[0], str)
+            and isinstance(address[1], int)
         ):
             if is_learning_mode():
                 add_learning_rule(
@@ -810,10 +820,10 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> int:
         if (
-                isinstance(address, tuple)
-                and len(address) >= 2
-                and isinstance(address[0], str)
-                and isinstance(address[1], int)
+            isinstance(address, tuple)
+            and len(address) >= 2
+            and isinstance(address[0], str)
+            and isinstance(address[1], int)
         ):
             if is_learning_mode():
                 add_learning_rule(
@@ -851,10 +861,10 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self: Any, data: ReadableBuffer, address: _Address, /) -> int:
         if (
-                isinstance(address, tuple)
-                and len(address) >= 2
-                and isinstance(address[0], str)
-                and isinstance(address[1], int)
+            isinstance(address, tuple)
+            and len(address) >= 2
+            and isinstance(address[0], str)
+            and isinstance(address[1], int)
         ):
             if self.type == Kind.UDP.value:
                 if is_learning_mode():
@@ -904,10 +914,10 @@ def activate_guard(rules: SocketRules) -> None:
 
 
 def _read_host_file() -> (
-        Tuple[
-            Dict[str, Union[IPv4Address, IPv6Address]],
-            Dict[Union[IPv4Address, IPv6Address], str],
-        ]
+    Tuple[
+        Dict[str, Union[IPv4Address, IPv6Address]],
+        Dict[Union[IPv4Address, IPv6Address], str],
+    ]
 ):
     dns: Dict[str, Union[IPv4Address, IPv6Address]] = {}
     inverse_dns: Dict[Union[IPv4Address, IPv6Address], str] = {}
@@ -919,10 +929,10 @@ def _read_host_file() -> (
             system_root = r"C:\Windows"
         hosts_file = Path(system_root) / r"System32\drivers\etc\hosts"
     elif (
-            sys.platform.startswith("linux")
-            or sys.platform == "darwin"
-            or sys.platform.startswith("freebsd")
-            or sys.platform == "sunos"
+        sys.platform.startswith("linux")
+        or sys.platform == "darwin"
+        or sys.platform.startswith("freebsd")
+        or sys.platform == "sunos"
     ):
         hosts_file = Path("/etc/hosts")
     else:
@@ -944,7 +954,7 @@ def _read_host_file() -> (
 
 
 def generate_rules(
-        learn: Set[Any],
+    learn: Set[Any],
 ) -> List[str]:
     result = set()
     dns, inverse_dns = _read_host_file()
@@ -1002,8 +1012,8 @@ def generate_rules(
             except ValueError:
                 pass  # Ignore
     for (destination, kind), (
-            in_rules_for_dest,
-            out_rules_for_dest,
+        in_rules_for_dest,
+        out_rules_for_dest,
     ) in by_destination.items():
         # Agregate ports
         if in_rules_for_dest:
@@ -1030,6 +1040,7 @@ def generate_rules(
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:
+
     def _deactivate_guard_sockets() -> None:
         global _rules
         _rules = ()

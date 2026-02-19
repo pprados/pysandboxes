@@ -3,9 +3,8 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from pprint import pprint
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
-from typing import Dict, List
+from typing import Any, List, Mapping, cast
 
 from pysandboxes import SandBoxError, sandbox, sandboxes
 from pysandboxes.learning import is_learning_mode
@@ -57,9 +56,9 @@ def _test_envs() -> None:
         try:
             os.listdir(os.environ.get("PYENV_ROOT"))
             # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             print("Error catch by os-sandbox")
-        except SandBoxError as e:
+        except SandBoxError:
             print("Error catch by pysandboxes")
     if "VIRTUAL_ENV" in os.environ:
         try:
@@ -76,8 +75,8 @@ def _test_network() -> None:
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         remote_ip = socket.gethostbyname("www.google.com")
-        xx = socket.gethostbyname_ex("www.google.com")
-        addr_infos = socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
+        socket.gethostbyname_ex("www.google.com")
+        socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
         sock.connect((remote_ip, 80))
     # tcp bind ipv4
     with socket.socket(AF_INET, SOCK_STREAM) as sock:
@@ -88,7 +87,7 @@ def _test_network() -> None:
     # web connexion
     import requests
 
-    f = requests.get("http://www.google.com/")
+    requests.get("http://www.google.com/")
     # udp connexion ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("127.0.0.1", 12345))
@@ -109,7 +108,7 @@ def _test_files() -> None:
     print("---- Test files")
     learning = is_learning_mode()
     try:
-        with io.open("tmp/test.remove", "w") as f:
+        with io.open("tmp/test.remove", "w") as _:
             pass
         # assert not learning, "Must be stopped by pysandbox"
     except Exception as e:
@@ -119,19 +118,19 @@ def _test_files() -> None:
             logger.exception(e)
 
     try:
-        with io.open("tst_wasm/factorial.wasm", "r") as f:
+        with io.open("tst_wasm/factorial.wasm", "r"):
             pass
         logger.error("Must be stopped by pysandbox")
-    except SandBoxError as e:
+    except SandBoxError:
         assert not is_learning_mode()
     except Exception as e:
         logger.exception(e)
 
     try:
-        with io.open("pysandboxes/__init__.py", "r") as f:
+        with io.open("pysandboxes/__init__.py", "r"):
             pass
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    except SandBoxError as e:
+    except SandBoxError:
         assert not is_learning_mode()
     except Exception as e:
         logger.exception(e)
@@ -148,19 +147,19 @@ def _test_files() -> None:
     assert "data.txt" in all_entries
 
     try:
-        with tempfile.TemporaryFile(mode="w+") as temp_file:
+        with tempfile.TemporaryFile(mode="w+") as _:
             pass
-    except SandBoxError as e:
+    except SandBoxError:
         logger.exception("tempfile.TemporaryFile")
-    except Exception as e:
+    except Exception:
         logger.exception("tempfile.TemporaryFile")
 
     try:
-        with tempfile.NamedTemporaryFile(mode="w+", delete=True) as temp_file:
+        with tempfile.NamedTemporaryFile(mode="w+", delete=True) as _:
             pass
-    except SandBoxError as e:
+    except SandBoxError:
         logger.exception("tempfile.NamedTemporaryFile")
-    except Exception as e:
+    except Exception:
         logger.exception("tempfile.NamedTemporaryFile")
 
 
@@ -219,26 +218,18 @@ async def main(argv: List[str]) -> int:
     extra_rules = convert_extra_rules(argv[1:])
     config_path = Path("tests/test.py-sandboxes")
     if "learn" in extra_rules:
-        learning_path, *_ = extra_rules.get("learn", [""])
+        learning_path, *_ = extra_rules.get("learn", set())
         if not learning_path:
             learning_path = ".py-sandboxes.test"
-        extra_rules["learn"] = learning_path
+        extra_rules["learn"] = {learning_path}
 
     for i in range(0, 1):
-        # asyncio.run(async_manager())
-        # # # print("----------------")
         async with sandboxes(
             async_init_sandbox,
             config_path=config_path,
-            # learn=".py-sandboxes", # Learn all the times
-            # os_sandbox="none",
-            **extra_rules,
+            **cast(Mapping[str, Any], extra_rules),
         ):
             await arun()
-        # TODO: voir la capture d'exception
-        # print("----------------")
-        # pysandboxes.run(arun(),init_fn=init_sandbox)
-        # print("----------------")
     return 0
 
 

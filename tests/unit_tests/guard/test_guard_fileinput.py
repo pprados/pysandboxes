@@ -3,16 +3,17 @@ import shutil
 from pathlib import Path
 from typing import Dict
 
-import pytest
-
 from pysandboxes.sb_types import ConfigLine
 
-from .test_guard_io import _reset_rules, activate_guard_files_rules, files
+from .test_guard_io import (
+    activate_guard_files_rules,
+    files,  # noqa: F401
+)
 
 
-def test_fileinput_input(files:Dict[str,Path]) -> None:
+def test_fileinput_input(files: Dict[str, Path]) -> None:  # noqa:F811
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]

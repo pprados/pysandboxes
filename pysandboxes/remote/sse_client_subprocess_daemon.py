@@ -9,20 +9,20 @@ import sys
 import tempfile
 import time
 import uuid
-from asyncio import CancelledError
+from asyncio import CancelledError, Task
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
-from typing import Callable, Dict, List, NamedTuple, Optional, Any
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 import aiohttp
-from aiohttp import ClientConnectorError
+from aiohttp import ClientConnectorError, ClientTimeout
 
 from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, Envs
-from ..tools import SyncOrAsyncFunc, get_callable_info, Environ
+from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
@@ -51,7 +51,7 @@ def get_log_formatter() -> str:
     if fmt is None:
         # Default formatter if none set explicitly
         fmt = logging.Formatter()
-    return fmt._fmt
+    return fmt._fmt if fmt._fmt else "%(message)s"
 
 
 async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
@@ -71,7 +71,7 @@ async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
                     break
                 child_stdin_writer.write(line.encode("utf-8"))
                 await child_stdin_writer.drain()
-            except Exception as e:
+            except Exception:
                 break
     finally:
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_settings)
@@ -137,7 +137,7 @@ async def launch_sandbox(
         pass
 
 
-def find_free_port() -> Optional[int]:
+def find_free_port() -> int:
     """
     Finds and returns an available TCP port.
 
@@ -154,8 +154,7 @@ def find_free_port() -> Optional[int]:
             # Return the port number assigned by the OS
             return s.getsockname()[1]
     except socket.error as e:
-        print(f"Error finding a free port: {e}")
-        return None
+        raise RuntimeError(f"Impossible to finding a free port: {e}")
 
 
 class BaseSubProcessDaemon(BaseSSESandbox):
@@ -190,12 +189,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         factor: float = RETRY_FACTOR,  # Exponential increase _factor
         max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
         reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
-        **kwargs:Dict[str,Any],
+        **kwargs: Dict[str, Any],
     ) -> None:
         super().__init__(token, host=host, max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
-        self._process = None
-        self._watchdog = None
+        self._process: Process | None = None
+        self._watchdog: Task | None = None
         self._attempts = 0
         self._base_delay = base_delay
         self._factor = factor
@@ -359,7 +358,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             init_fn=init_fn_ref,
         )
 
-        env:Environ
+        env: Environ
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
         else:
@@ -380,7 +379,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             while True:
                 try:  # TODO: test in the server never response
                     async with session.get(
-                        ping_url, timeout=TIMEOUT_FOR_PING
+                        ping_url,
+                        timeout=ClientTimeout(
+                            total=TIMEOUT_FOR_PING,
+                        ),
                     ) as response:
                         if response.status == 200:
                             break

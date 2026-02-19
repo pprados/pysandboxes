@@ -14,6 +14,7 @@ from types import ModuleType, TracebackType
 from typing import (
     Any,
     Callable,
+    ContextManager,
     Dict,
     Iterator,
     List,
@@ -25,7 +26,8 @@ from typing import (
     Type,
     TypeAlias,
     Union,
-    cast, Generator, )
+    cast,
+)
 
 from .config import OPTIMIZE
 from .e import RuleFileNotFoundError, RulePermissionError
@@ -48,7 +50,7 @@ _white_list = [
 ]
 
 StrOrBytesPath: TypeAlias = (
-        str | bytes | os.PathLike[str] | os.PathLike[bytes]
+    str | bytes | os.PathLike[str] | os.PathLike[bytes]
 )  # stable
 
 
@@ -102,8 +104,8 @@ _os_path_abspath = os.path.abspath
 
 
 def parse_rules(
-        config: ConfigLines,
-        errors: List[ErrorMsg],
+    config: ConfigLines,
+    errors: List[ErrorMsg],
 ) -> Tuple[FileRules, ConfigLines]:
     """
     Parses rule strings into internal ParserRule objects.
@@ -136,7 +138,8 @@ def parse_rules(
                             (
                                 f"{format_ruleref(rule)}: "
                                 f"In 'bind={s_src},{s_dest}', "
-                                f"source and destination must exists and be directories.",
+                                f"source and destination must exists "
+                                f"and be directories.",
                                 rule.path,
                                 rule.ln,
                             )
@@ -196,12 +199,13 @@ def parse_rules(
                 )
                 continue
         elif rule.rule.startswith("ignore="):
-            pattern = rule.rule[len("ignore="):]
+            pattern = rule.rule[len("ignore=") :]
             rules_ignore.append(IgnoreRule(pattern, rule))
         else:
             ignore_rules.append(rule)
-    rules_bind = sorted(rules_bind, key=lambda r: len(r.dest) if r.dest else 0,
-                        reverse=True)
+    rules_bind = sorted(
+        rules_bind, key=lambda r: len(r.dest) if r.dest else 0, reverse=True
+    )
 
     return tuple(rules_ignore + cast(List[FilesRule], rules_bind)), ignore_rules
 
@@ -223,11 +227,11 @@ _special_env = OrderedDict(
         (
             (k, _learn_env._get(k))
             for k in [
-            "PWD",
-            "HOME",
-            "TMP",
-            "TEMP",
-        ]
+                "PWD",
+                "HOME",
+                "TMP",
+                "TEMP",
+            ]
             if _learn_env._has(k)
         ),
         key=lambda x: len(x[1]),
@@ -240,20 +244,20 @@ _special_home = OrderedDict(
         (
             (k, _learn_env._get(k))
             for k in [
-            "PYENV_ROOT",
-            "VIRTUAL_ENV",
-            "CONDA_HOME",
-            "HF_HOME",
-            "HF_DATASETS_CACHE",
-            "HF_MODULES_CACHE",
-            "HF_HUB_CACHE",
-            "TRANSFORMERS_CACHE" "," "TORCH_HOME",
-            "KERAS_HOME",
-            "TFHUB_CACHE_DIR",
-            "MXNET_HOME",
-            "NLTK_DATA",
-            "SPACY_DATA",
-        ]
+                "PYENV_ROOT",
+                "VIRTUAL_ENV",
+                "CONDA_HOME",
+                "HF_HOME",
+                "HF_DATASETS_CACHE",
+                "HF_MODULES_CACHE",
+                "HF_HUB_CACHE",
+                "TRANSFORMERS_CACHE" "," "TORCH_HOME",
+                "KERAS_HOME",
+                "TFHUB_CACHE_DIR",
+                "MXNET_HOME",
+                "NLTK_DATA",
+                "SPACY_DATA",
+            ]
             if _learn_env._has(k)
         ),
         key=lambda x: len(x[1]),
@@ -263,7 +267,7 @@ _special_home = OrderedDict(
 
 
 def generate_rules(
-        learn: Set[Any],
+    learn: Set[Any],
 ) -> List[str]:
     # Select only parent
     global _special_env, _special_home
@@ -284,9 +288,9 @@ def generate_rules(
     allready_added: List[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
         if (
-                path.exists()
-                and (path.is_file() or path.is_dir())
-                and os.access(path, os.R_OK)
+            path.exists()
+            and (path.is_file() or path.is_dir())
+            and os.access(path, os.R_OK)
         ):
             write = parent_level[path]
             value = None
@@ -325,7 +329,7 @@ def generate_rules(
 
 # Helper to resolve symlinks and apply rules
 def _apply_src_to_dest_rules(
-        path: str, accept_src: bool = False, accept_dest: bool = False
+    path: str, accept_src: bool = False, accept_dest: bool = False
 ) -> Tuple[Optional[str], Optional[FilesRule]]:
     """
     Applies the rules to a file path.
@@ -342,22 +346,22 @@ def _apply_src_to_dest_rules(
             assert rule.source is not None
             assert rule.dest is not None
             if (
-                    rule.source != rule.dest
-                    and (real_path.startswith(rule.dest) or real_path == rule.dest[:-1])
-                    and not accept_dest
+                rule.source != rule.dest
+                and (real_path.startswith(rule.dest) or real_path == rule.dest[:-1])
+                and not accept_dest
             ):
                 return None, rule
             if (
-                    rule.source != rule.dest
-                    and real_path == rule.source[:-1]
-                    and not accept_src
+                rule.source != rule.dest
+                and real_path == rule.source[:-1]
+                and not accept_src
             ):
                 return None, rule
             if real_path.startswith(rule.source) or real_path == rule.source[:-1]:
                 if (
-                        rule.source != rule.dest
-                        and not accept_dest
-                        and real_path == rule.dest[:-1]
+                    rule.source != rule.dest
+                    and not accept_dest
+                    and real_path == rule.dest[:-1]
                 ):
                     return None, rule
                 relative = os.path.relpath(real_path, rule.source)
@@ -371,7 +375,7 @@ def _apply_src_to_dest_rules(
                 return new_path, None
         elif isinstance(rule, IgnoreRule):
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
-                    real_path, rule.source
+                real_path, rule.source
             ):
                 return None, rule
         else:
@@ -381,11 +385,11 @@ def _apply_src_to_dest_rules(
 
 # Helper to resolve symlinks and apply rules
 def _apply_dest_to_src_rules(
-        path: Union[str, os.PathLike, _DirEntry],
-        *,
-        write: bool,
-        accept_src: bool = False,
-        accept_dest: bool = True,
+    path: Union[str, os.PathLike, _DirEntry],
+    *,
+    write: bool,
+    accept_src: bool = False,
+    accept_dest: bool = True,
 ) -> Tuple[Optional[str], Optional[FilesRule]]:
     """
     Change destination file, ask by the program, to the real source file.
@@ -407,15 +411,15 @@ def _apply_dest_to_src_rules(
             if rule.source is None or rule.dest is None:
                 continue
             if (
-                    rule.source != rule.dest
-                    and str(fake_path).startswith(rule.dest[:-1])
-                    and not accept_dest
+                rule.source != rule.dest
+                and str(fake_path).startswith(rule.dest[:-1])
+                and not accept_dest
             ):
                 return None, rule
             if rule.source != rule.dest and fake_path.startswith(rule.source[:-1]):
                 if not accept_src:
                     return None, rule
-                relative = fake_path[len(rule.source):]
+                relative = fake_path[len(rule.source) :]
                 new_path = os.path.join(rule.dest, relative)
                 if not fake_path.endswith("/") and relative == "":
                     new_path = new_path[:-1]
@@ -432,7 +436,8 @@ def _apply_dest_to_src_rules(
                     else:
                         raise RulePermissionError(
                             f"Cannot write to {rule.dest!r}. "
-                            f"Rule {rule.config.rule!r} from {format_ruleref(rule.config)}"
+                            f"Rule {rule.config.rule!r} from "
+                            f"{format_ruleref(rule.config)}"
                         )
                 relative = os.path.relpath(fake_path_dir, rule.dest)
                 if relative == ".":
@@ -444,13 +449,13 @@ def _apply_dest_to_src_rules(
         elif isinstance(rule, IgnoreRule):
             assert rule.source is not None
             if rule.source[0] == "/":
-                if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
-                        fake_path, rule.source
+                if fnmatch.fnmatch(str(original_path), rule.source) or fnmatch.fnmatch(
+                    fake_path, rule.source
                 ):
                     return None, rule
             else:
                 if fnmatch.fnmatch(
-                        Path(original_path).name, rule.source
+                    Path(original_path).name, rule.source
                 ) or fnmatch.fnmatch(Path(fake_path).name, rule.source):
                     return None, rule
         else:
@@ -472,8 +477,7 @@ def _special_caller() -> bool:
 
 
 def _raise_ignore(
-        file: Union[str, bytes, os.PathLike, int],
-        rule: FilesRule
+    file: Union[str, bytes, os.PathLike, int], rule: FilesRule
 ) -> NoReturn:
     assert rule is not None
 
@@ -504,23 +508,26 @@ def _raise_access(file: Union[str]) -> NoReturn:
 #     import sys
 #     return sys.modules[name]
 
+
 def _wrap_buitins_open(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(file: str,
-                mode: str = "r",
-                encoding: str | None = None,
-                errors: str | None = None,
-                newline: str | None = None,
-                ) -> Any:
+    def wrapper(
+        file: str,
+        mode: str = "r",
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> Any:
         if _special_caller():
-            return func(file,
-                        mode=mode,
-                        encoding=encoding,
-                        errors=errors,
-                        newline=newline,
-                        )
+            return func(
+                file,
+                mode=mode,
+                encoding=encoding,
+                errors=errors,
+                newline=newline,
+            )
         need_to_write = mode is not None and (
-                "w" in mode or "a" in mode or "x" in mode or "+" in mode
+            "w" in mode or "a" in mode or "x" in mode or "+" in mode
         )
         remapped, rule = _apply_dest_to_src_rules(file, write=need_to_write)
         if rule:
@@ -531,21 +538,22 @@ def _wrap_buitins_open(func: Callable) -> Callable:
                 remapped = file
             else:
                 _raise_access(file)
-        return func(remapped,
-                    mode=mode,
-                    encoding=encoding,
-                    errors=errors,
-                    newline=newline,
-                    )
+        return func(
+            remapped,
+            mode=mode,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
 
     return wrapper
 
 
 def _wrap_filename(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
-    def wrapper(file: Union[str, bytes, os.PathLike, int],
-                *args: Any,
-                **kwargs: Dict[str, Any]) -> Any:
+    def wrapper(
+        file: Union[str, bytes, os.PathLike, int], *args: Any, **kwargs: Dict[str, Any]
+    ) -> Any:
         # Detect call from posixpath
         if _special_caller():
             return func(file, *args, **kwargs)
@@ -571,14 +579,14 @@ def _wrap_filename(func: Callable, *, write: bool) -> Callable:
 
 
 def _wrap_two_filenames(
-        func: Callable, *, in_write: bool = False, out_write: bool = True
+    func: Callable, *, in_write: bool = False, out_write: bool = True
 ) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            src: Union[str, bytes, os.PathLike],
-            dest: Union[str, bytes, os.PathLike],
-            *args: Any,
-            **kwargs: Dict[str, Any],
+        src: Union[str, bytes, os.PathLike],
+        dest: Union[str, bytes, os.PathLike],
+        *args: Any,
+        **kwargs: Dict[str, Any],
     ) -> Any:
         # Detect call from posixpath
         if _special_caller():
@@ -596,8 +604,9 @@ def _wrap_two_filenames(
         remapped_src, rule1 = _apply_dest_to_src_rules(cast(str, src), write=in_write)
         if rule1:
             _raise_ignore(src, rule1)
-        remapped_dest, rule2 = _apply_dest_to_src_rules(cast(str, dest),
-                                                        write=out_write)
+        remapped_dest, rule2 = _apply_dest_to_src_rules(
+            cast(str, dest), write=out_write
+        )
         if rule2:
             _raise_ignore(dest, rule2)
         if remapped_src is None and rule1 is not None:
@@ -610,10 +619,10 @@ def _wrap_two_filenames(
 def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            path: Union[str, bytes, os.PathLike, int],
-            *,
-            dir_fd: Optional[int] = None,
-            follow_symlinks: bool = True
+        path: Union[str, bytes, os.PathLike, int],
+        *,
+        dir_fd: Optional[int] = None,
+        follow_symlinks: bool = True,
     ) -> Any:
         if isinstance(path, int):
             return func(path=path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
@@ -637,8 +646,8 @@ def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
 def _wrap_os_path_samefile(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            f1: Union[str, bytes, os.PathLike],
-            f2: Union[str, bytes, os.PathLike],
+        f1: Union[str, bytes, os.PathLike],
+        f2: Union[str, bytes, os.PathLike],
     ) -> Any:
         if isinstance(f1, int) or isinstance(f2, int):
             return func(f1, f2)
@@ -656,8 +665,7 @@ def _wrap_os_path_samefile(func: Callable) -> Callable:
             _raise_ignore(f1, rule1)
         remapped_dest = None
         if remapped_src is not None:
-            remapped_dest, rule2 = _apply_dest_to_src_rules(cast(str, f2),
-                                                            write=False)
+            remapped_dest, rule2 = _apply_dest_to_src_rules(cast(str, f2), write=False)
             if rule2:
                 _raise_ignore(f2, rule2)
         if remapped_dest is None:
@@ -700,11 +708,13 @@ def _wrap_os_chdir(func: Callable, *, write: bool) -> Callable:
 
 def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(self: Any,
-                pattern: str,
-                *,
-                case_sensitive: bool | None = None,
-                recurse_symlinks: bool = False) -> Generator[Path]:
+    def wrapper(
+        self: Any,
+        pattern: str,
+        *,
+        case_sensitive: bool | None = None,
+        recurse_symlinks: bool = False,
+    ) -> Iterator[Path]:
         remapped, rule = _apply_dest_to_src_rules(self, write=False)
         if not remapped:
             if is_learning_mode():
@@ -721,7 +731,7 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
                 )
                 if remapped_filter:
                     if not str(self).startswith("/"):
-                        remapped_filter = remapped_filter[len(abs_remapper) + 1:]
+                        remapped_filter = remapped_filter[len(abs_remapper) + 1 :]
                     if remapped_filter == "":
                         remapped_filter = "."
                     # yield Path(remapped_filter).relative_to(self)
@@ -744,11 +754,11 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
 def _wrap_os_open(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            path: Union[str, bytes, os.PathLike, int],
-            flags: int,
-            mode: int = 0x777,
-            *,
-            dir_fd: int | None = None
+        path: Union[str, bytes, os.PathLike, int],
+        flags: int,
+        mode: int = 0x777,
+        *,
+        dir_fd: int | None = None,
     ) -> int:
         if isinstance(path, int):
             return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
@@ -766,8 +776,7 @@ def _wrap_os_open(func: Callable) -> Callable:
             need_to_write = bool(
                 (flags & os.O_WRONLY) or (flags & os.O_RDWR) or (flags & os.O_APPEND)
             )
-            remapped, rule = _apply_dest_to_src_rules(path,
-                                                      write=need_to_write)
+            remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
             if remapped is None:
                 if is_learning_mode():
                     add_learning_rule(LearnFileRule(Path(path), False))
@@ -782,12 +791,12 @@ def _wrap_os_open(func: Callable) -> Callable:
 def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            path: Union[str, bytes, os.PathLike, int],
-            mode: int,
-            *,
-            dir_fd: int | None = None,
-            effective_ids: bool = False,
-            follow_symlinks: bool = True,
+        path: Union[str, bytes, os.PathLike, int],
+        mode: int,
+        *,
+        dir_fd: int | None = None,
+        effective_ids: bool = False,
+        follow_symlinks: bool = True,
     ) -> bool:
         if isinstance(path, int) or _special_caller():
             return func(
@@ -891,7 +900,7 @@ def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]
             path = "."
         path = cast(str, path)
         if new_path_and_rule := _apply_dest_to_src_rules(
-                path, write=False, accept_src=False, accept_dest=True
+            path, write=False, accept_src=False, accept_dest=True
         ):
             remapped, rule = new_path_and_rule
             if rule:
@@ -921,9 +930,8 @@ def _wrap_os_listdir(func: Callable[..., List[str]]) -> Callable[..., List[str]]
 def _wrap_os_readlink(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            path: Union[str, bytes, os.PathLike],
-            *,
-            dir_fd: int | None = None) -> str:
+        path: Union[str, bytes, os.PathLike], *, dir_fd: int | None = None
+    ) -> str:
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
@@ -950,11 +958,11 @@ def _wrap_os_readlink(func: Callable) -> Callable:
 def _wrap_os_symlink(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            src: StrOrBytesPath,
-            dst: StrOrBytesPath,
-            target_is_directory: bool = False,
-            *,
-            dir_fd: int | None = None,
+        src: StrOrBytesPath,
+        dst: StrOrBytesPath,
+        target_is_directory: bool = False,
+        *,
+        dir_fd: int | None = None,
     ) -> Any:
         if isinstance(str, int) or isinstance(dst, int):
             return func(
@@ -999,16 +1007,12 @@ def _wrap_os_symlink(func: Callable) -> Callable:
     return wrapper
 
 
-class _ScanDirContextManager:
+class _ScanDirContextManager(Iterator):
     """
     A context manager that wraps os.scandir and implements the context manager kind.
     """
 
     __slot__ = ("directory", "real_directory", "scanner")
-
-    def close(self) -> None:
-        if self.scanner:
-            self.scanner._shutdown()
 
     def __init__(self, directory: str):
         self.directory = directory
@@ -1022,7 +1026,11 @@ class _ScanDirContextManager:
             else:
                 _raise_access(directory)
         self.real_directory = new_path
-        self.scanner = None
+        self.scanner: ContextManager | Iterator | None = None
+
+    def close(self) -> None:
+        if self.scanner and hasattr(self.scanner, "close"):
+            self.scanner.close()
 
     def __enter__(self) -> "_ScanDirContextManager":
         """
@@ -1033,24 +1041,26 @@ class _ScanDirContextManager:
         return self
 
     def __exit__(
-            self,
-            exc_type: Optional[Type[BaseException]],
-            exc_val: Optional[BaseException],
-            exc_tb: Optional[TracebackType],
-    ) -> bool:
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Any:
         """
         Exit the context manager, closing the scandir iterator.
         """
         if self.scanner is not None:
-            return self.scanner.__exit__(exc_type, exc_val, exc_tb)
+            return cast(ContextManager, self.scanner).__exit__(
+                exc_type, exc_val, exc_tb
+            )
         return False  # Don't suppress exceptions
 
-    def __iter__(self) -> "_ScanDirContextManager":
-        """
+    def __iter__(self) -> Iterator[str]:
+        """h
         Make the context manager iterable.
         """
         if is_learning_mode() and OPTIMIZE:
-            return self.scanner.__iter__()
+            return cast(Iterator, self.scanner).__iter__()  # type: ignore[union-attr]
         return self
 
     def __next__(self) -> os.DirEntry:
@@ -1066,7 +1076,7 @@ class _ScanDirContextManager:
         while True:
             try:
                 while True:
-                    entry = next(self.scanner)
+                    entry = cast(Iterator, self.scanner).__next__()
                     dest_path, rule = _apply_src_to_dest_rules(
                         entry.path, accept_src=False, accept_dest=True
                     )
@@ -1100,48 +1110,51 @@ def _wrap_os_scandir(func: Callable) -> Callable:
 
 # %% io wrapper
 
+
 def _wrap_io_open(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
-            file: Union[str, bytes, os.PathLike, int],
-            mode: str | None = "r",
-            buffering: int | None = 1,
-            encoding: str | None = None,
-            errors: str | None = None,
-            newline: str | None = None,
-            closefd: bool = True,
-            opener: Callable | None = None
+        file: Union[str, bytes, os.PathLike, int],
+        mode: str | None = "r",
+        buffering: int | None = 1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+        closefd: bool = True,
+        opener: Callable | None = None,
     ) -> Any:
         # Detect call from posixpath
         if mode is None:
             mode = "r"
         if _special_caller():
-            return func(file=file,
-                        mode=mode,
-                        buffering=buffering,
-                        encoding=encoding,
-                        errors=errors,
-                        newline=newline,
-                        closefd=closefd,
-                        opener=opener,
-                        )
+            return func(
+                file=file,
+                mode=mode,
+                buffering=buffering,
+                encoding=encoding,
+                errors=errors,
+                newline=newline,
+                closefd=closefd,
+                opener=opener,
+            )
         if isinstance(file, int):
-            return func(file=file,
-                        mode=mode,
-                        buffering=buffering,
-                        encoding=encoding,
-                        errors=errors,
-                        newline=newline,
-                        closefd=closefd,
-                        opener=opener,
-                        )
+            return func(
+                file=file,
+                mode=mode,
+                buffering=buffering,
+                encoding=encoding,
+                errors=errors,
+                newline=newline,
+                closefd=closefd,
+                opener=opener,
+            )
         if isinstance(file, _DirEntry):
-            name = file.path
+            file = file.path
         if isinstance(file, bytes):
-            name = os.fsdecode(file)
+            file = os.fsdecode(file)
         file = cast(str, file)
         need_to_write = mode is not None and (
-                "w" in mode or "a" in mode or "x" in mode or "+" in mode
+            "w" in mode or "a" in mode or "x" in mode or "+" in mode
         )
         remapped, rule = _apply_dest_to_src_rules(cast(str, file), write=need_to_write)
         if rule:
@@ -1152,15 +1165,16 @@ def _wrap_io_open(func: Callable) -> Callable:
                 remapped = file
             else:
                 _raise_access(file)
-        return func(file=remapped,
-                    mode=mode,
-                    buffering=buffering,
-                    encoding=encoding,
-                    errors=errors,
-                    newline=newline,
-                    closefd=closefd,
-                    opener=opener,
-                    )
+        return func(
+            file=remapped,
+            mode=mode,
+            buffering=buffering,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+            closefd=closefd,
+            opener=opener,
+        )
 
     return wrapper
 
@@ -1187,24 +1201,26 @@ def _wrap__io(module: ModuleType) -> ModuleType:
 class Guard_FileIO(FileIO):
     @staticmethod  # known case of __new__
     def __new__(
-            cls, name: str, mode: str = "r", closefd: bool = True, opener: Any = None,
-            *args: Any, **kwargs: Dict[str, Any]
+        cls, file: str, mode: str = "r", closefd: bool = True, opener: Any = None
     ) -> Any:  # real signature unknown
         """Create and return a new object.  See help(type) for accurate signature."""
         need_to_write = mode is not None and (
-                "w" in mode or "a" in mode or "x" in mode or "+" in mode
+            "w" in mode or "a" in mode or "x" in mode or "+" in mode
         )
-        remapped, rule = _apply_dest_to_src_rules(name, write=need_to_write)
+        remapped, rule = _apply_dest_to_src_rules(file, write=need_to_write)
         if rule:
-            _raise_ignore(name, rule)
+            _raise_ignore(file, rule)
         if not remapped:
             if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(name), need_to_write))
-                remapped = name
+                add_learning_rule(LearnFileRule(Path(file), need_to_write))
+                remapped = file
             else:
-                _raise_access(name)
+                _raise_access(file)
         return io.FileIO(
-            str(remapped), mode=mode, closefd=closefd, opener=opener, *args, **kwargs
+            file=str(remapped),
+            mode=mode,
+            closefd=closefd,
+            opener=opener,
         )
 
 
@@ -1403,6 +1419,7 @@ def activate_guard(rules: FileRules) -> None:
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:
+
     def _deactivate_guard_files() -> None:
         global _rules
         _rules = (

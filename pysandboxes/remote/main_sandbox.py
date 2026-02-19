@@ -8,9 +8,8 @@ import pickle
 import sys
 import threading
 from pathlib import Path
-from typing import Optional, cast
+from typing import Optional
 
-from pysandboxes.base_daemon import BaseDaemon
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
 
@@ -42,7 +41,7 @@ async def run_server(process_config: DaemonParameters) -> int:
             )
             sys.exit(-1)
         set_is_in_sandbox(False)  # Learn the import during the import
-        assert hasattr(module,function_name)
+        assert hasattr(module, function_name)
         init_fn = getattr(module, function_name)
 
     # Else, _start the daemon
@@ -113,7 +112,6 @@ def main() -> int:
         logging.DEBUG
     )  # FIX_RELEASE
     all_rules = process_config.all_rules
-    os_sandbox = all_rules.os_sandbox
 
     # In this case, use the standard loop in place of the private sandbox loop
 
@@ -138,7 +136,10 @@ if __name__ == "__main__":
     try:
         rc = main()
     except SystemExit as e:
-        rc = int(e.code)
+        if e.code is not None:
+            rc = int(e.code)
+        else:
+            rc = 0
     except KeyboardInterrupt:
         rc = 0
     except RuntimeError as e:

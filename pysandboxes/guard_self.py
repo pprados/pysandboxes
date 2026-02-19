@@ -1,18 +1,16 @@
 from types import ModuleType
-from typing import Any, Callable, Dict, Tuple, cast, MutableMapping
+from typing import Any, Callable, Dict, MutableMapping, Tuple, cast
 from weakref import WeakKeyDictionary
 
 from .e import RuleAttributeError
 from .immutable_dict import ImmutableDict
-
 
 # TODO: limit recursion
 # TODO: limit memory
 
 
 class GuardModule(ModuleType):
-    _states: MutableMapping[ModuleType,
-    ImmutableDict[str, Any]] = WeakKeyDictionary()
+    _states: MutableMapping[ModuleType, ImmutableDict[str, Any]] = WeakKeyDictionary()
 
     __slot__ = ()
 
@@ -32,11 +30,11 @@ class GuardModule(ModuleType):
                 return obj
 
     def __init__(
-            self,
-            name: str,
-            *,
-            _original: ModuleType | None = None,
-            _guard_attributs: Tuple[str, ...] | None = None,
+        self,
+        name: str,
+        *,
+        _original: ModuleType | None = None,
+        _guard_attributs: Tuple[str, ...] | None = None,
     ):
         super().__init__(name)
         if _original:

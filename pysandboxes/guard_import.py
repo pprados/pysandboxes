@@ -7,21 +7,25 @@ import logging
 import os
 import sys
 from importlib import resources
-from importlib.abc import MetaPathFinder, Loader
+from importlib.abc import Loader
 from importlib.machinery import ModuleSpec
 from importlib.metadata import DistributionFinder
 from types import ModuleType
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
     Iterable,
+    Iterator,
     List,
+    MutableMapping,
     NamedTuple,
     Optional,
+    Sequence,
     Set,
     Tuple,
-    cast, Sequence, Iterator, MutableMapping, TYPE_CHECKING,
+    cast,
 )
 
 from .e import RuleModuleNotFoundError
@@ -34,12 +38,14 @@ from .tools import is_in_sandbox
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from importlib.metadata import Prepared, FastPath  # type: ignore[attr-defined]
+    from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
+
     from _typeshed.importlib import MetaPathFinderProtocol
 else:
-    Prepared=Any  # FIXME
-    FastPath=Any
-    MetaPathFinderProtocol=Any
+    Prepared = Any  # FIXME
+    FastPath = Any
+    MetaPathFinderProtocol = Any
+
 
 class PatchRule(NamedTuple):
     module_name: str
@@ -75,8 +81,8 @@ _patch_rules: PatchRules = ImmutableDict({})
 
 
 def parse_rules(
-        config: ConfigLines,
-        errors: List[ErrorMsg],
+    config: ConfigLines,
+    errors: List[ErrorMsg],
 ) -> Tuple[ImportRules, ConfigLines]:
     white_list: List[str] = []
     ignore_rules: ConfigLines = []
@@ -100,12 +106,11 @@ def _apply_patch(module: ModuleType, name: str) -> None:
         if patch.module_name != "":
             paths = patch.module_name.split(".")
             for node in paths[:-1]:
-                parent_object = cur_object
                 cur_object = cur_object.__dict__[node]
             new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
             if __debug__ and isinstance(
-                    new_value, type(_apply_patch)
+                new_value, type(_apply_patch)
             ):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined]
             setattr(cur_object, paths[-1], new_value)
@@ -171,8 +176,7 @@ class GuardLoader(Loader):
 class GuardFinder(importlib.abc.MetaPathFinder):
     @classmethod
     def find_distributions(
-            cls,
-            context: DistributionFinder.Context = DistributionFinder.Context()
+        cls, context: DistributionFinder.Context = DistributionFinder.Context()
     ) -> Iterable[importlib.metadata.PathDistribution]:
         """
         Find distributions.
@@ -193,7 +197,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
     @classmethod
     def _search_paths(cls, name: str | None, paths: list[str]) -> Iterator[FastPath]:
         """Find metadata directories in paths heuristically."""
-        from importlib.metadata import Prepared, FastPath  # type: ignore[attr-defined]
+        from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
+
         prepared = Prepared(name)
         return itertools.chain.from_iterable(
             path.search(prepared) for path in map(FastPath, paths)
@@ -209,10 +214,10 @@ class GuardFinder(importlib.abc.MetaPathFinder):
     """
 
     def find_spec(
-            self,
-            fullname: str,
-            path: Sequence[str] | None,
-            target: ModuleType | None = None
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
     ) -> Optional[ModuleSpec]:
         """
         Finds the specification for a module.
@@ -226,9 +231,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         for finder in sys.meta_path:
             if finder == cast(MetaPathFinderProtocol, self):
                 continue
-            original_spec = finder.find_spec(
-                fullname, path, target
-            )
+            original_spec = finder.find_spec(fullname, path, target)
             if original_spec:
                 break
         else:
@@ -239,10 +242,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         if original_spec:
             # logger.debug(
             #     f"GuardFinder: Found _original spec via {type(finder).__name__!r}.")
-            # Create a new spec using our custom GuardLoader, but with the _original spec's data
+            # Create a new spec using our custom GuardLoader,
+            # but with the _original spec's data
 
-            # logger.debug(
-            #     f"GuardFinder: Found _original spec {original_spec.name} via {type(finder).__name__!r}.")
             if original_spec.name in _patch_rules:
                 # logger.debug(f"Inject loader for {original_spec.name!r}")
                 if original_spec.parent:
@@ -275,9 +277,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             if is_learning_mode() and is_in_sandbox():
                 module_name = fullname.split(".", 1)[0]
                 if (
-                        "*" not in _rules
-                        and module_name not in _rules
-                        and module_name != "pysandboxes"
+                    "*" not in _rules
+                    and module_name not in _rules
+                    and module_name != "pysandboxes"
                 ):
                     add_learning_rule(LearnImportRule(module_name))
             else:
@@ -298,7 +300,7 @@ _activated = False
 
 
 def _activate_patch_import(
-        patch_rules: PatchRules,
+    patch_rules: PatchRules,
 ) -> bool:
     global _activated
     import sys
@@ -373,8 +375,8 @@ def patch_rules() -> Dict[str, Callable]:
 
 
 def activate_guard_import(
-        str_patch_rules: Dict[str, Callable],
-        rules: ImportRules,
+    str_patch_rules: Dict[str, Callable],
+    rules: ImportRules,
 ) -> None:
     global _rules
     global _activated
@@ -429,7 +431,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
 
 
 def generate_rules(
-        learn: Set[Any],
+    learn: Set[Any],
 ) -> List[str]:
     # Select only parent
     other_result = set()
@@ -497,9 +499,8 @@ def generate_rules(
 
 
 if "PYTEST_RUN_CONFIG" in os.environ:
-    def _deactivate_guard_import() -> None:
-        import sys
 
+    def _deactivate_guard_import() -> None:
         global _rules
         _rules = ("*",)
         remove_modules()

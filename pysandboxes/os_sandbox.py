@@ -1,9 +1,8 @@
 import asyncio
 import logging
-import os
 import threading
 import uuid
-from typing import Any, Callable, Dict, Optional, Type, Union, cast
+from typing import Any, Callable, Optional, Type, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
@@ -14,7 +13,7 @@ from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
 from .remote.task_daemon import TaskDaemon
-from .tools import SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox, Environ
+from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,11 @@ async def stop_incoming_call() -> None:
 
 
 def is_accept_incoming_call() -> bool:
-    return is_daemon_started() and _current_daemon._accept_incoming
+    return (
+        is_daemon_started()
+        and _current_daemon is not None
+        and _current_daemon._accept_incoming
+    )
 
 
 async def async_start_daemon(
@@ -203,7 +206,7 @@ def start_daemon(
 
 def is_daemon_started() -> bool:
     global _current_daemon
-    return _current_daemon and _current_daemon.is_started
+    return _current_daemon is not None and _current_daemon.is_started
 
 
 def _set_current_daemon(daemon: BaseDaemon) -> None:

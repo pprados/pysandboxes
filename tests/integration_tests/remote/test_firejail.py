@@ -3,7 +3,7 @@ import logging
 import os
 from asyncio import AbstractEventLoop
 from pathlib import Path
-from typing import Iterator
+from typing import AsyncGenerator, Iterator
 
 import pytest
 
@@ -22,7 +22,7 @@ def event_loop() -> Iterator[AbstractEventLoop]:
 
 
 @pytest.fixture(scope="module", autouse=True)
-async def start_daemon_for_tests() -> Iterator[None]:
+async def start_daemon_for_tests() -> AsyncGenerator[None, None]:
     config_path = Path(__file__).parent.parent / "test.py-sandboxes"
 
     log_level = logging.root.getEffectiveLevel()

@@ -1,13 +1,14 @@
 import re
 from pathlib import Path
 from typing import (
+    Iterator,
     List,
     Tuple,
-    Union, Iterator,
+    Union,
 )
 
 # Added Tuple and Any for mock_getaddrinfo clarity
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -17,7 +18,6 @@ from pysandboxes.guard_socket import (
     Kind,
     _check_address_with_rules,
     _convert_ports_range,
-    _deactivate_guard_sockets,
     parse_rules,
 )
 from pysandboxes.main_logger import ErrorMsg
@@ -46,7 +46,7 @@ def test_no_rules_denied_connection(mock_getaddrinfo: Mock) -> None:
     mock_getaddrinfo.return_value = [
         (s_family, s_kind, 6, "", ("93.184.216.34", 80))
     ]  # Used s_family
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     rules, _ = parse_rules([], errors)
     address: Tuple[str, int] = ("example.com", 80)
     with pytest.raises(RuleSocketConnectionRefusedError):
@@ -57,10 +57,8 @@ def test_invalid_port_raises_value_error(mock_getaddrinfo: Mock) -> None:
     """
     Connections to an invalid port number should raise a ValueError.
     """
-    from pysandboxes.guard_socket import socket
-
-    errors:List[ErrorMsg] = []
-    s_family, s_kind = socket.AF_INET, Kind.TCP
+    errors: List[ErrorMsg] = []
+    s_kind = Kind.TCP
     rules, _ = parse_rules([], errors)  # Rules don't matter here
     with pytest.raises(ValueError, match="Invalid port number: -1"):
         _check_address_with_rules(rules, s_kind, ("example.com", -1), Direction.OUT)
@@ -76,8 +74,8 @@ def test_hostname_resolution_failure_raises_value_error(
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
-    s_family, s_kind = socket.AF_INET, Kind.TCP
+    errors: List[ErrorMsg] = []
+    s_kind = Kind.TCP
     mock_getaddrinfo.side_effect = socket.gaierror("Resolution failed")
     rules, _ = parse_rules(
         [
@@ -91,7 +89,8 @@ def test_hostname_resolution_failure_raises_value_error(
     with pytest.raises(
         ValueError,
         match=re.escape(
-            r"Invalid hostname or IP address (resolution failed): nonexistent.example.com"
+            r"Invalid hostname or IP address (resolution failed): "
+            r"nonexistent.example.com"
         ),
     ):
         _check_address_with_rules(rules, s_kind, address, Direction.OUT)
@@ -107,8 +106,8 @@ def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
-    s_family, s_kind = socket.AF_INET, Kind.TCP
+    errors: List[ErrorMsg] = []
+    s_kind = Kind.TCP
     # with patch("pysandboxes.guard_socket.socket.getaddrinfo") as mock_getaddrinfo:
     mock_getaddrinfo.return_value = []  # No results
     rules, _ = parse_rules(
@@ -120,7 +119,8 @@ def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     )
     assert not errors
     address: Tuple[str, int] = ("empty.resolve.com", 80)
-    # This ValueError is unlikely to be raised by the current guard_socket.py code in this scenario.
+    # This ValueError is unlikely to be raised by the current guard_socket.py code
+    # in this scenario.
     with pytest.raises(
         ValueError,
         match=re.escape(
@@ -143,11 +143,12 @@ def test_hostname_resolves_to_no_valid_ips_raises_value_error(
 
 def test_explicit_deny_rule_blocks_connection(mock_getaddrinfo: Mock) -> None:
     """
-    An explicit DENY rule matching the IP, port, and directions should block the connection.
+    An explicit DENY rule matching the IP, port, and directions should
+    block the connection.
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
     mock_getaddrinfo.return_value = [
         (s_family, s_kind, 6, "", ("192.168.1.100", 8080))
@@ -167,11 +168,12 @@ def test_explicit_deny_rule_blocks_connection(mock_getaddrinfo: Mock) -> None:
 
 def test_explicit_deny_rule_any_port_blocks_connection(mock_getaddrinfo: Mock) -> None:
     """
-    An explicit DENY rule with '*' (all ports) should block connection to any port on that network.
+    An explicit DENY rule with '*' (all ports) should block connection to any port
+    on that network.
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
     mock_getaddrinfo.return_value = [
         (s_family, s_kind, 6, "", ("10.0.0.5", 1234))
@@ -191,11 +193,12 @@ def test_explicit_deny_rule_any_port_blocks_connection(mock_getaddrinfo: Mock) -
 
 def test_accept_all_syntaxes(mock_getaddrinfo: Mock) -> None:
     """
-    An explicit DENY rule with '*' (all ports) should block connection to any port on that network.
+    An explicit DENY rule with '*' (all ports) should block connection to any
+    port on that network.
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
     mock_getaddrinfo.return_value = [
         (s_family, s_kind, 6, "", ("10.0.0.5", 1234))
@@ -218,7 +221,7 @@ def test_explicit_deny_ipv6_rule_blocks_connection(mock_getaddrinfo: Mock) -> No
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET6, Kind.TCP
     mock_getaddrinfo.return_value = [
         (s_family, s_kind, 6, "", ("::1", 443, 0, 0))
@@ -242,8 +245,8 @@ def test_multiple_ips_one_matches_deny_blocks(mock_getaddrinfo: Mock) -> None:
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
-    s_family, s_kind = socket.AF_INET, Kind.TCP
+    errors: List[ErrorMsg] = []
+    s_kind = Kind.TCP
     mock_getaddrinfo.return_value = [
         (socket.AF_INET, s_kind, 6, "", ("1.2.3.4", 80)),
         (socket.AF_INET, s_kind, 6, "", ("192.168.1.10", 80)),
@@ -267,13 +270,14 @@ def test_explicit_allow_rule_not_triggers_allow_exception(
     mock_getaddrinfo: Mock,
 ) -> None:
     """
-    Tests that an explicit ALLOW rule, when matched, raises a specific "explicitly ALLOW"
+    Tests that an explicit ALLOW rule, when matched, raises a specific
+    "explicitly ALLOW"
     RuntimeError, as per the current function logic.
     This occurs if no preceding DENY rule matched.
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
     mock_getaddrinfo.return_value = [
         (s_family, s_kind, 6, "", ("8.8.8.8", 53))
@@ -298,7 +302,7 @@ def test_bind_direction_check_explicit_deny(mock_getaddrinfo: Mock) -> None:
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
     mock_getaddrinfo.return_value = [
         (s_family, s_kind, 6, "", ("0.0.0.0", 8080))
@@ -318,7 +322,8 @@ def test_bind_direction_check_explicit_deny(mock_getaddrinfo: Mock) -> None:
 
 def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: Mock) -> None:
     """
-    If hostname resolves to multiple IPs (IPv4 and IPv6), and one IPv6 matches a DENY rule,
+    If hostname resolves to multiple IPs (IPv4 and IPv6), and one IPv6 matches a
+    DENY rule,
     the connection is blocked. The socket instance is AF_INET6.
     The first rule is ALLOW to set implicit DENY, but it doesn't match the connection.
     """
@@ -327,9 +332,8 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: Mock) -> None:
     hostname: str = "mixed.ip.example.com"
     port: int = 9000
     # Socket instance is IPv6 capable
-    s_family, s_kind = socket.AF_INET6, Kind.TCP
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     mock_getaddrinfo.return_value = [
         (socket.AF_INET, Kind.TCP, 6, "", ("172.16.0.5", port)),
         (
@@ -353,6 +357,7 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: Mock) -> None:
     )
     assert not errors
     address: Tuple[str, int] = (hostname, port)
+    s_kind = Kind.TCP
 
     with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, s_kind, address, Direction.OUT)
@@ -360,11 +365,12 @@ def test_mixed_ipv4_ipv6_resolution_one_denied(mock_getaddrinfo: Mock) -> None:
 
 def test_socket_type_any_allows_different_types(mock_getaddrinfo: Mock) -> None:
     """
-    Tests that a rule with 'any' for socket type allows connections with different socket kinds.
+    Tests that a rule with 'any' for socket type allows connections with
+    different socket kinds.
     """
     from pysandboxes.guard_socket import socket
 
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     s_kind = Kind.TCP
     hostname, port = "anytype.example.com", 1234
     ip_address = "1.2.3.4"
@@ -432,7 +438,7 @@ def test_convert_ports_range_valid_cases(
         ("abc-8080", "Invalid _start port number 'abc' in range 'abc-8080'."),
         (
             "8080-8000",
-            "Invalid range: _start port 8080 is greater than end port 8000 in '8080-8000'.",
+            "Invalid range: _start port 8080 is greater than end port 8000 in '8080-8000'.",  # noqa: E501
         ),
         ("-1", "Invalid range format: '-1'. Range _start cannot be empty."),
         ("65536", "Invalid port number '65536'."),
@@ -459,7 +465,8 @@ def test_convert_ports_range_invalid_cases(
 
 def test_convert_ports_range_duplicates_and_sorting() -> None:
     """
-    Tests that _convert_ports_range handles duplicates and sorts the output for valid inputs.
+    Tests that _convert_ports_range handles duplicates and sorts the output for
+    valid inputs.
     """
     assert _convert_ports_range("443,80,443") == (80, 443)
     assert _convert_ports_range("8080-8082,8000-8001") == (8000, 8001, 8080, 8081, 8082)

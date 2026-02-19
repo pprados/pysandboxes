@@ -7,16 +7,19 @@ import site
 import sys
 import tempfile
 import threading
-import time
 from pathlib import Path
-from typing import Any, Dict, List, MutableSet, Optional, Tuple, Union, Iterator, Set
+from typing import Any, Iterator, List, MutableSet, Optional, Set, Tuple, Union, cast
 
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
 from ..sb_types import Args, ConfigLine, Envs
-from ..tools import follow_links_executable, remove_comments, substitute_env_vars, \
-    Environ
+from ..tools import (
+    Environ,
+    follow_links_executable,
+    remove_comments,
+    substitute_env_vars,
+)
 from .sse_client_subprocess_daemon import BaseSubProcessDaemon
 from .tools import suggest_package_installation, which_command
 
@@ -185,8 +188,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     break
 
         need_root = False
-        from importlib.resources import files
-
         args = [str(which_command("firejail"))]
 
         if logger.getEffectiveLevel() > logging.INFO:
@@ -210,19 +211,19 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         whitelist = WhiteList()
 
         # Manage sys.executable
-        bin_path:Set[Path] = set()
+        bin_path: Set[Path] = set()
         follow_links_executable(Path(sys.executable), bin_path)
         for p in bin_path:
             _follow_links(p, whitelist)
 
-        for p in sys.path:
-            if os.path.isdir(p):
-                if p not in whitelist:
-                    _follow_links(p, whitelist)
+        for sp in sys.path:
+            if os.path.isdir(sp):
+                if sp not in whitelist:
+                    _follow_links(sp, whitelist)
 
-        for p in site.getsitepackages():
-            if os.path.isdir(p):
-                if p not in whitelist:
+        for sp in site.getsitepackages():
+            if os.path.isdir(sp):
+                if sp not in whitelist:
                     _follow_links(p, whitelist)
 
         for white in whitelist:
@@ -244,6 +245,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             ),
             key=lambda x: len(x.source),
         ):
+            rule = cast(BindRule, rule)
             if rule.source == rule.dest:
                 if rule.write or rule.source not in whitelist:
                     if rule.source != "/tmp/":
@@ -264,9 +266,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         if REPLACE:
             from ..guard_files import parse_rules as files_parse_rules
 
-            new_files_rules, _ = files_parse_rules(
+            _new_files_rules, _ = files_parse_rules(
                 [ConfigLine("bind=/,/", Path(), 0)], []
             )
+            new_files_rules = cast(List[BindRule], _new_files_rules)
             selected_rules = [
                 rule
                 for rule in all_rules.file_rules
@@ -300,7 +303,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 netfilter_tmp_file.close()
                 netfilter_file.unlink(missing_ok=True)
                 if DEBUG:
-                    netfilter_file = "netfilter.net"
+                    netfilter_file = Path("netfilter.net")
                 else:
                     os.mkfifo(netfilter_file)
 
@@ -321,12 +324,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 netfilter6_tmp_file.close()
                 netfilter6_file.unlink(missing_ok=True)
                 if DEBUG:
-                    netfilter6_file = "netfilter6.net"
+                    netfilter6_file = Path("netfilter6.net")
                 else:
                     os.mkfifo(netfilter6_file)
 
                 def publich_netfilter6() -> None:
-                    netfilter6_file.write_text("\n".join(net_filter4))
+                    netfilter6_file.write_text("\n".join(net_filter6))
                     if not DEBUG:
                         netfilter_file.unlink(missing_ok=True)
 

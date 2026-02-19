@@ -3,10 +3,11 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Any
+from typing import Any, Dict, List, Set, Tuple
 
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode
 from pysandboxes.tools import set_is_in_sandbox
+
 from ..all_rules import AllRules
 
 logger = logging.getLogger(__name__)
@@ -26,14 +27,14 @@ def _debug_log() -> None:
 
 
 def _python_interactive(
-        all_rules: AllRules,
-        ban: bool,
+    all_rules: AllRules,
+    ban: bool,
 ) -> int:
     exit_msg = None
     term = os.environ.get("TERM")
     if sys.stdout.isatty() and (
-            (term and ("color" in term or "256" in term or "true" in term))
-            or (sys.platform == "win32" and "ANSICON" in os.environ)
+        (term and ("color" in term or "256" in term or "true" in term))
+        or (sys.platform == "win32" and "ANSICON" in os.environ)
     ):
         BOLD = "\033[1m"
         RED = "\033[1m\033[31m"
@@ -88,7 +89,7 @@ def _python_interactive(
         c = get_config()
 
         # Update the prompt
-        from IPython.terminal.prompts import Prompts, Token
+        from IPython.terminal.prompts import Prompts
 
         class CustomPrompts(Prompts):
             def in_prompt_tokens(self) -> List[Any]:
@@ -122,7 +123,7 @@ def _python_interactive(
 
         # Create a banner for the standard REPL
         if hasattr(sys, "ps1"):
-            sys.ps1 = prefix + getattr(sys,"ps1")
+            sys.ps1 = prefix + getattr(sys, "ps1")
         else:
             sys.ps1 = prefix + ">>> "
 
@@ -136,8 +137,8 @@ def _python_interactive(
                 # to only exit the interactive shell
                 local_exit=True,
             )
-        except SystemExit as e:
-            pass
+        except SystemExit:
+            pass  # Ignore and continue
     return 0
 
 
@@ -175,8 +176,8 @@ def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> i
     return 0
 
 
-def convert_extra_rules(args: List[str]) -> Dict[str, str | Set[str]]:
-    result: Dict[str, str | Set[str]] = {}
+def convert_extra_rules(args: List[str]) -> Dict[str, Set[str]]:
+    result: Dict[str, Set[str]] = {}
     for rule in args:
         assert rule.startswith("--")
         rule = rule[2:]
@@ -192,8 +193,8 @@ def convert_extra_rules(args: List[str]) -> Dict[str, str | Set[str]]:
 
 
 def python_in_sb(
-        all_rules: AllRules,
-        python_cmd: List[str],
+    all_rules: AllRules,
+    python_cmd: List[str],
 ) -> int:
     try:
         _debug_log()
@@ -207,7 +208,7 @@ def python_in_sb(
                 python_cmd.pop(0)  # Remove -m
                 python_cmd.pop(0)  # Remove module name
                 spec = importlib.util.find_spec(mod_name)
-                if spec:
+                if spec and spec.origin is not None:
                     sys.argv = [spec.origin] + python_cmd
                 else:
                     sys.argv = [""] + python_cmd
@@ -216,7 +217,8 @@ def python_in_sb(
                 # Error case for '-m' without a module name
                 print(
                     "Argument expected for -m option\n"
-                    "usage: python-sb [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+                    "usage: python-sb [option] ... "
+                    "[-c cmd | -m mod | file | -] [arg] ...\n"
                     "Try `python-sb -h' for more information.\n",
                     file=sys.stderr,
                 )
@@ -230,7 +232,8 @@ def python_in_sb(
             else:
                 print(
                     "Argument expected for -c option\n"
-                    "usage: python-sb [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+                    "usage: python-sb [option] ... "
+                    "[-c cmd | -m mod | file | -] [arg] ...\n"
                     "Try `python-sb -h' for more information.\n",
                     file=sys.stderr,
                 )

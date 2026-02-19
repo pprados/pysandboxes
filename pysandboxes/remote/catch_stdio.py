@@ -6,7 +6,6 @@ import logging
 import queue
 import sys
 from concurrent.futures import Executor
-from functools import partial
 from typing import Any, Callable, Dict, Optional, Union
 
 from ..private_loop import get_sandbox_loop
@@ -18,8 +17,8 @@ TQueue = Union[queue.Queue, asyncio.Queue]
 
 class QueueStringIO(io.StringIO):
     """
-    A custom file-like object that intercepts writes, sends them to a thread-specific queue,
-    and also writes to an underlying StringIO buffer.
+    A custom file-like object that intercepts writes, sends them to a
+    thread-specific queue, and also writes to an underlying StringIO buffer.
     """
 
     def __init__(self, type: str, queue: Optional[TQueue]):
@@ -114,8 +113,12 @@ async def acatch_stdio(
     *args: Any,
 ) -> Dict[str, Any]:
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
-    captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=sync_or_async_queue)
-    captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=sync_or_async_queue)
+    captured_stdout: io.StringIO = QueueStringIO(
+        type="stdout", queue=sync_or_async_queue
+    )
+    captured_stderr: io.StringIO = QueueStringIO(
+        type="stderr", queue=sync_or_async_queue
+    )
     fn_result: Any = None
 
     async def run_in_context() -> Dict[str, Any]:
@@ -168,7 +171,7 @@ def _thread_catch_stream(
     locals_dict: dict | None = None,
     executor: Executor,
 ) -> None:
-    stream_queue:queue.Queue = queue.Queue()
+    stream_queue: queue.Queue = queue.Queue()
     fut = executor.submit(
         fn,
         code_string,
@@ -192,9 +195,3 @@ def _thread_catch_stream(
         return result["result"]
     elif "exception" in result:
         raise result["exception"]
-
-
-eval_stream = partial(catch_stdio, eval)
-exec_stream = partial(catch_stdio, exec)
-thread_eval_stream = partial(_thread_catch_stream, eval_stream)
-thread_exec_stream = partial(_thread_catch_stream, exec_stream)

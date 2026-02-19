@@ -1,5 +1,7 @@
 import collections
 from typing import (
+    Any,
+    Callable,
     Dict,
     Generic,
     Hashable,
@@ -11,7 +13,8 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    ValuesView, cast, Any, Callable,
+    ValuesView,
+    cast,
 )
 
 KeyType = TypeVar("KeyType", bound=Hashable)
@@ -19,13 +22,16 @@ ValueType = TypeVar("ValueType")
 
 
 def _restore_pickle(
-        data: Dict[KeyType, ValueType]
+    data: Dict[KeyType, ValueType]
 ) -> "ImmutableDict[KeyType,ValueType]":
     return ImmutableDict(data)
 
 
-class ImmutableDict(tuple[tuple[KeyType, ...], tuple[ValueType, ...]],
-                    collections.abc.Mapping, Generic[KeyType, ValueType]):
+class ImmutableDict(
+    tuple[tuple[KeyType, ...], tuple[ValueType, ...]],
+    collections.abc.Mapping,
+    Generic[KeyType, ValueType],
+):
     """
     An immutable dictionary-like object built on a tuple of tuples.
     This class is compatible with the collections.abc.Mapping kind.
@@ -35,9 +41,8 @@ class ImmutableDict(tuple[tuple[KeyType, ...], tuple[ValueType, ...]],
 
     # construction accepts either a Mapping or an iterable of (key, value) pairs
     def __new__(
-            cls,
-            data: Union[
-                Mapping[KeyType, ValueType], Iterable[Tuple[KeyType, ValueType]]],
+        cls,
+        data: Union[Mapping[KeyType, ValueType], Iterable[Tuple[KeyType, ValueType]]],
     ) -> "ImmutableDict[KeyType, ValueType]":
         # Normalize incoming data to an iterable of pairs
         keys: Tuple[KeyType, ...]
@@ -79,16 +84,12 @@ class ImmutableDict(tuple[tuple[KeyType, ...], tuple[ValueType, ...]],
         return tuple.__getitem__(self, 1)  # type: ignore[index]
 
     # Mapping kind
-    def __getitem__(self, key: Any) -> Any:
-        if isinstance(key, slice):
-            return self._keys[key]
-        else:
-            assert isinstance(key, str)
-            try:
-                idx = self._keys.index(key)
-            except ValueError:
-                raise KeyError(key)
-            return self._values[idx]
+    def __getitem__(self, key: KeyType) -> ValueType:  # type: ignore[override]
+        try:
+            idx = self._keys.index(key)
+        except ValueError:
+            raise KeyError(key)
+        return cast(ValueType, self._values[idx])
 
     def __iter__(self) -> Iterator[KeyType]:  # type: ignore[override]
         return iter(self._keys)

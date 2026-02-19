@@ -26,7 +26,8 @@ def find_process_childrens(parent_pid: int) -> List[int]:
                     status_file_path = Path(f"/proc/{pid_dir}/status")
 
                     # Ensure the status file exists and is readable.
-                    # A process might exit between listdir and open, or permissions might be restricted.
+                    # A process might exit between listdir and open,
+                    # or permissions might be restricted.
                     if status_file_path.exists() and os.access(
                         status_file_path, os.R_OK
                     ):
@@ -88,15 +89,3 @@ def test_multi_thread() -> None:
         # Wait for all threads to complete their execution
         for thread in threads:
             thread.join()
-
-    # print("\nAll threads have finished.")
-    # print(f"Final shared data length: {len(shared_data)}")
-    #
-    # # The expected length should be 10 if there were no race conditions.
-    # # However, due to the lack of a lock, the final length might be less than 10,
-    # # or the state of the data might be corrupted.
-    # if len(shared_data) != 10:
-    #     print("Test failed: Synchronization issues detected. Final length is not 10.")
-    # else:
-    #     print(
-    #         "Test passed: Final length is 10. The race condition might not have manifested this time.")

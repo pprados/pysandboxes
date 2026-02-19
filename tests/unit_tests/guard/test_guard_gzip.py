@@ -5,14 +5,18 @@ import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine
-from .test_guard_io import activate_guard_files_rules, files
+
+from .test_guard_io import (
+    activate_guard_files_rules,
+    files,  # noqa: F401
+)
 
 
-def test_gzip(files: Dict[str, Path]) -> None:
+def test_gzip(files: Dict[str, Path]) -> None:  # noqa: F811
     from pathlib import Path
 
     rules = [
-        ConfigLine(f"ignore=*.log", Path(), 0),
+        ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
         ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
     ]
@@ -26,8 +30,8 @@ def test_gzip(files: Dict[str, Path]) -> None:
     import gzip
     import pathlib
 
-    assert pathlib._local.io.open.__pysandbox__, "Sandbox not applied"
-    assert builtins.open.__pysandbox__, "Sandbox not applied"
+    assert pathlib._local.io.open.__pysandbox__, "Sandbox not applied"  # type: ignore[attr-defined]
+    assert builtins.open.__pysandbox__, "Sandbox not applied"  # type: ignore[attr-defined]
 
     source = pathlib.Path(files["bind_dest"] / "bound_file.txt")
     compressed = source.with_suffix(".gz")

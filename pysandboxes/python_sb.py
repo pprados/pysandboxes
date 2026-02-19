@@ -5,7 +5,7 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Dict, cast
+from typing import Any, Mapping, cast
 
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
@@ -20,6 +20,7 @@ from pysandboxes.remote.sse_client_subprocess_daemon import (
 )
 from pysandboxes.sb_types import Envs
 from pysandboxes.tools import Environ
+
 from .remote.parse_cpython_args import parse_python_cmd_line
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def main() -> int:
 
     # Add extra to manage ipython
     try:
-        import IPython
+        import IPython  # noqa: F401
 
         binds = extra_rules.get("bind", set())  # bind=~/.ipython,~/.ipython
         binds.add("~/.ipython,~/.ipython")
@@ -67,22 +68,22 @@ def main() -> int:
         from importlib.resources import files
 
         if (
-                not "/" in str(config_path)
-                and len(python_cmd) >= 2
-                and python_cmd[0] == "-m"
+            "/" not in str(config_path)
+            and len(python_cmd) >= 2
+            and python_cmd[0] == "-m"
         ):
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
             caller_module = python_cmd[1].split(".", 1)[0]
             resource_path = files(caller_module)
-            resource_config = resource_path / config_path
+            resource_config = str(resource_path) / config_path
             if resource_config and resource_config.exists():
                 config_path = resource_config
 
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=os.environ,  # Use current environ
-            **extra_rules,
+            **cast(Mapping[str, Any], extra_rules),
         )
     except ConfigSyntaxError as e:
         print(str(e), file=sys.stderr)
@@ -128,7 +129,7 @@ def main() -> int:
             port=0,
             init_fn="",
         )
-        env:Environ
+        env: Environ
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
         else:

@@ -3,7 +3,6 @@ from types import ModuleType
 from typing import Dict, Set, Tuple
 
 import pytest
-from unit_tests.guard.test_guard_io import _reset_rules
 
 from pysandboxes import RuleAttributeError
 
@@ -13,7 +12,7 @@ def test_escape_with_closure() -> None:
     import io
 
     assert hasattr(io.open, "__closure__"), "Not in a pysandbox"
-    original_open = io.open.__closure__[0].cell_contents
+    original_open = io.open.__closure__[0].cell_contents  # type: ignore[index]
     assert original_open.__module__ == "_io", "Not the _original io.open"
 
 
@@ -22,7 +21,7 @@ def test_escape_with_subclasses() -> None:
     # TODO Try to block the __subclasses__ access
     def find_all_subclasses(cls: type) -> Set[type]:
         all_subclasses: Set[type] = set()
-        direct_subclasses: Tuple[type, ...] = type.__subclasses__(cls)
+        direct_subclasses: Tuple[type, ...] = type.__subclasses__(cls)  # type: ignore[assignment]
         for subclass in direct_subclasses:
             all_subclasses.add(subclass)
             all_subclasses.update(find_all_subclasses(subclass))

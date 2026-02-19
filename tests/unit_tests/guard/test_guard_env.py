@@ -7,7 +7,7 @@ from pysandboxes.sb_types import ConfigLine, Envs
 
 
 def test_simple_env() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(
         [
             ConfigLine("env=FOO=bar", Path(), 0),
@@ -20,7 +20,7 @@ def test_simple_env() -> None:
 
 
 def test_var_value() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(
         [
             ConfigLine("env=FOO=${bar}", Path(), 0),
@@ -32,7 +32,7 @@ def test_var_value() -> None:
 
 
 def test_var_default_value() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(
         [
             ConfigLine("env=FOO=${X:=BAR}", Path(), 0),
@@ -44,7 +44,7 @@ def test_var_default_value() -> None:
 
 
 def test_var_pattern() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(
         [
             ConfigLine("env=*_API_KEY=${*_API_KEY}", Path(), 0),
@@ -56,7 +56,7 @@ def test_var_pattern() -> None:
 
 
 def test_var_all_pattern() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(
         [
             ConfigLine("env=*=${*}", Path(), 0),
@@ -68,7 +68,7 @@ def test_var_all_pattern() -> None:
 
 
 def test_var_all_pattern_and_unset() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(
         [
             ConfigLine("env=*=${*}", Path(), 0),

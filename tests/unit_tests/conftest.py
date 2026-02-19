@@ -1,7 +1,10 @@
 import logging
 
 import pytest
-from unit_tests import _activate_guard_import_for_tests, _deactivate_all_rules
+from unit_tests.guard.test_guard_io import (
+    _activate_guard_import_for_tests,
+    _deactivate_all_rules,
+)
 
 
 def init_log_level() -> None:

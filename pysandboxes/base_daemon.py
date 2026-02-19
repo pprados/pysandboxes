@@ -1,10 +1,9 @@
 import logging
-import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from .sb_types import Envs
-from .tools import SyncOrAsyncFunc, Environ
+from .tools import Environ, SyncOrAsyncFunc
 
 if TYPE_CHECKING:
     from .all_rules import AllRules
@@ -23,7 +22,7 @@ class BaseDaemon(ABC):
     def __init__(
         self,
         token: str,
-        **kwargs:Dict[str,Any],
+        **kwargs: Dict[str, Any],
     ) -> None:
         self._is_started = False
         self._token = token
@@ -64,7 +63,7 @@ class BaseDaemon(ABC):
         self._accept_incoming = False
 
     @property
-    def token(self) -> Optional[str]:
+    def token(self) -> str:
         return self._token
 
     @abstractmethod
@@ -83,6 +82,6 @@ class BaseDaemon(ABC):
         func: Callable[..., Any],
         _force_incomming: bool,
         *args: Any,
-        **kwargs: Dict[str,Any],
+        **kwargs: Dict[str, Any],
     ) -> Any:
         raise NotImplementedError

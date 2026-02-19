@@ -4,13 +4,13 @@ from typing import List
 
 import pytest
 from integration_tests.sb_usage import init_log_level
-from pysandboxes.main_logger import ErrorMsg
 from unit_tests.guard.test_guard_io import (
     _activate_guard_import_for_tests,
     _deactivate_all_rules,
 )
 
 from pysandboxes.guard_socket import parse_rules
+from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
 from pysandboxes.sb_types import ConfigLine
@@ -32,11 +32,14 @@ def check_iptables_rules_syntax(
     Checks the syntax of iptables/ip6tables rules without applying them.
 
     Args:
-        rules_content (str): The content of the rules in iptables-save/ip6tables-save format.
-        is_ipv6 (bool): True if rules are for IPv6 (ip6tables-restore), False for IPv4 (iptables-restore).
+        rules_content (str): The content of the rules in iptables-save/ip6tables-save
+        format.
+        is_ipv6 (bool): True if rules are for IPv6 (ip6tables-restore), False for
+        IPv4 (iptables-restore).
 
     Returns:
-        tuple[bool, str]: A tuple containing (True if syntax is OK, error/success message).
+        tuple[bool, str]: A tuple containing (True if syntax is OK,
+        error/success message).
     """
     # Determine the restore command based on IPv4 or IPv6
     restore_command: str = "ip6tables-restore" if is_ipv6 else "iptables-restore"
@@ -67,7 +70,7 @@ def check_iptables_rules_syntax(
 
 
 def test_ip4_netfilter_conv() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     rules, _ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp|localhost|80,443|OUT", Path(), 0),
@@ -101,19 +104,19 @@ def test_ip4_netfilter_conv() -> None:
             "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 10.0.0.0/8  -j REJECT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.0/8  -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.0.1/32  -j ACCEPT",
-            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -m multiport --sports 80,443 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 127.0.0.0/8  -m multiport --dports 80,443 -j ACCEPT",
-            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.1/32  -m multiport --sports 80,443 -j ACCEPT",
-            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.0.0.0/8  -m multiport --sports 80,443 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -m multiport --dports 80 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.0.1/32  -j ACCEPT",  # noqa: E501
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -m multiport --sports 80,443 -j ACCEPT",  # noqa: E501
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 127.0.0.0/8  -m multiport --dports 80,443 -j ACCEPT",  # noqa: E501
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.1/32  -m multiport --sports 80,443 -j ACCEPT",  # noqa: E501
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.0.0.0/8  -m multiport --sports 80,443 -j ACCEPT",  # noqa: E501
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -m multiport --dports 80 -j ACCEPT",  # noqa: E501
             "COMMIT",
         ]
     ) == sorted(ipfilter)
 
 
 def test_ip6_netfilter_conv() -> None:
-    errors:List[ErrorMsg] = []
+    errors: List[ErrorMsg] = []
     rules, _ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp|2001:db8::/32|80,443|OUT", Path(), 0),
@@ -145,10 +148,10 @@ def test_ip6_netfilter_conv() -> None:
             "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
             "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32  -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -m multiport --dports 80,443 -j ACCEPT",
-            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32  -m multiport --sports 80,443 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -m multiport --dports 80 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -j ACCEPT",  # noqa: E501
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -m multiport --dports 80,443 -j ACCEPT",  # noqa: E501
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32  -m multiport --sports 80,443 -j ACCEPT",  # noqa: E501
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32  -m multiport --dports 80 -j ACCEPT",  # noqa: E501
             "COMMIT",
         ]
     ) == sorted(ipfilter)

@@ -12,7 +12,7 @@ from aiohttp_sse_client import client as sse_client
 from ..base_daemon import BaseDaemon
 from ..private_loop import sandbox_loop
 from ..tools import get_callable_info, is_in_sandbox
-from .parameters import INTERVAL_FOR_RETRY_CONNECTION, MAX_CONNECT_RETRY
+from .parameters import INTERVAL_FOR_RETRY_CONNECTION
 from .tools import from_b85, to_b85
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class BaseSSESandbox(BaseDaemon):
         *,
         host: str,
         max_connect_retry: int,
-        **kwargs:Dict[str,Any],
+        **kwargs: Dict[str, Any],
     ) -> None:
         super().__init__(token)
         self.port = 0
@@ -128,7 +128,7 @@ class BaseSSESandbox(BaseDaemon):
         func: Callable[..., Any],
         _force_incomming: bool,
         *args: Any,
-        **kwargs: Dict[str,Any],
+        **kwargs: Dict[str, Any],
     ) -> Any:
         if is_in_sandbox():
             return func(*args, **kwargs)

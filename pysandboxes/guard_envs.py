@@ -2,11 +2,11 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, cast, Set
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Set, Tuple, cast
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
-from .tools import is_in_sandbox, resolve_env_variables
+from .tools import Environ, is_in_sandbox, resolve_env_variables
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ _rules: EnvsRules = cast(EnvsRules, ())
 
 def parse_rules(
     rules: ConfigLines,
-    source_vars: Dict[str, str],
+    source_vars: Environ,
     errors: List[ErrorMsg],
 ) -> Tuple[EnvsRules, Envs, ConfigLines]:
     """
@@ -42,11 +42,7 @@ def parse_rules(
     new_vars: Dict[str, str] = {}
     ignore_rules: ConfigLines = []
 
-    # This pattern finds ${VAR} or ${VAR:=default} substitutions.
-    subst_pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
-
     def substitute_value(value_pattern: str) -> str:
-        """Resolves a single value pattern, e.g., ${VAR:=default}."""
         return resolve_env_variables(value_pattern, source_vars)
 
     envs_rules = set()
@@ -117,10 +113,10 @@ class LearnEnviron(os._Environ):
             decodekey = os.environ.decodekey
             encodevalue = os.environ.encodevalue
             decodevalue = os.environ.decodevalue
-            assert hasattr(os.environ,"_data")
+            assert hasattr(os.environ, "_data")
             data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
-            self._keys_used:Set[str] = set()
+            self._keys_used: Set[str] = set()
             self._original_envs = os.environ
 
     def __getitem__(self, key: str) -> str:
@@ -137,7 +133,7 @@ class LearnEnviron(os._Environ):
         if is_in_sandbox():
             self._keys_used.add(key)
 
-    def _clone(self) -> Dict[str,str]:
+    def _clone(self) -> Dict[str, str]:
         return {k: v for k, v in super().items()}
 
     def _get(self, key: str, default: Any = None) -> Any:
@@ -178,7 +174,7 @@ def activate_guard(rules: EnvsRules) -> None:
 def patch_rules(learning_path: Optional[Path]) -> Dict[str, Callable]:
     if learning_path:
 
-        def activate_learning_env_factory(x:Any) -> LearnEnviron:
+        def activate_learning_env_factory(x: Any) -> LearnEnviron:
             return LearnEnviron()
 
         return {"os.environ": activate_learning_env_factory}

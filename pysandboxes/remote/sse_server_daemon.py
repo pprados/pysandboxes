@@ -4,20 +4,23 @@ import importlib
 import inspect
 import json
 import logging
-import os
 import sys
 import traceback
-from asyncio import CancelledError
+from asyncio import CancelledError, Task
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from uvicorn import Server
 
 from ..all_rules import AllRules
-from ..private_loop import get_sandbox_loop, sandbox_loop
+from ..private_loop import get_sandbox_loop
 from ..sb_types import Args, Envs
-from ..tools import SyncOrAsyncFunc, set_is_in_sandbox, Environ
+from ..tools import (
+    Environ,
+    SyncOrAsyncFunc,
+    set_is_in_sandbox,
+)
 from .parameters import (
     MAX_CONNECT_RETRY,
     POLLING_DELAY,
@@ -62,8 +65,6 @@ async def sandbox_daemon(
     try:
         _active_requests += 1
 
-        loop = asyncio.get_event_loop()
-
         module_name, function_name = function_id.split(":", 1)
         set_is_in_sandbox(True)
         try:
@@ -74,7 +75,7 @@ async def sandbox_daemon(
             return
         use_async = inspect.iscoroutinefunction(function)
         logger.debug(
-            f"(%s) calling %s%s.%s(%s,%s)...",
+            "(%s) calling %s%s.%s(%s,%s)...",
             session_id,
             "async " if use_async else "",
             module_name,
@@ -83,38 +84,18 @@ async def sandbox_daemon(
             ",".join([f"{k}={repr(v)}" for k, v in kwargs.items()]),
         )
 
-        stdio_queue:asyncio.Queue = asyncio.Queue()
+        stdio_queue: asyncio.Queue = asyncio.Queue()
+        async_fut: asyncio.Future | None = None
 
-        if use_async:
+        async def _async_set_sandbox_and_catch_stdio() -> Any:
+            from .catch_stdio import acatch_stdio
 
-            async def _set_sandbox_and_catch_stdio() -> Any:
-                from .catch_stdio import acatch_stdio, catch_stdio
+            rc = await acatch_stdio(stdio_queue, function, kwargs, *args)
+            return rc
 
-                rc = await acatch_stdio(stdio_queue, function, kwargs, *args)
-                return rc
-
-            fut = asyncio.create_task(
-                _set_sandbox_and_catch_stdio(), name="catch_stdio"
-            )
-        else:
-
-            @sandbox_loop
-            def _set_sandbox_and_catch_stdio() -> Dict[str, Any]:
-                try:
-                    import os
-
-                    set_is_in_sandbox(True)
-                    from .catch_stdio import acatch_stdio, catch_stdio
-
-                    return catch_stdio(stdio_queue, function, kwargs, *args)
-                except Exception as e:
-                    logger.error(traceback.format_exc())  # FIXME
-                    raise e
-
-            fut = loop.run_in_executor(
-                None,
-                _set_sandbox_and_catch_stdio,
-            )
+        async_fut = asyncio.create_task(
+            _async_set_sandbox_and_catch_stdio(), name="catch_stdio"
+        )
         while stdio_queue:
             msg = await stdio_queue.get()
             if "result" in msg:
@@ -126,7 +107,7 @@ async def sandbox_daemon(
                 yield _sse_msg(json.dumps(msg))
             elif "stderr" in msg:
                 yield _sse_msg(json.dumps(msg))
-        result = await fut
+        result = await async_fut
         if "result" in result:
             logger.debug("(%s) ... return %s", session_id, repr(result["result"]))
             result["result"] = to_b85(result["result"])
@@ -140,7 +121,7 @@ async def sandbox_daemon(
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
         yield json.dumps({"session_id": session_id, "cancelled": True})
-    except AssertionError as e:
+    except AssertionError:
         logger.exception("assertion %s", traceback.format_exc())
         sys.exit(-1)
         # Ignore?
@@ -158,8 +139,6 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
     from fastapi.responses import StreamingResponse
 
     app = FastAPI()
-
-    active_requests = 0
 
     @app.get("/ping")
     async def ping() -> dict[str, str]:
@@ -232,7 +211,8 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
             },
             "access": {
                 "()": "uvicorn.logging.AccessFormatter",
-                "fmt": '%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+                "fmt": "%(levelprefix)s %(client_addr)s - "
+                '"%(request_line)s" %(status_code)s',
                 # noqa: E501
             },
         },
@@ -282,16 +262,16 @@ class SSEServerDaemon(BaseSSESandbox):
 
     def __init__(self, token: str, *, port: int):
         super().__init__(token, host="localhost", max_connect_retry=MAX_CONNECT_RETRY)
-        self.uvicorn: Optional[Server] = None
-        self.task = None
+        self.uvicorn: Server | None = None
+        self.task: Task | None = None
         self.port = port
         self.hostname = "localhost"
         self.stopped = True
 
     @property
     def active_request(self) -> int:
-        global _active_request
-        return _active_request
+        global _active_requests
+        return _active_requests
 
     def update_rules(self, *, envs: Envs, all_rules: AllRules) -> AllRules:
         return AllRules(
@@ -331,11 +311,14 @@ class SSEServerDaemon(BaseSSESandbox):
             start_event = asyncio.Event()
 
             async def _run_daemon() -> None:
+                if not self.uvicorn:
+                    logger.warning("Uvicorn server not started")
+                    return
                 try:
                     start_event.set()
                     assert asyncio.get_running_loop() == get_sandbox_loop()
                     await self.uvicorn.serve()
-                except asyncio.CancelledError as e:
+                except asyncio.CancelledError:
                     # logger.debug("Receive cancel server")
                     self._accept_incoming = False
                     if self.uvicorn:
@@ -346,7 +329,7 @@ class SSEServerDaemon(BaseSSESandbox):
                             )
                         except asyncio.TimeoutError:
                             logger.warning(
-                                f"Timeout during uvicorn daemon_shutdown. Force exit"
+                                "Timeout during uvicorn daemon_shutdown. Force exit"
                             )
                             self.uvicorn.force_exit = True
                         self.uvicorn.started = False
@@ -406,4 +389,5 @@ class SSEServerDaemon(BaseSSESandbox):
         return self.uvicorn.started if self.uvicorn else False
 
     async def join(self) -> None:
+        assert self.task
         await self.task

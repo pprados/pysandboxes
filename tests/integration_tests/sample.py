@@ -2,7 +2,7 @@ import logging
 import sys
 from pathlib import Path
 
-from pysandboxes import sandbox, sandboxes, sandboxes_api
+from pysandboxes import sandbox, sandboxes
 
 logger = logging.getLogger(__name__)
 

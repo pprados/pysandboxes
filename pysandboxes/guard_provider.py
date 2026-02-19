@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from .config import CONFIG_NAME
 from .main_logger import ErrorMsg, format_error_list, format_ruleref
@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__)
 def parse_rules(
     rules: ConfigLines,
     errors: List[ErrorMsg],
-) -> Tuple[str, bool, Optional[Path], bool, ConfigLines]:
+) -> Tuple[str, bool, Path, bool, ConfigLines]:
     from .os_sandbox import providers_factory
 
     other_rules = []
     provider_rule: ConfigLines = []
     providers_set = []
     use_py_sandbox = True
-    learning_path = None
+    learning_path = Path(CONFIG_NAME)
     learning = False
 
     for rule in rules:
@@ -67,17 +67,17 @@ def parse_rules(
             else:
                 learning_path = Path(value) if value else Path(CONFIG_NAME)
                 if not learning_path.parent.exists():
-                    learning_path = None
                     errors.append(
                         (
                             f"{format_ruleref(rule)}: "
-                            f"Invalid value {value!r} for 'lear'. "
+                            f"Invalid value {value!r} for 'learn'. "
                             f"The parent path must exist.",
                             rule.path,
                             rule.ln,
                         )
                     )
-                learning = True
+                else:
+                    learning = True
 
         else:
             other_rules.append(rule)

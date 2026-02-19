@@ -1,14 +1,13 @@
-import logging
+import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Iterator, Any
+from typing import Any, Dict, Iterator, List
 
 import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.guard_files import BindRule, activate_guard, parse_rules
-from pysandboxes.guard_import import remove_modules
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
 from pysandboxes.tools import follow_links_executable
@@ -127,12 +126,10 @@ def files() -> Dict[str, Path]:
     }
 
 
-import os
-
 if "PYTEST_RUN_CONFIG" in os.environ:
 
     def activate_guard_files_rules(rules: ConfigLines) -> None:
-        errors:List[ErrorMsg] = []
+        errors: List[ErrorMsg] = []
         _deactivate_all_rules()
         file_rules, _ = parse_rules(rules, errors)
         assert not errors
@@ -142,7 +139,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         import sys
 
         new_file_rules: List[BindRule] = []
-        exe_paths = set()
+        exe_paths: set[Path] = set()
         follow_links_executable(Path(sys.executable), exe_paths)
         for p in exe_paths:
             new_file_rules.append(
@@ -166,7 +163,9 @@ if "PYTEST_RUN_CONFIG" in os.environ:
             )
         )
         # activate_guard(tuple(list(file_rules) + new_file_rules))
-        activate_guard(tuple(list(file_rules) + new_file_rules))
+        all_rules = list(file_rules)
+        all_rules.extend(new_file_rules)
+        activate_guard(tuple(all_rules))
 
 
 def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]) -> None:
@@ -179,7 +178,9 @@ def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]) -> None:
         io.open(files["ignore"])
 
 
-def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, Path]) -> None:
+def test_io_open_code_ignore_rule_blocks_open_code_file_access(
+    files: Dict[str, Path]
+) -> None:
     rules = [ConfigLine(f"ignore={files['ignore']}", Path(), 0)]
     activate_guard_files_rules(rules)
 

@@ -13,22 +13,22 @@ from typing import (
     Coroutine,
     Dict,
     List,
+    Mapping,
     Optional,
-    Protocol,
     TypeVar,
     Union,
-    runtime_checkable, Mapping,
 )
 
 from .base_daemon import BaseDaemon
 from .e import ConfigSyntaxError
-from .os_sandbox import async_shutdown_daemon, async_stop_daemon
+from .os_sandbox import async_shutdown_daemon
 from .private_loop import get_sandbox_loop, sandbox_loop, set_sandbox_loop
 from .tools import (
+    Environ,
     SyncOrAsyncFunc,
     check_mixte_async_async,
     is_in_sandbox,
-    set_is_in_sandbox, Environ,
+    set_is_in_sandbox,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,11 +38,13 @@ _lock = Lock()
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def _check__main__coroutine(coroutine:Any) -> None:
-    if inspect.getmodule(coroutine.cr_frame).__name__ == "__main__":
-        raise ValueError(
-            "The coroutine must be declared in a module " "other than __main__."
-        )
+def _check__main__coroutine(coroutine: Any) -> None:
+    module = inspect.getmodule(coroutine.cr_frame)
+    if module and hasattr(module, "__name__"):
+        if module.__name__ == "__main__":
+            raise ValueError(
+                "The coroutine must be declared in a module " "other than __main__."
+            )
 
 
 def sandbox(
@@ -75,8 +77,7 @@ def sandbox(
         return decorator(_func)
 
 
-@runtime_checkable
-class sandboxes(Protocol):
+class sandboxes:
     __slot__ = (
         "init_fn",
         "config_path",
@@ -105,7 +106,7 @@ class sandboxes(Protocol):
         envs: Environ | None = None,
         python_args: Optional[List[str]] = None,
         graceful_shutdown: bool = True,
-        **extra_rules:Mapping[str,Any],
+        **extra_rules: Mapping[str, Any],
     ) -> None:
         self.init_fn = init_fn
         self.config_path = (
@@ -119,13 +120,13 @@ class sandboxes(Protocol):
             envs = os.environ
         self.envs = envs
         self.extra_rules = extra_rules
-        self.learning_path = None
+        self.learning_path: Path | None = None
         self.python_args = python_args
         self.graceful_shutdown = graceful_shutdown
-        self._old_sigint = None
-        self._old_sigterm = None
-        self._old_sigquit = None
-        self._daemon = None
+        self._old_sigint: Any = None
+        self._old_sigterm: Any = None
+        self._old_sigquit: Any = None
+        self._daemon: BaseDaemon | None = None
 
     # ── synchronous API ────────────────────────────────
     def __enter__(self) -> BaseDaemon:
@@ -171,6 +172,7 @@ class sandboxes(Protocol):
                 self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
                 self._old_sigquit = signal.signal(signal.SIGQUIT, signal_handler)
 
+        assert self._daemon is not None
         return self._daemon
 
     def __exit__(
@@ -201,11 +203,10 @@ class sandboxes(Protocol):
                 signal.signal(signal.SIGTERM, self._old_sigterm)
                 signal.signal(signal.SIGQUIT, self._old_sigquit)
 
-            self.learning_path = False
             await self._daemon._stop(max_pending=0)
             logger.debug("daemon stopped")
 
-    def __delete__(self, instance) -> None:
+    def __delete__(self, instance: "sandboxes") -> None:
         asyncio.run_coroutine_threadsafe(
             self._stop_daemon(), get_sandbox_loop()
         ).result()
@@ -248,6 +249,7 @@ class sandboxes(Protocol):
                 self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
                 self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
                 self._old_sigquit = signal.signal(signal.SIGQUIT, signal_handler)
+        assert self._daemon is not None
         return self._daemon
 
     @sandbox_loop
@@ -270,7 +272,10 @@ def run(
     *,
     init_fn: Optional[SyncOrAsyncFunc] = None,
     config_path: Optional[Union[Path, str]] = None,
-    **kwargs: Dict[str,Any],
+    envs: Environ | None = None,
+    python_args: Optional[List[str]] = None,
+    graceful_shutdown: bool = True,
+    **kwargs: Dict[str, Any],
 ) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
@@ -287,6 +292,9 @@ def run(
         async with sandboxes(
             init_fn=init_fn,
             config_path=config_path,
+            envs=envs,
+            python_args=python_args,
+            graceful_shutdown=graceful_shutdown,
             **kwargs,
         ):
             result = (await asyncio.create_task(main), "_start sandbox in run")
