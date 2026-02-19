@@ -1,11 +1,14 @@
 import logging
 from pathlib import Path
+from typing import Generator
+
+from _pytest.logging import LogCaptureFixture
 
 from pysandboxes import ConfigSyntaxError
 from pysandboxes.py_sandbox import load_and_parse_config
 
 
-def test_syntax_error(caplog):
+def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
     """Check all possible syntax errors."""
     config_path = Path(__file__).parent / "syntax-error.profile"
 
@@ -13,11 +16,11 @@ def test_syntax_error(caplog):
         with caplog.at_level(logging.WARNING):
             load_and_parse_config(
                 config_path,
-                extra_rules=[
-                    "os-sandbox=error",
-                    "env=abc",
-                    "bind=",
-                ],
+                **{
+                    "os-sandbox": "error",
+                    "env": "abc",
+                    "bind": "",
+                },
             )
             assert 0, "Must raise an exception"
     except ConfigSyntaxError as e:
@@ -30,8 +33,9 @@ def test_syntax_error(caplog):
         ]
         # Check syntax error
         assert without_filename == [
-            "syntax-error(1), syntax-error(2) and syntax-error(3): Multiple os-sandbox parameters.",
-            "<arg>: Invalid rule \"extra-rules=['os-sandbox=error', 'env=abc', 'bind=']\"",
+            "<arg>: Detect a missing '=' in rule: env=abc.",
+            "<arg>: Invalid os-sandbox 'error'.",
+            "<arg>: In 'bind=', source and destination must be separated with a comma.",
             "syntax-error(1): Invalid os-sandbox 'toto'.",
             "syntax-error(4): Invalid rule 'set-env=ERROR'",
             "syntax-error(5): In 'bind=${PWD}/.,${PWD}/not_exist', source and destination must exists and be directories.",

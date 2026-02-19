@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict
 
 import pytest
 
@@ -7,7 +8,7 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import _reset_rules, activate_guard_files_rules, files
 
 
-def test_os_path_abspath(files):
+def test_os_path_abspath(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
@@ -24,7 +25,7 @@ def test_os_path_abspath(files):
     )
 
 
-def test_os_path_exists_and_lexists(files):
+def test_os_path_exists_and_lexists(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -40,7 +41,7 @@ def test_os_path_exists_and_lexists(files):
     assert os.path.lexists(files["bind_dest"] / "bound_file.txt")
 
 
-def test_os_path_islink(files):
+def test_os_path_islink(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -55,7 +56,7 @@ def test_os_path_islink(files):
     assert not os.path.islink(files["bind_dest"] / "bound_file.txt")
 
 
-def test_os_path_isdir(files):
+def test_os_path_isdir(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -69,7 +70,7 @@ def test_os_path_isdir(files):
     assert os.path.isdir(files["bind_dest"])
 
 
-def test_os_path_isfile(files):
+def test_os_path_isfile(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -83,7 +84,7 @@ def test_os_path_isfile(files):
     assert os.path.isfile(files["bind_dest"] / "bound_file.txt")
 
 
-def test_os_path_samefile(files):
+def test_os_path_samefile(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -107,7 +108,7 @@ def test_os_path_samefile(files):
     assert os.path.samefile(files["path"] / "visible.txt", files["bound_file"]) is False
 
 
-def test_os_path_realpath(files):
+def test_os_path_realpath(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
@@ -125,7 +126,7 @@ def test_os_path_realpath(files):
     )
 
 
-def test_os_path_atime_mtime_ctime_and_size(files):
+def test_os_path_atime_mtime_ctime_and_size(files:Dict[str, Path]) -> None:
     rules = [
         ConfigLine(f"ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),

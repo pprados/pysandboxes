@@ -183,7 +183,7 @@ def return_level_parameter(log_level: int) -> str:
         logging.DEBUG: "-vv",
         logging.NOTSET: "-vvv",
     }
-    return _map.get(log_level, logging.NOTSET)
+    return _map.get(log_level, "-vvv")
 
 
 # Constant from linux/prctl.h

@@ -39,7 +39,7 @@ def test_remove_comment_with_quotes() -> None:
         assert result == expected
 
 
-def test_resolve_env_variables():
+def test_resolve_env_variables() -> None:
     assert resolve_env_variables("[${A}]", {"A": "val_a"}) == "[val_a]"
     # Without ref
     assert resolve_env_variables("[${Z}]", {"A": "val_a"}) == "[]"

@@ -67,7 +67,7 @@ def _worker(thread_id: int) -> None:
         assert result_sync == f"a {thread_id}"
 
 
-def test_multi_thread():
+def test_multi_thread() -> None:
     """
     Check if the multiple call at the same time are not shuffled
     """

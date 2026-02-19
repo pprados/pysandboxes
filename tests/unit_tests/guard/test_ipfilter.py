@@ -4,6 +4,7 @@ from typing import List
 
 import pytest
 from integration_tests.sb_usage import init_log_level
+from pysandboxes.main_logger import ErrorMsg
 from unit_tests.guard.test_guard_io import (
     _activate_guard_import_for_tests,
     _deactivate_all_rules,
@@ -41,7 +42,7 @@ def check_iptables_rules_syntax(
     restore_command: str = "ip6tables-restore" if is_ipv6 else "iptables-restore"
 
     # Options for test mode
-    command_args: List[str] = [which_command(restore_command), "--test"]
+    command_args: List[str] = [str(which_command(restore_command)), "--test"]
 
     # Use a temporary file to pass the rules to the restore tool's standard input
     try:
@@ -65,8 +66,8 @@ def check_iptables_rules_syntax(
         return False, error_message
 
 
-def test_ip4_netfilter_conv():
-    errors = []
+def test_ip4_netfilter_conv() -> None:
+    errors:List[ErrorMsg] = []
     rules, _ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp|localhost|80,443|OUT", Path(), 0),
@@ -111,8 +112,8 @@ def test_ip4_netfilter_conv():
     ) == sorted(ipfilter)
 
 
-def test_ip6_netfilter_conv():
-    errors = []
+def test_ip6_netfilter_conv() -> None:
+    errors:List[ErrorMsg] = []
     rules, _ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp|2001:db8::/32|80,443|OUT", Path(), 0),

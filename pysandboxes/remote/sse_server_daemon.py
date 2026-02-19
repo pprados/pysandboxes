@@ -4,6 +4,7 @@ import importlib
 import inspect
 import json
 import logging
+import os
 import sys
 import traceback
 from asyncio import CancelledError
@@ -16,7 +17,7 @@ from uvicorn import Server
 from ..all_rules import AllRules
 from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..sb_types import Args, Envs
-from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
+from ..tools import SyncOrAsyncFunc, set_is_in_sandbox, Environ
 from .parameters import (
     MAX_CONNECT_RETRY,
     POLLING_DELAY,
@@ -39,7 +40,7 @@ class RPCPayload(object):
     kwargs: str
 
 
-def _sse_msg(data: str):
+def _sse_msg(data: str) -> str:
     return "data:" + data + "\n\n"
 
 
@@ -47,7 +48,7 @@ async def sandbox_daemon(
     session_id: str,
     function_id: str,
     args: Args,
-    kwargs: Dict[str, Any],
+    kwargs: dict[str, Any],
 ) -> AsyncGenerator[str, None]:
     """
     This function is called by the sandbox daemon to execute a function in the sandbox.
@@ -82,7 +83,7 @@ async def sandbox_daemon(
             ",".join([f"{k}={repr(v)}" for k, v in kwargs.items()]),
         )
 
-        stdio_queue = asyncio.Queue()
+        stdio_queue:asyncio.Queue = asyncio.Queue()
 
         if use_async:
 
@@ -98,7 +99,7 @@ async def sandbox_daemon(
         else:
 
             @sandbox_loop
-            def _set_sandbox_and_catch_stdio():
+            def _set_sandbox_and_catch_stdio() -> Dict[str, Any]:
                 try:
                     import os
 
@@ -107,7 +108,7 @@ async def sandbox_daemon(
 
                     return catch_stdio(stdio_queue, function, kwargs, *args)
                 except Exception as e:
-                    logger.error(traceback.format_exc())
+                    logger.error(traceback.format_exc())  # FIXME
                     raise e
 
             fut = loop.run_in_executor(
@@ -151,7 +152,7 @@ async def sandbox_daemon(
         set_is_in_sandbox(False)
 
 
-def create_uvicorn_daemon(token: str, host: str, port: int) -> "uvicorn.Server":
+def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
     import uvicorn
     from fastapi import Body, FastAPI, HTTPException, Request
     from fastapi.responses import StreamingResponse
@@ -161,7 +162,7 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> "uvicorn.Server":
     active_requests = 0
 
     @app.get("/ping")
-    async def ping():
+    async def ping() -> dict[str, str]:
         return {"message": "OK"}
 
     @app.post("/rpc")
@@ -294,7 +295,7 @@ class SSEServerDaemon(BaseSSESandbox):
 
     def update_rules(self, *, envs: Envs, all_rules: AllRules) -> AllRules:
         return AllRules(
-            config=(),
+            config=[],  # FIXME: a quoi sert config?
             envs=envs,
             os_sandbox="",
             use_py_sandbox=all_rules.use_py_sandbox,
@@ -303,13 +304,14 @@ class SSEServerDaemon(BaseSSESandbox):
             envs_rules=(),
             socket_rules=all_rules.socket_rules,
             file_rules=all_rules.file_rules,
+            import_rules=all_rules.import_rules,
         )
 
     async def _start(
         self,
         all_rules: AllRules,
         *,
-        envs: Dict[str, str],
+        envs: Environ,
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc],
     ) -> None:
@@ -328,7 +330,7 @@ class SSEServerDaemon(BaseSSESandbox):
 
             start_event = asyncio.Event()
 
-            async def _run_daemon():
+            async def _run_daemon() -> None:
                 try:
                     start_event.set()
                     assert asyncio.get_running_loop() == get_sandbox_loop()
@@ -392,10 +394,11 @@ class SSEServerDaemon(BaseSSESandbox):
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
         logger.debug("SSEServerDaemon._shutdown()")
         await self._stop(max_pending=0)
-        self.task.cancel()
-        await self.task
+        if self.task:
+            self.task.cancel()
+            await self.task
+            self.task = None
         self.uvicorn = None
-        self.task = None
         logger.debug("Remote shutdowned")
 
     @property

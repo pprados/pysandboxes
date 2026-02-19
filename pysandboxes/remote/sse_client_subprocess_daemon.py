@@ -13,7 +13,7 @@ from asyncio import CancelledError
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
-from typing import Callable, Dict, List, NamedTuple, Optional
+from typing import Callable, Dict, List, NamedTuple, Optional, Any
 
 import aiohttp
 from aiohttp import ClientConnectorError
@@ -22,7 +22,7 @@ from ..all_rules import AllRules
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, Envs
-from ..tools import SyncOrAsyncFunc, get_callable_info
+from ..tools import SyncOrAsyncFunc, get_callable_info, Environ
 from . import main_shutdown
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 DEBUG = False
 
 
-def get_log_formatter():
+def get_log_formatter() -> str:
     root_logger = logging.getLogger()
     fmt = None
     for h in root_logger.handlers:
@@ -119,7 +119,7 @@ async def launch_sandbox(
         )
     try:
 
-        def preexec_fn():
+        def preexec_fn() -> None:
             os.umask(0o006)  # Only user:RW
 
         process = await asyncio.create_subprocess_exec(
@@ -190,8 +190,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         factor: float = RETRY_FACTOR,  # Exponential increase _factor
         max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
         reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
-        **kwargs,
-    ):
+        **kwargs:Dict[str,Any],
+    ) -> None:
         super().__init__(token, host=host, max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
         self._process = None
@@ -209,7 +209,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
     def subprocess_cmd(
         self,
         all_rules: AllRules,
-        envs: Dict[str, str],
+        envs: Environ,
         pipe_path: Path,
     ) -> Args:
         from . import main_sandbox
@@ -234,7 +234,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self,
         all_rules: AllRules,
         *,
-        envs: Dict[str, str],
+        envs: Environ,
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc],
     ) -> None:
@@ -257,11 +257,13 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self,
         all_rules: AllRules,
         *,
-        envs: Dict[str, str],
+        envs: Environ,
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc],
     ) -> None:
         errorlevel = -1
+        if self._process is None:
+            return
         try:
             self._attempts = 0
             while errorlevel != 0:
@@ -303,7 +305,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self,
         all_rules: AllRules,
         *,
-        envs: Dict[str, str],
+        envs: Environ,
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc],
         first: bool = False,
@@ -357,6 +359,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             init_fn=init_fn_ref,
         )
 
+        env:Environ
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
         else:
@@ -430,7 +433,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 logger.info(
                     "Kill the sandbox daemon (graceful_shutdown=%s)", graceful_shutdown
                 )
-                self._process.kill()
+                if self._process:
+                    self._process.kill()
         except OSError:
             pass
         except (SystemExit, KeyboardInterrupt):

@@ -8,7 +8,7 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import _reset_rules, activate_guard_files_rules
 
 
-def test_apply_dest_to_src_rule():
+def test_apply_dest_to_src_rule() -> None:
     # TODO: test tous les chemins, dont path=""
 
     cwd = str(Path.cwd())
@@ -69,7 +69,7 @@ def test_apply_dest_to_src_rule():
     ), "Refuse empty filename"
 
 
-def test_apply_src_to_dest_rules():
+def test_apply_src_to_dest_rules() -> None:
     cwd = str(Path.cwd())
     src_dir = f"{cwd}/tests"
     dst_dir = f"{cwd}/pysandboxes"
@@ -111,6 +111,6 @@ def test_apply_src_to_dest_rules():
     assert refuse_error[1] is not None
 
     assert (
-        _apply_src_to_dest_rules(f"{dst_dir}/", accept_dest=True),
+        _apply_src_to_dest_rules(f"{dst_dir}/", accept_dest=True)==
         (f"{dst_dir}", None),
     )

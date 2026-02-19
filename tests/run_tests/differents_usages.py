@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 SIZE_OF_LOOP = 1  # Try multiple calls
 
 
-def init_log_level():
+def init_log_level() -> None:
     sandboxes_level = logging.WARNING
     uvicorn_level = logging.WARNING
     format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
@@ -33,31 +33,31 @@ def init_log_level():
     logger.setLevel(logging.INFO)
 
 
-def sync_init_sandbox():
+def sync_init_sandbox() -> None:
     logger.debug("sync: 'sync_init_sandbox()' called")
     init_log_level()
 
 
-async def async_init_sandbox():
+async def async_init_sandbox() -> None:
     logger.debug("sync: 'async_init_sandbox()' called")
     init_log_level()
 
 
 @sandbox
-async def arun_in_sandbox(called_pid: int):
+async def arun_in_sandbox(called_pid: int) -> int:
     logger.info("async: annotated 'arun_in_sandbox()' called in a sandbox")
     assert called_pid != os.getpid()
     return 42
 
 
 @sandbox
-async def arun_exit():
+async def arun_exit() -> int:
     logger.debug("************** Force Daemon exited with 99")
     os._exit(99)
     return 42
 
 
-async def asynchronize_function():
+async def asynchronize_function() -> None:
     logger.info("async: Call 'asynchronize_function()'")
     rc = await arun_in_sandbox(os.getpid())
     # rc = await arun_exit()
@@ -65,13 +65,13 @@ async def asynchronize_function():
 
 
 @sandbox
-def run_in_sandbox(called_pid: int):
+def run_in_sandbox(called_pid: int) -> int:
     logger.info("sync: annotated 'run_in_sandbox()' called in a sandbox")
     assert called_pid != os.getpid()
     return 42
 
 
-def synchronize_function():
+def synchronize_function() -> None:
     logger.info("sync: Call 'synchronize_function()'")
     rc = run_in_sandbox(os.getpid())
     assert rc == 42

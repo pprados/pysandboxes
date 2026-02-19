@@ -9,13 +9,14 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, MutableSet, Optional, Tuple, Union
+from typing import Any, Dict, List, MutableSet, Optional, Tuple, Union, Iterator, Set
 
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
 from ..sb_types import Args, ConfigLine, Envs
-from ..tools import follow_links_executable, remove_comments, substitute_env_vars
+from ..tools import follow_links_executable, remove_comments, substitute_env_vars, \
+    Environ
 from .sse_client_subprocess_daemon import BaseSubProcessDaemon
 from .tools import suggest_package_installation, which_command
 
@@ -73,7 +74,7 @@ class WhiteList(MutableSet):
 
         return False
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         """
         Returns an iterator over the directory paths in the WhiteList.
         """
@@ -161,7 +162,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     def _firejail_args(
         self,
         all_rules: AllRules,
-        envs: Dict[str, str],
+        envs: Environ,
         pipe_path: Optional[Path],
     ) -> Tuple[Args, AllRules]:
         """
@@ -209,7 +210,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         whitelist = WhiteList()
 
         # Manage sys.executable
-        bin_path = set()
+        bin_path:Set[Path] = set()
         follow_links_executable(Path(sys.executable), bin_path)
         for p in bin_path:
             _follow_links(p, whitelist)
@@ -303,7 +304,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 else:
                     os.mkfifo(netfilter_file)
 
-                def publich_netfilter():
+                def publich_netfilter() -> None:
                     netfilter_file.write_text("\n".join(net_filter4))
                     if not DEBUG:
                         netfilter_file.unlink(missing_ok=True)
@@ -324,7 +325,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 else:
                     os.mkfifo(netfilter6_file)
 
-                def publich_netfilter6():
+                def publich_netfilter6() -> None:
                     netfilter6_file.write_text("\n".join(net_filter4))
                     if not DEBUG:
                         netfilter_file.unlink(missing_ok=True)
@@ -354,7 +355,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     def subprocess_cmd(
         self,
         all_rules: AllRules,
-        envs: Dict[str, str],
+        envs: Environ,
         pipe_path: Path,
     ) -> List[str]:
         run_daemon_cmd = super().subprocess_cmd(

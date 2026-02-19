@@ -23,7 +23,7 @@ class AllRules(NamedTuple):
 
 
 EmptyRules = AllRules(
-    config=(),
+    config=[],
     envs=Envs({}),
     os_sandbox="subprocess",
     use_py_sandbox=False,

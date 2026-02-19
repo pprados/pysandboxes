@@ -1,7 +1,7 @@
 # %%
 import socket
 from ipaddress import IPv4Network, IPv6Network
-from typing import List
+from typing import List, Union, Iterable
 
 from .guard_socket import Action, Direction, Kind, SocketRules
 
@@ -17,60 +17,60 @@ _map_netfilter_type = {
 }
 
 
-def _build_netfilter(
-    rule_type,
-    network_obj,
-    rule_direction_from_rule,
-    rule_ports_list,
-    dest: str,
-    ipv6: bool = False,
-) -> str:
-    if rule_type in [socket.IPPROTO_ICMP, socket.IPPROTO_ICMPV6]:
-        sdport = ""
-    elif isinstance(rule_ports_list, range):
-        if rule_ports_list != range(65535):
-            sdport = f"-m multiport --{dest}ports {rule_ports_list._start}:{rule_ports_list._stop - 1} "
-        else:
-            sdport = ""
-    else:
-        sdport = (
-            f"-m multiport --{dest}ports " + ",".join(map(str, rule_ports_list)) + " "
-        )
+# def _build_netfilter(
+#     rule_type,
+#     network_obj,
+#     rule_direction_from_rule,
+#     rule_ports_list,
+#     dest: str,
+#     ipv6: bool = False,
+# ) -> str:
+#     if rule_type in [socket.IPPROTO_ICMP, socket.IPPROTO_ICMPV6]:
+#         sdport = ""
+#     elif isinstance(rule_ports_list, range):
+#         if rule_ports_list != range(65535):
+#             sdport = f"-m multiport --{dest}ports {rule_ports_list._start}:{rule_ports_list._stop - 1} "
+#         else:
+#             sdport = ""
+#     else:
+#         sdport = (
+#             f"-m multiport --{dest}ports " + ",".join(map(str, rule_ports_list)) + " "
+#         )
+#
+#     network = ""
+#     if not ipv6:
+#         if not isinstance(network_obj, IPv4Network):
+#             return ""
+#         if network_obj.compressed != "0.0.0.0/0":
+#             network = f"-d {network_obj.compressed} "
+#     else:
+#         if not isinstance(network_obj, IPv6Network):
+#             return ""
+#         if network_obj.compressed != "::/0":
+#             network = f"-d {network_obj.compressed} "
+#     if rule_type in [socket.IPPROTO_TCP]:
+#         if dest == "d":
+#             cstate = "-m conntrack --ctstate NEW,ESTABLISHED "
+#         else:
+#             cstate = "-m conntrack --ctstate ESTABLISHED "
+#     else:
+#         cstate = ""
+#     ip_rule = f"{network}" f"{sdport}" f"{cstate}"
+#     return ip_rule
 
-    network = ""
-    if not ipv6:
-        if not isinstance(network_obj, IPv4Network):
-            return ""
-        if network_obj.compressed != "0.0.0.0/0":
-            network = f"-d {network_obj.compressed} "
-    else:
-        if not isinstance(network_obj, IPv6Network):
-            return ""
-        if network_obj.compressed != "::/0":
-            network = f"-d {network_obj.compressed} "
-    if rule_type in [socket.IPPROTO_TCP]:
-        if dest == "d":
-            cstate = "-m conntrack --ctstate NEW,ESTABLISHED "
-        else:
-            cstate = "-m conntrack --ctstate ESTABLISHED "
-    else:
-        cstate = ""
-    ip_rule = f"{network}" f"{sdport}" f"{cstate}"
-    return ip_rule
 
-
-def _build_port(rule_ports_list):
+def _build_port(rule_ports_list:Union[Iterable[int],range]) -> str:
     if isinstance(rule_ports_list, range):
         if rule_ports_list != range(65536):
             s_port = f"{rule_ports_list.start}:{rule_ports_list.stop - 1} "
         else:
-            s_port = None
+            s_port = ""
     else:
         s_port = ",".join(map(str, rule_ports_list))
     return s_port
 
 
-def _build_network(network_obj, ipv6: bool):
+def _build_network(network_obj: Union[IPv4Network,IPv6Network], ipv6: bool) -> str:
     network = ""
     if not ipv6:
         if not isinstance(network_obj, IPv4Network):

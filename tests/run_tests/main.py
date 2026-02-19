@@ -14,7 +14,7 @@ from .main_sync_with_sandboxes_call_sync import (
 )
 
 
-async def async_main():
+async def async_main() -> None:
     await main_async_with_sandboxes_call_async()
     try:
         await main_async_with_sandboxes_call_sync()
@@ -23,7 +23,7 @@ async def async_main():
         pass
 
 
-def sync_main():
+def sync_main() -> None:
     main_async_run_and_async_init()
     main_sync_with_sandboxes_call_sync()
     main_async_run_and_sync_init()

@@ -1,6 +1,6 @@
 import argparse
 import sys
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 
 def _split_python_cmd(args: List[str]) -> Tuple[List[str], List[str]]:
@@ -53,7 +53,11 @@ def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[s
     class CustomHelpFormatter(argparse.HelpFormatter):
         """A custom formatter that wraps help messages at a specified width."""
 
-        def __init__(self, prog, indent_increment=2, max_help_position=10, width=None):
+        def __init__(self,
+                     prog:str,
+                     indent_increment:int=2,
+                     max_help_position:int=10,
+                     width:Optional[int]=None):
             # We override the width here instead of in the parent class
             if width is None:
                 width = 80  # Default width, change this as needed

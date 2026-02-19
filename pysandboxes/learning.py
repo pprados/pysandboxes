@@ -4,14 +4,15 @@ from datetime import datetime
 from importlib import resources
 from multiprocessing import Lock
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple, Set, cast
 
+from .config import CONFIG_NAME
 from .main_logger import pysandboxes_logger
 
 logger = logging.getLogger(__name__)
 
 _lock = Lock()
-_learning = set()
+_learning:Set[Any] = set()
 
 _learning_path: Optional[Path] = None
 
@@ -24,37 +25,38 @@ def generate_config_from_learning() -> None:
     from .guard_socket import generate_rules as socket_generate_rules
 
     # Manage old files
-    learning_path, old_learning_path = _manage_olds_file(_learning_path)
+    learning_path=_learning_path or Path(CONFIG_NAME)
+    learning_path, old_learning_path = _manage_olds_file(learning_path)
 
     # Manage envs rules
     env_rules = env_generate_rules()
     if env_rules:
         all_env_rules = "\n".join(env_rules)
     else:
-        all_env_rules = None
+        all_env_rules = ""
 
     # Manage import rules
     import_rules = import_generate_rules(_learning)
     if import_rules:
         all_import_rules = "\n".join(import_rules)
     else:
-        all_import_rules = None
+        all_import_rules = ""
 
     # Manage files rules
     file_rules = file_generate_rules(_learning)
     if file_rules:
         all_file_rules = "\n".join(file_rules)
     else:
-        all_file_rules = None
+        all_file_rules = ""
 
     # Manage sockets rules
     socket_rules = socket_generate_rules(_learning)
     if socket_rules:
         all_socket_rules = "\n".join(socket_rules)
     else:
-        all_socket_rules = None
+        all_socket_rules = ""
 
-    replaces = {
+    replaces:dict[str,str] = {
         # "learning_repeat": f"learn={learning_path}",
         "learning_guard_envs": all_env_rules,
         "learning_guard_import": all_import_rules,
@@ -72,8 +74,8 @@ def generate_config_from_learning() -> None:
     else:
         # Load template
         with resources.as_file(
-            resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
-            / "py-sandbox.template"
+                resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
+                / "py-sandbox.template"
         ) as resource_path:
             all_lines = resource_path.read_text().split("\n")
 
@@ -120,7 +122,7 @@ def generate_config_from_learning() -> None:
         learning_path.write_text("\n".join(all_lines))
 
 
-def _manage_olds_file(_learning_path):
+def _manage_olds_file(_learning_path:Path) -> Tuple[Path, Optional[Path]]:
     old_learning_path = None
     learning_path = _learning_path
     if learning_path.exists() and not learning_path.is_dir():
@@ -131,8 +133,8 @@ def _manage_olds_file(_learning_path):
             if not backup.exists():
                 break
             i += 1
-        old_learning_path = backup
-    return learning_path, old_learning_path
+        old_learning_path = Path(backup)
+    return Path(learning_path), old_learning_path
 
 
 def activate_learning(config_file: Path) -> None:
@@ -140,12 +142,12 @@ def activate_learning(config_file: Path) -> None:
     _learning_path = config_file
 
 
-def stop_learning_mode():
+def stop_learning_mode() -> None:
     global _learning_path
     _learning_path = None
 
 
-def is_learning_mode():
+def is_learning_mode() -> bool:
     global _learning_path
     return _learning_path is not None
 

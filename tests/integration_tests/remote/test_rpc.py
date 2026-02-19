@@ -37,7 +37,7 @@ def sync_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-def test_sync_function():
+def test_sync_function() -> None:
     result_sync = sync_function("a", b="b")
     assert result_sync == "a b"
 
@@ -50,26 +50,26 @@ async def async_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-async def test_async_function():
+async def test_async_function() -> None:
     result_async = await async_function("a", b="b")
     assert result_async == "a b"
 
 
 @sandbox()
-def sync_function_with_error(a: int, b: int) -> str:
+def sync_function_with_error(a: int, b: int) -> float:
     return a / b
 
 
-def test_sync_function_with_error():
+def test_sync_function_with_error() -> None:
     with pytest.raises(ZeroDivisionError):
         sync_function_with_error(10, 0)
 
 
 @sandbox()
-async def async_function_with_error(a: int, b: int) -> str:
+async def async_function_with_error(a: int, b: int) -> float:
     return a / b
 
 
-async def test_async_function_with_error():
+async def test_async_function_with_error() -> None:
     with pytest.raises(ZeroDivisionError):
         await async_function_with_error(10, 0)

@@ -60,7 +60,7 @@ class WrapperIO(io.TextIOBase):
         self._context = context
         self._old = None
 
-    def set_context(self, new_textio: io.TextIOBase):
+    def set_context(self, new_textio: io.TextIOBase) -> None:
         if not self._old:
             self._old = self._context.get()
             self._context.set(new_textio)
@@ -69,7 +69,7 @@ class WrapperIO(io.TextIOBase):
     def __getattr__(self, name: str) -> Any:
         # Called only if attribute not found the usual way
         if name in ("write", "flush", "_context", "_old"):
-            return super().__getattr__(name)
+            return super().__getattr__(name)  # type: ignore[misc]
         return getattr(self._old, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -79,7 +79,7 @@ class WrapperIO(io.TextIOBase):
         else:
             setattr(self._old, name, value)
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self._old:
             self._context.set(self._old)
 
@@ -108,14 +108,14 @@ def catch_stdio(
 
 
 async def acatch_stdio(
-    queue: Optional[TQueue],
+    sync_or_async_queue: Optional[TQueue],
     fn: Callable,
     kwargs: Dict[str, Any],
     *args: Any,
 ) -> Dict[str, Any]:
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
-    captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=queue)
-    captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=queue)
+    captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=sync_or_async_queue)
+    captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=sync_or_async_queue)
     fn_result: Any = None
 
     async def run_in_context() -> Dict[str, Any]:
@@ -123,8 +123,8 @@ async def acatch_stdio(
         # Allows modification of eval_result from outer scope
         nonlocal fn_result
         # Set the context variables for the current context
-        sys.stdout.set_context(captured_stdout)
-        sys.stderr.set_context(captured_stderr)
+        sys.stdout.set_context(captured_stdout)  # type: ignore[union-attr]
+        sys.stderr.set_context(captured_stderr)  # type: ignore[union-attr]
         result: Dict[str, Any]
 
         try:
@@ -135,21 +135,22 @@ async def acatch_stdio(
             else:
                 fn_result = fn(*args, **kwargs)
             result = {"result": fn_result}
-            if queue:
-                if isinstance(queue, asyncio.Queue):
-                    queue.put_nowait(result)
-                else:
-                    queue.put(result)
+            if sync_or_async_queue is not None:
+                if isinstance(sync_or_async_queue, asyncio.Queue):
+                    sync_or_async_queue.put_nowait(result)
+                elif isinstance(sync_or_async_queue, queue.Queue):
+                    sync_or_async_queue.put(result)
             return result
         except Exception as e:
             import tblib
 
             result = {"exception": (e, tblib.Traceback(e.__traceback__))}
 
-            if isinstance(queue, asyncio.Queue):
-                queue.put_nowait(result)
-            else:
-                queue.put(result)
+            if sync_or_async_queue is not None:
+                if isinstance(sync_or_async_queue, asyncio.Queue):
+                    sync_or_async_queue.put_nowait(result)
+                elif isinstance(sync_or_async_queue, queue.Queue):
+                    sync_or_async_queue.put(result)
             return result
 
     result = await run_in_context()
@@ -163,11 +164,11 @@ def _thread_catch_stream(
     fn: Callable,
     code_string: str,
     *,
-    globals_dict: dict = None,
-    locals_dict: dict = None,
+    globals_dict: dict | None = None,
+    locals_dict: dict | None = None,
     executor: Executor,
 ) -> None:
-    stream_queue = queue.Queue()
+    stream_queue:queue.Queue = queue.Queue()
     fut = executor.submit(
         fn,
         code_string,

@@ -4,7 +4,7 @@ import pytest
 from unit_tests import _activate_guard_import_for_tests, _deactivate_all_rules
 
 
-def init_log_level():
+def init_log_level() -> None:
     sandboxes_level = logging.DEBUG
     uvicorn_level = logging.WARNING
     format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"

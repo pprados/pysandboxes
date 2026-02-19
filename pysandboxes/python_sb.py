@@ -15,18 +15,17 @@ from pysandboxes.remote.python_in_sb import convert_extra_rules
 from pysandboxes.remote.sse_client_subprocess_daemon import (
     BaseSubProcessDaemon,
     DaemonParameters,
-    find_free_port,
     get_log_formatter,
     launch_sandbox,
 )
 from pysandboxes.sb_types import Envs
-
+from pysandboxes.tools import Environ
 from .remote.parse_cpython_args import parse_python_cmd_line
 
 logger = logging.getLogger(__name__)
 
 
-def _debug_log():
+def _debug_log() -> None:
     level = logging.WARNING  # FIX_RELEASE
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     logging.basicConfig(level=level, format=format)
@@ -68,9 +67,9 @@ def main() -> int:
         from importlib.resources import files
 
         if (
-            not "/" in str(config_path)
-            and len(python_cmd) >= 2
-            and python_cmd[0] == "-m"
+                not "/" in str(config_path)
+                and len(python_cmd) >= 2
+                and python_cmd[0] == "-m"
         ):
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
@@ -82,7 +81,7 @@ def main() -> int:
 
         all_rules = load_and_parse_config(
             config_path=config_path,
-            envs=dict(os.environ),  # Use current environ
+            envs=os.environ,  # Use current environ
             **extra_rules,
         )
     except ConfigSyntaxError as e:
@@ -115,7 +114,7 @@ def main() -> int:
         pipe_path.unlink(missing_ok=True)
         cmd = os_provider.subprocess_cmd(
             all_rules,
-            envs=cast(Dict[str, str], os.environ),
+            envs=os.environ,
             pipe_path=pipe_path,
         )
         python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
@@ -129,12 +128,13 @@ def main() -> int:
             port=0,
             init_fn="",
         )
+        env:Environ
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
         else:
             env = all_rules.envs
 
-        async def launch_and_wait():
+        async def launch_and_wait() -> int:
             process = await launch_sandbox(
                 cmd + python_cmd,
                 pipe_path,
@@ -152,7 +152,10 @@ if __name__ == "__main__":
     try:
         rc = main()
     except SystemExit as e:
-        rc = int(e.code)
+        if e.code is not None:
+            rc = int(e.code)
+        else:
+            rc = 0
     except KeyboardInterrupt:
         rc = 0
     except Exception as e:

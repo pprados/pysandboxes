@@ -14,7 +14,7 @@ from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
 from .remote.task_daemon import TaskDaemon
-from .tools import SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox
+from .tools import SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox, Environ
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,9 @@ _startup_counter = 0  # Number of time the daemon has been started
 
 async def stop_incoming_call() -> None:
     # Stop to accept incoming call and wait the end of the current call
-    _current_daemon._accept_incoming = False
+    global _current_daemon
+    if _current_daemon:
+        _current_daemon._accept_incoming = False
 
 
 def is_accept_incoming_call() -> bool:
@@ -53,7 +55,7 @@ def is_accept_incoming_call() -> bool:
 async def async_start_daemon(
     all_rules: AllRules,
     *,
-    envs: Dict[str, str],
+    envs: Environ,
     log_level: int,
     init_fn: Optional[SyncOrAsyncFunc],
     python_args: Optional[list[str]] = None,
@@ -77,7 +79,7 @@ _start_lock = threading.Lock()
 
 async def _async_start_daemon(
     all_rules: AllRules,
-    envs: Dict[str, str],
+    envs: Environ,
     log_level: int,
     init_fn: Optional[SyncOrAsyncFunc],
     python_args: Optional[list[str]] = None,
@@ -113,7 +115,7 @@ async def _async_start_daemon(
             raise e
 
 
-async def async_stop_daemon(max_pending: int = 0):
+async def async_stop_daemon(max_pending: int = 0) -> None:
     """
     Asynchronize version to daemon_shutdown the current daemon.
     Return when the daemon is daemon_shutdown.
@@ -127,7 +129,7 @@ async def async_stop_daemon(max_pending: int = 0):
         await _current_daemon._stop(max_pending)
 
 
-async def async_shutdown_daemon(graceful_shutdown: bool = True):
+async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
     """
     Asynchronize version to daemon_shutdown the current daemon.
     Return when the daemon is daemon_shutdown.
@@ -153,7 +155,7 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True):
 
 def start_daemon(
     all_rules: AllRules,
-    envs: Union[Dict[str, str], os._Environ],
+    envs: Environ,
     log_level: int,
     init_fn: Optional[SyncOrAsyncFunc] = None,
     python_args: Optional[list[str]] = None,
@@ -178,7 +180,7 @@ def start_daemon(
         loop = get_sandbox_loop()
         start_event = threading.Event()
 
-        async def _start_daemon_and_signal():
+        async def _start_daemon_and_signal() -> None:
             await _async_start_daemon(
                 all_rules,
                 envs=envs,
@@ -226,7 +228,7 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
         stop_event = threading.Event()
 
         @sandbox_loop
-        async def _async_shutdown_daemon():
+        async def _async_shutdown_daemon() -> None:
             await async_shutdown_daemon()
             stop_event.set()
             reset_sandbox_loop()

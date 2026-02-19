@@ -46,8 +46,8 @@ class BaseSSESandbox(BaseDaemon):
         *,
         host: str,
         max_connect_retry: int,
-        **kwargs,
-    ):
+        **kwargs:Dict[str,Any],
+    ) -> None:
         super().__init__(token)
         self.port = 0
         self.base_url = f"http://{host}:{{PORT}}"
@@ -128,7 +128,7 @@ class BaseSSESandbox(BaseDaemon):
         func: Callable[..., Any],
         _force_incomming: bool,
         *args: Any,
-        **kwargs: Any,
+        **kwargs: Dict[str,Any],
     ) -> Any:
         if is_in_sandbox():
             return func(*args, **kwargs)

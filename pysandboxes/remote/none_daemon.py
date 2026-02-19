@@ -1,10 +1,10 @@
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Dict
 
 from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
 from ..sb_types import Envs
-from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
+from ..tools import SyncOrAsyncFunc, set_is_in_sandbox, Environ
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +16,12 @@ class NoneDaemon(BaseDaemon):
     #     super().__init__(token,**kwargs)
 
     async def _start(
-        self,
-        all_rules: AllRules,
-        *,
-        log_level: int,
-        envs: Optional[Envs],
-        init_fn: Optional[SyncOrAsyncFunc],
+            self,
+            all_rules: "AllRules",
+            *,
+            envs: Environ,
+            log_level: int,
+            init_fn: Optional[SyncOrAsyncFunc],
     ) -> None:
         self._is_started = True
         set_is_in_sandbox(True)  # Simulate the presence of sandbox
@@ -44,15 +44,16 @@ class NoneDaemon(BaseDaemon):
     async def join(self) -> int:
         raise NotImplementedError
 
-    def update_rules(self, *, envs: Envs, all_rules: "AllRules") -> "AllRules":
-        return all_rules
-
     async def async_call_in_sandbox(
         self, func: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> Any:
         raise NotImplementedError
 
     def call_in_sandbox(
-        self, func: Callable[..., Any], _force_incoming: bool, *args: Any, **kwargs: Any
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: Dict[str,Any],
     ) -> Any:
         raise NotImplementedError

@@ -6,7 +6,7 @@ import sys
 import types
 from importlib import resources
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, cast
+from typing import Dict, List, Optional, Set, Tuple, cast, Any, Mapping
 
 from . import (
     guard_envs,
@@ -24,7 +24,7 @@ from .guard_import import remove_modules
 from .learning import activate_learning
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
-from .tools import remove_config_comments, substitute_config_env_vars
+from .tools import remove_config_comments, substitute_config_env_vars, Environ
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
 def load_and_parse_config(
     config_path: Optional[Path] = None,
     *,
-    envs: Optional[Dict[str, str]] = None,
-    **extra_rules,
+    envs: Optional[Environ] = None,
+    **extra_rules:Mapping[str,Any],
 ) -> AllRules:
     """
     Reads and parses the configuration file for the sandbox.
@@ -130,7 +130,7 @@ def load_and_parse_config(
 
 def _search_module_config(config_path: Optional[Path]) -> Path:
     if not config_path:
-        config_path = CONFIG_NAME
+        config_path = Path(CONFIG_NAME)
     # Try to find config filename
     pysb_module_name = __name__.split(".", 1)[0]
     # Search the module of the caller
@@ -194,19 +194,18 @@ def parse_config(
     config: ConfigLines,
     config_path: Path,
     *,
-    envs: Optional[Dict[str, str]] = None,
+    envs: Optional[Environ] = None,
 ) -> AllRules:
     if envs is None:
         envs = os.environ
-    ienvs = Envs(envs)
     errors: List[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
     config = _parse_include({config_path}, config)
 
     # 2. Parse the rules, step by step
-    envs_rules, sandbox_env, others = guard_envs.parse_rules(config, ienvs, errors)
-    others = substitute_config_env_vars(others, ienvs)  # with main envs
+    envs_rules, sandbox_env, others = guard_envs.parse_rules(config, envs, errors)
+    others = substitute_config_env_vars(others, envs)  # with main envs
 
     # 3. Parse others rules
     (
@@ -258,7 +257,7 @@ def parse_config(
 
 def activate_sandboxes(
     all_rules: AllRules,
-    envs: Optional[Dict[str, str]] = None,
+    envs: Optional[Environ] = None,
 ) -> None:
     if envs is None:
         envs = os.environ

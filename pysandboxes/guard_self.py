@@ -1,39 +1,42 @@
 from types import ModuleType
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Tuple, cast, MutableMapping
 from weakref import WeakKeyDictionary
 
 from .e import RuleAttributeError
 from .immutable_dict import ImmutableDict
+
 
 # TODO: limit recursion
 # TODO: limit memory
 
 
 class GuardModule(ModuleType):
-    _states: Dict[ModuleType, ImmutableDict[str, Any]] = WeakKeyDictionary()
+    _states: MutableMapping[ModuleType,
+    ImmutableDict[str, Any]] = WeakKeyDictionary()
 
     __slot__ = ()
 
-    def __new__(cls, name: str, *args, **kwargs):
+    def __new__(cls, name: str, *args: Any, **kwargs: Dict[str, Any]) -> Any:
         if "_original" in kwargs and "_guard_attributs" in kwargs:
             return super().__new__(GuardModule, *args, **kwargs)
         else:
             if cls == GuardModule:
                 # Return, not guarded module
                 obj = super().__new__(ModuleType)
-                obj.__init__(name)
+                obj.__init__(name)  # type: ignore[misc]
                 return obj
             else:
                 obj = super().__new__(cls)
-                super(ModuleType, obj).__init__(name)
+                super(ModuleType, obj).__init__()  # type: ignore[misc]
+                obj.name = name
                 return obj
 
     def __init__(
-        self,
-        name,
-        *,
-        _original: ModuleType = None,
-        _guard_attributs: Tuple[str, ...] = None,
+            self,
+            name: str,
+            *,
+            _original: ModuleType | None = None,
+            _guard_attributs: Tuple[str, ...] | None = None,
     ):
         super().__init__(name)
         if _original:
@@ -75,5 +78,6 @@ def patch_rules() -> Dict[str, Callable]:
 def activate_guard() -> None:
     import sys
 
-    sys.meta_path = tuple(sys.meta_path)  # Change to immutable list
+    # Change to immutable list
+    sys.meta_path = cast(list[Any], tuple(sys.meta_path))
     sys.modules["sys"] = _global_patch_in_sys_module(sys.modules["sys"])

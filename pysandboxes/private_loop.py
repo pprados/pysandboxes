@@ -10,7 +10,7 @@ from _weakref import ReferenceType
 
 logger = logging.getLogger(__name__)
 
-_background_loop_ref: ReferenceType[AbstractEventLoop] = None
+_background_loop_ref: Optional[ReferenceType[AbstractEventLoop]] = None
 
 _lock = threading.Lock()
 
@@ -47,7 +47,7 @@ def _ensure_background_loop(new_loop: bool = False) -> Optional[AbstractEventLoo
             logger.debug("Create a private event loop for sandbox without async call")
 
         loop = asyncio.new_event_loop()
-        loop.__pysandbox__ = True
+        loop.__pysandbox__ = True  # type: ignore[attr-defined]
         _background_loop_ref = weakref.ref(loop)
         asyncio.set_event_loop(loop)
 
@@ -102,7 +102,7 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-def reset_sandbox_loop():
+def reset_sandbox_loop() -> None:
     """Remove the sandbox loop"""
     global _background_loop_ref
     with _lock:

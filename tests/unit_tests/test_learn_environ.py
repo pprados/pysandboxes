@@ -2,7 +2,7 @@ from pysandboxes.guard_envs import LearnEnviron
 from pysandboxes.tools import set_is_in_sandbox
 
 
-def test_environ():
+def test_environ() -> None:
     LearnEnviron._instance = None  # Reset singleton
     try:
         set_is_in_sandbox(True)

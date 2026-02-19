@@ -8,7 +8,7 @@ from unit_tests.guard.test_guard_io import _reset_rules
 from pysandboxes import RuleAttributeError
 
 
-def test_escape_with_closure():
+def test_escape_with_closure() -> None:
     # Find the _original version of io.open (possible if the code is in Python)
     import io
 
@@ -18,7 +18,7 @@ def test_escape_with_closure():
 
 
 @pytest.mark.skip
-def test_escape_with_subclasses():
+def test_escape_with_subclasses() -> None:
     # TODO Try to block the __subclasses__ access
     def find_all_subclasses(cls: type) -> Set[type]:
         all_subclasses: Set[type] = set()
@@ -45,11 +45,11 @@ def test_escape_with_subclasses():
     found_modules = get_subclasses_modules(find_all_subclasses(object))
     import_module = found_modules["pysandboxes.guard_import"]
     with pytest.raises(RuleAttributeError):
-        import_module._rules = ()  # Remove rules
+        import_module._rules = ()  # type: ignore[attr-defined]
 
 
 @pytest.mark.skip
-def test_escape_with_meta_path():
+def test_escape_with_meta_path() -> None:
     import sys
 
     with pytest.raises(RuleAttributeError):

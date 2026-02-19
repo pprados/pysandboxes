@@ -9,23 +9,24 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Dict,
     Iterator,
     List,
     Optional,
     Set,
     Tuple,
-    Union,
+    Union, Mapping,
 )
 
-from .sb_types import ConfigLine, ConfigLines, Envs
+from .sb_types import ConfigLine, ConfigLines
+
+Environ = Mapping[str, str] | os._Environ
 
 
-def resolve_env_variables(s: str, envs: Union[Dict[str, str], Envs]):
+def resolve_env_variables(s: str, envs: Environ) -> str:
     # Motif pour capturer les expressions ${VAR} ou ${VAR:=default}
     pattern = re.compile(r"\$\{([^{}:=]+)(?::=([^{}]*))?\}")
 
-    def replace(match):
+    def replace(match: re.Match[str]) -> str:
         var_name = match.group(1)
         default_value = match.group(2)
 
@@ -40,11 +41,14 @@ def resolve_env_variables(s: str, envs: Union[Dict[str, str], Envs]):
     return s
 
 
-def substitute_env_vars(lines: List[str], env_vars: Dict[str, str]) -> List[str]:
+def substitute_env_vars(lines: List[str],
+                        env_vars: Environ
+                        ) -> List[str]:
     return [resolve_env_variables(line, env_vars) for line in lines]
 
 
-def substitute_config_env_vars(lines: ConfigLines, env_vars: Envs) -> ConfigLines:
+def substitute_config_env_vars(lines: ConfigLines,
+                               env_vars: Environ) -> ConfigLines:
     return [
         ConfigLine(resolve_env_variables(line, env_vars), path, ln)
         for line, path, ln in lines
@@ -91,7 +95,7 @@ def _remove_comment(line: str) -> str:
     Returns:
         Line without comment
     """
-    result: str = []
+    result: List[str] = []
     in_quotes: bool = False
     quote_char: Optional[str] = None
     i: int = 0
@@ -146,9 +150,9 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 
 def find_config(
-    filename: str,
-    raise_error_if_not_found: bool = False,
-    usecwd: bool = False,
+        filename: str,
+        raise_error_if_not_found: bool = False,
+        usecwd: bool = False,
 ) -> str:
     """
     Search in increasingly higher folders for the given file
@@ -157,7 +161,7 @@ def find_config(
     """
 
     # TODO: search in module of the caller
-    def _is_interactive():
+    def _is_interactive() -> bool:
         """Decide whether this is running in a REPL or IPython notebook"""
         if hasattr(sys, "ps1") or hasattr(sys, "ps2"):
             return True
@@ -167,7 +171,7 @@ def find_config(
             return False
         return not hasattr(main, "__file__")
 
-    def _is_debugger():
+    def _is_debugger() -> bool:
         return sys.gettrace() is not None
 
     if usecwd or _is_interactive() or _is_debugger() or getattr(sys, "frozen", False):
@@ -179,7 +183,7 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-            frame.f_code.co_filename
+                frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back
@@ -198,9 +202,7 @@ def find_config(
 
 
 # %% -----------------------
-_is_in_sandbox = False
 
-# Use a context to separete the thread with the sandbox and the thread in the differents layers
 _sandboxed = contextvars.ContextVar("sanboxed", default=0)
 _is_in_sandbox: int = 0
 
@@ -280,7 +282,7 @@ mixed_sync_and_async_error = (
 )
 
 
-def check_mixte_async_async():
+def check_mixte_async_async() -> None:
     try:
         if asyncio.get_running_loop():
             raise RuntimeError(mixed_sync_and_async_error)
@@ -296,7 +298,7 @@ def follow_links_executable(executable: Path, all_paths: Set[Path]) -> None:
         if str(executable.parent.parent) not in all_paths:
             all_paths.add(executable.parent.parent)
         else:
-            return all_paths
+            return
     else:
         if executable not in all_paths:
             all_paths.add(executable)

@@ -19,7 +19,7 @@ _cli = {
     "cli",
 }
 
-__all__ = _api | _exception
+__all__ = list(_api | _exception)
 
 
 class LazySandboxesProxy:
@@ -27,7 +27,7 @@ class LazySandboxesProxy:
     Manage circular import
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Le module n'est pas encore importé, juste son nom est stocké
         self.modules = None
 
@@ -53,5 +53,5 @@ class LazySandboxesProxy:
 _sandboxes = LazySandboxesProxy()
 
 
-def __getattr__(name):
+def __getattr__(name:str) -> Any:
     return _sandboxes.__getattr__(name)

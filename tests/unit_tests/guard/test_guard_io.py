@@ -2,18 +2,19 @@ import logging
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Iterator, Any
 
 import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.guard_files import BindRule, activate_guard, parse_rules
 from pysandboxes.guard_import import remove_modules
+from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
 from pysandboxes.tools import follow_links_executable
 
 
-def _deactivate_all_rules():
+def _deactivate_all_rules() -> None:
     from pysandboxes.guard_files import _deactivate_guard_files
     from pysandboxes.guard_import import _deactivate_guard_import
     from pysandboxes.guard_socket import _deactivate_guard_sockets
@@ -23,7 +24,7 @@ def _deactivate_all_rules():
     _deactivate_guard_import()
 
 
-def _activate_guard_import_for_tests():
+def _activate_guard_import_for_tests() -> None:
     from pysandboxes.guard_files import patch_rules as file_patch_rules
     from pysandboxes.guard_import import (
         activate_guard_import,
@@ -44,18 +45,18 @@ def _activate_guard_import_for_tests():
     )
 
 
-def _reset_rules():
+def _reset_rules() -> Iterator[Any]:
     yield
     _deactivate_all_rules()
 
 
 @pytest.fixture(autouse=True)
-def reset_rules():
+def reset_rules() -> None:
     _reset_rules()
 
 
 @pytest.fixture
-def files(tmp_path) -> Dict[str, Path]:
+def files() -> Dict[str, Path]:
     # Create test files and symlinks
     # It's executer without patch.
     tmp_path = Path("/tmp/test")
@@ -131,7 +132,7 @@ import os
 if "PYTEST_RUN_CONFIG" in os.environ:
 
     def activate_guard_files_rules(rules: ConfigLines) -> None:
-        errors = []
+        errors:List[ErrorMsg] = []
         _deactivate_all_rules()
         file_rules, _ = parse_rules(rules, errors)
         assert not errors
@@ -168,7 +169,7 @@ if "PYTEST_RUN_CONFIG" in os.environ:
         activate_guard(tuple(list(file_rules) + new_file_rules))
 
 
-def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
+def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]) -> None:
     rules = [ConfigLine(f"ignore={files['ignore']}", Path(), 0)]
     activate_guard_files_rules(rules)
 
@@ -178,7 +179,7 @@ def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]):
         io.open(files["ignore"])
 
 
-def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, Path]):
+def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, Path]) -> None:
     rules = [ConfigLine(f"ignore={files['ignore']}", Path(), 0)]
     activate_guard_files_rules(rules)
 
@@ -188,7 +189,7 @@ def test_io_open_code_ignore_rule_blocks_open_code_file_access(files: Dict[str, 
         io.open_code(str(files["ignore"]))
 
 
-def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]):
+def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]) -> None:
     rules = [ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)]
     activate_guard_files_rules(rules)
     # Access using the dest path should redirect to src
@@ -201,7 +202,7 @@ def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]):
     assert content == "Content"
 
 
-def test_io_open_write(files: Dict[str, Path]):
+def test_io_open_write(files: Dict[str, Path]) -> None:
     rules = [ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)]
     activate_guard_files_rules(rules)
     target_path = files["bind_dest"] / "write.txt"
@@ -214,7 +215,7 @@ def test_io_open_write(files: Dict[str, Path]):
     os.remove(str(target_path))
 
 
-def test_io_open_refuse_write(files: Dict[str, Path]):
+def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
     rules = [ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)]
     activate_guard_files_rules(rules)
     target_path = files["bind_dest"] / "write.txt"
@@ -226,7 +227,7 @@ def test_io_open_refuse_write(files: Dict[str, Path]):
             f.write("sample")
 
 
-def test_io_open_visible_and_invisible_files(files: Dict[str, Path]):
+def test_io_open_visible_and_invisible_files(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),

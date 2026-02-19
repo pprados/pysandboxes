@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from asyncio import AbstractEventLoop
 from pathlib import Path
 from typing import Iterator
 
@@ -14,7 +15,7 @@ from pysandboxes.remote.tools import which_command
 
 # See https://github.com/tortoise/tortoise-orm/issues/638
 @pytest.yield_fixture(scope="module")
-def event_loop(request):
+def event_loop() -> Iterator[AbstractEventLoop]:
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
@@ -43,7 +44,7 @@ def sync_function(a: str, b: str) -> str:
 
 
 @pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")
-def test_sync_function():
+def test_sync_function() -> None:
     result_sync = sync_function("a", b="b")
     assert result_sync == "a b"
 
@@ -57,6 +58,6 @@ async def async_function(a: str, b: str) -> str:
 
 
 @pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")
-async def test_async_function():
+async def test_async_function() -> None:
     result_async = await async_function("a", b="b")
     assert result_async == "a b"

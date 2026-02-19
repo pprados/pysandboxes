@@ -1,9 +1,10 @@
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from .sb_types import Envs
-from .tools import SyncOrAsyncFunc
+from .tools import SyncOrAsyncFunc, Environ
 
 if TYPE_CHECKING:
     from .all_rules import AllRules
@@ -22,8 +23,8 @@ class BaseDaemon(ABC):
     def __init__(
         self,
         token: str,
-        **kwargs,
-    ):
+        **kwargs:Dict[str,Any],
+    ) -> None:
         self._is_started = False
         self._token = token
         self._accept_incoming = False
@@ -46,7 +47,7 @@ class BaseDaemon(ABC):
         self,
         all_rules: "AllRules",
         *,
-        envs: Dict[str, str],
+        envs: Environ,
         log_level: int,
         init_fn: Optional[SyncOrAsyncFunc],
     ) -> None:
@@ -61,10 +62,6 @@ class BaseDaemon(ABC):
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
         """Muse be called via async_shutdown_daemon()"""
         self._accept_incoming = False
-
-    @abstractmethod
-    def update_rules(self, *, envs: Envs, all_rules: "AllRules") -> "AllRules":
-        raise NotImplementedError
 
     @property
     def token(self) -> Optional[str]:
@@ -86,6 +83,6 @@ class BaseDaemon(ABC):
         func: Callable[..., Any],
         _force_incomming: bool,
         *args: Any,
-        **kwargs: Any,
+        **kwargs: Dict[str,Any],
     ) -> Any:
         raise NotImplementedError

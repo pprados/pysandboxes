@@ -10,7 +10,7 @@ config_path = Path(__file__).parent.parent / "config" / "test.py-sandboxes"
 assert config_path.exists()
 
 
-def init_sandbox():
+def init_sandbox() -> None:
     logger.info("init_sandbox called")
 
 
@@ -53,12 +53,12 @@ async def bridge_async_to_sync(config_path: Path) -> None:
 
 
 @sandbox
-def sync_print_stdin_stdout():
+def sync_print_stdin_stdout() -> None:
     print("hello")
     print("world", file=sys.stderr)
 
 
 @sandbox
-async def async_print_stdin_stdout():
+async def async_print_stdin_stdout() -> None:
     print("hello")
     print("world", file=sys.stderr)

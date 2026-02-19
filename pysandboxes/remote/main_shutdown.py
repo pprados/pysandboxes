@@ -18,7 +18,7 @@ async def daemon_shutdown(graceful_shutdown: bool) -> None:
         # Stop all current jobs
         await async_stop_daemon(max_pending=1)  # 1 for me
 
-        async def _delay_for_send_the_response():
+        async def _delay_for_send_the_response() -> None:
             time.sleep(POLLING_DELAY)
             # And after, daemon_shutdown the daemon and exit
             await async_shutdown_daemon()

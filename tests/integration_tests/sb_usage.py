@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from pprint import pprint
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
-from typing import Dict
+from typing import Dict, List
 
 from pysandboxes import SandBoxError, sandbox, sandboxes
 from pysandboxes.learning import is_learning_mode
@@ -14,7 +14,7 @@ from pysandboxes.remote.python_in_sb import convert_extra_rules
 logger = logging.getLogger(__name__)
 
 
-def init_log_level():
+def init_log_level() -> None:
     sandboxes_level = logging.WARNING
     uvicorn_level = logging.WARNING
     format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
@@ -29,7 +29,7 @@ def init_log_level():
 
 
 @sandbox
-async def arun_in_sandbox():
+async def arun_in_sandbox() -> int:
     logger.info("Run 'arun_in_sandbox()' in sandbox")
     _test_envs()
     _test_files()
@@ -39,7 +39,7 @@ async def arun_in_sandbox():
 
 
 @sandbox
-def run_in_sandbox():
+def run_in_sandbox() -> int:
     logger.info("Run 'run_in_sandbox()' in sandbox")
 
     _test_network()
@@ -52,7 +52,7 @@ def run_in_sandbox():
     return 42
 
 
-def _test_envs():
+def _test_envs() -> None:
     if "PYENV_ROOT" in os.environ:
         try:
             os.listdir(os.environ.get("PYENV_ROOT"))
@@ -70,7 +70,7 @@ def _test_envs():
     assert os.environ["HOME"]
 
 
-def _test_network():
+def _test_network() -> None:
     # tcp connexion
     import socket
 
@@ -105,7 +105,7 @@ def _test_network():
         sock.bind(("::1", 0))
 
 
-def _test_files():
+def _test_files() -> None:
     print("---- Test files")
     learning = is_learning_mode()
     try:
@@ -164,34 +164,34 @@ def _test_files():
         logger.exception("tempfile.NamedTemporaryFile")
 
 
-async def ainit_sandbox():
+async def ainit_sandbox() -> None:
     logger.error("INIT Daemon")
 
 
-async def async_manager():
+async def async_manager() -> None:
     for i in range(0, 2):
         async with sandboxes(init_fn=init_sandbox):
             assert await arun() == 42
 
 
 # %% --------------------------------------
-def init_sandbox():
+def init_sandbox() -> None:
     logger.debug("INIT sandbox")
     init_log_level()
 
 
-async def async_init_sandbox():
+async def async_init_sandbox() -> None:
     init_sandbox()
 
 
-async def arun():
+async def arun() -> int:
     rc = await arun_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42
     return rc
 
 
-def run():
+def run() -> int:
     rc = run_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42
@@ -199,15 +199,15 @@ def run():
 
 
 @sandbox
-def _call_llm(token: str):
+def _call_llm(token: str) -> None:
     print(f"{token=}")
 
 
-def call_llm():
+def call_llm() -> None:
     _call_llm(token=os.environ["USER"])
 
 
-async def main(argv: Dict[str, str]) -> int:
+async def main(argv: List[str]) -> int:
     init_log_level()
     os.environ["LLM_TOKEN"] = "abc"
 
@@ -239,6 +239,7 @@ async def main(argv: Dict[str, str]) -> int:
         # print("----------------")
         # pysandboxes.run(arun(),init_fn=init_sandbox)
         # print("----------------")
+    return 0
 
 
 # from pysandboxes.sandboxes_api import sandboxes

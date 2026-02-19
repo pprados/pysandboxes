@@ -3,7 +3,7 @@ import pytest
 from pysandboxes.immutable_dict import ImmutableDict
 
 
-def test_immutable_dict():
+def test_immutable_dict() -> None:
     # Création d'une instance à partir d'un dictionnaire
     original_dict = {"a": 1, "b": 2, "c": 3}
     my_immutable_dict = ImmutableDict(original_dict)
@@ -28,8 +28,8 @@ def test_immutable_dict():
         my_immutable_dict["a"] = 10
 
 
-def test_empty_immutable_dict():
-    my_immutable_dict = ImmutableDict({})
+def test_empty_immutable_dict() -> None:
+    my_immutable_dict:ImmutableDict = ImmutableDict({})
     my_immutable_dict.keys()
     my_immutable_dict.values()
     import pickle

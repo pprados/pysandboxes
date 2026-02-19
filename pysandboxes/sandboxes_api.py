@@ -17,7 +17,7 @@ from typing import (
     Protocol,
     TypeVar,
     Union,
-    runtime_checkable,
+    runtime_checkable, Mapping,
 )
 
 from .base_daemon import BaseDaemon
@@ -28,7 +28,7 @@ from .tools import (
     SyncOrAsyncFunc,
     check_mixte_async_async,
     is_in_sandbox,
-    set_is_in_sandbox,
+    set_is_in_sandbox, Environ,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ _lock = Lock()
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def _check__main__coroutine(coroutine):
+def _check__main__coroutine(coroutine:Any) -> None:
     if inspect.getmodule(coroutine.cr_frame).__name__ == "__main__":
         raise ValueError(
             "The coroutine must be declared in a module " "other than __main__."
@@ -85,7 +85,10 @@ class sandboxes(Protocol):
         "learning_path",
         "python_args",
         "graceful_shutdown",
-        "_old_sigint" "_old_sigterm" "_old_sigquit" "_daemon",
+        "_old_sigint",
+        "_old_sigterm",
+        "_old_sigquit",
+        "_daemon",
     )
     """
     Context manager to _start and _stop the sandbox daemon.
@@ -99,10 +102,10 @@ class sandboxes(Protocol):
         init_fn: Optional[SyncOrAsyncFunc] = None,
         config_path: Optional[Union[Path, str]] = None,
         *,
-        envs: Union[None, Dict[str, str], os._Environ] = None,
+        envs: Environ | None = None,
         python_args: Optional[List[str]] = None,
         graceful_shutdown: bool = True,
-        **extra_rules,
+        **extra_rules:Mapping[str,Any],
     ) -> None:
         self.init_fn = init_fn
         self.config_path = (
@@ -175,21 +178,21 @@ class sandboxes(Protocol):
         exc_type: Optional[type[BaseException]],
         exc: Optional[BaseException],
         tb: Optional[Any],
-    ) -> bool:
+    ) -> None:
         """
         Stop the sandbox daemon.
         """
         logger.debug("__exit__ _start...")
         if is_in_sandbox():
             set_is_in_sandbox(False)
-            return False
+            return
 
         asyncio.run_coroutine_threadsafe(
             async_shutdown_daemon(self.graceful_shutdown), get_sandbox_loop()
         ).result()
-        return False
+        return
 
-    async def _stop_daemon(self):
+    async def _stop_daemon(self) -> None:
         if self._daemon and self._daemon.is_started:
             logger.debug("_stop_daemon...")
             if threading.current_thread() is threading.main_thread():
@@ -202,7 +205,7 @@ class sandboxes(Protocol):
             await self._daemon._stop(max_pending=0)
             logger.debug("daemon stopped")
 
-    def __delete__(self, instance):
+    def __delete__(self, instance) -> None:
         asyncio.run_coroutine_threadsafe(
             self._stop_daemon(), get_sandbox_loop()
         ).result()
@@ -265,11 +268,9 @@ class sandboxes(Protocol):
 def run(
     main: Coroutine[Any, Any, Any],
     *,
-    debug=None,
-    loop_factory=None,
     init_fn: Optional[SyncOrAsyncFunc] = None,
     config_path: Optional[Union[Path, str]] = None,
-    **kwargs: Any,
+    **kwargs: Dict[str,Any],
 ) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
@@ -278,7 +279,7 @@ def run(
     """
     _check__main__coroutine(main)
 
-    async def _run():
+    async def _run() -> Any:
         # In this context, use the standard running loop.
         # the sandbox will be started before the main coroutine.
         # loop = asyncio.get_running_loop()

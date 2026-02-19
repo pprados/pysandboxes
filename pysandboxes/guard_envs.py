@@ -2,7 +2,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, cast, Set
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
@@ -22,47 +22,6 @@ EnvsRules = Tuple[EnvRule, ...]
 
 # Internal state for the file filter
 _rules: EnvsRules = cast(EnvsRules, ())
-
-
-def _read_and_substitute_lines(path: Path, env_vars: Dict[str, str]) -> ConfigLines:
-    """
-    Reads a file, filters out empty lines and comments, and performs variable
-    substitution on the remaining lines.
-
-    The function supports two substitution formats:
-    1. ${VAR_NAME}: Replaces the placeholder with the value of VAR_NAME from
-       the env_vars dictionary. If the variable is not found, it's replaced
-       with an empty string.
-    2. ${VAR_NAME:=default_value}: Replaces the placeholder with the value of
-       VAR_NAME if it exists in env_vars. Otherwise, it uses the provided
-       default_value.
-
-    Args:
-        path: The Path object pointing to the file to be read.
-        env_vars: A dictionary containing the environment-like variables
-                  for substitution.
-
-    Returns:
-        A list of strings, where each string is a processed and substituted
-        line from the file.
-    """
-    pattern = re.compile(r"\$\{([a-zA-Z0-9_]+)(?::=(.*?))?\}")
-
-    def substitute(match: re.Match) -> str:
-        var_name = match.group(1)
-        default_value = match.group(2)
-        return env_vars.get(
-            var_name, default_value if default_value is not None else ""
-        )
-
-    processed_lines: ConfigLines = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            if stripped and not stripped.lstrip().startswith("#"):
-                substituted_line = pattern.sub(substitute, stripped)
-                processed_lines.append(substituted_line)
-    return processed_lines
 
 
 def parse_rules(
@@ -140,7 +99,7 @@ class LearnEnviron(os._Environ):
     # while behaving like a standard dictionary.
     # """
 
-    _instance: "LearnEnviron" = None
+    _instance: Optional["LearnEnviron"] = None
 
     def __new__(
         cls,
@@ -150,7 +109,7 @@ class LearnEnviron(os._Environ):
             cls._instance = super(LearnEnviron, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Initialize with the _original environment data
         if not hasattr(self, "_keys_used"):
             # super().__init__(original_environ)
@@ -158,10 +117,11 @@ class LearnEnviron(os._Environ):
             decodekey = os.environ.decodekey
             encodevalue = os.environ.encodevalue
             decodevalue = os.environ.decodevalue
-            data = os.environ._data
+            assert hasattr(os.environ,"_data")
+            data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
-            self._keys_used = set()
-            self._original_envs = dict(os.environ)
+            self._keys_used:Set[str] = set()
+            self._original_envs = os.environ
 
     def __getitem__(self, key: str) -> str:
         try:
@@ -177,7 +137,7 @@ class LearnEnviron(os._Environ):
         if is_in_sandbox():
             self._keys_used.add(key)
 
-    def _clone(self):
+    def _clone(self) -> Dict[str,str]:
         return {k: v for k, v in super().items()}
 
     def _get(self, key: str, default: Any = None) -> Any:
@@ -218,7 +178,7 @@ def activate_guard(rules: EnvsRules) -> None:
 def patch_rules(learning_path: Optional[Path]) -> Dict[str, Callable]:
     if learning_path:
 
-        def activate_learning_env_factory(x):
+        def activate_learning_env_factory(x:Any) -> LearnEnviron:
             return LearnEnviron()
 
         return {"os.environ": activate_learning_env_factory}

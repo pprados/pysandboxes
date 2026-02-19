@@ -11,20 +11,21 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    ValuesView,
+    ValuesView, cast, Any, Callable,
 )
 
 KeyType = TypeVar("KeyType", bound=Hashable)
 ValueType = TypeVar("ValueType")
 
 
-def _restore_picle(
-    data: Dict[KeyType, ValueType]
+def _restore_pickle(
+        data: Dict[KeyType, ValueType]
 ) -> "ImmutableDict[KeyType,ValueType]":
     return ImmutableDict(data)
 
 
-class ImmutableDict(tuple, collections.abc.Mapping, Generic[KeyType, ValueType]):
+class ImmutableDict(tuple[tuple[KeyType, ...], tuple[ValueType, ...]],
+                    collections.abc.Mapping, Generic[KeyType, ValueType]):
     """
     An immutable dictionary-like object built on a tuple of tuples.
     This class is compatible with the collections.abc.Mapping kind.
@@ -34,8 +35,9 @@ class ImmutableDict(tuple, collections.abc.Mapping, Generic[KeyType, ValueType])
 
     # construction accepts either a Mapping or an iterable of (key, value) pairs
     def __new__(
-        cls,
-        data: Union[Mapping[KeyType, ValueType], Iterable[Tuple[KeyType, ValueType]]],
+            cls,
+            data: Union[
+                Mapping[KeyType, ValueType], Iterable[Tuple[KeyType, ValueType]]],
     ) -> "ImmutableDict[KeyType, ValueType]":
         # Normalize incoming data to an iterable of pairs
         keys: Tuple[KeyType, ...]
@@ -51,8 +53,8 @@ class ImmutableDict(tuple, collections.abc.Mapping, Generic[KeyType, ValueType])
                 # We don't want to learn all keys
                 if isinstance(data, LearnEnviron):
                     data = dict(data)
-                keys = tuple(data.keys())
-                values = tuple(data.values())
+                keys = cast(Tuple[KeyType, ...], tuple(data.keys()))
+                values = cast(Tuple[ValueType, ...], tuple(data.values()))
             else:
                 # allow any iterable of (k, v) pairs
                 items = tuple(data)
@@ -65,8 +67,8 @@ class ImmutableDict(tuple, collections.abc.Mapping, Generic[KeyType, ValueType])
         obj = tuple.__new__(cls, (keys, values))
         return obj
 
-    def __reduce__(self):
-        return (_restore_picle, (dict(self),))
+    def __reduce__(self) -> Tuple[Callable[..., Any], Tuple[Any, ...]]:
+        return (_restore_pickle, (dict(self),))
 
     @property
     def _keys(self) -> Tuple[KeyType, ...]:
@@ -77,17 +79,18 @@ class ImmutableDict(tuple, collections.abc.Mapping, Generic[KeyType, ValueType])
         return tuple.__getitem__(self, 1)  # type: ignore[index]
 
     # Mapping kind
-    def __getitem__(self, key: KeyType) -> ValueType:
+    def __getitem__(self, key: Any) -> Any:
         if isinstance(key, slice):
             return self._keys[key]
         else:
+            assert isinstance(key, str)
             try:
                 idx = self._keys.index(key)
             except ValueError:
                 raise KeyError(key)
             return self._values[idx]
 
-    def __iter__(self) -> Iterator[KeyType]:
+    def __iter__(self) -> Iterator[KeyType]:  # type: ignore[override]
         return iter(self._keys)
 
     def __len__(self) -> int:

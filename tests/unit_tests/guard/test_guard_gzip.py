@@ -1,12 +1,14 @@
+from pathlib import Path
+from typing import Dict
+
 import pytest
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine
-
 from .test_guard_io import activate_guard_files_rules, files
 
 
-def test_gzip(files):
+def test_gzip(files: Dict[str, Path]) -> None:
     from pathlib import Path
 
     rules = [

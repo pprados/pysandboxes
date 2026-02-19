@@ -12,7 +12,7 @@ class ConfigSyntaxError(SandBoxError):
         self.message = message
         self.errors = errors
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.message + "\n" + "\n".join(self.errors)
 
 

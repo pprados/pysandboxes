@@ -12,6 +12,7 @@ from typing import Optional, cast
 
 from pysandboxes.base_daemon import BaseDaemon
 from pysandboxes.os_sandbox import providers_factory
+from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
 
 from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 from .python_in_sb import python_in_sb
@@ -24,7 +25,7 @@ logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 # %%
 
 
-async def run_server(process_config: DaemonParameters):
+async def run_server(process_config: DaemonParameters) -> int:
     from pysandboxes.main_logger import pysandboxes_logger
 
     # Call init function
@@ -41,6 +42,7 @@ async def run_server(process_config: DaemonParameters):
             )
             sys.exit(-1)
         set_is_in_sandbox(False)  # Learn the import during the import
+        assert hasattr(module,function_name)
         init_fn = getattr(module, function_name)
 
     # Else, _start the daemon
@@ -56,14 +58,15 @@ async def run_server(process_config: DaemonParameters):
 
     from pysandboxes.os_sandbox import _set_current_daemon
 
-    server_daemon: BaseDaemon = providers_factory["_sse_server"](
+    server_daemon: SSEServerDaemon = providers_factory["_sse_server"](
         process_config.token,
         port=process_config.port,
     )
+    assert isinstance(server_daemon, SSEServerDaemon)
     _set_current_daemon(server_daemon)
     await server_daemon._start(
         process_config.all_rules,
-        envs=cast(dict, os.environ),
+        envs=os.environ,
         log_level=process_config.log_level,
         init_fn=init_fn,
     )
@@ -118,7 +121,7 @@ def main() -> int:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
 
-        activate_sandboxes(all_rules, dict(os.environ))
+        activate_sandboxes(all_rules, os.environ)
 
     # Use python-sb command?
     if sandboxes_parsed._python_sb:

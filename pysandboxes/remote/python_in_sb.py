@@ -3,17 +3,16 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Union
+from typing import Dict, List, Set, Tuple, Any
 
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode
 from pysandboxes.tools import set_is_in_sandbox
-
 from ..all_rules import AllRules
 
 logger = logging.getLogger(__name__)
 
 
-def _debug_log():
+def _debug_log() -> None:
     level = logging.WARNING  # FIX_RELEASE
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     logging.basicConfig(level=level, format=format)
@@ -27,14 +26,14 @@ def _debug_log():
 
 
 def _python_interactive(
-    all_rules: AllRules,
-    ban: bool,
+        all_rules: AllRules,
+        ban: bool,
 ) -> int:
     exit_msg = None
     term = os.environ.get("TERM")
     if sys.stdout.isatty() and (
-        (term and ("color" in term or "256" in term or "true" in term))
-        or (sys.platform == "win32" and "ANSICON" in os.environ)
+            (term and ("color" in term or "256" in term or "true" in term))
+            or (sys.platform == "win32" and "ANSICON" in os.environ)
     ):
         BOLD = "\033[1m"
         RED = "\033[1m\033[31m"
@@ -78,10 +77,10 @@ def _python_interactive(
         # Hack for IPython
         sys.modules["__main__"] = ModuleType(name="__main__")
 
-        def audit_hook(event, args):
+        def audit_hook(event: str, args: Tuple) -> None:
             logger.debug(f'Audit event: {event} {",".join(map(repr, args))}')
 
-        sys.addaudithook(audit_hook)
+        sys.addaudithook(audit_hook)  # FIXME
 
         import IPython
         from traitlets.config import get_config
@@ -92,8 +91,8 @@ def _python_interactive(
         from IPython.terminal.prompts import Prompts, Token
 
         class CustomPrompts(Prompts):
-            def in_prompt_tokens(self, cli=None):
-                result = list(super().in_prompt_tokens())
+            def in_prompt_tokens(self) -> List[Any]:
+                result = super().in_prompt_tokens()
                 full_prompt = prefix + result[2][1]
                 result[2] = result[2][0], full_prompt
                 self.shell.prompt_length = len(full_prompt)
@@ -123,7 +122,7 @@ def _python_interactive(
 
         # Create a banner for the standard REPL
         if hasattr(sys, "ps1"):
-            sys.ps1 = prefix + sys.ps1
+            sys.ps1 = prefix + getattr(sys,"ps1")
         else:
             sys.ps1 = prefix + ">>> "
 
@@ -176,8 +175,8 @@ def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> i
     return 0
 
 
-def convert_extra_rules(args: List[str]) -> Dict[str, Union[str, Set[str]]]:
-    result = {}
+def convert_extra_rules(args: List[str]) -> Dict[str, str | Set[str]]:
+    result: Dict[str, str | Set[str]] = {}
     for rule in args:
         assert rule.startswith("--")
         rule = rule[2:]
@@ -193,8 +192,8 @@ def convert_extra_rules(args: List[str]) -> Dict[str, Union[str, Set[str]]]:
 
 
 def python_in_sb(
-    all_rules: AllRules,
-    python_cmd: List[str],
+        all_rules: AllRules,
+        python_cmd: List[str],
 ) -> int:
     try:
         _debug_log()

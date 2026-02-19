@@ -97,11 +97,11 @@ def test_os_xattr(files: Dict[str, Path]) -> None:
     os.setxattr(files["visible"], "user.comment", b"comment")
     assert os.getxattr(files["visible"], "user.comment") == b"comment"
     assert os.listxattr(files["visible"]) == ["user.comment"]
-    assert os.removexattr(files["visible"], "user.comment") is None
+    os.removexattr(files["visible"], "user.comment")
     os.setxattr(files["bound_file"], "user.comment", b"comment")
     assert os.getxattr(files["bound_file"], "user.comment") == b"comment"
     assert os.listxattr(files["bound_file"]) == ["user.comment"]
-    assert os.removexattr(files["bound_file"], "user.comment") is None
+    os.removexattr(files["bound_file"], "user.comment")
 
     with pytest.raises(RuleFileNotFoundError):
         os.getxattr(files["ignore"], "user.comment")
@@ -173,20 +173,19 @@ def test_os_remove(files: Dict[str, Path]) -> None:
     import os
 
     (files["path"] / "to_remove.txt").write_text("To remove")
-    assert os.remove(files["path"] / "to_remove.txt") is None, "Need to remove file"
+    os.remove(files["path"] / "to_remove.txt")
 
     # Try to remove ignored file
     with pytest.raises(RuleFileNotFoundError):
-        assert os.remove(files["ignore"])
+        os.remove(files["ignore"])
 
     f = os.open(files["bind_dest"] / "to_remove.txt", os.O_CREAT | os.O_WRONLY)
     try:
         os.write(f, b"To remove")
     finally:
         os.close(f)
-    assert (
-        os.remove(files["bind_dest"] / "to_remove.txt") is None
-    ), "Need to remove alias"
+    os.remove(files["bind_dest"] / "to_remove.txt")
+
 
 
 def test_os_remove_refused(files: Dict[str, Path]) -> None:
@@ -217,13 +216,13 @@ def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
-    assert os.rmdir(d) is None
+    os.rmdir(d)
 
     d = files["bind_dest"] / "dir_to_remove"
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
-    assert os.rmdir(d) is None
+    os.rmdir(d)
 
     with pytest.raises(RuleFileNotFoundError):
         os.mkdir(files["bind_src"] / "dir_to_remove")
@@ -232,13 +231,13 @@ def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
-    assert os.removedirs(files["path"] / "dir_to_remove") is None
+    os.removedirs(files["path"] / "dir_to_remove")
 
     d = files["bind_dest"] / "dir_to_remove"
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
-    assert os.removedirs(files["bind_dest"] / "dir_to_remove") is None
+    os.removedirs(files["bind_dest"] / "dir_to_remove")
 
     with pytest.raises(RuleFileNotFoundError):
         os.mkdir(files["bind_src"] / "dir_to_remove")
@@ -273,12 +272,12 @@ def test_os_rename(files: Dict[str, Path]) -> None:
 
     with io.open(files["to_rename"], "w") as f:
         f.write("To rename")
-    assert os.rename(files["to_rename"], files["new_rename"]) is None
+    os.rename(files["to_rename"], files["new_rename"])
     os.unlink(files["new_rename"])
 
     with io.open(files["bind_to_rename"], "w") as f:
         f.write("To rename")
-    assert os.rename(files["bind_to_rename"], files["new_bind_rename"]) is None
+    os.rename(files["bind_to_rename"], files["new_bind_rename"])
     os.unlink(files["new_bind_rename"])
 
     with pytest.raises(RuleFileNotFoundError):
@@ -502,13 +501,13 @@ def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:
 
     import os
 
-    assert os.chflags(files["path"], stat.SF_ARCHIVED)
-    assert os.chflags(files["bound_file"], stat.SF_ARCHIVED)
-    assert os.lchflags(files["path"], stat.SF_ARCHIVED)
-    assert os.lchflags(files["bound_file"], stat.SF_ARCHIVED)
-    assert os.lchflags(files["bind_dest"], stat.SF_ARCHIVED)
+    assert os.chflags(files["path"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
+    assert os.chflags(files["bound_file"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
+    assert os.lchflags(files["path"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
+    assert os.lchflags(files["bound_file"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
+    assert os.lchflags(files["bind_dest"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
     with pytest.raises(RuleFileNotFoundError):
-        assert os.lchflags(files["bind_src"], stat.SF_ARCHIVED)
+        assert os.lchflags(files["bind_src"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
 
 
 def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:
@@ -523,23 +522,17 @@ def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:
     import stat
 
     mode = os.stat(files["path"]).st_mode
-    assert os.chmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE) is None
-    assert os.chmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE) is None
-    assert os.chmod(files["bind_dest"], mode | stat.S_IREAD | stat.S_IWRITE) is None
+    os.chmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE)
+    os.chmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
+    os.chmod(files["bind_dest"], mode | stat.S_IREAD | stat.S_IWRITE)
     with pytest.raises(RuleFileNotFoundError):
         os.chmod(files["bind_src"], mode | stat.S_IREAD | stat.S_IWRITE)
 
     if sys.platform != "win32" and sys.platform != "linux":
-        assert os.lchmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE) is None
-        assert (
-            os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE) is None
-        )
-        assert (
-            os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE) is None
-        )
-        assert (
-            os.lchmod(files["bind_dest"], mode | stat.S_IREAD | stat.S_IWRITE) is None
-        )
+        os.lchmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE)
+        os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
+        os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
+        os.lchmod(files["bind_dest"], mode | stat.S_IREAD | stat.S_IWRITE)
         with pytest.raises(RuleFileNotFoundError):
             os.lchmod(files["bind_src"], mode | stat.S_IREAD | stat.S_IWRITE)
 
@@ -577,16 +570,16 @@ def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:
 
     uid = os.stat(files["path"]).st_uid
     gid = os.stat(files["path"]).st_gid
-    assert os.chown(files["path"], uid, gid) is None
-    assert os.chown(files["bound_file"], uid, gid) is None
-    assert os.chown(files["bind_dest"], uid, gid) is None
+    os.chown(files["path"], uid, gid)
+    os.chown(files["bound_file"], uid, gid)
+    os.chown(files["bind_dest"], uid, gid)
     with pytest.raises(RuleFileNotFoundError):
         os.chown(files["bind_src"], uid, gid)
 
-    assert os.lchown(files["path"], uid, gid) is None
-    assert os.lchown(files["bound_file"], uid, gid) is None
-    assert os.lchown(files["bound_file"], uid, gid) is None
-    assert os.lchown(files["bind_dest"], uid, gid) is None
+    os.lchown(files["path"], uid, gid)
+    os.lchown(files["bound_file"], uid, gid)
+    os.lchown(files["bound_file"], uid, gid)
+    os.lchown(files["bind_dest"], uid, gid)
     with pytest.raises(RuleFileNotFoundError):
         os.lchown(files["bind_src"], uid, gid)
 
@@ -604,10 +597,10 @@ def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:
     uid = os.stat(files["path"]).st_uid
     gid = os.stat(files["path"]).st_gid
     with pytest.raises(RulePermissionError):
-        os.chown(files["bound_file"], uid, gid) is None
+        os.chown(files["bound_file"], uid, gid)
 
     with pytest.raises(RulePermissionError):
-        os.lchown(files["bound_file"], uid, gid) is None
+        os.lchown(files["bound_file"], uid, gid)
 
 
 def test_os_replace(files: Dict[str, Path]) -> None:
@@ -793,10 +786,10 @@ def test_os_makedirs_and_removedirs(files: Dict[str, Path]) -> None:
     import os
 
     os.makedirs(files["path"] / "dir_to_remove" / "inner")
-    assert os.removedirs(files["path"] / "dir_to_remove" / "inner") is None
+    os.removedirs(files["path"] / "dir_to_remove" / "inner")
 
     os.makedirs(files["bind_dest"] / "dir_to_remove" / "inner")
-    assert os.removedirs(files["bind_dest"] / "dir_to_remove" / "inner") is None
+    os.removedirs(files["bind_dest"] / "dir_to_remove" / "inner")
 
     with pytest.raises(RuleFileNotFoundError):
         os.makedirs(files["bind_src"] / "dir_to_remove" / "inner")
@@ -818,7 +811,7 @@ def test_os_renames(files: Dict[str, Path]) -> None:
 
     with io.open(files["to_rename"], "w") as f:
         f.write("To rename")
-    assert os.renames(files["to_rename"], files["new_rename"]) is None
+    os.renames(files["to_rename"], files["new_rename"])
     os.unlink(files["new_rename"])
 
 
