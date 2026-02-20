@@ -1230,6 +1230,7 @@ def _f(func: Callable, **kwargs: Any) -> Callable:
         def wrapper2(original: Any) -> Any:
             return func(original, **kwargs)
 
+        wrapper2.__doc__ = func.__doc__
         return wrapper2
 
     return wrapper()

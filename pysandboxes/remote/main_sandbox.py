@@ -102,15 +102,12 @@ def main() -> int:
     root_logger.handlers.clear()
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(process_config.log_format))
-    # FIX_RELEASE
-    # handler.setFormatter(logging.Formatter("  " + process_config.log_format))
+    handler.setFormatter(logging.Formatter("  " +
+                                           process_config.log_format)) # FIX_RELEASE
     root_logger.addHandler(handler)
     root_logger.setLevel(process_config.log_level)
     logger.debug("config body and token successfully read from named pipe")
 
-    # logging.getLogger("aiohttp_sse_client.client").setLevel(
-    #     logging.DEBUG
-    # )  # FIX_RELEASE
     all_rules = process_config.all_rules
 
     # In this case, use the standard loop in place of the private sandbox loop

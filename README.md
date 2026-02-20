@@ -126,7 +126,7 @@ This scenario is the simplest. You just need to replace the launch of your appli
 ```shell
 python-db --learn -m my_module
 ```
-You can use it in interactive mode.
+You can use it in interactive mode and continue to use the help shortcut.
 ```shell
 > python-sb
 SANDBOXES Python 3.13.5 | packaged by Anaconda, Inc. | [GCC 11.2.0] on linux
@@ -134,7 +134,17 @@ SANDBOXES Python 3.13.5 | packaged by Anaconda, Inc. | [GCC 11.2.0] on linux
 Type "help", "copyright", "credits" or "license" for more information.
 IPython 8.37.0 -- An enhanced Interactive Python. Type '?' for help.
 
-⚠ In [1]: 
+⚠ In [1]: import os
+⚠ In [2]: os.open??
+Signature: os.open(path, flags, mode=511, *, dir_fd=None)
+Docstring:
+Open a file for low level IO.  Returns a file descriptor (integer).
+
+If dir_fd is not None, it should be a file descriptor open to a directory,
+  and path should be relative; path will then be relative to that directory.
+dir_fd may not be implemented on your platform.
+  If it is unavailable, using it will raise a NotImplementedError.
+Type:      function
 ```
 
 If IPython is installed, it's used. All the standard python parameters are availables.
@@ -333,21 +343,21 @@ We offer several implementations to encapsulate the Python sandbox:
 
 The feature proposed by each technologies:
 
-| Guard                     | py-sandbox | firejail  |
-|---------------------------|:----------:|:---------:|
-| Isolation                 |  Process   | Container |
-| Python code               |     ✅      |    ❌     |
-| Compiled code             |     ❌     |     ✅     |
-| env                       |     ✅      |    ❌     |
-| bind=a,a                  |     ✅      |     ✅     |
-| bind=a,b                  |     ✅      |    ❌     |
-| ignore=*                  |     ✅      |     ✅     |
-| network                   |     ✅      |     ✅     |
-| import                    |     ✅      |    ❌     |
-| Resource limits           |     ❌     |    ✅      |
-| OS-sandbox                |     ❌     |     ✅     |
-| Vm compatible             |     ✅      |     ✅     |
-| Container<br/> compatible |     ✅      |    ❌     |
+| Guard                     | py-sandbox | firejail  | none |
+|---------------------------|:----------:|:---------:|:----:|
+| Isolation                 |  Process   | Container |  ❌   |
+| Python code               |     ✅      |    ❌     |  ❌   |
+| Compiled code             |     ❌     |     ✅     |  ❌   |
+| env                       |     ✅      |    ❌     |  ❌   |
+| bind=a,a                  |     ✅      |     ✅     |  ❌   |
+| bind=a,b                  |     ✅      |    ❌     |  ❌   |
+| ignore=*                  |     ✅      |     ✅     |  ❌   |
+| network                   |     ✅      |     ✅     |  ❌   |
+| import                    |     ✅      |    ❌     |  ❌   |
+| Resource limits           |     ❌     |    ✅      |  ❌   |
+| OS-sandbox                |     ❌     |     ✅     |  ❌   |
+| Vm compatible             |     ✅      |     ✅     |  ❌   |
+| Container<br/> compatible |     ✅      |    ❌     |  ❌   |
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
 

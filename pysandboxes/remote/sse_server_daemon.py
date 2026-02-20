@@ -179,7 +179,6 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
             media_type="text/event-stream",
         )
 
-    # TODO: Use https
     # Extract current logging configuration
     # If not logger exist, try to duplicate the root logger parameters
     uvicorn_logger = logging.getLogger("uvicorn")

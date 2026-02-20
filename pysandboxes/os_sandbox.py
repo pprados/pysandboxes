@@ -18,7 +18,6 @@ from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sand
 logger = logging.getLogger(__name__)
 
 providers_factory: dict[str, Type] = {
-    # TODO: faire un provider "transparent"
     "_task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
     "_sse_server": SSEServerDaemon,  # Impossible to activate py-sandbox in this mode.
     "none": NoneDaemon,

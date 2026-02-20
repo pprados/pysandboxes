@@ -377,7 +377,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
         async with aiohttp.ClientSession() as session:
             while True:
-                try:  # TODO: test in the server never response
+                try:
                     async with session.get(
                         ping_url,
                         timeout=ClientTimeout(

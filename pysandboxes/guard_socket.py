@@ -522,7 +522,7 @@ def _check_address_with_rules(
 
         unique_ips = list(dict.fromkeys(ip_objects))
     if not unique_ips:
-        raise ValueError(  # TODO: TU for that
+        raise ValueError(
             f"Invalid hostname or IP address (resolution failed): {hostname}"
         )
 
@@ -806,7 +806,6 @@ def _wrap_socket_connect(func: Callable) -> Callable:
                 "Unexpected address format for connect: %s. Skipping IP rule check.",
                 address,
             )
-            # FIX_RELEASE: unknown socket format
             assert False, (
                 f"Unexpected address format for connect: "
                 f"{address}. Skipping IP rule check."

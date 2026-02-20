@@ -81,7 +81,7 @@ def generate_config_from_learning() -> None:
 
     # Insert new rules in the file
     pattern: str = (
-        r"^# </([^\}]+)>"  # FIX_RELEASE: XX pour forcer à la fin du fichier
+        r"^# </([^\}]+)>"
     )
     for i, line in enumerate(all_lines):
         match = re.search(pattern, line)

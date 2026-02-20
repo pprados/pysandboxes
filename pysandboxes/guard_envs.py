@@ -151,7 +151,7 @@ class LearnEnviron(os._Environ):
             return False
 
 
-def generate_rules() -> List[str]:  # TODO: search in envs for url, port, etc.
+def generate_rules() -> List[str]:
     global _rules
     learn_env = LearnEnviron()  # Get singleton
     result = []

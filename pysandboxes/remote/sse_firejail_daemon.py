@@ -170,7 +170,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     ) -> Tuple[Args, AllRules]:
         """
         Apply the pysandboxes rules to firejail.
-        TODO: expliquer si on modifie
         """
 
         # Replace the rules.
@@ -253,8 +252,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     whitelist.add(rule.source)
             else:
                 # Note: py-sandbox manage the alias
-                # TOTRY, with root, use --bind
-                # args.append(f"--whitelist={rule.source}")
                 whitelist.add(rule.source)
                 keep_files_rules.append(rule)
                 need_root = False

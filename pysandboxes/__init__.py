@@ -40,7 +40,7 @@ class LazySandboxesProxy:
         # Le module n'est pas encore importé, juste son nom est stocké
         self.modules: dict[str, ModuleType] | None = None
 
-    def __getattr__(self, name: str) -> Any:  # TODO: check with python <3.12 (PEP 726)
+    def __getattr__(self, name: str) -> Any:
         """
         Intercepte l'accès à un attribut et importe le module si nécessaire.
         """

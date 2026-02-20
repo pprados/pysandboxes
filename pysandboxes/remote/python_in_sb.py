@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    level = logging.WARNING  # FIX_RELEASE
+    level = logging.WARNING
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     logging.basicConfig(level=level, format=format)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
@@ -77,11 +77,6 @@ def _python_interactive(
 
         # Hack for IPython
         sys.modules["__main__"] = ModuleType(name="__main__")
-
-        def audit_hook(event: str, args: Tuple) -> None:
-            logger.debug(f'Audit event: {event} {",".join(map(repr, args))}')
-
-        sys.addaudithook(audit_hook)  # FIXME
 
         import IPython
         from traitlets.config import get_config

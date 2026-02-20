@@ -5,10 +5,6 @@ from weakref import WeakKeyDictionary
 from .e import RuleAttributeError
 from .immutable_dict import ImmutableDict
 
-# TODO: limit recursion
-# TODO: limit memory
-
-
 class GuardModule(ModuleType):
     _states: MutableMapping[ModuleType, ImmutableDict[str, Any]] = WeakKeyDictionary()
 
