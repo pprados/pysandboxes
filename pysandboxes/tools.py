@@ -223,8 +223,8 @@ def set_is_in_sandbox(value: bool) -> None:
 
 
 SyncOrAsyncFunc = Union[
-    Callable[[], None],  # Fonction synchrone
-    Callable[[], Awaitable[None]],  # Fonction asynchrone
+    Callable[[], None],  # Function synchrone
+    Callable[[], Awaitable[None]],  # Function asynchrone
 ]
 
 

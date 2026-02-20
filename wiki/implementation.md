@@ -1,6 +1,6 @@
 # Implementation
 
-## Stategy
+## Strategy
 - All the py-sandbox are a dynamic patch of python API
 - To avoid having to load all modules in order to patch them before launching the program, we use a clever strategy. A specific import implementation is added. It imports the modules in the usual way and, if necessary, adds the changes required to protect the code.
 - This mechanism also allows authorized modules to be filtered.
@@ -15,7 +15,7 @@ Here is a brief description of the implementation. You will find more details by
 
   - The parameter files are consulted.
   - The `os-sandbox` parameter is extracted.
-  - The environement variables are injected in the config lines
+  - The environment variables are injected in the config lines
   - The parameters are converted into specific parameters for **os-sandbox**.
   - The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `bind` on directories is not relevant.
   - A free TCP port is selected
@@ -44,11 +44,11 @@ Here is a brief description of the implementation. You will find more details by
           - it is restarted.
           - The `init_fn` function is executed again, then communication resumes.
         - If a _shutdown of the daemon is requested
-          - All future incomming request are block
+          - All future incoming request are block
           - Waiting the end of all current request
           - Say it's done for the main process
           - Start to _shutdown the daemon
     - If the daemon is stopped, a watchdog can detect this situation
       - The child process is restarted
-      - The current requests are retry multiple times to be reconected to the new child process.
+      - The current requests are retry multiple times to be reconnected to the new child process.
 

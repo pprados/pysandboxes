@@ -15,6 +15,8 @@ integration_tests:
 test tests:
 	poetry run pytest -v $(TEST_FILE)
 
+all-tests: tests integration_tests
+
 test_watch:
 	poetry run ptw --now . -- tests/unit_tests
 

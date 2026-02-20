@@ -102,8 +102,9 @@ def main() -> int:
     root_logger.handlers.clear()
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(process_config.log_format))
-    handler.setFormatter(logging.Formatter("  " +
-                                           process_config.log_format)) # FIX_RELEASE
+    handler.setFormatter(
+        logging.Formatter("  " + process_config.log_format)
+    )  # FIX_RELEASE
     root_logger.addHandler(handler)
     root_logger.setLevel(process_config.log_level)
     logger.debug("config body and token successfully read from named pipe")

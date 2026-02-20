@@ -1,1 +1,1 @@
-# Differents implementations of "OS sandbox"
+# Different implementations of "OS sandbox"

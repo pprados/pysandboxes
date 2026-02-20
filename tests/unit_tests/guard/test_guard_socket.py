@@ -474,10 +474,10 @@ def test_convert_ports_range_duplicates_and_sorting() -> None:
 
 def test_invalid_sendTo() -> None:
     """
-    Test if a invalide sendTo continue to raise an exception
+    Test if a invalid sendTo continue to raise an exception
     """
     from pysandboxes.guard_socket import socket
 
     with pytest.raises(BrokenPipeError):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:  # Invalide type
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:  # Invalid type
             sock.sendto(b"hello", ("127.0.0.1", 12345))

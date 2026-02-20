@@ -7,10 +7,10 @@ It also verifies the relevance of the multiple sandbox encapsulation strategy, w
 
 We have a planned roadmap. Developments will arrive gradually, with no specific order:
 
-- [X] Controle environment variables
-- [X] Controle import list
-- [X] Controle file and network access
-- [X] Controle life cycle of the daemon (restart if necessary)
+- [X] Control environment variables
+- [X] Control import list
+- [X] Control file and network access
+- [X] Control life cycle of the daemon (restart if necessary)
 - [ ] Use sys.audit
 - [ ] Guard some criticals methods in Python (spawn, shell, etc.)
 - [ ] New **OS-sandboxes**

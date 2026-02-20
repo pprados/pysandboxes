@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set
 
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode
 from pysandboxes.tools import set_is_in_sandbox
@@ -219,7 +219,7 @@ def python_in_sb(
                 )
 
         elif python_cmd[0] == "-c":
-            # Case: Execute a comand
+            # Case: Execute a command
             if len(python_cmd) > 1:
                 script_body = python_cmd[1]
                 python_cmd.pop(1)

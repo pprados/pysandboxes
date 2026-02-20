@@ -157,7 +157,7 @@ def test_shutil_make_archive(files: Dict[str, Path]) -> None:  # noqa: F811
     shutil.make_archive(
         base_name=str(files["path"] / "arch"),
         format="zip",
-        root_dir=files["bind_dest"],  # dossier à compresser
+        root_dir=files["bind_dest"],  # dossier à compressor
     )
 
 

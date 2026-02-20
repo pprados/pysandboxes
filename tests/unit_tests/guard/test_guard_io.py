@@ -1,4 +1,3 @@
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -59,7 +58,7 @@ def files() -> Dict[str, Path]:
     # Create test files and symlinks
     # It's executer without patch.
     tmp_path = Path("/tmp/test")
-    shutil.rmtree(tmp_path)
+    shutil.rmtree(tmp_path, ignore_errors=True)
     tmp_path.mkdir(exist_ok=True)
     (tmp_path / "visible.txt").write_text("Visible")
     (tmp_path / "ignore.log").write_text("Should be ignored")
@@ -126,46 +125,44 @@ def files() -> Dict[str, Path]:
     }
 
 
-if "PYTEST_RUN_CONFIG" in os.environ:
+def activate_guard_files_rules(rules: ConfigLines) -> None:
+    errors: List[ErrorMsg] = []
+    _deactivate_all_rules()
+    file_rules, _ = parse_rules(rules, errors)
+    assert not errors
 
-    def activate_guard_files_rules(rules: ConfigLines) -> None:
-        errors: List[ErrorMsg] = []
-        _deactivate_all_rules()
-        file_rules, _ = parse_rules(rules, errors)
-        assert not errors
+    # Add more rules for pytests
+    import pwd
+    import sys
 
-        # Add more rules for pytests
-        import pwd
-        import sys
-
-        new_file_rules: List[BindRule] = []
-        exe_paths: set[Path] = set()
-        follow_links_executable(Path(sys.executable), exe_paths)
-        for p in exe_paths:
-            new_file_rules.append(
-                BindRule(
-                    source=str(p),
-                    dest=str(p),
-                    write=True,
-                    config=ConfigLine("Hack for pytest", Path(), 0),
-                )
-            )
-
-        import os
-
-        username = pwd.getpwuid(os.getuid())[0]
+    new_file_rules: List[BindRule] = []
+    exe_paths: set[Path] = set()
+    follow_links_executable(Path(sys.executable), exe_paths)
+    for p in exe_paths:
         new_file_rules.append(
             BindRule(
-                source=f"/tmp/pytest-of-{username}/",
-                dest=f"/tmp/pytest-of-{username}/",
+                source=str(p),
+                dest=str(p),
                 write=True,
                 config=ConfigLine("Hack for pytest", Path(), 0),
             )
         )
-        # activate_guard(tuple(list(file_rules) + new_file_rules))
-        all_rules = list(file_rules)
-        all_rules.extend(new_file_rules)
-        activate_guard(tuple(all_rules))
+
+    import os  # noqa: F811
+
+    username = pwd.getpwuid(os.getuid())[0]
+    new_file_rules.append(
+        BindRule(
+            source=f"/tmp/pytest-of-{username}/",
+            dest=f"/tmp/pytest-of-{username}/",
+            write=True,
+            config=ConfigLine("Hack for pytest", Path(), 0),
+        )
+    )
+    # activate_guard(tuple(list(file_rules) + new_file_rules))
+    all_rules = list(file_rules)
+    all_rules.extend(new_file_rules)
+    activate_guard(tuple(all_rules))
 
 
 def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]) -> None:
@@ -209,7 +206,7 @@ def test_io_open_write(files: Dict[str, Path]) -> None:
     target_path = files["bind_dest"] / "write.txt"
 
     import io
-    import os
+    import os  # noqa: F811
 
     with io.open(target_path, "w") as f:
         f.write("sample")

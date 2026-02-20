@@ -1,7 +1,8 @@
 import logging
 
 import pytest
-from unit_tests.guard.test_guard_io import (
+
+from .guard.test_guard_io import (
     _activate_guard_import_for_tests,
     _deactivate_all_rules,
 )

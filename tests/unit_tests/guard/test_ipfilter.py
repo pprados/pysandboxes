@@ -3,17 +3,18 @@ from pathlib import Path
 from typing import List
 
 import pytest
-from integration_tests.sb_usage import init_log_level
-from unit_tests.guard.test_guard_io import (
-    _activate_guard_import_for_tests,
-    _deactivate_all_rules,
-)
 
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
 from pysandboxes.sb_types import ConfigLine
+
+from ..conftest import init_log_level
+from .test_guard_io import (
+    _activate_guard_import_for_tests,
+    _deactivate_all_rules,
+)
 
 
 @pytest.fixture(autouse=True)

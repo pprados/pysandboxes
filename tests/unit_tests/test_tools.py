@@ -50,7 +50,7 @@ def test_resolve_env_variables() -> None:
 
     assert resolve_env_variables("${A${B}}", {"B": "B"}) == ""
 
-    # test with defaut value
+    # test with default value
     assert resolve_env_variables("[${A:=def}]", {"A": "val_a"}) == "[val_a]"
     assert resolve_env_variables("[${A:=def}]", {}) == "[def]"
     assert resolve_env_variables("[${A:=${B}}]", {"B": "val_b"}) == "[val_b]"

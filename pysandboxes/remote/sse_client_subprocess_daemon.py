@@ -188,7 +188,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         # Initial delay in seconds (e.g., 100 ms)
         factor: float = RETRY_FACTOR,  # Exponential increase _factor
         max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
-        reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attemps
+        reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attempts
         **kwargs: Dict[str, Any],
     ) -> None:
         super().__init__(token, host=host, max_connect_retry=max_connect_retry)

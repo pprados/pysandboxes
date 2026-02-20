@@ -1,4 +1,4 @@
-# %% Test ressource manager
+# %% Test resource manager
 import pytest
 
 from pysandboxes import sandboxes

@@ -80,9 +80,9 @@ def main() -> int:
             if resource_config and resource_config.exists():
                 config_path = resource_config
 
-        envs=extra_rules.get("env",set())
+        envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
-        extra_rules["env"]=envs
+        extra_rules["env"] = envs
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=os.environ,  # Use current environ

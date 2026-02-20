@@ -97,7 +97,7 @@ pip install git+https://github.com/pprados/pysandboxes.git
 We propose only four think:
 - A Command Line Interface: `python-sb`
 - A function: `run`
-- A ressource provider: `sandboxes`
+- A resource provider: `sandboxes`
 - An annotation: `@sandbox`
 
 There are two usage modes:
@@ -468,7 +468,7 @@ We invite you, after each update, to test your application without learning. Thi
 
 ##  Do I have any new rule violations since the update?
 Indeed, new ones can be proposed. As the approach is based on denial by default, these rules are rejected. Restart a learning session to add what is necessary.
-Use the minor version to fix the version to used. The minor version is incremeted for each new rules.
+Use the minor version to fix the version to used. The minor version is incremented for each new rules.
 
 ## Debugging
 When using an external sandbox, two processes are launched. Your development environment is normally capable of handling this, if you use `os-sandbox=subprocess`. A breakpoint in a `@sandbox` function will interrupt the program in the sandbox process. Stack trace analysis will not be easy, as there is no complete trace of the call.
@@ -495,7 +495,7 @@ To disable only one rule family, use the generic acceptance settings.
 Or
 - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
 - Use the `learn=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
-- Use the special `os-provider=none` to desactivate all the `@sandbox` annotations
+- Use the special `os-provider=none` to deactivate all the `@sandbox` annotations
 
 ## How to package the project
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.

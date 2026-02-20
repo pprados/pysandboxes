@@ -70,7 +70,7 @@ def _test_envs() -> None:
 
 
 def _test_network() -> None:
-    # tcp connexion
+    # tcp connection
     import socket
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -84,16 +84,16 @@ def _test_network() -> None:
     # tcp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
         sock.bind(("::1", 0))
-    # web connexion
+    # web connection
     import requests
 
     requests.get("http://www.google.com/")
-    # udp connexion ipv4
+    # udp connection ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("127.0.0.1", 12345))
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("127.0.0.1", 12346))
-    # udp connexion ipv6
+    # udp connection ipv6
     with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("::1", 12345))
     # udp bind ipv4
@@ -138,11 +138,11 @@ def _test_files() -> None:
     print("---- Test scandir docs")
     use_alias_rule = False
     if use_alias_rule:
-        datas = "tests/alias"
+        data = "tests/alias"
     else:
-        datas = "tests/data"
+        data = "tests/data"
     all_entries = []
-    with os.scandir(datas) as entries:
+    with os.scandir(data) as entries:
         all_entries = [entry.name for entry in entries]
     assert "data.txt" in all_entries
 

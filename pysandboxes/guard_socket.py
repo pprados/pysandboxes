@@ -189,7 +189,7 @@ def _parse_rule(
             (
                 f"{format_ruleref(rule)}: "
                 f"{rule.rule!r} "
-                f"use an invalide action. Must be {Action.ALLOW.name!r} "
+                f"use an invalid action. Must be {Action.ALLOW.name!r} "
                 f"or {Action.DENY.name!r}.",
                 rule.path,
                 rule.ln,
@@ -286,9 +286,7 @@ def _parse_rule(
     except ValueError:
         errors.append(
             (
-                f"{format_ruleref(rule)}: "
-                f"In {rule.rule!r}, "
-                f"invalide port list.",
+                f"{format_ruleref(rule)}: " f"In {rule.rule!r}, " f"invalid port list.",
                 rule.path,
                 rule.ln,
             )
@@ -637,12 +635,12 @@ _RetAddress: TypeAlias = Any
 def _get_fammily(ip: str) -> int:
     ip_object = ip_address(ip)
     if ip_object.version == 4:
-        familly = socket.AF_INET
+        family = socket.AF_INET
     elif ip_object.version == 6:
-        familly = socket.AF_INET6
+        family = socket.AF_INET6
     else:
-        familly = 0
-    return familly
+        family = 0
+    return family
 
 
 # %%
@@ -884,7 +882,7 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
                         conn_direction=Direction.OUT,
                     )
             else:
-                logger.debug("Invalide usage of sendto")
+                logger.debug("Invalid usage of sendto")
         return func(self, data, address)
 
     return wrapper
@@ -981,7 +979,7 @@ def generate_rules(
                     elif ip.version == 6:
                         mask = 128
                     else:
-                        mask = 0  # Uknown mask
+                        mask = 0  # Unknown mask
                     if mask:
                         destination = f"{learn_rule.address}/{mask}"
                     else:
@@ -1014,7 +1012,7 @@ def generate_rules(
         in_rules_for_dest,
         out_rules_for_dest,
     ) in by_destination.items():
-        # Agregate ports
+        # Aggregate ports
         if in_rules_for_dest:
             in_ports = {
                 key_for_port.get(rule.port, str(rule.port))
@@ -1038,7 +1036,7 @@ def generate_rules(
     return sorted(list(result))
 
 
-if "PYTEST_RUN_CONFIG" in os.environ:
+if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_sockets() -> None:
         global _rules

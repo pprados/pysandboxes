@@ -15,11 +15,11 @@ def _split_python_cmd(args: List[str]) -> Tuple[List[str], List[str]]:
 
 def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[str]]:
     # Split the command line in 3 parts:
-    # - cpython paramater,
+    # - cpython parameter,
     # - pysandbox extra parameters,
     # - cpython command (-c ..., -i, acme.py, ...)
     #
-    # If the paramter ask the help, print it and exit
+    # If the parameter ask the help, print it and exit
 
     # Split args before and after python command
     python_args, python_cmd = _split_python_cmd(args)

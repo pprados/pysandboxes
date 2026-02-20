@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 DEBUG = False
 
 # Replace rules to delegate the filter to firejail.
-# The exception are differents
+# The exception are different
 REPLACE = True
 
 

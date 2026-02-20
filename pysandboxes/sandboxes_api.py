@@ -163,7 +163,7 @@ class sandboxes:
                 It will kill daemon processes before exiting itself.
                 """
                 # Iterate through all child processes and send them SIGTERM
-                logger.debug("Catch signal %s. Propagate to the dameon.", signum)
+                logger.debug("Catch signal %s. Propagate to the daemon.", signum)
                 loop = get_sandbox_loop()
                 loop.call_soon_threadsafe(lambda: loop.create_task(self._stop_daemon()))
 
@@ -241,7 +241,7 @@ class sandboxes:
                 It will kill daemon processes before exiting itself.
                 """
                 # Iterate through all child processes and send them SIGTERM
-                logger.debug("Catch signal %s. Propagate to the dameon.", signum)
+                logger.debug("Catch signal %s. Propagate to the daemon.", signum)
                 logger.debug("Signal lance stop_daemon")
                 asyncio.get_running_loop().create_task(self._stop_daemon())
 

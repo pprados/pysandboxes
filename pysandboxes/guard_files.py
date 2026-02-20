@@ -379,7 +379,7 @@ def _apply_src_to_dest_rules(
             ):
                 return None, rule
         else:
-            assert "Invalide rules"
+            assert "Invalid rules"
     return path, None
 
 
@@ -459,7 +459,7 @@ def _apply_dest_to_src_rules(
                 ) or fnmatch.fnmatch(Path(fake_path).name, rule.source):
                     return None, rule
         else:
-            assert False, f"Invalide guard_files rules {type(rule)=}"
+            assert False, f"Invalid guard_files rules {type(rule)=}"
     return None, None
 
 
@@ -1419,7 +1419,7 @@ def activate_guard(rules: FileRules) -> None:
     _rules = rules
 
 
-if "PYTEST_RUN_CONFIG" in os.environ:
+if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_files() -> None:
         global _rules

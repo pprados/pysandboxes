@@ -23,8 +23,9 @@
 #learn=.py-sandboxes  # Default filename: '.py-sandboxes'
 
 #######################################################################################
-# It's possible to include user, global or others parameters files. If the file is not
-# found, this directive is ignored.
+# For configuration composition, it's possible to include user, global or others
+# parameters files. If the file is not found, this directive is ignored.
+
 include "~/.config/pysandboxes/user-py-sandboxes.profile"
 include "/etc/pysandboxes/global-py-sandboxes.profile"
 
@@ -52,7 +53,7 @@ py-sandbox=True  # Activate the python sandbox (true by default)
 # - `subprocess` (default): Use a subprocess to invoke sandboxed functions
 # - `firejail`: A utility that allows you to restrict access to disks, networks,
 #   capacity, system calls, etc.
-# - `none`: special provider to desactivate the `@sandbox` annotations
+# - `none`: special provider to deactivate the `@sandbox` annotations
 
 os-sandbox=subprocess
 #os-sandbox=firejail
@@ -85,7 +86,7 @@ os-sandbox=subprocess
 #
 # You can remove a variable with `unenv=<name>`
 
-# Some exemples
+# Some examples
 #env=*=${*}  # Duplicate all variables
 #env=HOME=.
 #env=USER=pysandbox
@@ -115,9 +116,9 @@ os-sandbox=subprocess
 ignore=.env
 ignore=*.log
 
-# Some exemples
+# Some examples
 #bind=/,/  # Accept all file access
-#ro-bind=/,/  # Accept to read all file (add rules to write in somes directories)
+#ro-bind=/,/  # Accept to read all file (add rules to write in some directories)
 
 # Here, the rules learned for files
 # <learning_guard_files>
@@ -130,17 +131,17 @@ ignore=*.log
 # Use `net` to add a new rule. The format is:
 # net=<ALLOW|DENY>|<tcp|udp|*>|<network|*>|<port list|*>|<IN|OUT|*>
 #
-# To accept all network connexion, use  ̀net=ALLOW|*|*|*|*`
+# To accept all network connection, use  ̀net=ALLOW|*|*|*|*`
 
-#net=ALLOW|*|0.0.0.0/0|*|IN  # Accept all incoming IPV4 connexion
-#net=ALLOW|*|0.0.0.0/0|*|OUT  # Accept all IPV4 connexion
-#net=ALLOW|*|::1/0|*|IN  # Accept all incoming IPV6 connexion
-#net=ALLOW|*|::1/0|*|OUT  # Accept all IPV6 connexion
+#net=ALLOW|*|0.0.0.0/0|*|IN  # Accept all incoming IPV4 connection
+#net=ALLOW|*|0.0.0.0/0|*|OUT  # Accept all IPV4 connection
+#net=ALLOW|*|::1/0|*|IN  # Accept all incoming IPV6 connection
+#net=ALLOW|*|::1/0|*|OUT  # Accept all IPV6 connection
 
 #net=ALLOW|tcp|0.0.0.0/0|443|OUT  # Can call HTTPS services for all network
 #net=ALLOW|tcp|0.0.0.0/0|80|OUT  # Can call HTTP services for all network
 
-#net=DENY|tcp|localhost|*|IN  # Deny locahost
+#net=DENY|tcp|localhost|*|IN  # Deny localhost
 #net=ALLOW|tcp|ip6-localhost|${PORT:=8000}|IN  # Allow ${PORT} or 8000 to ip6-locahost
 
 

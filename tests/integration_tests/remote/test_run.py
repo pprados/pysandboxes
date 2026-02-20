@@ -15,12 +15,12 @@ def test_run() -> None:
 
 
 def test_run_and_async_sanboxes() -> None:
-    # An async method, call a async method with sandboxes ressource manager
+    # An async method, call a async method with sandboxes resource manager
     pysandboxes.run(async_sanboxes(config_path), config_path=config_path)
 
 
 def test_run_and_sync_sanboxes() -> None:
-    # An async method, call a sync method with sandboxes ressource manager
+    # An async method, call a sync method with sandboxes resource manager
     # Can not be called. Use only async sandbox function.
     with pytest.raises(RuntimeError, match=mixed_sync_and_async_error):
         pysandboxes.run(bridge_async_to_sync(config_path), config_path=config_path)

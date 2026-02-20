@@ -42,7 +42,7 @@ class LazySandboxesProxy:
 
     def __getattr__(self, name: str) -> Any:
         """
-        Intercepte l'accès à un attribut et importe le module si nécessaire.
+        Intercepte l'accès à un attribute et importe le module si nécessaire.
         """
         if not self.modules:
             import importlib

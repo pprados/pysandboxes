@@ -80,9 +80,7 @@ def generate_config_from_learning() -> None:
             all_lines = resource_path.read_text().split("\n")
 
     # Insert new rules in the file
-    pattern: str = (
-        r"^# </([^\}]+)>"
-    )
+    pattern: str = r"^# </([^\}]+)>"
     for i, line in enumerate(all_lines):
         match = re.search(pattern, line)
         if match and match.group(1) in replaces:

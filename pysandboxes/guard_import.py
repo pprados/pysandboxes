@@ -353,7 +353,7 @@ def remove_modules() -> None:
             to_remove.add(k)
 
     importlib.invalidate_caches()
-    # Reload modules (may add modules with relead() )
+    # Reload modules (may add modules with reload() )
     for k in to_remove:
         if k in sys.modules:
             if k in sys.builtin_module_names:
@@ -498,7 +498,7 @@ def generate_rules(
     return result
 
 
-if "PYTEST_RUN_CONFIG" in os.environ:
+if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_import() -> None:
         global _rules
