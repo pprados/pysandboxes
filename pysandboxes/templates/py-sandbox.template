@@ -32,6 +32,7 @@
 # You can include additional configuration files for better organization.
 # Missing files are silently ignored.
 
+include "./.local.py-sandboxes"
 include "~/.config/pysandboxes/user-py-sandboxes.profile"
 include "/etc/pysandboxes/global-py-sandboxes.profile"
 

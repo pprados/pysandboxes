@@ -130,6 +130,7 @@ class DaemonParameters(NamedTuple):
         port: Network port for communication.
         init_fn: Initialization function reference.
     """
+
     all_rules: AllRules
     log_level: int
     log_format: str
@@ -215,6 +216,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
     Manages subprocess lifecycle including automatic restart on failure,
     watchdog monitoring, and communication via SSE over HTTP.
     """
+
     __slots__ = (
         "_is_started",
         "_token",

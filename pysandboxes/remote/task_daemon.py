@@ -20,6 +20,7 @@ class TaskDaemon(SSEServerDaemon):
     Extends SSEServerDaemon to provide in-process execution without
     subprocess isolation. Primarily used for testing and development.
     """
+
     async def _start(
         self,
         all_rules: AllRules,

@@ -36,6 +36,7 @@ def set_sandbox_loop(loop: AbstractEventLoop) -> None:
         loop: The asyncio event loop to set.
     """
     global _background_loop_ref
+    assert _background_loop_ref is None or _background_loop_ref() is None
     _background_loop_ref = weakref.ref(loop)
 
 

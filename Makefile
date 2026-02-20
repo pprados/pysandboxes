@@ -35,6 +35,9 @@ lint lint_diff:
 	poetry run black $(PYTHON_FILES) --check
 	poetry run ruff .
 
+claude-lint: lint
+	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'
+
 format format_diff:
 	poetry run black $(PYTHON_FILES)
 	poetry run ruff --select I --fix $(PYTHON_FILES)

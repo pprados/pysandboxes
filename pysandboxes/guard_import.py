@@ -59,6 +59,7 @@ class PatchRule(NamedTuple):
         module_name: Name of the module or attribute to patch.
         patch_factory: Factory function that creates the patch.
     """
+
     module_name: str
     patch_factory: Callable
 
@@ -74,6 +75,7 @@ class LearnImportRule(NamedTuple):
     Attributes:
         name: Name of the imported module.
     """
+
     name: str
 
 

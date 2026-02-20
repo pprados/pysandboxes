@@ -58,6 +58,7 @@ class RPCPayload(object):
         args: Base85-encoded serialized positional arguments.
         kwargs: Base85-encoded serialized keyword arguments.
     """
+
     session_id: str
     function: str
     args: str
@@ -306,6 +307,7 @@ class SSEServerDaemon(BaseSSESandbox):
     Provides HTTP API endpoints for remote code execution with real-time
     streaming of output via Server-Sent Events.
     """
+
     __slots__ = ("uvicorn", "task", "port", "hostname", "stopped")
 
     def __init__(self, token: str, *, port: int):

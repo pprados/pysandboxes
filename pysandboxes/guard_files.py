@@ -68,6 +68,7 @@ class BindRule(NamedTuple):
         write: Whether write access is allowed.
         config: Configuration line where rule was defined.
     """
+
     source: str
     dest: str | None
     write: bool
@@ -81,6 +82,7 @@ class IgnoreRule(NamedTuple):
         source: Glob pattern for files to ignore.
         config: Configuration line where rule was defined.
     """
+
     source: str
     config: ConfigLine
 
@@ -97,6 +99,7 @@ class LearnFileRule(NamedTuple):
         path: File or directory path that was accessed.
         write: Whether write access was attempted.
     """
+
     path: Path
     write: bool
 

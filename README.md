@@ -15,7 +15,7 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
 It's time to control, as much as possible, the allowed capabilities for your application.
 
 -----
-![Sandboxes](sandboxes-small.png)
+![Sandboxes](py-sandboxes-small.png)
 
 # Table of Contents
 - [Principle](#principle)

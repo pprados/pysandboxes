@@ -72,6 +72,7 @@ class WrapperIO(io.TextIOBase):
     A wrapper for sys.stdout/sys.stderr to allow for context-local redirection.
     It uses a context variable to hold the current output stream.
     """
+
     def __init__(self, context: contextvars.ContextVar):
         """
         Initializes the WrapperIO.
@@ -233,51 +234,3 @@ async def acatch_stdio(
 
     return result
 
-
-def _thread_catch_stream(
-    fn: Callable,
-    code_string: str,
-    *,
-    globals_dict: dict | None = None,
-    locals_dict: dict | None = None,
-    executor: Executor,
-) -> None:
-    """
-    Catches and streams stdout/stderr from a function running in a separate thread.
-
-    This is useful for getting real-time output from a long-running function.
-
-    Args:
-        fn: The function to execute in a thread.
-        code_string: The code string to be executed by the function.
-        globals_dict: Globals for the execution context.
-        locals_dict: Locals for the execution context.
-        executor: The executor to run the thread.
-
-    Returns:
-        The result of the function execution, or raises an exception.
-    """
-    stream_queue: queue.Queue = queue.Queue()
-    fut = executor.submit(
-        fn,
-        code_string,
-        globals_dict=globals_dict,
-        locals_dict=locals_dict,
-        queue=stream_queue,
-    )
-    while stream_queue:
-        msg = stream_queue.get()
-
-        if "result" in msg:
-            break
-        elif "exception" in msg:
-            break
-        elif "stdout" in msg:
-            print(msg["stdout"])
-        elif "stderr" in msg:
-            print(msg["stderr"], file=sys.stderr, flush=True)
-    result = fut.result()
-    if "result" in result:
-        return result["result"]
-    elif "exception" in result:
-        raise result["exception"]

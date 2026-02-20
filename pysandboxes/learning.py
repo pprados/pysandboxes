@@ -192,5 +192,6 @@ def add_learning_rule(rule: Any) -> None:
         rule: The rule to add to the learning collection.
     """
     with _lock:
-        _learning.add(rule)
-        pysandboxes_logger.debug(repr(rule))
+        if is_learning_mode():
+            _learning.add(rule)
+            pysandboxes_logger.debug(repr(rule))

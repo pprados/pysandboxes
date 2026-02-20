@@ -96,6 +96,7 @@ class Direction(IntEnum):
 
 class Kind(Enum):
     """Enumeration for socket types."""
+
     TCP = socket.SOCK_STREAM
     UDP = socket.SOCK_DGRAM
     UNKNOWN = socket.SOCK_DGRAM
@@ -110,6 +111,7 @@ class SocketMask(NamedTuple):
         network: Network range to match against.
         ports: Allowed ports (tuple or range).
     """
+
     kinds: tuple[Kind, ...]
     network: IPv4Network | IPv6Network
     ports: tuple[int, ...] | range
@@ -124,6 +126,7 @@ class SocketRule(NamedTuple):
         directions: Allowed directions (IN, OUT).
         config: Configuration line where rule was defined.
     """
+
     action: Action
     mask: SocketMask
     directions: tuple[Direction, ...]
@@ -144,6 +147,7 @@ class LearnSocketRule(NamedTuple):
         direction: Connection direction (IN, OUT) or None.
         dns: Resolved IP addresses for hostname.
     """
+
     fn: str
     kind: Kind
     address: str

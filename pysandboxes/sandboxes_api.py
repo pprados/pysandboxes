@@ -26,6 +26,8 @@ from typing import (
     TypeVar,
 )
 
+from tornado.gen import is_coroutine_function
+
 from .base_daemon import BaseDaemon
 from .e import ConfigSyntaxError
 from .os_sandbox import async_shutdown_daemon
@@ -385,5 +387,7 @@ def run(
             result = (await asyncio.create_task(main), "_start sandbox in run")
             return result
 
+    if not inspect.iscoroutine(main):
+        raise ValueError("a coroutine was expected, got {!r}".format(main))
     result = asyncio.run(_run())
     return result
