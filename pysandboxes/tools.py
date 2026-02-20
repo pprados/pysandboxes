@@ -61,10 +61,28 @@ def resolve_env_variables(s: str, envs: Environ) -> str:
 
 
 def substitute_env_vars(lines: list[str], env_vars: Environ) -> list[str]:
+    """Substitute environment variables in a list of strings.
+
+    Args:
+        lines: List of strings containing environment variable references.
+        env_vars: Environment variables mapping.
+
+    Returns:
+        List of strings with environment variables resolved.
+    """
     return [resolve_env_variables(line, env_vars) for line in lines]
 
 
 def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigLines:
+    """Substitute environment variables in configuration lines.
+
+    Args:
+        lines: Configuration lines containing environment variable references.
+        env_vars: Environment variables mapping.
+
+    Returns:
+        Configuration lines with environment variables resolved.
+    """
     return [
         ConfigLine(resolve_env_variables(line, env_vars), path, ln)
         for line, path, ln in lines
@@ -72,6 +90,14 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigL
 
 
 def remove_config_comments(config: ConfigLines) -> ConfigLines:
+    """Remove comments and template lines from configuration.
+
+    Args:
+        config: Configuration lines to process.
+
+    Returns:
+        Configuration lines with comments and templates removed.
+    """
     processed_lines: ConfigLines = []
 
     for line, path, ln in config:
@@ -88,6 +114,14 @@ def remove_config_comments(config: ConfigLines) -> ConfigLines:
 
 
 def remove_comments(config: list[str]) -> list[str]:
+    """Remove comments from a list of strings.
+
+    Args:
+        config: List of strings to process.
+
+    Returns:
+        List of strings with comments removed.
+    """
     processed_lines: list[str] = []
 
     for line in config:
@@ -102,14 +136,13 @@ def remove_comments(config: list[str]) -> list[str]:
 
 
 def _remove_comment(line: str) -> str:
-    """
-    Removes comments from a line while respecting quotes.
+    """Remove comments from a line while respecting quotes.
 
     Args:
-        line: The line to process
+        line: The line to process.
 
     Returns:
-        Line without comment
+        Line without comment.
     """
     result: list[str] = []
     in_quotes: bool = False
@@ -146,8 +179,17 @@ def _remove_comment(line: str) -> str:
 
 
 def _walk_to_base(path: str, base: str) -> Iterator[str]:
-    """
-    Yield directories starting from the given directory up to the root
+    """Yield directories starting from given directory up to base.
+
+    Args:
+        path: Starting directory path.
+        base: Base directory to stop at.
+
+    Yields:
+        Directory paths from starting directory up to base.
+
+    Raises:
+        IOError: If starting path is not found.
     """
     if not os.path.exists(path):
         raise IOError("Starting path not found")
@@ -166,14 +208,22 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 
 def find_config(
-        filename: str,
-        raise_error_if_not_found: bool = False,
-        usecwd: bool = False,
+    filename: str,
+    raise_error_if_not_found: bool = False,
+    usecwd: bool = False,
 ) -> str:
-    """
-    Search in increasingly higher folders for the given file
+    """Search in increasingly higher folders for the given file.
 
-    Returns path to the file if found, or an empty string otherwise
+    Args:
+        filename: Name of the file to search for.
+        raise_error_if_not_found: Whether to raise error if file not found.
+        usecwd: Whether to use current working directory as starting point.
+
+    Returns:
+        Path to the file if found, or empty string otherwise.
+
+    Raises:
+        IOError: If file not found and raise_error_if_not_found is True.
     """
 
     # TODO: search in module of the caller
@@ -199,7 +249,7 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-                frame.f_code.co_filename
+            frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back
@@ -224,12 +274,22 @@ _is_in_sandbox: int = 0
 
 
 def is_in_sandbox() -> bool:
+    """Check if currently executing inside a sandbox.
+
+    Returns:
+        True if inside sandbox, False otherwise.
+    """
     global _is_in_sandbox
     return _sandboxed.get() > 0
     # return _is_in_sandbox > 0
 
 
 def set_is_in_sandbox(value: bool) -> None:
+    """Set sandbox execution state.
+
+    Args:
+        value: True to enter sandbox context, False to exit.
+    """
     global _is_in_sandbox
     if value:
         _sandboxed.set(_sandboxed.get() + 1)
@@ -296,6 +356,11 @@ mixed_sync_and_async_error = (
 
 
 def check_mixte_async_async() -> None:
+    """Check for mixed synchronous and asynchronous execution contexts.
+
+    Raises:
+        RuntimeError: If mixing sync and async sandbox functions.
+    """
     try:
         if asyncio.get_running_loop():
             raise RuntimeError(mixed_sync_and_async_error)
@@ -307,6 +372,15 @@ def check_mixte_async_async() -> None:
 
 
 def follow_links_executable(executable: Path, all_paths: set[Path]) -> None:
+    """Follow symlinks for executable paths and add to paths set.
+
+    Args:
+        executable: Path to executable to follow.
+        all_paths: Set of paths to add discovered paths to.
+
+    Raises:
+        RuntimeError: If unable to resolve executable symlink.
+    """
     if executable.parents[0].name == "bin":
         if str(executable.parent.parent) not in all_paths:
             all_paths.add(executable.parent.parent)

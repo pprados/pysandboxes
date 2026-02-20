@@ -1,9 +1,28 @@
+"""
+This module provides utilities for parsing the Python command line.
+
+It is designed to separate standard CPython interpreter arguments from custom
+arguments intended for the pysandbox environment, and from the actual command
+(script, -c, or -m) to be executed.
+"""
 import argparse
 import sys
-from typing import List, Optional, Tuple
 
 
-def _split_python_cmd(args: List[str]) -> Tuple[List[str], List[str]]:
+def _split_python_cmd(args: list[str]) -> tuple[list[str], list[str]]:
+    """
+    Splits command-line arguments into Python options and the command part.
+
+    The split occurs at the first argument that is '-c', '-m', or does not
+    start with a '-', which typically signifies the start of the script or
+    command to be executed.
+
+    Args:
+        args: A list of command-line arguments.
+
+    Returns:
+        A tuple containing two lists: (python_args, python_cmd).
+    """
     for idx, arg in enumerate(args):
         if arg in ("-c", "-m") or not arg.startswith("-"):
             python_args, other_args = args[:idx], args[idx:]
@@ -13,7 +32,24 @@ def _split_python_cmd(args: List[str]) -> Tuple[List[str], List[str]]:
     return python_args, other_args
 
 
-def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[str]]:
+def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """
+    Parses the Python command line to separate CPython, sandbox, and command args.
+
+    This function uses `argparse` to identify standard CPython command-line
+    options. Any arguments not recognized by the parser are considered custom
+    sandbox arguments. It also handles various help flags, printing the help
+    message and exiting if any are present.
+
+    Args:
+        args: A list of command-line arguments from sys.argv[1:].
+
+    Returns:
+        A tuple containing three lists:
+        1. `python_parsed_args`: Standard CPython arguments.
+        2. `sandboxes_args`: Custom arguments for the sandbox.
+        3. `python_cmd`: The command to be executed and its arguments.
+    """
     # Split the command line in 3 parts:
     # - cpython parameter,
     # - pysandbox extra parameters,
@@ -24,42 +60,19 @@ def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[s
     # Split args before and after python command
     python_args, python_cmd = _split_python_cmd(args)
 
-    # Parse python argument
-    # class SandboxAction(argparse.Action):
-    #     def __init__(self,
-    #                  option_strings: Sequence[str],
-    #                  dest: str,
-    #                  # type:Callable[[str], _T] | FileType | None=None,
-    #                  # nargs:int | _NArgsStr | _SUPPRESS_T | None=None,
-    #                  # const:Any=None,
-    #                  # default:Any=None,
-    #                  # choices:Iterable[_T] | None=None,
-    #                  # required:bool=False,
-    #                  # metavar:str | tuple[str, ...] | None=None,
-    #                  # help:str=None,
-    #                  # deprecated:bool=False
-    #                  ):
-    #         super().__init__(option_strings="OPTOIN_STRING",
-    #                          dest="DEST",
-    #                          required=False,
-    #                          help=None,
-    #                          deprecated=False,
-    #                          metavar=argparse._deprecated_default,
-    #                          )
-    #
-    #     def __call__(self, *args, **kwargs):
-    #         print(f"Program Version: {self.version}")
-
     class CustomHelpFormatter(argparse.HelpFormatter):
-        """A custom formatter that wraps help messages at a specified width."""
+        """
+        Custom argparse formatter to control help message width and add extra info.
+        """
 
         def __init__(
             self,
             prog: str,
             indent_increment: int = 2,
             max_help_position: int = 10,
-            width: Optional[int] = None,
+            width: int | None = None,
         ):
+            """Initializes the custom formatter, setting a default width."""
             # We override the width here instead of in the parent class
             if width is None:
                 width = 80  # Default width, change this as needed
@@ -67,6 +80,7 @@ def parse_python_cmd_line(args: List[str]) -> Tuple[List[str], List[str], List[s
             # super().add_argument(SandboxAction())
 
         def format_help(self) -> str:
+            """Appends additional argument info to the standard help message."""
             help = super().format_help()
             help += (
                 "\n"

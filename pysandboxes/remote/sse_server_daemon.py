@@ -1,3 +1,16 @@
+"""Server-Sent Events (SSE) server daemon for PySandboxes remote execution.
+
+This module implements the server-side component of PySandboxes remote execution
+using FastAPI and Uvicorn. It provides a secure HTTP API for executing code
+in sandboxed environments with real-time streaming of stdout/stderr.
+
+Key components:
+- RPCPayload: Data structure for remote procedure calls
+- sandbox_daemon: Core execution engine with stdio capture
+- SSEServerDaemon: Main server implementation
+- Authentication and authorization via Bearer tokens
+"""
+
 import asyncio
 import base64
 import importlib
@@ -9,7 +22,7 @@ import traceback
 from asyncio import CancelledError, Task
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator
 
 from uvicorn import Server
 
@@ -37,6 +50,14 @@ _active_requests = 0
 
 @dataclass
 class RPCPayload(object):
+    """Payload structure for remote procedure calls.
+
+    Attributes:
+        session_id: Unique identifier for the execution session.
+        function: Module and function name in format 'module:function'.
+        args: Base85-encoded serialized positional arguments.
+        kwargs: Base85-encoded serialized keyword arguments.
+    """
     session_id: str
     function: str
     args: str
@@ -44,6 +65,14 @@ class RPCPayload(object):
 
 
 def _sse_msg(data: str) -> str:
+    """Format data as Server-Sent Events message.
+
+    Args:
+        data: JSON string to send as SSE message.
+
+    Returns:
+        Properly formatted SSE message string.
+    """
     return "data:" + data + "\n\n"
 
 
@@ -53,11 +82,16 @@ async def sandbox_daemon(
     args: Args,
     kwargs: dict[str, Any],
 ) -> AsyncGenerator[str, None]:
-    """
-    This function is called by the sandbox daemon to execute a function in the sandbox.
-    The code use a run_in_executor to run the function in a separate thread.
-    All the stdio is captured and sent back to the client.
-    The exception is also sent back to the client.
+    """Execute function in sandbox with stdio capture and streaming.
+
+    Args:
+        session_id: Unique session identifier for tracking.
+        function_id: Function identifier in 'module:function' format.
+        args: Positional arguments for function call.
+        kwargs: Keyword arguments for function call.
+
+    Yields:
+        SSE-formatted messages containing stdout, stderr, result, or exception.
     """
     import pickle
 
@@ -134,6 +168,16 @@ async def sandbox_daemon(
 
 
 def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
+    """Create configured Uvicorn server for sandbox daemon.
+
+    Args:
+        token: Authentication token for API access.
+        host: Host address to bind to.
+        port: Port number to listen on.
+
+    Returns:
+        Configured Uvicorn server instance.
+    """
     import uvicorn
     from fastapi import Body, FastAPI, HTTPException, Request
     from fastapi.responses import StreamingResponse
@@ -257,9 +301,20 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
 
 
 class SSEServerDaemon(BaseSSESandbox):
+    """Server-side daemon for handling sandboxed code execution.
+
+    Provides HTTP API endpoints for remote code execution with real-time
+    streaming of output via Server-Sent Events.
+    """
     __slots__ = ("uvicorn", "task", "port", "hostname", "stopped")
 
     def __init__(self, token: str, *, port: int):
+        """Initialize SSE server daemon.
+
+        Args:
+            token: Authentication token for API access.
+            port: Port number for HTTP server.
+        """
         super().__init__(token, host="localhost", max_connect_retry=MAX_CONNECT_RETRY)
         self.uvicorn: Server | None = None
         self.task: Task | None = None
@@ -269,10 +324,24 @@ class SSEServerDaemon(BaseSSESandbox):
 
     @property
     def active_request(self) -> int:
+        """Get number of currently active requests.
+
+        Returns:
+            Number of requests being processed.
+        """
         global _active_requests
         return _active_requests
 
     def update_rules(self, *, envs: Envs, all_rules: AllRules) -> AllRules:
+        """Update security rules for server daemon.
+
+        Args:
+            envs: Environment variables.
+            all_rules: Current security rules.
+
+        Returns:
+            Updated security rules for server context.
+        """
         return AllRules(
             config=[],  # FIXME: a quoi sert config?
             envs=envs,
@@ -292,8 +361,16 @@ class SSEServerDaemon(BaseSSESandbox):
         *,
         envs: Environ,
         log_level: int,
-        init_fn: Optional[SyncOrAsyncFunc],
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
+        """Start the SSE server daemon.
+
+        Args:
+            all_rules: Security rules configuration.
+            envs: Environment variables.
+            log_level: Logging level.
+            init_fn: Optional initialization function.
+        """
         set_is_in_sandbox(True)
         if init_fn:
             if asyncio.iscoroutinefunction(init_fn):
@@ -347,7 +424,11 @@ class SSEServerDaemon(BaseSSESandbox):
             loop.slow_callback_duration = initial_threshold
 
     async def _stop(self, max_pending: int) -> None:
-        """End all current jobs"""
+        """Stop server and wait for pending requests to complete.
+
+        Args:
+            max_pending: Maximum number of pending requests to wait for.
+        """
         logger.debug("Remote daemon_shutdown calling")
         set_is_in_sandbox(False)
         logger.debug("Refuse new incoming call")
@@ -374,6 +455,11 @@ class SSEServerDaemon(BaseSSESandbox):
         self.stopped = True
 
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        """Shutdown the SSE server daemon.
+
+        Args:
+            graceful_shutdown: Whether to perform graceful shutdown.
+        """
         logger.debug("SSEServerDaemon._shutdown()")
         await self._stop(max_pending=0)
         if self.task:
@@ -385,8 +471,18 @@ class SSEServerDaemon(BaseSSESandbox):
 
     @property
     def is_started(self) -> bool:
+        """Check if server is started and ready.
+
+        Returns:
+            True if server is started, False otherwise.
+        """
         return self.uvicorn.started if self.uvicorn else False
 
     async def join(self) -> None:
+        """Wait for server task to complete.
+
+        Raises:
+            AssertionError: If server task is not available.
+        """
         assert self.task
         await self.task

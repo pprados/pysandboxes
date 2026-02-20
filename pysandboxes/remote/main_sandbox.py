@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""Main sandbox process entry point for PySandboxes remote execution.
+
+This module serves as the main entry point for sandbox processes that run in
+isolated environments (subprocess, firejail, etc.). It handles configuration
+loading, sandbox initialization, and server startup for remote code execution.
+
+The main process:
+1. Loads configuration from named pipes
+2. Activates Python-level sandboxing if enabled
+3. Starts the SSE server daemon for remote communication
+4. Handles graceful shutdown and error handling
+"""
+
 import argparse
 import asyncio
 import importlib
@@ -8,7 +21,6 @@ import pickle
 import sys
 import threading
 from pathlib import Path
-from typing import Optional
 
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
@@ -25,11 +37,19 @@ logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 
 async def run_server(process_config: DaemonParameters) -> int:
+    """Run the sandbox server with the provided configuration.
+
+    Args:
+        process_config: Configuration parameters for the daemon process.
+
+    Returns:
+        Exit code (0 for success).
+    """
     from pysandboxes.main_logger import pysandboxes_logger
 
     # Call init function
     # Note: the init_function is called AFTER the activation of the python sandbox
-    init_fn: Optional[SyncOrAsyncFunc] = None
+    init_fn: SyncOrAsyncFunc | None = None
     if process_config.init_fn:
         module_name, function_name = str(process_config.init_fn).split(":", 1)
         set_is_in_sandbox(True)
@@ -74,6 +94,14 @@ async def run_server(process_config: DaemonParameters) -> int:
 
 
 def main() -> int:
+    """Main entry point for the sandbox process.
+
+    Parses command line arguments, loads configuration from named pipe,
+    sets up logging, and starts either the server or python-sb mode.
+
+    Returns:
+        Exit code (0 for success, non-zero for errors).
+    """
     threading.main_thread().name = "DaemonMainThread"
 
     parser = argparse.ArgumentParser(

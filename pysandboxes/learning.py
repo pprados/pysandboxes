@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 _lock = Lock()
 _learning: Set[Any] = set()
 
-_learning_path: Path|None = None
+_learning_path: Path | None = None
 
 
 def generate_config_from_learning() -> None:

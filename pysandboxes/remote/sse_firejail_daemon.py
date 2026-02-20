@@ -1,3 +1,16 @@
+"""Firejail-based daemon for OS-level sandboxing with PySandboxes.
+
+This module implements a firejail-based sandbox daemon that combines
+PySandboxes Python-level security with firejail OS-level isolation.
+It configures firejail profiles, manages file system access rules,
+and handles network filtering for comprehensive sandboxing.
+
+Key components:
+- WhiteList: Optimized directory path whitelist management
+- FireJailSSEDaemon: Firejail subprocess daemon implementation
+- Firejail profile generation and rule translation
+"""
+
 import importlib
 import logging
 import os
@@ -8,7 +21,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any, Iterator, List, MutableSet, Optional, Set, Tuple, Union, cast
+from typing import Any, Iterator, MutableSet, cast
 
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
@@ -33,35 +46,26 @@ REPLACE = True
 
 
 class WhiteList(MutableSet):
-    """
-    A class that simulates a set of directory paths, implementing a white list logic.
+    """Optimized whitelist for directory paths with prefix logic.
 
-    This class extends MutableSet to provide set-like functionality. It ensures
-    that the stored directory paths are unique and adhere to specific prefix rules.
-    If a new directory path is a prefix of an existing path, the existing path is
-    removed and replaced by the new, more general path. If a new path is already
-    prefixed by an existing path, it is not added.
+    This class manages directory paths efficiently by applying prefix rules:
+    - If a new path is already covered by an existing parent path, it's not added
+    - If a new path covers existing child paths, the children are removed
+    - Ensures minimal set of paths that cover all allowed directories
     """
 
     def __init__(self) -> None:
-        """
-        Initializes the WhiteList with an optional list of directory paths.
-
-        Args:
-            directories (list[str]): A list of initial directory paths to add.
-        """
+        """Initialize empty WhiteList."""
         self._set: set[str] = set()
 
     def __contains__(self, item: Any) -> bool:
-        """
-        Checks if a directory path or any of its parent directories is in the WhiteList.
+        """Check if directory path is covered by whitelist.
 
         Args:
-            item (Any): The directory path to check.
+            item: The directory path to check.
 
         Returns:
-            bool: True if the item is a string and is in the internal set or is a
-                  sub-directory of an existing path, False otherwise.
+            True if path is whitelisted or is subdirectory of whitelisted path.
         """
 
         # Ensure the path ends with a separator for consistent prefix checking.
@@ -78,31 +82,26 @@ class WhiteList(MutableSet):
         return False
 
     def __iter__(self) -> Iterator[str]:
-        """
-        Returns an iterator over the directory paths in the WhiteList.
+        """Iterate over whitelisted directory paths.
+
+        Returns:
+            Iterator over directory paths.
         """
         return iter(self._set)
 
     def __len__(self) -> int:
-        """
-        Returns the number of directory paths in the WhiteList.
+        """Get number of whitelisted paths.
 
         Returns:
-            int: The number of paths.
+            Number of paths in the whitelist.
         """
         return len(self._set)
 
     def add(self, directory: str) -> None:
-        """
-        Adds a new directory path to the WhiteList, applying the prefix rules.
-
-        - If the new directory path is already prefixed by an existing path, it
-          is not added.
-        - If the new directory path is a prefix of one or more existing paths,
-          those paths are removed and the new path is added.
+        """Add directory path to whitelist with prefix optimization.
 
         Args:
-            directory (str): The directory path to add.
+            directory: Directory path to add.
         """
         # Ensure the path ends with a separator to simplify prefix checks.
         if not directory.endswith("/"):
@@ -129,11 +128,10 @@ class WhiteList(MutableSet):
             self._set.add(directory)
 
     def discard(self, directory: str) -> None:
-        """
-        Removes a directory path from the WhiteList if it exists.
+        """Remove directory path from whitelist.
 
         Args:
-            directory (str): The directory path to remove.
+            directory: Directory path to remove.
         """
         # Ensure the path ends with a separator for consistency.
         if not directory.endswith("/"):
@@ -141,7 +139,16 @@ class WhiteList(MutableSet):
         self._set.discard(directory)
 
 
-def _follow_links(filename: Union[str, Path], whitelist: WhiteList) -> None:
+def _follow_links(filename: str | Path, whitelist: WhiteList) -> None:
+    """Add file path and its symlink target to whitelist.
+
+    Args:
+        filename: File or directory path to add.
+        whitelist: WhiteList to add paths to.
+
+    Raises:
+        RuntimeError: If symlink cannot be resolved.
+    """
     whitelist.add(str(filename))
     try:
         if Path(filename).is_symlink():
@@ -153,12 +160,27 @@ def _follow_links(filename: Union[str, Path], whitelist: WhiteList) -> None:
 
 
 class FireJailSSEDaemon(BaseSubProcessDaemon):
+    """Firejail-based subprocess daemon for OS-level sandboxing.
+
+    Translates PySandboxes rules to firejail configuration and launches
+    sandboxed processes with comprehensive OS-level isolation.
+    """
+
     def update_rules(
         self,
         *,
         all_rules: AllRules,
         envs: Envs,
     ) -> AllRules:
+        """Update rules by translating to firejail configuration.
+
+        Args:
+            all_rules: Current security rules.
+            envs: Environment variables.
+
+        Returns:
+            Updated security rules for firejail context.
+        """
         _, updated_all_rules = self._firejail_args(all_rules, envs, None)
         return updated_all_rules
 
@@ -166,10 +188,17 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         self,
         all_rules: AllRules,
         envs: Environ,
-        pipe_path: Optional[Path],
-    ) -> Tuple[Args, AllRules]:
-        """
-        Apply the pysandboxes rules to firejail.
+        pipe_path: Path | None,
+    ) -> tuple[Args, AllRules]:
+        """Generate firejail command arguments from PySandboxes rules.
+
+        Args:
+            all_rules: Security rules to translate.
+            envs: Environment variables.
+            pipe_path: Path to configuration pipe.
+
+        Returns:
+            Tuple of (firejail_args, updated_rules).
         """
 
         # Replace the rules.
@@ -210,7 +239,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         whitelist = WhiteList()
 
         # Manage sys.executable
-        bin_path: Set[Path] = set()
+        bin_path: set[Path] = set()
         follow_links_executable(Path(sys.executable), bin_path)
         for p in bin_path:
             _follow_links(p, whitelist)
@@ -266,7 +295,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             _new_files_rules, _ = files_parse_rules(
                 [ConfigLine("bind=/,/", Path(), 0)], []
             )
-            new_files_rules = cast(List[BindRule], _new_files_rules)
+            new_files_rules = cast(list[BindRule], _new_files_rules)
             selected_rules = [
                 rule
                 for rule in all_rules.file_rules
@@ -357,7 +386,17 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
-    ) -> List[str]:
+    ) -> list[str]:
+        """Build complete command line for firejail subprocess.
+
+        Args:
+            all_rules: Security rules configuration.
+            envs: Environment variables.
+            pipe_path: Path to configuration pipe.
+
+        Returns:
+            Complete command line arguments including firejail and subprocess args.
+        """
         run_daemon_cmd = super().subprocess_cmd(
             all_rules,
             envs,

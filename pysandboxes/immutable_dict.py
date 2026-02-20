@@ -28,6 +28,14 @@ ValueType = TypeVar("ValueType")
 def _restore_pickle(
     data: dict[KeyType, ValueType]
 ) -> "ImmutableDict[KeyType,ValueType]":
+    """Restore ImmutableDict from pickled data.
+
+    Args:
+        data: Dictionary data to restore from.
+
+    Returns:
+        New ImmutableDict instance with the provided data.
+    """
     return ImmutableDict(data)
 
 
@@ -46,8 +54,16 @@ class ImmutableDict(
     # construction accepts either a Mapping or an iterable of (key, value) pairs
     def __new__(
         cls,
-        data: Mapping[KeyType, ValueType]| Iterable[tuple[KeyType, ValueType]],
+        data: Mapping[KeyType, ValueType] | Iterable[tuple[KeyType, ValueType]],
     ) -> "ImmutableDict[KeyType, ValueType]":
+        """Create new ImmutableDict instance.
+
+        Args:
+            data: Either a mapping or iterable of (key, value) pairs.
+
+        Returns:
+            New ImmutableDict instance.
+        """
         # Normalize incoming data to an iterable of pairs
         keys: tuple[KeyType, ...]
         values: tuple[ValueType, ...]
@@ -77,18 +93,44 @@ class ImmutableDict(
         return obj
 
     def __reduce__(self) -> tuple[Callable[..., Any], tuple[Any, ...]]:
+        """Support for pickle serialization.
+
+        Returns:
+            Tuple for pickle reconstruction.
+        """
         return (_restore_pickle, (dict(self),))
 
     @property
     def _keys(self) -> tuple[KeyType, ...]:
+        """Get tuple of all keys.
+
+        Returns:
+            Tuple containing all dictionary keys.
+        """
         return tuple.__getitem__(self, 0)  # type: ignore[index]
 
     @property
     def _values(self) -> tuple[ValueType, ...]:
+        """Get tuple of all values.
+
+        Returns:
+            Tuple containing all dictionary values.
+        """
         return tuple.__getitem__(self, 1)  # type: ignore[index]
 
     # Mapping kind
     def __getitem__(self, key: KeyType) -> ValueType:  # type: ignore[override]
+        """Get value by key.
+
+        Args:
+            key: Key to look up.
+
+        Returns:
+            Value associated with the key.
+
+        Raises:
+            KeyError: If key is not found.
+        """
         try:
             idx = self._keys.index(key)
         except ValueError:
@@ -96,12 +138,30 @@ class ImmutableDict(
         return cast(ValueType, self._values[idx])
 
     def __iter__(self) -> Iterator[KeyType]:  # type: ignore[override]
+        """Iterate over keys.
+
+        Returns:
+            Iterator over dictionary keys.
+        """
         return iter(self._keys)
 
     def __len__(self) -> int:
+        """Get number of key-value pairs.
+
+        Returns:
+            Number of items in the dictionary.
+        """
         return len(self._keys)
 
     def __contains__(self, key: object) -> bool:
+        """Check if key exists in dictionary.
+
+        Args:
+            key: Key to check for existence.
+
+        Returns:
+            True if key exists, False otherwise.
+        """
         try:
             self._keys.index(key)  # type: ignore[arg-type]
             return True
@@ -109,14 +169,34 @@ class ImmutableDict(
             return False
 
     def __repr__(self) -> str:
+        """String representation of the dictionary.
+
+        Returns:
+            String representation in ImmutableDict format.
+        """
         return f"ImmutableDict({dict(zip(self._keys, self._values))})"
 
     # Keep Mapping's default .keys(), .items(), .values()
     def keys(self) -> KeysView[KeyType]:
+        """Get view of dictionary keys.
+
+        Returns:
+            Keys view of the dictionary.
+        """
         return Mapping.keys(self)
 
     def items(self) -> ItemsView[KeyType, ValueType]:
+        """Get view of dictionary items.
+
+        Returns:
+            Items view of the dictionary.
+        """
         return Mapping.items(self)
 
     def values(self) -> ValuesView[ValueType]:
+        """Get view of dictionary values.
+
+        Returns:
+            Values view of the dictionary.
+        """
         return Mapping.values(self)

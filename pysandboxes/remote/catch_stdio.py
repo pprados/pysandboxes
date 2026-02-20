@@ -1,3 +1,8 @@
+"""
+This module provides utilities for capturing stdout and stderr streams,
+especially in a multi-threaded or asynchronous context.
+It uses context variables to manage thread-specific output streams.
+"""
 import asyncio
 import contextvars
 import inspect
@@ -6,13 +11,13 @@ import logging
 import queue
 import sys
 from concurrent.futures import Executor
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable
 
 from ..private_loop import get_sandbox_loop
 
 logger = logging.getLogger(__name__)
 
-TQueue = Union[queue.Queue, asyncio.Queue]
+TQueue = queue.Queue | asyncio.Queue
 
 
 class QueueStringIO(io.StringIO):
@@ -21,10 +26,17 @@ class QueueStringIO(io.StringIO):
     thread-specific queue, and also writes to an underlying StringIO buffer.
     """
 
-    def __init__(self, type: str, queue: Optional[TQueue]):
+    def __init__(self, type: str, queue: TQueue | None):
+        """
+        Initializes the QueueStringIO.
+
+        Args:
+            type: The type of stream ("stdout" or "stderr").
+            queue: The queue to which messages will be sent.
+        """
         super().__init__()
         self.type = type
-        self._message_queue: Optional[TQueue] = queue
+        self._message_queue: TQueue | None = queue
         self._buffer: io.StringIO = (
             io.StringIO()
         )  # Underlying buffer for aggregated content
@@ -50,16 +62,33 @@ class QueueStringIO(io.StringIO):
         return self._buffer.getvalue()
 
     def flush(self) -> None:
+        """Flushes the underlying buffer."""
         # No-op for StringIO, but good practice for file-like objects
         self._buffer.flush()
 
 
 class WrapperIO(io.TextIOBase):
+    """
+    A wrapper for sys.stdout/sys.stderr to allow for context-local redirection.
+    It uses a context variable to hold the current output stream.
+    """
     def __init__(self, context: contextvars.ContextVar):
+        """
+        Initializes the WrapperIO.
+
+        Args:
+            context: The context variable that holds the current stream.
+        """
         self._context = context
         self._old = None
 
     def set_context(self, new_textio: io.TextIOBase) -> None:
+        """
+        Sets a new stream for the current context.
+
+        Args:
+            new_textio: The new stream to be used for the current context.
+        """
         if not self._old:
             self._old = self._context.get()
             self._context.set(new_textio)
@@ -79,13 +108,24 @@ class WrapperIO(io.TextIOBase):
             setattr(self._old, name, value)
 
     def __del__(self) -> None:
+        """Restores the original stream when the wrapper is deleted."""
         if self._old:
             self._context.set(self._old)
 
     def write(self, s: str) -> int:
+        """
+        Writes to the stream of the current context.
+
+        Args:
+            s: The string to write.
+
+        Returns:
+            The number of characters written.
+        """
         return self._context.get().write(s)
 
     def flush(self) -> None:
+        """Flushes the stream of the current context."""
         self._context.get().flush()
 
 
@@ -94,11 +134,23 @@ sys.stderr = WrapperIO(contextvars.ContextVar("current_stderr", default=sys.stde
 
 
 def catch_stdio(
-    queue: Optional[TQueue],
+    queue: TQueue | None,
     fn: Callable,
-    kwargs: Dict[str, Any],
+    kwargs: dict[str, Any],
     *args: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
+    """
+    Catches stdout and stderr for a synchronous function running in the sandbox loop.
+
+    Args:
+        queue: The queue to which output and results will be sent.
+        fn: The synchronous function to execute.
+        kwargs: Keyword arguments for the function.
+        *args: Positional arguments for the function.
+
+    Returns:
+        A dictionary containing the result, stdout, and stderr.
+    """
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
     result = asyncio.run_coroutine_threadsafe(
         acatch_stdio(queue, fn, kwargs, *args), asyncio.get_event_loop()
@@ -107,11 +159,26 @@ def catch_stdio(
 
 
 async def acatch_stdio(
-    sync_or_async_queue: Optional[TQueue],
+    sync_or_async_queue: TQueue | None,
     fn: Callable,
-    kwargs: Dict[str, Any],
+    kwargs: dict[str, Any],
     *args: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
+    """
+    Asynchronously catches stdout and stderr for a function (sync or async).
+
+    This function sets up context-local streams to capture the output of the
+    given function.
+
+    Args:
+        sync_or_async_queue: The queue (sync or async) to send output to.
+        fn: The function to execute.
+        kwargs: Keyword arguments for the function.
+        *args: Positional arguments for the function.
+
+    Returns:
+        A dictionary containing the result, stdout, and stderr.
+    """
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
     captured_stdout: io.StringIO = QueueStringIO(
         type="stdout", queue=sync_or_async_queue
@@ -121,14 +188,18 @@ async def acatch_stdio(
     )
     fn_result: Any = None
 
-    async def run_in_context() -> Dict[str, Any]:
+    async def run_in_context() -> dict[str, Any]:
+        """
+        Runs the function in a context with captured stdio.
+        Handles both sync and async functions and captures exceptions.
+        """
         logger.debug("async run_in_context()...")
         # Allows modification of eval_result from outer scope
         nonlocal fn_result
         # Set the context variables for the current context
         sys.stdout.set_context(captured_stdout)  # type: ignore[union-attr]
         sys.stderr.set_context(captured_stderr)  # type: ignore[union-attr]
-        result: Dict[str, Any]
+        result: dict[str, Any]
 
         try:
             use_async = inspect.iscoroutinefunction(fn)
@@ -171,6 +242,21 @@ def _thread_catch_stream(
     locals_dict: dict | None = None,
     executor: Executor,
 ) -> None:
+    """
+    Catches and streams stdout/stderr from a function running in a separate thread.
+
+    This is useful for getting real-time output from a long-running function.
+
+    Args:
+        fn: The function to execute in a thread.
+        code_string: The code string to be executed by the function.
+        globals_dict: Globals for the execution context.
+        locals_dict: Locals for the execution context.
+        executor: The executor to run the thread.
+
+    Returns:
+        The result of the function execution, or raises an exception.
+    """
     stream_queue: queue.Queue = queue.Queue()
     fut = executor.submit(
         fn,

@@ -130,7 +130,7 @@ def load_and_parse_config(
     )
 
 
-def _search_module_config(config_path: Path|None) -> Path:
+def _search_module_config(config_path: Path | None) -> Path:
     if not config_path:
         config_path = Path(CONFIG_NAME)
     # Try to find config filename
@@ -146,7 +146,7 @@ def _search_module_config(config_path: Path|None) -> Path:
     from importlib.resources import files
 
     caller_module = frame.f_globals.get("__name__", "__main__").split(".", 1)[0]
-    resource_config: Path|None = None
+    resource_config: Path | None = None
     if caller_module != "__main__":
         resource_path = cast(Path, files(caller_module))
         resource_config = resource_path / config_path
@@ -196,7 +196,7 @@ def parse_config(
     config: ConfigLines,
     config_path: Path,
     *,
-    envs: Environ|None = None,
+    envs: Environ | None = None,
 ) -> AllRules:
     if envs is None:
         envs = os.environ
@@ -259,7 +259,7 @@ def parse_config(
 
 def activate_sandboxes(
     all_rules: AllRules,
-    envs: Environ|None = None,
+    envs: Environ | None = None,
 ) -> None:
     if envs is None:
         envs = os.environ

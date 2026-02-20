@@ -1,3 +1,16 @@
+"""Subprocess-based daemon client for PySandboxes remote execution.
+
+This module implements a subprocess-based daemon that spawns isolated Python
+processes for sandboxed code execution. It provides process management,
+watchdog functionality, and IPC communication via Server-Sent Events (SSE).
+
+Key components:
+- BaseSubProcessDaemon: Base class for subprocess-based sandboxes
+- SubProcessDaemon: Standard subprocess implementation
+- DaemonParameters: Configuration data structure
+- Process lifecycle management with automatic restart on failure
+"""
+
 import asyncio
 import gc
 import logging
@@ -13,7 +26,7 @@ from asyncio import CancelledError, Task
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Callable, Dict, List, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout
@@ -43,6 +56,11 @@ DEBUG = False
 
 
 def get_log_formatter() -> str:
+    """Get the current log formatter pattern.
+
+    Returns:
+        Format string for log messages.
+    """
     root_logger = logging.getLogger()
     fmt = None
     for h in root_logger.handlers:
@@ -55,6 +73,11 @@ def get_log_formatter() -> str:
 
 
 async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
+    """Write stdin data to child process.
+
+    Args:
+        child_stdin_writer: Stream writer for child process stdin.
+    """
     import pty
     import termios
     import tty
@@ -82,6 +105,12 @@ async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
 async def _read_stream(
     stream: asyncio.StreamReader, callback: Callable[[str], None]
 ) -> None:
+    """Read data from stream and call callback for each line.
+
+    Args:
+        stream: Stream reader to read from.
+        callback: Function to call with each line of output.
+    """
     while True:
         line: bytes = await stream.readline()
         if line:
@@ -91,6 +120,16 @@ async def _read_stream(
 
 
 class DaemonParameters(NamedTuple):
+    """Configuration parameters for daemon processes.
+
+    Attributes:
+        all_rules: Security rules configuration.
+        log_level: Logging level for the daemon.
+        log_format: Format string for log messages.
+        token: Authentication token for communication.
+        port: Network port for communication.
+        init_fn: Initialization function reference.
+    """
     all_rules: AllRules
     log_level: int
     log_format: str
@@ -101,11 +140,22 @@ class DaemonParameters(NamedTuple):
 
 @sandbox_loop
 async def launch_sandbox(
-    cmd: List[str],
+    cmd: list[str],
     pipe_path: Path,
     envs: Envs,
     process_config: DaemonParameters,
 ) -> Process:
+    """Launch a sandbox subprocess with the given configuration.
+
+    Args:
+        cmd: Command line arguments for the subprocess.
+        pipe_path: Path to named pipe for configuration transfer.
+        envs: Environment variables for the subprocess.
+        process_config: Configuration parameters to send to subprocess.
+
+    Returns:
+        The launched subprocess.
+    """
     os.mkfifo(pipe_path)
     if DEBUG:
         Path("run.sh").write_text(
@@ -138,11 +188,13 @@ async def launch_sandbox(
 
 
 def find_free_port() -> int:
-    """
-    Finds and returns an available TCP port.
+    """Find and return an available TCP port.
 
     Returns:
-        The number of a free TCP port, or None if no port could be found.
+        Number of a free TCP port.
+
+    Raises:
+        RuntimeError: If no free port could be found.
     """
     # Use contextlib.closing to ensure the socket is properly closed
     try:
@@ -158,6 +210,11 @@ def find_free_port() -> int:
 
 
 class BaseSubProcessDaemon(BaseSSESandbox):
+    """Base class for subprocess-based sandbox daemons.
+
+    Manages subprocess lifecycle including automatic restart on failure,
+    watchdog monitoring, and communication via SSE over HTTP.
+    """
     __slots__ = (
         "_is_started",
         "_token",
@@ -180,7 +237,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         token: str,
         *,
         host: str = "localhost",
-        python_args: Optional[List[str]] = None,
+        python_args: list[str] | None = None,
         max_connect_retry: int = MAX_CONNECT_RETRY,
         max_attempts: int = RETRY_MAX_ATTEMPTS,
         # Maximum number of retry _attempts
@@ -189,8 +246,20 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         factor: float = RETRY_FACTOR,  # Exponential increase _factor
         max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
         reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attempts
-        **kwargs: Dict[str, Any],
     ) -> None:
+        """Initialize the subprocess daemon.
+
+        Args:
+            token: Authentication token for communication.
+            host: Host address for communication.
+            python_args: Additional Python arguments for subprocess.
+            max_connect_retry: Maximum connection retry attempts.
+            max_attempts: Maximum restart attempts before giving up.
+            base_delay: Initial delay between restart attempts.
+            factor: Exponential backoff factor for delays.
+            max_delay: Maximum delay between attempts.
+            reset_delay: Delay after which attempt counter resets.
+        """
         super().__init__(token, host=host, max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
         self._process: Process | None = None
@@ -211,6 +280,16 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         envs: Environ,
         pipe_path: Path,
     ) -> Args:
+        """Build command line arguments for subprocess.
+
+        Args:
+            all_rules: Security rules configuration.
+            envs: Environment variables.
+            pipe_path: Path to named pipe for configuration.
+
+        Returns:
+            List of command line arguments.
+        """
         from . import main_sandbox
 
         cmd_parameters = [
@@ -235,8 +314,16 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         *,
         envs: Environ,
         log_level: int,
-        init_fn: Optional[SyncOrAsyncFunc],
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
+        """Start the subprocess daemon.
+
+        Args:
+            all_rules: Security rules configuration.
+            envs: Environment variables.
+            log_level: Logging level to set.
+            init_fn: Optional initialization function.
+        """
         self.restart = 0
         self.port = find_free_port()
 
@@ -258,8 +345,16 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         *,
         envs: Environ,
         log_level: int,
-        init_fn: Optional[SyncOrAsyncFunc],
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
+        """Monitor subprocess and restart on failure.
+
+        Args:
+            all_rules: Security rules configuration.
+            envs: Environment variables.
+            log_level: Logging level.
+            init_fn: Optional initialization function.
+        """
         errorlevel = -1
         if self._process is None:
             return
@@ -306,9 +401,18 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         *,
         envs: Environ,
         log_level: int,
-        init_fn: Optional[SyncOrAsyncFunc],
+        init_fn: SyncOrAsyncFunc | None,
         first: bool = False,
     ) -> None:
+        """Restart the subprocess daemon.
+
+        Args:
+            all_rules: Security rules configuration.
+            envs: Environment variables.
+            log_level: Logging level.
+            init_fn: Optional initialization function.
+            first: Whether this is the first start (not a restart).
+        """
         with tempfile.TemporaryDirectory() as tmpdir:
             pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
             pipe_path.unlink(missing_ok=True)
@@ -339,8 +443,18 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         port: int,
         *,
         log_level: int,
-        init_fn: Optional[SyncOrAsyncFunc],
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
+        """Execute subprocess restart with given command and configuration.
+
+        Args:
+            all_rules: Security rules configuration.
+            args: Command line arguments for subprocess.
+            pipe_path: Path to named pipe for configuration.
+            port: Network port for communication.
+            log_level: Logging level.
+            init_fn: Optional initialization function.
+        """
         self._is_started = False
         self._accept_incoming = False
         if init_fn:
@@ -404,11 +518,21 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         logger.debug(f"{self._accept_incoming=}")
 
     async def _stop(self, max_pending: int) -> None:
+        """Stop the subprocess daemon.
+
+        Args:
+            max_pending: Maximum pending operations to wait for.
+        """
         if self._watchdog:
             self._watchdog.cancel()
             self._watchdog = None
 
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        """Shutdown the subprocess daemon.
+
+        Args:
+            graceful_shutdown: Whether to perform graceful shutdown.
+        """
         await super()._shutdown(graceful_shutdown)
         self.max_connect_retry = 1  # Try only one time for remote _shutdown
 
@@ -452,10 +576,24 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
+    """Standard subprocess daemon implementation.
+
+    Simple subprocess daemon that delegates rule updates to the parent class.
+    """
+
     def update_rules(
         self,
         *,
         envs: Envs,
         all_rules: AllRules,
     ) -> AllRules:
+        """Update security rules (no-op for basic subprocess daemon).
+
+        Args:
+            envs: Environment variables.
+            all_rules: Current security rules.
+
+        Returns:
+            Unchanged security rules.
+        """
         return all_rules

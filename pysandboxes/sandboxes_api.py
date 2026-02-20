@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import (
     Any,
     Callable,
-    Coroutine, TypeVar,
+    Coroutine,
+    TypeVar,
 )
 
 from .base_daemon import BaseDaemon
@@ -261,9 +262,9 @@ class sandboxes:
 
     def __exit__(
         self,
-        exc_type: type[BaseException]|None,
-        exc: BaseException|None,
-        tb: Any|None,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any | None,
     ) -> None:
         """
         Stop the sandbox daemon.
@@ -339,8 +340,8 @@ class sandboxes:
     @sandbox_loop
     async def __aexit__(
         self,
-        exc_type: type[BaseException]|None,
-        exc: BaseException|None,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
         tb: Any,
     ) -> bool:
         """
@@ -354,10 +355,10 @@ class sandboxes:
 def run(
     main: Coroutine[Any, Any, Any],
     *,
-    init_fn: SyncOrAsyncFunc|None = None,
-    config_path: Path| str|None = None,
+    init_fn: SyncOrAsyncFunc | None = None,
+    config_path: Path | str | None = None,
     envs: Environ | None = None,
-    python_args: list[str]|None = None,
+    python_args: list[str] | None = None,
     graceful_shutdown: bool = True,
     **kwargs: dict[str, Any],
 ) -> Any:

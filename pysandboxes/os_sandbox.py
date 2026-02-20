@@ -1,8 +1,15 @@
+"""
+This module manages the lifecycle of different sandbox daemons.
+
+It provides functions to start, stop, and interact with various sandboxing
+providers like subprocess, firejail, etc. It maintains a singleton instance
+of the currently active daemon.
+"""
 import asyncio
 import logging
 import threading
 import uuid
-from typing import Any, Callable, Optional, Type, cast
+from typing import Any, Callable, Type, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
@@ -17,6 +24,7 @@ from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sand
 
 logger = logging.getLogger(__name__)
 
+# A factory to create daemon instances from their names.
 providers_factory: dict[str, Type] = {
     "_task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
     "_sse_server": SSEServerDaemon,  # Impossible to activate py-sandbox in this mode.
@@ -35,11 +43,18 @@ providers_factory: dict[str, Type] = {
 DEFAULT_OS_SANDBOX = "subprocess"
 
 # Singleton with the current daemon used by the sandbox
-_current_daemon: Optional[BaseDaemon] = None  # TODO: use context?
-_startup_counter = 0  # Number of time the daemon has been started
+_current_daemon: BaseDaemon | None = None
+# Number of times the daemon has been started. Used for reference counting.
+_startup_counter = 0
 
 
 async def stop_incoming_call() -> None:
+    """
+    Stops the current daemon from accepting new incoming calls.
+
+    This function sets a flag on the daemon to prevent it from processing
+    new requests, allowing for a graceful shutdown.
+    """
     # Stop to accept incoming call and wait the end of the current call
     global _current_daemon
     if _current_daemon:
@@ -47,6 +62,12 @@ async def stop_incoming_call() -> None:
 
 
 def is_accept_incoming_call() -> bool:
+    """
+    Checks if the current daemon is started and accepting incoming calls.
+
+    Returns:
+        True if the daemon is running and accepting calls, False otherwise.
+    """
     return (
         is_daemon_started()
         and _current_daemon is not None
@@ -59,12 +80,23 @@ async def async_start_daemon(
     *,
     envs: Environ,
     log_level: int,
-    init_fn: Optional[SyncOrAsyncFunc],
-    python_args: Optional[list[str]] = None,
+    init_fn: SyncOrAsyncFunc | None,
+    python_args: list[str] | None = None,
 ) -> BaseDaemon:
     """
-    Asynchronize version to _start daemon by name.
-    Returns daemon object when is starred
+    Asynchronously starts a daemon by name.
+
+    This is a wrapper around _async_start_daemon.
+
+    Args:
+        all_rules: The security rules for the sandbox.
+        envs: Environment variables for the sandbox process.
+        log_level: The logging level for the daemon.
+        init_fn: An optional initialization function to run in the sandbox.
+        python_args: Optional arguments for the Python interpreter in the sandbox.
+
+    Returns:
+        The started daemon instance.
     """
     return await _async_start_daemon(
         all_rules,
@@ -83,12 +115,28 @@ async def _async_start_daemon(
     all_rules: AllRules,
     envs: Environ,
     log_level: int,
-    init_fn: Optional[SyncOrAsyncFunc],
-    python_args: Optional[list[str]] = None,
+    init_fn: SyncOrAsyncFunc | None,
+    python_args: list[str] | None = None,
 ) -> BaseDaemon:
     """
-    Asynchronize version without the creation of the sandbox loop.
-    It's used in run()
+    Core logic to asynchronously start a daemon.
+
+    It ensures that only one daemon is started at a time using a lock.
+    If a daemon is already running, it increments a counter and returns
+    the existing instance.
+
+    Args:
+        all_rules: The security rules for the sandbox.
+        envs: Environment variables for the sandbox process.
+        log_level: The logging level for the daemon.
+        init_fn: An optional initialization function to run in the sandbox.
+        python_args: Optional arguments for the Python interpreter in the sandbox.
+
+    Returns:
+        The started daemon instance.
+
+    Raises:
+        ValueError: If the specified os_sandbox name is unknown.
     """
     assert all_rules.os_sandbox
     async with _async_start_lock:
@@ -119,8 +167,10 @@ async def _async_start_daemon(
 
 async def async_stop_daemon(max_pending: int = 0) -> None:
     """
-    Asynchronize version to daemon_shutdown the current daemon.
-    Return when the daemon is daemon_shutdown.
+    Asynchronously stops the current daemon.
+
+    Args:
+        max_pending: The maximum number of pending tasks to wait for.
     """
     global _current_daemon, _startup_counter
     async with _async_start_lock:
@@ -133,8 +183,13 @@ async def async_stop_daemon(max_pending: int = 0) -> None:
 
 async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
     """
-    Asynchronize version to daemon_shutdown the current daemon.
-    Return when the daemon is daemon_shutdown.
+    Asynchronously shuts down the current daemon.
+
+    This function decrements the startup counter. If the counter reaches zero,
+    it proceeds to shut down the daemon.
+
+    Args:
+        graceful_shutdown: If True, waits for pending tasks to complete.
     """
     global _current_daemon, _startup_counter
     async with _async_start_lock:
@@ -159,12 +214,28 @@ def start_daemon(
     all_rules: AllRules,
     envs: Environ,
     log_level: int,
-    init_fn: Optional[SyncOrAsyncFunc] = None,
-    python_args: Optional[list[str]] = None,
+    init_fn: SyncOrAsyncFunc | None = None,
+    python_args: list[str] | None = None,
 ) -> BaseDaemon:
     """
-    Synchronize version to _start daemon by name.
-    Returns daemon object when is starred
+    Synchronously starts a daemon by name.
+
+    This function is a synchronous wrapper around the async start logic.
+    It is thread-safe.
+
+    Args:
+        all_rules: The security rules for the sandbox.
+        envs: Environment variables for the sandbox process.
+        log_level: The logging level for the daemon.
+        init_fn: An optional initialization function to run in the sandbox.
+        python_args: Optional arguments for the Python interpreter in the sandbox.
+
+    Returns:
+        The started daemon instance.
+
+    Raises:
+        RuntimeError: If the daemon fails to start.
+        ValueError: If the specified os_sandbox name is unknown.
     """
     assert all_rules.os_sandbox
     global _current_daemon, _startup_counter
@@ -183,6 +254,7 @@ def start_daemon(
         start_event = threading.Event()
 
         async def _start_daemon_and_signal() -> None:
+            """Helper to run async start and signal completion."""
             await _async_start_daemon(
                 all_rules,
                 envs=envs,
@@ -204,19 +276,39 @@ def start_daemon(
 
 
 def is_daemon_started() -> bool:
+    """
+    Checks if the daemon is currently started.
+
+    Returns:
+        True if the daemon is started, False otherwise.
+    """
     global _current_daemon
     return _current_daemon is not None and _current_daemon.is_started
 
 
 def _set_current_daemon(daemon: BaseDaemon) -> None:
+    """
+    Sets the global current daemon instance.
+
+    Args:
+        daemon: The daemon instance to set as current.
+    """
     global _current_daemon
     _current_daemon = daemon
 
 
 def shutdown_daemon(graceful_shutdown: bool = True) -> None:
     """
-    Synchronize version to daemon_shutdown the current daemon.
-    Return when the daemon is daemon_shutdown.
+    Synchronously shuts down the current daemon.
+
+    This is a thread-safe, synchronous wrapper around the async shutdown logic.
+
+    Args:
+        graceful_shutdown: If True, waits for pending tasks to complete.
+
+    Raises:
+        RuntimeError: If the daemon fails to shut down within the timeout.
+        ValueError: If shutdown is called more times than start.
     """
     global _current_daemon, _startup_counter
     with _start_lock:
@@ -231,6 +323,7 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
 
         @sandbox_loop
         async def _async_shutdown_daemon() -> None:
+            """Helper to run async shutdown and signal completion."""
             await async_shutdown_daemon()
             stop_event.set()
             reset_sandbox_loop()
@@ -245,6 +338,15 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
 
 
 def get_token() -> str:
+    """
+    Gets the security token of the current daemon.
+
+    Returns:
+        The security token as a string.
+
+    Raises:
+        AssertionError: If the daemon is not started.
+    """
     global _current_daemon
     assert _current_daemon is not None, "Daemon not started when trying to get token"
     return _current_daemon.token
@@ -253,6 +355,23 @@ def get_token() -> str:
 async def async_call_in_sandbox(
     func: Callable[..., Any], *args: Any, **kwargs: Any
 ) -> Any:
+    """
+    Asynchronously executes a function inside the sandbox.
+
+    If the call is already inside a sandbox, it executes the function directly.
+    Otherwise, it forwards the call to the current daemon.
+
+    Args:
+        func: The function to execute.
+        *args: Positional arguments for the function.
+        **kwargs: Keyword arguments for the function.
+
+    Returns:
+        The result of the function execution.
+
+    Raises:
+        AssertionError: If the daemon is not started.
+    """
     global _current_daemon
     if is_in_sandbox():
         return await func(*args, **kwargs)
@@ -262,6 +381,23 @@ async def async_call_in_sandbox(
 
 
 def call_in_sandbox(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """
+    Synchronously executes a function inside the sandbox.
+
+    If the call is already inside a sandbox, it executes the function directly.
+    Otherwise, it forwards the call to the current daemon.
+
+    Args:
+        func: The function to execute.
+        *args: Positional arguments for the function.
+        **kwargs: Keyword arguments for the function.
+
+    Returns:
+        The result of the function execution.
+
+    Raises:
+        AssertionError: If the daemon is not started.
+    """
     global _current_daemon
     if is_in_sandbox():
         return func(*args, **kwargs)

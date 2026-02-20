@@ -108,22 +108,30 @@ def parse_rules(
 
 
 class LearnEnviron(os._Environ):
-    # """
-    # A custom class that replaces os.environ to log all accesses,
-    # while behaving like a standard dictionary.
-    # """
+    """Custom environment class that logs all accesses for learning mode.
+
+    This class replaces os.environ to track which environment variables
+    are accessed during execution, enabling automatic rule generation.
+    Implements singleton pattern to ensure consistency.
+    """
 
     _instance: "LearnEnviron | None" = None
 
     def __new__(
         cls,
     ) -> "LearnEnviron":
+        """Create or return existing singleton instance.
+
+        Returns:
+            The singleton LearnEnviron instance.
+        """
         # Implement a singleton
         if cls._instance is None:
             cls._instance = super(LearnEnviron, cls).__new__(cls)
         return cls._instance
 
     def __init__(self) -> None:
+        """Initialize the learning environment if not already done."""
         # Initialize with the _original environment data
         if not hasattr(self, "_keys_used"):
             # super().__init__(original_environ)
@@ -138,6 +146,17 @@ class LearnEnviron(os._Environ):
             self._original_envs = os.environ
 
     def __getitem__(self, key: str) -> str:
+        """Get environment variable and track access in learning mode.
+
+        Args:
+            key: Environment variable name.
+
+        Returns:
+            Environment variable value.
+
+        Raises:
+            KeyError: If environment variable doesn't exist.
+        """
         try:
             result = super(LearnEnviron, self).__getitem__(key)
             if is_in_sandbox():
@@ -147,14 +166,34 @@ class LearnEnviron(os._Environ):
             raise
 
     def __setitem__(self, key: str, value: str) -> None:
+        """Set environment variable and track access in learning mode.
+
+        Args:
+            key: Environment variable name.
+            value: Environment variable value.
+        """
         super(LearnEnviron, self).__setitem__(key, value)
         if is_in_sandbox():
             self._keys_used.add(key)
 
     def _clone(self) -> dict[str, str]:
+        """Create a copy of the environment as a regular dictionary.
+
+        Returns:
+            Dictionary copy of all environment variables.
+        """
         return {k: v for k, v in super().items()}
 
     def _get(self, key: str, default: Any = None) -> Any:
+        """Get environment variable with default fallback.
+
+        Args:
+            key: Environment variable name.
+            default: Default value if key doesn't exist.
+
+        Returns:
+            Environment variable value or default.
+        """
         try:
             result = super(LearnEnviron, self).__getitem__(key)
             return result
@@ -162,6 +201,14 @@ class LearnEnviron(os._Environ):
             return default
 
     def _has(self, key: str) -> Any:
+        """Check if environment variable exists.
+
+        Args:
+            key: Environment variable name.
+
+        Returns:
+            True if variable exists, False otherwise.
+        """
         try:
             super(LearnEnviron, self).__getitem__(key)
             return True
@@ -170,6 +217,14 @@ class LearnEnviron(os._Environ):
 
 
 def generate_rules() -> list[str]:
+    """Generate environment variable rules from learning data.
+
+    Creates configuration rules for all environment variables that were
+    accessed during learning mode execution.
+
+    Returns:
+        List of env= configuration rule strings.
+    """
     global _rules
     learn_env = LearnEnviron()  # Get singleton
     result = []
@@ -185,11 +240,24 @@ def generate_rules() -> list[str]:
 
 
 def activate_guard(rules: EnvsRules) -> None:
+    """Activate environment variable guard with specified rules.
+
+    Args:
+        rules: Environment variable access rules to enforce.
+    """
     global _rules
     _rules = rules
 
 
-def patch_rules(learning_path: Path| None) -> dict[str, Callable]:
+def patch_rules(learning_path: Path | None) -> dict[str, Callable]:
+    """Provide patch rules for environment variable monitoring.
+
+    Args:
+        learning_path: Path for learning mode configuration, None if disabled.
+
+    Returns:
+        Dictionary of module patches for environment monitoring.
+    """
     if learning_path:
 
         def activate_learning_env_factory(x: Any) -> LearnEnviron:

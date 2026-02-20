@@ -95,6 +95,7 @@ class Direction(IntEnum):
 
 
 class Kind(Enum):
+    """Enumeration for socket types."""
     TCP = socket.SOCK_STREAM
     UDP = socket.SOCK_DGRAM
     UNKNOWN = socket.SOCK_DGRAM
@@ -102,12 +103,27 @@ class Kind(Enum):
 
 # Parsed rule format used internally:
 class SocketMask(NamedTuple):
+    """Socket filtering criteria.
+
+    Attributes:
+        kinds: Allowed socket types (TCP, UDP).
+        network: Network range to match against.
+        ports: Allowed ports (tuple or range).
+    """
     kinds: tuple[Kind, ...]
-    network: IPv4Network| IPv6Network
-    ports: tuple[int, ...]| range
+    network: IPv4Network | IPv6Network
+    ports: tuple[int, ...] | range
 
 
 class SocketRule(NamedTuple):
+    """Socket access rule.
+
+    Attributes:
+        action: Action to take (ALLOW or DENY).
+        mask: Filtering criteria for this rule.
+        directions: Allowed directions (IN, OUT).
+        config: Configuration line where rule was defined.
+    """
     action: Action
     mask: SocketMask
     directions: tuple[Direction, ...]
@@ -118,12 +134,22 @@ SocketRules = tuple[SocketRule, ...]
 
 
 class LearnSocketRule(NamedTuple):
+    """Socket access observed during learning mode.
+
+    Attributes:
+        fn: Function name that made the socket call.
+        kind: Socket type (TCP, UDP, UNKNOWN).
+        address: Target address (hostname or IP).
+        port: Target port number.
+        direction: Connection direction (IN, OUT) or None.
+        dns: Resolved IP addresses for hostname.
+    """
     fn: str
     kind: Kind
     address: str
     port: int
-    direction: Direction|None
-    dns: tuple[IPv4Address| IPv6Address, ...]
+    direction: Direction | None
+    dns: tuple[IPv4Address | IPv6Address, ...]
 
 
 _all_networks = ["0.0.0.0/0", "::1/0"]
@@ -133,7 +159,15 @@ _rules: SocketRules = cast(SocketRules, ())
 
 def _yield_networks_from_string(
     input_str: str,
-) -> Generator[IPv4Network| IPv6Network, None, None]:
+) -> Generator[IPv4Network | IPv6Network, None, None]:
+    """Convert string to network objects.
+
+    Args:
+        input_str: Network specification (CIDR notation or hostname).
+
+    Yields:
+        Network objects for the input string.
+    """
     host_dns, _ = _read_host_file()
     try:
         # Case 1: The input is a network in CIDR notation (e.g., '192.168.1.0/24')
@@ -155,7 +189,16 @@ def _yield_networks_from_string(
 
 def _parse_rule(
     rule: ConfigLine, errors: list[tuple[str, Path, int]]
-) -> list[SocketRule]|None:
+) -> list[SocketRule] | None:
+    """Parse a single network access rule.
+
+    Args:
+        rule: Configuration line containing net= rule.
+        errors: List to collect parsing errors.
+
+    Returns:
+        List of parsed socket rules, or None if parsing failed.
+    """
     if not rule.rule.startswith("net="):
         return []
     value_part = rule.rule[len("net=") :]
@@ -328,6 +371,15 @@ def _parse_rule(
 def parse_rules(
     rules: ConfigLines, errors: list[ErrorMsg]
 ) -> tuple[SocketRules, ConfigLines]:
+    """Parse network access rules from configuration.
+
+    Args:
+        rules: Configuration lines to parse.
+        errors: List to collect parsing errors.
+
+    Returns:
+        Tuple of parsed socket rules and remaining config lines.
+    """
     socket_rules = []
     ignore_rules = []
     for rule in rules:
@@ -352,6 +404,14 @@ def parse_rules(
 
 
 def _flatten_ports(input_ports: set[int | range]) -> set[int]:
+    """Convert port ranges to individual port numbers.
+
+    Args:
+        input_ports: Set containing integers and ranges.
+
+    Returns:
+        Set of individual port numbers.
+    """
     result: set[int] = set()
     for element in input_ports:
         if isinstance(element, int):
@@ -364,7 +424,20 @@ def _flatten_ports(input_ports: set[int | range]) -> set[int]:
     return result
 
 
-def _convert_ports_range(syntax: str) -> tuple[int, ...]| range:
+def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
+    """Convert port specification string to port numbers or range.
+
+    Converts strings like "80,443,8000-8080,*" into port collections.
+
+    Args:
+        syntax: Port specification string.
+
+    Returns:
+        Tuple of port numbers or range object for '*'.
+
+    Raises:
+        ValueError: For invalid port syntax.
+    """
     """
     Converts a port specification string (e.g., "80,443,8000-8080,*")
     into a sorted list of unique integer port numbers or a range object for '*'.
@@ -461,27 +534,52 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...]| range:
             return first
     return tuple(sorted(cast(set[int], ports)))
 
+
 @functools.lru_cache(maxsize=1000)
-def getaddrinfo(hostname: str|bytes|None,
-                     port: bytes|str|int,
-                     family:int = 0,
-                     type:int=0,
-                     proto:int=0,
-                     flags:int=0,
-                     ) -> Any:
-  return socket.getaddrinfo(hostname=hostname,
-                            port=None,
-                            family=family,
-                            type=type,
-                            proto=proto,
-                            flags=flags)
+def getaddrinfo(
+    hostname: str | bytes | None,
+    port: bytes | str | int,
+    family: int = 0,
+    type: int = 0,
+    proto: int = 0,
+    flags: int = 0,
+) -> Any:
+    """Cached DNS resolution for socket addresses.
+
+    Args:
+        hostname: Hostname to resolve.
+        port: Port number (ignored in resolution).
+        family: Address family filter.
+        type: Socket type filter.
+        proto: Protocol filter.
+        flags: Additional resolution flags.
+
+    Returns:
+        List of address info tuples.
+    """
+    return socket.getaddrinfo(
+        hostname=hostname, port=None, family=family, type=type, proto=proto, flags=flags
+    )
+
 
 def _check_address_with_rules(
     socket_rules: SocketRules,
     socket_kind: Kind,
-    address: tuple[str, int],  # Expect (hostname_or_ip_str, port_int)
+    address: tuple[str, int],
     conn_direction: Direction,
-) -> None:  # Expect IN or OUT constants
+) -> None:
+    """Check if socket address is allowed by configured rules.
+
+    Args:
+        socket_rules: Active socket access rules.
+        socket_kind: Type of socket (TCP, UDP).
+        address: Target address (hostname/IP, port).
+        conn_direction: Connection direction (IN or OUT).
+
+    Raises:
+        RuleSocketConnectionRefusedError: If access is denied by rules.
+        ValueError: For invalid address or port values.
+    """
     """
     Checks if a given address and port are allowed for the specified connection
     directions based on the configured rules and the derived implicit default policy.
@@ -496,7 +594,7 @@ def _check_address_with_rules(
     if not isinstance(destination_port, int) or not (0 <= destination_port <= 65535):
         raise ValueError(f"Invalid port number: {destination_port}")
 
-    unique_ips: list[IPv4Address| IPv6Address]
+    unique_ips: list[IPv4Address | IPv6Address]
     use_hostname = False
     try:
         unique_ips = [ip_address(hostname)]
@@ -512,9 +610,7 @@ def _check_address_with_rules(
             # This might happen if self.proto is something specific but
             # getaddrinfo needs a more general hint
             try:
-                infos = getaddrinfo(
-                    hostname, None, type=socket_kind.value, proto=0
-                )
+                infos = getaddrinfo(hostname, None, type=socket_kind.value, proto=0)
             except socket.gaierror:
                 raise ValueError(
                     f"Invalid hostname or IP address (resolution failed): {hostname}"
@@ -897,6 +993,11 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
 
 
 def patch_rules() -> dict[str, Callable]:
+    """Provide socket patching rules for guard activation.
+
+    Returns:
+        Dictionary of socket module patches.
+    """
     return {
         "socket.socket.bind": _wrap_socket_bind,
         "socket.socket.connect": _wrap_socket_connect,
@@ -910,6 +1011,14 @@ def patch_rules() -> dict[str, Callable]:
 
 
 def activate_guard(rules: SocketRules) -> None:
+    """Activate socket guard with specified rules.
+
+    Args:
+        rules: Socket access rules to enforce.
+
+    Raises:
+        RuntimeError: If guard is already activated.
+    """
     if not rules:
         return
     global _rules
@@ -920,12 +1029,12 @@ def activate_guard(rules: SocketRules) -> None:
 
 def _read_host_file() -> (
     tuple[
-        dict[str, IPv4Address| IPv6Address],
-        dict[IPv4Address| IPv6Address, str],
+        dict[str, IPv4Address | IPv6Address],
+        dict[IPv4Address | IPv6Address, str],
     ]
 ):
-    dns: dict[str, IPv4Address| IPv6Address] = {}
-    inverse_dns: dict[IPv4Address| IPv6Address, str] = {}
+    dns: dict[str, IPv4Address | IPv6Address] = {}
+    inverse_dns: dict[IPv4Address | IPv6Address, str] = {}
     # Read the host file
     # Détecter le système d'exploitation pour trouver le bon chemin
     if sys.platform == "win32":
@@ -961,6 +1070,17 @@ def _read_host_file() -> (
 def generate_rules(
     learn: set[Any],
 ) -> list[str]:
+    """Generate socket rules from learning data.
+
+    Creates network access rules based on observed socket connections
+    during learning mode execution.
+
+    Args:
+        learn: Set of learned socket access patterns.
+
+    Returns:
+        List of net= configuration rule strings.
+    """
     result = set()
     dns, inverse_dns = _read_host_file()
 

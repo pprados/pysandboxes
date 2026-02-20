@@ -1,3 +1,16 @@
+"""Utility functions for PySandboxes remote execution modules.
+
+This module provides various utility functions used by the remote execution
+components including package management, network configuration, logging setup,
+and system-level operations for process management.
+
+Key utilities:
+- Package installation suggestions based on OS detection
+- Network gateway information retrieval
+- Process death signal management (pdeathsig)
+- Serialization utilities for remote communication
+"""
+
 import base64
 import logging
 import os
@@ -8,7 +21,7 @@ import sys  # Import the sys module to access system-specific parameters and fun
 import textwrap
 from ctypes import cdll
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import netifaces
 
@@ -21,7 +34,15 @@ known_paths = [
 ]
 
 
-def which_command(command: str) -> Optional[Path]:
+def which_command(command: str) -> Path | None:
+    """Find executable command in known system paths.
+
+    Args:
+        command: Command name to search for.
+
+    Returns:
+        Path to command executable or None if not found.
+    """
     for path in known_paths:
         if (path / command).exists():
             return path / command
@@ -32,6 +53,11 @@ def which_command(command: str) -> Optional[Path]:
 
 
 def get_venv() -> str | None:
+    """Get current virtual environment path.
+
+    Returns:
+        Path to virtual environment or None if not in venv.
+    """
     if sys.prefix != sys.base_prefix:
         venv_path = sys.prefix
         return venv_path
@@ -40,16 +66,18 @@ def get_venv() -> str | None:
 
 
 def configure_logging_level(verbose_count: int) -> int:
-    """
-    Configures the logging level based on the number of verbose flags.
+    """Configure logging level based on verbose flag count.
 
     Args:
-        verbose_count (int): The number of '-v' flags provided by the user.
-                             - 0: ERROR
-                             - 1: WARNING
-                             - 2: INFO
-                             - 3: DEBUG
-                             - 4+: NOTSET
+        verbose_count: Number of verbose flags:
+                      - 0: ERROR
+                      - 1: WARNING
+                      - 2: INFO
+                      - 3: DEBUG
+                      - 4+: NOTSET
+
+    Returns:
+        Configured logging level constant.
     """
     if verbose_count == 0:
         log_level = logging.ERROR
@@ -66,8 +94,13 @@ def configure_logging_level(verbose_count: int) -> int:
     return log_level
 
 
-def get_default_gateway_info() -> Optional[Tuple[str, str]]:
-    gws: Dict[str, Any] = netifaces.gateways()
+def get_default_gateway_info() -> tuple[str, str] | None:
+    """Get default network gateway information.
+
+    Returns:
+        Tuple of (gateway_ip, interface_name) or None if no gateway found.
+    """
+    gws: dict[str, Any] = netifaces.gateways()
 
     # Retrieve default IPv4 gateway
     try:
@@ -90,12 +123,13 @@ def get_default_gateway_info() -> Optional[Tuple[str, str]]:
 
 
 def suggest_package_installation(package_name: str) -> str:
-    """
-    Suggests how to install a given package based on the detected operating system
-    and Linux distribution.
+    """Suggest package installation command based on detected OS.
 
     Args:
-        package_name (str): The name of the package to suggest installation for.
+        package_name: Name of the package to install.
+
+    Returns:
+        Installation command string for the detected OS/distribution.
     """
     system: str = sys.platform
 
@@ -176,6 +210,14 @@ def suggest_package_installation(package_name: str) -> str:
 
 
 def return_level_parameter(log_level: int) -> str:
+    """Convert logging level to verbose parameter string.
+
+    Args:
+        log_level: Logging level constant.
+
+    Returns:
+        Corresponding verbose parameter string (e.g., '-v', '-vv').
+    """
     _map = {
         logging.WARN: "",
         logging.INFO: "-v",
@@ -190,9 +232,9 @@ PR_SET_PDEATHSIG = 1
 
 
 def set_pdeathsig() -> None:
-    """
-    Sets the PR_SET_PDEATHSIG option for the current process,
-    so it receives SIGTERM if its parent dies.
+    """Set process death signal to receive SIGTERM when parent dies.
+
+    Only works on POSIX systems with prctl support.
     """
     if os.name != "posix":
         logger.warning("set_pdeathsig() not supported on non-POSIX systems.")
@@ -210,6 +252,14 @@ def set_pdeathsig() -> None:
 
 
 def to_b85(obj: Any) -> str:
+    """Serialize object to base85-encoded string.
+
+    Args:
+        obj: Object to serialize.
+
+    Returns:
+        Base85-encoded serialized object string.
+    """
     result = base64.b85encode(
         pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
     ).decode("ascii")
@@ -218,6 +268,14 @@ def to_b85(obj: Any) -> str:
 
 
 def from_b85(b85: str) -> Any:
+    """Deserialize object from base85-encoded string.
+
+    Args:
+        b85: Base85-encoded string.
+
+    Returns:
+        Deserialized object.
+    """
     return pickle.loads(
         base64.b85decode(b85.encode("ascii")),
     )

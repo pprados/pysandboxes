@@ -53,6 +53,12 @@ else:
 
 
 class PatchRule(NamedTuple):
+    """Rule for applying patches to imported modules.
+
+    Attributes:
+        module_name: Name of the module or attribute to patch.
+        patch_factory: Factory function that creates the patch.
+    """
     module_name: str
     patch_factory: Callable
 
@@ -63,10 +69,23 @@ ImportRules = tuple[str, ...]
 
 
 class LearnImportRule(NamedTuple):
+    """Learning rule for tracking imported modules.
+
+    Attributes:
+        name: Name of the imported module.
+    """
     name: str
 
 
 def _conv_patch_rules(patch_rules: dict[str, Callable]) -> PatchRules:
+    """Convert patch rules dictionary to structured patch rules.
+
+    Args:
+        patch_rules: Dictionary mapping module paths to patch factories.
+
+    Returns:
+        Structured patch rules organized by top-level module.
+    """
     rules: MutableMapping[str, list[PatchRule]] = {}
     # Split path by first module
     for k, v in patch_rules.items():
@@ -89,6 +108,15 @@ def parse_rules(
     config: ConfigLines,
     errors: list[ErrorMsg],
 ) -> tuple[ImportRules, ConfigLines]:
+    """Parse import rules from configuration lines.
+
+    Args:
+        config: Configuration lines to process.
+        errors: List to collect parsing errors.
+
+    Returns:
+        Tuple of parsed import rules and remaining config lines.
+    """
     white_list: list[str] = []
     ignore_rules: ConfigLines = []
     for rule in config:
@@ -104,6 +132,12 @@ def parse_rules(
 
 
 def _apply_patch(module: ModuleType, name: str) -> None:
+    """Apply patches to a loaded module.
+
+    Args:
+        module: The loaded module to patch.
+        name: Name of the module being patched.
+    """
     logger.debug(f"Apply patch {name=} {module=}")
     all_patch = cast(tuple[PatchRule, ...], _patch_rules[name])
     for patch in all_patch:
@@ -125,22 +159,32 @@ def _apply_patch(module: ModuleType, name: str) -> None:
 
 
 class GuardLoader(Loader):
-    """
-    A custom loader that wraps an _original loader to modify a module after it
-    has been created and executed.
+    """Custom loader that wraps original loader to modify modules after loading.
+
+    This loader intercepts the module loading process to enforce import restrictions
+    and apply patches to modules as they are loaded.
     """
 
     __slots__ = ("original_spec", "original_loader")
 
     def __init__(self, original_spec: ModuleSpec):
+        """Initialize the guard loader.
+
+        Args:
+            original_spec: The original module specification to wrap.
+        """
         # Store the _original spec and loader
         self.original_spec: ModuleSpec = original_spec
         self.original_loader: Loader | None = original_spec.loader
 
     def create_module(self, spec: ModuleSpec) -> ModuleType | None:
-        """
-        Delegates the module creation to the _original loader.
-        This gets the base module object from the standard import process.
+        """Delegate module creation to the original loader.
+
+        Args:
+            spec: Module specification.
+
+        Returns:
+            Created module or None if creation failed.
         """
         # logger.debug(f"create_module({spec=}")
         if self.original_loader is None:
@@ -149,10 +193,15 @@ class GuardLoader(Loader):
         return module  # Not initialized
 
     def exec_module(self, module: ModuleType) -> None:
-        """
-        Executes the module code using the _original loader, then performs
-        custom modifications.
-        This is where we add our custom logic after the standard loading.
+        """Execute module code and apply custom modifications.
+
+        Enforces import restrictions and applies patches after module execution.
+
+        Args:
+            module: Module to execute.
+
+        Raises:
+            RuleModuleNotFoundError: If module is not allowed by rules.
         """
 
         if module is None:
@@ -179,17 +228,23 @@ class GuardLoader(Loader):
 
 # Define the custom finder class
 class GuardFinder(importlib.abc.MetaPathFinder):
+    """Custom meta path finder that intercepts module imports.
+
+    This finder wraps the standard import mechanism to enforce import
+    restrictions and apply patches to modules during loading.
+    """
+
     @classmethod
     def find_distributions(
         cls, context: DistributionFinder.Context = DistributionFinder.Context()
     ) -> Iterable[importlib.metadata.PathDistribution]:
-        """
-        Find distributions.
+        """Find package distributions.
 
-        Return an iterable of all Distribution instances capable of
-        loading the metadata for packages matching ``context.name``
-        (or all names if ``None`` indicated) along the paths in the list
-        of directories ``context.path``.
+        Args:
+            context: Distribution finder context.
+
+        Returns:
+            Iterable of path distributions for matching packages.
         """
         from importlib.metadata import PathDistribution
 
@@ -201,7 +256,15 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
     @classmethod
     def _search_paths(cls, name: str | None, paths: list[str]) -> Iterator[FastPath]:
-        """Find metadata directories in paths heuristically."""
+        """Find metadata directories in paths heuristically.
+
+        Args:
+            name: Package name to search for.
+            paths: List of directory paths to search in.
+
+        Returns:
+            Iterator of FastPath objects for found metadata directories.
+        """
         from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
 
         prepared = Prepared(name)
@@ -212,6 +275,11 @@ class GuardFinder(importlib.abc.MetaPathFinder):
     __slots__ = ("_finders",)
 
     def __init__(self, finders: list[MetaPathFinderProtocol]):
+        """Initialize the guard finder.
+
+        Args:
+            finders: List of meta path finders to delegate to.
+        """
         self._finders = finders
 
     """
@@ -223,9 +291,16 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         fullname: str,
         path: Sequence[str] | None,
         target: ModuleType | None = None,
-    ) -> ModuleSpec|None:
-        """
-        Finds the specification for a module.
+    ) -> ModuleSpec | None:
+        """Find module specification with import guarding.
+
+        Args:
+            fullname: Fully qualified module name.
+            path: Package path if this is a submodule.
+            target: Target module for relative imports.
+
+        Returns:
+            Module specification with guard loader if applicable.
         """
         # logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
@@ -307,6 +382,14 @@ _activated = False
 def _activate_patch_import(
     patch_rules: PatchRules,
 ) -> bool:
+    """Activate import patching with specified rules.
+
+    Args:
+        patch_rules: Rules for patching modules during import.
+
+    Returns:
+        True if patching was activated, False if already active.
+    """
     global _activated
     import sys
 
@@ -343,6 +426,11 @@ _not_refresh_modules: set[str] = {
 
 
 def remove_modules() -> None:
+    """Remove non-essential modules from sys.modules for clean import state.
+
+    This function clears the module cache except for essential system modules,
+    forcing fresh imports that will go through the guard system.
+    """
     import sys
 
     logger.debug("Remove modules")
@@ -376,6 +464,11 @@ def remove_modules() -> None:
 
 
 def patch_rules() -> dict[str, Callable]:
+    """Get default patch rules for import guard.
+
+    Returns:
+        Dictionary mapping module paths to patch factory functions.
+    """
     return {}
 
 
@@ -383,6 +476,12 @@ def activate_guard_import(
     str_patch_rules: dict[str, Callable],
     rules: ImportRules,
 ) -> None:
+    """Activate import guard with specified rules and patches.
+
+    Args:
+        str_patch_rules: Dictionary mapping module paths to patch factories.
+        rules: Import rules specifying allowed modules.
+    """
     global _rules
     global _activated
     patch_rules: PatchRules = _conv_patch_rules(str_patch_rules)
@@ -398,15 +497,14 @@ def activate_guard_import(
 
 
 def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
-    """
-    Groups a list of strings by joining them with commas, respecting a maximum width.
+    """Group strings by joining with commas, respecting maximum width.
 
     Args:
-        items: The list of strings to group.
+        items: The strings to group.
         max_width: The maximum allowed width for each group.
 
     Returns:
-        A list of strings, where each string is a comma-separated group.
+        List of comma-separated grouped strings.
     """
     if not items:
         return []
@@ -438,6 +536,17 @@ def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
 def generate_rules(
     learn: set[Any],
 ) -> list[str]:
+    """Generate import rules from learning data.
+
+    Categorizes learned imports into standard, deprecated, dangerous,
+    and external modules to generate appropriate configuration rules.
+
+    Args:
+        learn: Set of learning rules collected during execution.
+
+    Returns:
+        List of configuration rule strings for imports.
+    """
     # Select only parent
     other_result = set()
     standard_result = set()
