@@ -1,3 +1,36 @@
+"""PySandboxes: Python Security Framework.
+
+This package provides sandbox environments for executing untrusted Python code safely.
+It uses a multi-layered defense-in-depth security architecture combining Python API
+patching with OS-level containers.
+
+The main API consists of:
+- @sandbox decorator for function-level sandboxing
+- sandboxes() context manager for process-level sandboxing
+- run() function for running coroutines in sandboxes
+- Learning mode for automatic security rule generation
+
+Example:
+    Basic function sandboxing:
+    ```python
+    from pysandboxes import sandbox
+
+    @sandbox
+    def untrusted_function():
+        # This code runs in a sandbox
+        return "safe result"
+    ```
+
+    Context manager usage:
+    ```python
+    from pysandboxes import sandboxes
+
+    with sandboxes():
+        # All code in this block runs sandboxed
+        result = some_function()
+    ```
+"""
+
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
@@ -32,17 +65,30 @@ __all__ = list(_api | _exception)
 
 
 class LazySandboxesProxy:
-    """
-    Manage circular import
+    """Lazy loading proxy to handle circular imports.
+
+    This class delays the import of sandbox modules until they are actually
+    accessed, preventing circular import issues while maintaining a clean API.
+
+    Attributes:
+        modules: Cached mapping of attribute names to their containing modules.
     """
 
     def __init__(self) -> None:
-        # Le module n'est pas encore importé, juste son nom est stocké
+        """Initialize the proxy with no cached modules."""
         self.modules: dict[str, ModuleType] | None = None
 
     def __getattr__(self, name: str) -> Any:
-        """
-        Intercepte l'accès à un attribute et importe le module si nécessaire.
+        """Intercept attribute access and import modules as needed.
+
+        Args:
+            name: The name of the attribute being accessed.
+
+        Returns:
+            The requested attribute from the appropriate module.
+
+        Raises:
+            AttributeError: If the attribute is not found in any module.
         """
         if not self.modules:
             import importlib
@@ -62,4 +108,12 @@ _sandboxes = LazySandboxesProxy()
 
 
 def __getattr__(name: str) -> Any:
+    """Module-level attribute access proxy.
+
+    Args:
+        name: The name of the attribute being accessed.
+
+    Returns:
+        The requested attribute from the sandboxes proxy.
+    """
     return _sandboxes.__getattr__(name)

@@ -1,10 +1,20 @@
+"""Learning mode implementation for automatic rule generation.
+
+This module implements the learning mode functionality that observes sandbox
+behavior and automatically generates security rules based on observed file access,
+network connections, imports, and environment variable usage.
+
+Learning mode helps developers bootstrap sandbox configurations by running their
+application through typical usage scenarios and capturing required permissions.
+"""
+
 import logging
 import re
 from datetime import datetime
 from importlib import resources
 from multiprocessing import Lock
 from pathlib import Path
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any, Set
 
 from .config import CONFIG_NAME
 from .main_logger import pysandboxes_logger
@@ -14,10 +24,16 @@ logger = logging.getLogger(__name__)
 _lock = Lock()
 _learning: Set[Any] = set()
 
-_learning_path: Optional[Path] = None
+_learning_path: Path|None = None
 
 
 def generate_config_from_learning() -> None:
+    """Generate configuration file from observed learning rules.
+
+    This function consolidates all rules collected during learning mode and
+    writes them to a configuration file. It handles rule formatting, template
+    processing, and file backup operations.
+    """
     global _learning_path
     from .guard_envs import generate_rules as env_generate_rules
     from .guard_files import generate_rules as file_generate_rules
@@ -66,7 +82,7 @@ def generate_config_from_learning() -> None:
 
     header = f"# Add rules ({datetime.now().strftime('%d/%m/%y at %H:%M')})"
 
-    all_lines: List[str] = []
+    all_lines: list[str] = []
     update_file = False
     if old_learning_path:
         # Current lines
@@ -120,7 +136,15 @@ def generate_config_from_learning() -> None:
         learning_path.write_text("\n".join(all_lines))
 
 
-def _manage_olds_file(_learning_path: Path) -> Tuple[Path, Optional[Path]]:
+def _manage_olds_file(_learning_path: Path) -> tuple[Path, Path | None]:
+    """Manage backup files for configuration updates.
+
+    Args:
+        _learning_path: Path to the learning configuration file.
+
+    Returns:
+        Tuple of (current_path, backup_path).
+    """
     old_learning_path = None
     learning_path = _learning_path
     if learning_path.exists() and not learning_path.is_dir():
@@ -136,21 +160,37 @@ def _manage_olds_file(_learning_path: Path) -> Tuple[Path, Optional[Path]]:
 
 
 def activate_learning(config_file: Path) -> None:
+    """Activate learning mode for the specified configuration file.
+
+    Args:
+        config_file: Path where learning rules should be saved.
+    """
     global _learning_path
     _learning_path = config_file
 
 
 def stop_learning_mode() -> None:
+    """Deactivate learning mode."""
     global _learning_path
     _learning_path = None
 
 
 def is_learning_mode() -> bool:
+    """Check if learning mode is currently active.
+
+    Returns:
+        True if learning mode is active, False otherwise.
+    """
     global _learning_path
     return _learning_path is not None
 
 
 def add_learning_rule(rule: Any) -> None:
+    """Add a rule to the learning set.
+
+    Args:
+        rule: The rule to add to the learning collection.
+    """
     with _lock:
         _learning.add(rule)
         pysandboxes_logger.debug(repr(rule))

@@ -1,5 +1,12 @@
+"""No-operation daemon for testing and debugging.
+
+This module provides a daemon implementation that doesn't actually create
+a separate process, allowing code to run directly in the current process.
+Useful for debugging and testing sandbox functionality.
+"""
+
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 
 from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
@@ -10,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class NoneDaemon(BaseDaemon):
+    """No-operation daemon that runs code in the current process.
+
+    This daemon implementation doesn't create a separate process, making it
+    useful for debugging and testing without the complexity of IPC.
+    """
     # def __init__(self,
     #              token:str,
     #              **kwargs):
@@ -21,7 +33,7 @@ class NoneDaemon(BaseDaemon):
         *,
         envs: Environ,
         log_level: int,
-        init_fn: Optional[SyncOrAsyncFunc],
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         self._is_started = True
         set_is_in_sandbox(True)  # Simulate the presence of sandbox
@@ -54,6 +66,6 @@ class NoneDaemon(BaseDaemon):
         func: Callable[..., Any],
         _force_incomming: bool,
         *args: Any,
-        **kwargs: Dict[str, Any],
+        **kwargs: dict[str, Any],
     ) -> Any:
         raise NotImplementedError

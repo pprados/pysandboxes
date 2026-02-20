@@ -1,4 +1,14 @@
-# Define the custom loader class
+"""Python import guard for PySandboxes.
+
+This module implements import sandboxing by intercepting and controlling module
+imports. It provides a whitelist-based security model where only explicitly
+allowed modules can be imported.
+
+The guard patches the import system using custom meta finders and loaders to
+enforce import restrictions defined in the configuration. It supports pattern
+matching and learning mode for automatic rule generation.
+"""
+
 import importlib
 import importlib.abc
 import importlib.util
@@ -15,16 +25,11 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
     Iterable,
     Iterator,
-    List,
     MutableMapping,
     NamedTuple,
-    Optional,
     Sequence,
-    Set,
-    Tuple,
     cast,
 )
 
@@ -52,24 +57,24 @@ class PatchRule(NamedTuple):
     patch_factory: Callable
 
 
-PatchRules = ImmutableDict[str, Tuple[PatchRule, ...]]
+PatchRules = ImmutableDict[str, tuple[PatchRule, ...]]
 
-ImportRules = Tuple[str, ...]
+ImportRules = tuple[str, ...]
 
 
 class LearnImportRule(NamedTuple):
     name: str
 
 
-def _conv_patch_rules(patch_rules: Dict[str, Callable]) -> PatchRules:
-    rules: MutableMapping[str, List[PatchRule]] = {}
+def _conv_patch_rules(patch_rules: dict[str, Callable]) -> PatchRules:
+    rules: MutableMapping[str, list[PatchRule]] = {}
     # Split path by first module
     for k, v in patch_rules.items():
         if "." in k:
             module, path = k.split(".", maxsplit=1)
         else:
             module, path = k, ""
-        patch_list: List[PatchRule] = rules.get(module, [])
+        patch_list: list[PatchRule] = rules.get(module, [])
         patch_list.append(PatchRule(path, v))
         rules[module] = patch_list
 
@@ -82,9 +87,9 @@ _patch_rules: PatchRules = ImmutableDict({})
 
 def parse_rules(
     config: ConfigLines,
-    errors: List[ErrorMsg],
-) -> Tuple[ImportRules, ConfigLines]:
-    white_list: List[str] = []
+    errors: list[ErrorMsg],
+) -> tuple[ImportRules, ConfigLines]:
+    white_list: list[str] = []
     ignore_rules: ConfigLines = []
     for rule in config:
         if rule.rule.startswith("python-import="):
@@ -100,7 +105,7 @@ def parse_rules(
 
 def _apply_patch(module: ModuleType, name: str) -> None:
     logger.debug(f"Apply patch {name=} {module=}")
-    all_patch = cast(Tuple[PatchRule, ...], _patch_rules[name])
+    all_patch = cast(tuple[PatchRule, ...], _patch_rules[name])
     for patch in all_patch:
         cur_object = module
         if patch.module_name != "":
@@ -206,7 +211,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
     __slots__ = ("_finders",)
 
-    def __init__(self, finders: List[MetaPathFinderProtocol]):
+    def __init__(self, finders: list[MetaPathFinderProtocol]):
         self._finders = finders
 
     """
@@ -218,7 +223,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         fullname: str,
         path: Sequence[str] | None,
         target: ModuleType | None = None,
-    ) -> Optional[ModuleSpec]:
+    ) -> ModuleSpec|None:
         """
         Finds the specification for a module.
         """
@@ -320,7 +325,7 @@ def _activate_patch_import(
 
 
 # Modules to not remove from sys.modules, and to wait the lazy patch
-_not_refresh_modules: Set[str] = {
+_not_refresh_modules: set[str] = {
     "sys",
     "asyncio",
     "builtins",
@@ -370,12 +375,12 @@ def remove_modules() -> None:
     assert "io" not in sys.modules
 
 
-def patch_rules() -> Dict[str, Callable]:
+def patch_rules() -> dict[str, Callable]:
     return {}
 
 
 def activate_guard_import(
-    str_patch_rules: Dict[str, Callable],
+    str_patch_rules: dict[str, Callable],
     rules: ImportRules,
 ) -> None:
     global _rules
@@ -392,7 +397,7 @@ def activate_guard_import(
     _rules = rules
 
 
-def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
+def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
     """
     Groups a list of strings by joining them with commas, respecting a maximum width.
 
@@ -406,7 +411,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
     if not items:
         return []
 
-    grouped_items: List[str] = []
+    grouped_items: list[str] = []
     current_line: str = ""
 
     for item in items:
@@ -431,8 +436,8 @@ def _group_by_width(items: Iterable[str], max_width: int) -> List[str]:
 
 
 def generate_rules(
-    learn: Set[Any],
-) -> List[str]:
+    learn: set[Any],
+) -> list[str]:
     # Select only parent
     other_result = set()
     standard_result = set()

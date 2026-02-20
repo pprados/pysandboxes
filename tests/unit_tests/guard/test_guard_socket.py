@@ -26,7 +26,7 @@ from pysandboxes.sb_types import ConfigLine
 
 @pytest.fixture
 def mock_getaddrinfo() -> Iterator[Mock]:
-    with patch("pysandboxes.guard_socket.socket.getaddrinfo") as mock:
+    with patch("pysandboxes.guard_socket.getaddrinfo") as mock:
         yield mock
 
 

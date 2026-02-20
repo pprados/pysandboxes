@@ -1,3 +1,10 @@
+"""Rules aggregation module for PySandboxes.
+
+This module provides data structures to collect and organize all security rules
+from different guards (environment, files, network, imports) into a unified
+configuration object.
+"""
+
 from pathlib import Path
 from typing import NamedTuple
 
@@ -10,6 +17,25 @@ from pysandboxes.sb_types import ConfigLines, Envs
 
 
 class AllRules(NamedTuple):
+    """Aggregates all security rules and configuration settings.
+
+    This data structure consolidates rules from all security guards along with
+    general sandbox configuration into a single object for easy distribution
+    throughout the system.
+
+    Attributes:
+        config: Raw configuration lines from config file.
+        envs: Environment variables available in sandbox.
+        os_sandbox: OS-level sandbox provider name.
+        use_py_sandbox: Whether Python-level sandboxing is enabled.
+        learning_path: Path where learning mode rules are saved.
+        learn: Whether learning mode is active.
+        envs_rules: Environment variable access rules.
+        socket_rules: Network access rules.
+        file_rules: File system access rules.
+        import_rules: Python import rules.
+    """
+
     config: ConfigLines
     envs: Envs
     os_sandbox: str

@@ -1,36 +1,71 @@
-# All the exceptions are here, to have a better stack trace.
+"""Exception classes for PySandboxes.
+
+This module centralizes all exception types to provide better stack traces
+and consistent error handling throughout the framework.
+"""
+
 from typing import List
 
 
 class SandBoxError(RuntimeError):
+    """Base exception class for all sandbox-related errors."""
+
     pass
 
 
 class ConfigSyntaxError(SandBoxError):
-    def __init__(self, message: str, errors: List[str]):
+    """Exception raised when configuration file has syntax errors.
+
+    Attributes:
+        message: The main error message.
+        errors: List of specific syntax errors found.
+    """
+
+    def __init__(self, message: str, errors: list[str]) -> None:
+        """Initialize the exception with message and error list.
+
+        Args:
+            message: The main error message.
+            errors: List of specific syntax errors.
+        """
         super().__init__()
         self.message = message
         self.errors = errors
 
     def __str__(self) -> str:
+        """Return formatted error message with all errors listed.
+
+        Returns:
+            Formatted string with main message and all error details.
+        """
         return self.message + "\n" + "\n".join(self.errors)
 
 
 class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
+    """Exception raised when a file access is denied by sandbox rules."""
+
     pass
 
 
 class RulePermissionError(PermissionError, SandBoxError):
+    """Exception raised when a permission is denied by sandbox rules."""
+
     pass
 
 
 class RuleSocketConnectionRefusedError(ConnectionRefusedError, SandBoxError):
+    """Exception raised when a network connection is denied by sandbox rules."""
+
     pass
 
 
 class RuleModuleNotFoundError(ModuleNotFoundError, SandBoxError):
+    """Exception raised when a module import is denied by sandbox rules."""
+
     pass
 
 
 class RuleAttributeError(AttributeError, SandBoxError):
+    """Exception raised when an attribute access is denied by sandbox rules."""
+
     pass

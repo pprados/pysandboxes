@@ -1,3 +1,10 @@
+"""Python-level sandbox implementation.
+
+This module provides the core Python-level sandboxing functionality, including
+configuration parsing, rule activation, and integration with various security
+guards (files, network, imports, environment).
+"""
+
 import inspect
 import logging
 import os
@@ -6,7 +13,7 @@ import sys
 import types
 from importlib import resources
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, Set, cast
+from typing import Any, cast
 
 from . import (
     guard_envs,
@@ -29,18 +36,17 @@ from .tools import Environ, remove_config_comments, substitute_config_env_vars
 logger = logging.getLogger(__name__)
 
 
-def _get_caller_module(skip: int) -> Optional[types.ModuleType]:
-    """
-    Returns the module of the caller.
+def _get_caller_module(skip: int) -> types.ModuleType | None:
+    """Returns the module of the caller.
 
-    Parameters:
-        skip (int): How many stack frames to skip.
-                    skip=0 -> current function (_get_caller_module),
-                    skip=1 -> function calling _get_caller_module,
-                    skip=2 -> caller of that function (default).
+    Args:
+        skip: How many stack frames to skip.
+            - skip=0: current function (_get_caller_module)
+            - skip=1: function calling _get_caller_module
+            - skip=2: caller of that function (default)
 
     Returns:
-        ModuleType | None: The module object of the caller, or None if not found.
+        The module object of the caller, or None if not found.
     """
     frame = inspect.currentframe()
     for _ in range(skip):
@@ -62,36 +68,32 @@ def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
 
 
 def load_and_parse_config(
-    config_path: Optional[Path] = None,
+    config_path: Path | None = None,
     *,
-    envs: Optional[Environ] = None,
-    **extra_rules: Mapping[str, Any],
+    envs: Environ | None = None,
+    **extra_rules: dict[str, Any],
 ) -> AllRules:
-    """
-    Reads and parses the configuration file for the sandbox.
+    """Reads and parses the configuration file for the sandbox.
 
-    The function follows this logic to find and process the configuration:
-    - If `config_path` is not provided, it defaults to "./.py-sandboxes".
-    - If the configuration file does not exist at the specified or default path,
-      the sandbox enters learn mode. At the end of the execution, it will
-      create a new configuration file at "./.py-sandboxes" based on the
-      activities observed.
-    - If `config_path` points to an existing file, that file is used for
-      configuration.
-    - If the configuration file contains a `--learn` directive pointing to
-      itself, any new rules generated during the run are appended to the end of
-      the file. The _original file is backed up with a `.old` suffix before
-      being modified.
+    This function implements a sophisticated configuration loading strategy:
+
+    1. If no config_path is provided, defaults to "./.py-sandboxes"
+    2. If the config file doesn't exist, automatically enables learning mode
+    3. In learning mode, creates a new config file based on observed behavior
+    4. If config contains a --learn directive, appends new rules to existing file
+    5. Original files are backed up with .old suffix before modification
 
     Args:
-        config_path: The path to the configuration file.
-        envs: A dictionary of environment variables to use for substitution.
-              Defaults to `os.environ`.
-        extra_rules: A list of additional rule strings to parse. Mays be string
-         or Iterable of strings for the same key
+        config_path: Path to the configuration file. Defaults to "./.py-sandboxes".
+        envs: Environment variables for substitution. Defaults to os.environ.
+        **extra_rules: Additional rule strings to parse. Values can be strings
+            or iterables of strings for the same key.
 
     Returns:
-        An `AllRules` object containing the parsed configuration.
+        An AllRules object containing the parsed configuration.
+
+    Raises:
+        ConfigSyntaxError: If configuration file has syntax errors.
     """
     if envs is None:
         envs = os.environ
@@ -99,7 +101,7 @@ def load_and_parse_config(
     extra_lines = []
     for k, all_v in extra_rules.items():
         k = k.replace("_", "-")  # TODO: params import
-        if isinstance(all_v, Set):
+        if isinstance(all_v, set):
             extra_lines.extend([ConfigLine(f"{k}={v}", Path(), 0) for v in all_v])
         else:
             extra_lines.append(ConfigLine(f"{k}={all_v}", Path(), 0))
@@ -128,7 +130,7 @@ def load_and_parse_config(
     )
 
 
-def _search_module_config(config_path: Optional[Path]) -> Path:
+def _search_module_config(config_path: Path|None) -> Path:
     if not config_path:
         config_path = Path(CONFIG_NAME)
     # Try to find config filename
@@ -144,7 +146,7 @@ def _search_module_config(config_path: Optional[Path]) -> Path:
     from importlib.resources import files
 
     caller_module = frame.f_globals.get("__name__", "__main__").split(".", 1)[0]
-    resource_config: Optional[Path] = None
+    resource_config: Path|None = None
     if caller_module != "__main__":
         resource_path = cast(Path, files(caller_module))
         resource_config = resource_path / config_path
@@ -158,7 +160,7 @@ def _search_module_config(config_path: Optional[Path]) -> Path:
 
 
 def _parse_include(
-    includes: Set[Path],
+    includes: set[Path],
     rules: ConfigLines,
 ) -> ConfigLines:
     # includes parameter is to detect the recursive includes
@@ -194,11 +196,11 @@ def parse_config(
     config: ConfigLines,
     config_path: Path,
     *,
-    envs: Optional[Environ] = None,
+    envs: Environ|None = None,
 ) -> AllRules:
     if envs is None:
         envs = os.environ
-    errors: List[ErrorMsg] = []  # Aggregate all errors
+    errors: list[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
     config = _parse_include({config_path}, config)
@@ -257,7 +259,7 @@ def parse_config(
 
 def activate_sandboxes(
     all_rules: AllRules,
-    envs: Optional[Environ] = None,
+    envs: Environ|None = None,
 ) -> None:
     if envs is None:
         envs = os.environ

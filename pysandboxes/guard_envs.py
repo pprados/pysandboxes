@@ -1,8 +1,18 @@
+"""Environment variables access guard for PySandboxes.
+
+This module implements environment variable sandboxing by intercepting and
+controlling access to os.environ. It provides a whitelist-based security model
+where only explicitly allowed environment variables are accessible.
+
+The guard supports pattern matching, variable substitution, and learning mode
+for automatic rule generation based on observed environment variable usage.
+"""
+
 import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Set, Tuple, cast
+from typing import Any, Callable, NamedTuple, cast
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
@@ -11,14 +21,22 @@ from .tools import Environ, is_in_sandbox, resolve_env_variables
 logger = logging.getLogger(__name__)
 
 
-# Internal representation of a rule
 class EnvRule(NamedTuple):
-    pattern: re.Pattern
+    """Internal representation of an environment variable rule.
+
+    Attributes:
+        pattern: Compiled regex pattern to match variable names.
+        ignore: Whether this is an ignore rule (blocks access).
+        config: Configuration line where this rule was defined.
+    """
+
+    pattern: re.Pattern[str]
     ignore: bool
     config: ConfigLine
 
 
-EnvsRules = Tuple[EnvRule, ...]
+EnvsRules = tuple[EnvRule, ...]
+"""Type alias for a tuple of environment variable rules."""
 
 # Internal state for the file filter
 _rules: EnvsRules = cast(EnvsRules, ())
@@ -27,19 +45,19 @@ _rules: EnvsRules = cast(EnvsRules, ())
 def parse_rules(
     rules: ConfigLines,
     source_vars: Environ,
-    errors: List[ErrorMsg],
-) -> Tuple[EnvsRules, Envs, ConfigLines]:
-    """
-    Processes a list of rules to create a new dictionary of variables.
+    errors: list[ErrorMsg],
+) -> tuple[EnvsRules, Envs, ConfigLines]:
+    """Process environment variable rules to create filtered environment.
 
     Args:
-        rules: A list of rule strings, e.g., ["key=value", "key2=${source_key}"].
-        source_vars: The _original dictionary of variables to draw from.
+        rules: Configuration lines containing env rules.
+        source_vars: Source environment variables to draw from.
+        errors: List to collect parsing errors.
 
     Returns:
-        A new dictionary with the applied rules.
+        Tuple containing parsed rules, filtered environment, and remaining config lines.
     """
-    new_vars: Dict[str, str] = {}
+    new_vars: dict[str, str] = {}
     ignore_rules: ConfigLines = []
 
     def substitute_value(value_pattern: str) -> str:
@@ -95,7 +113,7 @@ class LearnEnviron(os._Environ):
     # while behaving like a standard dictionary.
     # """
 
-    _instance: Optional["LearnEnviron"] = None
+    _instance: "LearnEnviron | None" = None
 
     def __new__(
         cls,
@@ -116,7 +134,7 @@ class LearnEnviron(os._Environ):
             assert hasattr(os.environ, "_data")
             data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
-            self._keys_used: Set[str] = set()
+            self._keys_used: set[str] = set()
             self._original_envs = os.environ
 
     def __getitem__(self, key: str) -> str:
@@ -133,7 +151,7 @@ class LearnEnviron(os._Environ):
         if is_in_sandbox():
             self._keys_used.add(key)
 
-    def _clone(self) -> Dict[str, str]:
+    def _clone(self) -> dict[str, str]:
         return {k: v for k, v in super().items()}
 
     def _get(self, key: str, default: Any = None) -> Any:
@@ -151,7 +169,7 @@ class LearnEnviron(os._Environ):
             return False
 
 
-def generate_rules() -> List[str]:
+def generate_rules() -> list[str]:
     global _rules
     learn_env = LearnEnviron()  # Get singleton
     result = []
@@ -171,7 +189,7 @@ def activate_guard(rules: EnvsRules) -> None:
     _rules = rules
 
 
-def patch_rules(learning_path: Optional[Path]) -> Dict[str, Callable]:
+def patch_rules(learning_path: Path| None) -> dict[str, Callable]:
     if learning_path:
 
         def activate_learning_env_factory(x: Any) -> LearnEnviron:

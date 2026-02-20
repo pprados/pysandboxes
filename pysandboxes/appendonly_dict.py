@@ -1,4 +1,20 @@
+"""Append-only dictionary implementation for PySandboxes.
+
+This module provides a specialized dictionary that only allows appending new
+key-value pairs, preventing modification of existing entries. Used for security
+configurations where immutability is important.
+"""
+
+
 def _check_called_by_imporlib(key: str) -> bool:
+    """Check if function is called by importlib (for internal use).
+
+    Args:
+        key: Key being accessed.
+
+    Returns:
+        True if called by importlib, False otherwise.
+    """
     return True
     import sys
 

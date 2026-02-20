@@ -1,15 +1,33 @@
+"""Logging utilities and error formatting for PySandboxes.
+
+This module provides logging configuration and utility functions for formatting
+error messages, file paths, and configuration references throughout the framework.
+"""
+
 import logging
 from pathlib import Path
-from typing import Sequence, Tuple
+from typing import Sequence
 
 from .sb_types import ConfigLine
 
 pysandboxes_logger = logging.getLogger("Pysandboxes")
 
-ErrorMsg = Tuple[str, Path, int]
+ErrorMsg = tuple[str, Path, int]
+"""Type alias for error message tuples containing message, path, and line number."""
 
 
 def make_relative_path(path: Path) -> str:
+    """Convert an absolute path to a relative path for display.
+
+    Tries to make the path relative to current working directory, then home
+    directory, falling back to absolute path if neither works.
+
+    Args:
+        path: The path to make relative.
+
+    Returns:
+        A string representation of the relative path.
+    """
     try:
         rel_path = str(path.absolute().relative_to(Path.cwd()))
     except ValueError:
@@ -24,6 +42,14 @@ def make_relative_path(path: Path) -> str:
 
 
 def format_ruleref(rule: ConfigLine) -> str:
+    """Format a configuration rule reference for error messages.
+
+    Args:
+        rule: The configuration line to format.
+
+    Returns:
+        A formatted string showing file path and line number.
+    """
     if rule.path == Path():
         path = "<arg>"
     else:
@@ -35,6 +61,14 @@ def format_ruleref(rule: ConfigLine) -> str:
 
 
 def format_error_list(errors: Sequence[str]) -> str:
+    """Format a list of error messages into a human-readable string.
+
+    Args:
+        errors: Sequence of error message strings.
+
+    Returns:
+        A formatted string with proper conjunction usage.
+    """
     return (
         errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]
     )

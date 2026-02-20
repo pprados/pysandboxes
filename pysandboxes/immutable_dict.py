@@ -1,8 +1,14 @@
+"""Immutable dictionary implementation for PySandboxes.
+
+This module provides an immutable dictionary class that prevents modification
+after creation. Used for security configurations and environment variables
+where immutability ensures configuration integrity.
+"""
+
 import collections
 from typing import (
     Any,
     Callable,
-    Dict,
     Generic,
     Hashable,
     ItemsView,
@@ -10,9 +16,7 @@ from typing import (
     Iterator,
     KeysView,
     Mapping,
-    Tuple,
     TypeVar,
-    Union,
     ValuesView,
     cast,
 )
@@ -22,7 +26,7 @@ ValueType = TypeVar("ValueType")
 
 
 def _restore_pickle(
-    data: Dict[KeyType, ValueType]
+    data: dict[KeyType, ValueType]
 ) -> "ImmutableDict[KeyType,ValueType]":
     return ImmutableDict(data)
 
@@ -42,11 +46,11 @@ class ImmutableDict(
     # construction accepts either a Mapping or an iterable of (key, value) pairs
     def __new__(
         cls,
-        data: Union[Mapping[KeyType, ValueType], Iterable[Tuple[KeyType, ValueType]]],
+        data: Mapping[KeyType, ValueType]| Iterable[tuple[KeyType, ValueType]],
     ) -> "ImmutableDict[KeyType, ValueType]":
         # Normalize incoming data to an iterable of pairs
-        keys: Tuple[KeyType, ...]
-        values: Tuple[ValueType, ...]
+        keys: tuple[KeyType, ...]
+        values: tuple[ValueType, ...]
         if isinstance(data, ImmutableDict):
             keys = data._keys
             values = data._values
@@ -58,8 +62,8 @@ class ImmutableDict(
                 # We don't want to learn all keys
                 if isinstance(data, LearnEnviron):
                     data = dict(data)
-                keys = cast(Tuple[KeyType, ...], tuple(data.keys()))
-                values = cast(Tuple[ValueType, ...], tuple(data.values()))
+                keys = cast(tuple[KeyType, ...], tuple(data.keys()))
+                values = cast(tuple[ValueType, ...], tuple(data.values()))
             else:
                 # allow any iterable of (k, v) pairs
                 items = tuple(data)
@@ -72,15 +76,15 @@ class ImmutableDict(
         obj = tuple.__new__(cls, (keys, values))
         return obj
 
-    def __reduce__(self) -> Tuple[Callable[..., Any], Tuple[Any, ...]]:
+    def __reduce__(self) -> tuple[Callable[..., Any], tuple[Any, ...]]:
         return (_restore_pickle, (dict(self),))
 
     @property
-    def _keys(self) -> Tuple[KeyType, ...]:
+    def _keys(self) -> tuple[KeyType, ...]:
         return tuple.__getitem__(self, 0)  # type: ignore[index]
 
     @property
-    def _values(self) -> Tuple[ValueType, ...]:
+    def _values(self) -> tuple[ValueType, ...]:
         return tuple.__getitem__(self, 1)  # type: ignore[index]
 
     # Mapping kind

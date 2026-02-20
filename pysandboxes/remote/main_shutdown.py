@@ -1,3 +1,9 @@
+"""Daemon shutdown handler for PySandboxes.
+
+This module handles the graceful shutdown of sandbox daemons, including
+learning mode cleanup and rule generation when the daemon terminates.
+"""
+
 import logging
 import time
 
@@ -8,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 async def daemon_shutdown(graceful_shutdown: bool) -> None:
+    """Handle daemon shutdown and cleanup.
+
+    Args:
+        graceful_shutdown: Whether to perform graceful shutdown with learning cleanup.
+    """
     from pysandboxes.os_sandbox import async_shutdown_daemon, async_stop_daemon
 
     global _current_daemon

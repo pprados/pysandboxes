@@ -1,3 +1,15 @@
+"""Sandbox API module providing decorators and context managers.
+
+This module contains the main public API for PySandboxes, including:
+- @sandbox decorator for function-level sandboxing
+- sandboxes() context manager for process-level sandboxing
+- run() function for running coroutines in sandboxes
+- Utility functions for sandbox state management
+
+The API supports both synchronous and asynchronous usage patterns and provides
+automatic lifecycle management for sandbox processes.
+"""
+
 import asyncio
 import functools
 import inspect
@@ -10,13 +22,7 @@ from pathlib import Path
 from typing import (
     Any,
     Callable,
-    Coroutine,
-    Dict,
-    List,
-    Mapping,
-    Optional,
-    TypeVar,
-    Union,
+    Coroutine, TypeVar,
 )
 
 from .base_daemon import BaseDaemon
@@ -39,6 +45,14 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def _check__main__coroutine(coroutine: Any) -> None:
+    """Check that a coroutine is not defined in __main__ module.
+
+    Args:
+        coroutine: The coroutine to check.
+
+    Raises:
+        ValueError: If the coroutine is defined in __main__ module.
+    """
     module = inspect.getmodule(coroutine.cr_frame)
     if module and hasattr(module, "__name__"):
         if module.__name__ == "__main__":
@@ -48,12 +62,37 @@ def _check__main__coroutine(coroutine: Any) -> None:
 
 
 def sandbox(
-    _func: Optional[F] = None,
+    _func: F | None = None,
 ) -> Callable[..., Any]:
-    """
-    Decorator to run a function in a sandbox.y
-    The function can be either synchronous or asynchronous.
-    Reraises any exception raised by the function.
+    """Decorator to run a function in a sandbox.
+
+    This decorator can be applied to both synchronous and asynchronous functions.
+    The decorated function will execute in an isolated sandbox environment with
+    restricted access to system resources.
+
+    Args:
+        _func: The function to be decorated (used when decorator is called without parentheses).
+
+    Returns:
+        The decorated function that will run in a sandbox.
+
+    Raises:
+        Any exception raised by the original function is re-raised.
+
+    Examples:
+        Decorating a synchronous function:
+        ```python
+        @sandbox
+        def safe_calculation(x, y):
+            return x + y
+        ```
+
+        Decorating an asynchronous function:
+        ```python
+        @sandbox
+        async def async_task():
+            return await some_operation()
+        ```
     """
     from pysandboxes.os_sandbox import async_call_in_sandbox, call_in_sandbox
 
@@ -78,7 +117,43 @@ def sandbox(
 
 
 class sandboxes:
-    __slot__ = (
+    """Context manager for sandbox process lifecycle management.
+
+    This class provides both synchronous and asynchronous context manager interfaces
+    for managing sandbox processes. It handles daemon startup, configuration, and
+    graceful shutdown.
+
+    Attributes:
+        init_fn: Optional initialization function called when daemon starts.
+        config_path: Path to sandbox configuration file.
+        envs: Environment variables available in the sandbox.
+        extra_rules: Additional security rules to apply.
+        learning_path: Path for learning mode rule generation.
+        python_args: Additional Python interpreter arguments.
+        graceful_shutdown: Whether to shutdown gracefully on exit.
+
+    Examples:
+        Basic usage:
+        ```python
+        with sandboxes():
+            # Code runs in sandbox
+            result = some_function()
+        ```
+
+        With custom configuration:
+        ```python
+        with sandboxes(config_path="custom.conf", graceful_shutdown=True):
+            result = some_function()
+        ```
+
+        Async usage:
+        ```python
+        async with sandboxes():
+            result = await some_async_function()
+        ```
+    """
+
+    __slots__ = (
         "init_fn",
         "config_path",
         "envs",
@@ -91,23 +166,27 @@ class sandboxes:
         "_old_sigquit",
         "_daemon",
     )
-    """
-    Context manager to _start and _stop the sandbox daemon.
-    The parameter `init_fn` is a function that will be called when the daemon starts,
-    inside the daemon process. It's a good place to initialize the database connection,
-    or to load some data.
-    """
 
     def __init__(
         self,
-        init_fn: Optional[SyncOrAsyncFunc] = None,
-        config_path: Optional[Union[Path, str]] = None,
+        init_fn: SyncOrAsyncFunc | None = None,
+        config_path: Path | str | None = None,
         *,
         envs: Environ | None = None,
-        python_args: Optional[List[str]] = None,
+        python_args: list[str] | None = None,
         graceful_shutdown: bool = True,
-        **extra_rules: Mapping[str, Any],
+        **extra_rules: dict[str, Any],
     ) -> None:
+        """Initialize the sandbox context manager.
+
+        Args:
+            init_fn: Function called during daemon initialization in the sandbox process.
+            config_path: Path to configuration file or directory.
+            envs: Environment variables to make available in sandbox.
+            python_args: Additional arguments for Python interpreter.
+            graceful_shutdown: Whether to shutdown gracefully on exit.
+            **extra_rules: Additional security rules as keyword arguments.
+        """
         self.init_fn = init_fn
         self.config_path = (
             config_path
@@ -130,8 +209,13 @@ class sandboxes:
 
     # ── synchronous API ────────────────────────────────
     def __enter__(self) -> BaseDaemon:
-        """
-        Start the sandbox daemon.
+        """Start the sandbox daemon for synchronous context manager.
+
+        Returns:
+            The started daemon instance.
+
+        Raises:
+            ConfigSyntaxError: If the configuration file has syntax errors.
         """
         from .e import ConfigSyntaxError
         from .os_sandbox import start_daemon
@@ -177,9 +261,9 @@ class sandboxes:
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc: Optional[BaseException],
-        tb: Optional[Any],
+        exc_type: type[BaseException]|None,
+        exc: BaseException|None,
+        tb: Any|None,
     ) -> None:
         """
         Stop the sandbox daemon.
@@ -255,9 +339,9 @@ class sandboxes:
     @sandbox_loop
     async def __aexit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc: Optional[BaseException],
-        tb: Optional[Any],
+        exc_type: type[BaseException]|None,
+        exc: BaseException|None,
+        tb: Any,
     ) -> bool:
         """
         Stop the sandbox daemon.
@@ -270,12 +354,12 @@ class sandboxes:
 def run(
     main: Coroutine[Any, Any, Any],
     *,
-    init_fn: Optional[SyncOrAsyncFunc] = None,
-    config_path: Optional[Union[Path, str]] = None,
+    init_fn: SyncOrAsyncFunc|None = None,
+    config_path: Path| str|None = None,
     envs: Environ | None = None,
-    python_args: Optional[List[str]] = None,
+    python_args: list[str]|None = None,
     graceful_shutdown: bool = True,
-    **kwargs: Dict[str, Any],
+    **kwargs: dict[str, Any],
 ) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox

@@ -1,6 +1,13 @@
+"""Abstract base class for sandbox daemon implementations.
+
+This module defines the base interface that all sandbox daemon providers
+must implement. It provides common functionality for daemon lifecycle
+management, configuration handling, and inter-process communication.
+"""
+
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 from .sb_types import Envs
 from .tools import Environ, SyncOrAsyncFunc
@@ -17,13 +24,25 @@ _mixed_sync_and_async_error = (
 
 
 class BaseDaemon(ABC):
+    """Abstract base class for all sandbox daemon implementations.
+
+    This class defines the interface that all sandbox providers (subprocess,
+    firejail, etc.) must implement for daemon lifecycle management.
+    """
+
     __slots__ = ("_is_started", "_token", "_accept_incoming")
 
     def __init__(
         self,
         token: str,
-        **kwargs: Dict[str, Any],
+        **kwargs: dict[str, Any],
     ) -> None:
+        """Initialize the daemon with a unique token.
+
+        Args:
+            token: Unique identifier for this daemon instance.
+            **kwargs: Additional provider-specific arguments.
+        """
         self._is_started = False
         self._token = token
         self._accept_incoming = False
@@ -35,10 +54,20 @@ class BaseDaemon(ABC):
         envs: Envs,
         all_rules: "AllRules",
     ) -> "AllRules":
+        """Some os-sandbox can upate the rules (remove some duplicate rules)
+
+        Returns:
+            The modified all rules.
+        """
         raise NotImplementedError
 
     @property
     def is_started(self) -> bool:
+        """Check if the daemon is started.
+
+        Returns:
+            True if daemon is started, False otherwise.
+        """
         return self._is_started
 
     @abstractmethod
@@ -48,22 +77,43 @@ class BaseDaemon(ABC):
         *,
         envs: Environ,
         log_level: int,
-        init_fn: Optional[SyncOrAsyncFunc],
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
-        """Muse be called via async_start_daemon()"""
+        """Must be called via async_start_daemon().
+
+        Args:
+            all_rules: Sandbox configuration and rules.
+            envs: Environment variables for the daemon.
+            log_level: Logging level.
+            init_fn: Optional initialization function.
+        """
         raise NotImplementedError
 
     @abstractmethod
     async def _stop(self, max_pending: int) -> None:
+        """Stop the daemon process.
+
+        Args:
+            max_pending: Maximum number of pending requests to wait for.
+        """
         raise NotImplementedError
 
     @abstractmethod
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
-        """Muse be called via async_shutdown_daemon()"""
+        """Must be called via async_shutdown_daemon().
+
+        Args:
+            graceful_shutdown: Whether to shutdown gracefully.
+        """
         self._accept_incoming = False
 
     @property
     def token(self) -> str:
+        """Get the daemon's unique token.
+
+        Returns:
+            The daemon's unique identifier.
+        """
         return self._token
 
     @abstractmethod
@@ -74,6 +124,19 @@ class BaseDaemon(ABC):
         *args: Any,
         **kwargs: Any,
     ) -> Any:
+        """Async call a functio in the sandbox
+
+        Args:
+            func: The function to call in the sandbox
+            _force_incomming: Special flag to execute the function
+            if the flag _accept_incomming is false (for call the last shutdown command)
+            args: all argument for the function
+            kwargs: all key-arguments for the function
+        Returns:
+            The return value
+         Raises::
+            Exception from the function
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -82,6 +145,19 @@ class BaseDaemon(ABC):
         func: Callable[..., Any],
         _force_incomming: bool,
         *args: Any,
-        **kwargs: Dict[str, Any],
+        **kwargs: dict[str, Any],
     ) -> Any:
+        """Sync call a functio in the sandbox
+
+        Args:
+            func: The function to call in the sandbox
+            _force_incomming: Special flag to execute the function
+            if the flag _accept_incomming is false (for call the last shutdown command)
+            args: all argument for the function
+            kwargs: all key-arguments for the function
+        Returns:
+            The return value
+         Raises::
+            Exception from the function
+        """
         raise NotImplementedError

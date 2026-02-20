@@ -1,3 +1,10 @@
+"""Utility functions for PySandboxes.
+
+This module provides common utility functions used throughout the PySandboxes
+framework, including environment variable resolution, configuration processing,
+function type checking, and sandbox state management.
+"""
+
 import asyncio
 import contextvars
 import inspect
@@ -10,21 +17,32 @@ from typing import (
     Awaitable,
     Callable,
     Iterator,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
 )
 
 from .sb_types import ConfigLine, ConfigLines
 
-Environ = Mapping[str, str] | os._Environ
+Environ = dict[str, str] | os._Environ
+"""Type alias for environment variable mappings."""
 
 
 def resolve_env_variables(s: str, envs: Environ) -> str:
-    # Motif pour capturer les expressions ${VAR} ou ${VAR:=default}
+    """Resolve environment variables in a string using bash-like syntax.
+
+    Supports ${VAR} and ${VAR:=default} patterns for variable substitution.
+
+    Args:
+        s: String containing environment variable references.
+        envs: Environment variables mapping.
+
+    Returns:
+        String with all environment variables resolved.
+
+    Examples:
+        >>> resolve_env_variables("${HOME}/file", {"HOME": "/home/user"})
+        '/home/user/file'
+        >>> resolve_env_variables("${PORT:=8000}", {})
+        '8000'
+    """
     pattern = re.compile(r"\$\{([^{}:=]+)(?::=([^{}]*))?\}")
 
     def replace(match: re.Match[str]) -> str:
@@ -42,7 +60,7 @@ def resolve_env_variables(s: str, envs: Environ) -> str:
     return s
 
 
-def substitute_env_vars(lines: List[str], env_vars: Environ) -> List[str]:
+def substitute_env_vars(lines: list[str], env_vars: Environ) -> list[str]:
     return [resolve_env_variables(line, env_vars) for line in lines]
 
 
@@ -69,8 +87,8 @@ def remove_config_comments(config: ConfigLines) -> ConfigLines:
     return processed_lines
 
 
-def remove_comments(config: List[str]) -> List[str]:
-    processed_lines: List[str] = []
+def remove_comments(config: list[str]) -> list[str]:
+    processed_lines: list[str] = []
 
     for line in config:
         # Remove end-of-line comments while respecting quotes
@@ -93,9 +111,9 @@ def _remove_comment(line: str) -> str:
     Returns:
         Line without comment
     """
-    result: List[str] = []
+    result: list[str] = []
     in_quotes: bool = False
-    quote_char: Optional[str] = None
+    quote_char: str | None = None
     i: int = 0
 
     while i < len(line):
@@ -148,9 +166,9 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 
 def find_config(
-    filename: str,
-    raise_error_if_not_found: bool = False,
-    usecwd: bool = False,
+        filename: str,
+        raise_error_if_not_found: bool = False,
+        usecwd: bool = False,
 ) -> str:
     """
     Search in increasingly higher folders for the given file
@@ -181,7 +199,7 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-            frame.f_code.co_filename
+                frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back
@@ -222,13 +240,10 @@ def set_is_in_sandbox(value: bool) -> None:
         # _is_in_sandbox -= 1
 
 
-SyncOrAsyncFunc = Union[
-    Callable[[], None],  # Function synchrone
-    Callable[[], Awaitable[None]],  # Function asynchrone
-]
+SyncOrAsyncFunc = Callable[[], None] | Callable[[], Awaitable[None]]
 
 
-def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional[str]]:
+def get_callable_info(func: Callable[..., Any]) -> tuple[str | None, str | None]:
     """
     Retrieves the module name and the fully qualified name of a callable.
 
@@ -241,8 +256,8 @@ def get_callable_info(func: Callable[..., Any]) -> Tuple[Optional[str], Optional
         - The name of the module where the callable is defined (str or None).
         - The fully qualified name of the callable (str or None).
     """
-    module_name: Optional[str] = None
-    callable_name: Optional[str] = None
+    module_name: str | None = None
+    callable_name: str | None = None
 
     # Get the module name using inspect.getmodule()
     # This works well for functions, methods, and class methods
@@ -291,7 +306,7 @@ def check_mixte_async_async() -> None:
             raise
 
 
-def follow_links_executable(executable: Path, all_paths: Set[Path]) -> None:
+def follow_links_executable(executable: Path, all_paths: set[Path]) -> None:
     if executable.parents[0].name == "bin":
         if str(executable.parent.parent) not in all_paths:
             all_paths.add(executable.parent.parent)
