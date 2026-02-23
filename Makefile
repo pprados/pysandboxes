@@ -1,7 +1,10 @@
 SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
-POETRY_EXTRA?=--all-extras
-POETRY_WITH?=dev,lint,test,codespell
+POETRY_OR_UV=uv
+UV_EXTRA?=
+POETRY_EXTRA?=
+POETRY_WITH?=-with dev,lint,test,codespell
+UV_GROUP?=--group dev --group lint --group test --group codespell
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -10,15 +13,15 @@ all: help
 TEST_FILE ?= tests/unit_tests/
 
 integration_tests:
-	poetry run pytest tests/integration_tests
+	$(POETRY_OR_UV) run pytest tests/integration_tests
 
 test tests:
-	poetry run pytest -v $(TEST_FILE)
+	$(POETRY_OR_UV) run pytest -v $(TEST_FILE)
 
 all-tests: tests integration_tests
 
 test_watch:
-	poetry run ptw --now . -- tests/unit_tests
+	$(POETRY_OR_UV) run ptw --now . -- tests/unit_tests
 
 
 ######################
@@ -31,22 +34,22 @@ lint format: PYTHON_FILES=.
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint lint_diff:
-	poetry run mypy $(PYTHON_FILES)
-	poetry run black $(PYTHON_FILES) --check
-	poetry run ruff .
+	$(POETRY_OR_UV) run mypy $(PYTHON_FILES)
+	$(POETRY_OR_UV) run black $(PYTHON_FILES) --check
+	$(POETRY_OR_UV) run ruff .
 
 claude-lint: lint
 	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'
 
 format format_diff:
-	poetry run black $(PYTHON_FILES)
-	poetry run ruff --select I --fix $(PYTHON_FILES)
+	$(POETRY_OR_UV) run black $(PYTHON_FILES)
+	$(POETRY_OR_UV) run ruff --select I --fix $(PYTHON_FILES)
 
 spell_check:
-	poetry run codespell --toml pyproject.toml
+	$(POETRY_OR_UV) run codespell --toml pyproject.toml
 
 spell_fix:
-	poetry run codespell --toml pyproject.toml -w
+	$(POETRY_OR_UV) run codespell --toml pyproject.toml -w
 
 
 ######################
@@ -76,7 +79,7 @@ api_docs_clean:
 
 
 api_docs_linkcheck:
-	poetry run linkchecker docs/api_reference/_build/html/index.html
+	$(POETRY_OR_UV) run linkchecker docs/api_reference/_build/html/index.html
 
 ######################
 # HELP
@@ -103,7 +106,7 @@ help:
 
 .PHONY: dist
 dist:
-	poetry build
+	$(POETRY_OR_UV) build
 
 # ---------------------------------------------------------------------------------------
 # SNIPPET pour tester la publication d'une distribution
@@ -142,26 +145,32 @@ endif
 poetry.lock: pyproject.toml
 	poetry lock
 	git add poetry.lock
-	poetry install $(POETRY_EXTRA) --with $(POETRY_WITH)
+	poetry install $(POETRY_EXTRA) -$(POETRY_WITH)
+
+uv.lock: pyproject.toml
+	uv lock
+	git add poetry.lock
+	uv sync $(UV_GROUP)
 
 
 ## Refresh lock
-lock: poetry.lock
+lock: $(POETRY_OR_UV).lock
 
 ## Start jupyter
 jupyter:
 	poetry run jupyter lab
 
 ## Validate the code
-validate: poetry.lock format lint spell_check test
+validate: $(POETRY_OR_UV).lock format lint spell_check test
 
 
 init: poetry.lock
-	@poetry self update
-	@poetry self add poetry-dotenv-plugin
-	@poetry self add poetry-plugin-export
-	@poetry self add poetry-git-version-plugin
-	@poetry config virtualenvs.in-project true
-	@poetry install --sync $(POETRY_EXTRA) --with $(POETRY_WITH)
+#	@poetry self update
+#	@poetry self add poetry-dotenv-plugin
+#	@poetry self add poetry-plugin-export
+#	@poetry self add poetry-git-version-plugin
+#	@poetry config virtualenvs.in-project true
+#	@poetry install --sync $(POETRY_EXTRA) --with $(POETRY_WITH)
+	@uv sync $(UV_GROUP)
 #	@pre-commit install
 	@git lfs install

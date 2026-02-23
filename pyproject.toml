@@ -1,43 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "pysandboxes"
 version = "0.0.0"  # Set with git tag
 description = "Lite sandbox for python code execution"
-authors = [ {name="Philippe PRADOS", email="github@prados.fr"}]
+#requires-python = ">=3.12,<4.0"
+requires-python = ">=3.13,<4.0"
+authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
 license = "Apache-2.0"
 readme = "README.md"
+dependencies = [
+    #  "httpcore @ git+https://github.com/pprados/httpcore.git",
+    "httpcore (>=1.0.9)",
+    #    "langgraph (>=0.3.0)",
+    #  "backports.interpreters (>0.2); python_version < '3.14'",
+    "interpreters-pep-734; python_version >='3.13'",
+    #  "interpreters-pep-734",
+    "fastapi (>=0.115.0)",
+    "uvicorn (>=0.34.0)",
+    "tblib (>=3.1.0)",
+    "aiohttp-sse-client (>=0.2.1)",
+    "netifaces (>=0.11.0)",
+    # For CLI
+    "click (>=8.2.0)",
+    "python-dotenv (>=0.9.0)",
+    #  "dnspython>=2.7.0", TODO
+    #  "RestrictedPython (>8.0)", TODO
+    # For ikernel_executor
+    #  "ipykernel (>=6.29.5)",
+    #  "jupyter_client (>=8.6.3)"
+    "logging (>=0.4.9.6,<0.5.0.0)"
+]
+
+
+[project.urls]
 repository = "https://www.github.com/pprados/langgraph-codeagent"
 homepage = "https://www.github.com/pprados/langgraph-codeagent"
-#requires-python = ">=3.12,<4.0"
-requires-python = ">=3.10,<4.0"
-packages = [
-  { include = "pysandboxes" },
-  # FIXME
+
+[tool.hatch.build.targets.wheel]
+packages = ["pysandboxes"]
+# FIXME
 #  { include = "my-package/.py-sandboxes", from=".py-sandboxes" },
+
+
+[tool.setuptools.packages.find]
+packages = [
+    { include = "pysandboxes" },
+    # FIXME
+    #  { include = "my-package/.py-sandboxes", from=".py-sandboxes" },
 ]
 
-dependencies = [
-  "httpcore @ git+https://github.com/pprados/httpcore.git",
-  "langgraph (>=0.3.0)",
-#  "backports.interpreters (>0.2); python_version < '3.14'",
-  "interpreters-pep-734; python_version >='3.13'",
-#  "interpreters-pep-734",
-  "fastapi (>=0.115.0)",
-  "uvicorn (>=0.34.0)",
-  "tblib (>=3.1.0)",
-  "aiohttp-sse-client (>=0.2.1)",
-  "netifaces (>=0.11.0)",
-
-  # For CLI
-  "click (>=8.2.0)",
-  "python-dotenv (>=0.9.0)",
-
-#  "dnspython>=2.7.0", TODO
-#  "RestrictedPython (>8.0)", TODO
-  # For ikernel_executor
-#  "ipykernel (>=6.29.5)",
-#  "jupyter_client (>=8.6.3)"
-"logging (>=0.4.9.6,<0.5.0.0)"
-]
+[tool.uv]
+package = true
 
 [project.scripts]
 python-sb = "pysandboxes.python_sb:main"
@@ -45,61 +61,54 @@ python3-sb = "pysandboxes.python_sb:main"
 ipython-sb = "pysandboxes.python_sb:main"
 ipython3-sb = "pysandboxes.python_sb:main"
 
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-playwright = "^1.28.0"
-setuptools = "^67.6.1"
-ipython = "*"
-ipykernel = "*"
-jupyter = "^1.0"
-jupyterlab_rise = "^0.42"
-pre-commit = "^3.6"
-twine = "^5.1.0"
-importlib-metadata = "7.2.1"
-scikit-learn = "^1.6"
-aiohttp = "*"
-pydevd-pycharm = "*"
-
-[tool.poetry.group.test.dependencies]
-# The only dependencies that should be added are
-# dependencies used for running tests (e.g., pytest, freezegun, response).
-# Any dependencies that do not meet that criteria will be removed.
-pytest = "^7.3.0"
-#pytest-cov = "^4.0.0"
-pytest-dotenv = "^0.5.2"
-#pytest-watcher = "^0.2.6"
-freezegun = "^1.2.2"
-responses = "^0.22.0"
-pytest-asyncio = "^0.20.3"
-pytest-mock = "^3.10.0"
-#pytest-socket = "^0.6.0"
-syrupy = "^4.0.2"
-#lark = "^1.1"
-
-[tool.poetry.group.lint]
-optional = true
-
-[tool.poetry.group.lint.dependencies]
-mypy = "^1.8"
-ruff = "^0.1.9"
-types-toml = "^0.10.8.1"
-types-redis = "^4.3.21.6"
-types-pytz = "^2023.3.0.0"
-black = { version = "^23.1.0", extras = ["jupiter"] }
-types-chardet = "^5.0.4.6"
-mypy-protobuf = "^3.0.0"
-types-google-cloud-ndb = "^2.0"
-types-docutils = "^0.20"
-types-pyyaml = "^6.0.12.2"
-types-requests = "^2.28.11.5"
-
-[tool.poetry.group.codespell]
-optional = true
-
-[tool.poetry.group.codespell.dependencies]
-codespell = "^2.2.5"
+[dependency-groups]
+dev = [
+    "playwright>=1.28.0",
+    "setuptools>=67.6.1",
+    "ipython",
+    "ipykernel",
+    "jupyter>=1.0",
+    "jupyterlab_rise>=0.42",
+    "pre-commit>=3.6",
+    "twine>=5.1.0",
+    "importlib-metadata==7.2.1",
+    "scikit-learn>=1.6",
+    "aiohttp",
+    "pydevd-pycharm",
+]
+test = [
+    # The only dependencies that should be added are
+    # dependencies used for running tests (e.g., pytest, freezegun, response).
+    # Any dependencies that do not meet that criteria will be removed.
+    "pytest>=7.3.0",
+    #"pytest-cov>=4.0.0",
+    "pytest-dotenv>=0.5.2",
+    #"pytest-watcher>=0.2.6",
+    "freezegun>=1.2.2",
+    "responses>=0.22.0",
+    "pytest-asyncio>=0.20.3",
+    "pytest-mock>=3.10.0",
+    #"pytest-socket>=0.6.0",
+    "syrupy>=4.0.2",
+    #"lark>=1.1",
+]
+lint = [
+    "mypy>=1.8",
+    "ruff>=0.1.9",
+    "types-toml>=0.10.8.1",
+    "types-redis>=4.3.21.6",
+    "types-pytz>=2023.3.0.0",
+    "black>=23.1.0",
+    "types-chardet>=5.0.4.6",
+    "mypy-protobuf>=3.0.0",
+    "types-google-cloud-ndb>=2.0",
+    "types-docutils>=0.20",
+    "types-pyyaml>=6.0.12.2",
+    "types-requests>=2.28.11.5",
+]
+codespell = [
+    "codespell>=2.2.5",
+]
 
 [tool.codespell]
 skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,./PPR/*'
@@ -112,12 +121,12 @@ ignore-words-list = 'momento,collison,ned,foor,reworkd,parth,whats,aapply,mysogy
 
 [tool.ruff]
 select = [
-  "E",  # pycodestyle
-  "F",  # pyflakes
-  "I",  # isort
+    "E", # pycodestyle
+    "F", # pyflakes
+    "I", # isort
 ]
 exclude = [
-  "tests/integration_tests/examples/non-utf8-encoding.py",
+    "tests/integration_tests/examples/non-utf8-encoding.py",
 ]
 
 
@@ -140,17 +149,11 @@ addopts = "--strict-markers --strict-config --durations=5 --snapshot-warn-unused
 # Registering custom markers.
 # https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
 markers = [
-  "requires: mark tests as requiring a specific library",
-  "scheduled: mark tests to run in scheduled testing",
-  "compile: mark placeholder test used to compile integration tests without running them"
+    "requires: mark tests as requiring a specific library",
+    "scheduled: mark tests to run in scheduled testing",
+    "compile: mark placeholder test used to compile integration tests without running them"
 ]
 asyncio_mode = "auto"
 
 
 
-[tool.poetry-git-version-plugin]
-make_alpha_version = true
-alpha_version_format = '{version}a{distance}+{commit_hash}'
-
-[tool.poetry]
-version = "2.0"  # base version

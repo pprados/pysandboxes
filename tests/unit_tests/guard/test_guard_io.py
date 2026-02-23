@@ -72,26 +72,24 @@ def files() -> Dict[str, Path]:
     (bind_src / "bound_file.txt").write_text("Content")
 
     # Symlink to ignore.log
-    if not (tmp_path / "home_link_to_ignore").exists(follow_symlinks=False):
+    if not (tmp_path / "home_link_to_ignore").exists():
         (tmp_path / "home_link_to_ignore").symlink_to(tmp_path / "ignore.log")
-    if not (tmp_path / "home_link").exists(follow_symlinks=False):
+    if not (tmp_path / "home_link").exists():
         (tmp_path / "home_link").symlink_to(tmp_path / "visible.txt")
-    if not (tmp_path / "home_link_to_bind_src").exists(follow_symlinks=False):
+    if not (tmp_path / "home_link_to_bind_src").exists():
         (tmp_path / "home_link_to_bind_src").symlink_to(
             tmp_path / "bind_src/bound_file.txt"
         )
-    if not (tmp_path / "home_link_relative_to_bind_src").exists(follow_symlinks=False):
+    if not (tmp_path / "home_link_relative_to_bind_src").exists():
         (tmp_path / "home_link_relative_to_bind_src").symlink_to(
             "bind_src/bound_file.txt"
         )
 
-    if not (tmp_path / "bind_src/link_to_bind_src").exists(follow_symlinks=False):
+    if not (tmp_path / "bind_src/link_to_bind_src").exists():
         (tmp_path / "bind_src/link_to_bind_src").symlink_to(
             tmp_path / "bind_src/bound_file.txt"
         )
-    if not (tmp_path / "bind_src/link_relative_to_bind_src").exists(
-        follow_symlinks=False
-    ):
+    if not (tmp_path / "bind_src/link_relative_to_bind_src").exists():
         (tmp_path / "bind_src/link_relative_to_bind_src").symlink_to("bound_file.txt")
 
     # TODO: yield and remove ?
