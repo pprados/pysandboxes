@@ -32,14 +32,13 @@
 --notv
 --nou2f
 --novideo
---disable-mnt
 --nodvd
---memory-deny-write-execute
+--disable-mnt
 --no3d  # Disable 3D hardware acceleration.
 
---blacklist=/etc/hosts
-#--blacklist=/etc/resolv.conf  # Protect DNS
---hosts-file=/dev/null
+# --blacklist=/etc/hosts
+--blacklist=/etc/resolv.conf  # Protect DNS
+# --hosts-file=/dev/null
 
 
 # *** Limits ***

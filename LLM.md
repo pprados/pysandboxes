@@ -65,6 +65,15 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - **Virtual Environment**: `.venv/` directory
 - **Entry Points**: `python-sb` CLI commands for sandboxed Python execution
 
+## Code Quality
+- Type hints required for all code
+- Public APIs must have docstrings
+- Functions must be focused and small
+- Follow existing patterns exactly
+- Line length: 78 chars maximum
+- Always uses 3.10 syntax (str | None in place of Optional[str]) 
+- avoid useless comments when generating code
+
 ## Testing Strategy
 
 - **Unit Tests**: `tests/unit_tests/` - Test individual components and guards
@@ -75,8 +84,4 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 
 - The project targets AI/LLM-generated code security use cases
 - Configuration files use whitelist-only security model
-- Remote execution uses SSE for IPC between processes
 - Multiple OS sandbox backends supported (firejail primary, Docker/podman planned)
-- Always uses strong typing. 
-- Always uses 3.10 syntax (str | None in place of Optional[str]) 
-- avoid useless comments when generating code

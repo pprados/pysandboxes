@@ -1,10 +1,14 @@
 SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
+
+# Swith to poetry to uv
 POETRY_OR_UV=uv
+LOCK=$(POETRY_OR_UV).lock
 UV_EXTRA?=
+UV_GROUP?=--group dev --group lint --group test --group codespell
+
 POETRY_EXTRA?=
 POETRY_WITH?=-with dev,lint,test,codespell
-UV_GROUP?=--group dev --group lint --group test --group codespell
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -154,7 +158,7 @@ uv.lock: pyproject.toml
 
 
 ## Refresh lock
-lock: $(POETRY_OR_UV).lock
+lock: $(LOCK)
 
 ## Start jupyter
 jupyter:
@@ -164,13 +168,17 @@ jupyter:
 validate: $(POETRY_OR_UV).lock format lint spell_check test
 
 
-init: poetry.lock
-#	@poetry self update
-#	@poetry self add poetry-dotenv-plugin
-#	@poetry self add poetry-plugin-export
-#	@poetry self add poetry-git-version-plugin
-#	@poetry config virtualenvs.in-project true
-#	@poetry install --sync $(POETRY_EXTRA) --with $(POETRY_WITH)
+_poetry-init:
+	@poetry self update
+	@poetry self add poetry-dotenv-plugin
+	@poetry self add poetry-plugin-export
+	@poetry self add poetry-git-version-plugin
+	@poetry config virtualenvs.in-project true
+	@poetry install --sync $(POETRY_EXTRA) --with $(POETRY_WITH)
+
+_uv-init:
 	@uv sync $(UV_GROUP)
+
+init: _$(POETRY_OR_UV)-init
 #	@pre-commit install
 	@git lfs install

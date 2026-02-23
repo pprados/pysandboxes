@@ -14,13 +14,13 @@ INTERVAL_FOR_RETRY_CONNECTION = 0.5  # Connection retry delay
 MAX_CONNECT_RETRY = 5  # Maximum connection attempts before raising error
 
 # Shutdown and lifecycle timing
-TIMEOUT_GRACEFUL_SHUTDOWN = 1  # Graceful shutdown timeout
+TIMEOUT_GRACEFUL_SHUTDOWN = 1.0  # Graceful shutdown timeout
 TIMEOUT_FOR_STOP_DAEMON = TIMEOUT_GRACEFUL_SHUTDOWN * 2  # Daemon stop timeout
-TIMEOUT_FOR_PING = 1  # Ping response timeout
+TIMEOUT_FOR_PING = 1.0  # Ping response timeout
 
 # Exponential backoff retry configuration
-RETRY_RESET_DELAY = 3 * 60  # Delay to reset connection attempt counters
+RETRY_RESET_DELAY = 3 * 60.0  # Delay to reset connection attempt counters
 RETRY_MAX_ATTEMPTS = 5  # Maximum retry attempts in reset period
 RETRY_BASE_DELAY = 1.0  # Initial exponential backoff delay
 RETRY_FACTOR = 1.5  # Exponential backoff multiplier
-RETRY_MAX_DELAY = 5  # Maximum exponential backoff delay cap
+RETRY_MAX_DELAY = 5.0  # Maximum exponential backoff delay cap
