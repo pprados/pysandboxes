@@ -179,6 +179,10 @@ _poetry-init:
 _uv-init:
 	@uv sync $(UV_GROUP)
 
+## Start MCP inspector
+inspector:
+	npx @modelcontextprotocol/inspector
+
 init: _$(POETRY_OR_UV)-init
 #	@pre-commit install
 	@git lfs install
