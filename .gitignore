@@ -171,3 +171,4 @@ cython_debug/
 
 netfilter*.net
 run.sh
+.mcp.json
