@@ -22,7 +22,7 @@ class TestQueueStringIO:
 
     def test_queue_string_io_initialization(self) -> None:
         """Test QueueStringIO initialization."""
-        test_queue = queue.Queue()
+        test_queue: queue.Queue = queue.Queue()
         qsio = QueueStringIO("stdout", test_queue)
 
         assert qsio.type == "stdout"
@@ -31,7 +31,7 @@ class TestQueueStringIO:
 
     def test_queue_string_io_write_with_sync_queue(self) -> None:
         """Test writing to QueueStringIO with synchronous queue."""
-        test_queue = queue.Queue()
+        test_queue: queue.Queue = queue.Queue()
         qsio = QueueStringIO("stdout", test_queue)
 
         result = qsio.write("Hello, World!")
@@ -45,7 +45,7 @@ class TestQueueStringIO:
 
     def test_queue_string_io_write_with_async_queue(self) -> None:
         """Test writing to QueueStringIO with asynchronous queue."""
-        test_queue = asyncio.Queue()
+        test_queue: asyncio.Queue = asyncio.Queue()
         qsio = QueueStringIO("stderr", test_queue)
 
         result = qsio.write("Error message")
@@ -93,7 +93,7 @@ class TestQueueStringIO:
 
     def test_queue_string_io_multiple_writes(self) -> None:
         """Test multiple writes to QueueStringIO."""
-        test_queue = queue.Queue()
+        test_queue: queue.Queue = queue.Queue()
         qsio = QueueStringIO("stdout", test_queue)
 
         qsio.write("Line 1\n")
@@ -222,7 +222,7 @@ class TestCatchStdio:
         def test_func(x: int, y: int) -> int:
             return x + y
 
-        test_queue = queue.Queue()
+        test_queue: queue.Queue = queue.Queue()
         result = catch_stdio(test_queue, test_func, {"y": 2}, 1)
 
         assert result == {"result": 42, "stdout": "output", "stderr": ""}
@@ -341,7 +341,7 @@ class TestACatchStdio:
         def test_func() -> str:
             return "queue_test"
 
-        test_queue = queue.Queue()
+        test_queue: queue.Queue = queue.Queue()
 
         with patch("sys.stdout") as mock_stdout, patch("sys.stderr") as mock_stderr:
             mock_stdout.set_context = Mock()
@@ -368,7 +368,7 @@ class TestACatchStdio:
         def test_func() -> int:
             return 123
 
-        test_queue = asyncio.Queue()
+        test_queue: asyncio.Queue = asyncio.Queue()
 
         with patch("sys.stdout") as mock_stdout, patch("sys.stderr") as mock_stderr:
             mock_stdout.set_context = Mock()
@@ -380,4 +380,3 @@ class TestACatchStdio:
             # Async queue should receive the result
             queue_result = test_queue.get_nowait()
             assert queue_result["result"] == 123
-

@@ -4,8 +4,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
 
-import pytest
-
 from pysandboxes.learning import (
     _manage_olds_file,
     activate_learning,
@@ -79,7 +77,7 @@ class TestGenerateConfigFromLearning:
 
         with patch("pysandboxes.learning._learning_path", None):
             with patch("pysandboxes.learning.resources.read_text") as mock_read_text:
-                with patch("builtins.open", mock_open()) as mock_file_open:
+                with patch("builtins.open", mock_open()):
                     mock_read_text.return_value = "template"
 
                     generate_config_from_learning()

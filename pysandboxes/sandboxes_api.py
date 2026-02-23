@@ -26,8 +26,6 @@ from typing import (
     TypeVar,
 )
 
-from tornado.gen import is_coroutine_function
-
 from .base_daemon import BaseDaemon
 from .e import ConfigSyntaxError
 from .os_sandbox import async_shutdown_daemon
@@ -74,7 +72,8 @@ def sandbox(
     restricted access to system resources.
 
     Args:
-        _func: The function to be decorated (used when decorator is called without parentheses).
+        _func: The function to be decorated (used when decorator is called
+        without parentheses).
 
     Returns:
         The decorated function that will run in a sandbox.
@@ -183,7 +182,8 @@ class sandboxes:
         """Initialize the sandbox context manager.
 
         Args:
-            init_fn: Function called during daemon initialization in the sandbox process.
+            init_fn: Function called during daemon initialization in
+            the sandbox process.
             config_path: Path to configuration file or directory.
             envs: Environment variables to make available in sandbox.
             python_args: Additional arguments for Python interpreter.

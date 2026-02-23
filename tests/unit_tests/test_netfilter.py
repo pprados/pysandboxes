@@ -1,11 +1,7 @@
 """Unit tests for netfilter module."""
 
-import socket
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
-from typing import List
-
-import pytest
 
 from pysandboxes.guard_socket import (
     Action,
@@ -102,7 +98,7 @@ class TestRuleToNetfilter:
 
     def test_rule_to_netfilter_empty_rules(self) -> None:
         """Test rule_to_netfilter with empty rules."""
-        socket_rules: SocketRules = []
+        socket_rules: SocketRules = tuple()
         result = rule_to_netfilter(socket_rules, is_ipv6=False)
 
         expected_base = [
@@ -157,8 +153,8 @@ class TestRuleToNetfilter:
 
         # Check that the rule was added (with correct spacing)
         tcp_rule_found = any(
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.1.0/24  -m multiport --dports 80 -j ACCEPT"
-            == rule
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.1.0/24  "
+            "-m multiport --dports 80 -j ACCEPT" == rule
             for rule in result
         )
         assert tcp_rule_found

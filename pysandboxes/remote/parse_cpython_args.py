@@ -27,17 +27,18 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         2. `sandboxes_args`: Custom arguments for the sandbox.
         3. `python_cmd`: The command to be executed and its arguments.
     """
+
     class CustomHelpFormatter(argparse.HelpFormatter):
         """
         Custom argparse formatter to control help message width and add extra info.
         """
 
         def __init__(
-                self,
-                prog: str,
-                indent_increment: int = 2,
-                max_help_position: int = 10,
-                width: int | None = None,
+            self,
+            prog: str,
+            indent_increment: int = 2,
+            max_help_position: int = 10,
+            width: int | None = None,
         ):
             """Initializes the custom formatter, setting a default width."""
             # We override the width here instead of in the parent class
@@ -59,14 +60,17 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
             )
             return help
 
-    long_params = ["--help",
-                   "--help-env",
-                   "--help-xoptions",
-                   "--help-all",
-                   "--check-hash-based-pycs"]
+    long_params = [
+        "--help",
+        "--help-env",
+        "--help-xoptions",
+        "--help-all",
+        "--check-hash-based-pycs",
+    ]
 
-    sandboxes_args = [arg for arg in args if
-                      arg.startswith("--") and arg not in long_params]
+    sandboxes_args = [
+        arg for arg in args if arg.startswith("--") and arg not in long_params
+    ]
     args = [arg for arg in args if not arg.startswith("--") or arg in long_params]
 
     parser = argparse.ArgumentParser(
@@ -81,13 +85,13 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         "--help",
         action="store_true",
         help="Print a short description of all command line options and "
-             "corresponding environment variables and exit.",
+        "corresponding environment variables and exit.",
     )
     parser.add_argument(
         "--help-env",
         action="store_true",
         help="Print a short description of Python-specific environment "
-             "variables and exit.",
+        "variables and exit.",
     )
     parser.add_argument(
         "--help-xoptions",
@@ -110,14 +114,14 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         "-b",
         action="store_true",
         help="Issue a warning when converting bytes or bytearray to str without "
-             "specifying encoding or comparing bytes or bytearray with str or bytes "
-             "with int. Issue an error when the option is given twice (-bb).",
+        "specifying encoding or comparing bytes or bytearray with str or bytes "
+        "with int. Issue an error when the option is given twice (-bb).",
     )
     parser.add_argument(
         "-B",
         action="store_true",
         help="If given, Python won’t try to write .pyc files on the import of "
-             "source modules. See also PYTHONDONTWRITEBYTECODE.",
+        "source modules. See also PYTHONDONTWRITEBYTECODE.",
     )
     parser.add_argument(
         "--check-hash-based-pycs",
@@ -134,7 +138,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         "-E",
         action="store_true",
         help="Ignore all PYTHON* environment variables, e.g. PYTHONPATH and "
-             "PYTHONHOME, that might be set.",
+        "PYTHONHOME, that might be set.",
     )
 
     parser.add_argument(
@@ -145,7 +149,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         "-O",
         action="store_true",
         help="Remove assert statements and any code conditional on "
-             "the value of __debug__.",
+        "the value of __debug__.",
     )
     parser.add_argument(
         "-OO", action="store_true", help="Do -O and also discard docstrings. "
@@ -159,7 +163,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         "-q",
         action="store_true",
         help="Don’t display the copyright and version messages "
-             "even in interactive mode.",
+        "even in interactive mode.",
     )
     parser.add_argument("-R", action="store_true", help="Turn on hash randomization.")
     parser.add_argument(
@@ -171,7 +175,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         "-S",
         action="store_true",
         help="Disable the import of the module site and the site-dependent "
-             "manipulations of sys.path that it entails. ",
+        "manipulations of sys.path that it entails. ",
     )
     parser.add_argument(
         "-u",
@@ -182,7 +186,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         "-v",
         action="store_true",
         help="Print a message each time a module is initialized, showing the "
-             "place (filename or built-in module) from which it is loaded. ",
+        "place (filename or built-in module) from which it is loaded. ",
     )
     parser.add_argument(
         "-W",
@@ -190,7 +194,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         metavar="arg",
         dest="warnings",
         help="Warning control. Python’s warning machinery by default prints "
-             "warning messages to sys.stderr.",
+        "warning messages to sys.stderr.",
     )
     parser.add_argument(
         "-x",
@@ -214,8 +218,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
     )
     parser2.add_argument("-c", help="Execute Python code")
     parser2.add_argument("-m", help="Execute a module")
-    parser2.add_argument("script", nargs=argparse.REMAINDER,
-                         help="script to start")
+    parser2.add_argument("script", nargs=argparse.REMAINDER, help="script to start")
 
     python_command = parser2.parse_args(remaining_args)
     python_command_args = []
@@ -227,8 +230,8 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         python_command_args.extend(python_command.script)
 
     if len(python_command_args):
-        assert args[-len(python_command_args):] == python_command_args
-        python_parsed_args = args[:-len(python_command_args)]
+        assert args[-len(python_command_args) :] == python_command_args
+        python_parsed_args = args[: -len(python_command_args)]
     else:
         python_parsed_args = args
 

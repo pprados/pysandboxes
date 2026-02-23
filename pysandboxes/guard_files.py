@@ -329,7 +329,7 @@ def generate_rules(
     # Select only parent
     global _special_env, _special_home
     learn = learn.copy()
-    parent_level: Dict[Path, bool] = {}
+    parent_level: dict[Path, bool] = {}
     for learn_rule in filter(lambda x: isinstance(x, LearnFileRule), learn):
         parent = learn_rule.path.absolute()
         if not parent.is_dir():

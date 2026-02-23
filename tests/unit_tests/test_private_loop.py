@@ -1,8 +1,6 @@
 """Unit tests for private_loop module."""
 
 import asyncio
-import threading
-import time
 from unittest.mock import Mock, patch
 
 import pytest
@@ -27,7 +25,7 @@ class TestSetSandboxLoop:
             set_sandbox_loop(loop)
 
             # Verify the loop was set by checking if we can get it back
-            with patch("pysandboxes.private_loop._background_loop_ref") as mock_ref:
+            with patch("pysandboxes.private_loop._background_loop_ref"):
                 # The reference should be set to a weakref of the loop
                 with pytest.raises(AssertionError):
                     set_sandbox_loop(loop)
@@ -54,7 +52,8 @@ class TestEnsureBackgroundLoop:
     """Test cases for _ensure_background_loop function."""
 
     def test_ensure_background_loop_no_new_loop(self) -> None:
-        """Test _ensure_background_loop returns None when new_loop is False and no loop exists."""
+        """Test _ensure_background_loop returns None when new_loop is False
+        and no loop exists."""
         with patch("pysandboxes.private_loop._background_loop_ref", None):
             result = _ensure_background_loop(new_loop=False)
             assert result is None
@@ -92,7 +91,8 @@ class TestEnsureBackgroundLoop:
     def test_ensure_background_loop_runtime_error(
         self, mock_get_running_loop: Mock
     ) -> None:
-        """Test _ensure_background_loop handles RuntimeError when not in async context."""
+        """Test _ensure_background_loop handles RuntimeError when not
+        in async context."""
         mock_get_running_loop.side_effect = RuntimeError("no running event loop")
 
         with patch("pysandboxes.private_loop._background_loop_ref", None):
@@ -139,7 +139,7 @@ class TestSandboxLoopDecorator:
             return "test"
 
         assert test_func.__name__ == "test_func"
-        assert "Test function docstring" in test_func.__doc__
+        assert test_func.__doc__ and "Test function docstring" in test_func.__doc__
         reset_sandbox_loop()
 
 

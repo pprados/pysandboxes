@@ -10,7 +10,6 @@ import io
 import logging
 import queue
 import sys
-from concurrent.futures import Executor
 from typing import Any, Callable
 
 from ..private_loop import get_sandbox_loop
@@ -73,7 +72,7 @@ class WrapperIO(io.TextIOBase):
     It uses a context variable to hold the current output stream.
     """
 
-    def __init__(self, context: contextvars.ContextVar):
+    def __init__(self, context: contextvars.ContextVar) -> None:
         """
         Initializes the WrapperIO.
 
@@ -81,7 +80,7 @@ class WrapperIO(io.TextIOBase):
             context: The context variable that holds the current stream.
         """
         self._context = context
-        self._old = None
+        self._old: contextvars.ContextVar | None = None
 
     def set_context(self, new_textio: io.TextIOBase) -> None:
         """
@@ -233,4 +232,3 @@ async def acatch_stdio(
     result["stderr"] = captured_stderr.getvalue()
 
     return result
-

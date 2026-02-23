@@ -187,7 +187,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     def _firejail_args(
         self,
         all_rules: AllRules,
-        envs: Environ,
+        envs: Environ | Envs,
         pipe_path: Path | None,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.

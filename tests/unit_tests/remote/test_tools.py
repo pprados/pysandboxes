@@ -3,7 +3,6 @@
 import logging
 import os
 import pickle
-import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
@@ -16,7 +15,6 @@ from pysandboxes.remote.tools import (
     get_default_gateway_info,
     get_venv,
     return_level_parameter,
-    set_pdeathsig,
     suggest_package_installation,
     to_b85,
     which_command,
@@ -44,8 +42,9 @@ class TestWhichCommand:
         expected_path = Path("/usr/bin/python3")
 
         with patch("pysandboxes.remote.tools.known_paths", []):
-            with patch("pysandboxes.remote.tools.shutil.which",
-                       return_value=str(expected_path)):
+            with patch(
+                "pysandboxes.remote.tools.shutil.which", return_value=str(expected_path)
+            ):
                 result = which_command("python3")
                 assert result == expected_path
 

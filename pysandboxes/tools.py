@@ -19,13 +19,13 @@ from typing import (
     Iterator,
 )
 
-from .sb_types import ConfigLine, ConfigLines
+from .sb_types import ConfigLine, ConfigLines, Envs
 
 Environ = dict[str, str] | os._Environ
 """Type alias for environment variable mappings."""
 
 
-def resolve_env_variables(s: str, envs: Environ) -> str:
+def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
     """Resolve environment variables in a string using bash-like syntax.
 
     Supports ${VAR} and ${VAR:=default} patterns for variable substitution.
@@ -60,7 +60,7 @@ def resolve_env_variables(s: str, envs: Environ) -> str:
     return s
 
 
-def substitute_env_vars(lines: list[str], env_vars: Environ) -> list[str]:
+def substitute_env_vars(lines: list[str], env_vars: Environ | Envs) -> list[str]:
     """Substitute environment variables in a list of strings.
 
     Args:

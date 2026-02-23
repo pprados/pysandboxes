@@ -1,7 +1,5 @@
 """Unit tests for pysandboxes.remote.parameters module."""
 
-import pytest
-
 from pysandboxes.remote.parameters import (
     INTERVAL_FOR_PING_DAEMON,
     INTERVAL_FOR_RETRY_CONNECTION,

@@ -1,9 +1,6 @@
 """Unit tests for pysandboxes.remote.parse_cpython_args module."""
 
-import sys
 from unittest.mock import Mock, patch
-
-import pytest
 
 from pysandboxes.remote.parse_cpython_args import (
     parse_python_cmd_line,
@@ -68,16 +65,13 @@ class TestParsePythonCmdLine:
 
     def test_parse_python_cmd_line_x_option(self) -> None:
         """Test parsing with -X option."""
-        args = ["--env=a=b",
-                "-X", "dev",
-                "-X", "utf8",
-                "script.py"]
+        args = ["--env=a=b", "-X", "dev", "-X", "utf8", "script.py"]
 
         python_parsed, sandboxes_args, python_cmd = parse_python_cmd_line(args)
 
         # Note: The current implementation may not handle -X correctly
         # This test documents the current behavior
-        assert python_parsed == ['-X', 'dev', '-X', 'utf8']
+        assert python_parsed == ["-X", "dev", "-X", "utf8"]
         assert sandboxes_args == ["--env=a=b"]
         assert python_cmd == ["script.py"]
 
@@ -86,7 +80,7 @@ class TestParsePythonCmdLine:
         """Test parsing with help flag exits."""
         args = ["-h"]
 
-        with patch("builtins.print") as mock_print:
+        with patch("builtins.print"):
             parse_python_cmd_line(args)
 
             mock_exit.assert_called_once_with(0)
@@ -98,7 +92,7 @@ class TestParsePythonCmdLine:
         """Test parsing with -? help flag exits."""
         args = ["-?"]
 
-        with patch("builtins.print") as mock_print:
+        with patch("builtins.print"):
             parse_python_cmd_line(args)
 
             mock_exit.assert_called_once_with(0)
@@ -108,7 +102,7 @@ class TestParsePythonCmdLine:
         """Test parsing with --help flag exits."""
         args = ["--help"]
 
-        with patch("builtins.print") as mock_print:
+        with patch("builtins.print"):
             parse_python_cmd_line(args)
 
             mock_exit.assert_called_once_with(0)
@@ -199,7 +193,7 @@ class TestParsePythonCmdLine:
 
     def test_parse_python_cmd_line_only_sandbox_args(self) -> None:
         """Test parsing with only sandbox arguments."""
-        args = ["--env=a=b","--learn"]
+        args = ["--env=a=b", "--learn"]
 
         python_parsed, sandboxes_args, python_cmd = parse_python_cmd_line(args)
 

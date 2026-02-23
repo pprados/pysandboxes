@@ -54,7 +54,7 @@ class BaseDaemon(ABC):
         envs: Envs,
         all_rules: "AllRules",
     ) -> "AllRules":
-        """Some os-sandbox can upate the rules (remove some duplicate rules)
+        """Some os-sandbox can update the rules (remove some duplicate rules)
 
         Returns:
             The modified all rules.
@@ -124,7 +124,7 @@ class BaseDaemon(ABC):
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        """Async call a functio in the sandbox
+        """Async call a function in the sandbox
 
         Args:
             func: The function to call in the sandbox
@@ -147,7 +147,7 @@ class BaseDaemon(ABC):
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> Any:
-        """Sync call a functio in the sandbox
+        """Sync call a function in the sandbox
 
         Args:
             func: The function to call in the sandbox

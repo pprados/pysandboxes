@@ -26,7 +26,7 @@ from asyncio import CancelledError, Task
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Callable, NamedTuple
+from typing import Callable, NamedTuple
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout
@@ -478,7 +478,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
         else:
-            env = all_rules.envs
+            env = dict(all_rules.envs)
 
         logger.debug("Launch process...")
         self._process = await launch_sandbox(

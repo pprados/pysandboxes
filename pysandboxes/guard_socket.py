@@ -541,7 +541,7 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
 
 @functools.lru_cache(maxsize=1000)
 def getaddrinfo(
-    hostname: str | bytes | None,
+    host: str | bytes | None,
     port: bytes | str | int,
     family: int = 0,
     type: int = 0,
@@ -551,7 +551,7 @@ def getaddrinfo(
     """Cached DNS resolution for socket addresses.
 
     Args:
-        hostname: Hostname to resolve.
+        host: Hostname to resolve.
         port: Port number (ignored in resolution).
         family: Address family filter.
         type: Socket type filter.
@@ -562,7 +562,7 @@ def getaddrinfo(
         List of address info tuples.
     """
     return socket.getaddrinfo(
-        hostname=hostname, port=None, family=family, type=type, proto=proto, flags=flags
+        host=host, port=port, family=family, type=type, proto=proto, flags=flags
     )
 
 
@@ -1096,7 +1096,7 @@ def generate_rules(
                 dns[learn_rule.address] = ip
 
     # 2. Map access to dns
-    by_destination: dict[tuple[str, Kind], tuple[List, List]] = {}
+    by_destination: dict[tuple[str, Kind], tuple[list, list]] = {}
     for learn_rule in filter(lambda x: isinstance(x, LearnSocketRule), learn):
         if learn_rule.fn not in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
             if learn_rule.address in dns:

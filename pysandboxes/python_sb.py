@@ -136,7 +136,7 @@ def main() -> int:
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
         else:
-            env = all_rules.envs
+            env = dict(all_rules.envs)
 
         async def launch_and_wait() -> int:
             process = await launch_sandbox(
