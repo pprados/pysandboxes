@@ -16,7 +16,7 @@ ErrorMsg = tuple[str, Path, int]
 """Type alias for error message tuples containing message, path, and line number."""
 
 
-def make_relative_path(path: Path) -> str:
+def make_relative_path(path: Path|None) -> str:
     """Convert an absolute path to a relative path for display.
 
     Tries to make the path relative to current working directory, then home
@@ -28,6 +28,8 @@ def make_relative_path(path: Path) -> str:
     Returns:
         A string representation of the relative path.
     """
+    if path is None:
+        return "None"
     try:
         rel_path = str(path.absolute().relative_to(Path.cwd()))
     except ValueError:
@@ -71,4 +73,33 @@ def format_error_list(errors: Sequence[str]) -> str:
     """
     return (
         errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]
+    )
+
+def config_log(
+        log_level:int,
+        format:str|None=None
+):
+    handlers: list[logging.Handler] = []
+    try:
+        # raise ImportError()  # Force to classic logging
+        from rich.console import Console
+        from rich.logging import RichHandler
+        handlers.append(RichHandler(
+            console=Console(stderr=True),
+            rich_tracebacks=False,
+            log_time_format="[%X]",
+            show_time=True,
+        ))
+        if not format:
+            format = "[%(process)d] %(message)s"
+    except ImportError:
+        if not format:
+            format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+        handlers = [logging.StreamHandler()]
+        handlers[0].setFormatter(logging.Formatter(format))
+    logging.basicConfig(
+        force=True,
+        level=log_level,
+        format=format,
+        handlers=handlers,
     )

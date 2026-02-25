@@ -333,7 +333,7 @@ class sandboxes:
                 """
                 # Iterate through all child processes and send them SIGTERM
                 logger.debug("Catch signal %s. Propagate to the daemon.", signum)
-                logger.debug("Signal lance stop_daemon")
+
                 asyncio.get_running_loop().create_task(self._stop_daemon())
                 handler = self._signals[signum]
                 if isinstance(handler, Callable):

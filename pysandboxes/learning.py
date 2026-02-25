@@ -10,7 +10,6 @@ application through typical usage scenarios and capturing required permissions.
 
 import logging
 import re
-import threading
 from datetime import datetime
 from importlib import resources
 from multiprocessing import Lock
@@ -18,7 +17,7 @@ from pathlib import Path
 from typing import Any, Set
 
 from .config import CONFIG_NAME
-from .main_logger import pysandboxes_logger
+from .main_logger import pysandboxes_logger, make_relative_path
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,10 @@ _learning: Set[Any] = set()
 
 _learning_path: Path | None = None
 
+# Check double usage
+_lock_generate = Lock()
 _save_learning_done: bool = False
+
 
 def generate_config_from_learning() -> None:
     """Generate configuration file from observed learning rules.
@@ -37,20 +39,24 @@ def generate_config_from_learning() -> None:
     processing, and file backup operations.
     """
     global _learning_path, _save_learning_done, _lock
-    with _lock:
+    with _lock_generate:
         from .guard_envs import generate_rules as env_generate_rules
         from .guard_files import generate_rules as file_generate_rules
         from .guard_import import generate_rules as import_generate_rules
         from .guard_socket import generate_rules as socket_generate_rules
 
+        with _lock:
+            learning = _learning.copy()
         # Manage old files
         if _save_learning_done:
             return
-        _save_learning_done = True
         learning_path = _learning_path or Path(CONFIG_NAME)
         learning_path, old_learning_path = _manage_olds_file(learning_path)
         logger.debug(
-            f"generate_config_from_learning({learning_path=},{old_learning_path=})")
+            "generate_config_from_learning(%s,%s)",
+            make_relative_path(learning_path),
+            make_relative_path(old_learning_path)
+        )
 
         # Manage envs rules
         env_rules = env_generate_rules()
@@ -60,21 +66,21 @@ def generate_config_from_learning() -> None:
             all_env_rules = ""
 
         # Manage import rules
-        import_rules = import_generate_rules(_learning)
+        import_rules = import_generate_rules(learning)
         if import_rules:
             all_import_rules = "\n".join(import_rules)
         else:
             all_import_rules = ""
 
         # Manage files rules
-        file_rules = file_generate_rules(_learning)
+        file_rules = file_generate_rules(learning)
         if file_rules:
             all_file_rules = "\n".join(file_rules)
         else:
             all_file_rules = ""
 
         # Manage sockets rules
-        socket_rules = socket_generate_rules(_learning)
+        socket_rules = socket_generate_rules(learning)
         if socket_rules:
             all_socket_rules = "\n".join(socket_rules)
         else:
@@ -98,7 +104,8 @@ def generate_config_from_learning() -> None:
         else:
             # Load template
             with resources.as_file(
-                    resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
+                    resources.files(
+                        __name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
                     / "py-sandbox.template"
             ) as resource_path:
                 all_lines = resource_path.read_text().split("\n")
@@ -110,7 +117,8 @@ def generate_config_from_learning() -> None:
             if match and match.group(1) in replaces:
                 if replaces[match.group(1)]:
                     logger.debug("Insert %s", match.group(1))
-                    all_lines[i] = header + "\n" + replaces[match.group(1)] + "\n\n" + line
+                    all_lines[i] = header + "\n" + replaces[
+                        match.group(1)] + "\n\n" + line
                     update_file = True
                     del replaces[match.group(1)]
 
@@ -132,7 +140,7 @@ def generate_config_from_learning() -> None:
             pysandboxes_logger.setLevel(logging.INFO)
             logger.debug(f"{learning_path=} {old_learning_path=}")
             msg = "\nWrite all learning rules in '%s'. %s" % (
-                learning_path.relative_to(Path()),
+                learning_path.absolute().relative_to(Path().absolute()),
                 find_learning,
             )
             if old_learning_path:
@@ -143,6 +151,7 @@ def generate_config_from_learning() -> None:
             pysandboxes_logger.info(msg)
             pysandboxes_logger.setLevel(old_level)
             learning_path.write_text("\n".join(all_lines))
+        _save_learning_done = True
 
 
 def _manage_olds_file(_learning_path: Path) -> tuple[Path, Path | None]:

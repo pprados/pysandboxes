@@ -9,6 +9,7 @@ from typing import Any, Mapping, cast
 
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
+from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.python_in_sb import convert_extra_rules
@@ -27,37 +28,15 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    handlers: list[logging.Handler] = []
-    try:
-        from rich.console import Console
-        from rich.logging import RichHandler
-
-        handlers.append(RichHandler(
-            console=Console(stderr=True),
-            rich_tracebacks=True,
-            log_time_format="[%X]",
-            show_time=True,
-            ))
-        format = "[%(process)d] %(message)s"
-    except ImportError:
-        pass
-
-    if not handlers:
-        format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
-        handlers.append(logging.StreamHandler())
-    level = logging.DEBUG  # FIX_RELEASE
-    logging.basicConfig(
-    level=level,
-    format=format,
-    handlers=handlers,
-    )
+    log_level=logging.DEBUG  # FIX_RELEASE
+    config_log(log_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(level)
-    logging.getLogger("pysandboxes").setLevel(level)
-    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
+    logging.getLogger("Pysandboxes").setLevel(log_level)
+    logging.getLogger("pysandboxes").setLevel(log_level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
 
 
 def main() -> int:

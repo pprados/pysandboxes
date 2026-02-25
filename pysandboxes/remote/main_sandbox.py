@@ -22,6 +22,7 @@ import sys
 import threading
 from pathlib import Path
 
+from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
 from .python_in_sb import python_in_sb
@@ -125,35 +126,9 @@ def main() -> int:
         raise RuntimeError("Impossible to read the config body from stdin")
 
     # Add ident inside the sandbox
-    format = " "+process_config.log_format
+    log_format = " " + process_config.log_format
     # Adjuste the root log level and format
-    root_logger = logging.getLogger()
-    root_logger.handlers.clear()
-    handlers: list[logging.Handler] = []
-    try:
-        from rich.console import Console
-        from rich.logging import RichHandler
-
-        handlers.append(RichHandler(
-            console=Console(stderr=True),
-            rich_tracebacks=True,
-            log_time_format="[%X]",
-            show_time=True,
-        ))
-    except ImportError:
-        # if True: # FIXME: rich log
-        handlers = [logging.StreamHandler()]
-        handlers[0].setFormatter(logging.Formatter(process_config.log_format))
-        # format = process_config.log_format
-        # handler.setFormatter(
-        #     logging.Formatter(format
-        # )  # FIX_RELEASE
-    logging.basicConfig(
-        level=process_config.log_level,
-        format=format,
-        handlers=handlers,
-    )
-    root_logger.setLevel(process_config.log_level)
+    config_log(process_config.log_level, format=log_format)
     logger.debug("config body and token successfully read from named pipe")
 
     all_rules = process_config.all_rules

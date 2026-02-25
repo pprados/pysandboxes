@@ -1267,11 +1267,11 @@ def _wrap_io_open(func: Callable) -> Callable:
             file = file.path
         if isinstance(file, bytes):
             file = os.fsdecode(file)
-        file = cast(str, file)
+        file = str(file)
         need_to_write = mode is not None and (
                 "w" in mode or "a" in mode or "x" in mode or "+" in mode
         )
-        remapped, rule = _apply_dest_to_src_rules(cast(str, file), write=need_to_write)
+        remapped, rule = _apply_dest_to_src_rules(file, write=need_to_write)
         if rule:
             _raise_ignore(file, rule)
         if remapped is None:

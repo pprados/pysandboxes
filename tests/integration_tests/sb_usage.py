@@ -16,36 +16,13 @@ logger = logging.getLogger(__name__)
 def init_log_level() -> None:
     sandboxes_level = logging.DEBUG
     uvicorn_level = logging.WARNING
-    handlers: list[logging.Handler] = []
-    try:
-        from rich.console import Console
-        from rich.logging import RichHandler
-
-        handlers.append(RichHandler(
-            console=Console(stderr=True),
-            rich_tracebacks=True,
-            log_time_format="[%X]",
-            show_time=True,
-        ))
-        format = "[%(process)d] %(message)s"
-    except ImportError:
-        pass
-
-    if not handlers:
-        handlers.append(logging.StreamHandler())
-        format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
-    logging.basicConfig(
-        level=min(sandboxes_level, logging.INFO),
-        format=format,
-        handlers=handlers
-    )
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
     logging.getLogger("Pysandboxes").setLevel(uvicorn_level)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
-    logger.setLevel(logging.INFO)
+    logging.getLogger().setLevel(sandboxes_level)  # Set the default level for root
 
 
 @sandbox

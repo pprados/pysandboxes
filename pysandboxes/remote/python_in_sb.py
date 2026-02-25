@@ -13,40 +13,21 @@ from attr.validators import is_callable
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode
 from pysandboxes.tools import set_is_in_sandbox
 from ..all_rules import AllRules
+from ..main_logger import config_log
 
 logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    handlers: list[logging.Handler] = []
-    try:
-        from rich.console import Console
-        from rich.logging import RichHandler
-
-        handlers.append(RichHandler(
-            console=Console(stderr=True),
-            rich_tracebacks=True,
-            log_time_format="[%X]",
-            show_time=True,
-            ))
-        format = "[%(process)d] %(message)s"
-    except ImportError:
-        pass
-
-    if not handlers:
-        format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
-        handlers.append(logging.StreamHandler())
-    level = logging.DEBUG
-    logging.basicConfig(level=level,
-                        format=format,
-                        handlers=handlers)
+    log_level = logging.DEBUG
+    config_log(logging.DEBUG)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(level)
-    logging.getLogger("pysandboxes").setLevel(level)
-    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
+    logging.getLogger("Pysandboxes").setLevel(log_level)
+    logging.getLogger("pysandboxes").setLevel(log_level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
 
 def _register_signal() -> None:
     signals: dict[

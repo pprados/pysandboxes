@@ -415,6 +415,7 @@ _not_refresh_modules: set[str] = {
     "importlib",
     "warnings",
     "logging",
+    "rich",  # Because I use it
     "_pytest",
     "_pytest.fixtures",
     "pytest",
@@ -434,8 +435,6 @@ def remove_modules() -> None:
     import sys
 
     logger.debug("Remove old modules")
-    if True:
-        return  # FIXME
     to_remove = set()
     for k, m in dict(sys.modules).items():
         if k.startswith("_pytest") or k.startswith("pytest"):
@@ -450,6 +449,7 @@ def remove_modules() -> None:
     importlib.invalidate_caches()
 
     # Reload modules (may add modules with reload() )
+    logger.debug("Reload modules...")
     for k in to_remove:
         if k in sys.modules:
             if k in sys.builtin_module_names:
@@ -459,12 +459,14 @@ def remove_modules() -> None:
                     pass
 
     # Remove modules
+    logger.debug("Remove modules...")
     for k in to_remove:
         if k in sys.modules:
             if k not in sys.builtin_module_names:
             # if True:
                 del sys.modules[k]
     assert "io" not in sys.modules
+    logger.debug("remove_modules() done")
 
 
 def patch_rules() -> dict[str, Callable]:
