@@ -65,7 +65,14 @@ def parse_rules(
                     )
                 )
             else:
-                learning_path = Path(value) if value else Path(CONFIG_NAME)
+                if value:
+                    learning_path = Path(value)
+                    if learning_path.parent == Path("."):
+                        # Use relative to the file with this parameter
+                        learning_path=rule.path.parent / learning_path
+
+                else:
+                     learning_path =Path(CONFIG_NAME)
                 if not learning_path.parent.exists():
                     errors.append(
                         (
