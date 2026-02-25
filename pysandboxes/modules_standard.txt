@@ -31,7 +31,6 @@ copy
 copyreg
 cProfile
 csv
-ctypes
 curses
 dataclasses
 datetime
@@ -69,7 +68,6 @@ html
 http
 idlelib
 imaplib
-importlib
 inspect
 io
 ipaddress
@@ -141,7 +139,6 @@ statistics
 string
 stringprep
 struct
-subprocess
 symtable
 sys
 sysconfig

@@ -1,4 +1,3 @@
 ctypes
-inspect
 importlib
 subprocess

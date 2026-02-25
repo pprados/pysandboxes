@@ -14,7 +14,7 @@ INTERVAL_FOR_RETRY_CONNECTION = 0.5  # Connection retry delay
 MAX_CONNECT_RETRY = 5  # Maximum connection attempts before raising error
 
 # Shutdown and lifecycle timing
-TIMEOUT_GRACEFUL_SHUTDOWN = 1.0  # Graceful shutdown timeout
+TIMEOUT_GRACEFUL_SHUTDOWN = 100.0  # FIXME Graceful shutdown timeout
 TIMEOUT_FOR_STOP_DAEMON = TIMEOUT_GRACEFUL_SHUTDOWN * 2  # Daemon stop timeout
 TIMEOUT_FOR_PING = 1.0  # Ping response timeout
 

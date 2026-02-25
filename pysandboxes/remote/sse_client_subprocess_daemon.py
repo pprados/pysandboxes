@@ -52,7 +52,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
+DEBUG = True  # FIXME
 
 
 def get_log_formatter() -> str:
@@ -571,7 +571,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             pass  # Ignore
         except Exception as e:
             logger.exception("Unknown error in _shutdown")
-            assert e is None, "Unknown error in _shutdown"
+            assert e is None, f"Unknown error in _shutdown {e}"
         finally:
             self._process = None
             self._is_started = False

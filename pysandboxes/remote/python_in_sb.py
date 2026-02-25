@@ -1,13 +1,17 @@
 import importlib
 import logging
 import os
+import signal
 import sys
+import threading
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from types import FrameType
+from typing import Any, Dict, List, Set, Callable
+
+from attr.validators import is_callable
 
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode
 from pysandboxes.tools import set_is_in_sandbox
-
 from ..all_rules import AllRules
 
 logger = logging.getLogger(__name__)
@@ -27,14 +31,14 @@ def _debug_log() -> None:
 
 
 def _python_interactive(
-    all_rules: AllRules,
-    ban: bool,
+        all_rules: AllRules,
+        ban: bool,
 ) -> int:
     exit_msg = None
     term = os.environ.get("TERM")
     if sys.stdout.isatty() and (
-        (term and ("color" in term or "256" in term or "true" in term))
-        or (sys.platform == "win32" and "ANSICON" in os.environ)
+            (term and ("color" in term or "256" in term or "true" in term))
+            or (sys.platform == "win32" and "ANSICON" in os.environ)
     ):
         BOLD = "\033[1m"
         RED = "\033[1m\033[31m"
@@ -139,6 +143,33 @@ def _python_interactive(
 
 def _python_module(all_rules: AllRules, mod_name: str) -> int:
     import runpy
+    # FIXME: doit être présent partout, et consistant avec __enter__
+    signals: dict[
+        int, Callable[[int, FrameType | None], Any] | int | signal.Handlers | None] = {
+        signal.SIGINT: signal.getsignal(signal.SIGINT),
+        signal.SIGTERM: signal.getsignal(signal.SIGTERM),
+        # signal.SIGQUIT: signal.getsignal(signal.SIGQUIT),
+    }
+
+    def signal_handler(signum: int, frame: FrameType) -> None:
+        """
+        Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
+        It will kill daemon processes before exiting itself.
+        """
+        # Iterate through all child processes and send them SIGTERM
+        logger.debug("Catch signal %s.", signum)
+        generate_config_from_learning()
+        handler = signals[signum]
+        signal.signal(signum,handler)
+        if isinstance(handler,Callable):
+            signal.raise_signal(signum)
+
+    if threading.current_thread() is threading.main_thread():  # TODO: de meme pour les autres formes d'appel
+        # logger.error("Activate signal handlers.")
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGQUIT, signal_handler)
+
 
     runpy.run_module(mod_name, run_name="__main__")
     if sys.flags.inspect:
@@ -188,8 +219,8 @@ def convert_extra_rules(args: List[str]) -> Dict[str, Set[str]]:
 
 
 def python_in_sb(
-    all_rules: AllRules,
-    python_cmd: List[str],
+        all_rules: AllRules,
+        python_cmd: List[str],
 ) -> int:
     try:
         _debug_log()

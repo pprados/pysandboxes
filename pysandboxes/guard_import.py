@@ -107,8 +107,8 @@ _patch_rules: PatchRules = ImmutableDict({})
 
 
 def parse_rules(
-    config: ConfigLines,
-    errors: list[ErrorMsg],
+        config: ConfigLines,
+        errors: list[ErrorMsg],
 ) -> tuple[ImportRules, ConfigLines]:
     """Parse import rules from configuration lines.
 
@@ -140,7 +140,7 @@ def _apply_patch(module: ModuleType, name: str) -> None:
         module: The loaded module to patch.
         name: Name of the module being patched.
     """
-    logger.debug(f"Apply patch {name=} {module=}")
+    logger.debug(f"Apply patch for {module}")
     all_patch = cast(tuple[PatchRule, ...], _patch_rules[name])
     for patch in all_patch:
         cur_object = module
@@ -151,7 +151,7 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
             if __debug__ and isinstance(
-                new_value, type(_apply_patch)
+                    new_value, type(_apply_patch)
             ):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined]
             setattr(cur_object, paths[-1], new_value)
@@ -238,7 +238,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
     @classmethod
     def find_distributions(
-        cls, context: DistributionFinder.Context = DistributionFinder.Context()
+            cls, context: DistributionFinder.Context = DistributionFinder.Context()
     ) -> Iterable[importlib.metadata.PathDistribution]:
         """Find package distributions.
 
@@ -283,16 +283,17 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             finders: List of meta path finders to delegate to.
         """
         self._finders = finders
+        self._debug = False
 
     """
     A custom finder that locates our special module.
     """
 
     def find_spec(
-        self,
-        fullname: str,
-        path: Sequence[str] | None,
-        target: ModuleType | None = None,
+            self,
+            fullname: str,
+            path: Sequence[str] | None,
+            target: ModuleType | None = None,
     ) -> ModuleSpec | None:
         """Find module specification with import guarding.
 
@@ -304,23 +305,19 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         Returns:
             Module specification with guard loader if applicable.
         """
-        # logger.debug(f"find_spec({fullname=},{path=},{target=})")
+        if self._debug:
+            logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
         # Delegate to the rest of the chain to find the _original module spec
         # We skip our own finder by checking sys.meta_path from the next index
         # import builtins;builtins.print(f"finder {fullname}")
-        # TODO: voir les imports recursif a.b
         for finder in sys.meta_path:
             if finder == cast(MetaPathFinderProtocol, self):
                 continue
-            original_spec = finder.find_spec(fullname, path, target)
-            if original_spec:
+            if original_spec := finder.find_spec(fullname, path, target):
                 break
         else:
             return None
-            # if not original_spec:
-            #     if fullname in "sys.modules":
-            #         original_spec = sys.modules[fullname].__spec__
         if original_spec:
             # logger.debug(
             #     f"GuardFinder: Found _original spec via {type(finder).__name__!r}.")
@@ -359,9 +356,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             if is_learning_mode() and is_in_sandbox():
                 module_name = fullname.split(".", 1)[0]
                 if (
-                    "*" not in _rules
-                    and module_name not in _rules
-                    and module_name != "pysandboxes"
+                        "*" not in _rules
+                        and module_name not in _rules
+                        and module_name != "pysandboxes"
                 ):
                     add_learning_rule(LearnImportRule(module_name))
             else:
@@ -382,7 +379,7 @@ _activated = False
 
 
 def _activate_patch_import(
-    patch_rules: PatchRules,
+        patch_rules: PatchRules,
 ) -> bool:
     """Activate import patching with specified rules.
 
@@ -423,6 +420,7 @@ _not_refresh_modules: set[str] = {
     "pytest",
     "pathlib",
     "subprocess",
+    'codecs',
     __name__.rsplit(".", maxsplit=1)[0],
 }
 
@@ -475,8 +473,8 @@ def patch_rules() -> dict[str, Callable]:
 
 
 def activate_guard_import(
-    str_patch_rules: dict[str, Callable],
-    rules: ImportRules,
+        str_patch_rules: dict[str, Callable],
+        rules: ImportRules,
 ) -> None:
     """Activate import guard with specified rules and patches.
 
@@ -536,7 +534,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
 
 
 def generate_rules(
-    learn: set[Any],
+        learn: set[Any],
 ) -> list[str]:
     """Generate import rules from learning data.
 
@@ -615,7 +613,6 @@ def generate_rules(
 
 
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
-
     def _deactivate_guard_import() -> None:
         global _rules
         _rules = ("*",)

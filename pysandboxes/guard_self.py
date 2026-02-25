@@ -73,6 +73,4 @@ def patch_rules() -> Dict[str, Callable]:
 def activate_guard() -> None:
     import sys
 
-    # Change to immutable list
-    sys.meta_path = cast(list[Any], tuple(sys.meta_path))
     sys.modules["sys"] = _global_patch_in_sys_module(sys.modules["sys"])

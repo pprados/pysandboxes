@@ -58,7 +58,7 @@ py-sandbox=true
 # Note: Some providers may not work in containers without additional privileges.
 
 #os-sandbox=subprocess  # default
-#os-sandbox=firejail
+#os-sandbox=firejail  # FIXME
 
 #######################################################################################
 # ENVIRONMENT VARIABLES
@@ -109,8 +109,9 @@ py-sandbox=true
 # WARNING: ignore=.* blocks access to .venv, .git, and other hidden directories
 
 # Block sensitive files by default:
-ignore=.env
-ignore=*.log
+#ignore=.env  # FIXME
+#ignore=.mcp
+#ignore=*.log
 
 # Example directory mounts:
 #ro-bind=/usr,/usr                    # Read-only system libraries

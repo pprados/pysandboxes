@@ -371,7 +371,7 @@ def check_mixte_async_async() -> None:
             raise
 
 
-def follow_links_executable(executable: Path, all_paths: set[Path]) -> None:
+def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]:
     """Follow symlinks for executable paths and add to paths set.
 
     Args:
@@ -385,12 +385,12 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> None:
         if str(executable.parent.parent) not in all_paths:
             all_paths.add(executable.parent.parent)
         else:
-            return
+            return all_paths
     else:
         if executable not in all_paths:
             all_paths.add(executable)
         else:
-            return
+            return all_paths
     if executable.is_symlink():
         try:
             follow_links_executable(executable.resolve(strict=True), all_paths)
@@ -398,3 +398,4 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> None:
             raise RuntimeError(
                 "Impossible to resolve the sys.executable `%s`", sys.executable
             )
+    return all_paths

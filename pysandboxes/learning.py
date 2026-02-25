@@ -26,6 +26,8 @@ _learning: Set[Any] = set()
 
 _learning_path: Path | None = None
 
+_learning_saved: bool = False
+
 
 def generate_config_from_learning() -> None:
     """Generate configuration file from observed learning rules.
@@ -34,15 +36,20 @@ def generate_config_from_learning() -> None:
     writes them to a configuration file. It handles rule formatting, template
     processing, and file backup operations.
     """
-    global _learning_path
+    global _learning_path, _learning_saved
     from .guard_envs import generate_rules as env_generate_rules
     from .guard_files import generate_rules as file_generate_rules
     from .guard_import import generate_rules as import_generate_rules
     from .guard_socket import generate_rules as socket_generate_rules
 
     # Manage old files
+    if _learning_saved:
+        return
+    _learning_saved = True
     learning_path = _learning_path or Path(CONFIG_NAME)
     learning_path, old_learning_path = _manage_olds_file(learning_path)
+    logger.debug(
+        f"generate_config_from_learning({learning_path=},{old_learning_path=})")
 
     # Manage envs rules
     env_rules = env_generate_rules()
@@ -90,13 +97,13 @@ def generate_config_from_learning() -> None:
     else:
         # Load template
         with resources.as_file(
-            resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
-            / "py-sandbox.template"
+                resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
+                / "py-sandbox.template"
         ) as resource_path:
             all_lines = resource_path.read_text().split("\n")
 
     # Insert new rules in the file
-    pattern: str = r"^# </([^\}]+)>"
+    pattern: str = r"^# XX</([^\}]+)>"  # FIXME
     for i, line in enumerate(all_lines):
         match = re.search(pattern, line)
         if match and match.group(1) in replaces:
@@ -122,6 +129,7 @@ def generate_config_from_learning() -> None:
         # Force level info
         old_level = pysandboxes_logger.level
         pysandboxes_logger.setLevel(logging.INFO)
+        logger.debug(f"{learning_path=} {old_learning_path=}")
         msg = "\nWrite all learning rules in '%s'. %s" % (
             learning_path.relative_to(Path()),
             find_learning,

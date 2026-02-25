@@ -23,18 +23,18 @@
 
 # Disable extras FIXME
 #--x11=none
---restrict-namespaces
---nogroups
---nonewprivs
---noprinters
---noroot
---nosound
---notv
---nou2f
---novideo
---nodvd
---disable-mnt
---no3d  # Disable 3D hardware acceleration.
+#--restrict-namespaces
+#--nogroups
+#--nonewprivs
+#--noprinters
+#--noroot
+#--nosound
+#--notv
+#--nou2f
+#--novideo
+#--nodvd
+#--disable-mnt
+#--no3d  # Disable 3D hardware acceleration.
 
 # --blacklist=/etc/hosts
 --blacklist=/etc/resolv.conf  # Protect DNS
@@ -42,13 +42,13 @@
 
 
 # *** Limits ***
---rlimit-as=${FIREJAIL_RELIMIT:=300m}
---rlimit-cpu=${FIREJAIL_CPU:=5}
---rlimit-fsize=${FIREJAIL_FSIZE:=100k}
---rlimit-nproc=${FIREJAIL_NPROC:=3}
---rlimit-nofile=${FIREJAIL_NOFILE:=50}
---rlimit-sigpending=${FIREJAIL_SIGPENDING:=1}
---nice=${NICE:=10}
+#--rlimit-as=${FIREJAIL_RELIMIT:=300m}
+#--rlimit-cpu=${FIREJAIL_CPU:=5}
+#--rlimit-fsize=${FIREJAIL_FSIZE:=100k}
+#--rlimit-nproc=${FIREJAIL_NPROC:=3}
+#--rlimit-nofile=${FIREJAIL_NOFILE:=50}
+#--rlimit-sigpending=${FIREJAIL_SIGPENDING:=1}
+#--nice=${NICE:=10}
 
 # *** Network ***
 # public DNS servers

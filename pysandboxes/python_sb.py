@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    level = logging.WARNING  # FIX_RELEASE
+    level = logging.DEBUG  # FIX_RELEASE
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     logging.basicConfig(level=level, format=format)
     logging.getLogger("asyncio").setLevel(logging.WARNING)

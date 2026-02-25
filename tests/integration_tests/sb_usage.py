@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import tempfile
+from io import TextIOWrapper
 from pathlib import Path
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
 from typing import Any, List, Mapping, cast
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.WARNING
+    sandboxes_level = logging.DEBUG
     uvicorn_level = logging.WARNING
     format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
     logging.basicConfig(level=min(sandboxes_level, logging.INFO), format=format)
@@ -29,10 +30,11 @@ def init_log_level() -> None:
 
 @sandbox
 async def arun_in_sandbox() -> int:
+    text_wrapper = io.TextIOWrapper(io.BytesIO(b'Ceci est un test en fran\xc3\xa7ais.'), encoding='utf8')
     logger.info("Run 'arun_in_sandbox()' in sandbox")
     _test_envs()
     _test_files()
-    # _test_network()
+    _test_network()
     print(42)
     return 42
 
@@ -66,7 +68,7 @@ def _test_envs() -> None:
             # assert is_learning_mode() or False, "Must be stopped by pysandbox"
         except SandBoxError as e:
             print(e)
-    assert os.environ["HOME"]
+    assert os.environ["LANGUAGE"]
 
 
 def _test_network() -> None:
@@ -216,7 +218,8 @@ async def main(argv: List[str]) -> int:
     # sys.addaudithook(audit_hook)
 
     extra_rules = convert_extra_rules(argv[1:])
-    config_path = Path("tests/test.py-sandboxes")
+    # config_path = Path("tests/test.py-sandboxes")
+    config_path = Path(".py-sandboxes")
     if "learn" in extra_rules:
         learning_path, *_ = extra_rules.get("learn", set())
         if not learning_path:
@@ -229,6 +232,7 @@ async def main(argv: List[str]) -> int:
             config_path=config_path,
             **cast(Mapping[str, Any], extra_rules),
         ):
+            text_wrapper = io.TextIOWrapper(io.BytesIO(b'Ceci est un test en fran\xc3\xa7ais.'), encoding='utf8')
             await arun()
     return 0
 

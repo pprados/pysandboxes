@@ -214,7 +214,6 @@ async def acatch_stdio(
                     sync_or_async_queue.put_nowait(result)
                 elif isinstance(sync_or_async_queue, queue.Queue):
                     sync_or_async_queue.put(result)
-            return result
         except Exception as e:
             import tblib
 
@@ -225,9 +224,25 @@ async def acatch_stdio(
                     sync_or_async_queue.put_nowait(result)
                 elif isinstance(sync_or_async_queue, queue.Queue):
                     sync_or_async_queue.put(result)
-            return result
+        return result
+
+    async def run() -> dict[str,Any]:
+        try:
+            use_async = inspect.iscoroutinefunction(fn)
+
+            if use_async:
+                fn_result = await fn(*args, **kwargs)
+            else:
+                fn_result = fn(*args, **kwargs)
+            result = {"result": fn_result}
+        except Exception as e:
+            import tblib
+
+            result = {"exception": (e, tblib.Traceback(e.__traceback__))}
+        return result
 
     result = await run_in_context()
+    # result = await run()
     result["stdout"] = captured_stdout.getvalue()
     result["stderr"] = captured_stderr.getvalue()
 

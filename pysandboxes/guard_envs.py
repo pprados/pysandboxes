@@ -13,7 +13,7 @@ import os
 import re
 import threading
 from pathlib import Path
-from threading import Thread
+from types import FrameType
 from typing import Any, Callable, NamedTuple, cast
 from weakref import WeakKeyDictionary
 
@@ -145,24 +145,29 @@ class LearnEnviron(os._Environ):
             assert hasattr(os.environ, "_data")
             data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
-            self._ignore_keys: WeakKeyDictionary[Thread,set[str]] = {}
+            self._ignore_keys: WeakKeyDictionary[
+                threading.Thread, tuple[FrameType, set[str]]] = {}
             self._keys_used: set[str] = set()
             self._original_envs = os.environ
 
     def __iter__(self):
         frame = inspect.currentframe()
-        if frame is not None:
-            frame = frame.f_back.f_back
+        frame = frame.f_back.f_back
         root_iter = super().__iter__()
 
-        self._ignore_keys[threading.current_thread()]=set()
+        self._ignore_keys[threading.current_thread()] = (frame, set())
+
         def _catch_for_all():
+            t = threading.current_thread()
             for k in root_iter:
-                iter_frame = inspect.currentframe()
-                if iter_frame:
-                    iter_frame = iter_frame.f_back.f_back
+                iter_frame = inspect.currentframe().f_back.f_back
                 if id(iter_frame) == id(frame):
-                    self._ignore_keys[threading.current_thread()].add(k)
+                    iter_frame, keys = self._ignore_keys.get(t, (frame, set()))
+                    keys.add(k)
+                    self._ignore_keys[t]=(iter_frame,keys)
+                else:
+                    # New frame, so remove the ignore_keys for this parent frame
+                    self._ignore_keys[t] = (frame, k)
                 yield k
 
         return _catch_for_all()  # TODO: items()
@@ -181,11 +186,32 @@ class LearnEnviron(os._Environ):
         """
         try:
             result = super(LearnEnviron, self).__getitem__(key)
-            ignore_keys:set[str]=self._ignore_keys.get(threading.current_thread(),set())
+            frame = inspect.currentframe()
+
+            t = threading.current_thread()
+            iter_frame, ignore_keys = self._ignore_keys.get(t, (None, set()))
+            ignore_keys: set[str]
+            # Search the iter_frame
+            for _ in range(0,3):
+                frame = frame.f_back
+                if not frame or id(frame) == id(iter_frame):
+                    break
             if key not in ignore_keys:
                 self._keys_used.add(key)
             else:
-                ignore_keys.remove(key)
+                ignore_keys.remove(key) # Ignore one time
+            if id(frame) != id(iter_frame):  # New frame, remove ignore_keys
+                # Use by a sub frame?
+                while frame.f_back:
+                    frame = frame.f_back
+                    if frame == iter_frame:
+                        break
+                else:
+                    # or in parent or brother frame?
+                    if t in self._ignore_keys:
+                        del self._ignore_keys[t]
+                ignore_keys.clear()
+
             return result
         except KeyError:
             raise
@@ -198,8 +224,7 @@ class LearnEnviron(os._Environ):
             value: Environment variable value.
         """
         super(LearnEnviron, self).__setitem__(key, value)
-        if is_in_sandbox():
-            self._keys_used.add(key)
+        self._keys_used.add(key)
 
     def _clone(self) -> dict[str, str]:
         """Create a copy of the environment as a regular dictionary.

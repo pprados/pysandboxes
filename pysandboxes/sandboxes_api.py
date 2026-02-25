@@ -19,6 +19,7 @@ import signal
 import threading
 from multiprocessing import Lock
 from pathlib import Path
+from types import FrameType
 from typing import (
     Any,
     Callable,
@@ -118,6 +119,8 @@ def sandbox(
         return decorator(_func)
 
 
+_SIGNAL_HANDLER=Callable[[int, FrameType | None], Any] | int | signal.Handlers | None
+
 class sandboxes:
     """Context manager for sandbox process lifecycle management.
 
@@ -163,9 +166,7 @@ class sandboxes:
         "learning_path",
         "python_args",
         "graceful_shutdown",
-        "_old_sigint",
-        "_old_sigterm",
-        "_old_sigquit",
+        "_signals",
         "_daemon",
     )
 
@@ -205,9 +206,8 @@ class sandboxes:
         self.learning_path: Path | None = None
         self.python_args = python_args
         self.graceful_shutdown = graceful_shutdown
-        self._old_sigint: Any = None
-        self._old_sigterm: Any = None
-        self._old_sigquit: Any = None
+        self._signals:dict[int, _SIGNAL_HANDLER] = {}
+
         self._daemon: BaseDaemon | None = None
 
     # ── synchronous API ────────────────────────────────
@@ -253,11 +253,15 @@ class sandboxes:
                 logger.debug("Catch signal %s. Propagate to the daemon.", signum)
                 loop = get_sandbox_loop()
                 loop.call_soon_threadsafe(lambda: loop.create_task(self._stop_daemon()))
+                handler = self._signals[signum]
+                if isinstance(handler, Callable):
+                    handler(signum, frame)
 
             if threading.current_thread() is threading.main_thread():
-                self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
-                self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
-                self._old_sigquit = signal.signal(signal.SIGQUIT, signal_handler)
+                logger.debug("Activate signal handlers.")
+                self._signals[signal.SIGINT] = signal.signal(signal.SIGINT, signal_handler)
+                self._signals[signal.SIGTERM] = signal.signal(signal.SIGTERM, signal_handler)
+                self._signals[signal.SIGQUIT] = signal.signal(signal.SIGQUIT, signal_handler)
 
         assert self._daemon is not None
         return self._daemon
@@ -286,9 +290,9 @@ class sandboxes:
             logger.debug("_stop_daemon...")
             if threading.current_thread() is threading.main_thread():
                 # Restore signal handler
-                signal.signal(signal.SIGINT, self._old_sigint)
-                signal.signal(signal.SIGTERM, self._old_sigterm)
-                signal.signal(signal.SIGQUIT, self._old_sigquit)
+                signal.signal(signal.SIGINT, self._signals[signal.SIGINT])
+                signal.signal(signal.SIGTERM, self._signals[signal.SIGTERM])
+                signal.signal(signal.SIGQUIT, self._signals[signal.SIGQUIT])
 
             await self._daemon._stop(max_pending=0)
             logger.debug("daemon stopped")
@@ -331,11 +335,15 @@ class sandboxes:
                 logger.debug("Catch signal %s. Propagate to the daemon.", signum)
                 logger.debug("Signal lance stop_daemon")
                 asyncio.get_running_loop().create_task(self._stop_daemon())
+                handler = self._signals[signum]
+                if isinstance(handler, Callable):
+                    handler(signum, frame)
 
             if threading.current_thread() is threading.main_thread():
-                self._old_sigint = signal.signal(signal.SIGINT, signal_handler)
-                self._old_sigterm = signal.signal(signal.SIGTERM, signal_handler)
-                self._old_sigquit = signal.signal(signal.SIGQUIT, signal_handler)
+                logger.debug("Activate signal handlers.")
+                self._signals[signal.SIGINT] = signal.signal(signal.SIGINT, signal_handler)
+                self._signals[signal.SIGTERM] = signal.signal(signal.SIGTERM, signal_handler)
+                self._signals[signal.SIGQUIT] = signal.signal(signal.SIGQUIT, signal_handler)
         assert self._daemon is not None
         return self._daemon
 

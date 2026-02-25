@@ -19,7 +19,7 @@ def parse_rules(
     provider_rule: ConfigLines = []
     providers_set = []
     use_py_sandbox = True
-    learning_path = Path(CONFIG_NAME)
+    learning_path = None
     learning = False
 
     for rule in rules:
@@ -83,6 +83,8 @@ def parse_rules(
             other_rules.append(rule)
 
     # provider from command line is prioritized
+    if not learning_path:
+        learning_path=Path(CONFIG_NAME)
     cmd_line_provider = list(filter(lambda x: x[1].ln == 0, providers_set))
     if len(cmd_line_provider) == 1:
         provider = cmd_line_provider[0][0]
