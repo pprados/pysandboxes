@@ -7,12 +7,15 @@ where only explicitly allowed environment variables are accessible.
 The guard supports pattern matching, variable substitution, and learning mode
 for automatic rule generation based on observed environment variable usage.
 """
-
+import inspect
 import logging
 import os
 import re
+import threading
 from pathlib import Path
+from threading import Thread
 from typing import Any, Callable, NamedTuple, cast
+from weakref import WeakKeyDictionary
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
@@ -43,9 +46,9 @@ _rules: EnvsRules = cast(EnvsRules, ())
 
 
 def parse_rules(
-    rules: ConfigLines,
-    source_vars: Environ,
-    errors: list[ErrorMsg],
+        rules: ConfigLines,
+        source_vars: Environ,
+        errors: list[ErrorMsg],
 ) -> tuple[EnvsRules, Envs, ConfigLines]:
     """Process environment variable rules to create filtered environment.
 
@@ -67,7 +70,7 @@ def parse_rules(
     for orule in rules:
         if orule.rule.startswith("env="):
             # Remove prefix
-            rule = ConfigLine(orule.rule[len("env=") :], orule.path, orule.ln)
+            rule = ConfigLine(orule.rule[len("env="):], orule.path, orule.ln)
 
             if "=" not in rule.rule:
                 errors.append(
@@ -98,7 +101,7 @@ def parse_rules(
                     EnvRule(re.compile(re.escape(key_pattern)), False, orule)
                 )
         elif orule.rule.startswith("unenv="):
-            remove_key = orule.rule[len("unenv=") :]
+            remove_key = orule.rule[len("unenv="):]
             new_vars.pop(remove_key, None)
             envs_rules.add(EnvRule(re.compile(re.escape(remove_key)), True, orule))
         else:
@@ -118,7 +121,7 @@ class LearnEnviron(os._Environ):
     _instance: "LearnEnviron | None" = None
 
     def __new__(
-        cls,
+            cls,
     ) -> "LearnEnviron":
         """Create or return existing singleton instance.
 
@@ -142,8 +145,27 @@ class LearnEnviron(os._Environ):
             assert hasattr(os.environ, "_data")
             data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
+            self._ignore_keys: WeakKeyDictionary[Thread,set[str]] = {}
             self._keys_used: set[str] = set()
             self._original_envs = os.environ
+
+    def __iter__(self):
+        frame = inspect.currentframe()
+        if frame is not None:
+            frame = frame.f_back.f_back
+        root_iter = super().__iter__()
+
+        self._ignore_keys[threading.current_thread()]=set()
+        def _catch_for_all():
+            for k in root_iter:
+                iter_frame = inspect.currentframe()
+                if iter_frame:
+                    iter_frame = iter_frame.f_back.f_back
+                if id(iter_frame) == id(frame):
+                    self._ignore_keys[threading.current_thread()].add(k)
+                yield k
+
+        return _catch_for_all()  # TODO: items()
 
     def __getitem__(self, key: str) -> str:
         """Get environment variable and track access in learning mode.
@@ -159,8 +181,11 @@ class LearnEnviron(os._Environ):
         """
         try:
             result = super(LearnEnviron, self).__getitem__(key)
-            if is_in_sandbox():
+            ignore_keys:set[str]=self._ignore_keys.get(threading.current_thread(),set())
+            if key not in ignore_keys:
                 self._keys_used.add(key)
+            else:
+                ignore_keys.remove(key)
             return result
         except KeyError:
             raise

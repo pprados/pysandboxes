@@ -28,3 +28,15 @@ def test_environ() -> None:
         assert envs == envs2
     finally:
         set_is_in_sandbox(False)
+
+def test_iter_environ() -> None:
+    envs = LearnEnviron()  # Reset singleton
+    for e in envs:
+        print(e)
+    assert not envs._keys_used,"Can not add key during iteration"
+
+    envs = LearnEnviron()  # Reset singleton
+    for e in envs.items():
+        print(e)
+    assert not envs._keys_used,"Can not add key during iteration"
+
