@@ -10,6 +10,7 @@ application through typical usage scenarios and capturing required permissions.
 
 import logging
 import re
+import threading
 from datetime import datetime
 from importlib import resources
 from multiprocessing import Lock
@@ -26,8 +27,7 @@ _learning: Set[Any] = set()
 
 _learning_path: Path | None = None
 
-_learning_saved: bool = False
-
+_save_learning_done: bool = False
 
 def generate_config_from_learning() -> None:
     """Generate configuration file from observed learning rules.
@@ -36,112 +36,113 @@ def generate_config_from_learning() -> None:
     writes them to a configuration file. It handles rule formatting, template
     processing, and file backup operations.
     """
-    global _learning_path, _learning_saved
-    from .guard_envs import generate_rules as env_generate_rules
-    from .guard_files import generate_rules as file_generate_rules
-    from .guard_import import generate_rules as import_generate_rules
-    from .guard_socket import generate_rules as socket_generate_rules
+    global _learning_path, _save_learning_done, _lock
+    with _lock:
+        from .guard_envs import generate_rules as env_generate_rules
+        from .guard_files import generate_rules as file_generate_rules
+        from .guard_import import generate_rules as import_generate_rules
+        from .guard_socket import generate_rules as socket_generate_rules
 
-    # Manage old files
-    if _learning_saved:
-        return
-    _learning_saved = True
-    learning_path = _learning_path or Path(CONFIG_NAME)
-    learning_path, old_learning_path = _manage_olds_file(learning_path)
-    logger.debug(
-        f"generate_config_from_learning({learning_path=},{old_learning_path=})")
+        # Manage old files
+        if _save_learning_done:
+            return
+        _save_learning_done = True
+        learning_path = _learning_path or Path(CONFIG_NAME)
+        learning_path, old_learning_path = _manage_olds_file(learning_path)
+        logger.debug(
+            f"generate_config_from_learning({learning_path=},{old_learning_path=})")
 
-    # Manage envs rules
-    env_rules = env_generate_rules()
-    if env_rules:
-        all_env_rules = "\n".join(env_rules)
-    else:
-        all_env_rules = ""
+        # Manage envs rules
+        env_rules = env_generate_rules()
+        if env_rules:
+            all_env_rules = "\n".join(env_rules)
+        else:
+            all_env_rules = ""
 
-    # Manage import rules
-    import_rules = import_generate_rules(_learning)
-    if import_rules:
-        all_import_rules = "\n".join(import_rules)
-    else:
-        all_import_rules = ""
+        # Manage import rules
+        import_rules = import_generate_rules(_learning)
+        if import_rules:
+            all_import_rules = "\n".join(import_rules)
+        else:
+            all_import_rules = ""
 
-    # Manage files rules
-    file_rules = file_generate_rules(_learning)
-    if file_rules:
-        all_file_rules = "\n".join(file_rules)
-    else:
-        all_file_rules = ""
+        # Manage files rules
+        file_rules = file_generate_rules(_learning)
+        if file_rules:
+            all_file_rules = "\n".join(file_rules)
+        else:
+            all_file_rules = ""
 
-    # Manage sockets rules
-    socket_rules = socket_generate_rules(_learning)
-    if socket_rules:
-        all_socket_rules = "\n".join(socket_rules)
-    else:
-        all_socket_rules = ""
+        # Manage sockets rules
+        socket_rules = socket_generate_rules(_learning)
+        if socket_rules:
+            all_socket_rules = "\n".join(socket_rules)
+        else:
+            all_socket_rules = ""
 
-    replaces: dict[str, str] = {
-        # "learning_repeat": f"learn={learning_path}",
-        "learning_guard_envs": all_env_rules,
-        "learning_guard_import": all_import_rules,
-        "learning_guard_files": all_file_rules,
-        "learning_guard_socket": all_socket_rules,
-    }
+        replaces: dict[str, str] = {
+            # "learning_repeat": f"learn={learning_path}",
+            "learning_guard_envs": all_env_rules,
+            "learning_guard_import": all_import_rules,
+            "learning_guard_files": all_file_rules,
+            "learning_guard_socket": all_socket_rules,
+        }
 
-    header = f"# Add rules ({datetime.now().strftime('%d/%m/%y at %H:%M')})"
+        header = f"# Add rules ({datetime.now().strftime('%d/%m/%y at %H:%M')})"
 
-    all_lines: list[str] = []
-    update_file = False
-    if old_learning_path:
-        # Current lines
-        all_lines = learning_path.read_text().split("\n")
-    else:
-        # Load template
-        with resources.as_file(
-                resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
-                / "py-sandbox.template"
-        ) as resource_path:
-            all_lines = resource_path.read_text().split("\n")
-
-    # Insert new rules in the file
-    pattern: str = r"^# XX</([^\}]+)>"  # FIXME
-    for i, line in enumerate(all_lines):
-        match = re.search(pattern, line)
-        if match and match.group(1) in replaces:
-            if replaces[match.group(1)]:
-                logger.debug("Insert %s", match.group(1))
-                all_lines[i] = header + "\n" + replaces[match.group(1)] + "\n\n" + line
-                update_file = True
-                del replaces[match.group(1)]
-
-    # If it's impossible to insert in the file, add rules at the end
-    if replaces and any(replaces.values()):
-        all_lines.append(header)
-        for v in replaces.values():
-            if v:
-                all_lines.append(v + "\n")
-                update_file = True
-    if list(filter(lambda line: line.startswith("learn"), all_lines)):
-        find_learning = " Remove the 'learn' parameter to use the sandboxes. "
-    else:
-        find_learning = ""
-
-    if update_file:
-        # Force level info
-        old_level = pysandboxes_logger.level
-        pysandboxes_logger.setLevel(logging.INFO)
-        logger.debug(f"{learning_path=} {old_learning_path=}")
-        msg = "\nWrite all learning rules in '%s'. %s" % (
-            learning_path.relative_to(Path()),
-            find_learning,
-        )
+        all_lines: list[str] = []
+        update_file = False
         if old_learning_path:
-            msg += "The old version is here '%s'. " % (old_learning_path,)
-            learning_path.rename(old_learning_path)
+            # Current lines
+            all_lines = learning_path.read_text().split("\n")
+        else:
+            # Load template
+            with resources.as_file(
+                    resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
+                    / "py-sandbox.template"
+            ) as resource_path:
+                all_lines = resource_path.read_text().split("\n")
 
-        msg += "Check and update this file to validate the rules."
-        pysandboxes_logger.info(msg)
-        pysandboxes_logger.setLevel(old_level)
-        learning_path.write_text("\n".join(all_lines))
+        # Insert new rules in the file
+        pattern: str = r"^# XX</([^\}]+)>"  # FIXME
+        for i, line in enumerate(all_lines):
+            match = re.search(pattern, line)
+            if match and match.group(1) in replaces:
+                if replaces[match.group(1)]:
+                    logger.debug("Insert %s", match.group(1))
+                    all_lines[i] = header + "\n" + replaces[match.group(1)] + "\n\n" + line
+                    update_file = True
+                    del replaces[match.group(1)]
+
+        # If it's impossible to insert in the file, add rules at the end
+        if replaces and any(replaces.values()):
+            all_lines.append(header)
+            for v in replaces.values():
+                if v:
+                    all_lines.append(v + "\n")
+                    update_file = True
+        if list(filter(lambda line: line.startswith("learn"), all_lines)):
+            find_learning = " Remove the 'learn' parameter to use the sandboxes. "
+        else:
+            find_learning = ""
+
+        if update_file:
+            # Force level info
+            old_level = pysandboxes_logger.level
+            pysandboxes_logger.setLevel(logging.INFO)
+            logger.debug(f"{learning_path=} {old_learning_path=}")
+            msg = "\nWrite all learning rules in '%s'. %s" % (
+                learning_path.relative_to(Path()),
+                find_learning,
+            )
+            if old_learning_path:
+                msg += "The old version is here '%s'. " % (old_learning_path,)
+                learning_path.rename(old_learning_path)
+
+            msg += "Check and update this file to validate the rules."
+            pysandboxes_logger.info(msg)
+            pysandboxes_logger.setLevel(old_level)
+            learning_path.write_text("\n".join(all_lines))
 
 
 def _manage_olds_file(_learning_path: Path) -> tuple[Path, Path | None]:

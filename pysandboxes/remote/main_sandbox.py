@@ -24,11 +24,10 @@ from pathlib import Path
 
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
-
-from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 from .python_in_sb import python_in_sb
 from .sse_client_subprocess_daemon import DaemonParameters
 from .tools import set_pdeathsig
+from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
@@ -125,15 +124,35 @@ def main() -> int:
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
 
+    # Add ident inside the sandbox
+    format = " "+process_config.log_format
     # Adjuste the root log level and format
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(process_config.log_format))
-    handler.setFormatter(
-        logging.Formatter("  " + process_config.log_format)
-    )  # FIX_RELEASE
-    root_logger.addHandler(handler)
+    handlers: list[logging.Handler] = []
+    try:
+        from rich.console import Console
+        from rich.logging import RichHandler
+
+        handlers.append(RichHandler(
+            console=Console(stderr=True),
+            rich_tracebacks=True,
+            log_time_format="[%X]",
+            show_time=True,
+        ))
+    except ImportError:
+        # if True: # FIXME: rich log
+        handlers = [logging.StreamHandler()]
+        handlers[0].setFormatter(logging.Formatter(process_config.log_format))
+        # format = process_config.log_format
+        # handler.setFormatter(
+        #     logging.Formatter(format
+        # )  # FIX_RELEASE
+    logging.basicConfig(
+        level=process_config.log_level,
+        format=format,
+        handlers=handlers,
+    )
     root_logger.setLevel(process_config.log_level)
     logger.debug("config body and token successfully read from named pipe")
 
@@ -151,7 +170,7 @@ def main() -> int:
     if sandboxes_parsed._python_sb:
         return python_in_sb(all_rules, sandboxes_args)
 
-    # Elsen _start the server
+    # Else _start the server
     return asyncio.run(run_server(process_config))
 
 

@@ -365,7 +365,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                 # logger.error("Ignore %s",repr(fullname))
                 pass
             if fullname == "pysandboxes_run":
-                logger.error(f"Pour pysandboxes_run {new_spec=}")
+                logger.error(f"Pour pysandboxes_run {new_spec=}")  # FIXME
             return new_spec
 
         # For all other imports, return None to let the standard import
@@ -409,7 +409,7 @@ def _activate_patch_import(
 # Modules to not remove from sys.modules, and to wait the lazy patch
 _not_refresh_modules: set[str] = {
     "sys",
-    "asyncio",
+    "asyncio",  # FIXME: bug si mcp, bug sinon pas de capture
     "builtins",
     "concurrent",
     "importlib",
@@ -433,7 +433,9 @@ def remove_modules() -> None:
     """
     import sys
 
-    logger.debug("Remove modules")
+    logger.debug("Remove old modules")
+    if True:
+        return  # FIXME
     to_remove = set()
     for k, m in dict(sys.modules).items():
         if k.startswith("_pytest") or k.startswith("pytest"):
@@ -446,6 +448,7 @@ def remove_modules() -> None:
             to_remove.add(k)
 
     importlib.invalidate_caches()
+
     # Reload modules (may add modules with reload() )
     for k in to_remove:
         if k in sys.modules:
@@ -459,6 +462,7 @@ def remove_modules() -> None:
     for k in to_remove:
         if k in sys.modules:
             if k not in sys.builtin_module_names:
+            # if True:
                 del sys.modules[k]
     assert "io" not in sys.modules
 

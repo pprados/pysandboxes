@@ -18,9 +18,28 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    level = logging.WARNING
-    format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
-    logging.basicConfig(level=level, format=format)
+    handlers: list[logging.Handler] = []
+    try:
+        from rich.console import Console
+        from rich.logging import RichHandler
+
+        handlers.append(RichHandler(
+            console=Console(stderr=True),
+            rich_tracebacks=True,
+            log_time_format="[%X]",
+            show_time=True,
+            ))
+        format = "[%(process)d] %(message)s"
+    except ImportError:
+        pass
+
+    if not handlers:
+        format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+        handlers.append(logging.StreamHandler())
+    level = logging.DEBUG
+    logging.basicConfig(level=level,
+                        format=format,
+                        handlers=handlers)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
@@ -28,6 +47,32 @@ def _debug_log() -> None:
     logging.getLogger("Pysandboxes").setLevel(level)
     logging.getLogger("pysandboxes").setLevel(level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
+
+def _register_signal() -> None:
+    signals: dict[
+        int, Callable[[int, FrameType | None], Any] | int | signal.Handlers | None] = {
+        signal.SIGINT: signal.getsignal(signal.SIGINT),
+        signal.SIGTERM: signal.getsignal(signal.SIGTERM),
+        signal.SIGQUIT: signal.getsignal(signal.SIGQUIT),
+    }
+
+    def signal_handler(signum: int, frame: FrameType) -> None:
+        """
+        Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
+        It will kill daemon processes before exiting itself.
+        """
+        # Iterate through all child processes and send them SIGTERM
+        logger.debug("Catch signal %s.", signum)
+        generate_config_from_learning()  # Save learning rules
+        handler = signals[signum]
+        signal.signal(signum,handler)
+        if isinstance(handler,Callable):
+            signal.raise_signal(signum)
+
+    if threading.current_thread() is threading.main_thread():  # TODO: de meme pour les autres formes d'appel
+        # logger.error("Activate signal handlers.")
+        for s in signals.keys():
+            signal.signal(s, signal_handler)
 
 
 def _python_interactive(
@@ -143,33 +188,7 @@ def _python_interactive(
 
 def _python_module(all_rules: AllRules, mod_name: str) -> int:
     import runpy
-    # FIXME: doit être présent partout, et consistant avec __enter__
-    signals: dict[
-        int, Callable[[int, FrameType | None], Any] | int | signal.Handlers | None] = {
-        signal.SIGINT: signal.getsignal(signal.SIGINT),
-        signal.SIGTERM: signal.getsignal(signal.SIGTERM),
-        # signal.SIGQUIT: signal.getsignal(signal.SIGQUIT),
-    }
-
-    def signal_handler(signum: int, frame: FrameType) -> None:
-        """
-        Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
-        It will kill daemon processes before exiting itself.
-        """
-        # Iterate through all child processes and send them SIGTERM
-        logger.debug("Catch signal %s.", signum)
-        generate_config_from_learning()
-        handler = signals[signum]
-        signal.signal(signum,handler)
-        if isinstance(handler,Callable):
-            signal.raise_signal(signum)
-
-    if threading.current_thread() is threading.main_thread():  # TODO: de meme pour les autres formes d'appel
-        # logger.error("Activate signal handlers.")
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGQUIT, signal_handler)
-
+    _register_signal()
 
     runpy.run_module(mod_name, run_name="__main__")
     if sys.flags.inspect:
@@ -179,6 +198,7 @@ def _python_module(all_rules: AllRules, mod_name: str) -> int:
 
 def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
     try:
+        _register_signal()
         script_body = script.read_text()
         sys.argv = [str(script)] + args
         exec(script_body)
@@ -195,6 +215,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
 
 
 def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> int:
+    _register_signal()
     sys.argv = args
     exec(script_body)
     if sys.flags.inspect:
@@ -223,7 +244,7 @@ def python_in_sb(
         python_cmd: List[str],
 ) -> int:
     try:
-        _debug_log()
+        _debug_log()  # FIXME: remove
         set_is_in_sandbox(True)
         if not len(python_cmd):
             _python_interactive(all_rules, True)

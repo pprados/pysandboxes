@@ -85,6 +85,7 @@ dev = [
     "scikit-learn>=1.6",
     "aiohttp",
     "pydevd-pycharm",
+    "rich>=14.0"
 ]
 test = [
     # The only dependencies that should be added are

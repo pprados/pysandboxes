@@ -27,9 +27,30 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
+    handlers: list[logging.Handler] = []
+    try:
+        from rich.console import Console
+        from rich.logging import RichHandler
+
+        handlers.append(RichHandler(
+            console=Console(stderr=True),
+            rich_tracebacks=True,
+            log_time_format="[%X]",
+            show_time=True,
+            ))
+        format = "[%(process)d] %(message)s"
+    except ImportError:
+        pass
+
+    if not handlers:
+        format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+        handlers.append(logging.StreamHandler())
     level = logging.DEBUG  # FIX_RELEASE
-    format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
-    logging.basicConfig(level=level, format=format)
+    logging.basicConfig(
+    level=level,
+    format=format,
+    handlers=handlers,
+    )
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
@@ -43,7 +64,7 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    _debug_log()
+    _debug_log()  # FIXME
     python_parsed_args, sandboxes_args, python_cmd = parse_python_cmd_line(sys.argv[1:])
 
     extra_rules = convert_extra_rules(sandboxes_args)
