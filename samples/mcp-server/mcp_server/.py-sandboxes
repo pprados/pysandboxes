@@ -1,5 +1,7 @@
 # Accept to include working directories rules?
 include "./py-sandboxes"
+include "./.local.py-sandboxes"
+
 
 os-sandbox=${OS_SANDBOX:-subprocess}
 

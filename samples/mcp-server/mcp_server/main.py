@@ -6,6 +6,8 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP, Context
 
+from pysandboxes import sandbox, sandboxes
+
 logger = logging.getLogger(__name__)
 
 level = logging.INFO
@@ -29,19 +31,11 @@ mcp = FastMCP("My Calculator Server",
 
 
 # Define the calculator tool
-# @sandbox
+@sandbox
 @mcp.tool(name="evaluate_expression",
           description="Evaluates a mathematical expression and returns the result"
           )
-async def evaluate_expression(expression: str, ctx: Context) -> float:
-    return await _evaluate_expression(expression)
-
-
-from pysandboxes import sandbox, sandboxes
-
-
-@sandbox
-async def _evaluate_expression(expression: str) -> float:
+async def evaluate_expression(expression: str) -> float:
     """Evaluates a mathematical expression and returns the result."""
     try:
         # Warning: eval() is unsafe for untrusted input; use a proper parser in production
@@ -58,13 +52,14 @@ async def _evaluate_expression(expression: str) -> float:
 def run_mcp_server(
         os_sandbox: str,
         transport: str,
-        sandboxes_config: Path
+        sandboxes_config: Path,
+        **kwargs,
 ) -> int:  # FIXME: mixer avec main lorsque __main__ sera réglé
     try:
         with sandboxes(
                 sandboxes_config=sandboxes_config,
-                os_sandbox=os_sandbox, # type: ignore[arg-type]
-                # learn=".py-sandboxes",
+                os_sandbox=os_sandbox,  # type: ignore[arg-type]
+                **kwargs,
         ):
             mcp.run(transport=transport)  # type: ignore[arg-type]
     except KeyboardInterrupt:
@@ -101,13 +96,23 @@ def main() -> int:
         default="subprocess",  # Use None as default value for clear checking
         help="Choice the os-sandbox provider."
     )
+    parser.add_argument(
+        "--learn",
+        dest="learn",
+        type=str,
+        default=None,  # Use None as default value for clear checking
+        help="The learning path."
+    )
     args = parser.parse_args()
-
+    kwargs = {}
+    if args.learn:
+        kwargs = {"learn": args.learn}
     logger.info(f"Start mcp_server with {args}")
     return run_mcp_server(
         args.os_sandbox,
         args.transport,
-        args.config_path
+        args.config_path,
+        **kwargs
     )
 
 

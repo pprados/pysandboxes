@@ -9,8 +9,8 @@
       "args": [
 //        "run",
         "-m", "pysandboxes.python_sb",
+        "--os-sandbox=none",
         "--pysandboxes-config=mcp_server/.py-sandboxes",
-//        "--learn=./.local.py-sandboxes",
         "-m", "mcp_server.main",
         "-t", "stdio"
       ]

@@ -24,7 +24,7 @@ After using the server to exercise all its *normal* functionalities, interrupt t
 
 From then on, you can launch the MCP server without the `--learn` parameter to enforce the generated security profile.
 
-## Usage by Selecting Functions to Protect (selected mode)
+## Usage by Selecting Functions to Protect (partial mode)
 
 To isolate a tool in the sandbox, start to launch the sandbox
 

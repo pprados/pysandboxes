@@ -9,6 +9,7 @@
       "args": [
 //        "run",
         "-m", "mcp_server.main",
+        "--learn=./.local.py-sandboxes",
         "-t", "stdio"
       ]
     }

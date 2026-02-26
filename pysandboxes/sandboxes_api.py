@@ -364,7 +364,7 @@ class sandboxes:
 
 
 def run(
-    main: Coroutine[Any, Any, Any],
+    main: Coroutine[Any, Any, Any],    # TODO: accept function without parameter
     *,
     init_fn: SyncOrAsyncFunc | None = None,
     config_path: Path | str | None = None,

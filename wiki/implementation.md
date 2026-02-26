@@ -30,7 +30,7 @@ Here is a brief description of the implementation in **complete mode**. You will
 - If interactive mode is used, the code detects whether it's a standard interface or the IPython CLI. The code then adjusts its headers and parameters to indicate the presence of the sandbox.
  
 ## Selected mode
-Here is a brief description of the implementation in **selected mode**. You will find more details by consulting the code.
+Here is a brief description of the implementation in **partial mode**. You will find more details by consulting the code.
 
 - The parameter files are consulted.
 - The `os-sandbox` parameter is extracted.

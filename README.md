@@ -41,6 +41,7 @@ It's time to control, as much as possible, the allowed capabilities for your app
   - [How to package the project](#how-to-package-the-project)
   - [Implementation](#implementation)
   - [What are the weaknesses of py-sandbox?](#what-are-the-weaknesses-of-py-sandbox)
+- [Samples](#samples)
 - [Roadmap](#roadmap)
 - [Appendix](#appendix)
   - [Databases](#databases)
@@ -97,7 +98,7 @@ We propose only four think:
 There are two usage modes:
 
   - Apply the sandbox to the entire application (complete mode).
-  - Apply the sandbox to a part of the application, with the rest being free  (selected mode).
+  - Apply the sandbox to a part of the application, with the rest being free  (partial mode).
 
 ## Apply the sandbox to the entire application  (complete mode)
 
@@ -108,7 +109,7 @@ flowchart TD
         subgraph OSSandbox [Python Sandbox]
 
         A[Caller Code]
-                C["@sandbox<br/>my_function(...)"]
+                C["<s>@sandbox</s><br/>my_function(...)"]
         end
     end
 
@@ -116,7 +117,7 @@ flowchart TD
     C -- "4- Propagate to caller" --> A
 ```
 
-This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). It's possible to add some *py-sandboxes parameters*, at the beginning:
+This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
 ```shell
 python-db --learn -m my_module
 ```
@@ -158,7 +159,7 @@ If you want to restart a learning session to add missing rules:
 
 This way, only the missing rules will be added to the file.
 
-## Apply the sandbox to a part of the application (selected mode).
+## Apply the sandbox to a part of the application (partial mode).
 
 Often, the application needs all privileges, has access to all API tokens, etc. Only a part of the application should be executed in a sandbox. For example, tools invoked by an LLM should not have access to all files or all environment variables. This makes it more difficult to abuse them.
 
@@ -170,8 +171,10 @@ In this scenario, your application will be split into two parts:
 ```mermaid
 flowchart TD
     subgraph MainApplicationFullPrivileges [Main Application]
-        direction TB
-        A[Caller Code]
+        subgraph WithSandboxes ["with sandboxes()"]
+            direction TB
+            A[Caller Code]
+        end
     end
     subgraph SandboxEnvironment ["OS-sandbox (Docker,...)"]
         direction TB
@@ -276,7 +279,7 @@ pysandboxes.run(main(),
                 )
 ```
 
-### Executing a function in the sandbox (isolated mode)
+### Executing a function in the sandbox (partial mode)
 
 To declare that a function must run in the sandbox, simply annotate it with `@sandbox`.
 
@@ -391,7 +394,7 @@ If you want to allow rules from the working directory to be added when using you
 
 ```ini
 # File my_module/.py-sandboxes
-include "${PWD}/.py-sandboxes"
+include "./.py-sandboxes"
 # ... specific rules
 ```
 
@@ -423,6 +426,10 @@ And declare it in your TOML file.
 my-script = "my_module:main_sb"
 # my-script = "my_module:main"  # Without sandboxes
 ```
+
+---
+## Samples
+See [here](wiki/samples.md)
 
 ---
 # FAQ
@@ -539,7 +546,7 @@ include = [
 If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file. Then the user can change some rules.
 ```ini
 # File my_module/.py-sandboxes
-include "${PWD}/.py-sandboxes"
+include "./.py-sandboxes"
 # ... specific rules
 ```
 

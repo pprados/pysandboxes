@@ -23,6 +23,15 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] podman
   - [ ] kubernetes
   - [ ] qemu
+- [ ] New samples
+  - [X] MCP server
+  - [X] MCP client
+  - [ ] langchain / langgraph
+  - [ ] [Crewai](https://www.crewai.com/)
+  - [ ] Google ADK
+  - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
+  - [ ] Pydantic.ai
+  - 
 - [ ] Management of *Denial of Service*
 - [ ] Management of regular expressions
 - [ ] Control of `exec()` and `eval()`

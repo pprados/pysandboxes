@@ -54,3 +54,11 @@ def test_escape_with_meta_path() -> None:
     with pytest.raises(RuleAttributeError):
         new_list = list(sys.meta_path)[1:]
         sys.meta_path = new_list
+
+
+# See https://rushter.com/blog/python-code-exec/
+# import sys
+# sys.modules["builtins"].exec("2+2")
+# globals()["__builtins__"].exec("2+2")
+# locals()["builtins"].exec("2+2")
+# types.FunctionType(compile("print(2+2)","<string>","exec"), globals())()

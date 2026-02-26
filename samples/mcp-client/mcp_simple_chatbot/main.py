@@ -435,5 +435,5 @@ def main_sb() -> int:  # FIXME
     from pysandboxes.python_sb import main
     return(main())  # Launch 'python-sb'
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # TODO: try to place in __init__.py
     sys.exit(anyio.run(main))
