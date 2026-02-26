@@ -517,7 +517,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
         self._is_started = True
         self._accept_incoming = True
-        logger.debug(f"{self._accept_incoming=}")
+
 
     async def _stop(self, max_pending: int) -> None:
         """Stop the subprocess daemon.

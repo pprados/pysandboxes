@@ -8,6 +8,9 @@ from mcp.server.fastmcp import FastMCP, Context
 
 from pysandboxes import sandbox, sandboxes
 
+logging.root.setLevel(logging.DEBUG)  # FIXME
+logging.getLogger("mcp.server.sse").setLevel(logging.WARNING)
+logging.getLogger("sse_starlette.sse").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # from mcp.mcp.fastmcp.sse import SseProtocol
@@ -20,6 +23,7 @@ mcp = FastMCP("My Calculator Server",
 
 
 # Define the calculator tool
+# @sandbox
 @mcp.tool(name="evaluate_expression",
           description="Evaluates a mathematical expression and returns the result")
 async def evaluate_expression(expression: str, ctx: Context) -> float:
@@ -39,10 +43,13 @@ async def _evaluate_expression(expression: str) -> float:
         raise ValueError(f"Invalid expression: {e}")
 
 
-def run_calc_server(transport:Literal["stdio", "sse", "streamable-http"]) -> int:
+def run_calc_server(transport:str) -> int:
     try:
-        with sandboxes():
-            mcp.run(transport=transport)
+        with sandboxes(
+            config_path="demo_mcp/.pysandboxes",
+            learn=".pysandboxes",
+        ):
+            mcp.run(transport=transport)  # type: ignore[arg-type]
         # mcp.run(transport=transport,  # type: ignore[arg-type]
         #         # host="127.0.0.1", port=8000
         #         )

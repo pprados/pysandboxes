@@ -81,7 +81,7 @@ def config_log(
 ):
     handlers: list[logging.Handler] = []
     try:
-        # raise ImportError()  # Force to classic logging
+        raise ImportError()  # Force to classic logging
         from rich.console import Console
         from rich.logging import RichHandler
         handlers.append(RichHandler(

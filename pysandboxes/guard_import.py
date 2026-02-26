@@ -448,24 +448,35 @@ def remove_modules() -> None:
 
     importlib.invalidate_caches()
 
+    # mode="reload_sys"
+    mode = "reload_all"
+    # mode="remove"
+
     # Reload modules (may add modules with reload() )
-    logger.debug("Reload modules...")
+    logger.debug("Reload modules... (%s)", mode)
     for k in to_remove:
         if k in sys.modules:
-            if k in sys.builtin_module_names:
+            if (
+                    (mode == "reload_all" or
+                    k in sys.builtin_module_names)
+                    and k.startswith("pysandboxes")
+            ):
                 m = sys.modules[k]
                 if m:
-                    importlib.reload(m)
-                    pass
+                    try:
+                        importlib.reload(m)
+                    except ImportError as e:
+                        logger.debug("Ignore '%s'", str(e))
 
     # Remove modules
-    logger.debug("Remove modules...")
-    for k in to_remove:
-        if k in sys.modules:
-            if k not in sys.builtin_module_names:
-            # if True:
-                del sys.modules[k]
-    assert "io" not in sys.modules
+    if mode == "remove":
+        logger.debug("Remove modules...")
+        for k in to_remove:
+            if k in sys.modules:
+                if k not in sys.builtin_module_names:
+                    # if True:
+                    del sys.modules[k]
+        assert "io" not in sys.modules
     logger.debug("remove_modules() done")
 
 

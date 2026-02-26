@@ -29,6 +29,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [ ] Control of `exec()` and `eval()`
 - [ ] Compile a part of code
 - [ ] Propagate the tracability id
+- [ ] Use anyio
 
 ## Guard some critical methods
 Certain methods must be rejected, even if the package is authorized (`spawn`, `system`, `sys.exit()`, ....)

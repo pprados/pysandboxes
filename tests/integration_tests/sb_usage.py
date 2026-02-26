@@ -230,8 +230,6 @@ async def main(argv: List[str]) -> int:
                 config_path=config_path,
                 **cast(Mapping[str, Any], extra_rules),
         ):
-            text_wrapper = io.TextIOWrapper(  # FIXME
-                io.BytesIO(b'Ceci est un test en fran\xc3\xa7ais.'), encoding='utf8')
             await arun()
     return 0
 

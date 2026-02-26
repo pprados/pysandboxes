@@ -1280,16 +1280,19 @@ def _wrap_io_open(func: Callable) -> Callable:
                 remapped = file
             else:
                 _raise_access(file)
-        return func(
-            file=remapped,
-            mode=mode,
-            buffering=buffering,
-            encoding=encoding,
-            errors=errors,
-            newline=newline,
-            closefd=closefd,
-            opener=opener,
-        )
+        try:
+            return func(
+                file=remapped,
+                mode=mode,
+                buffering=buffering,
+                encoding=encoding,
+                errors=errors,
+                newline=newline,
+                closefd=closefd,
+                opener=opener,
+            )
+        except Exception as e:  # FIXME: catch internal error for debug
+            raise
 
     return wrapper
 

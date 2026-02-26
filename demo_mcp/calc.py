@@ -1,6 +1,7 @@
 import logging
 import sys
-from .run_calc import run_calc_server, async_run_server
+
+from .run_calc import run_calc_server
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,5 @@ if __name__ == "__main__":
     transport = "stdio"
     if len(sys.argv) > 1:
         transport = sys.argv[1]
-    import pysandboxes
-
-    # errlevel= pysandboxes.run(
-    #     async_run_server(transport)
-    # )
-    errlevel = run_calc_server(transport)  # type: ignore[arg-type]
+    errlevel = run_calc_server(transport)
     sys.exit(errlevel)

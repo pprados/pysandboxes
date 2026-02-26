@@ -70,6 +70,8 @@ python-sb = "pysandboxes.python_sb:main"
 python3-sb = "pysandboxes.python_sb:main"
 ipython-sb = "pysandboxes.python_sb:main"
 ipython3-sb = "pysandboxes.python_sb:main"
+cli-sb = "cli:main_sb"
+cli = "cli:main"
 
 [dependency-groups]
 dev = [

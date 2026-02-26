@@ -102,10 +102,10 @@ We propose only four think:
 
 There are two usage modes:
 
-  - Apply the sandbox to the entire application.
-  - Apply the sandbox to a part of the application, with the rest being free.
+  - Apply the sandbox to the entire application (complete mode).
+  - Apply the sandbox to a part of the application, with the rest being free  (selected mode).
 
-## Apply the sandbox to the entire application
+## Apply the sandbox to the entire application  (complete mode)
 
 ```mermaid
 flowchart TD
@@ -122,7 +122,7 @@ flowchart TD
     C -- "4- Propagate to caller" --> A
 ```
 
-This scenario is the simplest. You just need to replace the launch of your application (`python -m xxx`) with a launch in the sandbox (`python-sb -m xxx`). It's possible to add some parameters, at the beginning:
+This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). It's possible to add some *py-sandboxes parameters*, at the beginning:
 ```shell
 python-db --learn -m my_module
 ```
@@ -147,9 +147,11 @@ dir_fd may not be implemented on your platform.
 Type:      function
 ```
 
-If IPython is installed, it's used. All the standard python parameters are availables.
+If *IPython* is installed, it's used. All the standard python parameters are availables.
 
 It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
+
+> For more information on using sandboxes with MCP, see [here](wiki/mcp.md).
 
 During the first launch, noting that there is no `.pysandboxes` parameter file, the application starts in learning mode. Use your application in all its capacities, so that the solution learns network and disk usage, imported modules, usage of environment variables, etc.
 When the application is stopped, a `.pysandboxes` file is created in the current directory. It has been populated with all the learned rules. **We invite you to review this file to make any necessary adjustments.**
@@ -162,7 +164,7 @@ If you want to restart a learning session to add missing rules:
 
 This way, only the missing rules will be added to the file.
 
-## Apply the sandbox to a part of the application.
+## Apply the sandbox to a part of the application (selected mode).
 
 Often, the application needs all privileges, has access to all API tokens, etc. Only a part of the application should be executed in a sandbox. For example, tools invoked by an LLM should not have access to all files or all environment variables. This makes it more difficult to abuse them.
 
@@ -194,7 +196,6 @@ flowchart TD
 
 ```
 
-
 ### Launching the Sandbox
 
 In your program, you must launch the sandbox before you can isolate certain parts of the code.
@@ -224,7 +225,6 @@ The `init_fn` parameter is optional. It can contain a function that will be invo
 ```python
 def init_log_level():
     sandboxes_level = logging.WARNING
-    uvicorn_level = logging.WARNING
     format = '[%(process)d] %(levelname)-5s %(name)s %(message)s'
     if is_in_sandbox():
         format = "  " + format
@@ -232,13 +232,8 @@ def init_log_level():
         level=min(sandboxes_level, logging.INFO),
         format=format
     )
-    logging.getLogger("asyncio").setLevel(uvicorn_level)
-    logging.getLogger("uvicorn").setLevel(uvicorn_level)
-    logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
-    logger.setLevel(logging.INFO)
 
 def init_fn():
     init_log_level()
@@ -286,7 +281,7 @@ pysandboxes.run(main(),
                 )
 ```
 
-### Executing a function in the sandbox
+### Executing a function in the sandbox (isolated mode)
 
 To declare that a function must run in the sandbox, simply annotate it with `@sandbox`.
 
@@ -301,12 +296,14 @@ def my_function_in_sandbox(param):
 
 Once the sandbox is launched, upon invocation of this function, the component handles converting the call into a Pickle-formatted request, sending it to the sandbox, and waiting for the result or exception to be returned to the caller.
 
+> All parameters and the return type must be Pickle-compatible.
+
 The sandbox receives the request, loads the corresponding module, finds the function, and invokes it. The response is then also converted into a Pickle-formatted response before being returned to the caller.
 
 There are a few peculiarities to note:
 
   - If an exception is raised in the sandbox, the stack trace is propagated to the main application to allow for a stack analysis as if the call had been made directly. This facilitates debugging.
-  - If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox. They are executed in the correct process.
+  - If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox or mix the different impressions between several threads. They are executed in the correct process, in the same async loop.
 
 ---
 # Security Filters
@@ -317,7 +314,7 @@ What are the security filters offered by **Py-Sandboxes**?
   - **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. It is also possible to use a different directory name in the sandbox than the original name. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
   - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
 
-Consult the parameter file generated during the first execution for more details.
+Consult the [parameter file](pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
 
 ---
 # OS-sandbox vs Py-sandbox
@@ -328,7 +325,7 @@ Our solution offers multiple layers of security:
 
 The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel.
 For example, database access is often done via compiled C drivers. See the appendix for more details.
-Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your .project without ensuring it is safe. We want to prevent abusive use of our code.
+Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. We want to prevent abusive use of our code.
 
 Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.
 
@@ -341,7 +338,7 @@ We offer several implementations to encapsulate the Python sandbox:
 
 *Other implementations will be added soon*
 
-The feature proposed by each technologies:
+The features of each technology are proposed:
 
 | Guard                     | py-sandbox | firejail  | none |
 |---------------------------|:----------:|:---------:|:----:|
@@ -379,23 +376,29 @@ include "${PWD}/.py-sandboxes"
 
 To create a CLI that uses **py-sanboxes**, use the following pattern:
 ```python
-# File my_module/cli.py
-def main():
-    ...
+def main() -> int:
+    # ...
+    print("hello")
+    return 99
 
-# File my_module/cli_sb.py
-def main():
+
+def main_sb() -> int:
     import sys
     import os
-    from pysandboxes.python_sb import main as sb_main
-    from my_module.cli import __name__ as module_name
-    sys.argv = [__file__, "-m", module_name] + sys.argv[1:]
-    os._exit(sb_main())
+
+    sys.argv = (
+            [
+                __file__,
+                "-m", os.path.splitext(os.path.basename(__file__))[0]
+            ] +
+            sys.argv[1:])
+    from pysandboxes.python_sb import main
+    return(main())  # Launch 'python-sb'
 ```
 
 And declare it in your TOML file.
 ```TOML
-[tool.poetry.scripts]
+[project.scripts]
 my-script = "my_module:main_sb"
 # my-script = "my_module:main"  # Without sandboxes
 ```
@@ -431,7 +434,12 @@ except SandBoxError:
 > Exceptions are thrown if violations are detected by *py-sandbox* and not by *os-sandbox*. 
 
 ## How to activate the sandbox in a notebook?
-In a cell, you can use `with sandboxes()` or `run()`.
+In on cell, you can use `with sandboxes()` or `run()`.
+```python
+# single cell
+with sandboxes():
+  ...
+```
 
 Between cells use:
 ```python
@@ -453,22 +461,22 @@ from pysandboxes import sandbox
 
 
 @sandbox
-def _call_llm(token: str):
+def _call_llm(token: str) -> None:
     print(f"{token=}")
     ...
 
 
-def call_llm():
+def call_llm() -> None:
     return _call_llm(token=os.environ["LLM_TOKEN"])
 ```
 
 ## How to ensure a new version of a module doesn't hide new network accesses?
-Using **pysandboxes** also makes you aware that a module update can also call the security rules into question.
+Using **Py-sandboxes** also makes you aware that a module update can also call the security rules into question.
 We invite you, after each update, to test your application without learning. This way, if a rule is violated, you will know its origin.
 
 ##  Do I have any new rule violations since the update?
-Indeed, new ones can be proposed. As the approach is based on denial by default, these rules are rejected. Restart a learning session to add what is necessary.
-Use the minor version to fix the version to used. The minor version is incremented for each new rules.
+Indeed, new ones can be proposed. As the approach is based on *denial by default*, these rules are rejected. Restart a learning session to add what is necessary.
+Use the minor version to fix the version to used (`n.m.*`). The minor version is incremented for each new rules.
 
 ## Debugging
 When using an external sandbox, two processes are launched. Your development environment is normally capable of handling this, if you use `os-sandbox=subprocess`. A breakpoint in a `@sandbox` function will interrupt the program in the sandbox process. Stack trace analysis will not be easy, as there is no complete trace of the call.
@@ -495,18 +503,25 @@ To disable only one rule family, use the generic acceptance settings.
 Or
 - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
 - Use the `learn=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
-- Use the special `os-provider=none` to deactivate all the `@sandbox` annotations
+- Use the special `os-provider=none` to deactivate all the `@sandbox` annotations. The stack trace show the direct call of the functions.
 
 ## How to package the project
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.
-The file must also be published in the project's launch directory.
+The file must also be published in the project's module directory.
 
-But, the best practice it to build a wheel, with your rules.
+The best practice it to build a wheel, with your rules.
 ```toml
 include = [
     { include = "my-package/.py-sanboxes" }
 ]
 ```
+If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file. Then the user can change some rules.
+```ini
+# File my_module/.py-sandboxes
+include "${PWD}/.py-sandboxes"
+# ... specific rules
+```
+
 ## Implementation
 see [here](wiki/implementation.md)
 
