@@ -19,12 +19,12 @@ def sync_with_exception() -> NoReturn:
 
 
 def test_catch_sync_with_exception() -> None:
-    with sandboxes(init_sandbox, config_path=config_path):
+    with sandboxes(init_sandbox, sandboxes_config=config_path):
         with pytest.raises(Exception):
             sync_with_exception()
 
 
 async def test_catch_async_with_exception() -> None:
-    async with sandboxes(init_sandbox, config_path=config_path):
+    async with sandboxes(init_sandbox, sandboxes_config=config_path):
         with pytest.raises(Exception):
             await async_with_exception()

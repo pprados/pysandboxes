@@ -7,9 +7,11 @@ arguments intended for the pysandbox environment, and from the actual command
 """
 import argparse
 import sys
+from pathlib import Path
 
 
-def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[str]]:
+def parse_python_cmd_line(args: list[str]) -> tuple[
+    list[str], list[str], list[str],Path]:
     """
     Parses the Python command line to separate CPython, sandbox, and command args.
 
@@ -22,10 +24,11 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         args: A list of command-line arguments from sys.argv[1:].
 
     Returns:
-        A tuple containing three lists:
+        A tuple containing:
         1. `python_parsed_args`: Standard CPython arguments.
         2. `sandboxes_args`: Custom arguments for the sandbox.
         3. `python_cmd`: The command to be executed and its arguments.
+        4. `pysandboxes_config`: The path for configuration
     """
 
     class CustomHelpFormatter(argparse.HelpFormatter):
@@ -69,9 +72,11 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
     ]
 
     sandboxes_args = [
-        arg for arg in args if arg.startswith("--") and arg not in long_params
+        arg for arg in args if arg.startswith("--") and
+                               arg not in long_params
+                                and not arg.startswith("--pysandboxes-config=")
     ]
-    args = [arg for arg in args if not arg.startswith("--") or arg in long_params]
+    args = [arg for arg in args if arg not in sandboxes_args]
 
     parser = argparse.ArgumentParser(
         prog="python-sb",
@@ -210,11 +215,18 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
     )
 
     python_parsed, remaining_args = parser.parse_known_args(args)
+    python_parsed.pysandboxes_config=None
     parser2 = argparse.ArgumentParser(
         prog="python-sb",
         description="Run a Python program in a SANBOX.",
         add_help=False,  # We'll add -h manually for full control
         formatter_class=CustomHelpFormatter,
+    )
+    parser2.add_argument(
+        "--pysandboxes-config",
+        action="store",
+        default="",
+        help="Where to find the pysandboxes configuration.",
     )
     parser2.add_argument("-c", help="Execute Python code")
     parser2.add_argument("-m", help="Execute a module")
@@ -229,6 +241,7 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
     if python_command.script:
         python_command_args.extend(python_command.script)
 
+    args = [arg for arg in args if not arg.startswith("--pysandboxes-config=")]
     if len(python_command_args):
         assert args[-len(python_command_args) :] == python_command_args
         python_parsed_args = args[: -len(python_command_args)]
@@ -237,6 +250,11 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
 
     if python_parsed.help:
         # Add extra parameter before generate the help
+        parser.add_argument(
+            "--pysandboxes-config",
+            action="store",
+            help="Where to find the pysandboxes configuration.",
+        )
         parser.add_argument(
             "--<sb-option>=<value>",
             action="store_true",
@@ -263,4 +281,5 @@ def parse_python_cmd_line(args: list[str]) -> tuple[list[str], list[str], list[s
         parser.print_help()
         sys.exit(0)
 
-    return python_parsed_args, sandboxes_args, python_command_args
+    return (python_parsed_args, sandboxes_args, python_command_args,
+            Path(python_command.pysandboxes_config) or Path())

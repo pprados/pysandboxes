@@ -57,7 +57,7 @@ py-sandbox=true
 #
 # Note: Some providers may not work in containers without additional privileges.
 
-os-sandbox=${OS_SANDBOX:=subprocess}
+os-sandbox=${OS_SANDBOX:-subprocess}
 
 #######################################################################################
 # ENVIRONMENT VARIABLES
@@ -68,7 +68,7 @@ os-sandbox=${OS_SANDBOX:=subprocess}
 # Syntax patterns:
 # - env=VAR=value                    Set fixed value
 # - env=VAR=${HOST_VAR}              Copy from host environment
-# - env=VAR=${HOST_VAR:=default}     Copy with fallback default
+# - env=VAR=${HOST_VAR:-default}     Copy with fallback default
 # - env=PATTERN_*=${PATTERN_*}       Pattern matching for multiple vars
 # - unenv=VAR                        Explicitly remove variable
 #
@@ -79,7 +79,7 @@ os-sandbox=${OS_SANDBOX:=subprocess}
 
 # Common safe variables:
 #env=USER=sandbox
-#env=TEMP=${TEMP:=${TMP}}
+#env=TEMP=${TEMP:-${TMP}}
 
 # API access (high security risk):
 #env=*_API_KEY=${*_API_KEY}
@@ -114,8 +114,8 @@ os-sandbox=${OS_SANDBOX:=subprocess}
 
 # Example directory mounts:
 #ro-bind=/usr,/usr                    # Read-only system libraries
-#ro-bind=${PWD},${PWD}                # Read-only project directory
-#bind=${PWD}/data,${PWD}/data         # Read-write data directory
+#ro-bind=.,.                # Read-only project directory
+#bind=./data,./data         # Read-write data directory
 #bind=/tmp,/tmp                       # Temporary files
 
 # Generated rules from learning mode:
@@ -146,7 +146,7 @@ os-sandbox=${OS_SANDBOX:=subprocess}
 #net=ALLOW|tcp|0.0.0.0/0|80|OUT          # HTTP to anywhere
 
 # Local server binding:
-#net=ALLOW|tcp|0.0.0.0/0|${PORT:=8000}|IN    # Accept connections on port
+#net=ALLOW|tcp|0.0.0.0/0|${PORT:-8000}|IN    # Accept connections on port
 
 # Block internal networks (recommended for production):
 #net=DENY|*|10.0.0.0/8|*|OUT             # Private Class A

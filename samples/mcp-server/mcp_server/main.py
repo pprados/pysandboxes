@@ -1,11 +1,11 @@
 import logging
 import sys
 
-from .run_calc import run_calc_server
+from .run_calc import run_mcp_server
 
 logger = logging.getLogger(__name__)
 
-level = logging.DEBUG
+level = logging.INFO
 format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(level)
 logging.getLogger("pysandboxes").setLevel(level)
@@ -17,11 +17,15 @@ logging.basicConfig(
     format=format,
 )
 
-# Run the mcp over stdio
-if __name__ == "__main__":
+
+def main() -> int:
     transport = "stdio"
     if len(sys.argv) > 1:
         transport = sys.argv[1]
-    logger.error(f"Start calc with {sys.argv}")
-    errlevel = run_calc_server(transport)
-    sys.exit(errlevel)
+    logger.info(f"Start mcp_server with transport={transport}")
+    return run_mcp_server(transport)
+
+
+# Run the mcp over stdio
+if __name__ == "__main__":  # FIXME: resoudre le __main__
+    sys.exit(main())

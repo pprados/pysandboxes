@@ -105,9 +105,12 @@ async def sandbox_daemon(
         try:
             module = importlib.import_module(module_name)
             function = getattr(module, function_name)
-        except (AttributeError, ModuleNotFoundError):
-            logger.warning("Function %s.%s() not found", module_name, function_name)
-            return
+        except ModuleNotFoundError:
+            logger.error("Module %s not found", module_name)
+            raise ValueError(f"Module {module_name} not found")
+        except AttributeError:
+            logger.error("Function %s.%s() not found", module_name, function_name)
+            raise ValueError(f"Function {module_name}.{function_name}() not found")
         use_async = inspect.iscoroutinefunction(function)
         logger.debug(
             "(%s) calling %s%s.%s(%s,%s)...",

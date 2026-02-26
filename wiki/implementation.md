@@ -19,7 +19,7 @@ Here is a brief description of the implementation in **complete mode**. You will
 - This process continues until the presence of the  ̀-c`, `-m`, or `<script.py>` parameters.
 - The configuration files are consulted.
 - The **os-sandbox** parameter is extracted.
-- Environment variables are injected into the configuration lines.
+- Environment variables are injected into the configuration files.
 - The parameters are converted into specific parameters for **os-sandbox**.
 - Parameters may be modified to account for the specificities of the **os-sandbox** implementation. For instance, applying a double bind to directories is not relevant.
 - A standard `python` program is launched within the *OS sandbox technology* using the extracted python parameters and `-m pysandboxes.remote.main_sandbox`.

@@ -28,7 +28,7 @@ Environ = dict[str, str] | os._Environ
 def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
     """Resolve environment variables in a string using bash-like syntax.
 
-    Supports ${VAR} and ${VAR:=default} patterns for variable substitution.
+    Supports ${VAR} and ${VAR:-default} patterns for variable substitution.
 
     Args:
         s: String containing environment variable references.
@@ -40,10 +40,10 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
     Examples:
         >>> resolve_env_variables("${HOME}/file", {"HOME": "/home/user"})
         '/home/user/file'
-        >>> resolve_env_variables("${PORT:=8000}", {})
+        >>> resolve_env_variables("${PORT:-8000}", {})
         '8000'
     """
-    pattern = re.compile(r"\$\{([^{}:=]+)(?::=([^{}]*))?\}")
+    pattern = re.compile(r"\$\{([^{}:-]+)(?::-([^{}]*))?\}")
 
     def replace(match: re.Match[str]) -> str:
         var_name = match.group(1)

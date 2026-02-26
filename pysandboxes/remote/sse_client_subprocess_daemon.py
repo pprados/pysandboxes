@@ -52,7 +52,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True  # FIXME
+DEBUG = True
 
 
 def get_log_formatter() -> str:

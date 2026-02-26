@@ -50,7 +50,8 @@ def generate_config_from_learning() -> None:
         # Manage old files
         if _save_learning_done:
             return
-        learning_path = _learning_path or Path(CONFIG_NAME)
+        learning_path = _learning_path
+        assert learning_path
         learning_path, old_learning_path = _manage_olds_file(learning_path)
         logger.debug(
             "generate_config_from_learning(%s,%s)",
@@ -177,14 +178,14 @@ def _manage_olds_file(_learning_path: Path) -> tuple[Path, Path | None]:
     return Path(learning_path), old_learning_path
 
 
-def activate_learning(config_file: Path) -> None:
+def set_learning_path(learning_path: Path) -> None:
     """Activate learning mode for the specified configuration file.
 
     Args:
-        config_file: Path where learning rules should be saved.
+        learning_path: Path where learning rules should be saved.
     """
     global _learning_path
-    _learning_path = config_file
+    _learning_path = learning_path
 
 
 def stop_learning_mode() -> None:

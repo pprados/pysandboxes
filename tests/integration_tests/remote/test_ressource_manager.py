@@ -12,7 +12,7 @@ async def test_async_run_sandboxes_twice() -> None:
     Invoke the sandbox twice to ensure that the sandbox is properly reset.
     """
     for i in range(0, 2):
-        async with sandboxes(init_sandbox, config_path=config_path):
+        async with sandboxes(init_sandbox, sandboxes_config=config_path):
             assert await async_forty_two() == 42
 
 
@@ -22,7 +22,7 @@ async def test_async_sandboxes_call_sync_sandbox() -> None:
     """
     for i in range(0, 2):
         with pytest.raises(RuntimeError, match=mixed_sync_and_async_error):
-            async with sandboxes(init_sandbox, config_path=config_path):
+            async with sandboxes(init_sandbox, sandboxes_config=config_path):
                 assert sync_forty_two() == 42
 
 
@@ -31,5 +31,5 @@ def test_sync_sandboxes_twice() -> None:
     Invoke the sandbox twice to ensure that the sandbox is properly reset.
     """
     for i in range(0, 2):
-        with sandboxes(init_sandbox, config_path=config_path):
+        with sandboxes(init_sandbox, sandboxes_config=config_path):
             assert sync_forty_two() == 42

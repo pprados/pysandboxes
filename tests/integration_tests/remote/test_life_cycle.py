@@ -72,7 +72,7 @@ def test_multi_thread() -> None:
     """
     Check if the multiple call at the same time are not shuffled
     """
-    with sandboxes(config_path=config_path):
+    with sandboxes(sandboxes_config=config_path):
         r = range(5)
         threads: List[threading.Thread] = []
 

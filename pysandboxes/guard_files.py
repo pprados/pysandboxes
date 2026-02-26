@@ -166,11 +166,11 @@ def parse_rules(
                     if not src.is_dir() or not dest.is_dir():
                         cwd = Path.cwd()
                         if src.is_relative_to(cwd):
-                            s_src = "${PWD}/" + str(src.relative_to(cwd))
+                            s_src = "./" + str(src.relative_to(cwd))
                         else:
                             s_src = str(src)
                         if dest.is_relative_to(cwd):
-                            s_dest = "${PWD}/" + str(dest.relative_to(cwd))
+                            s_dest = "./" + str(dest.relative_to(cwd))
                         else:
                             s_dest = str(dest)
                         errors.append(

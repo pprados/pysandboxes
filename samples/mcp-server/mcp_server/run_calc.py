@@ -6,9 +6,7 @@ from typing import Literal
 # from fastmcp import FastMCP, Context
 from mcp.server.fastmcp import FastMCP, Context
 
-from pysandboxes import sandbox, sandboxes
-
-logging.root.setLevel(logging.DEBUG)  # FIXME
+logging.root.setLevel(logging.INFO)  # FIXME
 logging.getLogger("mcp.server.sse").setLevel(logging.WARNING)
 logging.getLogger("sse_starlette.sse").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -29,12 +27,14 @@ mcp = FastMCP("My Calculator Server",
 async def evaluate_expression(expression: str, ctx: Context) -> float:
     return await _evaluate_expression(expression)
 
+from pysandboxes import sandbox, sandboxes
 @sandbox
 async def _evaluate_expression(expression: str) -> float:
     """Evaluates a mathematical expression and returns the result."""
     try:
         # Warning: eval() is unsafe for untrusted input; use a proper parser in production
         logger.info(f"Calculated : {expression}")
+
         result = eval(expression, {"__builtins__": {}},
                       {"add": add, "sub": sub, "mul": mul, "truediv": truediv})
         logger.info(f"Result : {result}")
@@ -43,12 +43,12 @@ async def _evaluate_expression(expression: str) -> float:
         raise ValueError(f"Invalid expression: {e}")
 
 
-def run_calc_server(transport:str) -> int:
+def run_mcp_server(transport:str) -> int:  # FIXME: mixer avec main lorsque __main__ sera réglé
     try:
         with sandboxes(
-            config_path="demo_mcp/.py-sandboxes",
+            # sandboxes_config="mcp_server/.py-sandboxes",
             os_sandbox="None",
-            learn=".py-sandboxes",
+            # learn=".py-sandboxes",
         ):
             mcp.run(transport=transport)  # type: ignore[arg-type]
         # mcp.run(transport=transport,  # type: ignore[arg-type]
@@ -60,5 +60,5 @@ def run_calc_server(transport:str) -> int:
     return 0
 
 async def async_run_server(transport:Literal["stdio", "sse", "streamable-http"]) -> int:
-    return run_calc_server(transport)
+    return run_mcp_server(transport)
 

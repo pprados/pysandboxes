@@ -10,7 +10,8 @@ from typing import Any, Dict, List, Set, Callable
 
 from attr.validators import is_callable
 
-from pysandboxes.learning import generate_config_from_learning, is_learning_mode
+from pysandboxes.learning import generate_config_from_learning, is_learning_mode, \
+    set_learning_path
 from pysandboxes.tools import set_is_in_sandbox
 from ..all_rules import AllRules
 from ..main_logger import config_log
@@ -19,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    log_level = logging.DEBUG
-    config_log(logging.DEBUG)
+    log_level = logging.INFO  # FIXME
+    config_log(log_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
@@ -227,6 +228,8 @@ def python_in_sb(
     try:
         _debug_log()  # FIXME: remove
         set_is_in_sandbox(True)
+
+        set_learning_path(all_rules.learning_path)
         if not len(python_cmd):
             _python_interactive(all_rules, True)
         elif python_cmd[0] == "-m":

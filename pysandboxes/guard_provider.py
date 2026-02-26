@@ -10,9 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 def parse_rules(
-    rules: ConfigLines,
-    errors: List[ErrorMsg],
-) -> Tuple[str, bool, Path, bool, ConfigLines]:
+        config_path:Path,
+        rules: ConfigLines,
+        errors: List[ErrorMsg],
+) -> Tuple[str, bool, Path|None, bool, ConfigLines]:
     from .os_sandbox import providers_factory
 
     other_rules = []
@@ -25,7 +26,7 @@ def parse_rules(
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
             provider_rule.append(rule)
-            provider = rule.rule[len("os-sandbox=") :].strip().lower()
+            provider = rule.rule[len("os-sandbox="):].strip().lower()
             if provider not in providers_factory:
                 errors.append(
                     (
@@ -54,7 +55,7 @@ def parse_rules(
         elif rule.rule.startswith("learn="):
             if learning_path:  # FIXME: error? prio for args?
                 continue
-            value = rule.rule.split("=", 1)[1].strip().lower()
+            value = rule.rule.split("=", 1)[1].strip()
             if value.lower() in ("true", "false", "0", "1"):
                 errors.append(
                     (
@@ -70,10 +71,10 @@ def parse_rules(
                     learning_path = Path(value)
                     if learning_path.parent == Path("."):
                         # Use relative to the file with this parameter
-                        learning_path=rule.path.parent / learning_path
+                        learning_path = rule.path.parent / learning_path
 
                 else:
-                     learning_path =Path(CONFIG_NAME)
+                    learning_path = Path(CONFIG_NAME)
                 if not learning_path.parent.exists():
                     errors.append(
                         (
@@ -91,8 +92,6 @@ def parse_rules(
             other_rules.append(rule)
 
     # provider from command line is prioritized
-    if not learning_path:
-        learning_path=Path(CONFIG_NAME)
     cmd_line_provider = list(filter(lambda x: x[1].ln == 0, providers_set))
     if len(cmd_line_provider) == 1:
         provider = cmd_line_provider[0][0]
@@ -111,8 +110,9 @@ def parse_rules(
         provider = providers_set[0][0]
     else:
         provider = "subprocess"  # default value
-    if not learning_path:
-        learning_path = Path(CONFIG_NAME)
+
+    if learning_path is None:
+        learning_path = config_path
 
     # Force learn mode if the file not exists
     if not learning_path.exists() and not learning:

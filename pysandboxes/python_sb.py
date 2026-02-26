@@ -9,9 +9,11 @@ from typing import Any, Mapping, cast
 
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
+from pysandboxes.learning import set_learning_path
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
+from pysandboxes.remote.none_daemon import NoneDaemon
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 from pysandboxes.remote.sse_client_subprocess_daemon import (
     BaseSubProcessDaemon,
@@ -21,14 +23,13 @@ from pysandboxes.remote.sse_client_subprocess_daemon import (
 )
 from pysandboxes.sb_types import Envs
 from pysandboxes.tools import Environ
-
 from .remote.parse_cpython_args import parse_python_cmd_line
 
 logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    log_level=logging.DEBUG  # FIX_RELEASE
+    log_level = logging.INFO  # FIX_RELEASE
     config_log(log_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
@@ -37,6 +38,7 @@ def _debug_log() -> None:
     logging.getLogger("Pysandboxes").setLevel(log_level)
     logging.getLogger("pysandboxes").setLevel(log_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
+    logging.info("Start in python-db")
 
 
 def main() -> int:
@@ -44,7 +46,8 @@ def main() -> int:
     Parses command-line arguments and run the cpython in sandbox
     """
     _debug_log()  # FIXME
-    python_parsed_args, sandboxes_args, python_cmd = parse_python_cmd_line(sys.argv[1:])
+    python_parsed_args, sandboxes_args, python_cmd, config_path = (
+        parse_python_cmd_line(sys.argv[1:]))
 
     extra_rules = convert_extra_rules(sandboxes_args)
 
@@ -58,9 +61,16 @@ def main() -> int:
     except ImportError:
         pass  # Ignore. IPython not found
 
-    config_path = Path()
+    # If --learn and --pysandboxes-config=xxx, use --learn=xxx
+    # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
     if len(extra_rules.get("learn", [])):
-        config_path = Path(list(extra_rules["learn"])[0])
+        learn_path = Path(list(extra_rules["learn"])[0])
+        if learn_path == Path():
+            if config_path == Path():
+                learn_path = Path(CONFIG_NAME)
+            else:
+                learn_path = config_path
+        extra_rules["learn"] = str(learn_path)
     if config_path == Path():
         config_path = Path(CONFIG_NAME)
 
@@ -68,9 +78,9 @@ def main() -> int:
         from importlib.resources import files
 
         if (
-            "/" not in str(config_path)
-            and len(python_cmd) >= 2
-            and python_cmd[0] == "-m"
+                "/" not in str(config_path)
+                and len(python_cmd) >= 2
+                and python_cmd[0] == "-m"
         ):
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
@@ -83,11 +93,13 @@ def main() -> int:
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
         extra_rules["env"] = envs
+        logger.error(f"Use {config_path=}")  # FIXME
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=os.environ,  # Use current environ
             **cast(Mapping[str, Any], extra_rules),
         )
+        set_learning_path(all_rules.learning_path)
     except ConfigSyntaxError as e:
         print(str(e), file=sys.stderr)
         sys.exit(-1)
@@ -98,21 +110,10 @@ def main() -> int:
     os_provider: BaseSubProcessDaemon = providers_factory[all_rules.os_sandbox](
         token, python_args=python_parsed_args
     )
-    if not isinstance(os_provider, BaseSubProcessDaemon):
+    if not isinstance(os_provider, NoneDaemon):
+        from .remote.python_in_sb import python_in_sb
 
-        async def run_locally():
-            try:
-                await os_provider._start(
-                    all_rules, log_level=log_level, envs=None, init_fn=None
-                )
-                from .remote.python_in_sb import python_in_sb
-
-                python_in_sb(all_rules, python_cmd)
-            finally:
-                await os_provider._shutdown(graceful_shutdown=True)
-            return 0
-
-        return asyncio.run(run_locally())
+        return python_in_sb(all_rules, python_cmd)
     with tempfile.TemporaryDirectory() as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)

@@ -35,7 +35,7 @@ class AllRules(NamedTuple):
         file_rules: File system access rules.
         import_rules: Python import rules.
     """
-
+    root_path: Path
     config: ConfigLines
     envs: Envs
     os_sandbox: str
@@ -49,6 +49,7 @@ class AllRules(NamedTuple):
 
 
 EmptyRules = AllRules(
+    root_path=Path(),
     config=[],
     envs=Envs({}),
     os_sandbox="subprocess",

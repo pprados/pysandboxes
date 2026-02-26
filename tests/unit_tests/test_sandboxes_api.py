@@ -239,7 +239,7 @@ class TestSandboxesContextManager:
         mock_daemon = Mock()
         mock_async_start.return_value = mock_daemon
 
-        with sandboxes(config_path="test.conf"):
+        with sandboxes(sandboxes_config="test.conf"):
             pass
 
         mock_async_start.assert_called_once()

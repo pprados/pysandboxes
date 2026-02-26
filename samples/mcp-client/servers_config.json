@@ -1,0 +1,82 @@
+{
+  "mcpServers": {
+  // Version with `python-sb`. The user MCP client decide the rules
+  //  to use (complete mode) in `../mcp-server/.py-sandboxes`
+    "complete_mode": {
+      "cwd": "../mcp-server",
+      "command": "python","cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
+//      "command": "uv",
+      "args": [
+//        "run",
+        "-m", "pysandboxes.python_sb",
+        "--pysandboxes-config=mcp_server/.py-sandboxes",
+        "-m", "mcp_server.main"
+      ]
+    }
+
+//  "mcpServers": {
+//    // The MCP-server decide the portion of code to isolate (selected mode).
+//    // The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
+//    "selected_mode": {
+//      "cwd": "../mcp-server",
+//     // "command": "python","cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
+//      "command": "uv",
+//      "args": [
+//        "run",
+//        "-m", "pysandboxes.python_sb",
+//        "-m", "mcp_server.main"
+//      ]
+//    }
+
+//    "calc_complete_mode": {
+//      "command": "uv",
+//      "args": [
+//        "--directory", "../mcp-server",
+//        "run",
+//        "-m", "pysandboxes.python_sb",
+//        "-m", "mcp_server.main"
+//      ]
+//    }
+
+    //    "calc_complete_mode": {
+//      "command": "python-sb",
+//      "args": [
+//        "-m",
+//        "mcp_server.main"
+//      ],
+//      "cwd": "../mcp-server",
+//      // Use only in the py-sandboxes project
+//      "env": {"PYTHONPATH":"../..:../mcp-server"}
+//    }
+
+//    // Version without `python-sb`. The MCP server decide where for which
+//    // function activated the sandboxes (selected mode).
+//    "calc_selected_mode": {
+//      "command": "python",
+//      "args": [
+//        "-m",
+//        "mcp_server.main"
+//      ],
+//      "cwd": "../mcp-server",
+//      // Use only in the py-sandboxes project
+//      "env": {"PYTHONPATH":"../..:../mcp-server"}
+//    }
+
+//  // Version without `python-sb`. The MCP server decide where to activate
+//  // the sandboxes (selected mode).
+//    "uv_complete_mode": {
+//      "command": "uv",
+//      "args": [
+//        "--directory", "../mcp-server",
+//        "-m",
+//        "pysandboxes.python_sb",
+//        "-m",
+//        "mcp_server.main"
+//      ],
+//      "cwd": "../mcp-server",
+//      // Use only in the py-sandboxes project
+//      "env": {"PYTHONPATH":"../..:../mcp-server"}
+//    }
+
+  }
+}

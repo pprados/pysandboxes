@@ -28,7 +28,7 @@ from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
 from .e import ConfigSyntaxError
 from .guard_import import remove_modules
-from .learning import activate_learning
+from .learning import set_learning_path
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import Environ, remove_config_comments, substitute_config_env_vars
@@ -77,7 +77,7 @@ def load_and_parse_config(
 
     This function implements a sophisticated configuration loading strategy:
 
-    1. If no config_path is provided, defaults to "./.py-sandboxes"
+    1. If no sandboxes_config is provided, defaults to "./.py-sandboxes"
     2. If the config file doesn't exist, automatically enables learning mode
     3. In learning mode, creates a new config file based on observed behavior
     4. If config contains a --learn directive, appends new rules to existing file
@@ -216,7 +216,7 @@ def parse_config(
         learning_path,
         learn,
         others,
-    ) = guard_provider.parse_rules(others, errors)
+    ) = guard_provider.parse_rules(config_path, others, errors)
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
@@ -244,6 +244,7 @@ def parse_config(
         # Force os_sandbox to subprocess
         os_sandbox = "subprocess"
     return AllRules(
+        root_path=config_path,
         config=config,
         envs=sandbox_env,
         os_sandbox=os_sandbox,
@@ -296,7 +297,6 @@ def activate_sandboxes(
     guard_envs.activate_guard(all_rules.envs_rules)
     guard_socket.activate_guard(all_rules.socket_rules)
     guard_files.activate_guard(all_rules.file_rules)
-    if all_rules.learn:
-        activate_learning(all_rules.learning_path)
+    set_learning_path(all_rules.learning_path)
     remove_modules()
     guard_self.activate_guard()

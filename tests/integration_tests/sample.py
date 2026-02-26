@@ -39,12 +39,12 @@ def sync_forty_two() -> int:
 
 
 def sync_sanboxes(config_path: Path) -> None:
-    with sandboxes(init_sandbox, config_path=config_path):
+    with sandboxes(init_sandbox, sandboxes_config=config_path):
         assert sync_forty_two() == 42
 
 
 async def async_sanboxes(config_path: Path) -> None:
-    async with sandboxes(init_sandbox, config_path=config_path):
+    async with sandboxes(init_sandbox, sandboxes_config=config_path):
         assert await async_forty_two() == 42
 
 

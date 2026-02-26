@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.DEBUG
+    sandboxes_level = logging.INFO # FIXME
     uvicorn_level = logging.WARNING
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
@@ -216,7 +216,7 @@ async def main(argv: List[str]) -> int:
     # sys.addaudithook(audit_hook)
 
     extra_rules = convert_extra_rules(argv[1:])
-    # config_path = Path("tests/test.py-sandboxes")
+    # sandboxes_config = Path("tests/test.py-sandboxes")
     config_path = Path(".py-sandboxes")
     if "learn" in extra_rules:
         learning_path, *_ = extra_rules.get("learn", set())
@@ -227,7 +227,7 @@ async def main(argv: List[str]) -> int:
     for i in range(0, 1):
         async with sandboxes(
                 async_init_sandbox,
-                config_path=config_path,
+                sandboxes_config=config_path,
                 **cast(Mapping[str, Any], extra_rules),
         ):
             await arun()

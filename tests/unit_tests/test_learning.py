@@ -6,7 +6,7 @@ from unittest.mock import Mock, mock_open, patch
 
 from pysandboxes.learning import (
     _manage_olds_file,
-    activate_learning,
+    set_learning_path,
     add_learning_rule,
     generate_config_from_learning,
     is_learning_mode,
@@ -123,7 +123,7 @@ class TestLearningModeManagement:
         config_file = Path("test_config.conf")
 
         with patch("pysandboxes.learning._learning_path", None):
-            activate_learning(config_file)
+            set_learning_path(config_file)
 
             # Check that learning mode is activated
             assert is_learning_mode() is True

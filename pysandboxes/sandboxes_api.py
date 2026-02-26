@@ -130,7 +130,7 @@ class sandboxes:
 
     Attributes:
         init_fn: Optional initialization function called when daemon starts.
-        config_path: Path to sandbox configuration file.
+        sandboxes_config: Path to sandbox configuration file.
         envs: Environment variables available in the sandbox.
         extra_rules: Additional security rules to apply.
         learning_path: Path for learning mode rule generation.
@@ -147,7 +147,7 @@ class sandboxes:
 
         With custom configuration:
         ```python
-        with sandboxes(config_path="custom.conf", graceful_shutdown=True):
+        with sandboxes(sandboxes_config="custom.conf", graceful_shutdown=True):
             result = some_function()
         ```
 
@@ -160,7 +160,7 @@ class sandboxes:
 
     __slots__ = (
         "init_fn",
-        "config_path",
+        "sandboxes_config",
         "envs",
         "extra_rules",
         "learning_path",
@@ -173,7 +173,7 @@ class sandboxes:
     def __init__(
         self,
         init_fn: SyncOrAsyncFunc | None = None,
-        config_path: Path | str | None = None,
+        sandboxes_config: Path | str | None = None,
         *,
         envs: Environ | None = None,
         python_args: list[str] | None = None,
@@ -185,18 +185,18 @@ class sandboxes:
         Args:
             init_fn: Function called during daemon initialization in
             the sandbox process.
-            config_path: Path to configuration file or directory.
+            sandboxes_config: Path to configuration file or directory.
             envs: Environment variables to make available in sandbox.
             python_args: Additional arguments for Python interpreter.
             graceful_shutdown: Whether to shutdown gracefully on exit.
             **extra_rules: Additional security rules as keyword arguments.
         """
         self.init_fn = init_fn
-        self.config_path = (
-            config_path
-            if isinstance(config_path, Path)
-            else Path(config_path)
-            if config_path
+        self.sandboxes_config = (
+            sandboxes_config
+            if isinstance(sandboxes_config, Path)
+            else Path(sandboxes_config)
+            if sandboxes_config
             else None
         )
         if envs is None:
@@ -229,7 +229,7 @@ class sandboxes:
             log_level = logging.root.getEffectiveLevel()
             try:
                 all_rules = load_and_parse_config(
-                    config_path=self.config_path,
+                    config_path=self.sandboxes_config,
                     envs=self.envs,
                     **self.extra_rules,
                 )
@@ -316,7 +316,7 @@ class sandboxes:
             log_level = logging.root.getEffectiveLevel()
             try:
                 all_rules = load_and_parse_config(
-                    self.config_path,
+                    self.sandboxes_config,
                     envs=self.envs,
                     **self.extra_rules,
                 )
@@ -387,7 +387,7 @@ def run(
         set_sandbox_loop(asyncio.get_running_loop())
         async with sandboxes(
             init_fn=init_fn,
-            config_path=config_path,
+            sandboxes_config=config_path,
             envs=envs,
             python_args=python_args,
             graceful_shutdown=graceful_shutdown,
