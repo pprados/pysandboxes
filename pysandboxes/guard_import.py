@@ -432,6 +432,10 @@ def remove_modules() -> None:
     This function clears the module cache except for essential system modules,
     forcing fresh imports that will go through the guard system.
     """
+    # mode="reload_sys"
+    # mode = "reload_all"  # FIXME: vérifier l'application des règles
+    mode="remove"
+
     import sys
 
     logger.debug("Remove old modules")
@@ -447,10 +451,6 @@ def remove_modules() -> None:
             to_remove.add(k)
 
     importlib.invalidate_caches()
-
-    # mode="reload_sys"
-    mode = "reload_all"
-    # mode="remove"
 
     # Reload modules (may add modules with reload() )
     logger.debug("Reload modules... (%s)", mode)

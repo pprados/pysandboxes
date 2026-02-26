@@ -25,7 +25,7 @@ def parse_rules(
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
             provider_rule.append(rule)
-            provider = rule.rule[len("os-sandbox=") :].strip()
+            provider = rule.rule[len("os-sandbox=") :].strip().lower()
             if provider not in providers_factory:
                 errors.append(
                     (
@@ -34,7 +34,8 @@ def parse_rules(
                         rule.ln,
                     )
                 )
-            providers_set.append((provider, rule))
+            else:
+                providers_set.append((provider, rule))
         elif rule.rule.startswith("py-sandbox="):
             value = rule.rule.split("=", 1)[1].strip().lower()
             if value in ("", "true"):

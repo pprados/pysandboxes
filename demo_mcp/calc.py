@@ -12,6 +12,7 @@ logging.getLogger("pysandboxes").setLevel(level)
 logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
 
 logging.basicConfig(
+    force=True,
     level=level,
     format=format,
 )
@@ -21,5 +22,6 @@ if __name__ == "__main__":
     transport = "stdio"
     if len(sys.argv) > 1:
         transport = sys.argv[1]
+    logger.error(f"Start calc with {sys.argv}")
     errlevel = run_calc_server(transport)
     sys.exit(errlevel)

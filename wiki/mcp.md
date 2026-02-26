@@ -26,8 +26,15 @@ From then on, you can launch the MCP server without the `learn` parameter to enf
 
 ## Usage by Selecting Functions to Protect (selected mode)
 
-To isolate a tool in the sandbox, simply add the `@sandbox` decorator.
+To isolate a tool in the sandbox, start to launch the sandbox
 
+```python
+with sandboxes(
+    config_path="demo_mcp/.py-sandboxes",
+):
+    mcp.run(transport=transport)  # type: ignore[arg-type]
+```
+and simply add the `@sandbox` decorator.
 ```python
 @sandbox
 @mcp.tool(name="evaluate_expression",
@@ -43,7 +50,7 @@ async def evaluate_expression(expression: str) -> float:
         raise ValueError(f"Invalid expression: {e}")
 ```
 
-The MCP SKL framework allows a tool to access the MCP server itself by adding a `ctx: Context` parameter. Since the context object exists outside the sandbox, it cannot be serialized and sent to the protected version of the code.
+The MCP SDK framework allows a tool to access the MCP server itself by adding a `ctx: Context` parameter. Since the context object exists outside the sandbox, it cannot be serialized and sent to the protected version of the code.
 
 To solve this, split the function in two: one part that handles the context in the main process and another, sandboxed part that performs the evaluation.
 

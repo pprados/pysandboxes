@@ -27,7 +27,7 @@ from typing import (
     TypeVar,
 )
 
-from .base_daemon import BaseDaemon
+from .base_daemon import BaseDaemon, FakeDaemon
 from .e import ConfigSyntaxError
 from .os_sandbox import async_shutdown_daemon
 from .private_loop import get_sandbox_loop, sandbox_loop, set_sandbox_loop
@@ -262,7 +262,8 @@ class sandboxes:
                 self._signals[signal.SIGINT] = signal.signal(signal.SIGINT, signal_handler)
                 self._signals[signal.SIGTERM] = signal.signal(signal.SIGTERM, signal_handler)
                 self._signals[signal.SIGQUIT] = signal.signal(signal.SIGQUIT, signal_handler)
-
+        else:
+            self._daemon = FakeDaemon(token="Fake token")
         assert self._daemon is not None
         return self._daemon
 

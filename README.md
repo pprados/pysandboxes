@@ -316,6 +316,26 @@ What are the security filters offered by **Py-Sandboxes**?
 
 Consult the [parameter file](pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
 
+## Manage config file locations
+By default, the program looks for the file in the root directory of the module that launches the sandbox. Otherwise, the `./py-sandboxes` file is used. This can be modified before the program is launched.
+If you package your application in a Wheel, place your parameters within your module.
+
+To address different scenarios, parameter files can include `include` instructions. This allows you to distribute parameters across different files and locations.
+
+By default, you'll find this:
+
+```
+include "./.local.py-sandboxes"  # May be add to .gitignore
+include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
+include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
+```
+
+The goal is to be able to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`).
+
+Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
+
+By adding or removing `include` statements, you can select the different personalization scenarios you want.
+
 ---
 # OS-sandbox vs Py-sandbox
 Our solution offers multiple layers of security:
@@ -325,7 +345,8 @@ Our solution offers multiple layers of security:
 
 The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel.
 For example, database access is often done via compiled C drivers. See the appendix for more details.
-Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. We want to prevent abusive use of our code.
+Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. 
+**We want to prevent abusive use of our code.**
 
 Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.
 

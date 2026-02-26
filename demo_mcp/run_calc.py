@@ -46,8 +46,9 @@ async def _evaluate_expression(expression: str) -> float:
 def run_calc_server(transport:str) -> int:
     try:
         with sandboxes(
-            config_path="demo_mcp/.pysandboxes",
-            learn=".pysandboxes",
+            config_path="demo_mcp/.py-sandboxes",
+            os_sandbox="None",
+            learn=".py-sandboxes",
         ):
             mcp.run(transport=transport)  # type: ignore[arg-type]
         # mcp.run(transport=transport,  # type: ignore[arg-type]

@@ -161,3 +161,51 @@ class BaseDaemon(ABC):
             Exception from the function
         """
         raise NotImplementedError
+
+class FakeDaemon(BaseDaemon):
+    def update_rules(
+        self,
+        *,
+        envs: Envs,
+        all_rules: "AllRules",
+    ) -> "AllRules":
+        return all_rules
+
+    is_started=True
+
+    async def _start(
+        self,
+        all_rules: "AllRules",
+        *,
+        envs: Environ,
+        log_level: int,
+        init_fn: SyncOrAsyncFunc | None,
+    ) -> None:
+        logger.debug("FakeDaemon._start...")
+        self._is_started = True
+
+    async def _stop(self, max_pending: int) -> None:
+        logger.debug("FakeDaemon._stop...")
+        self._is_started = False
+
+    async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        logger.debug("FakeDaemon._shutdown...")
+        self._is_started = False
+
+    async def async_call_in_sandbox(
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        raise NotImplemented("It's a Fake daemon, because you use `python-sb`.")
+
+    def call_in_sandbox(
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: dict[str, Any],
+    ) -> Any:
+        raise NotImplemented("It's a Fake daemon, because you use `python-sb`.")
