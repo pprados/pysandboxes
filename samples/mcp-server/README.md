@@ -44,8 +44,8 @@ flowchart TD
     C -- "4- return" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
+    style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
 ```
 Pour lancer ce MCP serveur, ajoutez cette ligne dans les paramètres de votre client, depuis le répertoire du serveur.
 ```bash
@@ -74,8 +74,8 @@ flowchart TD
     C -- "4- return" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
+    style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
 ```
 
 ### Complete mode with streamable-http
@@ -108,8 +108,8 @@ flowchart TD
     %% 🎨 Style personnalisé pour OSSandbox
     style Docker1 fill:#C195DB,stroke:#006064,stroke-width:2px
     style Docker2 fill:#C195DB,stroke:#006064,stroke-width:2px
-    style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
+    style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
 ```
 
 ```bash
@@ -149,8 +149,8 @@ flowchart TD
     %% 🎨 Style personnalisé pour OSSandbox
     style Docker1 fill:#C195DB,stroke:#006064,stroke-width:2px
     style Docker2 fill:#C195DB,stroke:#006064,stroke-width:2px
-    style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
+    style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
 ```
 
 ```bash

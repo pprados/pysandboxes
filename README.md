@@ -118,8 +118,8 @@ flowchart TD
 
 
 %% 🎨 Style personnalisé pour OSSandbox
-style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
-style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
+style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
+style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
 ```
 
 This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
@@ -197,8 +197,8 @@ flowchart TD
     B -- "4- Propagate to caller" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
+    style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
 
 ```
 
