@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import logging
 import os
@@ -398,8 +399,22 @@ class ChatSession:
 
 async def main() -> int:
     """Initialize and run the chat session."""
+    parser = argparse.ArgumentParser(
+        prog="mcp_client",
+        description="Run a MCP-client",
+    )
+    parser.add_argument(
+        "-c",
+        dest="mcp",
+        type=str,
+        required=False,
+        default="servers_config.json",
+        help="The mcp server configuration file."
+    )
+    args=parser.parse_args()
+
     config = Configuration()
-    server_config = config.load_config("servers_config.json")
+    server_config = config.load_config(args.mcp)
     servers = [Server(name, srv_config) for name, srv_config in server_config["mcpServers"].items()]
     llm_client = LLMClient(config.llm_api_key)
     chat_session = ChatSession(servers, llm_client)

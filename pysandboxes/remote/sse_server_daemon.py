@@ -348,6 +348,7 @@ class SSEServerDaemon(BaseSSESandbox):
             Updated security rules for server context.
         """
         return AllRules(
+            root_path=all_rules.root_path,
             config=[],  # FIXME: a quoi sert config?
             envs=envs,
             os_sandbox="",

@@ -52,7 +52,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True
+DEBUG = False
 
 
 def get_log_formatter() -> str:
@@ -181,6 +181,7 @@ async def launch_sandbox(
         gc.collect()
         with open(pipe_path, "wb") as fifo:
             fifo.write(pickle.dumps(process_config))
+            fifo.flush()
             fifo.close()
         pipe_path.unlink()
         return process

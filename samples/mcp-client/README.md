@@ -21,49 +21,26 @@ Consultez le fichier `servers_config.json` pour selectionner les différentes va
     
     **Note:** The current implementation is configured to use the Groq API endpoint (`https://api.groq.com/openai/v1/chat/completions`) with the `llama-3.2-90b-vision-preview` model. If you plan to use a different LLM provider, you'll need to modify the `LLMClient` class in `main.py` to use the appropriate endpoint URL and model parameters.
 
-   3. **Configure servers:**
+3. **Configure servers:**
 
-        The `servers_config.json` follows the same structure as Claude Desktop, allowing for easy integration of multiple servers.
-        Here's some examples. You must choice only one:
+     The `servers_config.json` follows the same structure as Claude Desktop, allowing for easy integration of multiple servers.
+     Here's some examples. You must choice only one:
 
-       1. **Use python-sb (complete mode)**
+    1. **Use python-sb (complete mode)**
 
-          Cette version permet d'isoler le mcp-server en mode stdio, dans **PY-sandboxes**. The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
+    Cette version permet d'isoler le mcp-server en mode stdio, dans **PY-sandboxes**. The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
+       
+    Executez la commande suivante, pour valoriser `servers_config.json`.
+    ```bash
+   uv run -m mcp_simple_chatbot.main -c servers_config_complete_mode.json
+    ```
+   2. **Use python-sb (partial mode)**
 
-         ```jons
-         "mcpServers": {
-           // Version with `python-sb`. The user MCP client decide the rules
-           //  to use (complete mode) in `../mcp-server/.py-sandboxes`
-           "complete_mode": {
-             "cwd": "../mcp-server",
-             "command": "uv",
-             "args": [
-               "run",
-               "-m", "pysandboxes.python_sb",
-               // Select the config file
-               "--pysandboxes-config=mcp_server/.py-sandboxes",
-               "-m", "mcp_server.main"
-             ]
-           }
-         ```
-       2. **Use python-sb (partial mode)**
-
-          Cette version permet d'isoler le mcp-server en mode stdio, dans **PY-sandboxes**.
-          ```json
-          "mcpServers": {
-            // The MCP-server decide the portion of code to isolate (selected mode).
-            // The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
-            "selected_mode": {
-              "cwd": "../mcp-server",
-             // "command": "python","cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
-              "command": "uv",
-              "args": [
-                "run",
-                "-m", "pysandboxes.python_sb",
-                "-m", "mcp_server.main"
-              ]
-            }
-          ```
+      Cette version permet d'isoler le mcp-server en mode stdio, dans **PY-sandboxes**.
+   Executez la commande suivante, pour valoriser `servers_config.json`.
+   ```bash
+   uv run -m mcp_simple_chatbot.main -c servers_config_selected_mode.json
+   ```
 
 ## Usage
 

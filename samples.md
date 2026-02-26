@@ -17,6 +17,16 @@ Le code du serveur peut être intégralement isolé dans plusieurs bac-à-sables
 #### 1. Scénario à la main de l'utilisateur
 Dans ce scénario, l'utilisateur choisi d'ajouter `python-sb --pysandboxes-config=...` pour le lancement du serveur MCP. Il peut ainsi indiquer uniquement les autorisations souhaités.
 
+FIXME
+```bash
+claude mcp add -s project mcp-demo -- uv --directory samples/mcp-server run -m mcp_server.main
+claude mcp add -s project mcp-demo -e PYTHONPATH=samples/mcp-server -t stdio -- python -m mcp_server.main
+
+PYTHONPATH=samples/mcp-server python -m mcp_server.main sse
+claude mcp remove -s project demo 
+claude mcp add -s project -t sse demo http://localhost:8000/mcp
+claude -d api -p "use the tool 'demo' to calcul 2+3 else stop and explain the error."
+```
 
 #### 2. Scénario pré-paramétré
 

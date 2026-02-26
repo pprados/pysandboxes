@@ -323,7 +323,7 @@ def get_callable_info(func: Callable[..., Any]) -> tuple[str | None, str | None]
     # This works well for functions, methods, and class methods
     module_obj = inspect.getmodule(func)
     if module_obj:
-        module_name = module_obj.__name__
+        module_name = module_obj.name
 
     # Get the qualified name of the callable
     # __qualname__ provides the dotted path from the module to the callable,

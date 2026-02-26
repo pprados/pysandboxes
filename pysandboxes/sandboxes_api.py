@@ -378,7 +378,7 @@ def run(
     It's similar to `asyncio.run()`, but with the sandbox.
     The parameters are the same as `asyncio.run()`.
     """
-    _check__main__coroutine(main)
+    # FIXME _check__main__coroutine(main)
 
     async def _run() -> Any:
         # In this context, use the standard running loop.

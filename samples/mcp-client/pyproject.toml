@@ -56,5 +56,5 @@ dev = [
 
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository
-pysandboxes = { path = "../.." }
-mcp-server = { path = "../mcp-server" }
+pysandboxes = { path = "../..", editable = true }
+mcp-server = { path = "../mcp-server", editable = true }

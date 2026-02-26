@@ -1,7 +1,10 @@
+import argparse
 import logging
 import sys
+from operator import add, sub, mul, truediv
+from pathlib import Path
 
-from .run_calc import run_mcp_server
+from mcp.server.fastmcp import FastMCP, Context
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +20,95 @@ logging.basicConfig(
     format=format,
 )
 
+mcp = FastMCP("My Calculator Server",
+              host="127.0.0.1",
+              port=8000,
+              log_level=logging.getLevelName(logger.getEffectiveLevel())
+              # type: ignore[arg-type]
+              )
+
+
+# Define the calculator tool
+# @sandbox
+@mcp.tool(name="evaluate_expression",
+          description="Evaluates a mathematical expression and returns the result"
+          )
+async def evaluate_expression(expression: str, ctx: Context) -> float:
+    return await _evaluate_expression(expression)
+
+
+from pysandboxes import sandbox, sandboxes
+
+
+@sandbox
+async def _evaluate_expression(expression: str) -> float:
+    """Evaluates a mathematical expression and returns the result."""
+    try:
+        # Warning: eval() is unsafe for untrusted input; use a proper parser in production
+        logger.info(f"Calculated : {expression}")
+
+        result = eval(expression, {"__builtins__": {}},
+                      {"add": add, "sub": sub, "mul": mul, "truediv": truediv})
+        logger.info(f"Result : {result}")
+        return result
+    except Exception as e:
+        raise ValueError(f"Invalid expression: {e}")
+
+
+def run_mcp_server(
+        os_sandbox: str,
+        transport: str,
+        sandboxes_config: Path
+) -> int:  # FIXME: mixer avec main lorsque __main__ sera réglé
+    try:
+        with sandboxes(
+                sandboxes_config=sandboxes_config,
+                os_sandbox=os_sandbox, # type: ignore[arg-type]
+                # learn=".py-sandboxes",
+        ):
+            mcp.run(transport=transport)  # type: ignore[arg-type]
+    except KeyboardInterrupt:
+        logger.info("Keyboard Interrupt")
+        pass
+    return 0
+
 
 def main() -> int:
-    transport = "stdio"
-    if len(sys.argv) > 1:
-        transport = sys.argv[1]
-    logger.info(f"Start mcp_server with transport={transport}")
-    return run_mcp_server(transport)
+    parser = argparse.ArgumentParser(
+        prog="mcp_server",
+        description="Run a MCP-server",
+    )
+    parser.add_argument(
+        "-t",
+        "--transport",
+        dest="transport",
+        type=str,
+        required=False,
+        default="stdio",
+        help="The transport type (e.g., http, stdio)."
+    )
+    parser.add_argument(
+        "--pysandboxes-config",
+        dest="config_path",
+        type=Path,
+        default=None,  # Use None as default value for clear checking
+        help="Path to the pysandboxes configuration file."
+    )
+    parser.add_argument(
+        "--os-sandbox",
+        dest="os_sandbox",
+        type=str,
+        default="subprocess",  # Use None as default value for clear checking
+        help="Choice the os-sandbox provider."
+    )
+    args = parser.parse_args()
+
+    logger.info(f"Start mcp_server with {args}")
+    return run_mcp_server(
+        args.os_sandbox,
+        args.transport,
+        args.config_path
+    )
 
 
 # Run the mcp over stdio

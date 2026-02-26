@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+  // Version with `python-sb`. The user MCP client decide the rules
+  //  to use (complete mode) in `../mcp-server/.py-sandboxes`
+    "complete_mode": {
+      "cwd": "../mcp-server",
+      "command": "python","cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
+//      "command": "uv",
+      "args": [
+//        "run",
+        "-m", "pysandboxes.python_sb",
+        "--pysandboxes-config=mcp_server/.py-sandboxes",
+        "-m", "mcp_server.main",
+        "-t", "stdio"
+      ]
+    }
+ }
+}
