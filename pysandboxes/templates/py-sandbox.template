@@ -33,8 +33,8 @@
 # Missing files are silently ignored.
 
 include "./.local.py-sandboxes"  # May be add to .gitignore
-include "~/.config/py-sandboxes/user-py-sandboxes.profile"
-include "/etc/py-sandboxes/global-py-sandboxes.profile"
+include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
+include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 
 #######################################################################################
 # PYTHON SANDBOX ACTIVATION
@@ -58,7 +58,6 @@ py-sandbox=true
 # Note: Some providers may not work in containers without additional privileges.
 
 os-sandbox=${OS_SANDBOX:=subprocess}
-#os-sandbox=firejail  # FIXME
 
 #######################################################################################
 # ENVIRONMENT VARIABLES
@@ -97,7 +96,7 @@ os-sandbox=${OS_SANDBOX:=subprocess}
 # By default, all file system access is denied. Use explicit rules to grant access.
 #
 # Rules:
-# - ignore=<pattern>               Block access to files matching glob pattern
+# - ignore=<glob pattern>          Block access to files matching glob pattern
 # - bind=<source>,<dest>           Mount source directory at dest (read-write)
 # - ro-bind=<source>,<dest>        Mount source directory at dest (read-only)
 #

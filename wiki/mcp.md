@@ -2,10 +2,10 @@
 
 Anthropic offers a standard [MCP SDK](https://github.com/modelcontextprotocol/python-sdk).
 
-This presents a valuable opportunity to use Pysandboxes. The tools and APIs exposed by an MCP server can be abused by manipulating the LLM's responses.
+This presents a valuable opportunity to use **Py-sandboxes**. The tools and APIs exposed by an MCP server can be abused by manipulating the LLM's responses.
 
 For example:
-- A tool for fetching a web page could be manipulated to access internal intranet pages or `localhost`.
+- A tool for fetching a web page could be manipulated to access internal intranet pages or `localhost` (To access API details, or to enter a recursive loop of page requests).
 - An LLM that generates Python code and then invokes a tool to execute it could go beyond the developer's intended scope.
 
 In these scenarios, **Pysandboxes** provides a solution.
@@ -22,7 +22,7 @@ python-sb --learn=demo_mcp/.pysandboxes -m demo_mcp.calc sse
 
 After using the server to exercise all its *normal* functionalities, interrupt the process (*Ctrl-C* or `kill -2 <pid>`) to generate the rules learned during its operation.
 
-From then on, you can launch the MCP server without the `learn` parameter to enforce the generated security profile.
+From then on, you can launch the MCP server without the `--learn` parameter to enforce the generated security profile.
 
 ## Usage by Selecting Functions to Protect (selected mode)
 
@@ -32,7 +32,7 @@ To isolate a tool in the sandbox, start to launch the sandbox
 with sandboxes(
     config_path="demo_mcp/.py-sandboxes",
 ):
-    mcp.run(transport=transport)  # type: ignore[arg-type]
+    mcp.run(transport=transport)
 ```
 and simply add the `@sandbox` decorator.
 ```python
@@ -74,7 +74,7 @@ async def _evaluate_expression(expression: str) -> float:
 ```
 
 # Sample use
-Add the *Demo MCP Server* in Claude*
+To add the *Demo MCP Server* in Claude, use something like this:
 ```bash
 claude mcp add --scope project demo -- python-sb -m demo_mcp.calc
 ```
