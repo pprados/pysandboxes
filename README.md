@@ -104,9 +104,9 @@ There are two usage modes:
 
 ```mermaid
 flowchart TD
-    subgraph SandboxEnvironment ["OS-sandbox"]
+    subgraph OSSandbox ["OS-sandbox"]
         direction LR
-        subgraph OSSandbox [Python Sandbox]
+        subgraph PythonSandbox [Python Sandbox]
 
         A[Caller Code]
                 C["<s>@sandbox</s><br/>my_function(...)"]
@@ -115,6 +115,11 @@ flowchart TD
 
     A -- "1- my_function(param)" --> C
     C -- "4- Propagate to caller" --> A
+
+
+%% 🎨 Style personnalisé pour OSSandbox
+style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
+style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
 ```
 
 This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
@@ -170,15 +175,15 @@ In this scenario, your application will be split into two parts:
 
 ```mermaid
 flowchart TD
-    subgraph MainApplicationFullPrivileges [Main Application]
+    subgraph MainApplication [Main Application]
         subgraph WithSandboxes ["with sandboxes()"]
             direction TB
             A[Caller Code]
         end
     end
-    subgraph SandboxEnvironment ["OS-sandbox (Docker,...)"]
+    subgraph OSSandbox ["OS-sandbox (Docker,...)"]
         direction TB
-        subgraph OSSandbox [Python Sandbox in a Child Process]
+        subgraph PythonSandbox [Python Sandbox in a Child Process]
             B(SSE<br/>Server)
 
                 C["@sandbox<br/>my_function(...)"]
@@ -190,6 +195,10 @@ flowchart TD
     B -- "2- Execute via IPC (Pickle)" --> C
     C -- "3- Return result/<br/>exception" --> B
     B -- "4- Propagate to caller" --> A
+
+    %% 🎨 Style personnalisé pour OSSandbox
+    style OSSandbox fill:#95DB9A,stroke:#006064,stroke-width:2px
+    style PythonSandbox fill:#3E71DE,stroke:#006064,stroke-width:2px
 
 ```
 
@@ -563,23 +572,4 @@ See [here](wiki/roadmap.md)
 ---
 # Appendix
 
-## Databases
-Here are details on the driver implementations for different databases. **py-sandbox** does not control access to databases using non-Python code. It may be necessary to add specific rules for this.
-
-| Database                       | Common Python Library                     | Implementation                                                     | Needs External Driver?             | Notes                                          |
-|--------------------------------| ----------------------------------------- | ------------------------------------------------------------------ | ---------------------------------- | ---------------------------------------------- |
-| **SQLite**                     | `sqlite3` (stdlib)                        | Built-in C library in Python                                       | ✅ No                              | Self-contained, included with Python.          |
-| **PostgreSQL**                 | `psycopg2`, `asyncpg`                     | C wrapper (`psycopg2`), pure Python/Cython (`asyncpg`)             | ❌ for psycopg2 / ✅ for asyncpg    | `asyncpg` speaks PostgreSQL protocol directly. |
-| **MySQL $/ MariaDB**           | `mysqlclient`, `PyMySQL`                  | C wrapper (`mysqlclient`), pure Python (`PyMySQL`)                 | ❌ for mysqlclient / ✅ for PyMySQL | Native driver = better performance.            |
-| **Oracle**                     | `cx_Oracle` (`oracledb`)                  | C wrapper                                                          | ❌ Yes                              | Needs Oracle Instant Client.                   |
-| **SQL Server**                 | `pyodbc`, `pymssql`                       | C wrapper (ODBC)                                                   | ❌ Yes                              | Requires ODBC driver (`msodbcsql`).            |
-| **IBM DB2 / Informix**         | `ibm_db`                                  | C wrapper                                                          | ❌ Yes                              | Requires IBM Data Server Driver.               |
-| **MongoDB**                    | `pymongo`                                 | Pure Python (with optional C extensions)                           | ✅ No                              | Implements MongoDB wire protocol.              |
-| **Redis**                      | `redis-py`                                | Pure Python                                                        | ✅ No                              | Direct RESP protocol over TCP.                 |
-| **Cassandra**                  | `cassandra-driver`                        | Cython + C libraries                                               | ❌ Yes                              | Uses Datastax native libs.                     |
-| **Elasticsearch / OpenSearch** | `elasticsearch-py`                        | Pure Python                                                        | ✅ No                              | Communicates over HTTP/REST.                   |
-| **CouchDB**                    | `couchdb-python`                          | Pure Python                                                        | ✅ No                              | HTTP REST API client.                          |
-| **Neo4j**                      | `neo4j` (official)                        | Pure Python                                                        | ✅ No                              | Uses Bolt protocol in Python.                  |
-| **DuckDB**                     | `duckdb`                                  | C wrapper                                                          | ✅ No (embedded library bundled)   | Works like SQLite, ships with libduckdb.       |
-| **ClickHouse**                 | `clickhouse-driver`, `clickhouse-connect` | C driver (`clickhouse-driver`), pure Python (`clickhouse-connect`) | ❌ for driver / ✅ for connect      | Supports TCP or HTTP.                          |
-| **Generic ODBC**               | `pyodbc`                                  | C wrapper                                                          | ❌ Yes                              | Needs ODBC system driver.                      |
+1. Connexion to Databases: See [here](wiki/database.md)

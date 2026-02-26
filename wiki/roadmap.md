@@ -31,7 +31,6 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] Google ADK
   - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
   - [ ] Pydantic.ai
-  - 
 - [ ] Management of *Denial of Service*
 - [ ] Management of regular expressions
 - [ ] Control of `exec()` and `eval()`
