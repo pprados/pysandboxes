@@ -5,9 +5,10 @@ This code is an example implementation of an MCP server.
 ## Features
 
 It offers the following services:
-- [X] Python code execution
-- [X] Publishing resources from a directory
-- [X] Browsing a WEB page
+- [X] Python code execution (tool `evaluate_expression`)
+- [X] Browsing a WEB page (tool `fetch_webpage`)
+- [X] Publishing resources from the directory  ̀./resources`
+- [X] Expose a prompt (`analyze_data`)
 
 This demonstrates the added value of **Py-sandboxes**. Security rules will limit the capabilities of the MCP server, using only a parameter file.
 
@@ -132,12 +133,18 @@ flowchart TD
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
-TODO: to be checked with claude
+
+To start the MCP server:
 ```bash
 cd path/to/mcp-server
-uv run -m mcp_server.main -t http --port 8000
+uv run -m pysandboxes.python_sb -m mcp_server.main -t http
 ```
-or use the [MCP client](../mcp-client/README.md).
+and add the parameter in the client.
+For example, for [claude-code](https://claude.com/product/claude-code), invoke:
+```bash
+claude mcp remove mcp_demo
+claude mcp add --transport http mcp_demo http://localhost:8000/mcp
+```
 
 ### Partial mode with http
 In this scenario, the server must be started before the client. It exposes an HTTP endpoint to allow the client to connect to it. It is itself divided into two parts (`@sandbox` annotation).
@@ -174,12 +181,35 @@ flowchart TD
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
-TODO: to be checked with claude
+To start the MCP server:
 ```bash
 cd path/to/mcp-server
-uv run -m mcp_server.main -t streamable-http --port 3001
+uv run -m mcp_server.main -t http
 ```
-or use the [MCP client](../mcp-client/README.md).
+and add the parameter in the client.
+For example, for [claude-code](https://claude.com/product/claude-code), invoke:
+```bash
+claude mcp remove mcp_demo
+claude mcp add --transport http mcp_demo http://localhost:8000/mcp
+```
 
 ## Client
 For the client, consult the specific documentation. For example, [here](../mcp-client/README.md)
+
+## With claude-code
+To use the tool `evaluate_expression`:
+```bash
+claude
+> use evaluate_expression to calc 2+3 
+
+● mcp_demo - evaluate_expression (MCP)(expression: "2+3")
+  ⎿  5                                                                                                                                                                   
+
+● 5
+```
+
+To use the prompt `analyze_data`:
+```bash
+claude
+> /mcp_demo:analyze_data (MCP) 2+3
+```

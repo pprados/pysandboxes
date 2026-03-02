@@ -39,6 +39,8 @@ def generate_config_from_learning() -> None:
     processing, and file backup operations.
     """
     global _learning_path, _save_learning_done, _lock
+    if not is_learning_mode():
+        return
     with _lock_generate:
         from .guard_envs import generate_rules as env_generate_rules
         from .guard_files import generate_rules as file_generate_rules
@@ -50,6 +52,7 @@ def generate_config_from_learning() -> None:
         # Manage old files
         if _save_learning_done:
             return
+
         learning_path = _learning_path
         assert learning_path
         learning_path, old_learning_path = _manage_olds_file(learning_path)
@@ -95,7 +98,7 @@ def generate_config_from_learning() -> None:
             "learning_guard_socket": all_socket_rules,
         }
 
-        header = f"# Add rules ({datetime.now().strftime('%d/%m/%y at %H:%M')})"
+        header = f"# Add rules ({datetime.now().strftime('%Y/%m/%d at %H:%M')})"
 
         all_lines: list[str] = []
         update_file = False
@@ -210,6 +213,7 @@ def add_learning_rule(rule: Any) -> None:
         rule: The rule to add to the learning collection.
     """
     with _lock:
-        if is_learning_mode():
+        from .guard_files import LearnFileRule
+        if is_learning_mode() and rule not in _learning:
             _learning.add(rule)
             pysandboxes_logger.debug(repr(rule))

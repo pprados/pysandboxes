@@ -50,6 +50,7 @@ from ipaddress import (
     ip_network,
 )
 from pathlib import Path
+from types import ModuleType
 from typing import (
     Any,
     Callable,
@@ -1010,6 +1011,10 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
 
     return wrapper
 
+def _wrap_syncio_socket(module: ModuleType) -> ModuleType:
+    import sys
+    # return sys.modules[module.__spec__.name]
+    return module  # FIXME
 
 def patch_rules() -> dict[str, Callable]:
     """Provide socket patching rules for guard activation.
@@ -1026,6 +1031,7 @@ def patch_rules() -> dict[str, Callable]:
         "socket.gethostbyname": _wrap_socket_gethostbyname,
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "socket.getaddrinfo": _wrap_socket_getaddrinfo,
+        "asyncio.selector_events.socket": _wrap_syncio_socket,
     }
 
 

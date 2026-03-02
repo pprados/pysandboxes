@@ -22,6 +22,8 @@ import sys
 import threading
 from pathlib import Path
 
+from pysandboxes.learning import generate_config_from_learning, set_learning_mode, \
+    set_learning_path
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
@@ -134,6 +136,10 @@ def main() -> int:
 
     all_rules = process_config.all_rules
 
+    # Initialize learn
+    set_learning_path(all_rules.learning_path)
+    set_learning_mode(all_rules.learn)
+
     # In this case, use the standard loop in place of the private sandbox loop
 
     if all_rules.use_py_sandbox:
@@ -162,6 +168,8 @@ if __name__ == "__main__":
         else:
             rc = 0
     except KeyboardInterrupt:
+        logger.debug("Except KeyboardInterrupt")
+        generate_config_from_learning()
         rc = 0
     except RuntimeError as e:
         print(str(e), file=sys.stderr)

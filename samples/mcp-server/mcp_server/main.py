@@ -34,32 +34,24 @@ mcp = FastMCP(
 RESOURCES_DIR = Path(__file__).parent.parent / "resources"
 
 
-# Define the calculator tool
-@sandbox
-@mcp.tool(
-    name="evaluate_expression",
-    description="Evaluates a mathematical expression and returns the result",
-)
-async def evaluate_expression(expression: str) -> float:
-    """Evaluates a mathematical expression and returns the result."""
-    try:
-        # Warning: eval() is unsafe for untrusted input; use a proper parser in production
-        logger.info(f"Calculated : {expression}")
+@mcp.resource("resource://greeting")
+def get_greeting() -> str:
+    """Provides a simple greeting message."""
+    return "Hello from FastMCP Resources!"
 
-        result = eval(
-            expression,
-            {"__builtins__": {}},
-            {"add": add, "sub": sub, "mul": mul, "truediv": truediv},
-        )
-        logger.info(f"Result : {result}")
-        return result
-    except Exception as e:
-        raise ValueError(f"Invalid expression: {e}")
-
-
-@mcp.resource("file://{path}")
+# Note: @mcp.resource annotation return an object, not a method.
+# When importing the module into the sandbox, the function to be invoked is not
+# available.
+# See https://gofastmcp.com/patterns/decorating-methods
+# Split the body in two part.
+@mcp.resource("resource://{path}")
 async def read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources."""
+    return await _read_file_resource(path)
+
+@sandbox
+async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces direct
+    """Expose files from the resources directory as MCP resources in a sandbox."""
     file_path = RESOURCES_DIR / path
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {path}")
@@ -86,34 +78,52 @@ async def fetch_webpage(url: str) -> str:
     except Exception as e:
         raise ValueError(f"Failed to fetch webpage: {e}")
 
+# Define the calculator tool
+@sandbox
+@mcp.tool(
+    name="evaluate_expression",
+    description="Evaluates a mathematical expression and returns the result",
+)
+async def evaluate_expression(expression: str) -> float:
+    """Evaluates a mathematical expression and returns the result."""
+    try:
+        # Warning: eval() is unsafe for untrusted input; use a proper parser in production
+        logger.info(f"Calculated : {expression}")
+
+        result = eval(
+            expression,
+            {"__builtins__": {}},
+            {"add": add, "sub": sub, "mul": mul, "truediv": truediv},
+        )
+        logger.info(f"Result : {result}")
+        return result
+    except Exception as e:
+        raise ValueError(f"Invalid expression: {e}")
+
+
 @mcp.prompt
-def analyze_data(data_points: list[float]) -> str:
-    """Creates a prompt asking for analysis of numerical data."""
-    formatted_data = ", ".join(str(point) for point in data_points)
-    return f"Please analyze these data points: {formatted_data}"
+def analyze_data(expression: str) -> str:
+    """Caculate expression."""
+    return f"with evaluate_expression calcul: {expression}"
 
 def run_mcp_server(
     os_sandbox: str,
     transport: str,
+    port: int,
     sandboxes_config: Path,
     **kwargs,
-) -> int:  # FIXME: mixer avec main lorsque __main__ sera réglé
-    try:
-        if True:  # FIXME
-            # with sandboxes(
-            #     sandboxes_config=sandboxes_config,
-            #     os_sandbox=os_sandbox,  # type: ignore[arg-type]
-            #     **kwargs,
-            # ):
-            mcp.run(transport=transport,
-                    show_banner=False,
-                    host="0.0.0.0",  # Bind to all interfaces
-                    port=8000,  # Custom port
-                    log_level="DEBUG",  # Override global log level
-                    )  # type: ignore[arg-type]
-    except KeyboardInterrupt:
-        logger.info("Keyboard Interrupt")
-        pass
+) -> int:
+    with sandboxes(
+        sandboxes_config=sandboxes_config,
+        os_sandbox=os_sandbox,  # type: ignore[arg-type]
+        **kwargs,
+    ):
+        mcp.run(transport=transport,
+                show_banner=False,
+                host="0.0.0.0",  # Bind to all interfaces
+                port=port,  # Custom port
+                log_level="DEBUG",  # Override global log level
+                )
     return 0
 
 
@@ -130,6 +140,15 @@ def main() -> int:
         required=False,
         default="stdio",
         help="The transport type (e.g., http, stdio).",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        dest="port",
+        type=int,
+        required=False,
+        default=8000,
+        help="The listened port",
     )
     parser.add_argument(
         "--pysandboxes-config",
@@ -157,7 +176,7 @@ def main() -> int:
     if args.learn:
         kwargs = {"learn": args.learn}
     logger.info(f"Start mcp_server with {args}")
-    return run_mcp_server(args.os_sandbox, args.transport, args.config_path, **kwargs)
+    return run_mcp_server(args.os_sandbox, args.transport, args.port, args.config_path, **kwargs)
 
 
 # Run the mcp over stdio

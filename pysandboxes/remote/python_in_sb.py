@@ -8,8 +8,6 @@ from pathlib import Path
 from types import FrameType
 from typing import Any, Callable, Dict, List, Set
 
-from attr.validators import is_callable
-
 from pysandboxes.learning import (
     generate_config_from_learning,
     is_learning_mode,
@@ -17,7 +15,6 @@ from pysandboxes.learning import (
     set_learning_path,
 )
 from pysandboxes.tools import set_is_in_sandbox
-
 from ..all_rules import AllRules
 from ..main_logger import config_log
 
@@ -25,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    log_level = logging.WARNING  # FIXME
+    log_level = logging.DEBUG  # FIXME
     config_log(log_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
@@ -51,10 +48,10 @@ def _register_signal() -> None:
         It will kill daemon processes before exiting itself.
         """
         # Iterate through all child processes and send them SIGTERM
-        logger.debug("Catch signal %s.", signum)
+        logger.error("Catch signal %s.", signum)  # FIXME
         generate_config_from_learning()  # Save learning rules
         handler = signals[signum]
-        signal.signal(signum, handler)
+        signal.signal(signum, handler)  # FIXME: doit etre après?
         if isinstance(handler, Callable):
             signal.raise_signal(signum)
 

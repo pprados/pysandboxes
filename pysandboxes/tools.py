@@ -239,7 +239,7 @@ def set_is_in_sandbox(value: bool) -> None:
     global _is_in_sandbox
     if value:
         _sandboxed.set(_sandboxed.get() + 1)
-        # _is_in_sandbox += 1
+        # _is_in_sandbox += 1  # FIXME: a tester
     else:
         _sandboxed.set(_sandboxed.get() - 1)
         assert _sandboxed.get() >= 0

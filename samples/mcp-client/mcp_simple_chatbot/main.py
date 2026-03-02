@@ -210,7 +210,10 @@ async def run(args):
                 mcp_server["command"] = w_command
 
     logging.getLogger("mcp").setLevel(logging.DEBUG)
-    client = Client(server_config)
+    client = Client(
+        server_config,
+        roots=["resource://"]
+    )
     async with client:
 
         llm_client = LLMClient(config.llm_api_key)

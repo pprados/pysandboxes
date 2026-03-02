@@ -496,6 +496,20 @@ Between cells use:
 sb = sandboxes().__enter__()
 ```
 
+## Why the current directory is used?
+Sometime, with the learn process, the rule `ro-bind=.,.` is added. This is usually due to the presence of an .env file that is found by a library. This causes this directory to be added to the rules. You can set the variables manually and temporarily rename this file while the learning process is underway.
+
+```bash
+set -o allexport
+source .env
+set +o allexport
+mv .env .env.bak
+```
+or
+```bash
+export $(grep -v '^#' .env | xargs)
+```
+
 ## How to propagate a token to an API in the sandbox?
 Replace:
 

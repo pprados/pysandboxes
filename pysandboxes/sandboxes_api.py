@@ -29,6 +29,7 @@ from typing import (
 
 from .base_daemon import BaseDaemon, FakeDaemon
 from .e import ConfigSyntaxError
+from .learning import generate_config_from_learning
 from .os_sandbox import async_shutdown_daemon
 from .private_loop import get_sandbox_loop, sandbox_loop, set_sandbox_loop
 from .tools import (
@@ -64,7 +65,7 @@ def _check__main__coroutine(coroutine: Any) -> None:
 
 
 def sandbox(
-    _func: F | None = None,
+        _func: F | None = None,
 ) -> Callable[..., Any]:
     """Decorator to run a function in a sandbox.
 
@@ -100,17 +101,18 @@ def sandbox(
     from pysandboxes.os_sandbox import async_call_in_sandbox, call_in_sandbox
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            return await async_call_in_sandbox(func, *args, **kwargs)
-
-        @functools.wraps(func)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            return call_in_sandbox(func, *args, **kwargs)
 
         if inspect.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return await async_call_in_sandbox(func, *args, **kwargs)
+
             return async_wrapper
         else:
+            @functools.wraps(func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return call_in_sandbox(func, *args, **kwargs)
+
             return sync_wrapper
 
     if _func is None:
@@ -172,14 +174,14 @@ class sandboxes:
     )
 
     def __init__(
-        self,
-        init_fn: SyncOrAsyncFunc | None = None,
-        sandboxes_config: Path | str | None = None,
-        *,
-        envs: Environ | None = None,
-        python_args: list[str] | None = None,
-        graceful_shutdown: bool = True,
-        **extra_rules: dict[str, Any],
+            self,
+            init_fn: SyncOrAsyncFunc | None = None,
+            sandboxes_config: Path | str | None = None,
+            *,
+            envs: Environ | None = None,
+            python_args: list[str] | None = None,
+            graceful_shutdown: bool = True,
+            **extra_rules: dict[str, Any],
     ) -> None:
         """Initialize the sandbox context manager.
 
@@ -243,18 +245,21 @@ class sandboxes:
             )
             self.learning_path = all_rules.learning_path
 
-            def signal_handler(signum: int, frame: object) -> None:
+            def signal_handler(signum: int, frame: FrameType | None) -> None:
                 """
                 Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
                 It will kill daemon processes before exiting itself.
                 """
                 # Iterate through all child processes and send them SIGTERM
                 logger.debug("Catch signal %s. Propagate to the daemon.", signum)
+
                 loop = get_sandbox_loop()
-                loop.call_soon_threadsafe(lambda: loop.create_task(self._stop_daemon()))
                 handler = self._signals[signum]
-                if isinstance(handler, Callable):
-                    handler(signum, frame)
+                async def _stop_and_handler():
+                    await self._stop_daemon()
+                    # if isinstance(handler, Callable):  # FIXME: propage signal?
+                    #     handler(signum, frame)
+                loop.call_soon_threadsafe(lambda: loop.create_task(_stop_and_handler()))
 
             if threading.current_thread() is threading.main_thread():
                 logger.debug("Activate signal handlers.")
@@ -273,10 +278,10 @@ class sandboxes:
         return self._daemon
 
     def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: Any | None,
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: Any | None,
     ) -> None:
         """
         Stop the sandbox daemon.
@@ -300,8 +305,9 @@ class sandboxes:
                 signal.signal(signal.SIGTERM, self._signals[signal.SIGTERM])
                 signal.signal(signal.SIGQUIT, self._signals[signal.SIGQUIT])
 
-            await self._daemon._stop(max_pending=0)
-            logger.debug("daemon stopped")
+            # await self._daemon._stop(max_pending=0)
+            await self._daemon._shutdown()
+            logger.debug("daemon shutdowned")
 
     def __delete__(self, instance: "sandboxes") -> None:
         asyncio.run_coroutine_threadsafe(
@@ -361,10 +367,10 @@ class sandboxes:
 
     @sandbox_loop
     async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: Any,
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: Any,
     ) -> bool:
         """
         Stop the sandbox daemon.
@@ -375,20 +381,21 @@ class sandboxes:
 
 
 def run(
-    main: Coroutine[Any, Any, Any],  # TODO: accept function without parameter
-    *,
-    init_fn: SyncOrAsyncFunc | None = None,
-    config_path: Path | str | None = None,
-    envs: Environ | None = None,
-    python_args: list[str] | None = None,
-    graceful_shutdown: bool = True,
-    **kwargs: dict[str, Any],
+        main: Coroutine[Any, Any, Any],  # TODO: accept function without parameter
+        *,
+        init_fn: SyncOrAsyncFunc | None = None,
+        config_path: Path | str | None = None,
+        envs: Environ | None = None,
+        python_args: list[str] | None = None,
+        graceful_shutdown: bool = True,
+        **kwargs: dict[str, Any],
 ) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
     It's similar to `asyncio.run()`, but with the sandbox.
     The parameters are the same as `asyncio.run()`.
     """
+
     # FIXME _check__main__coroutine(main)
 
     async def _run() -> Any:
@@ -397,12 +404,12 @@ def run(
         # loop = asyncio.get_running_loop()
         set_sandbox_loop(asyncio.get_running_loop())
         async with sandboxes(
-            init_fn=init_fn,
-            sandboxes_config=config_path,
-            envs=envs,
-            python_args=python_args,
-            graceful_shutdown=graceful_shutdown,
-            **kwargs,
+                init_fn=init_fn,
+                sandboxes_config=config_path,
+                envs=envs,
+                python_args=python_args,
+                graceful_shutdown=graceful_shutdown,
+                **kwargs,
         ):
             result = (await asyncio.create_task(main), "_start sandbox in run")
             return result

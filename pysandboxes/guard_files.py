@@ -393,7 +393,7 @@ def generate_rules(
                             if x == "/.":
                                 x = ""
                             if key == "PWD":
-                                value = "."
+                                value = "." + x
                             else:
                                 value = f"${{{key}}}" + x
                         break
