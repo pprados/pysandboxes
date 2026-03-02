@@ -26,6 +26,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [ ] New samples
   - [X] MCP server
   - [X] MCP client
+  - [ ] A2A protocol
   - [ ] langchain / langgraph
   - [ ] [Crewai](https://www.crewai.com/)
   - [ ] Google ADK

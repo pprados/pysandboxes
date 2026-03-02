@@ -5,6 +5,7 @@ from operator import add, mul, sub, truediv
 from pathlib import Path
 
 import httpx
+from httpx_file import FileTransport
 from fastmcp import FastMCP
 from markdownify import markdownify as md
 
@@ -39,6 +40,7 @@ def get_greeting() -> str:
     """Provides a simple greeting message."""
     return "Hello from FastMCP Resources!"
 
+
 # Note: @mcp.resource annotation return an object, not a method.
 # When importing the module into the sandbox, the function to be invoked is not
 # available.
@@ -48,6 +50,7 @@ def get_greeting() -> str:
 async def read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources."""
     return await _read_file_resource(path)
+
 
 @sandbox
 async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces direct
@@ -70,13 +73,15 @@ async def fetch_webpage(url: str) -> str:
     """Fetches the content of a webpage and returns it as markdown."""
     try:
         logger.info(f"Fetching webpage: {url}")
-        async with httpx.AsyncClient() as client:
+        # For the demo, accept the 'file:' URL
+        async with httpx.AsyncClient(mounts={"file://": FileTransport()}) as client:
             response = await client.get(url, follow_redirects=True)
             response.raise_for_status()
             logger.info(f"Successfully fetched: {url}")
             return md(response.text)
     except Exception as e:
         raise ValueError(f"Failed to fetch webpage: {e}")
+
 
 # Define the calculator tool
 @sandbox
@@ -87,13 +92,15 @@ async def fetch_webpage(url: str) -> str:
 async def evaluate_expression(expression: str) -> float:
     """Evaluates a mathematical expression and returns the result."""
     try:
-        # Warning: eval() is unsafe for untrusted input; use a proper parser in production
+        # Warning: eval() is unsafe for untrusted input;
+        # use a proper parser in production
         logger.info(f"Calculated : {expression}")
 
         result = eval(
             expression,
             {"__builtins__": {}},
-            {"add": add, "sub": sub, "mul": mul, "truediv": truediv},
+            {"add": add, "sub": sub, "mul": mul, "truediv": truediv,
+             },
         )
         logger.info(f"Result : {result}")
         return result
@@ -106,17 +113,18 @@ def analyze_data(expression: str) -> str:
     """Caculate expression."""
     return f"with evaluate_expression calcul: {expression}"
 
+
 def run_mcp_server(
-    os_sandbox: str,
-    transport: str,
-    port: int,
-    sandboxes_config: Path,
-    **kwargs,
+        os_sandbox: str,
+        transport: str,
+        port: int,
+        sandboxes_config: Path,
+        **kwargs,
 ) -> int:
     with sandboxes(
-        sandboxes_config=sandboxes_config,
-        os_sandbox=os_sandbox,  # type: ignore[arg-type]
-        **kwargs,
+            sandboxes_config=sandboxes_config,
+            os_sandbox=os_sandbox,  # type: ignore[arg-type]
+            **kwargs,
     ):
         mcp.run(transport=transport,
                 show_banner=False,
@@ -176,7 +184,8 @@ def main() -> int:
     if args.learn:
         kwargs = {"learn": args.learn}
     logger.info(f"Start mcp_server with {args}")
-    return run_mcp_server(args.os_sandbox, args.transport, args.port, args.config_path, **kwargs)
+    return run_mcp_server(args.os_sandbox, args.transport, args.port, args.config_path,
+                          **kwargs)
 
 
 # Run the mcp over stdio

