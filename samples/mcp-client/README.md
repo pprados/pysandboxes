@@ -75,8 +75,8 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
         C -- "4- return" --> A
 
         %% 🎨 Style personnalisé pour OSSandbox
-        style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
-        style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
+        style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
+        style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
     ```
     Executez la commande suivante pour lancer de mode.
     ```bash
@@ -110,8 +110,8 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
         C -- "4- return" --> A
 
         %% 🎨 Style personnalisé pour OSSandbox
-        style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
-        style PythonSandbox fill:#986F67,stroke:#006064,stroke-width:2px
+        style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
+        style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
 
     ```
    Executez la commande suivante pour lancer ce mode.
@@ -163,9 +163,9 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
         D -- "stdio" --> A
    
         %% 🎨 Style personnalisé pour OSSandbox
-        style OSSandbox fill:#E6DCDA,stroke:#006064,stroke-width:2px
-        style PythonSandbox1 fill:#986F67,stroke:#006064,stroke-width:2px
-        style PythonSandbox2 fill:#986F67,stroke:#006064,stroke-width:2px
+        style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
+        style PythonSandbox1 fill:#aa7c52,stroke:#006064,stroke-width:2px
+        style PythonSandbox2 fill:#aa7c52,stroke:#006064,stroke-width:2px
     ```
    
    ```bash
