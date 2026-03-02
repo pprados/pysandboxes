@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 def parse_rules(
-        config_path: Path,
-        rules: ConfigLines,
-        errors: List[ErrorMsg],
+    config_path: Path,
+    rules: ConfigLines,
+    errors: List[ErrorMsg],
 ) -> Tuple[str, bool, Path | None, bool, ConfigLines]:
     from .os_sandbox import providers_factory
 
@@ -26,7 +26,7 @@ def parse_rules(
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
             provider_rule.append(rule)
-            provider = rule.rule[len("os-sandbox="):].strip().lower()
+            provider = rule.rule[len("os-sandbox=") :].strip().lower()
             if provider not in providers_factory:
                 errors.append(
                     (
@@ -85,7 +85,7 @@ def parse_rules(
                             rule.ln,
                         )
                     )
-                learn=True
+                learn = True
 
         else:
             other_rules.append(rule)

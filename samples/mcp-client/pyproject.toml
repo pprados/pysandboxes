@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "A simple CLI chatbot using the Model Context Protocol (MCP)"
 readme = "README.md"
 requires-python = ">=3.13"
-authors = [{ name = "Edoardo Cilia" }]
-keywords = ["mcp", "llm", "chatbot", "cli"]
+authors = [{ name = "Philippe PRADOS" }]
+keywords = ["sandboxes", "mcp", "llm", "chatbot"]
 license = { text = "MIT" }
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -24,7 +24,8 @@ dependencies = [
 ]
 
 [project.scripts]
-mcp-simple-chatbot = "mcp_simple_chatbot.client:main"
+mcp-simple-chatbot = "mcp_simple_chatbot.main:main"
+mcp-simple-chatbot-sb = "mcp_simple_chatbot.main:main_sb"
 
 [build-system]
 requires = ["hatchling"]

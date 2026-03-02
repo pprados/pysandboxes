@@ -16,6 +16,9 @@ all: help
 # Define a variable for the test file path.
 TEST_FILE ?= tests/unit_tests/
 
+.vscode/launch.json: .idea/runConfigurations/*
+	claude -p "Update the .vscode/launch.json file with the modification of the files in .idea/runConfigurations/"
+
 integration_tests:
 	$(POETRY_OR_UV) run pytest tests/integration_tests
 

@@ -204,7 +204,7 @@ def test_pathlib_chmod_and_lchmod(files: Dict[str, opl.Path]) -> None:  # noqa: 
 
 
 def test_pathlib_statand_stat_and_lstat(
-    files: Dict[str, opl.Path]  # noqa: F811
+    files: Dict[str, opl.Path],  # noqa: F811
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
@@ -228,7 +228,7 @@ def test_pathlib_statand_stat_and_lstat(
 
 
 def test_pathlib_mkdir_removedirs_and_rmdir(
-    files: Dict[str, opl.Path]  # noqa: F811
+    files: Dict[str, opl.Path],  # noqa: F811
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
@@ -247,7 +247,7 @@ def test_pathlib_mkdir_removedirs_and_rmdir(
 
 
 def test_pathlib_link_symlink_and_readlink(
-    files: Dict[str, opl.Path]  # noqa: F811
+    files: Dict[str, opl.Path],  # noqa: F811
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
@@ -311,7 +311,7 @@ def test_pathlib_link_symlink_and_readlink(
 
 
 def test_pathlib_link_symlink_and_readlink_refused(
-    files: Dict[str, opl.Path]  # noqa: F811
+    files: Dict[str, opl.Path],  # noqa: F811
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),

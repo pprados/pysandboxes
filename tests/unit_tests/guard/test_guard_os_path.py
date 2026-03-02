@@ -128,7 +128,7 @@ def test_os_path_realpath(files: Dict[str, Path]) -> None:  # noqa: F811
 
 
 def test_os_path_atime_mtime_ctime_and_size(
-    files: Dict[str, Path]  # noqa: F811
+    files: Dict[str, Path],  # noqa: F811
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),

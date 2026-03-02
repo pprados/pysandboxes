@@ -26,7 +26,7 @@ ValueType = TypeVar("ValueType")
 
 
 def _restore_pickle(
-    data: dict[KeyType, ValueType]
+    data: dict[KeyType, ValueType],
 ) -> "ImmutableDict[KeyType,ValueType]":
     """Restore ImmutableDict from pickled data.
 

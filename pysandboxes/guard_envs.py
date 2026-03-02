@@ -19,7 +19,7 @@ from weakref import WeakKeyDictionary
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
-from .tools import Environ, is_in_sandbox, resolve_env_variables
+from .tools import Environ, resolve_env_variables
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +93,13 @@ def parse_rules(
                 for source_key, source_value in source_vars.items():
                     if regex_key.match(source_key):
                         # The rule implies copying the matched key-value pairs
-                        new_vars[source_key] = source_value
+                        if source_value:  # Ignore empty value
+                            new_vars[source_key] = source_value
             # Case: Simple rule like key=value or key=${VAR}
             else:
-                new_vars[key_pattern] = substitute_value(value_pattern)
+                v = substitute_value(value_pattern)
+                if v:  # Ignore empty value
+                    new_vars[key_pattern] = v
                 envs_rules.add(
                     EnvRule(re.compile(re.escape(key_pattern)), False, orule)
                 )
@@ -146,7 +149,8 @@ class LearnEnviron(os._Environ):
             data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
             self._ignore_keys: WeakKeyDictionary[
-                threading.Thread, tuple[FrameType, set[str]]] = {}
+                threading.Thread, tuple[FrameType, set[str]]
+            ] = {}
             self._keys_used: set[str] = set()
             self._original_envs = os.environ
 
@@ -164,13 +168,16 @@ class LearnEnviron(os._Environ):
                 if id(iter_frame) == id(frame):
                     iter_frame, keys = self._ignore_keys.get(t, (frame, set()))
                     keys.add(k)
-                    self._ignore_keys[t]=(iter_frame,keys)
+                    self._ignore_keys[t] = (iter_frame, keys)
                 else:
                     # New frame, so remove the ignore_keys for this parent frame
                     self._ignore_keys[t] = (frame, k)
                 yield k
 
         return _catch_for_all()  # TODO: items()
+
+    def __contains__(self, key: str) -> str:
+        return super(LearnEnviron, self).__contains__(key)  # FIXME
 
     def __getitem__(self, key: str) -> str:
         """Get environment variable and track access in learning mode.
@@ -192,14 +199,14 @@ class LearnEnviron(os._Environ):
             iter_frame, ignore_keys = self._ignore_keys.get(t, (None, set()))
             ignore_keys: set[str]
             # Search the iter_frame
-            for _ in range(0,3):
+            for _ in range(0, 3):
                 frame = frame.f_back
                 if not frame or id(frame) == id(iter_frame):
                     break
             if key not in ignore_keys:
                 self._keys_used.add(key)
             else:
-                ignore_keys.remove(key) # Ignore one time
+                ignore_keys.remove(key)  # Ignore one time
             if id(frame) != id(iter_frame):  # New frame, remove ignore_keys
                 # Use by a sub frame?
                 while frame.f_back:
@@ -311,8 +318,11 @@ def patch_rules(learning_path: Path | None) -> dict[str, Callable]:
     if learning_path:
 
         def activate_learning_env_factory(x: Any) -> LearnEnviron:
-            return LearnEnviron()
+            os.environ = LearnEnviron()
+            return os.environ
 
-        return {"os.environ": activate_learning_env_factory}
+        return {
+            "os.environ": activate_learning_env_factory,
+        }
     else:
         return {}

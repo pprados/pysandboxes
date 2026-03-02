@@ -90,10 +90,21 @@ def test_iter_values_detection_environ() -> None:
         pass
     assert not envs._keys_used, "Can not add key during iteration"
 
+
 def test_iter_use_directly_detection_environ() -> None:
     envs = LearnEnviron()  # Reset singleton
     envs._keys_used.clear()
     for k in envs.keys():
         _ = envs[k]
-        _ =envs["PATH"]
+        _ = envs["PATH"]
     assert "PATH" in envs._keys_used, "Can add direct key usage during iteration"
+
+
+def test_update_from_environ() -> None:
+    # env.update(os.environ)
+    # FIXME:
+    d={}
+    envs = LearnEnviron()  # Reset singleton
+    envs._keys_used.clear()
+    d.update(envs)
+    assert not envs._keys_used

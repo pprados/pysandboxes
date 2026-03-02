@@ -16,7 +16,7 @@ from .test_guard_io import (
 
 
 def test_os_listdir_filters_ignored_files_and_bind(
-    files: Dict[str, Path]  # noqa: F811
+    files: Dict[str, Path],  # noqa: F811
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -248,7 +248,7 @@ def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:  # noqa:
 
 
 def test_os_mkdir_removedirs_and_rmdir_refused(
-    files: Dict[str, Path]  # noqa: F811
+    files: Dict[str, Path],  # noqa: F811
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),

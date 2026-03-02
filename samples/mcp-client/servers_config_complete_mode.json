@@ -4,10 +4,10 @@
   //  to use (complete mode) in `../mcp-server/.py-sandboxes`
     "complete_mode": {
       "cwd": "../mcp-server",
-      "command": "python","cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
-//      "command": "uv",
+//      "command": "python","cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
+      "command": "uv",
       "args": [
-//        "run",
+        "run",
         "-m", "pysandboxes.python_sb",
         "--pysandboxes-config=mcp_server/.py-sandboxes",
 //        "--learn=./.local.py-sandboxes",

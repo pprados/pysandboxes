@@ -35,6 +35,7 @@ class AllRules(NamedTuple):
         file_rules: File system access rules.
         import_rules: Python import rules.
     """
+
     root_path: Path
     config: ConfigLines
     envs: Envs

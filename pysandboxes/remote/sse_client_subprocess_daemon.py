@@ -519,7 +519,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self._is_started = True
         self._accept_incoming = True
 
-
     async def _stop(self, max_pending: int) -> None:
         """Stop the subprocess daemon.
 

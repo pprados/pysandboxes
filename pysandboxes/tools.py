@@ -8,6 +8,7 @@ function type checking, and sandbox state management.
 import asyncio
 import contextvars
 import inspect
+import logging
 import os
 import re
 import sys
@@ -213,9 +214,9 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 
 def find_config(
-        filename: str,
-        raise_error_if_not_found: bool = False,
-        usecwd: bool = False,
+    filename: str,
+    raise_error_if_not_found: bool = False,
+    usecwd: bool = False,
 ) -> str:
     """Search in increasingly higher folders for the given file.
 
@@ -254,7 +255,7 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-                frame.f_code.co_filename
+            frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back
@@ -328,7 +329,7 @@ def get_callable_info(func: Callable[..., Any]) -> tuple[str | None, str | None]
     # This works well for functions, methods, and class methods
     module_obj = inspect.getmodule(func)
     if module_obj:
-        module_name = module_obj.name
+        module_name = module_obj.__spec__.name
 
     # Get the qualified name of the callable
     # __qualname__ provides the dotted path from the module to the callable,

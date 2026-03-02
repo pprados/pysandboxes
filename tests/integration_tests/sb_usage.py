@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.INFO # FIXME
+    sandboxes_level = logging.INFO  # FIXME
     uvicorn_level = logging.WARNING
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
@@ -27,8 +27,9 @@ def init_log_level() -> None:
 
 @sandbox
 async def arun_in_sandbox() -> int:
-    text_wrapper = io.TextIOWrapper(io.BytesIO(b'Ceci est un test en fran\xc3\xa7ais.'),  # FIXME
-                                    encoding='utf8')
+    text_wrapper = io.TextIOWrapper(
+        io.BytesIO(b"Ceci est un test en fran\xc3\xa7ais."), encoding="utf8"  # FIXME
+    )
     logger.info("Run 'arun_in_sandbox()' in sandbox")
     _test_envs()
     _test_files()
@@ -226,12 +227,13 @@ async def main(argv: List[str]) -> int:
 
     for i in range(0, 1):
         async with sandboxes(
-                async_init_sandbox,
-                sandboxes_config=config_path,
-                **cast(Mapping[str, Any], extra_rules),
+            async_init_sandbox,
+            sandboxes_config=config_path,
+            **cast(Mapping[str, Any], extra_rules),
         ):
             await arun()
     return 0
+
 
 # from pysandboxes.sandboxes_api import sandboxes
 #

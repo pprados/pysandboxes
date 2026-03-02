@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pysandboxes"
+name = "pysandboxes"  # FIXME: envisager python-sb (voir completement si cela fonction avec uvx)
 version = "0.0.0"  # Set with git tag
 description = "Lite sandbox for python code execution"
 #requires-python = ">=3.12,<4.0"

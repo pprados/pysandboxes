@@ -10,8 +10,12 @@ from typing import Any, Dict, List, Set, Callable
 
 from attr.validators import is_callable
 
-from pysandboxes.learning import generate_config_from_learning, is_learning_mode, \
-    set_learning_path, set_learning_mode
+from pysandboxes.learning import (
+    generate_config_from_learning,
+    is_learning_mode,
+    set_learning_path,
+    set_learning_mode,
+)
 from pysandboxes.tools import set_is_in_sandbox
 from ..all_rules import AllRules
 from ..main_logger import config_log
@@ -20,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    log_level = logging.INFO  # FIXME
+    log_level = logging.DEBUG  # FIXME
     config_log(log_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
@@ -30,9 +34,11 @@ def _debug_log() -> None:
     logging.getLogger("pysandboxes").setLevel(log_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
 
+
 def _register_signal() -> None:
     signals: dict[
-        int, Callable[[int, FrameType | None], Any] | int | signal.Handlers | None] = {
+        int, Callable[[int, FrameType | None], Any] | int | signal.Handlers | None
+    ] = {
         signal.SIGINT: signal.getsignal(signal.SIGINT),
         signal.SIGTERM: signal.getsignal(signal.SIGTERM),
         signal.SIGQUIT: signal.getsignal(signal.SIGQUIT),
@@ -47,25 +53,27 @@ def _register_signal() -> None:
         logger.debug("Catch signal %s.", signum)
         generate_config_from_learning()  # Save learning rules
         handler = signals[signum]
-        signal.signal(signum,handler)
-        if isinstance(handler,Callable):
+        signal.signal(signum, handler)
+        if isinstance(handler, Callable):
             signal.raise_signal(signum)
 
-    if threading.current_thread() is threading.main_thread():  # TODO: de meme pour les autres formes d'appel
+    if (
+        threading.current_thread() is threading.main_thread()
+    ):  # TODO: de meme pour les autres formes d'appel
         # logger.error("Activate signal handlers.")
         for s in signals.keys():
             signal.signal(s, signal_handler)
 
 
 def _python_interactive(
-        all_rules: AllRules,
-        ban: bool,
+    all_rules: AllRules,
+    ban: bool,
 ) -> int:
     exit_msg = None
     term = os.environ.get("TERM")
     if sys.stdout.isatty() and (
-            (term and ("color" in term or "256" in term or "true" in term))
-            or (sys.platform == "win32" and "ANSICON" in os.environ)
+        (term and ("color" in term or "256" in term or "true" in term))
+        or (sys.platform == "win32" and "ANSICON" in os.environ)
     ):
         BOLD = "\033[1m"
         RED = "\033[1m\033[31m"
@@ -100,7 +108,7 @@ def _python_interactive(
         f"{sb_mode}"
         'Type "help", "copyright", "credits" or "license" for more information.'
     )
-    prefix = "\u26A0 "
+    prefix = "\u26a0 "
 
     try:
         # Try to import and use IPython for a better REPL experience
@@ -170,6 +178,7 @@ def _python_interactive(
 
 def _python_module(all_rules: AllRules, mod_name: str) -> int:
     import runpy
+
     _register_signal()
 
     runpy.run_module(mod_name, run_name="__main__")
@@ -221,10 +230,9 @@ def convert_extra_rules(args: List[str]) -> Dict[str, Set[str]]:
     return result
 
 
-
 def python_in_sb(
-        all_rules: AllRules,
-        python_cmd: List[str],
+    all_rules: AllRules,
+    python_cmd: List[str],
 ) -> int:
     try:
         _debug_log()  # FIXME: remove

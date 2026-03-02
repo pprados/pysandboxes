@@ -174,7 +174,7 @@ def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]) -> None:
 
 
 def test_io_open_code_ignore_rule_blocks_open_code_file_access(
-    files: Dict[str, Path]
+    files: Dict[str, Path],
 ) -> None:
     rules = [ConfigLine(f"ignore={files['ignore']}", Path(), 0)]
     activate_guard_files_rules(rules)

@@ -1,4 +1,5 @@
 """Unit tests for pysandboxes.remote.parse_cpython_args module."""
+
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -12,8 +13,7 @@ class TestParsePythonCmdLine:
 
     def test_parse_python_cmd_line_basic_script(self) -> None:
         """Test parsing basic script execution."""
-        args = ["-v", "-O", "script.py", "-v",
-                "arg2"]
+        args = ["-v", "-O", "script.py", "-v", "arg2"]
 
         python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
@@ -79,7 +79,7 @@ class TestParsePythonCmdLine:
         # This test documents the current behavior
         assert python_parsed == ["-X", "dev", "-X", "utf8"]
         assert sandboxes_args == ["--env=a=b"]
-        assert python_cmd == ["script.py","--param=value"]
+        assert python_cmd == ["script.py", "--param=value"]
         assert config == Path(".")
 
     @patch("sys.exit")
@@ -94,7 +94,7 @@ class TestParsePythonCmdLine:
 
     @patch("sys.exit")
     def test_parse_python_cmd_line_help_flag_with_question(
-            self, mock_exit: Mock
+        self, mock_exit: Mock
     ) -> None:
         """Test parsing with -? help flag exits."""
         args = ["-?"]
@@ -136,7 +136,7 @@ class TestParsePythonCmdLine:
             "script.py",
         ]
 
-        python_parsed, sandboxes_args, python_cmd,config = parse_python_cmd_line(args)
+        python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
         boolean_flags = [
             "-b",

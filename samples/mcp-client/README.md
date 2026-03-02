@@ -138,7 +138,7 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
         D -- "stdio" --> A
     ```
    ```bash
-   uv run -m mcp_sample_chatbot.main -c servers_config_no_sandboxes.json
+   uvx  mcp-simple-chatbot -c servers_config_no_sandboxes.json
    ```
    2.  inside a sandboxes
    

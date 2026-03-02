@@ -15,7 +15,9 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 class Configuration:
@@ -24,7 +26,9 @@ class Configuration:
     def __init__(self) -> None:
         """Initialize configuration with environment variables."""
         self.load_env()
-        self.api_key = os.getenv("GROK_API_KEY")
+        self.api_key = os.getenv(
+            "GROQ_API_KEY"
+        )
 
     @staticmethod
     def load_env() -> None:
@@ -59,7 +63,7 @@ class Configuration:
             ValueError: If the API key is not found in environment variables.
         """
         if not self.api_key:
-            raise ValueError("GROK_API_KEY not found in environment variables")
+            raise ValueError("GROQ_API_KEY not found in environment variables")
         return self.api_key
 
 
@@ -76,7 +80,7 @@ class Server:
 
     async def initialize(self) -> None:
         """Initialize the server connection."""
-        command = shutil.which("npx") if self.config["command"] == "npx" else self.config["command"]
+        command = shutil.which(self.config["command"]) or self.config["command"]
         if command is None:
             raise ValueError("The command must be a valid string and cannot be None.")
 
@@ -84,16 +88,24 @@ class Server:
             server_params = StdioServerParameters(
                 command=command,
                 args=self.config["args"],
-                env={**os.environ, **self.config["env"]} if self.config.get("env") else None,
+                env=(
+                    {**os.environ, **self.config["env"]}
+                    if self.config.get("env")
+                    else None
+                ),
                 cwd=self.config.get("cwd"),
             )
-            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+            stdio_transport = await self.exit_stack.enter_async_context(
+                stdio_client(server_params)
+            )
             read, write = stdio_transport
-            session = await self.exit_stack.enter_async_context(ClientSession(read, write))
+            session = await self.exit_stack.enter_async_context(
+                ClientSession(read, write)
+            )
             await session.initialize()
             self.session = session
         except Exception as e:
-            logging.error(f"Error initializing server {self.name}: {e}")
+            logging.exception(f"Error initializing server {self.name}")
             await self.cleanup()
             raise
 
@@ -114,7 +126,10 @@ class Server:
 
         for item in tools_response:
             if isinstance(item, tuple) and item[0] == "tools":
-                tools.extend(Tool(tool.name, tool.description, tool.inputSchema, tool.title) for tool in item[1])
+                tools.extend(
+                    Tool(tool.name, tool.description, tool.inputSchema, tool.title)
+                    for tool in item[1]
+                )
 
         return tools
 
@@ -153,7 +168,9 @@ class Server:
 
             except Exception as e:
                 attempt += 1
-                logging.warning(f"Error executing tool: {e}. Attempt {attempt} of {retries}.")
+                logging.warning(
+                    f"Error executing tool: {e}. Attempt {attempt} of {retries}."
+                )
                 if attempt < retries:
                     logging.info(f"Retrying in {delay} seconds...")
                     await asyncio.sleep(delay)
@@ -196,7 +213,9 @@ class Tool:
         args_desc = []
         if "properties" in self.input_schema:
             for param_name, param_info in self.input_schema["properties"].items():
-                arg_desc = f"- {param_name}: {param_info.get('description', 'No description')}"
+                arg_desc = (
+                    f"- {param_name}: {param_info.get('description', 'No description')}"
+                )
                 if param_name in self.input_schema.get("required", []):
                     arg_desc += " (required)"
                 args_desc.append(arg_desc)
@@ -305,13 +324,17 @@ class ChatSession:
                     tools = await server.list_tools()
                     if any(tool.name == tool_call["tool"] for tool in tools):
                         try:
-                            result = await server.execute_tool(tool_call["tool"], tool_call["arguments"])
+                            result = await server.execute_tool(
+                                tool_call["tool"], tool_call["arguments"]
+                            )
 
                             if isinstance(result, dict) and "progress" in result:
                                 progress = result["progress"]
                                 total = result["total"]
                                 percentage = (progress / total) * 100
-                                logging.info(f"Progress: {progress}/{total} ({percentage:.1f}%)")
+                                logging.info(
+                                    f"Progress: {progress}/{total} ({percentage:.1f}%)"
+                                )
 
                             return f"Tool execution result: {result}"
                         except Exception as e:
@@ -385,7 +408,9 @@ class ChatSession:
 
                         final_response = self.llm_client.get_response(messages)
                         print(final_response)
-                        messages.append({"role": "assistant", "content": final_response})
+                        messages.append(
+                            {"role": "assistant", "content": final_response}
+                        )
                     else:
                         messages.append({"role": "assistant", "content": llm_response})
 
@@ -397,7 +422,19 @@ class ChatSession:
             await self.cleanup_servers()
 
 
-async def main() -> int:
+async def run(args):
+    config = Configuration()
+    server_config = config.load_config(args.mcp)
+    servers = [
+        Server(name, srv_config)
+        for name, srv_config in server_config["mcpServers"].items()
+    ]
+    llm_client = LLMClient(config.llm_api_key)
+    chat_session = ChatSession(servers, llm_client)
+    await chat_session.start()
+
+
+def main() -> int:
     """Initialize and run the chat session."""
     parser = argparse.ArgumentParser(
         prog="mcp_client",
@@ -409,31 +446,25 @@ async def main() -> int:
         type=str,
         required=False,
         default="servers_config.json",
-        help="The mcp server configuration file."
+        help="The mcp server configuration file.",
     )
-    args=parser.parse_args()
-
-    config = Configuration()
-    server_config = config.load_config(args.mcp)
-    servers = [Server(name, srv_config) for name, srv_config in server_config["mcpServers"].items()]
-    llm_client = LLMClient(config.llm_api_key)
-    chat_session = ChatSession(servers, llm_client)
-    await chat_session.start()
+    anyio.run(run, parser.parse_args())
     return 0
 
 
-def main_sb() -> int:  # FIXME
+def main_sb() -> int:  # FIXME: a placer dans le README.md
     import sys
-    import os
 
-    sys.argv = (
-            [
-                __file__,
-                "-m", os.path.splitext(os.path.basename(__file__))[0]
-            ] +
-            sys.argv[1:])
-    from pysandboxes.python_sb import main
-    return(main())  # Launch 'python-sb'
+    if __name__ not in sys.modules:
+        return main()  # Manage recursivity if main_sb is called from __main__
+
+    sys.argv = [__file__, "-m", globals()["__spec__"].name] + sys.argv[1:]
+    from pysandboxes.python_sb import main as python_sb
+
+    del sys.modules[__name__]  # Manage recursivity
+    return python_sb()  # Launch 'python-sb'
+
 
 if __name__ == "__main__":  # TODO: try to place in __init__.py
-    sys.exit(anyio.run(main))
+    # sys.exit(main())  # FIXME
+    sys.exit(main_sb())

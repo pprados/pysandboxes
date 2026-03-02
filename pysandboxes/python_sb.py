@@ -45,9 +45,10 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    _debug_log()  # FIXME
-    python_parsed_args, sandboxes_args, python_cmd, config_path = (
-        parse_python_cmd_line(sys.argv[1:]))
+    # _debug_log()  # FIXME
+    python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
+        sys.argv[1:]
+    )
 
     extra_rules = convert_extra_rules(sandboxes_args)
 
@@ -65,7 +66,7 @@ def main() -> int:
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
     # If -m module  use resource
     if len(extra_rules.get("learn", [])):
-        learn_path:Path = Path(list(extra_rules["learn"])[0])
+        learn_path: Path = Path(list(extra_rules["learn"])[0])
         if learn_path == Path():
             if config_path == Path():
                 learn_path = Path(CONFIG_NAME)
@@ -78,23 +79,25 @@ def main() -> int:
         import importlib
 
         if (
-                "/" not in str(config_path)
-                and len(python_cmd) >= 2
-                and python_cmd[0] == "-m"
+            "/" not in str(config_path)
+            and len(python_cmd) >= 2
+            and python_cmd[0] == "-m"
         ):
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
             caller_module = python_cmd[1].split(".", 1)[0]
-            resource_path = importlib.resources.files(caller_module)
-            resource_config = str(resource_path) / config_path
-            if resource_config and resource_config.exists():
-                config_path = resource_config
-
+            try:
+                resource_path = importlib.resources.files(caller_module)
+                resource_config = str(resource_path) / config_path
+                if resource_config and resource_config.exists():
+                    config_path = resource_config
+            except FileNotFoundError:
+                pass  # Ignore
 
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
         extra_rules["env"] = envs
-        logger.error(f"Use {config_path=}")  # FIXME
+        logger.debug(f"Use {config_path=}")  # FIXME: a supprimer
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=os.environ,  # Use current environ

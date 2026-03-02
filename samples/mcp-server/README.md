@@ -1,6 +1,7 @@
 # MCP Server
 
-Ce code est une exemple d'implémentation d'un serveur MCP
+Ce code est une exemple d'implémentation d'un serveur MCP.
+
 ## Features
 
 Il offrant les services suivants:
@@ -52,6 +53,12 @@ Pour lancer ce MCP serveur, ajoutez cette ligne dans les paramètres de votre cl
 # Add this command line in the paramater of the MCP client
 uv run -m mcp_server.main -t stdio
 ```
+For exemple, for [claude-code](https://claude.com/product/claude-code), invoke:
+```bash
+claude mcp remove mcp_demo
+claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
+```
+
 ### Partial Mode with stdio
 Dans ce scénario, une partie du serveur MCP est sous le controle de **py-sandboxes**. Le client invoque le serveur MCP, dont une partie s'exécute dans un bac-à-sable (annotation `@sandbox`). 
 ```mermaid
@@ -78,17 +85,29 @@ flowchart TD
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
+Pour lancer ce MCP serveur, ajoutez cette ligne dans les paramètres de votre client, depuis le répertoire du serveur.
+```bash
+# Add this command line in the paramater of the MCP client
+uv run -m mcp_server.main -t stdio
+```
+
+For exemple, for [claude-code](https://claude.com/product/claude-code), invoke:
+```bash
+claude mcp remove mcp_demo
+claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
+```
+
 ### Complete mode with streamable-http
 Dans ce scénario, le serveur doit être lancé avant le client. Il expose un end-point HTTP, pour permettre au client de s'y connecter.
 
 ```mermaid
 flowchart TD
-    subgraph Docker1 ["VM/Container Client"]
+    subgraph Docker1 ["Node/VM/Container"]
         subgraph MCPClient ["MCP Client"]
             D[Chat]
         end
     end
-    subgraph Docker2 ["VM/Container Server"]
+    subgraph Docker2 ["Node/VM/Container"]
         subgraph OSSandbox ["OS-sandbox"]
             direction LR
             subgraph PythonSandbox [Python Sandbox]
@@ -111,7 +130,7 @@ flowchart TD
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
-
+TODO: a vérifier avec claude
 ```bash
 cd path/to/mcp-server
 uv run -m mcp_server.main -t streamable-http --port 3001
@@ -122,12 +141,12 @@ Dans ce scénario, le serveur doit être lancé avant le client. Il expose un en
 
 ```mermaid
 flowchart TD
-    subgraph Docker1 ["VM/Container Client"]
+    subgraph Docker1 ["Node/VM/Container"]
         subgraph MCPClient ["MCP Client"]
             D[Chat]
         end
     end
-    subgraph Docker2 ["VM/Container Server"]
+    subgraph Docker2 ["Node/VM/Container"]
         subgraph MCPServer [MCP Server]
             subgraph WithSandboxes ["with sandboxes()"]
                 A[Caller Code]
@@ -152,7 +171,7 @@ flowchart TD
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
-
+TODO: a vérifier avec claude
 ```bash
 cd path/to/mcp-server
 uv run -m mcp_server.main -t streamable-http --port 3001

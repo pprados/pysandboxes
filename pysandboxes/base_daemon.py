@@ -162,6 +162,7 @@ class BaseDaemon(ABC):
         """
         raise NotImplementedError
 
+
 class FakeDaemon(BaseDaemon):
     def update_rules(
         self,
@@ -171,7 +172,7 @@ class FakeDaemon(BaseDaemon):
     ) -> "AllRules":
         return all_rules
 
-    is_started=True
+    is_started = True
 
     async def _start(
         self,

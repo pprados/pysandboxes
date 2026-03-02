@@ -4,12 +4,12 @@
     // The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
     "selected_mode": {
       "cwd": "../mcp-server",
-      "command": "python", "cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
-//      "command": "uv",
+//      "command": "python", "cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
+      "command": "uv",
       "args": [
-//        "run",
+        "run",
         "-m", "mcp_server.main",
-        "--learn=./.local.py-sandboxes",
+//        "--learn=./.local.py-sandboxes",
         "-t", "stdio"
       ]
     }

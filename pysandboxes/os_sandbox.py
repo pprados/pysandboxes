@@ -5,6 +5,7 @@ It provides functions to start, stop, and interact with various sandboxing
 providers like subprocess, firejail, etc. It maintains a singleton instance
 of the currently active daemon.
 """
+
 import asyncio
 import logging
 import threading
@@ -204,6 +205,7 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return
+        logger.debug(f"============== {type(_current_daemon)}")
         await _current_daemon._shutdown(graceful_shutdown)
         assert not _current_daemon.is_started
         _current_daemon = None

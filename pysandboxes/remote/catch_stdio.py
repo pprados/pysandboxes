@@ -3,6 +3,7 @@ This module provides utilities for capturing stdout and stderr streams,
 especially in a multi-threaded or asynchronous context.
 It uses context variables to manage thread-specific output streams.
 """
+
 import asyncio
 import contextvars
 import inspect
@@ -226,7 +227,7 @@ async def acatch_stdio(
                     sync_or_async_queue.put(result)
         return result
 
-    async def run() -> dict[str,Any]:
+    async def run() -> dict[str, Any]:
         try:
             use_async = inspect.iscoroutinefunction(fn)
 

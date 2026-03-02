@@ -119,7 +119,8 @@ def sandbox(
         return decorator(_func)
 
 
-_SIGNAL_HANDLER=Callable[[int, FrameType | None], Any] | int | signal.Handlers | None
+_SIGNAL_HANDLER = Callable[[int, FrameType | None], Any] | int | signal.Handlers | None
+
 
 class sandboxes:
     """Context manager for sandbox process lifecycle management.
@@ -195,9 +196,7 @@ class sandboxes:
         self.sandboxes_config = (
             sandboxes_config
             if isinstance(sandboxes_config, Path)
-            else Path(sandboxes_config)
-            if sandboxes_config
-            else None
+            else Path(sandboxes_config) if sandboxes_config else None
         )
         if envs is None:
             envs = os.environ
@@ -206,7 +205,7 @@ class sandboxes:
         self.learning_path: Path | None = None
         self.python_args = python_args
         self.graceful_shutdown = graceful_shutdown
-        self._signals:dict[int, _SIGNAL_HANDLER] = {}
+        self._signals: dict[int, _SIGNAL_HANDLER] = {}
 
         self._daemon: BaseDaemon | None = None
 
@@ -259,9 +258,15 @@ class sandboxes:
 
             if threading.current_thread() is threading.main_thread():
                 logger.debug("Activate signal handlers.")
-                self._signals[signal.SIGINT] = signal.signal(signal.SIGINT, signal_handler)
-                self._signals[signal.SIGTERM] = signal.signal(signal.SIGTERM, signal_handler)
-                self._signals[signal.SIGQUIT] = signal.signal(signal.SIGQUIT, signal_handler)
+                self._signals[signal.SIGINT] = signal.signal(
+                    signal.SIGINT, signal_handler
+                )
+                self._signals[signal.SIGTERM] = signal.signal(
+                    signal.SIGTERM, signal_handler
+                )
+                self._signals[signal.SIGQUIT] = signal.signal(
+                    signal.SIGQUIT, signal_handler
+                )
         else:
             self._daemon = FakeDaemon(token="Fake token")
         assert self._daemon is not None
@@ -342,9 +347,15 @@ class sandboxes:
 
             if threading.current_thread() is threading.main_thread():
                 logger.debug("Activate signal handlers.")
-                self._signals[signal.SIGINT] = signal.signal(signal.SIGINT, signal_handler)
-                self._signals[signal.SIGTERM] = signal.signal(signal.SIGTERM, signal_handler)
-                self._signals[signal.SIGQUIT] = signal.signal(signal.SIGQUIT, signal_handler)
+                self._signals[signal.SIGINT] = signal.signal(
+                    signal.SIGINT, signal_handler
+                )
+                self._signals[signal.SIGTERM] = signal.signal(
+                    signal.SIGTERM, signal_handler
+                )
+                self._signals[signal.SIGQUIT] = signal.signal(
+                    signal.SIGQUIT, signal_handler
+                )
         assert self._daemon is not None
         return self._daemon
 
@@ -364,7 +375,7 @@ class sandboxes:
 
 
 def run(
-    main: Coroutine[Any, Any, Any],    # TODO: accept function without parameter
+    main: Coroutine[Any, Any, Any],  # TODO: accept function without parameter
     *,
     init_fn: SyncOrAsyncFunc | None = None,
     config_path: Path | str | None = None,

@@ -1,18 +1,18 @@
 # Samples
-Nous proposons plusieurs scénarios d'utilisation de **Py-Sandboxes**, combiné à différents frameworks.
+We offer several scenarios for using **Py-Sandboxes**, combined with different frameworks.
 
 ## MCP
-Un des objectifs initial du projet, est de renforcer la sécurité lors de l'utilisations d'outils avec un modèle de langage (LLM).
+One of the initial goals of the project is to enhance security when using tools with a language model (LLM).
 
-La spécification [MCP](https://modelcontextprotocol.io/specification/2025-06-18) propose des API pour Python, pour exposer des outils via ce protocole, et pour créer ou connecter des clients MCP pour invoquer ces outils ([Client MCP](https://modelcontextprotocol.io/clients)) .
+The [MCP](https://modelcontextprotocol.io/specification/2025-06-18) specification provides Python APIs to expose tools via this protocol, and to create or connect MCP clients to invoke these tools ([MCP Client](https://modelcontextprotocol.io/clients)).
 
-### Standard python API MCP
-Dans ce scénario, nous allons exposer un serveur MCP pour qu'il soit utilisé par des applications d'IA générative.
+### Standard Python MCP API
+In this scenario, we will expose an MCP server to be used by generative AI applications.
 
-Suivant la commande de lancement, le serveur MCP sera plus ou moins isolés de l'OS ou du client.
+Depending on the launch command, the MCP server will be more or less isolated from the OS or the client.
 
 #### MCP Client
-Le sous-project [MCP client](../samples/mcp-client/README.md) propose différent scénarios de lancement, pour ajouter des bac-à-sables dans une architecture combinant un MCP client et un MCP server.
+The [MCP client](../samples/mcp-client/README.md) sub-project offers different launch scenarios to add sandboxes in an architecture combining an MCP client and an MCP server.
 
 #### MCP Server
-Le sous-project [MCP server](../samples/mcp-server/README.md) propose différent scénario de lancement pour isoler plus ou moins le serveur MCP.
+The [MCP server](../samples-mcp-server/README.md) sub-project offers different launch scenarios to isolate the MCP server to a greater or lesser extent.

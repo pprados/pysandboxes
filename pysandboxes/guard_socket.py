@@ -33,6 +33,7 @@ Example:
     import urllib.request  # Now protected
     ```
 """
+
 import functools
 import logging
 import os
@@ -1031,12 +1032,10 @@ def activate_guard(rules: SocketRules) -> None:
     _rules = rules
 
 
-def _read_host_file() -> (
-    tuple[
-        dict[str, IPv4Address | IPv6Address],
-        dict[IPv4Address | IPv6Address, str],
-    ]
-):
+def _read_host_file() -> tuple[
+    dict[str, IPv4Address | IPv6Address],
+    dict[IPv4Address | IPv6Address, str],
+]:
     dns: dict[str, IPv4Address | IPv6Address] = {}
     inverse_dns: dict[IPv4Address | IPv6Address, str] = {}
     # Read the host file
