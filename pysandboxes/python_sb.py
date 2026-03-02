@@ -111,7 +111,7 @@ def main() -> int:
     os_provider: BaseSubProcessDaemon = providers_factory[all_rules.os_sandbox](
         token, python_args=python_parsed_args
     )
-    if not isinstance(os_provider, NoneDaemon):
+    if isinstance(os_provider, NoneDaemon):
         from .remote.python_in_sb import python_in_sb
 
         return python_in_sb(all_rules, python_cmd)

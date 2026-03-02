@@ -10,7 +10,7 @@ from pysandboxes.learning import (
     add_learning_rule,
     generate_config_from_learning,
     is_learning_mode,
-    stop_learning_mode,
+    stop_learning_mode, set_learning_mode,
 )
 
 
@@ -132,7 +132,7 @@ class TestLearningModeManagement:
         """Test stopping learning mode."""
         # First activate learning
         with patch("pysandboxes.learning._learning_path", Path("test.conf")):
-            stop_learning_mode()
+            set_learning_mode(False)
 
             # Check that learning mode is stopped
             assert is_learning_mode() is False

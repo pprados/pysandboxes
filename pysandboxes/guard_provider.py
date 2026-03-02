@@ -21,7 +21,7 @@ def parse_rules(
     providers_set = []
     use_py_sandbox = True
     learning_path = None
-    learning = False
+    learn = False
 
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
@@ -53,8 +53,8 @@ def parse_rules(
                     )
                 )
         elif rule.rule.startswith("learn="):
-            if learning_path:  # FIXME: error? prio for args?
-                continue
+            if learning_path:
+                continue  # FIXME: error? prio for args?
             value = rule.rule.split("=", 1)[1].strip()
             if value.lower() in ("true", "false", "0", "1"):
                 errors.append(
@@ -85,8 +85,7 @@ def parse_rules(
                             rule.ln,
                         )
                     )
-                else:
-                    learning = True
+                learn=True
 
         else:
             other_rules.append(rule)
@@ -105,7 +104,7 @@ def parse_rules(
                 0,
             )
         )
-        return "errors", use_py_sandbox, learning_path, learning, other_rules
+        return "errors", use_py_sandbox, learning_path, learn, other_rules
     elif len(providers_set) == 1:
         provider = providers_set[0][0]
     else:
@@ -114,8 +113,11 @@ def parse_rules(
     if learning_path is None:
         learning_path = config_path
 
+    # Remove learn mode if py-sandbox=False
+    if not use_py_sandbox:
+        learn = False
     # Force learn mode if the file not exists
-    if not learning_path.exists() and not learning:
-        learning = True
+    elif not learning_path.exists():
+        learn = True
 
-    return provider, use_py_sandbox, learning_path, learning, other_rules
+    return provider, use_py_sandbox, learning_path, learn, other_rules

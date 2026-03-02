@@ -16,7 +16,6 @@ from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, Set
 
-from .config import CONFIG_NAME
 from .main_logger import pysandboxes_logger, make_relative_path
 
 logger = logging.getLogger(__name__)
@@ -25,6 +24,7 @@ _lock = Lock()
 _learning: Set[Any] = set()
 
 _learning_path: Path | None = None
+_learning_mode: bool = False
 
 # Check double usage
 _lock_generate = Lock()
@@ -188,20 +188,19 @@ def set_learning_path(learning_path: Path) -> None:
     _learning_path = learning_path
 
 
-def stop_learning_mode() -> None:
-    """Deactivate learning mode."""
-    global _learning_path
-    _learning_path = None
-
-
 def is_learning_mode() -> bool:
     """Check if learning mode is currently active.
 
     Returns:
         True if learning mode is active, False otherwise.
     """
-    global _learning_path
-    return _learning_path is not None
+    global _learning_mode
+    return _learning_mode
+
+
+def set_learning_mode(mode: bool) -> None:
+    global _learning_mode
+    _learning_mode = mode
 
 
 def add_learning_rule(rule: Any) -> None:

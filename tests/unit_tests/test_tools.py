@@ -54,3 +54,20 @@ def test_resolve_env_variables() -> None:
     assert resolve_env_variables("[${A:-def}]", {"A": "val_a"}) == "[val_a]"
     assert resolve_env_variables("[${A:-def}]", {}) == "[def]"
     assert resolve_env_variables("[${A:-${B}}]", {"B": "val_b"}) == "[val_b]"
+
+    # With recursive values
+    assert resolve_env_variables("[${${B}:-${${D}}}]",
+                                 {
+                                     "A": "val_a",
+                                     "B":"A",
+                                     "C": "val_c",
+                                     "D": "C",
+                                 }) == "[val_a]"
+
+    assert resolve_env_variables("[${${B}:-${${D}}}]",
+                                 {
+                                     "A": "val_a",
+                                     "B":"X",
+                                     "C": "val_c",
+                                     "D": "C",
+                                 }) == "[val_c]"

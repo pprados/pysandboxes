@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Set, Callable
 from attr.validators import is_callable
 
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode, \
-    set_learning_path
+    set_learning_path, set_learning_mode
 from pysandboxes.tools import set_is_in_sandbox
 from ..all_rules import AllRules
 from ..main_logger import config_log
@@ -221,6 +221,7 @@ def convert_extra_rules(args: List[str]) -> Dict[str, Set[str]]:
     return result
 
 
+
 def python_in_sb(
         all_rules: AllRules,
         python_cmd: List[str],
@@ -230,6 +231,7 @@ def python_in_sb(
         set_is_in_sandbox(True)
 
         set_learning_path(all_rules.learning_path)
+        set_learning_mode(all_rules.learn)
         if not len(python_cmd):
             _python_interactive(all_rules, True)
         elif python_cmd[0] == "-m":

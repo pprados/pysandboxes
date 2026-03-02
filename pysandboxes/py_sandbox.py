@@ -243,6 +243,7 @@ def parse_config(
     if learn:
         # Force os_sandbox to subprocess
         os_sandbox = "subprocess"
+
     return AllRules(
         root_path=config_path,
         config=config,

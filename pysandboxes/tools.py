@@ -51,7 +51,12 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
 
         while "${" in var_name:
             var_name = resolve_env_variables(var_name, envs)
+        if default_value is not None:
+            while "${" in default_value:
+                default_value = resolve_env_variables(default_value, envs)
 
+        if default_value is None:
+            default_value = ""
         value = envs.get(var_name, default_value)
         return value
 
@@ -208,9 +213,9 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 
 def find_config(
-    filename: str,
-    raise_error_if_not_found: bool = False,
-    usecwd: bool = False,
+        filename: str,
+        raise_error_if_not_found: bool = False,
+        usecwd: bool = False,
 ) -> str:
     """Search in increasingly higher folders for the given file.
 
@@ -249,7 +254,7 @@ def find_config(
         current_file = __file__
 
         while frame.f_code.co_filename == current_file or not os.path.exists(
-            frame.f_code.co_filename
+                frame.f_code.co_filename
         ):
             assert frame.f_back is not None
             frame = frame.f_back
