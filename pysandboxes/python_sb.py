@@ -63,6 +63,7 @@ def main() -> int:
 
     # If --learn and --pysandboxes-config=xxx, use --learn=xxx
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
+    # If -m module  use resource
     if len(extra_rules.get("learn", [])):
         learn_path:Path = Path(list(extra_rules["learn"])[0])
         if learn_path == Path():
@@ -73,9 +74,8 @@ def main() -> int:
         extra_rules["learn"] = str(learn_path)
     if config_path == Path():
         config_path = Path(CONFIG_NAME)
-
     try:
-        from importlib.resources import files
+        import importlib
 
         if (
                 "/" not in str(config_path)
@@ -85,10 +85,11 @@ def main() -> int:
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
             caller_module = python_cmd[1].split(".", 1)[0]
-            resource_path = files(caller_module)
+            resource_path = importlib.resources.files(caller_module)
             resource_config = str(resource_path) / config_path
             if resource_config and resource_config.exists():
                 config_path = resource_config
+
 
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")

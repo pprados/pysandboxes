@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 def parse_rules(
-        config_path:Path,
+        config_path: Path,
         rules: ConfigLines,
         errors: List[ErrorMsg],
-) -> Tuple[str, bool, Path|None, bool, ConfigLines]:
+) -> Tuple[str, bool, Path | None, bool, ConfigLines]:
     from .os_sandbox import providers_factory
 
     other_rules = []
@@ -39,9 +39,9 @@ def parse_rules(
                 providers_set.append((provider, rule))
         elif rule.rule.startswith("py-sandbox="):
             value = rule.rule.split("=", 1)[1].strip().lower()
-            if value in ("", "true"):
+            if value in ("", "true", "1"):
                 use_py_sandbox = True
-            elif value == "false":
+            elif value in ("false", "none", "0"):
                 use_py_sandbox = False
             else:
                 errors.append(

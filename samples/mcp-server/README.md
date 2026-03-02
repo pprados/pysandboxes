@@ -44,8 +44,8 @@ flowchart TD
     C -- "4- return" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 Pour lancer ce MCP serveur, ajoutez cette ligne dans les paramètres de votre client, depuis le répertoire du serveur.
 ```bash
@@ -74,8 +74,8 @@ flowchart TD
     C -- "4- return" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
 ### Complete mode with streamable-http
@@ -106,10 +106,10 @@ flowchart TD
     C -- "4- return" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style Docker1 fill:#C195DB,stroke:#006064,stroke-width:2px
-    style Docker2 fill:#C195DB,stroke:#006064,stroke-width:2px
-    style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+    style Docker1 fill:#C195DB
+    style Docker2 fill:#C195DB
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
 ```bash
@@ -147,10 +147,10 @@ flowchart TD
     C -- "4- return" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style Docker1 fill:#C195DB,stroke:#006064,stroke-width:2px
-    style Docker2 fill:#C195DB,stroke:#006064,stroke-width:2px
-    style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+    style Docker1 fill:#C195DB
+    style Docker2 fill:#C195DB
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
 ```bash

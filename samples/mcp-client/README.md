@@ -47,7 +47,7 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
 
     Executez la commande suivante pour lancer de mode.
     ```bash
-   uv run -m mcp_simple_chatbot.main -c servers_config_no_sandboxes.json
+   uv run -m mcp_simple_chatbot.main -c servers_config_no_sandbox.json
     ```
     2. **Use python-sb (complete mode)**
 
@@ -75,8 +75,8 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
         C -- "4- return" --> A
 
         %% 🎨 Style personnalisé pour OSSandbox
-        style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-        style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+        style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+        style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
     ```
     Executez la commande suivante pour lancer de mode.
     ```bash
@@ -110,8 +110,8 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
         C -- "4- return" --> A
 
         %% 🎨 Style personnalisé pour OSSandbox
-        style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-        style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+        style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+        style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 
     ```
    Executez la commande suivante pour lancer ce mode.
@@ -142,8 +142,8 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
    ```
    2.  inside a sandboxes
    
-       Dans ce scénario, l'intégralité de l'architecture MCP est dans une OS-sandbox. L'invocation des serveurs s'effectuant via le protocole stdio, et des sous-processus, ces derniers s'executent dans la même OS-sandbox. Vous devez alors la paramétrer, au niveau du client, pour garder les privilèges combinés du MCP client et de ses MCP serveur.
-       Le MCP serveur doit être lancé avec un `--os-sandbox=subprocess` qu'il n'y ai pas de nouveau *OS-sandbox* encapsulé. Le MCP serveur peut avoir ses propres paramètres de *Python-sandbox* si besoin.
+       Dans ce scénario, l'intégralité de l'architecture MCP est dans une OS-sandbox. L'invocation des serveurs s'effectuant via le protocole stdio et des sous-processus, ces derniers s'executent dans la même OS-sandbox. Vous devez alors la paramétrer, au niveau du client, pour garder les privilèges combinés du MCP client et de ses MCP serveur.
+       Le MCP serveur doit être lancé avec un `--os-sandbox=subprocess` pour qu'il n'y ai pas de nouveau *OS-sandbox* encapsulé. Le MCP serveur peut avoir ses propres paramètres de *Python-sandbox* si besoin.
     ```mermaid
     flowchart TD
         subgraph OSSandbox ["OS-sandbox"]
@@ -163,9 +163,9 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
         D -- "stdio" --> A
    
         %% 🎨 Style personnalisé pour OSSandbox
-        style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-        style PythonSandbox1 fill:#aa7c52,stroke:#006064,stroke-width:2px
-        style PythonSandbox2 fill:#aa7c52,stroke:#006064,stroke-width:2px
+        style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+        style PythonSandbox1 fill:#aa7c52,stroke:#2f2617,stroke-width:4px
+        style PythonSandbox2 fill:#aa7c52,stroke:#2f2617,stroke-width:4px
     ```
    
    ```bash

@@ -10,7 +10,7 @@
 //        "run",
         "-m", "pysandboxes.python_sb",
         "--os-sandbox=none",
-        "--pysandboxes-config=mcp_server/.py-sandboxes",
+        "--py-sandbox=none",
         "-m", "mcp_server.main",
         "-t", "stdio"
       ]

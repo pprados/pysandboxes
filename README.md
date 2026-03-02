@@ -118,8 +118,8 @@ flowchart TD
 
 
 %% 🎨 Style personnalisé pour OSSandbox
-style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
 This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
@@ -197,8 +197,8 @@ flowchart TD
     B -- "4- Propagate to caller" --> A
 
     %% 🎨 Style personnalisé pour OSSandbox
-    style OSSandbox fill:#ebe0d0,stroke:#006064,stroke-width:2px
-    style PythonSandbox fill:#aa7c52,stroke:#006064,stroke-width:2px
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 
 ```
 
@@ -343,6 +343,7 @@ Parameters for all of the user's projects can be present in `~/.config/py-sandbo
 
 By adding or removing `include` statements, you can select the different personalization scenarios you want.
 
+TODO: --pysandboxes-config=...
 ---
 # OS-sandbox vs Py-sandbox
 Our solution offers multiple layers of security:
