@@ -1504,9 +1504,9 @@ _default_rules: dict[str, Callable] = {
     # ALLOW shutil.move
     # "shutil.rmtree": _f(_wrap_filename, write=True),
     # ALLOW shutil.which
-        # "tempfile._os": _f(_wrap__os),  # TODO: check python version
-        # "pathlib._local.io": _f(_wrap__io),  # TODO: check python version
-        # "pathlib._local.os": _f(_wrap__os),
+    # "tempfile._os": _f(_wrap__os),  # TODO: check python version
+    # "pathlib._local.io": _f(_wrap__io),  # TODO: check python version
+    # "pathlib._local.os": _f(_wrap__os),
     "shutil.os": _f(_wrap__os),
     # builtins
     "builtins.open": _f(_wrap_buitins_open),

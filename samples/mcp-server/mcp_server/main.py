@@ -1,10 +1,12 @@
 import argparse
 import logging
 import sys
-from operator import add, sub, mul, truediv
+from operator import add, mul, sub, truediv
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP, Context
+import httpx
+from fastmcp import FastMCP
+from markdownify import markdownify as md
 
 from pysandboxes import sandbox, sandboxes
 
@@ -14,7 +16,7 @@ level = logging.DEBUG
 format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
-#logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
+# logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
 
 logging.basicConfig(
     force=True,
@@ -23,12 +25,13 @@ logging.basicConfig(
 )
 
 mcp = FastMCP(
-    "My Calculator Server",
+    "My MCP Server",
     host="127.0.0.1",
     port=8000,
     log_level=logging.getLevelName(logger.getEffectiveLevel()),
-    # type: ignore[arg-type]
 )
+
+RESOURCES_DIR = Path(__file__).parent.parent / "resources"
 
 
 # Define the calculator tool
@@ -54,6 +57,41 @@ async def evaluate_expression(expression: str) -> float:
         raise ValueError(f"Invalid expression: {e}")
 
 
+@mcp.resource("file://{path}")
+async def read_file_resource(path: str) -> str:
+    """Expose files from the resources directory as MCP resources."""
+    file_path = RESOURCES_DIR / path
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    if not file_path.is_relative_to(RESOURCES_DIR):
+        raise ValueError(f"Access denied: path outside resources directory")
+    logger.info(f"Reading resource: {path}")
+    return file_path.read_text()
+
+
+@sandbox
+@mcp.tool(
+    name="fetch_webpage",
+    description="Fetches the content of a webpage from a given URL",
+)
+async def fetch_webpage(url: str) -> str:
+    """Fetches the content of a webpage and returns it as markdown."""
+    try:
+        logger.info(f"Fetching webpage: {url}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            logger.info(f"Successfully fetched: {url}")
+            return md(response.text)
+    except Exception as e:
+        raise ValueError(f"Failed to fetch webpage: {e}")
+
+@mcp.prompt
+def analyze_data(data_points: list[float]) -> str:
+    """Creates a prompt asking for analysis of numerical data."""
+    formatted_data = ", ".join(str(point) for point in data_points)
+    return f"Please analyze these data points: {formatted_data}"
+
 def run_mcp_server(
     os_sandbox: str,
     transport: str,
@@ -61,12 +99,18 @@ def run_mcp_server(
     **kwargs,
 ) -> int:  # FIXME: mixer avec main lorsque __main__ sera réglé
     try:
-        with sandboxes(
-            sandboxes_config=sandboxes_config,
-            os_sandbox=os_sandbox,  # type: ignore[arg-type]
-            **kwargs,
-        ):
-            mcp.run(transport=transport)  # type: ignore[arg-type]
+        if True:  # FIXME
+            # with sandboxes(
+            #     sandboxes_config=sandboxes_config,
+            #     os_sandbox=os_sandbox,  # type: ignore[arg-type]
+            #     **kwargs,
+            # ):
+            mcp.run(transport=transport,
+                    show_banner=False,
+                    host="0.0.0.0",  # Bind to all interfaces
+                    port=8000,  # Custom port
+                    log_level="DEBUG",  # Override global log level
+                    )  # type: ignore[arg-type]
     except KeyboardInterrupt:
         logger.info("Keyboard Interrupt")
         pass

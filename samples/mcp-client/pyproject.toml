@@ -20,7 +20,8 @@ dependencies = [
     "mcp>=1.14",
     "uvicorn>=0.32",
     "json-with-comments>=1.2.10",
-    "pysandboxes"
+    "pysandboxes",
+    "fastmcp>=2.12.4",
 ]
 
 [project.scripts]

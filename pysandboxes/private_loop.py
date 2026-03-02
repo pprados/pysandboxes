@@ -12,10 +12,9 @@ import functools
 import logging
 import threading
 import weakref
+from _weakref import ReferenceType
 from asyncio import AbstractEventLoop
 from typing import Any, Callable
-
-from _weakref import ReferenceType
 
 logger = logging.getLogger(__name__)
 

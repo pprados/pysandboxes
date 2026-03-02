@@ -25,10 +25,11 @@ from pathlib import Path
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
+
+from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 from .python_in_sb import python_in_sb
 from .sse_client_subprocess_daemon import DaemonParameters
 from .tools import set_pdeathsig
-from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 

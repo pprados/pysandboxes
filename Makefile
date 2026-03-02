@@ -50,7 +50,7 @@ claude-lint: lint
 
 format format_diff:
 	$(POETRY_OR_UV) run black $(PYTHON_FILES)
-	$(POETRY_OR_UV) run ruff --select I --fix $(PYTHON_FILES)
+	$(POETRY_OR_UV) run ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
 	$(POETRY_OR_UV) run codespell --toml pyproject.toml

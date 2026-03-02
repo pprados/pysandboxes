@@ -2,7 +2,7 @@
   "mcpServers": {
     // The MCP-server decide the portion of code to isolate (selected mode).
     // The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
-    "selected_mode": {
+    "mcp_server": {
       "cwd": "../mcp-server",
 //      "command": "python", "cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
       "command": "uv",

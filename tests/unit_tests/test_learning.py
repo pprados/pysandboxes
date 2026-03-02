@@ -6,12 +6,12 @@ from unittest.mock import Mock, mock_open, patch
 
 from pysandboxes.learning import (
     _manage_olds_file,
-    set_learning_path,
     add_learning_rule,
     generate_config_from_learning,
     is_learning_mode,
-    stop_learning_mode,
     set_learning_mode,
+    set_learning_path,
+    stop_learning_mode,
 )
 
 

@@ -17,9 +17,10 @@ classifiers = [
 dependencies = [
     "click>=8.2",
     "debugpy>=1.8.17",
+    "fastmcp>=2.12.4",
+    "markdownify>=1.2.0",
     "mcp>=1.14",
-
-    "pysandboxes>=0.0"
+    "pysandboxes>=0.0",
 ]
 
 [project.scripts]

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
   // Version without `python-sb`. The user MCP client decide the rules to use
-    "complete_mode": {
+    "mcp_server": {
       "cwd": "../mcp-server",
       "command": "python","cwd": "../mcp-server",
       "args": [

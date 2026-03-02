@@ -6,17 +6,18 @@ import sys
 import threading
 from pathlib import Path
 from types import FrameType
-from typing import Any, Dict, List, Set, Callable
+from typing import Any, Callable, Dict, List, Set
 
 from attr.validators import is_callable
 
 from pysandboxes.learning import (
     generate_config_from_learning,
     is_learning_mode,
-    set_learning_path,
     set_learning_mode,
+    set_learning_path,
 )
 from pysandboxes.tools import set_is_in_sandbox
+
 from ..all_rules import AllRules
 from ..main_logger import config_log
 

@@ -1,15 +1,15 @@
 # MCP Server
 
-Ce code est une exemple d'implémentation d'un serveur MCP.
+This code is an example implementation of an MCP server.
 
 ## Features
 
-Il offrant les services suivants:
-- [X] Execution de code python
-- [ ] Publication de ressources venant d'un répertoire
-- [ ] Navigation sur une page WEB
+It offers the following services:
+- [X] Python code execution
+- [X] Publishing resources from a directory
+- [X] Browsing a WEB page
 
-Cela permet de montrer la valeur ajoutée de **Py-sandboxes**. Des règles de sécurités vont permettre de limiter les capacités du serveur MCP, uniquement à l'aide d'un fichier de paramètres.
+This demonstrates the added value of **Py-sandboxes**. Security rules will limit the capabilities of the MCP server, using only a parameter file.
 
 ## Installation
 
@@ -20,10 +20,10 @@ uv sync --reinstall
 
 ## Usage
 
-Comme tous serveur MCP, ce dernier peut être utilisé, soit comme un sous-processus du MCP Client (communication `stdio`), soit comme un serveur en écoute sur un port TCP.
+Like any MCP server, this one can be used either as a subprocess of the MCP Client (`stdio` communication) or as a server listening on a TCP port.
 
 ### Complete Mode with stdio
-Dans ce scénario, l'intégralité du serveur MCP est sous le controle de **Py-sandboxes**. L'annotation `@sandbox` est ignorée.
+In this scenario, the entire MCP server is under the control of **Py-sandboxes**. The `@sandbox` annotation is ignored.
 ```mermaid
 flowchart TD
     subgraph MCPClient ["MCP Client"]
@@ -44,23 +44,24 @@ flowchart TD
     A -- "1- my_function(param)" --> C
     C -- "4- return" --> A
 
-    %% 🎨 Style personnalisé pour OSSandbox
+    %% 🎨 Custom style for OSSandbox
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
-Pour lancer ce MCP serveur, ajoutez cette ligne dans les paramètres de votre client, depuis le répertoire du serveur.
+To launch this MCP server, add this line to your client's parameters, from the server's directory.
 ```bash
-# Add this command line in the paramater of the MCP client
+# Add this command line in the parameter of the MCP client
 uv run -m mcp_server.main -t stdio
 ```
-For exemple, for [claude-code](https://claude.com/product/claude-code), invoke:
+For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
 claude mcp remove mcp_demo
 claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
 ```
+or use the [MCP client](../mcp-client/README.md).
 
 ### Partial Mode with stdio
-Dans ce scénario, une partie du serveur MCP est sous le controle de **py-sandboxes**. Le client invoque le serveur MCP, dont une partie s'exécute dans un bac-à-sable (annotation `@sandbox`). 
+In this scenario, part of the MCP server is under the control of **py-sandboxes**. The client invokes the MCP server, part of which runs in a sandbox (`@sandbox` annotation). 
 ```mermaid
 flowchart TD
     subgraph MCPClient ["MCP Client"]
@@ -80,25 +81,26 @@ flowchart TD
     A -- "1- my_function(param)" --> C
     C -- "4- return" --> A
 
-    %% 🎨 Style personnalisé pour OSSandbox
+    %% 🎨 Custom style for OSSandbox
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
-Pour lancer ce MCP serveur, ajoutez cette ligne dans les paramètres de votre client, depuis le répertoire du serveur.
+To launch this MCP server, add this line to your client's parameters, from the server's directory.
 ```bash
-# Add this command line in the paramater of the MCP client
+# Add this command line in the parameter of the MCP client
 uv run -m mcp_server.main -t stdio
 ```
 
-For exemple, for [claude-code](https://claude.com/product/claude-code), invoke:
+For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
 claude mcp remove mcp_demo
 claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
 ```
+or use the [MCP client](../mcp-client/README.md).
 
-### Complete mode with streamable-http
-Dans ce scénario, le serveur doit être lancé avant le client. Il expose un end-point HTTP, pour permettre au client de s'y connecter.
+### Complete mode with http
+In this scenario, the server must be started before the client. It exposes an HTTP endpoint to allow the client to connect to it.
 
 ```mermaid
 flowchart TD
@@ -124,20 +126,21 @@ flowchart TD
     A -- "1- my_function(param)" --> C
     C -- "4- return" --> A
 
-    %% 🎨 Style personnalisé pour OSSandbox
+    %% 🎨 Custom style for OSSandbox
     style Docker1 fill:#C195DB
     style Docker2 fill:#C195DB
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
-TODO: a vérifier avec claude
+TODO: to be checked with claude
 ```bash
 cd path/to/mcp-server
-uv run -m mcp_server.main -t streamable-http --port 3001
+uv run -m mcp_server.main -t http --port 8000
 ```
+or use the [MCP client](../mcp-client/README.md).
 
-### Partial mode with streamable-http
-Dans ce scénario, le serveur doit être lancé avant le client. Il expose un end-point HTTP, pour permettre au client de s'y connecter. Lui même est découpé en deux partie (annotation `@sandbox`).
+### Partial mode with http
+In this scenario, the server must be started before the client. It exposes an HTTP endpoint to allow the client to connect to it. It is itself divided into two parts (`@sandbox` annotation).
 
 ```mermaid
 flowchart TD
@@ -165,17 +168,18 @@ flowchart TD
     A -- "1- my_function(param)" --> C
     C -- "4- return" --> A
 
-    %% 🎨 Style personnalisé pour OSSandbox
+    %% 🎨 Custom style for OSSandbox
     style Docker1 fill:#C195DB
     style Docker2 fill:#C195DB
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
-TODO: a vérifier avec claude
+TODO: to be checked with claude
 ```bash
 cd path/to/mcp-server
 uv run -m mcp_server.main -t streamable-http --port 3001
 ```
+or use the [MCP client](../mcp-client/README.md).
 
 ## Client
-Pour le client, consultez la documentation spécifique. Par exemple, [ici](../mcp-client/README.md)
+For the client, consult the specific documentation. For example, [here](../mcp-client/README.md)

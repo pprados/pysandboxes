@@ -16,7 +16,7 @@ from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, Set
 
-from .main_logger import pysandboxes_logger, make_relative_path
+from .main_logger import make_relative_path, pysandboxes_logger
 
 logger = logging.getLogger(__name__)
 

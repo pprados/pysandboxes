@@ -405,7 +405,7 @@ def _activate_patch_import(
 # Modules to not remove from sys.modules, and to wait the lazy patch
 _not_refresh_modules: set[str] = {
     "sys",
-    "asyncio",  # FIXME: bug si mcp, bug sinon pas de capture
+    # "asyncio",  # FIXME: bug si mcp, bug sinon pas de capture
     "builtins",
     "concurrent",
     "importlib",
