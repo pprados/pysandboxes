@@ -1,0 +1,4 @@
+# For pycharm debug
+python-import=pydevd, pydevd_tracing, pydevd_file_utils, pydevd_concurrency_analyser, pydev_ipython, pydoc
+python-import=_pydevd_bundle, _pydev_imps, _pyrepl,_pydev_bundle, _pydevd_frame_eval
+python-import=xmlrpc,xml,socketserver,ctypes,pkgutil,code,codeop

@@ -213,66 +213,6 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
         last_dir, current_dir = current_dir, parent_dir
 
 
-def find_config(
-    filename: str,
-    raise_error_if_not_found: bool = False,
-    usecwd: bool = False,
-) -> str:
-    """Search in increasingly higher folders for the given file.
-
-    Args:
-        filename: Name of the file to search for.
-        raise_error_if_not_found: Whether to raise error if file not found.
-        usecwd: Whether to use current working directory as starting point.
-
-    Returns:
-        Path to the file if found, or empty string otherwise.
-
-    Raises:
-        IOError: If file not found and raise_error_if_not_found is True.
-    """
-
-    # TODO: search in module of the caller
-    def _is_interactive() -> bool:
-        """Decide whether this is running in a REPL or IPython notebook"""
-        if hasattr(sys, "ps1") or hasattr(sys, "ps2"):
-            return True
-        try:
-            main = __import__("__main__", None, None, fromlist=["__file__"])
-        except ModuleNotFoundError:
-            return False
-        return not hasattr(main, "__file__")
-
-    def _is_debugger() -> bool:
-        return sys.gettrace() is not None
-
-    if usecwd or _is_interactive() or _is_debugger() or getattr(sys, "frozen", False):
-        # Should work without __file__, e.g. in REPL or IPython notebook.
-        path = os.getcwd()
-    else:
-        # will work for .py files
-        frame = sys._getframe()
-        current_file = __file__
-
-        while frame.f_code.co_filename == current_file or not os.path.exists(
-            frame.f_code.co_filename
-        ):
-            assert frame.f_back is not None
-            frame = frame.f_back
-        frame_filename = frame.f_code.co_filename
-        path = os.path.dirname(os.path.abspath(frame_filename))
-
-    for dirname in _walk_to_base(path, os.getcwd()):
-        check_path = os.path.join(dirname, filename)
-        if os.path.isfile(check_path):
-            return check_path
-
-    if raise_error_if_not_found:
-        raise IOError("File not found")
-
-    return ""
-
-
 # %% -----------------------
 
 _sandboxed = contextvars.ContextVar("sanboxed", default=0)

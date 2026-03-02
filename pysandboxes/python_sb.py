@@ -35,7 +35,7 @@ def _debug_log() -> None:
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(log_level)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(log_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
     logging.info("Start in python-db")
@@ -45,7 +45,7 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    # _debug_log()  # FIXME
+    _debug_log()
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
         sys.argv[1:]
     )
@@ -88,7 +88,7 @@ def main() -> int:
             caller_module = python_cmd[1].split(".", 1)[0]
             try:
                 resource_path = importlib.resources.files(caller_module)
-                resource_config = str(resource_path) / config_path
+                resource_config = resource_path / config_path
                 if resource_config and resource_config.exists():
                     config_path = resource_config
             except FileNotFoundError:

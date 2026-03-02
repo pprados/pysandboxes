@@ -68,10 +68,10 @@ def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
 
 
 def load_and_parse_config(
-    config_path: Path | None = None,
-    *,
-    envs: Environ | None = None,
-    **extra_rules: dict[str, Any],
+        config_path: Path | None = None,
+        *,
+        envs: Environ | None = None,
+        **extra_rules: dict[str, Any],
 ) -> AllRules:
     """Reads and parses the configuration file for the sandbox.
 
@@ -118,7 +118,7 @@ def load_and_parse_config(
         # Activate the learn mode
         # Load the template, and add learn mode
         with resources.as_file(
-            resources.files(pysb_module_name + ".templates") / "py-sandbox.template"
+                resources.files(pysb_module_name + ".templates") / "py-sandbox.template"
         ) as resource_path:
             config = extra_lines + _read_config_and_remove_comments(resource_path)
     else:
@@ -138,7 +138,7 @@ def _search_module_config(config_path: Path | None) -> Path:
     # Search the module of the caller
     frame = sys._getframe()
     while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
-        pysb_module_name + "."
+            pysb_module_name + "."
     ):
         assert frame.f_back is not None
         frame = frame.f_back
@@ -160,8 +160,9 @@ def _search_module_config(config_path: Path | None) -> Path:
 
 
 def _parse_include(
-    includes: set[Path],
-    rules: ConfigLines,
+        root_path: Path,
+        includes: set[Path],
+        rules: ConfigLines,
 ) -> ConfigLines:
     # includes parameter is to detect the recursive includes
     others: ConfigLines = []
@@ -169,7 +170,10 @@ def _parse_include(
     for rule in rules:
         match = pattern.match(rule.rule)
         if match:
-            filename = Path(match[1]).expanduser().absolute()
+            filename = Path(match[1])
+            if '/' not in str(filename):
+                filename = root_path / filename
+            filename = filename.expanduser().absolute()
             if filename not in includes:  # No loop of include
                 try:
                     if filename.exists():
@@ -178,13 +182,15 @@ def _parse_include(
                             [
                                 ConfigLine(line, filename, ln + 1)
                                 for ln, line in enumerate(
-                                    filename.read_text().split("\n")
-                                )
+                                filename.read_text().split("\n")
+                            )
                             ]
                         )
                         # Recursive include
                         includes.add(filename.absolute())
-                        others.extend(_parse_include(includes, include_config))
+                        others.extend(_parse_include(root_path,
+                                                     includes,
+                                                     include_config))
                 except PermissionError:
                     pass  # Ignore
         else:
@@ -193,17 +199,17 @@ def _parse_include(
 
 
 def parse_config(
-    config: ConfigLines,
-    config_path: Path,
-    *,
-    envs: Environ | None = None,
+        config: ConfigLines,
+        config_path: Path,
+        *,
+        envs: Environ | None = None,
 ) -> AllRules:
     if envs is None:
         envs = os.environ
     errors: list[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
-    config = _parse_include({config_path}, config)
+    config = _parse_include(config_path.parent, {config_path}, config)
 
     # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, envs, errors)
@@ -260,8 +266,8 @@ def parse_config(
 
 
 def activate_sandboxes(
-    all_rules: AllRules,
-    envs: Environ | None = None,
+        all_rules: AllRules,
+        envs: Environ | None = None,
 ) -> None:
     if envs is None:
         envs = os.environ

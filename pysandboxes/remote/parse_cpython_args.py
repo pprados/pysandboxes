@@ -7,12 +7,15 @@ arguments intended for the pysandbox environment, and from the actual command
 """
 
 import argparse
+import importlib
 import sys
 from pathlib import Path
 
+from pysandboxes.config import CONFIG_NAME
+
 
 def parse_python_cmd_line(
-    args: list[str],
+        args: list[str],
 ) -> tuple[list[str], list[str], list[str], Path]:
     """
     Parses the Python command line to separate CPython, sandbox, and command args.
@@ -39,11 +42,11 @@ def parse_python_cmd_line(
         """
 
         def __init__(
-            self,
-            prog: str,
-            indent_increment: int = 2,
-            max_help_position: int = 10,
-            width: int | None = None,
+                self,
+                prog: str,
+                indent_increment: int = 2,
+                max_help_position: int = 10,
+                width: int | None = None,
         ):
             """Initializes the custom formatter, setting a default width."""
             # We override the width here instead of in the parent class
@@ -97,6 +100,17 @@ def parse_python_cmd_line(
             _, pysandboxes_config_p = arg.split("=", maxsplit=1)
             pysandboxes_config = Path(pysandboxes_config_p)
 
+    if pysandboxes_config == Path() and len(python_run_args) >= 2 and python_run_args[
+        0] == "-m":
+        try:
+            caller_module = python_run_args[1]
+            resource_path = importlib.resources.files(caller_module)
+            resource_config = resource_path / CONFIG_NAME
+            if resource_config and resource_config.exists():
+                pysandboxes_config = resource_config
+        except FileNotFoundError:
+            pass  # Ignore
+
     sandboxes_args = [
         arg
         for arg in args
@@ -122,13 +136,13 @@ def parse_python_cmd_line(
         "--help",
         action="store_true",
         help="Print a short description of all command line options and "
-        "corresponding environment variables and exit.",
+             "corresponding environment variables and exit.",
     )
     parser.add_argument(
         "--help-env",
         action="store_true",
         help="Print a short description of Python-specific environment "
-        "variables and exit.",
+             "variables and exit.",
     )
     parser.add_argument(
         "--help-xoptions",
@@ -151,14 +165,14 @@ def parse_python_cmd_line(
         "-b",
         action="store_true",
         help="Issue a warning when converting bytes or bytearray to str without "
-        "specifying encoding or comparing bytes or bytearray with str or bytes "
-        "with int. Issue an error when the option is given twice (-bb).",
+             "specifying encoding or comparing bytes or bytearray with str or bytes "
+             "with int. Issue an error when the option is given twice (-bb).",
     )
     parser.add_argument(
         "-B",
         action="store_true",
         help="If given, Python won’t try to write .pyc files on the import of "
-        "source modules. See also PYTHONDONTWRITEBYTECODE.",
+             "source modules. See also PYTHONDONTWRITEBYTECODE.",
     )
     parser.add_argument(
         "--check-hash-based-pycs",
@@ -175,7 +189,7 @@ def parse_python_cmd_line(
         "-E",
         action="store_true",
         help="Ignore all PYTHON* environment variables, e.g. PYTHONPATH and "
-        "PYTHONHOME, that might be set.",
+             "PYTHONHOME, that might be set.",
     )
 
     parser.add_argument(
@@ -186,7 +200,7 @@ def parse_python_cmd_line(
         "-O",
         action="store_true",
         help="Remove assert statements and any code conditional on "
-        "the value of __debug__.",
+             "the value of __debug__.",
     )
     parser.add_argument(
         "-OO", action="store_true", help="Do -O and also discard docstrings. "
@@ -200,7 +214,7 @@ def parse_python_cmd_line(
         "-q",
         action="store_true",
         help="Don’t display the copyright and version messages "
-        "even in interactive mode.",
+             "even in interactive mode.",
     )
     parser.add_argument("-R", action="store_true", help="Turn on hash randomization.")
     parser.add_argument(
@@ -212,7 +226,7 @@ def parse_python_cmd_line(
         "-S",
         action="store_true",
         help="Disable the import of the module site and the site-dependent "
-        "manipulations of sys.path that it entails. ",
+             "manipulations of sys.path that it entails. ",
     )
     parser.add_argument(
         "-u",
@@ -223,7 +237,7 @@ def parse_python_cmd_line(
         "-v",
         action="store_true",
         help="Print a message each time a module is initialized, showing the "
-        "place (filename or built-in module) from which it is loaded. ",
+             "place (filename or built-in module) from which it is loaded. ",
     )
     parser.add_argument(
         "-W",
@@ -231,7 +245,7 @@ def parse_python_cmd_line(
         metavar="arg",
         dest="warnings",
         help="Warning control. Python’s warning machinery by default prints "
-        "warning messages to sys.stderr.",
+             "warning messages to sys.stderr.",
     )
     parser.add_argument(
         "-x",

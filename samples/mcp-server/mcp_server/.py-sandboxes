@@ -1,0 +1,49 @@
+include "./.local.py-sandboxes"  # May be add to .gitignore
+
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+env=HOME=${HOME}
+
+# Standard Python
+python-import=importlib
+python-import=__future__, _collections_abc, _colorize, _compat_pickle, _compression
+python-import=_decimal, _opcode_metadata, _sysconfigdata__linux_x86_64-linux-gnu
+python-import=_weakrefset, _zoneinfo, abc, argparse, ast, base64, bisect, bz2
+python-import=calendar, collections, configparser, contextlib, contextvars, copy
+python-import=copyreg, dataclasses, datetime, decimal, dis, email, encodings, enum
+python-import=fnmatch, fractions, functools, genericpath, gettext, hashlib, heapq
+python-import=hmac, html, http, inspect, io, ipaddress, json, keyword, linecache
+python-import=locale, lzma, mimetypes, multiprocessing, numbers, operator, os
+python-import=pickle, platform, posixpath, pprint, queue, quopri, random, re
+python-import=reprlib, runpy, secrets, selectors, shlex, shutil, signal, socket, ssl
+python-import=stat, string, struct, sysconfig, tempfile, textwrap, threading, token
+python-import=tokenize, traceback, types, typing, urllib, uuid, weakref, zipfile
+python-import=zoneinfo
+
+# External modules (Are you sure about the origin?)
+python-import=annotated_types
+python-import=anyio
+python-import=attr
+python-import=attrs
+python-import=click
+python-import=dotenv
+python-import=httpx
+python-import=httpx_sse
+python-import=idna
+python-import=jsonschema
+python-import=jsonschema_specifications
+python-import=mcp
+python-import=mcp_server
+python-import=opcode
+python-import=pydantic
+python-import=pydantic_core
+python-import=pydantic_settings
+python-import=python_multipart
+python-import=referencing
+python-import=rpds
+python-import=sniffio
+python-import=sse_starlette
+python-import=starlette
+python-import=typing_extensions
+python-import=typing_inspection
+python-import=uvicorn

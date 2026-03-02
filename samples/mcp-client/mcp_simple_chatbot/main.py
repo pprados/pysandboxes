@@ -27,7 +27,7 @@ class Configuration:
         """Initialize configuration with environment variables."""
         self.load_env()
         self.api_key = os.getenv(
-            "GROQ_API_KEY"
+            "GROK_API_KEY"
         )
 
     @staticmethod
@@ -63,7 +63,7 @@ class Configuration:
             ValueError: If the API key is not found in environment variables.
         """
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment variables")
+            raise ValueError("GROK_API_KEY not found in environment variables")
         return self.api_key
 
 
@@ -455,16 +455,19 @@ def main() -> int:
 def main_sb() -> int:  # FIXME: a placer dans le README.md
     import sys
 
+    # Manage recursivity if main_sb is called from __main__
     if __name__ not in sys.modules:
-        return main()  # Manage recursivity if main_sb is called from __main__
+        return main()
 
     sys.argv = [__file__, "-m", globals()["__spec__"].name] + sys.argv[1:]
     from pysandboxes.python_sb import main as python_sb
 
-    del sys.modules[__name__]  # Manage recursivity
+    # Manage recursivity
+    del sys.modules[__name__]
+
     return python_sb()  # Launch 'python-sb'
 
 
 if __name__ == "__main__":  # TODO: try to place in __init__.py
     # sys.exit(main())  # FIXME
-    sys.exit(main_sb())
+    sys.exit(main_sb()) # Use Full SB by default

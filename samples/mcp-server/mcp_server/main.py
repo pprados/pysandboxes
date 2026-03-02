@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 level = logging.DEBUG
 format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
-logging.getLogger("Pysandboxes").setLevel(level)
+logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
-logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
+#logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
 
 logging.basicConfig(
     force=True,
@@ -74,11 +74,6 @@ def run_mcp_server(
 
 
 def main() -> int:
-    # Dans votre code serveur
-    logger.info("Serveur MCP démarré")
-    logger.debug("Information de debug")
-    logger.error("Erreur détectée")
-
     parser = argparse.ArgumentParser(
         prog="mcp_server",
         description="Run a MCP-server",

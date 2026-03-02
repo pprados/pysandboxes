@@ -30,6 +30,7 @@
 # CONFIGURATION COMPOSITION
 # ==========================
 # You can include additional configuration files for better organization.
+# Name without '/' may be in the same directory.
 # Missing files are silently ignored.
 
 include "./.local.py-sandboxes"  # May be add to .gitignore

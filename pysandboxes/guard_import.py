@@ -208,14 +208,6 @@ class GuardLoader(Loader):
 
         if module is None:
             return
-        if not is_learning_mode():
-            if _rules and _rules[0] != "*":
-                module_name = module.__name__
-                # Reactiver le filtre de module
-                if module_name not in _rules:
-                    raise RuleModuleNotFoundError(
-                        f"Module named {module_name!r} is not allowed by a rule"
-                    )
         # logger.debug(f"exec_module({module.__name__})...")
         if not self.original_loader:
             return
@@ -353,8 +345,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     )
             else:
                 new_spec = original_spec
+            module_name = fullname.split(".", 1)[0]
             if is_learning_mode() and is_in_sandbox():
-                module_name = fullname.split(".", 1)[0]
                 if (
                     "*" not in _rules
                     and module_name not in _rules
@@ -362,8 +354,12 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                 ):
                     add_learning_rule(LearnImportRule(module_name))
             else:
-                # logger.error("Ignore %s",repr(fullname))
-                pass
+                if _rules and _rules[0] != "*":
+                    # Reactiver le filtre de module
+                    if module_name not in _rules:
+                        raise RuleModuleNotFoundError(
+                            f"Module named {module_name!r} is not allowed by a rule"
+                        )
             if fullname == "pysandboxes_run":
                 logger.error(f"Pour pysandboxes_run {new_spec=}")  # FIXME
             return new_spec

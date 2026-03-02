@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    log_level = logging.DEBUG  # FIXME
+    log_level = logging.WARNING  # FIXME
     config_log(log_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
