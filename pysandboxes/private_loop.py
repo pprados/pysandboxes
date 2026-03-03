@@ -107,12 +107,12 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
                 import sys
 
                 logger.exception("")
-                print("KeyboardInterrupt", file=sys.stderr)
                 _thread.interrupt_main(signal.SIGINT)
             except SystemExit as e:
                 import os
+                import sys
 
-                logger.error("Exit sandbox")
+                logger.error("Exit sandbox")  # FIXME
                 os._exit(e.args[0])
             except Exception:
                 import os

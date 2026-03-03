@@ -217,7 +217,7 @@ async def main(argv: List[str]) -> int:
     # sys.addaudithook(audit_hook)
 
     extra_rules = convert_extra_rules(argv[1:])
-    # sandboxes_config = Path("tests/test.py-sandboxes")
+    # pysandboxes_config = Path("tests/test.py-sandboxes")
     config_path = Path(".py-sandboxes")
     if "learn" in extra_rules:
         learning_path, *_ = extra_rules.get("learn", set())

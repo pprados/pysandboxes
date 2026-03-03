@@ -106,7 +106,7 @@ def load_and_parse_config(
 
     This function implements a sophisticated configuration loading strategy:
 
-    1. If no sandboxes_config is provided, defaults to "./.py-sandboxes"
+    1. If no pysandboxes_config is provided, defaults to "./.py-sandboxes"
     2. If the config file doesn't exist, automatically enables learning mode
     3. In learning mode, creates a new config file based on observed behavior
     4. If config contains a --learn directive, appends new rules to existing file

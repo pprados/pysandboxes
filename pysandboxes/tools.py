@@ -251,7 +251,7 @@ def set_is_in_sandbox(value: bool) -> None:
         _sandboxed -= 1
         _is_in_sandbox -= 1
         # assert _sandboxed.get() >= 0
-        assert _sandboxed >= 0
+        assert _sandboxed >= 0, f"{_sandboxed=}"
 
 
 def find_config_for_module(module: str) -> Path | None:

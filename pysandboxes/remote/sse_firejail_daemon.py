@@ -40,7 +40,7 @@ from .tools import suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
+DEBUG = True
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different

@@ -52,13 +52,13 @@ flowchart TD
 To launch this MCP server, add this line to your client's parameters, from the server's directory.
 ```bash
 # Add this command line in the parameter of the MCP client
-uv run -m mcp_server.main -t stdio
+uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio
 ```
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
 cd path/to/mcp-server
 claude mcp remove mcp_demo
-claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
+claude mcp add mcp_demo -- uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio
 ```
 and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
 
@@ -239,7 +239,7 @@ For the client, consult the specific documentation. For example, [here](../mcp-c
 
 
 ---
-## Attach
+## Attack the MCP server
 Without sandbox, you can try 
 
 - a *Path Traversal*
@@ -254,7 +254,7 @@ Without sandbox, you can try
 
 `http://localhost:636` for cups.
 
-- a *Remote Code Execution*
+- a *Remote Code Execution* (not detected now)
 
 ![Remote Code Execution](RCE.png)
 
@@ -264,7 +264,7 @@ Without sandbox, you can try
 ][0]("cat README.md",shell=True,stdout=-1,text=True).communicate()[0]
 ```
 
-- a *Deni of services*
+- a *Deni of services* (not detected now)
 
 ![Deny of Service](DOS.png)
 To use the prompt `analyze_data`:

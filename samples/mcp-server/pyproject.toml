@@ -15,13 +15,40 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    "click>=8.2",
-    "debugpy>=1.8.17",
     "fastmcp>=2.12.4",
-    "httpx-file>=0.2.0",
     "markdownify>=1.2.0",
-    "mcp>=1.14",
     "pysandboxes>=0.0",
+]
+[dependency-groups]
+dev = [
+    "playwright>=1.28.0",
+    "setuptools>=67.6.1",
+    "ipython",
+    "ipykernel",
+    "jupyter>=1.0",
+    "jupyterlab_rise>=0.42",
+    "pre-commit>=3.6",
+    "twine>=5.1.0",
+    "importlib-metadata==7.2.1",
+    "scikit-learn>=1.6",
+    "pydevd-pycharm",
+    "rich>=14.0",
+    "mcp[cli]>=1.14.0",
+    "json-with-comments>=1.2.10",
+]
+test = [
+    "pytest>=7.3.0",
+    "pytest-dotenv>=0.5.2",
+    "pytest-asyncio>=0.20.3",
+    "pytest-mock>=3.10.0",
+    "syrupy>=5.0.0",
+]
+lint = [
+    "mypy>=1.8",
+    "ruff>=0.1.9",
+]
+codespell = [
+    "codespell>=2.2.5",
 ]
 
 [project.scripts]
@@ -57,3 +84,9 @@ pysandboxes = { path = "../..", editable = true }
 
 [[tool.uv.index]]
 url = "https://pypi.org/simple"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+asyncio_default_fixture_loop_scope = "session"

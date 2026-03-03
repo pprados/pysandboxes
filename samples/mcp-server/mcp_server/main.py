@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import argparse
+import importlib
 import logging
 import sys
 from operator import add, mul, sub, truediv
@@ -130,11 +131,11 @@ def run_mcp_server(
     os_sandbox: str,
     transport: str,
     port: int,
-    sandboxes_config: Path,
+    pysandboxes_config: Path,
     **kwargs,
 ) -> int:
     with sandboxes(
-        sandboxes_config=sandboxes_config,
+        sandboxes_config=pysandboxes_config,
         py_sandbox=py_sandbox,  # type: ignore[arg-type]
         os_sandbox=os_sandbox,  # type: ignore[arg-type]
         **kwargs,
@@ -204,10 +205,14 @@ def main() -> int:
         help="The learning path.",
     )
     args = parser.parse_args()
+    if not args.config_path:
+        resource_path = importlib.resources.files(__package__)
+        args.config_path = resource_path / ".py-sandboxes"
+
     kwargs = {}
     if args.learn:
         kwargs = {"learn": args.learn}
-    logger.info(f"Start mcp_server with {args}")
+    logger.error(f"Start mcp_server with {args}")  # FIXME
     return run_mcp_server(
         args.py_sandbox,
         args.os_sandbox,
@@ -220,4 +225,12 @@ def main() -> int:
 
 # Run the mcp over stdio
 if __name__ == "__main__":  # FIXME: resoudre le __main__
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt", file=sys.stderr)
+        pass
+    except SystemExit:
+        print("SystemExit", file=sys.stderr)
+        pass
+

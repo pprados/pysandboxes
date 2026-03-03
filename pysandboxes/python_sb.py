@@ -80,20 +80,10 @@ def main() -> int:
     try:
         import importlib
 
-        if (
-                "/" not in str(config_path)
-                and len(python_cmd) >= 2
-                and python_cmd[0] == "-m"
-        ):
-            # learn is a filename, not a full filename
-            # and use -m syntax. So search the config file in the module
-            caller_module = python_cmd[1].split(".", 1)[0]
-            config_path = find_config_for_module(caller_module)
-
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
         extra_rules["env"] = envs
-        logger.debug(f"Use {config_path=}")  # FIXME: a supprimer
+        logger.info(f"Use {config_path=}")
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=os.environ,  # Use current environ

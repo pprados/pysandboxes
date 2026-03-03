@@ -154,7 +154,7 @@ class sandboxes:
 
         With custom configuration:
         ```python
-        with sandboxes(sandboxes_config="custom.conf", graceful_shutdown=True):
+        with sandboxes(pysandboxes_config="custom.conf", graceful_shutdown=True):
             result = some_function()
         ```
 
@@ -256,16 +256,19 @@ class sandboxes:
                 """
                 # Iterate through all child processes and send them SIGTERM
                 logger.debug("Catch signal %s. Propagate to the daemon.", signum)
-
+                # Remove this handler
+                signal.signal(
+                    signum, self._signals[signum]
+                )
                 loop = get_sandbox_loop()
-                handler = self._signals[signum]
 
-                async def _stop_and_handler():
+                async def _stop_and_propagate_signal():
                     await self._stop_daemon()
-                    # if isinstance(handler, Callable):  # FIXME: propage signal?
-                    #     handler(signum, frame)
+                    import _thread
+                    logger.debug("Propagate {%i}",signum)
+                    _thread.interrupt_main(signum)
 
-                loop.call_soon_threadsafe(lambda: loop.create_task(_stop_and_handler()))
+                loop.call_soon_threadsafe(lambda: loop.create_task(_stop_and_propagate_signal()))
 
             if threading.current_thread() is threading.main_thread():
                 logger.debug("Activate signal handlers.")
