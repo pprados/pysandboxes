@@ -309,16 +309,16 @@ def activate_guard(rules: EnvsRules) -> None:
     _rules = rules
 
 
-def patch_rules(learning_path: Path | None) -> dict[str, Callable]:
+def patch_rules(learn:bool) -> dict[str, Callable]:
     """Provide patch rules for environment variable monitoring.
 
     Args:
-        learning_path: Path for learning mode configuration, None if disabled.
+        learn: Use learn mode?
 
     Returns:
         Dictionary of module patches for environment monitoring.
     """
-    if learning_path:
+    if learn:
 
         def activate_learning_env_factory(x: Any) -> LearnEnviron:
             os.environ = LearnEnviron()

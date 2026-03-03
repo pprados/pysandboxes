@@ -24,15 +24,14 @@ from pysandboxes.remote.sse_client_subprocess_daemon import (
     launch_sandbox,
 )
 from pysandboxes.sb_types import Envs
-from pysandboxes.tools import Environ
-
+from pysandboxes.tools import Environ, find_config_for_module
 from .remote.parse_cpython_args import parse_python_cmd_line
 
 logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    log_level = logging.INFO  # FIX_RELEASE
+    log_level = logging.DEBUG  # FIX_RELEASE
     config_log(log_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
@@ -82,20 +81,14 @@ def main() -> int:
         import importlib
 
         if (
-            "/" not in str(config_path)
-            and len(python_cmd) >= 2
-            and python_cmd[0] == "-m"
+                "/" not in str(config_path)
+                and len(python_cmd) >= 2
+                and python_cmd[0] == "-m"
         ):
             # learn is a filename, not a full filename
             # and use -m syntax. So search the config file in the module
             caller_module = python_cmd[1].split(".", 1)[0]
-            try:
-                resource_path = importlib.resources.files(caller_module)
-                resource_config = resource_path / config_path
-                if resource_config and resource_config.exists():
-                    config_path = resource_config
-            except FileNotFoundError:
-                pass  # Ignore
+            config_path = find_config_for_module(caller_module)
 
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")

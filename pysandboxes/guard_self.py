@@ -68,11 +68,9 @@ def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
     return module
 
 
-def patch_rules() -> Dict[str, Callable]:
+def patch_rules(learn:bool) -> Dict[str, Callable]:
     return {}
 
 
 def activate_guard() -> None:
-    import sys
-
-    sys.modules["sys"] = _global_patch_in_sys_module(sys.modules["sys"])
+    pass  # Nothing at this time

@@ -31,7 +31,6 @@ mcp = FastMCP(
     "My MCP Server",
     host="127.0.0.1",
     port=8000,
-    log_level=logging.getLevelName(logger.getEffectiveLevel()),
 )
 
 RESOURCES_DIR = Path(__file__).parent.parent / "resources"
@@ -121,6 +120,7 @@ def analyze_data(expression: str) -> str:
 
 
 def run_mcp_server(
+    py_sandbox: str,
     os_sandbox: str,
     transport: str,
     port: int,
@@ -129,6 +129,7 @@ def run_mcp_server(
 ) -> int:
     with sandboxes(
         sandboxes_config=sandboxes_config,
+        py_sandbox=py_sandbox,  # type: ignore[arg-type]
         os_sandbox=os_sandbox,  # type: ignore[arg-type]
         **kwargs,
     ):
@@ -182,6 +183,13 @@ def main() -> int:
         help="Choice the os-sandbox provider.",
     )
     parser.add_argument(
+        "--py-sandbox",
+        dest="py_sandbox",
+        type=str,
+        default="True",  # Use None as default value for clear checking
+        help="Choice to activate the py-sandbox.",
+    )
+    parser.add_argument(
         "--learn",
         dest="learn",
         type=str,
@@ -194,7 +202,12 @@ def main() -> int:
         kwargs = {"learn": args.learn}
     logger.info(f"Start mcp_server with {args}")
     return run_mcp_server(
-        args.os_sandbox, args.transport, args.port, args.config_path, **kwargs
+        args.py_sandbox,
+        args.os_sandbox,
+        args.transport,
+        args.port,
+        args.config_path,
+        **kwargs
     )
 
 

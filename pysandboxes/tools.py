@@ -15,6 +15,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from types import ModuleType
 from typing import (
     Any,
     Awaitable,
@@ -22,6 +23,7 @@ from typing import (
     Iterator,
 )
 
+from .config import CONFIG_NAME
 from .sb_types import ConfigLine, ConfigLines, Envs
 
 Environ = dict[str, str] | os._Environ
@@ -241,12 +243,23 @@ def set_is_in_sandbox(value: bool) -> None:
     global _is_in_sandbox
     if value:
         _sandboxed.set(_sandboxed.get() + 1)
-        # _is_in_sandbox += 1  # FIXME: a tester
+        _is_in_sandbox += 1
     else:
         _sandboxed.set(_sandboxed.get() - 1)
+        _is_in_sandbox -= 1
         assert _sandboxed.get() >= 0
-        # _is_in_sandbox -= 1
 
+def find_config_for_module(module:str) -> Path | None:
+    import importlib
+    try:
+        resource_path = importlib.resources.files(module)
+        resource_config = resource_path / CONFIG_NAME
+        if resource_config and resource_config.exists():
+            return resource_config
+        else:
+            return None
+    except FileNotFoundError:
+        return None
 
 SyncOrAsyncFunc = Callable[[], None] | Callable[[], Awaitable[None]]
 

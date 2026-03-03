@@ -8,6 +8,7 @@
         "-m", "pysandboxes.python_sb",
         "--os-sandbox=none",
         "--py-sandbox=none",
+//        "--learn=.py-sandboxesXX",
         "-m", "mcp_server.main",
         "-t", "stdio"
       ]

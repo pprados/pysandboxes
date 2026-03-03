@@ -31,7 +31,7 @@ def _debug_log() -> None:
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
-    logging.getLogger("Pysandboxes").setLevel(log_level)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(log_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
 

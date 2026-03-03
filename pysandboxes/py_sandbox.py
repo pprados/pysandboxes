@@ -29,13 +29,40 @@ from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
 from .e import ConfigSyntaxError
-from .guard_import import remove_modules
-from .learning import set_learning_path
+from .learning import set_learning_path, set_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import Environ, remove_config_comments, substitute_config_env_vars
 
 logger = logging.getLogger(__name__)
+
+def _search_module_config(config_path: Path | None) -> Path:
+    if not config_path:
+        config_path = Path(CONFIG_NAME)
+    # Try to find config filename
+    pysb_module_name = __name__.split(".", 1)[0]
+    # Search the module of the caller
+    frame = sys._getframe()
+    while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
+        pysb_module_name + "."
+    ):
+        assert frame.f_back is not None
+        frame = frame.f_back
+    # Module of the caller
+    from importlib.resources import files
+
+    caller_module = frame.f_globals.get("__name__", "__main__").split(".", 1)[0]
+    resource_config: Path | None = None
+    if caller_module != "__main__":
+        resource_path = cast(Path, files(caller_module))
+        resource_config = resource_path / config_path
+    if resource_config and resource_config.exists():
+        config_path = resource_config
+        logger.info("Use the resource %s from the caller module", config_path)
+    else:
+        # Else search in the current working directory
+        config_path = Path.cwd() / config_path
+    return config_path
 
 
 def _get_caller_module(skip: int) -> types.ModuleType | None:
@@ -102,7 +129,7 @@ def load_and_parse_config(
     # Extra rules can be in form k=v or k=[v1,v2,...]
     extra_lines = []
     for k, all_v in extra_rules.items():
-        k = k.replace("_", "-")  # TODO: params import
+        k = k.replace("_", "-")
         if isinstance(all_v, set):
             extra_lines.extend([ConfigLine(f"{k}={v}", Path(), 0) for v in all_v])
         else:
@@ -130,35 +157,6 @@ def load_and_parse_config(
         config_path=config_path,
         envs=envs,
     )
-
-
-def _search_module_config(config_path: Path | None) -> Path:
-    if not config_path:
-        config_path = Path(CONFIG_NAME)
-    # Try to find config filename
-    pysb_module_name = __name__.split(".", 1)[0]
-    # Search the module of the caller
-    frame = sys._getframe()
-    while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
-        pysb_module_name + "."
-    ):
-        assert frame.f_back is not None
-        frame = frame.f_back
-    # Module of the caller
-    from importlib.resources import files
-
-    caller_module = frame.f_globals.get("__name__", "__main__").split(".", 1)[0]
-    resource_config: Path | None = None
-    if caller_module != "__main__":
-        resource_path = cast(Path, files(caller_module))
-        resource_config = resource_path / config_path
-    if resource_config and resource_config.exists():
-        config_path = resource_config
-        logger.info("Use the resource %s from the caller module", config_path)
-    else:
-        # Else search in the current working directory
-        config_path = Path.cwd() / config_path
-    return config_path
 
 
 def _parse_include(
@@ -287,11 +285,11 @@ def activate_sandboxes(
         )
 
     # Apply the rules
-    env_patch_rules = guard_envs.patch_rules(all_rules.learning_path)
-    file_patch_rules = guard_files.patch_rules()
-    socket_patch_rules = guard_socket.patch_rules()
-    import_patch_rules = guard_import.patch_rules()
-    self_patch_rules = guard_self.patch_rules()
+    env_patch_rules = guard_envs.patch_rules(all_rules.learn)
+    file_patch_rules = guard_files.patch_rules(all_rules.learn)
+    socket_patch_rules = guard_socket.patch_rules(all_rules.learn)
+    import_patch_rules = guard_import.patch_rules(all_rules.learn)
+    self_patch_rules = guard_self.patch_rules(all_rules.learn)
     guard_import.activate_guard_import(
         {
             **file_patch_rules,
@@ -306,6 +304,6 @@ def activate_sandboxes(
     guard_envs.activate_guard(all_rules.envs_rules)
     guard_socket.activate_guard(all_rules.socket_rules)
     guard_files.activate_guard(all_rules.file_rules)
+    set_learning_mode(all_rules.learn)
     set_learning_path(all_rules.learning_path)
-    remove_modules()
-    # guard_self.activate_guard()
+    guard_self.activate_guard()

@@ -28,6 +28,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers managment)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
+    - [ ] [Cloud morph](https://cloud.morph.so/)
 - [ ] New samples
   - [X] MCP server
   - [X] MCP client

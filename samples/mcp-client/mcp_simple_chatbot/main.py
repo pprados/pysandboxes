@@ -5,13 +5,12 @@ import logging
 import sys
 from shutil import which
 
-from mcp.types import TextResourceContents
-
 import anyio
 import httpx
 import jsonc as json
 from dotenv import load_dotenv
 from fastmcp import Client
+from mcp.types import TextResourceContents
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -181,8 +180,7 @@ class ChatSession:
         )
 
         system_message = (
-            "You are a helpful assistant with access to tools "
-            "and resources.\n\n"
+            "You are a helpful assistant with access to tools " "and resources.\n\n"
         )
 
         if tools_description:
@@ -193,8 +191,7 @@ class ChatSession:
 
         if resource_templates_list:
             system_message += (
-                f"Available resource templates:\n"
-                f"{resource_templates_list}\n\n"
+                f"Available resource templates:\n" f"{resource_templates_list}\n\n"
             )
 
         system_message += (
@@ -288,6 +285,7 @@ def main() -> int:
         default="servers_config.json",
         help="The mcp server configuration file.",
     )
+
     anyio.run(run, parser.parse_args())
     return 0
 
@@ -308,6 +306,6 @@ def main_sb() -> int:
     return python_sb()  # Launch 'python-sb'
 
 
-if __name__ == "__main__":  # TODO: try to place in __init__.py
-    # sys.exit(main())  # FIXME
-    sys.exit(main_sb())  # Use Full SB by default
+if __name__ == "__main__":  # TODO: try to place in __init__.py for python -m mcp_simple_chatbot
+    sys.exit(main())  # FIXME: main() mcp client without sandbox
+    # sys.exit(main_sb())  # Use Full SB

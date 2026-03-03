@@ -5,10 +5,10 @@ This code is an example implementation of an MCP server.
 ## Features
 
 It offers the following services:
-- [X] Python code execution (tool `evaluate_expression`)
-- [X] Browsing a WEB page (tool `fetch_webpage`)
 - [X] Publishing resources from the directory  ̀./resources`
 - [X] Expose a prompt (`analyze_data`)
+- [X] Browsing a WEB page (tool `fetch_webpage`)
+- [X] Python code execution (tool `evaluate_expression`)
 
 This demonstrates the added value of **Py-sandboxes**. Security rules will limit the capabilities of the MCP server, using only a parameter file.
 

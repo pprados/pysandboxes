@@ -195,7 +195,7 @@ class TestAddLearningRule:
         rules = [
             "file:/path/to/file",
             "socket:tcp:80",
-            "import:module_name",
+            "import:code_path",
             "env:VARIABLE_NAME",
         ]
 

@@ -2,8 +2,7 @@ SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
 
 # Swith to poetry to uv
-POETRY_OR_UV=uv
-LOCK=$(POETRY_OR_UV).lock
+UV=uv
 UV_EXTRA?=
 UV_GROUP?=--group dev --group lint --group test --group codespell
 
@@ -19,16 +18,19 @@ TEST_FILE ?= tests/unit_tests/
 .vscode/launch.json: .idea/runConfigurations/*
 	claude -p "Update the .vscode/launch.json file with the modification of the files in .idea/runConfigurations/"
 
+# Fix VS Code launch.json
+fix-vs-code: .vscode/launch.json
+
 integration_tests:
-	$(POETRY_OR_UV) run pytest tests/integration_tests
+	$(UV) run pytest tests/integration_tests
 
 test tests:
-	$(POETRY_OR_UV) run pytest -v $(TEST_FILE)
+	$(UV) run pytest -v $(TEST_FILE)
 
 all-tests: tests integration_tests
 
 test_watch:
-	$(POETRY_OR_UV) run ptw --now . -- tests/unit_tests
+	$(UV) run ptw --now . -- tests/unit_tests
 
 
 ######################
@@ -41,28 +43,29 @@ lint format: PYTHON_FILES=.
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint lint_diff:
-	$(POETRY_OR_UV) run mypy $(PYTHON_FILES)
-	$(POETRY_OR_UV) run black $(PYTHON_FILES) --check
-	$(POETRY_OR_UV) run ruff .
+	$(UV) run mypy $(PYTHON_FILES)
+	$(UV) run black $(PYTHON_FILES) --check
+	$(UV) run ruff .
 
 claude-lint: lint
 	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'
 
 format format_diff:
-	$(POETRY_OR_UV) run black $(PYTHON_FILES)
-	$(POETRY_OR_UV) run ruff check --select I --fix $(PYTHON_FILES)
+	$(UV) run black $(PYTHON_FILES)
+	$(UV) run ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
-	$(POETRY_OR_UV) run codespell --toml pyproject.toml
+	$(UV) run codespell --toml pyproject.toml
 
 spell_fix:
-	$(POETRY_OR_UV) run codespell --toml pyproject.toml -w
+	$(UV) run codespell --toml pyproject.toml -w
 
 
 ######################
 # DOCUMENTATION
 ######################
 
+# Clean the environment
 clean: docs_clean api_docs_clean
 	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \; || true
 	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
@@ -86,34 +89,61 @@ api_docs_clean:
 
 
 api_docs_linkcheck:
-	$(POETRY_OR_UV) run linkchecker docs/api_reference/_build/html/index.html
+	$(UV) run linkchecker docs/api_reference/_build/html/index.html
 
 ######################
 # HELP
 ######################
 
+.DEFAULT: help
+## Print all majors target
 help:
-	@echo '----'
-	@echo 'format                       - run code formatters'
-	@echo 'lint                         - run linters'
-	@echo 'test                         - run unit tests'
-	@echo 'tests                        - run unit tests'
-	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
-	@echo 'test_watch                   - run unit tests in watch mode'
-	@echo 'clean                        - run docs_clean and api_docs_clean'
-	@echo 'docs_build                   - build the documentation'
-	@echo 'docs_clean                   - clean the documentation build artifacts'
-	@echo 'docs_linkcheck               - run linkchecker on the documentation'
-	@echo 'api_docs_build               - build the API Reference documentation'
-	@echo 'api_docs_clean               - clean the API Reference documentation build artifacts'
-	@echo 'api_docs_linkcheck           - run linkchecker on the API Reference documentation'
-	@echo 'spell_check               	- run codespell on the project'
-	@echo 'spell_fix               		- run codespell on the project and fix the errors'
+	@echo "$(bold)Available rules:$(normal)"
+	@echo
+	@sed -n -e "/^## / { \
+		h; \
+		s/.*//; \
+		:doc" \
+		-e "H; \
+		n; \
+		s/^## //; \
+		t doc" \
+		-e "s/:.*//; \
+		G; \
+		s/\\n## /---/; \
+		s/\\n/ /g; \
+		p; \
+	}" ${MAKEFILE_LIST} \
+	| LC_ALL='C' sort --ignore-case \
+	| awk -F '---' \
+		-v ncol=$$(tput cols) \
+		-v indent=20 \
+		-v col_on="$$(tput setaf 6)" \
+		-v col_off="$$(tput sgr0)" \
+	'{ \
+		printf "%s%*s%s ", col_on, -indent, $$1, col_off; \
+		n = split($$2, words, " "); \
+		line_length = ncol - indent; \
+		for (i = 1; i <= n; i++) { \
+			line_length -= length(words[i]) + 1; \
+			if (line_length <= 0) { \
+				line_length = ncol - indent - length(words[i]) - 1; \
+				printf "\n%*s ", -indent, " "; \
+			} \
+			printf "%s ", words[i]; \
+		} \
+		printf "\n"; \
+	}' \
+	| more $(shell test $(shell uname) = Darwin && echo '--no-init --raw-control-chars')
+
+	@echo -e "Use '$(cyan)make -B ...$(normal)' to force the target"
+	@echo -e "Use '$(cyan)make -n ...$(normal)' to simulate the build"
+
 
 
 .PHONY: dist
 dist:
-	$(POETRY_OR_UV) build
+	$(UV) build
 
 # ---------------------------------------------------------------------------------------
 # SNIPPET pour tester la publication d'une distribution
@@ -168,7 +198,7 @@ jupyter:
 	poetry run jupyter lab
 
 ## Validate the code
-validate: $(POETRY_OR_UV).lock format lint spell_check test
+validate: $(UV).lock format lint spell_check test
 
 
 _poetry-init:
@@ -186,6 +216,6 @@ _uv-init:
 inspector:
 	npx @modelcontextprotocol/inspector
 
-init: _$(POETRY_OR_UV)-init
+init: _$(UV)-init
 #	@pre-commit install
 	@git lfs install

@@ -14,13 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.INFO  # FIXME
+    sandboxes_level = logging.DEBUG  # FIXME
     uvicorn_level = logging.WARNING
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
-    logging.getLogger("Pysandboxes").setLevel(uvicorn_level)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logging.getLogger().setLevel(sandboxes_level)  # Set the default level for root
 

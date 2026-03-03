@@ -58,11 +58,11 @@ class PatchRule(NamedTuple):
     """Rule for applying patches to imported modules.
 
     Attributes:
-        module_name: Name of the module or attribute to patch.
+        code_path: Name of the module or attribute to patch.
         patch_factory: Factory function that creates the patch.
     """
 
-    module_name: str
+    code_path: str
     patch_factory: Callable
 
 
@@ -109,8 +109,8 @@ _patch_rules: PatchRules = ImmutableDict({})
 
 
 def parse_rules(
-    config: ConfigLines,
-    errors: list[ErrorMsg],
+        config: ConfigLines,
+        errors: list[ErrorMsg],
 ) -> tuple[ImportRules, ConfigLines]:
     """Parse import rules from configuration lines.
 
@@ -142,24 +142,26 @@ def _apply_patch(module: ModuleType, name: str) -> None:
         module: The loaded module to patch.
         name: Name of the module being patched.
     """
-    logger.debug(f"Apply patch for {module}")
+    logger.debug(f"Apply patch for {module.__name__}")
     all_patch = cast(tuple[PatchRule, ...], _patch_rules[name])
     for patch in all_patch:
         cur_object = module
-        if patch.module_name != "":
-            paths = patch.module_name.split(".")
+        if patch.code_path != "":
+            paths = patch.code_path.split(".")
             for node in paths[:-1]:
                 cur_object = cur_object.__dict__[node]
             new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
             if __debug__ and isinstance(
-                new_value, type(_apply_patch)
+                    new_value, type(_apply_patch)
             ):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined]
             setattr(cur_object, paths[-1], new_value)
+            # logger.debug("Patch %s.%s",name, patch.code_path)
         else:
             # Patch the entire module
             sys.modules[name] = patch.patch_factory(cur_object)
+            # logger.debug("Patch the module %s",name)
 
 
 class GuardLoader(Loader):
@@ -232,7 +234,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
     @classmethod
     def find_distributions(
-        cls, context: DistributionFinder.Context = DistributionFinder.Context()
+            cls, context: DistributionFinder.Context = DistributionFinder.Context()
     ) -> Iterable[importlib.metadata.PathDistribution]:
         """Find package distributions.
 
@@ -284,10 +286,10 @@ class GuardFinder(importlib.abc.MetaPathFinder):
     """
 
     def find_spec(
-        self,
-        fullname: str,
-        path: Sequence[str] | None,
-        target: ModuleType | None = None,
+            self,
+            fullname: str,
+            path: Sequence[str] | None,
+            target: ModuleType | None = None,
     ) -> ModuleSpec | None:
         """Find module specification with import guarding.
 
@@ -350,9 +352,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             module_name = fullname.split(".", 1)[0]
             if is_learning_mode() and is_in_sandbox():
                 if (
-                    "*" not in _rules
-                    and module_name not in _rules
-                    and module_name != "pysandboxes"
+                        "*" not in _rules
+                        and module_name not in _rules
+                        and module_name != "pysandboxes"
                 ):
                     add_learning_rule(LearnImportRule(module_name))
             else:
@@ -377,7 +379,7 @@ _activated = False
 
 
 def _activate_patch_import(
-    patch_rules: PatchRules,
+        patch_rules: PatchRules,
 ) -> bool:
     """Activate import patching with specified rules.
 
@@ -404,87 +406,7 @@ def _activate_patch_import(
         return False
 
 
-# Modules to not remove from sys.modules, and to wait the lazy patch
-_not_refresh_modules: set[str] = {
-    "sys",
-    "asyncio",  # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
-    # "asyncio.base_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
-    # "asyncio.proactor_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
-    # "asyncio.selector_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
-    # "asyncio.trsock", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
-    # "asyncio.unix_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
-    # "asyncio.windows_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
-    "builtins",
-    "concurrent",
-    "importlib",
-    "warnings",
-    "logging",
-    "rich",  # Because I use it
-    "_pytest",
-    "_pytest.fixtures",
-    "pytest",
-    # "pathlib",
-    "subprocess",
-    "codecs",
-    __name__.rsplit(".", maxsplit=1)[0],
-}
-
-
-def remove_modules() -> None:
-    """Remove non-essential modules from sys.modules for clean import state.
-
-    This function clears the module cache except for essential system modules,
-    forcing fresh imports that will go through the guard system.
-    """
-    # mode="reload_sys"
-    # mode = "reload_all"  # FIXME: vérifier l'application des règles
-    mode = "remove"
-    import sys
-
-    logger.debug("Remove old modules")
-    to_remove = set()
-    for k, m in dict(sys.modules).items():
-        if k.startswith("_pytest") or k.startswith("pytest"):
-            continue
-        # Detect system modules
-        for special in _not_refresh_modules:
-            if k == special or k.startswith(special + "."):
-                break
-        else:
-            to_remove.add(k)
-
-    importlib.invalidate_caches()
-
-    # Reload modules (may add modules with reload() )
-    logger.debug("Reload modules... (%s)", mode)
-    for k in sorted(to_remove):
-        if k in ("asyncio.base_events", "asyncio.selector_events"):
-            logger.debug(f"HACK: reloade({k=}")
-            importlib.reload(sys.modules[k])
-        if k in sys.modules:
-            if (mode == "reload_all" or k in sys.builtin_module_names) and k.startswith(
-                "pysandboxes"
-            ):
-                m = sys.modules[k]
-                if m:
-                    try:
-                        importlib.reload(m)
-                    except ImportError as e:
-                        logger.debug("Ignore '%s'", str(e))
-
-    # Remove modules
-    if mode == "remove":
-        logger.debug("Remove modules...")
-        for k in to_remove:
-            if k in sys.modules:
-                if k not in sys.builtin_module_names:
-                    # if True:
-                    del sys.modules[k]
-        assert "io" not in sys.modules
-    logger.debug("remove_modules() done")
-
-
-def patch_rules() -> dict[str, Callable]:
+def patch_rules(learn: bool) -> dict[str, Callable]:
     """Get default patch rules for import guard.
 
     Returns:
@@ -494,8 +416,8 @@ def patch_rules() -> dict[str, Callable]:
 
 
 def activate_guard_import(
-    str_patch_rules: dict[str, Callable],
-    rules: ImportRules,
+        str_patch_rules: dict[str, Callable],
+        rules: ImportRules,
 ) -> None:
     """Activate import guard with specified rules and patches.
 
@@ -509,11 +431,12 @@ def activate_guard_import(
     if _activated:
         logger.debug("Guard_files was already activated.")
         return
-    if _activate_patch_import(patch_rules):
-        for module in _not_refresh_modules:
+    if _activate_patch_import(patch_rules):  # Add in sys.meta_path
+        # For all loaded modules, apply patch
+        for module in sys.modules:
             if module in patch_rules:
-                builtins_module = sys.modules[module]
-                _apply_patch(builtins_module, module)
+                _apply_patch(sys.modules[module], module)
+
     _rules = rules
 
 
@@ -555,7 +478,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
 
 
 def generate_rules(
-    learn: set[Any],
+        learn: set[Any],
 ) -> list[str]:
     """Generate import rules from learning data.
 
@@ -634,8 +557,6 @@ def generate_rules(
 
 
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
-
     def _deactivate_guard_import() -> None:
         global _rules
         _rules = ("*",)
-        remove_modules()

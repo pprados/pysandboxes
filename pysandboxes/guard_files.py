@@ -544,19 +544,6 @@ def _apply_dest_to_src_rules(
     return None, None
 
 
-def _special_caller() -> bool:
-    return False
-    # frame = sys._getframe(2)
-    # filename = None
-    # if inspect.isframe(frame):
-    #     code = frame.f_code
-    #     filename = code.co_filename
-    # for wl in _white_list:
-    #     if filename.endswith(wl):
-    #         return True
-    # return False
-
-
 def _raise_ignore(file: str | bytes | os.PathLike | int, rule: FilesRule) -> NoReturn:
     assert rule is not None
 
@@ -602,17 +589,6 @@ def _wrap_buitins_open(func: Callable) -> Callable:
         closefd: bool = True,
         opener: Callable | None = None,
     ) -> Any:
-        if _special_caller():
-            return func(
-                file,
-                mode=mode,
-                buffering=buffering,
-                encoding=encoding,
-                errors=errors,
-                newline=newline,
-                closefd=closefd,
-                opener=opener,
-            )
         need_to_write = mode is not None and (
             "w" in mode or "a" in mode or "x" in mode or "+" in mode
         )
@@ -659,8 +635,6 @@ def _wrap_filename(func: Callable, *, write: bool, learn: bool = True) -> Callab
         file: str | bytes | os.PathLike | int, *args: Any, **kwargs: dict[str, Any]
     ) -> Any:
         # Detect call from posixpath
-        if _special_caller():
-            return func(file, *args, **kwargs)
         if isinstance(file, int):
             return func(file, *args, **kwargs)
         if isinstance(file, _DirEntry):
@@ -694,8 +668,6 @@ def _wrap_two_filenames(
         **kwargs: dict[str, Any],
     ) -> Any:
         # Detect call from posixpath
-        if _special_caller():
-            return func(src, dest, *args, **kwargs)
         if isinstance(src, _DirEntry):
             src = src.path
         if isinstance(src, bytes):
@@ -783,8 +755,6 @@ def _wrap_os_path_samefile(func: Callable) -> Callable:
         f1 = cast(str, f1)
         f2 = cast(str, f2)
         # Detect call from posixpath
-        if _special_caller():
-            return func(f1, f2)
         remapped_src, rule1 = _apply_dest_to_src_rules(cast(str, f1), write=False)
         if rule1:
             _raise_ignore(f1, rule1)
@@ -810,8 +780,6 @@ def _wrap_os_chdir(func: Callable, *, write: bool) -> Callable:
             path = os.fsdecode(path)
         path = cast(str, path)
         new_dir = path
-        if _special_caller():
-            return func(new_dir)
         if isinstance(path, int):
             return func(path)
         new_dir = cast(str, os.fspath(path))
@@ -890,8 +858,6 @@ def _wrap_os_open(func: Callable) -> Callable:
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         # Detect call from posixpath
-        if _special_caller():
-            return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
         if isinstance(path, int):
             return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
         if isinstance(path, _DirEntry):
@@ -923,7 +889,7 @@ def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
         effective_ids: bool = False,
         follow_symlinks: bool = True,
     ) -> bool:
-        if isinstance(path, int) or _special_caller():
+        if isinstance(path, int):
             return func(
                 path=path,
                 mode=mode,
@@ -1099,10 +1065,6 @@ def _wrap_os_symlink(func: Callable) -> Callable:
             src = os.fsdecode(dst)
         src = cast(str, src)
         dst = cast(str, dst)
-        if _special_caller():
-            return func(
-                src=src, dst=dst, target_is_directory=target_is_directory, dir_fd=dir_fd
-            )
         remapped, rule = _apply_dest_to_src_rules(cast(str, dst), write=True)
         if rule:
             _raise_ignore(dst, rule)
@@ -1248,17 +1210,6 @@ def _wrap_io_open(func: Callable) -> Callable:
         # Detect call from posixpath
         if mode is None:
             mode = "r"
-        if _special_caller():
-            return func(
-                file=file,
-                mode=mode,
-                buffering=buffering,
-                encoding=encoding,
-                errors=errors,
-                newline=newline,
-                closefd=closefd,
-                opener=opener,
-            )
         if isinstance(file, int):
             return func(
                 file=file,
@@ -1515,7 +1466,7 @@ _default_rules: dict[str, Callable] = {
 }
 
 
-def patch_rules() -> dict[str, Callable]:
+def patch_rules(learn:bool) -> dict[str, Callable]:
     """Provide file system patching rules for guard activation.
 
     Returns:

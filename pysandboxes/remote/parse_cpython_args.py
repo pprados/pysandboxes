@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from pysandboxes.config import CONFIG_NAME
+from pysandboxes.tools import find_config_for_module
 
 
 def parse_python_cmd_line(
@@ -109,10 +110,8 @@ def parse_python_cmd_line(
     ):
         try:
             caller_module = python_run_args[1]
-            resource_path = importlib.resources.files(caller_module)
-            resource_config = resource_path / CONFIG_NAME
-            if resource_config and resource_config.exists():
-                pysandboxes_config = resource_config
+            if (x:=find_config_for_module(caller_module)):
+                pysandboxes_config=x
         except FileNotFoundError:
             pass  # Ignore
 

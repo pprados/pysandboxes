@@ -831,6 +831,8 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
         ]
     ]:
         result = func(host, port, family, type, proto, flags, *args, **kwargs)
+        if isinstance(host, bytes):
+            host=host.decode("utf-8")
         if isinstance(host, str) and host and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -1014,30 +1016,37 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_syncio_socket(module: ModuleType) -> ModuleType:
-    import sys
-
-    # return sys.modules[module.__spec__.name]
+def _wrap_asyncio_socket(module: ModuleType) -> ModuleType:  # FIXME: remove, ne fait rien
+    # import sys
+    # import importlib
+    # importlib.reload(module)
+    socket_m=sys.modules[module.__spec__.name]
+    assert hasattr(socket_m.socket.connect,"__pysandbox__")
+    # return socket_m
     return module  # FIXME
 
 
-def patch_rules() -> dict[str, Callable]:
+def patch_rules(learn:bool) -> dict[str, Callable]:
     """Provide socket patching rules for guard activation.
 
     Returns:
         Dictionary of socket module patches.
     """
-    return {
+    rules= {
         "socket.socket.bind": _wrap_socket_bind,
         "socket.socket.connect": _wrap_socket_connect,
         "socket.socket.connect_ex": _wrap_socket_connect_ex,
         "socket.socket.sendto": _wrap_socket_sendto,
-        # TODO: patch gethostbyname() only if learning mode?
-        "socket.gethostbyname": _wrap_socket_gethostbyname,
-        "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
-        "socket.getaddrinfo": _wrap_socket_getaddrinfo,
-        "asyncio.selector_events.socket": _wrap_syncio_socket,
+        "asyncio.base_events.socket": _wrap_asyncio_socket,
+        "asyncio.selector_events.socket": _wrap_asyncio_socket,
     }
+    if learn:
+        rules |= {
+            "socket.gethostbyname": _wrap_socket_gethostbyname,
+            "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
+            "socket.getaddrinfo": _wrap_socket_getaddrinfo,
+        }
+    return rules
 
 
 def activate_guard(rules: SocketRules) -> None:
