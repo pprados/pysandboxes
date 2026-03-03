@@ -1011,10 +1011,13 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
 
     return wrapper
 
+
 def _wrap_syncio_socket(module: ModuleType) -> ModuleType:
     import sys
+
     # return sys.modules[module.__spec__.name]
     return module  # FIXME
+
 
 def patch_rules() -> dict[str, Callable]:
     """Provide socket patching rules for guard activation.

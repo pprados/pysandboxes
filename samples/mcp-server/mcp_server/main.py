@@ -3,12 +3,12 @@ import logging
 import sys
 from operator import add, mul, sub, truediv
 from pathlib import Path
+from typing import Any
 
 import httpx
-from httpx_file import FileTransport
 from fastmcp import FastMCP
+from httpx_file import FileTransport
 from markdownify import markdownify as md
-
 from pysandboxes import sandbox, sandboxes
 
 logger = logging.getLogger(__name__)
@@ -99,8 +99,12 @@ async def evaluate_expression(expression: str) -> float:
         result = eval(
             expression,
             {"__builtins__": {}},
-            {"add": add, "sub": sub, "mul": mul, "truediv": truediv,
-             },
+            {
+                "add": add,
+                "sub": sub,
+                "mul": mul,
+                "truediv": truediv,
+            },
         )
         logger.info(f"Result : {result}")
         return result
@@ -115,23 +119,26 @@ def analyze_data(expression: str) -> str:
 
 
 def run_mcp_server(
-        os_sandbox: str,
-        transport: str,
-        port: int,
-        sandboxes_config: Path,
-        **kwargs,
+    os_sandbox: str,
+    transport: str,
+    port: int,
+    sandboxes_config: Path,
+    **kwargs,
 ) -> int:
     with sandboxes(
-            sandboxes_config=sandboxes_config,
-            os_sandbox=os_sandbox,  # type: ignore[arg-type]
-            **kwargs,
+        sandboxes_config=sandboxes_config,
+        os_sandbox=os_sandbox,  # type: ignore[arg-type]
+        **kwargs,
     ):
-        mcp.run(transport=transport,
-                show_banner=False,
-                host="0.0.0.0",  # Bind to all interfaces
-                port=port,  # Custom port
-                log_level="DEBUG",  # Override global log level
-                )
+        add_parameters: dict[str, Any] = {}
+        if transport == "http":
+            add_parameters = {"host": "0.0.0.0", "port": port}
+        mcp.run(
+            transport=transport,
+            show_banner=False,
+            log_level="DEBUG",  # Override global log level
+            **add_parameters,
+        )
     return 0
 
 
@@ -184,8 +191,9 @@ def main() -> int:
     if args.learn:
         kwargs = {"learn": args.learn}
     logger.info(f"Start mcp_server with {args}")
-    return run_mcp_server(args.os_sandbox, args.transport, args.port, args.config_path,
-                          **kwargs)
+    return run_mcp_server(
+        args.os_sandbox, args.transport, args.port, args.config_path, **kwargs
+    )
 
 
 # Run the mcp over stdio

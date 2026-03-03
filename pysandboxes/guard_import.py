@@ -405,7 +405,7 @@ def _activate_patch_import(
 # Modules to not remove from sys.modules, and to wait the lazy patch
 _not_refresh_modules: set[str] = {
     "sys",
-    "asyncio", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
+    "asyncio",  # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
     # "asyncio.base_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
     # "asyncio.proactor_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
     # "asyncio.selector_events", # soit BaseSelectorEventLoop n'a pas le bon patch socket, soit MCP plante
@@ -446,10 +446,7 @@ def remove_modules() -> None:
             continue
         # Detect system modules
         for special in _not_refresh_modules:
-            if (
-                    k == special
-                    or k.startswith(special + ".")
-            ):
+            if k == special or k.startswith(special + "."):
                 break
         else:
             to_remove.add(k)
@@ -459,12 +456,12 @@ def remove_modules() -> None:
     # Reload modules (may add modules with reload() )
     logger.debug("Reload modules... (%s)", mode)
     for k in sorted(to_remove):
-        if k in ('asyncio.base_events','asyncio.selector_events'):
+        if k in ("asyncio.base_events", "asyncio.selector_events"):
             logger.debug(f"HACK: reloade({k=}")
             importlib.reload(sys.modules[k])
         if k in sys.modules:
-            if ((mode == "reload_all" or k in sys.builtin_module_names)
-                    and k.startswith("pysandboxes")
+            if (mode == "reload_all" or k in sys.builtin_module_names) and k.startswith(
+                "pysandboxes"
             ):
                 m = sys.modules[k]
                 if m:

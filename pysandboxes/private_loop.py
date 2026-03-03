@@ -99,10 +99,11 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
                 loop.run_forever()
                 logger.debug("Stop thread for sandbox event loop")
             except KeyboardInterrupt as e:
-                import os
-                import sys
-                import signal
                 import _thread
+                import os
+                import signal
+                import sys
+
                 logger.exception("")
                 print("KeyboardInterrupt", file=sys.stderr)
                 _thread.interrupt_main(signal.SIGINT)

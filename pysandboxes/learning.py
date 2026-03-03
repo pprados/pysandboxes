@@ -214,6 +214,7 @@ def add_learning_rule(rule: Any) -> None:
     """
     with _lock:
         from .guard_files import LearnFileRule
+
         if is_learning_mode() and rule not in _learning:
             _learning.add(rule)
             pysandboxes_logger.debug(repr(rule))

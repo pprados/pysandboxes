@@ -209,7 +209,12 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
 
 2. **Interact with the assistant:**
 
-   The assistant will automatically detect available tools and can respond to queries based on the tools provided by the configured servers. Try `calc 2+3`
+   The assistant will automatically detect available tools and can respond to queries based on the tools provided by the configured servers. Try:
+
+   - `calc 2+3` (use tool *evaluate_expression*)
+   - `load and print the <head> of www.google.fr` (use tool *fetch_webpage*)
+   - `print the greating message.` (use *resource://greeting*)
+   - `load and summarizes the 'readme.md' resource.` (use *resource://{path}*)
 
 3. **Exit the session:**
 

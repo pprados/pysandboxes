@@ -22,8 +22,11 @@ import sys
 import threading
 from pathlib import Path
 
-from pysandboxes.learning import generate_config_from_learning, set_learning_mode, \
-    set_learning_path
+from pysandboxes.learning import (
+    generate_config_from_learning,
+    set_learning_mode,
+    set_learning_path,
+)
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon

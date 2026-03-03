@@ -61,7 +61,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 ## Development Environment
 
 - **Python**: 3.10+ (tested up to 3.13)
-- **Package Manager**: Poetry
+- **Package Manager**: mv
 - **Virtual Environment**: `.venv/` directory
 - **Entry Points**: `python-sb` CLI commands for sandboxed Python execution
 

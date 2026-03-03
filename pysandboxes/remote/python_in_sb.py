@@ -15,6 +15,7 @@ from pysandboxes.learning import (
     set_learning_path,
 )
 from pysandboxes.tools import set_is_in_sandbox
+
 from ..all_rules import AllRules
 from ..main_logger import config_log
 

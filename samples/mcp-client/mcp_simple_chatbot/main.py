@@ -3,6 +3,8 @@ import logging
 import sys
 from shutil import which
 
+from mcp.types import TextResourceContents
+
 import anyio
 import httpx
 import jsonc as json
@@ -100,70 +102,124 @@ class ChatSession:
         self.llm_client = llm_client
 
     async def process_llm_response(self, llm_response: str) -> str:
-        """Process the LLM response and execute tools if needed."""
+        """Process the LLM response and execute tools or resources if needed."""
         import json
 
         try:
             client = self.client
-            tool_call = json.loads(llm_response)
-            if "tool" in tool_call and "arguments" in tool_call:
-                logging.info(f"Executing tool: {tool_call['tool']}")
-                logging.info(f"With arguments: {tool_call['arguments']}")
+            action = json.loads(llm_response)
 
-                # for client in self.client:
-                if True:
-                    tools = await client.list_tools()
-                    if any(tool.name == tool_call["tool"] for tool in tools):
-                        try:
-                            result = await client.call_tool(
-                                tool_call["tool"], tool_call["arguments"]
-                            )
-                            return f"Tool execution result: {result}"
-                        except Exception as e:
-                            error_msg = f"Error executing tool: {str(e)}"
-                            logging.error(error_msg)
-                            return error_msg
+            if "tool" in action and "arguments" in action:
+                logging.info(f"Executing tool: {action['tool']}")
+                logging.info(f"With arguments: {action['arguments']}")
 
-                return f"No server found with tool: {tool_call['tool']}"
+                tools = await client.list_tools()
+                if any(tool.name == action["tool"] for tool in tools):
+                    try:
+                        result = await client.call_tool(
+                            action["tool"], action["arguments"]
+                        )
+                        return f"Tool execution result: {result}"
+                    except Exception as e:
+                        error_msg = f"Error executing tool: {str(e)}"
+                        logging.error(error_msg)
+                        return error_msg
+
+                return f"No server found with tool: {action['tool']}"
+
+            elif "resource" in action:
+                logging.info(f"Reading resource: {action['resource']}")
+
+                try:
+                    results = await client.read_resource(action["resource"])
+                    result = "\n".join((result.text for result in results))
+                    return f"Resource content: {result}"
+                except Exception as e:
+                    error_msg = f"Error reading resource: {str(e)}"
+                    logging.error(error_msg)
+                    return error_msg
+
             return llm_response
         except json.JSONDecodeError:
             return llm_response
 
     async def start(self) -> None:
         """Main chat session handler."""
-        # async with anyio.create_task_group() as tg:
-        #     for client in self.client:
-        #         tg.start_soon(client.__aenter__)
-
         all_tools = await self.client.list_tools()
+        all_resources = await self.client.list_resources()
+        all_resource_templates = await self.client.list_resource_templates()
 
         tools_description = "\n".join(
             [
-                f"Tool: {tool.name}\nDescription: {tool.description}\nArguments: {tool.inputSchema}"
+                f"Tool: {tool.name}\n"
+                f"Description: {tool.description}\n"
+                f"Arguments: {tool.inputSchema}"
                 for tool in all_tools
             ]
         )
 
+        resources_list = "\n".join(
+            [
+                f"Resource URI: {res.uri}\n"
+                f"Name: {res.name}\n"
+                f"Description: {res.description}\n"
+                f"MIME Type: {res.mimeType}"
+                for res in all_resources
+            ]
+        )
+
+        resource_templates_list = "\n".join(
+            [
+                f"Resource Template: {res.uriTemplate}\n"
+                f"Name: {res.name}\n"
+                f"Description: {res.description}\n"
+                f"MIME Type: {res.mimeType}"
+                for res in all_resource_templates
+            ]
+        )
+
         system_message = (
-            "You are a helpful assistant with access to these tools:\n\n"
-            f"{tools_description}\n"
-            "Choose the appropriate tool based on the user's question. "
-            "If no tool is needed, reply directly.\n\n"
-            "IMPORTANT: When you need to use a tool, you must ONLY respond with "
-            "the exact JSON object format below, nothing else:\n"
+            "You are a helpful assistant with access to tools "
+            "and resources.\n\n"
+        )
+
+        if tools_description:
+            system_message += f"Available tools:\n{tools_description}\n\n"
+
+        if resources_list:
+            system_message += f"Available resources:\n{resources_list}\n\n"
+
+        if resource_templates_list:
+            system_message += (
+                f"Available resource templates:\n"
+                f"{resource_templates_list}\n\n"
+            )
+
+        system_message += (
+            "Choose the appropriate tool or resource based on the "
+            "user's question. "
+            "If no tool or resource is needed, reply directly.\n\n"
+            "IMPORTANT: When you need to use a tool, respond ONLY with:\n"
             "{\n"
             '    "tool": "tool-name",\n'
             '    "arguments": {\n'
             '        "argument-name": "value"\n'
             "    }\n"
-            "}\n\n"
-            "After receiving a tool's response:\n"
-            "1. Transform the raw data into a natural, conversational response\n"
+            "}\n"
+            "and nothing else.\n\n"
+            "IMPORTANT: When you need to access a resource, respond ONLY with:\n"
+            "{\n"
+            '    "resource": "resource-uri"\n'
+            "}\n"
+            "and nothing else.\n\n"
+            "After receiving a response:\n"
+            "1. Transform the raw data into a natural, "
+            "conversational response\n"
             "2. Keep responses concise but informative\n"
             "3. Focus on the most relevant information\n"
             "4. Use appropriate context from the user's question\n"
             "5. Avoid simply repeating the raw data\n\n"
-            "Please use only the tools that are explicitly defined above."
+            "Use only the tools and resources explicitly defined above."
         )
 
         messages = [{"role": "system", "content": system_message}]
@@ -187,16 +243,13 @@ class ChatSession:
 
                     final_response = self.llm_client.get_response(messages)
                     print(final_response)
-                    messages.append(
-                        {"role": "assistant", "content": final_response}
-                    )
+                    messages.append({"role": "assistant", "content": final_response})
                 else:
                     messages.append({"role": "assistant", "content": llm_response})
 
             except KeyboardInterrupt:
                 logging.info("\nExiting...")
                 break
-
 
 
 async def run(args):
@@ -210,10 +263,8 @@ async def run(args):
                 mcp_server["command"] = w_command
 
     logging.getLogger("mcp").setLevel(logging.DEBUG)
-    client = Client(
-        server_config,
-        roots=["resource://"]
-    )
+    # client = Client(server_config, roots=["resource://"]) FIXME
+    client = Client(server_config)
     async with client:
 
         llm_client = LLMClient(config.llm_api_key)
