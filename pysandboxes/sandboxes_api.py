@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Sandbox API module providing decorators and context managers.
 
 This module contains the main public API for PySandboxes, including:

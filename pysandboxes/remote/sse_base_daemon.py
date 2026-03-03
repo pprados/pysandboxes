@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 import asyncio
 import json
 import logging

@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Configuration parameters for remote execution components.
 
 This module defines timing constants and configuration parameters used

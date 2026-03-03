@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Firejail-based daemon for OS-level sandboxing with PySandboxes.
 
 This module implements a firejail-based sandbox daemon that combines

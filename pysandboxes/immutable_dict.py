@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Immutable dictionary implementation for PySandboxes.
 
 This module provides an immutable dictionary class that prevents modification

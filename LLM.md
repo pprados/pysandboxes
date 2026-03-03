@@ -73,6 +73,11 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - Line length: 78 chars maximum
 - Always uses 3.10 syntax (str | None in place of Optional[str]) 
 - avoid useless comments when generating code
+- For all new file, add the comment:
+```python
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+```
 
 ## Testing Strategy
 

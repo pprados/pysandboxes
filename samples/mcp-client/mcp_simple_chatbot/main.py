@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 import argparse
 import logging
 import sys

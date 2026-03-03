@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Learning mode implementation for automatic rule generation.
 
 This module implements the learning mode functionality that observes sandbox

@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Task-based daemon implementation for PySandboxes.
 
 This module provides a simple wrapper around SSEServerDaemon that runs

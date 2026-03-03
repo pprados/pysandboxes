@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Utility functions for PySandboxes.
 
 This module provides common utility functions used throughout the PySandboxes

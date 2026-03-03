@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Rules aggregation module for PySandboxes.
 
 This module provides data structures to collect and organize all security rules

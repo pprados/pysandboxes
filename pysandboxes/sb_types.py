@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Type definitions for PySandboxes.
 
 This module provides common type aliases and data structures used throughout

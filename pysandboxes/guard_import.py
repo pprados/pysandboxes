@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Python import guard for PySandboxes.
 
 This module implements import sandboxing by intercepting and controlling module

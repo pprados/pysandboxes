@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Environment variables access guard for PySandboxes.
 
 This module implements environment variable sandboxing by intercepting and

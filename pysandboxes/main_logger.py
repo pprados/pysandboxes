@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Logging utilities and error formatting for PySandboxes.
 
 This module provides logging configuration and utility functions for formatting

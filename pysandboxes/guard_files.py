@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """File system access guard for PySandboxes.
 
 This module implements comprehensive file system sandboxing by intercepting and

@@ -66,7 +66,7 @@ Our solution helps reduce the following risks:
   - [X] **Remote Code Execution (RCE)**: Sensitive APIs are not available.
   - [X] **Reverse Shells**: Network connections are limited.
   - [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
-  - [X] **Token Theft**: Accessible files are filtered.
+  - [X] **Token Theft**: Accessible files and enviroment variables are filtered.
   - [X] **Remote Access**: Network and code actions are limited.
   - [ ] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules (not yet implemented).
   - [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (not yet implemented).
@@ -270,14 +270,9 @@ if __name__ == "__main__":
 Note the following pattern, which involves calling the same initialization function in `main()` and in the sandbox.
 
 ```python
-# Init.py file
 async def init_app():
     # Run in main() and in the sandbox
    ...
-
-# main script
-import pysandboxes
-from init import init_app
 
 async def main():
     await init_app()
@@ -337,7 +332,7 @@ Consult the [parameter file](pysandboxes/templates/py-sandbox.template) generate
 By default, the program looks for the file in the root directory of the module that launches the sandbox. Otherwise, the `./py-sandboxes` file is used. This can be modified before the program is launched.
 If you package your application in a Wheel, place your parameters within your module.
 
-To address different scenarios, parameter files can include `include` instructions. This allows you to distribute parameters across different files and locations.
+To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
 
 By default, you'll find this:
 

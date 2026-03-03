@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Daemon shutdown handler for PySandboxes.
 
 This module handles the graceful shutdown of sandbox daemons, including

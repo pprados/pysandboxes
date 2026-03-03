@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """
 This module provides utilities for capturing stdout and stderr streams,
 especially in a multi-threaded or asynchronous context.

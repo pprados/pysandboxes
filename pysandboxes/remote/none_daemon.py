@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """No-operation daemon for testing and debugging.
 
 This module provides a daemon implementation that doesn't actually create

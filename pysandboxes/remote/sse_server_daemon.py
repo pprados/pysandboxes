@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Server-Sent Events (SSE) server daemon for PySandboxes remote execution.
 
 This module implements the server-side component of PySandboxes remote execution

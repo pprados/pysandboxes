@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 # See man firejail
 #--quiet
 --name=firejail-sandbox

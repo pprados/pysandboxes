@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Abstract base class for sandbox daemon implementations.
 
 This module defines the base interface that all sandbox daemon providers

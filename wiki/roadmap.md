@@ -22,7 +22,12 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] Docker (Docker or OCI images, oci-a,rchive)
   - [ ] podman
   - [ ] kubernetes
-  - [ ] qemu
+  - [ ] micro-VM
+    - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
+    - [ ] [Firecracker](https://firecracker-microvm.github.io/)
+    - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers managment)
+    - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
+    - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
 - [ ] New samples
   - [X] MCP server
   - [X] MCP client

@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Configuration constants for PySandboxes.
 
 This module contains global configuration constants used throughout the

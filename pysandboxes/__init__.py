@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """PySandboxes: Python Security Framework.
 
 This package provides sandbox environments for executing untrusted Python code safely.

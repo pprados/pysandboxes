@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Exception classes for PySandboxes.
 
 This module centralizes all exception types to provide better stack traces

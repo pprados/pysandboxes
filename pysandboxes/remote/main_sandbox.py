@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Main sandbox process entry point for PySandboxes remote execution.
 
 This module serves as the main entry point for sandbox processes that run in

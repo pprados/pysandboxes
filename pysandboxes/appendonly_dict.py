@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Append-only dictionary implementation for PySandboxes.
 
 This module provides a specialized dictionary that only allows appending new

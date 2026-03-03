@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Utility functions for PySandboxes remote execution modules.
 
 This module provides various utility functions used by the remote execution

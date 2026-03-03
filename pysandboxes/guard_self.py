@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 from types import ModuleType
 from typing import Any, Callable, Dict, MutableMapping, Tuple, cast
 from weakref import WeakKeyDictionary

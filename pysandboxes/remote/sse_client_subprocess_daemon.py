@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Subprocess-based daemon client for PySandboxes remote execution.
 
 This module implements a subprocess-based daemon that spawns isolated Python

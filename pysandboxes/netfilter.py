@@ -1,4 +1,5 @@
-# %%
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 import socket
 from ipaddress import IPv4Network, IPv6Network
 from typing import Iterable, List, Union

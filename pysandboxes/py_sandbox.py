@@ -1,3 +1,5 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
 """Python-level sandbox implementation.
 
 This module provides the core Python-level sandboxing functionality, including
