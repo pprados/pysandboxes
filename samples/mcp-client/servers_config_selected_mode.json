@@ -3,13 +3,14 @@
     // The MCP-server decide the portion of code to isolate (selected mode).
     // The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
     "mcp_server": {
+      "type": "stdio",
       "cwd": "../mcp-server",
 //      "command": "python", "cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
       "command": "uv",
       "args": [
         "run",
         "-m", "mcp_server.main",
-//        "--learn=./.local.py-sandboxes",
+//        "--learn=./.local.py-sandboxes",  // FIX_RELEASE
         "-t", "stdio"
       ]
     }

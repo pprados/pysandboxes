@@ -15,8 +15,8 @@ from pysandboxes import sandbox, sandboxes
 
 logger = logging.getLogger(__name__)
 
-level = logging.DEBUG
-format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+level = logging.WARNING
+format = "MCPServer: %(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
 # logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
@@ -29,29 +29,28 @@ logging.basicConfig(
 
 mcp = FastMCP(
     "My MCP Server",
-    host="127.0.0.1",
-    port=8000,
 )
 
 RESOURCES_DIR = Path(__file__).parent.parent / "resources"
 
 
-@mcp.resource("resource://greeting")
-def get_greeting() -> str:
-    """Provides a simple greeting message."""
-    return "Hello from FastMCP Resources!"
+@mcp.resource("config://version")
+def get_version() -> str:
+    return "1.0.0"
 
+@mcp.resource("greeting://{name}")
+def greet(name: str) -> str:
+    return f"Hello {name} from MCPServer!"
 
 # Note: @mcp.resource annotation return an object, not a method.
 # When importing the module into the sandbox, the function to be invoked is not
 # available.
 # See https://gofastmcp.com/patterns/decorating-methods
 # Split the body in two part.
-@mcp.resource("resource://{path}")
+@mcp.resource("myresource://{path}")
 async def read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources."""
     return await _read_file_resource(path)
-
 
 @sandbox
 async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces direct
@@ -61,7 +60,7 @@ async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces dire
         raise FileNotFoundError(f"File not found: {path}")
     if not file_path.is_relative_to(RESOURCES_DIR):
         raise ValueError(f"Access denied: path outside resources directory")
-    logger.info(f"Reading resource: {path}")
+    logger.debug(f"Reading myresource:{path}")
     return file_path.read_text()
 
 
@@ -113,10 +112,17 @@ async def evaluate_expression(expression: str) -> float:
         raise ValueError(f"Invalid expression: {e}")
 
 
-@mcp.prompt
+@mcp.prompt()
 def analyze_data(expression: str) -> str:
     """Caculate expression."""
     return f"with evaluate_expression calcul: {expression}"
+
+
+@mcp.prompt()
+def summarize_webpage(url: str) -> str:
+    """Summarize a webpage content."""
+    return f"""Please fetch and summarize the webpage at {url}.
+Use the fetch_webpage tool to get the content, then provide a concise summary."""
 
 
 def run_mcp_server(
@@ -146,6 +152,7 @@ def run_mcp_server(
 
 
 def main() -> int:
+
     parser = argparse.ArgumentParser(
         prog="mcp_server",
         description="Run a MCP-server",

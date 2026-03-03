@@ -1037,8 +1037,8 @@ def patch_rules(learn:bool) -> dict[str, Callable]:
         "socket.socket.connect": _wrap_socket_connect,
         "socket.socket.connect_ex": _wrap_socket_connect_ex,
         "socket.socket.sendto": _wrap_socket_sendto,
-        "asyncio.base_events.socket": _wrap_asyncio_socket,
-        "asyncio.selector_events.socket": _wrap_asyncio_socket,
+        # "asyncio.base_events.socket": _wrap_asyncio_socket,
+        # "asyncio.selector_events.socket": _wrap_asyncio_socket,
     }
     if learn:
         rules |= {

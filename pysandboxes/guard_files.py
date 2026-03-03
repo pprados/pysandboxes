@@ -1194,13 +1194,12 @@ def _wrap_os_scandir(func: Callable) -> Callable:
 
 # %% io wrapper
 
-
 def _wrap_io_open(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
         file: str | bytes | os.PathLike | int,
         mode: str | None = "r",
-        buffering: int | None = 1,
+        buffering: int | None = -1,
         encoding: str | None = None,
         errors: str | None = None,
         newline: str | None = None,

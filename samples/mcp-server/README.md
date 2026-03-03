@@ -56,10 +56,11 @@ uv run -m mcp_server.main -t stdio
 ```
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
+cd path/to/mcp-server
 claude mcp remove mcp_demo
 claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
 ```
-or use the [MCP client](../mcp-client/README.md).
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
 
 ### Partial Mode with stdio
 In this scenario, part of the MCP server is under the control of **py-sandboxes**. The client invokes the MCP server, part of which runs in a sandbox (`@sandbox` annotation). 
@@ -95,10 +96,11 @@ uv run -m mcp_server.main -t stdio
 
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
+cd path/to/mcp-server
 claude mcp remove mcp_demo
 claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
 ```
-or use the [MCP client](../mcp-client/README.md).
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
 
 ### Complete mode with http
 In this scenario, the server must be started before the client. It exposes an HTTP endpoint to allow the client to connect to it.
@@ -145,6 +147,7 @@ For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 claude mcp remove mcp_demo
 claude mcp add --transport http mcp_demo http://localhost:8000/mcp
 ```
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
 
 ### Partial mode with http
 In this scenario, the server must be started before the client. It exposes an HTTP endpoint to allow the client to connect to it. It is itself divided into two parts (`@sandbox` annotation).
@@ -192,10 +195,51 @@ For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 claude mcp remove mcp_demo
 claude mcp add --transport http mcp_demo http://localhost:8000/mcp
 ```
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
 
+---
+
+## With claude-code
+To use the tool `fetch_webpage`:
+```bash
+claude
+> get and summarize the page http://www.google.com 
+```
+
+To use the tool `evaluate_expression`:
+```bash
+claude
+> use evaluate_expression to calc 112134+1433 
+
+● mcp_demo - evaluate_expression (MCP)(expression: "112134+1433")
+  ⎿  113567                                                                                                                                                                   
+
+● 113567
+```
+
+To use the prompt `analyze_data`:
+```bash
+claude
+> /mcp_demo:analyze_data (MCP) 112134+1433
+```
+
+To use the resource `@version`:
+```bash
+call the mcp server and print the resource @config://version
+```
+
+To use the resource template `@myresource` (check [bug fix](https://github.com/anthropics/claude-code/issues/4110)):
+```bash
+Access to @myresource://readme.md and summarize there
+```
+
+---
 ## Client
 For the client, consult the specific documentation. For example, [here](../mcp-client/README.md) or use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
 
+
+---
+## Attach
 Without sandbox, you can try 
 
 - a *Path Traversal*
@@ -223,25 +267,13 @@ Without sandbox, you can try
 - a *Deni of services*
 
 ![Deny of Service](DOS.png)
-
-```python
-[_ for _ in [c for c in add.__class__.__base__.__subclasses__()
- if c.__name__ == "count"]][0]()]
-```
-## With claude-code
-To use the tool `evaluate_expression`:
-```bash
-claude
-> use evaluate_expression to calc 2+3 
-
-● mcp_demo - evaluate_expression (MCP)(expression: "2+3")
-  ⎿  5                                                                                                                                                                   
-
-● 5
-```
-
 To use the prompt `analyze_data`:
 ```bash
 claude
 > /mcp_demo:analyze_data (MCP) 2+3
+```
+
+```python
+[_ for _ in [c for c in add.__class__.__base__.__subclasses__()
+ if c.__name__ == "count"]][0]()]
 ```

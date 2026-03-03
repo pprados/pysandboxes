@@ -149,7 +149,7 @@ async def sandbox_daemon(
                 yield _sse_msg(json.dumps(msg))
         result = await async_fut
         if "result" in result:
-            logger.debug("(%s) ... return %s", session_id, repr(result["result"]))
+            logger.debug("(%s) ... return %s", session_id, repr(result["result"])[:40])
             result["result"] = to_b85(result["result"])
         if "exception" in result:
             logger.debug("(%s) ... raise %s", session_id, repr(result["exception"]))
