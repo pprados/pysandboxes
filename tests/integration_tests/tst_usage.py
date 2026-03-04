@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def init_log_level() -> None:
     sandboxes_level = logging.DEBUG  # FIXME
-    uvicorn_level = logging.WARNING
+    uvicorn_level = logging.ERROR
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
@@ -26,6 +26,8 @@ def init_log_level() -> None:
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logging.getLogger().setLevel(sandboxes_level)  # Set the default level for root
+    logging.basicConfig(level=min(sandboxes_level, logging.INFO))
+
 
 
 @sandbox
@@ -41,13 +43,9 @@ async def arun_in_sandbox() -> int:
 @sandbox
 def run_in_sandbox() -> int:
     logger.info("Run 'run_in_sandbox()' in sandbox")
-
     _test_network()
-
     _test_files()
-
     _test_envs()
-
     print(42)
     return 42
 
@@ -75,19 +73,24 @@ def _test_network() -> None:
     import socket
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        logger.debug("gethostbyname")
         remote_ip = socket.gethostbyname("www.google.com")
+        logger.debug("gethostbyname_ex")
         socket.gethostbyname_ex("www.google.com")
+        logger.debug("getaddrinfo")
         socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
+        logger.debug(f"connect {remote_ip=}")
         sock.connect((remote_ip, 80))
     # tcp bind ipv4
     with socket.socket(AF_INET, SOCK_STREAM) as sock:
-        sock.bind(("localhost", 0))
+        sock.bind(("127.0.0.1", 0))
     # tcp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
         sock.bind(("::1", 0))
+
     # web connection
     import requests
-
+    logger.debug("request")
     requests.get("http://www.google.com/")
     # udp connection ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:

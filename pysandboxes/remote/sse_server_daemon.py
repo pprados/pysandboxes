@@ -312,7 +312,7 @@ class SSEServerDaemon(BaseSSESandbox):
     streaming of output via Server-Sent Events.
     """
 
-    __slots__ = ("uvicorn", "task", "port", "hostname", "stopped")
+    __slots__ = ("uvicorn", "task", "port", "stopped")
 
     def __init__(self, token: str, *, port: int):
         """Initialize SSE server daemon.
@@ -321,11 +321,10 @@ class SSEServerDaemon(BaseSSESandbox):
             token: Authentication token for API access.
             port: Port number for HTTP server.
         """
-        super().__init__(token, host="localhost", max_connect_retry=MAX_CONNECT_RETRY)
+        super().__init__(token, max_connect_retry=MAX_CONNECT_RETRY)
         self.uvicorn: Server | None = None
         self.task: Task | None = None
         self.port = port
-        self.hostname = "localhost"
         self.stopped = True
 
     @property
@@ -389,7 +388,7 @@ class SSEServerDaemon(BaseSSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            self.uvicorn = create_uvicorn_daemon(self.token, self.hostname, self.port)
+            self.uvicorn = create_uvicorn_daemon(self.token, "0.0.0.0", self.port) # FIXME: que si os_sandbox?
 
             start_event = asyncio.Event()
 

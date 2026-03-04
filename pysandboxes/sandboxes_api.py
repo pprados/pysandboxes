@@ -371,6 +371,8 @@ class sandboxes:
                 self._signals[signal.SIGQUIT] = signal.signal(
                     signal.SIGQUIT, signal_handler
                 )
+        else:
+            self._daemon = FakeDaemon(token="Fake token")
         assert self._daemon is not None
         return self._daemon
 

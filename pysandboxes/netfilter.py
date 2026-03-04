@@ -78,53 +78,50 @@ def rule_to_netfilter(
             #     continue
             for direction in rule_directions:
                 ports = _build_port(rule_ports_list)
+                if is_ipv6 and isinstance(network, IPv6Network):
+                    s_network = _build_network(network, is_ipv6)
+                elif not is_ipv6 and isinstance(network, IPv4Network):
+                    s_network = _build_network(network, is_ipv6)
+                else:
+                    continue
+
+                if direction == Direction.OUT:
+                    s_state = "--ctstate NEW "
+                    s_network = f"-d {s_network} " if s_network else ""
+                else:
+                    s_state = "--ctstate NEW,ESTABLISHED "
+                    s_network = f"-s {s_network} " if s_network else ""
+
+                if ports:
+                    multiport = f"-m multiport --dports {ports} "
+                else:
+                    multiport = ""
+
+                ip_rule: str
                 if kind == Kind.TCP:
-                    if is_ipv6 and isinstance(network, IPv6Network):
-                        s_network = _build_network(network, is_ipv6)
-                    elif not is_ipv6 and isinstance(network, IPv4Network):
-                        s_network = _build_network(network, is_ipv6)
-                    else:
-                        continue
-
-                    if direction == Direction.OUT:
-                        s_state = "--ctstate NEW "
-                        s_ports = "d"
-                        s_network = f"-d {s_network} " if s_network else ""
-                    else:
-                        s_state = "--ctstate NEW,ESTABLISHED "
-                        s_ports = "s"
-                        s_network = f"-s {s_network} " if s_network else ""
-
-                    if ports:
-                        multiport = f"-m multiport --{s_ports}ports {ports} "
-                    else:
-                        multiport = ""
-
-                    ip_rule: str
-                    if kind == Kind.TCP:
-                        ip_rule = (
-                            f"-A {_map_direction[direction]} "
-                            f"-p tcp "
-                            f"-m conntrack "
-                            f"{s_state}"
-                            f"{s_network}"
-                            f"{multiport}"
-                            f"-j {_map_action[action]}"
-                        )
-                    elif kind == Kind.UDP:
-                        ip_rule = (
-                            f"-A {_map_direction[direction]} "
-                            f"-p udp "
-                            f"{s_network}"
-                            f"{multiport}"
-                            f"-j {_map_action[action]}"
-                        )
-                    else:
-                        assert "Internal error"
-                        ip_rule = ""
-                    # assert ip_rule not in netfilter
-                    if ip_rule not in netfilter:
-                        netfilter.append(ip_rule)
+                    ip_rule = (
+                        f"-A {_map_direction[direction]} "
+                        f"-p tcp "
+                        f"-m conntrack "
+                        f"{s_state}"
+                        f"{s_network}"
+                        f"{multiport}"
+                        f"-j {_map_action[action]}"
+                    )
+                elif kind == Kind.UDP:
+                    ip_rule = (
+                        f"-A {_map_direction[direction]} "
+                        f"-p udp "
+                        f"{s_network}"
+                        f"{multiport}"
+                        f"-j {_map_action[action]}"
+                    )
+                else:
+                    assert "Internal error"
+                    ip_rule = ""
+                # assert ip_rule not in netfilter
+                if ip_rule not in netfilter:
+                    netfilter.append(ip_rule)
 
     netfilter.append("COMMIT")
     return netfilter

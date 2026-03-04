@@ -32,6 +32,7 @@ dependencies = [
     # For CLI
     "python-dotenv (>=0.9.0)",
     "email-validator>=2.3.0",
+    "dnspython>=2.8.0",
 ]
 
 
@@ -80,6 +81,7 @@ dev = [
     "rich>=14.0",
     "mcp[cli]>=1.14.0",
     "json-with-comments>=1.2.10",
+    "pdoc>=15.0.4",  # TODO
 ]
 test = [
     # The only dependencies that should be added are

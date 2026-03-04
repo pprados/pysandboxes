@@ -20,14 +20,17 @@ import os
 import re
 import shlex
 import site
+import subprocess
 import sys
 import tempfile
 import threading
+from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
 from .sse_client_subprocess_daemon import BaseSubProcessDaemon, DEBUG
-from .tools import suggest_package_installation, which_command, get_default_interface, get_dns_servers
+from .tools import suggest_package_installation, which_command, get_default_interface, get_dns_servers, \
+    get_bridge_interfaces, get_systemd_resolved_upstream_dns
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
@@ -165,6 +168,65 @@ def _follow_links(filename: str | Path, whitelist: WhiteList) -> None:
             "Impossible to resolve the sys.executable `%s`", sys.executable
         )
 
+# Use firejail --ip.print to return the ip of the daemon with a specific pid
+def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
+    """
+    Retrieves the IP address of a Firejail-isolated daemon using the 'firejail --net.print' command.
+
+    Args:
+        pid: The Process ID (PID) of the Firejail parent process to query.
+
+    Returns:
+        The IP address (str) of the daemon's isolated network interface,
+        or None if the command fails or the IP is not found.
+    """
+    if not isinstance(pid, int) or pid <= 0:
+        raise ValueError(f"Invalid PID provided: {pid}")
+
+    try:
+        # 1. Execute the firejail command.
+        # --ip.print <pid> queries the network namespace for the specified PID.
+        command: list[str] = [which_command("firejail"), f"--net.print={pid}"]
+
+        # Capture stdout and stderr, timeout if it takes too long.
+        result= subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,  # We handle the error manually
+            timeout=2
+        )
+
+        # 2. Check for command execution errors.
+        if result.returncode != 0:
+            logger.error("firejail error: %s", result.stderr.strip())
+            raise SystemExit(1)
+
+        # 3. Parse the output to find the IP address.
+        output: str = result.stderr.strip()
+
+        # The output format is typically: "IP address: <IP>" or just the IP.
+        # We use a regex to reliably find an IPv4 address.
+        # Regex explanation: (\d{1,3}\.){3}\d{1,3} matches four groups of 1-3 digits separated by dots.
+        for line in output.split("\n"):
+            parts: list[str] = line.split()
+            if len(parts) >2 and parts[0] == "eth0":
+                return ipaddress.IPv4Address(parts[2])
+        return None
+
+    except FileNotFoundError:
+        # firejail command is not in the system PATH.
+        logger.error("firejail not found. Install it with:")
+        logger.error(suggest_package_installation("firejail"))
+        raise SystemExit(1)
+    except subprocess.TimeoutExpired:
+        # Command took longer than the timeout.
+        logger.error(f"firejail command timed out for PID {pid}.")
+        return None
+    except Exception as e:
+        # Catch any other unexpected error.
+        logger.error(f"with firejail command, an unexpected error occurred: {e}.")
+        return None
 
 class FireJailSSEDaemon(BaseSubProcessDaemon):
     """Firejail-based subprocess daemon for OS-level sandboxing.
@@ -211,6 +273,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         """
         _, updated_all_rules = self._firejail_args(all_rules, envs, None)
         return updated_all_rules
+
+    @property
+    def base_url(self):
+        return f"http://{get_firejail_daemon_ip(self._process.pid)}:{{PORT}}"
 
     def _firejail_args(
             self,
@@ -317,8 +383,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 args.append(f"--whitelist={rule.source}")
             if not rule.write:
                 args.append(f"--read-only={rule.source}")
-            # else:
-            #     args.append(f"--read-write={rule.source}")
+            else:
+                args.append(f"--read-write={rule.source}")
 
 
         if REPLACE:  # FIXME
@@ -341,6 +407,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         if pipe_path:
             args.append(f"--mkdir={str(pipe_path)}")
             args.append(f"--whitelist={str(pipe_path)}")  # Must be a whitelist
+            # args.append(f"--read-only={str(pipe_path)}")  # Must be a whitelist
+            # args.append(f"--read-write={str(pipe_path)}")  # FIXME
 
         if all_rules.socket_rules:
             if restricted_network:
@@ -351,44 +419,37 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 )
                 sys.exit(1)
 
-            dns_server_v4, dns_server_v6 = get_dns_servers()
-            # Simulate an ipv6 dns
-            # dns_server_v4=[]
-            # dns_server_v6=[
-            #     ipaddress.ip_address("::1"),
-            # ]
-            if dns_server_v4:
-                loopback_network = ipaddress.ip_network('127.0.0.0/8')
-                for dns in dns_server_v4:
-                    if dns in loopback_network:
+            dns_servers = [ip for ip in get_systemd_resolved_upstream_dns() if isinstance(ip,IPv4Address)]
+
+            if dns_servers:
+                for dns in dns_servers:
+                    if not dns.is_loopback:
                         # Change to other, because inside the firejail, the loopback is not accessible
-                        dns_server_v4 = [
-                            ipaddress.ip_address("1.1.1.1"),
-                            ipaddress.ip_address("1.0.0.1"),
-                        ]
-                        args.append("--dns=1.1.1.1")
-                        args.append("--dns=1.0.0.1")
+                        for dns in dns_servers:
+                            args.append(f"--dns={dns}")
                         break
             else:
                 # FIXME: see https://github.com/netblue30/firejail/discussions/6931
-                for dns in dns_server_v6:
-                    if dns.is_loopback:
-                        loopback_dns = True
-                        dns_server_v6 = [
-                            ipaddress.ip_address("2606:4700:4700::1111"),
-                            ipaddress.ip_address("2606:4700:4700::1001"),
-                        ]
-                        args.append("--dns=2606:4700:4700::1111")
-                        args.append("--dns=2606:4700:4700::1001")
-                        break
+                # for pin_dns in dns_server_v6:
+                #     if not pin_dns.is_loopback:
+                #         loopback_dns = True
+                #         args.append(f"--pin_dns={pin_dns}")
+                #         break
+                pass
             default_interface = get_default_interface()
+            bridges = get_bridge_interfaces()
+            if not bridges:
+                bridge = default_interface  # FIXME: c'est lors de l'update inside
+                # raise ValueError("Impossible to find a bridge (br*). "
+                #                  "Create a bridge to use firejail.")
+            else:
+                bridge=bridges[0]  # FIXME: take first is a good idea?
             if not default_interface:
                 raise ValueError("Impossible to detect the default network interface")
-            default_interface="br0"  # FIXME
-            args.append(f"--net={default_interface}")
+            args.append(f"--net={bridge}")
 
             if pipe_path:  # Update rules?
-                net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_server_v4, is_ipv6=False)
+                net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
                 netfilter_tmp_file = tempfile.NamedTemporaryFile(
                     delete=False, suffix=".fifo"
                 )
@@ -407,9 +468,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                 threading.Thread(target=publich_netfilter, daemon=True).start()
 
-                args.append(f"--netfilter={netfilter_file}")
+                args.append(f"--netfilter={netfilter_file}")  # FIXME
 
-                net_filter6 = rule_to_netfilter(all_rules.socket_rules, dns_server_v6, is_ipv6=True)
+                net_filter6 = rule_to_netfilter(all_rules.socket_rules, [], is_ipv6=True)
                 netfilter6_tmp_file = tempfile.NamedTemporaryFile(
                     delete=False, suffix=".fifo"
                 )

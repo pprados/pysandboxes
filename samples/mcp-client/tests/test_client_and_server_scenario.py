@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import time
+from pathlib import Path
 from subprocess import run, Popen, PIPE
 from typing import Optional
 
@@ -27,7 +28,8 @@ all_mcp_server_config = [
     "http",
 ]
 
-def _get_default_interface() -> str|None:
+
+def _get_default_interface() -> str | None:
     """
     Retrieves the name of the default network interface by reading the
     /proc/net/route pseudo-file on Linux.
@@ -66,7 +68,7 @@ def _get_default_interface() -> str|None:
     return None
 
 
-def _get_ip_from_interface(interface_name: str) -> str|None:
+def _get_ip_from_interface(interface_name: str) -> str | None:
     try:
         # Execute the 'ip addr show [interface_name]' command
         # and capture the output.
@@ -104,6 +106,7 @@ def _get_ip_from_interface(interface_name: str) -> str|None:
         print("Error: The 'ip' command was not found. Is your system path correct?")
         return None
 
+
 # In some scenarios, it is not possible to access localhost from an OS sandbox.
 # For example, with firejail. It is necessary to use the host's IP address and enable a bridge.
 MY_IP = _get_ip_from_interface(_get_default_interface())
@@ -133,7 +136,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
         time.sleep(1)
     return process
 
-
+# TODO: mock du LLM
 # @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not os.environ.get("GROK_API_KEY"), reason="Set GROK_API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
@@ -145,6 +148,12 @@ def test_claude_evaluate_expression(
     process: Popen | None = None
     try:
         mcp_server_config += ".json"
+
+        if mcp_server_config == "http.json":
+            br0 = Path("/sys/class/net/br0")  # FIXME: check bridge
+            if not br0.is_dir():
+                pytest.skip(f"Need 'br0'. Use `sudo add-bridge.sh`")
+
         process = _start_server(mcp_server_config)
         start_client = \
             (['-m', 'pysandboxes.python_sb'] +

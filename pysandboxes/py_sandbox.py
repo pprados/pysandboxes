@@ -248,7 +248,7 @@ def parse_config(
     providers_rules, others = parse_provider_rules(others)
     os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
 
-    socket_rules, others = guard_socket.parse_rules(others, errors)
+    socket_rules, others, pin_dns = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
 
@@ -287,6 +287,7 @@ def parse_config(
         learn=learn,
         envs_rules=envs_rules,
         socket_rules=socket_rules,
+        pin_dns=pin_dns,
         file_rules=files_rules,
         import_rules=import_rules,
     )

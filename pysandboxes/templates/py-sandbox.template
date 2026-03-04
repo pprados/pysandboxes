@@ -157,6 +157,7 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 #net=DENY|*|127.0.0.0/8|*|OUT            # Loopback
 #net=DENY|*|fc00::/7|*|OUT               # IPv6 ULA
 #net=DENY|*|fe80::/10|*|OUT              # IPv6 Link-local
+# TODO: /etc/firejail/nolocal.net
 
 # Generated rules from learning mode:
 # <learning_guard_socket>

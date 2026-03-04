@@ -227,10 +227,12 @@ graph TD
                     D[Chat]
                 end
             end
-            macvlan["macvlan<br/>device"]
+            lo1["lo<br/>127.0.0.1"]
+            veth["veth<br/>192.168.0.10"]
         end
         
-        macvlan -- 192.168.1.1 --> eth0
+        lo2["lo<br/>127.0.0.1"]
+        veth -- 192.168.1.1 --> eth0
     end
 
     mcp_server["MCP Server"]
@@ -263,8 +265,10 @@ graph TD
                     D[Chat]
                 end
             end
-            macvlan["macvlan<br/>device"]
+            lo1["lo<br/>192.168.0.1"]
+            veth["macvlan<br/>device"]
         end
+        lo2["lo<br/>192.168.0.1"]
         eth0
         br0
     end
@@ -272,9 +276,9 @@ graph TD
     mcp_server["MCP Server"]
     local_network["local network"]
 
-    macvlan -- 10.10.20.1 --> br0
-    eth0 -- 192.168.1.0/24 --> local_network
+    veth -- 10.10.20.1 --> br0
     br0 <--> eth0
+    eth0 -- 192.168.1.0/24 --> local_network
     eth0 -- 192.168.0.10 --> mcp_server
     
     %% 🎨 Style personnalisé pour OSSandbox

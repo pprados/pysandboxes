@@ -39,20 +39,23 @@ def _get_rpc_params(
 
 
 class BaseSSESandbox(BaseDaemon):
-    __slots__ = ("port", "base_url", "max_connect_retry")
+    __slots__ = ("port", "host","max_connect_retry")
 
     def __init__(
         self,
         token: str,
         *,
-        host: str,
         max_connect_retry: int,
         **kwargs: Dict[str, Any],
     ) -> None:
         super().__init__(token)
         self.port = 0
-        self.base_url = f"http://{host}:{{PORT}}"
+        self.host = "localhost"
         self.max_connect_retry = max_connect_retry
+
+    @property
+    def base_url(self):
+        return f"http://{self.host}:{{PORT}}"
 
     async def async_call_in_sandbox(
         self,
@@ -64,7 +67,7 @@ class BaseSSESandbox(BaseDaemon):
         if is_in_sandbox():
             return await func(*args, **kwargs)
         if not _force_incomming and not self._accept_incoming:
-            raise RuntimeError("The sandbox demon is being stopped.")
+            raise RuntimeError("The sandbox daemon is being stopped.")
 
         retry = self.max_connect_retry
         while retry > 0:
@@ -77,7 +80,7 @@ class BaseSSESandbox(BaseDaemon):
                 sandbox_server_url = (
                     self.base_url.replace("{PORT}", str(self.port)) + "/rpc"
                 )
-                logger.debug("Try to call to %s", sandbox_server_url)
+                logger.debug("Try to call %s", sandbox_server_url)
                 async with sse_client.EventSource(
                     sandbox_server_url,
                     # session=session,  # TODO: Use a correlationid?

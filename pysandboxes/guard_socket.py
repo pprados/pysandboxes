@@ -64,6 +64,7 @@ from typing import (
 )
 
 from .e import RuleSocketConnectionRefusedError
+from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref, pysandboxes_logger
 from .sb_types import ConfigLine, ConfigLines
@@ -82,6 +83,20 @@ Adresse_Type: TypeAlias = (
         | tuple[int, int]  # For AF_VSOCK, AF_QIPCRTR sockets
         | tuple[int, int, int, int, int]  # For AF_TIPC sockets
 )
+
+InternalDNS = dict[
+    str,
+    list[
+        tuple[
+            int,  # Familly
+            int,  # Type
+            int,  # Proto
+            str,  # cononame
+            tuple[str, int] |  # Ipv4 host,port
+            tuple[str, int, int, int]  # Ipv6 host, port, flowinfo, scopeid
+        ]
+    ]
+]
 
 
 class Action(IntEnum):
@@ -167,6 +182,7 @@ _rules: SocketRules = cast(SocketRules, ())
 
 def _yield_networks_from_string(
         input_str: str,
+        pin_dns: InternalDNS
 ) -> Generator[IPv4Network | IPv6Network, None, None]:
     """Convert string to network objects.
 
@@ -187,30 +203,38 @@ def _yield_networks_from_string(
         # Case 2: The input is a hostname (e.g., 'www.google.com')
         # Resolve all IPs for the hostname and treat each as a /32 or /128 network
         if input_str in host_dns:
-            yield ip_network(host_dns[input_str], strict=False)
+            for ip in host_dns[input_str]:
+                pin_dns[input_str] = getaddrinfo(input_str, 0)
+                yield ip_network(ip, strict=False)
         else:
             results: list[
                 tuple[
-                    socket.AddressFamily,
-                    socket.SocketKind,
+                    int,
+                    int,
                     int,
                     str,
                     tuple[str, int] | tuple[str, int, int, int],
                 ]
             ]
-            results = socket.getaddrinfo(host=input_str, port=0)
+            # dns_servers=["8.8.8.8", "8.8.4.4"]
+            # ipv4_resolved,ipv6_resolved=resolve_round_robin_hostname(dns_servers,input_str)
+            all_adresss = set()  # FIXME
+            # all_adresss.update([ip_network(ip) for ip in ipv4_resolved])
+            # all_adresss.update([ip_network(ip) for ip in ipv6_resolved])
+            addr_info = socket.getaddrinfo(host=input_str, port=0)
             # Remove duplicate
-            all_adresss = set()
-            for result in results:
+            pin_dns[input_str] = addr_info
+            for result in addr_info:
                 address: str = result[4][0]
-
                 all_adresss.add(ip_network(address))
             for addr in all_adresss:
                 yield addr
 
 
 def _parse_rule(
-        rule: ConfigLine, errors: list[tuple[str, Path, int]]
+        rule: ConfigLine,
+        errors: list[tuple[str, Path, int]],
+        pin_dns: InternalDNS
 ) -> list[SocketRule] | None:
     """Parse a single network access rule.
 
@@ -360,7 +384,7 @@ def _parse_rule(
 
     def _for_each_networks() -> Iterator[SocketRule]:
         for network in networks:
-            for net in _yield_networks_from_string(network):
+            for net in _yield_networks_from_string(network, pin_dns):
                 yield SocketRule(
                     Action[action],
                     SocketMask(
@@ -387,12 +411,12 @@ def _parse_rule(
                 rule.ln,
             )
         )
-        return None
+        return None, {}
 
 
 def parse_rules(
         rules: ConfigLines, errors: list[ErrorMsg]
-) -> tuple[SocketRules, ConfigLines]:
+) -> tuple[SocketRules, ConfigLines, ImmutableDict[str, list[str]]]:
     """Parse network access rules from configuration.
 
     Args:
@@ -404,8 +428,9 @@ def parse_rules(
     """
     socket_rules = []
     ignore_rules = []
+    dns: InternalDNS = {}
     for rule in rules:
-        parsed_rules = _parse_rule(rule, errors)
+        parsed_rules = _parse_rule(rule, errors, dns)
         if parsed_rules:
             socket_rules.extend(parsed_rules)
         elif parsed_rules is not None:
@@ -422,7 +447,8 @@ def parse_rules(
         ),
         reverse=True,
     )
-    return tuple(sorted_rules), ignore_rules
+    pin_dns = cast(ImmutableDict[str, list[str]], ImmutableDict({k: list(v) for k, v in dns.items()}))
+    return tuple(sorted_rules), ignore_rules, pin_dns
 
 
 def _flatten_ports(input_ports: set[int | range]) -> set[int]:
@@ -756,6 +782,15 @@ ReadableBuffer: TypeAlias = Buffer  # stable
 _Address: TypeAlias = tuple[Any, ...] | str | ReadableBuffer
 _RetAddress: TypeAlias = Any
 
+_pin_dns: ImmutableDict[str, list[str]] = {}
+
+
+def set_pin_dns(dns: ImmutableDict[str, list[str]]) -> None:
+    global _pin_dns
+    assert not _pin_dns
+    logger.debug("pin_dns=\n"+"\n".join(k + ": " + ", ".join(x[4][0] for x in v) for k, v in dns.items()))
+    _pin_dns = dns
+
 
 # Not used
 def _get_fammily(ip: str) -> int:
@@ -773,6 +808,11 @@ def _get_fammily(ip: str) -> int:
 def _wrap_socket_gethostbyname(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: dict[str, Any]) -> Any:
+        if isinstance(name, str) and name in _pin_dns:
+            for l in _pin_dns[name]:
+                if l[0] == socket.AF_INET:
+                    return l[4][0]
+            raise socket.gaierror(errno=-3, strerror="Temporary failure in name resolution")
         result = func(name, *args, **kwargs)
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
@@ -794,6 +834,10 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: dict[str, Any]) -> Any:
         result = func(name, *args, **kwargs)
+        if isinstance(name, str) and name in _pin_dns:
+            addr_info = _pin_dns[name]
+            can_name = addr_info[0][3] or name
+            return can_name, [], [l[4][0] for l in _pin_dns[name] if l[0] == socket.AF_INET]
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -802,7 +846,7 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
                     name,
                     0,
                     Direction.OUT,
-                    tuple(result[2]),
+                    tuple([ip_address(r) for r in result[2]]),
                 )
             )
         return result
@@ -823,8 +867,8 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
             **kwargs: dict[str, Any],
     ) -> list[
         tuple[
-            socket.AddressFamily,
-            socket.SocketKind,
+            int,
+            int,
             int,
             str,
             tuple[str, int] | tuple[str, int, int, int],
@@ -833,6 +877,17 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
         result = func(host, port, family, type, proto, flags, *args, **kwargs)
         if isinstance(host, bytes):
             host = host.decode("utf-8")
+        if isinstance(host, str) and host in _pin_dns:
+            result = _pin_dns[host]
+
+            # Patch port
+            def _patch_port(port: int, l: tuple[int, int, int, str, tuple[str, int] | tuple[str, int, int, int]]) -> \
+                    tuple[int, int, int, str, tuple[str, int] | tuple[str, int, int, int]]:
+                address = list(l[4])
+                address[1] = port
+                return l[0], l[1], l[2], l[3], tuple(address)
+
+            result = (_patch_port(port, l) for l in result)
         if isinstance(host, str) and host and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -872,7 +927,7 @@ def _wrap_socket_bind(func: Callable) -> Callable:
                         address[0],
                         int(address[1]),
                         Direction.IN,
-                        (),  # dns
+                        (),  # pin_dns
                     )
                 )
             else:
@@ -913,7 +968,7 @@ def _wrap_socket_connect(func: Callable) -> Callable:
                         address[0],
                         int(address[1]),
                         Direction.OUT,
-                        (),  # dns
+                        (),  # pin_dns
                     )
                 )
             else:
@@ -958,7 +1013,7 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
                         address[0],
                         int(address[1]),
                         Direction.OUT,
-                        (),  # dns
+                        (),  # pin_dns
                     )
                 )
             else:
@@ -1000,7 +1055,7 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
                             address[0],
                             int(address[1]),
                             Direction.OUT,
-                            (),  # dns
+                            (),  # pin_dns
                         )
                     )
                 else:
@@ -1016,16 +1071,6 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_asyncio_socket(module: ModuleType) -> ModuleType:  # FIXME: remove, ne fait rien
-    # import sys
-    # import importlib
-    # importlib.reload(module)
-    socket_m = sys.modules[module.__spec__.name]
-    assert hasattr(socket_m.socket.connect, "__pysandbox__")
-    # return socket_m
-    return module  # FIXME
-
-
 def patch_rules(learn: bool) -> dict[str, Callable]:
     """Provide socket patching rules for guard activation.
 
@@ -1037,15 +1082,10 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         "socket.socket.connect": _wrap_socket_connect,
         "socket.socket.connect_ex": _wrap_socket_connect_ex,
         "socket.socket.sendto": _wrap_socket_sendto,
-        "asyncio.base_events.socket": _wrap_asyncio_socket,
-        "asyncio.selector_events.socket": _wrap_asyncio_socket,
+        "socket.gethostbyname": _wrap_socket_gethostbyname,
+        "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
+        "socket.getaddrinfo": _wrap_socket_getaddrinfo,
     }
-    if learn:
-        rules |= {
-            "socket.gethostbyname": _wrap_socket_gethostbyname,
-            "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
-            "socket.getaddrinfo": _wrap_socket_getaddrinfo,
-        }
     return rules
 
 
@@ -1067,11 +1107,11 @@ def activate_guard(rules: SocketRules) -> None:
 
 
 def _read_host_file() -> tuple[
-    dict[str, IPv4Address | IPv6Address],
-    dict[IPv4Address | IPv6Address, str],
+    dict[str, set[IPv4Address | IPv6Address]],
+    dict[IPv4Address | IPv6Address, set[str]],
 ]:
-    dns: dict[str, IPv4Address | IPv6Address] = {}
-    inverse_dns: dict[IPv4Address | IPv6Address, str] = {}
+    dns: dict[str, set[IPv4Address | IPv6Address]] = {}
+    inverse_dns: dict[IPv4Address | IPv6Address, set[str]] = {}
     # Read the host file
     # Détecter le système d'exploitation pour trouver le bon chemin
     if sys.platform == "win32":
@@ -1087,7 +1127,7 @@ def _read_host_file() -> tuple[
     ):
         hosts_file = Path("/etc/hosts")
     else:
-        return {}
+        return {}, {}
     if hosts_file.exists() and hosts_file.is_file() and os.access(hosts_file, os.R_OK):
         host_lines = hosts_file.read_text().split("\n")
         for line in host_lines:
@@ -1097,9 +1137,9 @@ def _read_host_file() -> tuple[
             if line:
                 ip, *hosts = line.split()
                 if hosts:
-                    inverse_dns[ip_address(ip)] = hosts[0]
+                    inverse_dns.setdefault(ip_address(ip), set()).add(hosts[0])
                 for host in hosts:
-                    dns[host] = ip_address(ip)
+                    dns.setdefault(host, set()).add(ip_address(ip))
     # Force localhost
     return dns, inverse_dns
 
@@ -1121,24 +1161,28 @@ def generate_rules(
     result = set()
     dns, inverse_dns = _read_host_file()
 
-    # 1. Get dns info
+    # 1. Get pin_dns info
     for learn_rule in filter(lambda x: isinstance(x, LearnSocketRule), learn):
         if learn_rule.fn in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
             for ip in learn_rule.dns:
-                inverse_dns[ip] = learn_rule.address
-                dns[learn_rule.address] = ip
+                inverse_dns.setdefault(ip, set()).add(learn_rule.address)
+                dns.setdefault(learn_rule.address, set()).add(ip)
 
-    # 2. Map access to dns
+    # 2. Map access to pin_dns
     by_destination: dict[tuple[str, Kind], tuple[list, list]] = {}
     for learn_rule in filter(lambda x: isinstance(x, LearnSocketRule), learn):
         if learn_rule.fn not in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
             if learn_rule.address in dns:
-                destination = learn_rule.address
+                # Find ip in DNS
+                destinations = {learn_rule.address}
             else:
+                # Direct IP access
                 ip = ip_address(learn_rule.address)
                 if ip in inverse_dns:
-                    destination = inverse_dns[ip]
+                    # but it's match a domain
+                    destinations = inverse_dns[ip]
                 else:
+                    # Else, use mask
                     if ip.version == 5:
                         mask = 32
                     elif ip.version == 6:
@@ -1146,20 +1190,20 @@ def generate_rules(
                     else:
                         mask = 0  # Unknown mask
                     if mask:
-                        destination = f"{learn_rule.address}/{mask}"
+                        destinations = {f"{learn_rule.address}/{mask}"}
                     else:
-                        destination = str(learn_rule.address)
-            # Search alias in env
-            for k, v in os.environ.items():
-                if v == destination:
-                    destination = f"${{{k}}}"
-            # Split by direction
-            in_out = by_destination.get((destination, learn_rule.kind), ([], []))
-            if learn_rule.direction is Direction.IN:
-                in_out[0].append(learn_rule)
-            else:
-                in_out[1].append(learn_rule)
-            by_destination[(destination, learn_rule.kind)] = in_out
+                        destinations = {str(learn_rule.address)}
+            for destination in destinations:
+                # Search alias in env
+                for k, v in os.environ.items():
+                    if v == destination:
+                        destination = f"${{{k}}}"
+                in_out = by_destination.get((destination, learn_rule.kind), ([], []))
+                if learn_rule.direction is Direction.IN:
+                    in_out[0].append(learn_rule)
+                else:
+                    in_out[1].append(learn_rule)
+                by_destination[(destination, learn_rule.kind)] = in_out
 
     # 3. Generate rules
 
@@ -1184,7 +1228,7 @@ def generate_rules(
                 for rule in in_rules_for_dest
             }  # Can not be a range
             result.add(
-                f"net=ALLOW|{learn_rule.kind.name}|"
+                f"net=ALLOW|{kind.name}|"
                 f"{'*' if destination == '0.0.0.0' else destination}"
                 f"|{','.join(in_ports)}|"
                 f"{Direction.IN.name}"
@@ -1195,7 +1239,7 @@ def generate_rules(
                 for rule in out_rules_for_dest
             }  # Can not be a range
             result.add(
-                f"net=ALLOW|{learn_rule.kind.name}|"
+                f"net=ALLOW|{kind.name}|"
                 f"{destination}|{','.join(out_ports)}|"
                 f"{Direction.OUT.name}"
             )
@@ -1205,4 +1249,4 @@ def generate_rules(
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
     def _deactivate_guard_sockets() -> None:
         global _rules
-        _rules = ()
+        __rules = ()

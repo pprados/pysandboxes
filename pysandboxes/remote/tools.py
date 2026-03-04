@@ -18,12 +18,15 @@ import ipaddress
 import logging
 import os
 import pickle
+import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
 from ctypes import cdll
+from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
 from typing import Any
 
@@ -285,7 +288,7 @@ def from_b85(b85: str) -> Any:
     )
 
 
-def get_default_interface() -> str|None:
+def get_default_interface() -> str | None:
     """
     Retrieves the name of the default network interface by reading the
     /proc/net/route pseudo-file on Linux.
@@ -315,18 +318,59 @@ def get_default_interface() -> str|None:
 
     except FileNotFoundError:
         # If the system is not Linux or the file is missing
-        print("Erreur: Le fichier /proc/net/route n'existe pas ou n'est pas accessible.")
-        return None
-    except Exception as e:
-        print(f"Une erreur inattendue est survenue lors de la lecture de la route par défaut: {e}")
+        logger.info("The file /proc/net/route not found.")
         return None
 
     return None
 
 
+def get_bridge_interfaces() -> list[str]:
+    """
+    Retrieves a list of names for network interfaces that are Linux bridges.
 
-def get_dns_servers() -> tuple[list[ipaddress.IPv4Address],list[ipaddress.IPv6Address]]:
-    dns_servers: list[ipaddress.IPv4Address|ipaddress.IPv6Address] = []
+    It checks for the presence of the 'bridge' subdirectory within
+    /sys/class/net/<interface>/, which is the standard indicator that
+    an interface is a Linux bridge device. This approach avoids using
+    external tools like 'ip' or 'brctl'.
+
+    Returns:
+        list[str]: The list of names of the bridge interfaces found.
+    """
+    bridge_interfaces: list[str] = []
+
+    # Standard path for network interfaces on Linux systems (sysfs)
+    net_path: Path = Path('/sys/class/net')
+
+    if not net_path.is_dir():
+        # This should exist on Ubuntu, but it's good practice to check
+        # Print is in English as it's part of the function's internal output
+        print(f"Warning: The path {net_path} is not a directory.")
+        return []
+
+    # Iterate over all entries in /sys/class/net
+    try:
+        for interface_dir in net_path.iterdir():
+            # Ensure the element is a directory (which is the case for interfaces)
+            if interface_dir.is_dir():
+                interface_name: str = interface_dir.name
+
+                # The /sys/class/net/<interface>/bridge directory exists
+                # if and only if the interface is a bridge.
+                # Check for the existence of the 'bridge' subdirectory
+                bridge_indicator_path: Path = interface_dir / 'bridge'
+
+                if bridge_indicator_path.is_dir():
+                    bridge_interfaces.append(interface_name)
+
+        return bridge_interfaces
+    except PermissionError:
+        raise RuntimeError("Error: Insufficient permissions to read /sys/class/net.")
+    except Exception as e:
+        raise RuntimeError(f"An unexpected error occurred while reading interfaces: {e}")
+
+
+def get_dns_servers() -> tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]:
+    dns_servers: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     with open('/etc/resolv.conf', 'r') as f:
         for line in f:
             # Cherche les lignes qui commencent par 'nameserver'
@@ -356,3 +400,106 @@ def get_dns_servers() -> tuple[list[ipaddress.IPv4Address],list[ipaddress.IPv6Ad
             print(f"Avertissement : '{addr}' n'est pas une adresse IP valide et a été ignorée.")
 
     return ipv4_list, ipv6_list
+
+
+def get_systemd_resolved_static_dns() -> list[IPv4Address|IPv6Address]:
+    """
+    Reads the systemd-resolved configuration file to retrieve statically
+    configured upstream DNS servers, avoiding external tool execution.
+
+    Note: This only retrieves statically configured servers from the
+    resolved.conf file. Dynamically acquired servers (via DHCP/NetworkManager)
+    are not visible here and require parsing other configuration files or
+    running the 'resolvectl' utility (which is an external tool).
+
+    Returns:
+        list[str]: A list of static DNS server IP addresses.
+    """
+    dns_servers: list[IPv4Address|IPv6Address] = []
+    config_path: str = '/run/systemd/resolve/resolv.conf'
+
+    # Regex to capture IP addresses following the 'DNS=' directive
+    # It handles multiple IPs separated by spaces.
+    dns_pattern: re.Pattern = re.compile(r'^\s*nameserver\s*(.*)$', re.IGNORECASE)
+
+    if not os.path.exists(config_path):
+        config_path = '/etc/systemd/resolved.conf'
+        if not os.path.exists(config_path):
+            return []
+    try:
+        with open(config_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                # Skip comments and empty lines
+                if not line or line.startswith('#'):
+                    continue
+
+                # Check for the DNS= line
+                match = dns_pattern.match(line)
+                if match:
+                    # The captured group (1) contains the IP list (e.g., "8.8.8.8 8.8.4.4")
+                    ip_list: str = match.group(1).strip()
+                    # Split the string by spaces and filter out any empty strings
+                    servers_found: list[str] = [ip.strip() for ip in ip_list.split() if ip]
+                    dns_servers.extend([ipaddress.ip_address(ip) for ip in servers_found])
+
+        return list(set(dns_servers))
+    except IOError as e:
+        print(f"Error reading {config_path}: {e}")
+        return []
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return []
+
+    # Use a set to remove duplicates, then convert back to a sorted list
+
+
+def get_systemd_resolved_upstream_dns() -> list[IPv4Address|IPv6Address]:
+    """
+    Executes 'resolvectl status' to retrieve the list of active upstream DNS
+    servers from the systemd-resolved service, filtering out the local stub
+    resolver IP (127.0.0.53).
+
+    Note: This function explicitly calls the external tool 'resolvectl'
+    via subprocess, as required to read the service's dynamic state.
+
+    Returns:
+        list[str]: A sorted list of unique, external DNS server IP addresses.
+    """
+    result = get_systemd_resolved_static_dns()
+    if result:
+        return result
+    try:
+        # Execute the resolvectl status command
+        result = subprocess.run(
+            [shutil.which('resolvectl'), 'status'],
+            capture_output=True,
+            text=True,
+            check=True,  # Raise an error if resolvectl fails
+            timeout=5
+        )
+        output: str = result.stdout
+
+        # Regex to capture the IPs following "Current DNS Server" or "DNS Servers"
+        # from both Global and Link configuration sections.
+        # Group 2 captures the list of IPs.
+        dns_pattern: re.Pattern = re.compile(
+            r'^\s*(Current\s+)?DNS\s+Servers:\s*(.*?)\s*$',
+            re.MULTILINE
+        )
+
+        all_ips: list[IPv4Address|IPv6Address] = []
+        # Find all matches across the output
+        matches = dns_pattern.findall(output)
+        for _, ip_string in matches:
+            # Split the captured IP string by space and extend the list
+            all_ips.extend([ipaddress.ip_address(ip) for ip in ip_string.split()])
+        return list(set(all_ips))
+    except FileNotFoundError:
+        pass
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Error executing 'resolvectl status': {e.stderr.strip()}")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Error: 'resolvectl status' command timed out.")
+    except Exception as e:
+        raise RuntimeError(f"An unexpected error occurred during execution: {e}")

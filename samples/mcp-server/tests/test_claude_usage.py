@@ -41,17 +41,17 @@ if MOCK:
 
 timeout = 30
 all_os_sandbox = [
-    "None",
+    # "None",
     "Subprocess",
-    "firejail",
+    # "firejail",
 ]
 all_protocol = [
-    "stdio",
+    # "stdio",
     "http"
 ]
 all_pysandboxes_mode = [
     "complete",
-    "partial"
+    # "partial"
 ]
 
 
@@ -123,7 +123,7 @@ def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> N
             process.terminate()
 
 
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)

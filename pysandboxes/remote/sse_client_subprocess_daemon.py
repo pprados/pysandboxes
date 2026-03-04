@@ -32,13 +32,6 @@ from typing import Callable, NamedTuple
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout
-
-from ..all_rules import AllRules
-from ..guard_socket import SocketRule
-from ..main_logger import pysandboxes_logger
-from ..private_loop import sandbox_loop
-from ..sb_types import Args, Envs, ConfigLine
-from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
@@ -52,6 +45,12 @@ from .parameters import (
     TIMEOUT_FOR_STOP_DAEMON,
 )
 from .sse_base_daemon import BaseSSESandbox
+from ..all_rules import AllRules
+from ..guard_socket import SocketRule
+from ..main_logger import pysandboxes_logger
+from ..private_loop import sandbox_loop
+from ..sb_types import Args, Envs, ConfigLine
+from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +105,7 @@ async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
 
 
 async def _read_stream(
-    stream: asyncio.StreamReader, callback: Callable[[str], None]
+        stream: asyncio.StreamReader, callback: Callable[[str], None]
 ) -> None:
     """Read data from stream and call callback for each line.
 
@@ -144,10 +143,10 @@ class DaemonParameters(NamedTuple):
 
 @sandbox_loop
 async def launch_sandbox(
-    cmd: list[str],
-    pipe_path: Path,
-    envs: Envs,
-    process_config: DaemonParameters,
+        cmd: list[str],
+        pipe_path: Path,
+        envs: Envs,
+        process_config: DaemonParameters,
 ) -> Process:
     """Launch a sandbox subprocess with the given configuration.
 
@@ -160,7 +159,7 @@ async def launch_sandbox(
     Returns:
         The launched subprocess.
     """
-    os.mkfifo(pipe_path) # FIXME a remettre
+    os.mkfifo(pipe_path)  # FIXME a remettre
     if DEBUG:
         try:
             Path("run.sh").write_text(
@@ -179,8 +178,9 @@ async def launch_sandbox(
         def preexec_fn() -> None:
             os.umask(0o006)  # Only user:RW
 
+        logger.debug("Start process: " + " ".join((repr(c) if ' ' in c else c for c in cmd)))
         process = await asyncio.create_subprocess_exec(
-            *cmd, env=dict(envs), preexec_fn=preexec_fn
+            *cmd, env=dict(envs), preexec_fn=preexec_fn,
         )
 
         # It's a good time for that
@@ -242,19 +242,19 @@ class BaseSubProcessDaemon(BaseSSESandbox):
     )
 
     def __init__(
-        self,
-        token: str,
-        *,
-        host: str = "localhost",
-        python_args: list[str] | None = None,
-        max_connect_retry: int = MAX_CONNECT_RETRY,
-        max_attempts: int = RETRY_MAX_ATTEMPTS,
-        # Maximum number of retry _attempts
-        base_delay: float = RETRY_BASE_DELAY,
-        # Initial delay in seconds (e.g., 100 ms)
-        factor: float = RETRY_FACTOR,  # Exponential increase _factor
-        max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
-        reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attempts
+            self,
+            token: str,
+            *,
+            host: str = "localhost",
+            python_args: list[str] | None = None,
+            max_connect_retry: int = MAX_CONNECT_RETRY,
+            max_attempts: int = RETRY_MAX_ATTEMPTS,
+            # Maximum number of retry _attempts
+            base_delay: float = RETRY_BASE_DELAY,
+            # Initial delay in seconds (e.g., 100 ms)
+            factor: float = RETRY_FACTOR,  # Exponential increase _factor
+            max_delay: float = RETRY_MAX_DELAY,  # Maximum delay in seconds
+            reset_delay: float = RETRY_RESET_DELAY,  # delay to reset attempts
     ) -> None:
         """Initialize the subprocess daemon.
 
@@ -284,10 +284,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self.restart = 0
 
     def subprocess_cmd(
-        self,
-        all_rules: AllRules,
-        envs: Environ,
-        pipe_path: Path,
+            self,
+            all_rules: AllRules,
+            envs: Environ,
+            pipe_path: Path,
     ) -> Args:
         """Build command line arguments for subprocess.
 
@@ -318,12 +318,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         return cmd_parameters
 
     async def _start(
-        self,
-        all_rules: AllRules,
-        *,
+            self,
+            all_rules: AllRules,
+            *,
             envs: Environ,
-        log_level: int,
-        init_fn: SyncOrAsyncFunc | None,
+            log_level: int,
+            init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         """Start the subprocess daemon.
 
@@ -349,12 +349,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         )
 
     async def watchdog(
-        self,
-        all_rules: AllRules,
-        *,
-        envs: Environ,
-        log_level: int,
-        init_fn: SyncOrAsyncFunc | None,
+            self,
+            all_rules: AllRules,
+            *,
+            envs: Environ,
+            log_level: int,
+            init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         """Monitor subprocess and restart on failure.
 
@@ -405,13 +405,13 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             pass  # Ignore
 
     async def _re_start(
-        self,
-        all_rules: AllRules,
-        *,
-        envs: Environ,
-        log_level: int,
-        init_fn: SyncOrAsyncFunc | None,
-        first: bool = False,
+            self,
+            all_rules: AllRules,
+            *,
+            envs: Environ,
+            log_level: int,
+            init_fn: SyncOrAsyncFunc | None,
+            first: bool = False,
     ) -> None:
         """Restart the subprocess daemon.
 
@@ -428,14 +428,14 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             from ..guard_socket import parse_rules as socket_parse_rules
 
             # Add rules for the communication with the sandbox
-            socket_rules:list[SocketRule]=list(all_rules.socket_rules)
-            _new_socket_rules, _ = socket_parse_rules(
+            socket_rules: list[SocketRule] = list(all_rules.socket_rules)
+            _new_socket_rules, *_ = socket_parse_rules(
                 [ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], []
             )
             socket_rules.extend(_new_socket_rules)
 
             from pysandboxes.guard_socket import SocketRules
-            all_rules=all_rules._replace(socket_rules=SocketRules(socket_rules))
+            all_rules = all_rules._replace(socket_rules=SocketRules(socket_rules))
 
             await self._re_start_cmd(
                 all_rules,
@@ -456,14 +456,14 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             pysandboxes_logger.warning("Child Sandbox re-started")
 
     async def _re_start_cmd(
-        self,
-        all_rules: AllRules,
-        args: Args,
-        pipe_path: Path,
-        port: int,
-        *,
-        log_level: int,
-        init_fn: SyncOrAsyncFunc | None,
+            self,
+            all_rules: AllRules,
+            args: Args,
+            pipe_path: Path,
+            port: int,
+            *,
+            log_level: int,
+            init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         """Execute subprocess restart with given command and configuration.
 
@@ -498,7 +498,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         else:
             env = dict(all_rules.envs)
 
-        logger.debug("Launch process...")
+        logger.debug("Launch process:" + " ".join((repr(c) if ' ' in c else c for c in args)))
         self._process = await launch_sandbox(
             args + ["--_named-pipe", str(pipe_path)],
             pipe_path=pipe_path,
@@ -510,13 +510,19 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         gc.collect()
         ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
         async with aiohttp.ClientSession() as session:
+            count_loop = 0
             while True:
                 try:
+                    logger.debug("Try to call %s", ping_url)  # FIXME
+                    count_loop += 1
+                    if count_loop > 100:
+                        logger.error("Is not possible to connect to the sandbox daemon")
+                        raise SystemExit("Is not possible to connect to the sandbox daemon")
                     async with session.get(
-                        ping_url,
-                        timeout=ClientTimeout(
-                            total=TIMEOUT_FOR_PING,
-                        ),
+                            ping_url,
+                            timeout=ClientTimeout(
+                                total=TIMEOUT_FOR_PING,
+                            ),
                     ) as response:
                         if response.status == 200:
                             break
@@ -533,6 +539,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         # One more time
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
+        logger.debug("Sandbox daemon is up and runnning")
         self._is_started = True
         self._accept_incoming = True
 
@@ -601,10 +608,10 @@ class SubProcessDaemon(BaseSubProcessDaemon):
     """
 
     def update_rules(
-        self,
-        *,
-        envs: Envs,
-        all_rules: AllRules,
+            self,
+            *,
+            envs: Envs,
+            all_rules: AllRules,
     ) -> AllRules:
         """Update security rules (no-op for basic subprocess daemon).
 

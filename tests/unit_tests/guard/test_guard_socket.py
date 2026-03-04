@@ -292,7 +292,7 @@ def test_explicit_allow_rule_not_triggers_allow_exception(
         errors,
     )
     assert not errors
-    address: Tuple[str, int] = ("google.dns", 53)
+    address: Tuple[str, int] = ("google.pin_dns", 53)
     _check_address_with_rules(rules, s_kind, address, Direction.OUT)
 
 

@@ -23,7 +23,7 @@ Here is a brief description of the implementation in **complete mode**. You will
 - The parameters are converted into specific parameters for **os-sandbox**.
 - Parameters may be modified to account for the specificities of the **os-sandbox** implementation. For instance, applying a double bind to directories is not relevant.
 - A standard `python` program is launched within the *OS sandbox technology* using the extracted python parameters and `-m pysandboxes.remote.main_sandbox`.
-- The sandbox's parameters, state, and log format are transmitted to the sandbox via a *named pipe*.
+- The sandbox\'s parameters, state, and log format are transmitted to the sandbox via a *named pipe*.
 - The main function read the configuration and detects the use of `python-sb`.
 - The sandbox is activated.
 - A simulation of a standard python startup (managing modules, scripts, commands, and interactive mode) is implemented to launch your program in the sandbox.
@@ -38,8 +38,8 @@ Here is a brief description of the implementation in **partial mode**. You will 
 - The parameters are converted into specific parameters for **os-sandbox**.
 - The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `bind` on directories is not relevant.
 - A free TCP port is selected
-- a classical `python` program is started in the sandbox technology, with the extracted classical python parameter and the module `-m pysandboxes.remote.main_sandbox'
-- The sandbox's parameters, port, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
+- a classical `python` program is started in the sandbox technology, with the extracted classical python parameter and the module `-m pysandboxes.remote.main_sandbox\'
+- The sandbox\'s parameters, port, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
 - In the sandbox
   - An HTTP FastAPI server is launched with the selected port.
       - It implements the SSE protocol.
@@ -55,7 +55,7 @@ Here is a brief description of the implementation in **partial mode**. You will 
           - The `@sandbox` function is invoked.
           - It detects that it is already running in a sandbox and then starts the normal execution.
           - A message stream goes up to the client with the uses of *stdout* and *stderr*.
-          - The function's return or exception goes back to the caller.
+          - The function\'s return or exception goes back to the caller.
           - If an exception is raised, the remote stack trace is injected, and the exception is propagated again.
           - The connection is terminated.
       - If an SSE request fails, it is retried after a delay.
@@ -71,3 +71,7 @@ Here is a brief description of the implementation in **partial mode**. You will 
     - The child process is restarted
     - The current requests are retry multiple times to be reconnected to the new child process.
 
+## Pin DNS
+DNS is a significant difficulty when using OS-Sandbox. Indeed, if we want to add netfilter rules, it is the host that must resolve the domain names to obtain a list of IP addresses. Then, a netfilter file allows these addresses to be used to limit access. But, the sandbox will itself want to resolve the same domain names. It is possible that it will receive different IP addresses. The network rules are then no longer compatible. For example, google.com can be resolved to dozens of IP addresses. Netfilter is not compatible with DNS.
+
+To work around this difficulty, before launching the sandbox, during the analysis of the rules, a pined-DNS is created, with the rules injected into netfilter. This DNS is then injected into the python APIs, so that the domain names return the same IP addresses and the netfilter rules work correctly.

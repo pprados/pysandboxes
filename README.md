@@ -367,10 +367,10 @@ Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is po
 
 We offer several implementations to encapsulate the Python sandbox:
 
-| Technology                                        | Specifics                                                                      | Description                                                                                               |
-|---------------------------------------------------|--------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| subprocess                                        | - no complementary security                                                    | This is the default implementation. It is simply a child Python process that holds the sandbox.           |
-| [firejail](https://github.com/netblue30/firejail) | - Disk mapping (without rename)<br/> - File filtering<br/> - Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                 |
+| Technology                                        | Configuration            | Specifics                                                                      | Description                                                                                               |
+|---------------------------------------------------|--------------------------|--------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| subprocess                                        |                          | - no complementary security                                                    | |This is the default implementation. It is simply a child Python process that holds the sandbox. |
+| [firejail](https://github.com/netblue30/firejail) | [here](wiki/firejail.md) | - Disk mapping (without rename)<br/> - File filtering<br/> - Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels. |
 
 *Other implementations will be added soon*
 

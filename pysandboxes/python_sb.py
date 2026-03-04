@@ -31,15 +31,16 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    log_level = logging.DEBUG  # FIX_RELEASE
-    config_log(log_level)
+    sandbox_level = logging.DEBUG  # FIX_RELEASE
+    uvicorn_log_level = logging.ERROR  # FIX_RELEASE
+    config_log(sandbox_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(uvicorn_log_level)
+    logging.getLogger("uvicorn.error").setLevel(uvicorn_log_level)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_log_level)
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
-    logging.getLogger("pysandboxes").setLevel(log_level)
-    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
+    logging.getLogger("pysandboxes").setLevel(sandbox_level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
     logging.info("Start in python-sb")
 
 
@@ -47,7 +48,8 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    _debug_log()
+    _debug_log()  # FIX_RELEASE
+
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
         sys.argv[1:]
     )

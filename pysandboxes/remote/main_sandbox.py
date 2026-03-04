@@ -24,6 +24,7 @@ import sys
 import threading
 from pathlib import Path
 
+from pysandboxes.guard_socket import set_pin_dns
 from pysandboxes.learning import (
     generate_config_from_learning,
     set_learning_mode,
@@ -41,16 +42,17 @@ from .tools import set_pdeathsig
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 def _debug_log() -> None:
-    log_level = logging.DEBUG  # FIX_RELEASE
-    config_log(log_level)
+    sandbox_level = logging.DEBUG  # FIX_RELEASE
+    uvicorn_log_level = logging.ERROR  # FIX_RELEASE
+    config_log(sandbox_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(uvicorn_log_level)
+    logging.getLogger("uvicorn.error").setLevel(uvicorn_log_level)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_log_level)
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
-    logging.getLogger("pysandboxes").setLevel(log_level)
-    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
-    logging.info("Start in python-sb")
+    logging.getLogger("pysandboxes").setLevel(sandbox_level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
+    logger.debug(f"*** Start main_sandbox\n"+" ".join((repr(c) if ' ' in c else c for c in sys.argv)))  # FIXME
 
 
 # %%
@@ -109,9 +111,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         log_level=process_config.log_level,
         init_fn=init_fn,
     )
-    logger.debug(
-        f"join server_daemon"
-    )
+    logger.debug("join server_daemon")
     await server_daemon.join()
     return 0
 
@@ -160,6 +160,7 @@ def main() -> int:
     # Initialize learn
     set_learning_path(all_rules.learning_path)
     set_learning_mode(all_rules.learn)
+    set_pin_dns(all_rules.pin_dns)
 
     # In this case, use the standard loop in place of the private sandbox loop
 
