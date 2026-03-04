@@ -365,11 +365,11 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                             not module_name.startswith("pysandboxes") and
                             module_name not in _rules
                     ):
-                        ex=RuleModuleNotFoundError(
+                        ex = RuleModuleNotFoundError(
                             f"Module named {module_name!r} is not allowed by a rule"
                         )
                         logger.debug("Module named %s is not allowed by a rule", repr(module_name))
-                        logger.exception(ex,"Module named %s is not allowed by a rule",repr(module_name))
+                        logger.exception(ex, "Module named %s is not allowed by a rule", repr(module_name))
                         raise ex
             return new_spec
 
@@ -613,7 +613,6 @@ def generate_rules(
     deprecated_modules = set(
         resources.read_text(__name__, "modules_deprecated.txt").split()
     )
-    standard_result.update(("decimal","numbers","_pydecimal","fractions"))  # FIXME: pourquoi?
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         if learn_rule.name in black_list:
