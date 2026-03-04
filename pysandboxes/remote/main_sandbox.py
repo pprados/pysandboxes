@@ -97,6 +97,9 @@ async def run_server(process_config: DaemonParameters) -> int:
         log_level=process_config.log_level,
         init_fn=init_fn,
     )
+    logger.debug(
+        f"join server_daemon"
+    )
     await server_daemon.join()
     return 0
 

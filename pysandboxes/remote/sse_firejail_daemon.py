@@ -41,10 +41,11 @@ from .tools import suggest_package_installation, which_command
 logger = logging.getLogger(__name__)
 
 DEBUG = True
+USE_WHITELIST = True
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
-REPLACE = True
+REPLACE = False  # FIXME
 
 
 class WhiteList(MutableSet):
@@ -223,7 +224,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         if logger.getEffectiveLevel() > logging.INFO:
             args.append("--quiet")
         else:
-            logger.info(
+            logger.debug(
                 "Activate Firejail's output (to remove, "
                 "change the level of this logger)"
             )
@@ -286,12 +287,13 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 whitelist.add(rule.source)
                 keep_files_rules.append(rule)
                 need_root = False
+            args.append(f"--whitelist={rule.source}")
             if not rule.write:
                 args.append(f"--read-only={rule.source}")
             else:
                 args.append(f"--read-write={rule.source}")
 
-        if REPLACE:
+        if REPLACE:  # FIXME
             from ..guard_files import parse_rules as files_parse_rules
 
             _new_files_rules, _ = files_parse_rules(
@@ -310,7 +312,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         # with --private-tmp, need more parameters
         if pipe_path:
             args.append(f"--mkdir={str(pipe_path)}")
-            args.append(f"--whitelist={str(pipe_path)}")
+            args.append(f"--whitelist={str(pipe_path)}")  # FIXME: whitelist ne semble pas nécessaire
             args.append(f"--read-only={str(pipe_path)}")
 
         if all_rules.socket_rules:

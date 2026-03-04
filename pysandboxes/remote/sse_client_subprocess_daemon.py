@@ -34,9 +34,10 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout
 
 from ..all_rules import AllRules
+from ..guard_socket import SocketRule
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
-from ..sb_types import Args, Envs
+from ..sb_types import Args, Envs, ConfigLine
 from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .parameters import (
@@ -54,7 +55,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False
+DEBUG = True  # FIXME
 
 
 def get_log_formatter() -> str:
@@ -159,7 +160,7 @@ async def launch_sandbox(
     Returns:
         The launched subprocess.
     """
-    os.mkfifo(pipe_path)
+    os.mkfifo(pipe_path) # FIXME a remettre
     if DEBUG:
         Path("run.sh").write_text(
             "#!/bin/bash\n"
@@ -421,6 +422,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         with tempfile.TemporaryDirectory() as tmpdir:
             pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
             pipe_path.unlink(missing_ok=True)
+            from ..guard_socket import parse_rules as socket_parse_rules
+
+            # Add rules for the communication with the sandbox
+            socket_rules:list[SocketRule]=list(all_rules.socket_rules)
+            _new_socket_rules, _ = socket_parse_rules(
+                [ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], []
+            )
+            socket_rules.extend(_new_socket_rules)
+
+            from pysandboxes.guard_socket import SocketRules
+            all_rules=all_rules._replace(socket_rules=SocketRules(socket_rules))
 
             await self._re_start_cmd(
                 all_rules,

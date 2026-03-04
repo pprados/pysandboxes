@@ -1,17 +1,30 @@
-include "./.local.py-sandboxes"  # May be add to .gitignore
+#include "./.local.py-sandboxes"  # May be add to .gitignore
 
+#learn=./.local.py-sandboxes
+
+#### OS-LEVEL SANDBOX PROVIDERS ####
 os-sandbox=${OS_SANDBOX:-subprocess}
 
+#### ENVIRONMENT VARIABLES ####
 #env=HOME=${HOME}
 env=LANGUAGE=${LANGUAGE}
 
+#### FILE SYSTEM ACCESS ####
+ignore=.secret
+ro-bind=./resources,./resources
+
+#### NETWORK ACCESS CONTROL ####
+net=ALLOW|TCP|*|8000|IN
+net=ALLOW|TCP|www.google.com|80|OUT
+
+#### PYTHON IMPORTS CONTROL ####
 # Standard Python
 python-import=_cffi_backend, _decimal, _markupbase, _multibytecodec
 python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, _pydecimal, colorsys, decimal
-python-import=fractions, getpass, hmac, html, http, importlib, mmap, numbers, pprint, secrets
+python-import=concurrent, encodings, fractions, getpass, hmac, html, http, importlib, mmap, numbers, pprint, secrets
 python-import=sysconfig, termios, webbrowser, zoneinfo
 
-# External modules (Are you sure about the origin?)
+# External modules
 python-import=aiofiles
 python-import=annotated_types
 python-import=anyio
@@ -23,7 +36,9 @@ python-import=charset_normalizer
 python-import=cryptography
 python-import=dateutil
 python-import=dotenv
+python-import=email_validator
 python-import=exceptiongroup
+python-import=fastapi
 python-import=fastmcp
 python-import=fqdn
 python-import=h11
@@ -54,18 +69,9 @@ python-import=sniffio
 python-import=soupsieve
 python-import=sse_starlette
 python-import=starlette
+python-import=stringprep
 python-import=typing_extensions
 python-import=typing_inspection
 python-import=uri_template
 python-import=uvicorn
 python-import=webcolors
-
-
-ignore=.*
-ro-bind=./resources,./resources
-ro-bind=./.venv,./.venv  # FIXME
-
-#net=ALLOW|TCP|0.0.0.0|8000|IN
-#net=ALLOW|TCP|127.0.0.1|8000|IN
-net=ALLOW|TCP|0.0.0.0|8000|IN
-net=ALLOW|TCP|www.google.com|80|OUT

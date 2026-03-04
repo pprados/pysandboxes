@@ -3,6 +3,7 @@
 import argparse
 import importlib
 import logging
+import os
 import sys
 from operator import add, mul, sub, truediv
 from pathlib import Path
@@ -16,7 +17,7 @@ from pysandboxes import sandbox, sandboxes
 
 logger = logging.getLogger(__name__)
 
-level = logging.WARNING
+level = logging.DEBUG
 format = "MCPServer: %(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
@@ -134,6 +135,7 @@ def run_mcp_server(
     pysandboxes_config: Path,
     **kwargs,
 ) -> int:
+    logger.debug("with sandboxes...")  # FIXME
     with sandboxes(
         sandboxes_config=pysandboxes_config,
         py_sandbox=py_sandbox,  # type: ignore[arg-type]
@@ -143,6 +145,7 @@ def run_mcp_server(
         add_parameters: dict[str, Any] = {}
         if transport == "http":
             add_parameters = {"host": "0.0.0.0", "port": port}
+        logger.debug("mcp.run...")  # FIXME
         mcp.run(
             transport=transport,
             show_banner=False,
@@ -187,14 +190,14 @@ def main() -> int:
         "--os-sandbox",
         dest="os_sandbox",
         type=str,
-        default="subprocess",  # Use None as default value for clear checking
+        default=os.environ.get("OS_SANDBOX","subprocess"),
         help="Choice the os-sandbox provider.",
     )
     parser.add_argument(
         "--py-sandbox",
         dest="py_sandbox",
         type=str,
-        default="True",  # Use None as default value for clear checking
+        default=os.environ.get("PY_SANDBOX","True"),  # Use None as default value for clear checking
         help="Choice to activate the py-sandbox.",
     )
     parser.add_argument(
@@ -212,7 +215,7 @@ def main() -> int:
     kwargs = {}
     if args.learn:
         kwargs = {"learn": args.learn}
-    logger.error(f"Start mcp_server with {args}")  # FIXME
+    logger.info(f"Start mcp_server with {args.transport} {args.config_path} {args.py_sandbox} {args.os_sandbox}")
     return run_mcp_server(
         args.py_sandbox,
         args.os_sandbox,
