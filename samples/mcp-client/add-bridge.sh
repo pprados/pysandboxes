@@ -7,7 +7,7 @@ DEFAULT_INTERFACE=$(ip route get 8.8.8.8 | awk '/dev/ {print $5; exit}')
 # Routed network configuration script
 #
 ip link set br0 down
-brctl subbr br0
+brctl delbr br0
 
 # bridge setup
 brctl addbr br0
