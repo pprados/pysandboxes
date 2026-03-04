@@ -75,3 +75,4 @@ python-import=typing_inspection
 python-import=uri_template
 python-import=uvicorn
 python-import=webcolors
+python-import=* # FIXME

@@ -30,19 +30,19 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
     This version allows launching the **MCP-server** in `stdio` mode, without **PY-sandboxes**.
     ```mermaid
     flowchart TD
-        subgraph MCPClient [\"MCP Client\"]
+        subgraph MCPClient ["MCP Client"]
             D[Chat]
         end
    
-        subgraph MCPServer [\"MCP Server\"]
+        subgraph MCPServer ["MCP Server"]
     
             A[Caller Code]
-            C[\"<s>@sandbox</s><br/>my_function(...)\"]
+            C["<s>@sandbox</s><br/>my_function(...)"]
         end
     
-        D -- \"stdio\" --> A
-        A -- \"1- my_function(param)\" --> C
-        C -- \"4- return\" --> A
+        D -- "stdio" --> A
+        A -- "1- my_function(param)" --> C
+        C -- "4- return" --> A
 
     ```
 
@@ -56,24 +56,24 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
        
     ```mermaid
     flowchart TD
-        subgraph MCPClient [\"MCP Client\"]
+        subgraph MCPClient ["MCP Client"]
             D[Chat]
         end
 
-        subgraph OSSandbox [\"OS-sandbox\"]
+        subgraph OSSandbox ["OS-sandbox"]
             direction LR
             subgraph PythonSandbox [Python Sandbox]
     
                 subgraph MCPServer [MCP Server]
                     A[Caller Code]
-                    C[\"<s>@sandbox</s><br/>my_function(...)\"]
+                    C["<s>@sandbox</s><br/>my_function(...)"]
                 end
             end
         end
     
-        D -- \"stdio\" --> A
-        A -- \"1- my_function(param)\" --> C
-        C -- \"4- return\" --> A
+        D -- "stdio" --> A
+        A -- "1- my_function(param)" --> C
+        C -- "4- return" --> A
 
         %% 🎨 Style personnalisé pour OSSandbox
         style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
@@ -89,26 +89,26 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
 
     ```mermaid
     flowchart TD
-        subgraph MCPClient [\"MCP Client\"]
+        subgraph MCPClient ["MCP Client"]
             D[Chat]
         end
 
-        subgraph MCPServer [\"MCP Server\"]
-            subgraph WithSandboxes [\"with sandboxes()\"]
+        subgraph MCPServer ["MCP Server"]
+            subgraph WithSandboxes ["with sandboxes()"]
                 A[Caller Code]
             end
         end
 
-        subgraph OSSandbox [\"OS-sandbox\"]
+        subgraph OSSandbox ["OS-sandbox"]
             direction TB
             subgraph PythonSandbox [Python Sandbox]
-                 C[\"<b>@sandbox</b><br/>my_function(...)\"]
+                 C["<b>@sandbox</b><br/>my_function(...)"]
             end
         end
     
-        D -- \"stdio\" --> A
-        A -- \"1- my_function(param)\" --> C
-        C -- \"4- return\" --> A
+        D -- "stdio" --> A
+        A -- "1- my_function(param)" --> C
+        C -- "4- return" --> A
 
         %% 🎨 Style personnalisé pour OSSandbox
         style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
@@ -128,15 +128,15 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
        In this scenario, sandboxes are completely disabled.
     ```mermaid
     flowchart TD
-        subgraph MCPClient [\"MCP Client\"]
+        subgraph MCPClient ["MCP Client"]
             D[Chat]
         end
 
-        subgraph MCPServer [\"MCP Server\"]
-           A[...]\
+        subgraph MCPServer ["MCP Server"]
+           A[...]
         end
 
-        D -- \"stdio\" --> A
+        D -- "stdio" --> A
     ```
    ```bash
    uvx  mcp-simple-chatbot -c servers_config_no_sandboxes.json
@@ -147,21 +147,21 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
        The MCP server must be launched with `--os-sandbox=subprocess` so that there is no new encapsulated **OS-sandbox**. The MCP server can have its own **Python-sandbox** parameters if needed.
     ```mermaid
     flowchart TD
-        subgraph OSSandbox [\"OS-sandbox\"]
+        subgraph OSSandbox ["OS-sandbox"]
             direction TB
             subgraph PythonSandbox1 [Python Sandbox]
-              subgraph MCPClient [\"MCP Client\"]
+              subgraph MCPClient ["MCP Client"]
                   D[Chat]
               end
             end   
             subgraph PythonSandbox2 [Python Sandbox]
-                subgraph MCPServer [\"MCP Server\"]
-                   A[...]\
+                subgraph MCPServer ["MCP Server"]
+                   A[...]
                 end
             end
         end
     
-        D -- \"stdio\" --> A
+        D -- "stdio" --> A
    
         %% 🎨 Style personnalisé pour OSSandbox
         style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
@@ -179,7 +179,7 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
 
     ```mermaid
     flowchart TD
-        subgraph OSSandbox [\"OS-sandbox\"]
+        subgraph OSSandbox ["OS-sandbox"]
             direction LR
             subgraph PythonSandbox [Python Sandbox]
                 subgraph MCPClient [MCP Client]
@@ -188,14 +188,14 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
             end
         end
     
-        subgraph MCPServer [\"MCP Server\"]
+        subgraph MCPServer ["MCP Server"]
             A[Caller Code]
-            C[\"@sandbox<br/>my_function(...)\"]
+            C["@sandbox<br/>my_function(...)"]
         end
 
-        D -- \"http\" --> A
-        A -- \"1- my_function(param)\" --> C
-        C -- \"4- return\" --> A
+        D -- "http" --> A
+        A -- "1- my_function(param)" --> C
+        C -- "4- return" --> A
 
         %% 🎨 Style personnalisé pour OSSandbox
         style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px

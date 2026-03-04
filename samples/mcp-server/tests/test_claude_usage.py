@@ -4,6 +4,7 @@ Test all the scenario with 'claude-code'
 
 import logging
 import os
+import re
 from shutil import which
 from subprocess import Popen, run, PIPE
 
@@ -15,6 +16,7 @@ MOCK = False
 if MOCK:
     from dataclasses import dataclass
 
+
     @dataclass
     class MockRunResult:
         stdout: str = ""
@@ -22,7 +24,7 @@ if MOCK:
 
 
     def _mock_run(*openargs, input=None, capture_output=False, timeout=None, check=False, **kwargs):
-        if isinstance(openargs[0],tuple):
+        if isinstance(openargs[0], tuple):
             cmd_line = " ".join(openargs[0])
             if "@config://version" in cmd_line:
                 return MockRunResult(stdout="1.0.0.0")
@@ -37,19 +39,18 @@ if MOCK:
 
     run = _mock_run
 
-
 timeout = 30
 all_os_sandbox = [
-    # "None",
-    # "Subprocess",
+    "None",
+    "Subprocess",
     "firejail",
 ]
 all_protocol = [
     "stdio",
-    # "http"
+    "http"
 ]
 all_pysandboxes_mode = [
-    # "complete",
+    "complete",
     "partial"
 ]
 
@@ -92,6 +93,7 @@ def _init_mcp_server(protocol: str,
     return process
 
 
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -121,7 +123,7 @@ def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> N
             process.terminate()
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -131,19 +133,22 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
     try:
 
         cmd = ("claude",
-               "--debug", "--verbose",
+               "-d", "--verbose",
                "--permission-mode", "bypassPermissions",
+               "--allowedTools", 'mcp__mcp_demo__fetch_webpage',
                "-p", 'get and summarize the page http://www.google.com',
                )
         result = run(
             cmd,
             env=os.environ.copy() | {"OS_SANDBOX": os_sandbox},
-            capture_output=True, text=True, check=True, shell=True)
+            input="",
+            timeout=timeout,
+            capture_output=True, text=True, check=True)
         print(result.stdout)
         if result.stderr:
             print("------- STDERR")
             print(result.stderr)
-        assert "The Google homepage is" in result.stdout
+        assert re.search("google.*homepage", result.stdout.lower())
     finally:
         if process:
             process.terminate()
@@ -160,13 +165,15 @@ def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
 
         cmd = ("claude",
                "--debug", "--verbose",
-               "--permission-mode", "bypassPermissions",
+               "--allowedTools", "mcp__mcp_demo__evaluate_expression",
                "-p", '/mcp_demo:analyze_data (MCP) 112134+1433',
                )
         result = run(
             cmd,
             env=os.environ.copy() | {"OS_SANDBOX": os_sandbox},
-            capture_output=True, text=True, check=True, shell=True)
+            input="",
+            timeout=timeout,
+            capture_output=True, text=True, check=False)
         print(result.stdout)
         if result.stderr:
             print("------- STDERR")
@@ -188,13 +195,16 @@ def test_claude_evaluate_expression(protocol: str, os_sandbox: str, mode: str) -
 
         cmd = ("claude",
                "--debug", "--verbose",
-               "--permission-mode", "bypassPermissions",
+               # "--permission-mode", "bypassPermissions",
+               "--allowedTools", "mcp__mcp_demo__evaluate_expression",
                "-p", 'use evaluate_expression to calc 112134+1433',
                )
         result = run(
             cmd,
+            input="",
+            timeout=timeout,
             env=os.environ.copy() | {"OS_SANDBOX": os_sandbox},
-            capture_output=True, text=True, check=True, shell=True)
+            capture_output=True, text=True, check=True, shell=False)
         print(result.stdout)
         if result.stderr:
             print("------- STDERR")

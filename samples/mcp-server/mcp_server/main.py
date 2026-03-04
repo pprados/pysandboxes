@@ -101,12 +101,7 @@ async def evaluate_expression(expression: str) -> float:
         result = eval(
             expression,
             {"__builtins__": {}},
-            {
-                "add": add,
-                "sub": sub,
-                "mul": mul,
-                "truediv": truediv,
-            },
+            {},
         )
         logger.info(f"Result : {result}")
         return result

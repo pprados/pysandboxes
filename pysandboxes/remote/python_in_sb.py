@@ -85,9 +85,14 @@ def _python_interactive(
         RESET = " ***"
 
     if all_rules.learn:
+        conf_path=all_rules.learning_path
+        try:
+            conf_path=conf_path.relative_to(Path.cwd())
+        except ValueError:
+            pass
         sb_mode = (
             f"{BOLD}API calls are LEARNED and saved in "
-            f"{str(all_rules.learning_path)!r} at the "
+            f"{str(conf_path)!r} at the "
             f"end of the session.{RESET}\n"
         )
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"

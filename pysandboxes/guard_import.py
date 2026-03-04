@@ -437,6 +437,106 @@ def activate_guard_import(
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
 
+    # And now, remove some packages
+    safe = [
+        'abc',
+
+        'asyncio',
+        # 'asyncio.base_events',
+        # 'asyncio.base_futures',
+        # 'asyncio.base_subprocess',
+        # 'asyncio.base_tasks',
+        # 'asyncio.constants',
+        # 'asyncio.coroutines',
+        # 'asyncio.events',
+        # 'asyncio.exceptions',
+        # 'asyncio.format_helpers',
+        # 'asyncio.futures',
+        # 'asyncio.locks',
+        # 'asyncio.log',
+        # 'asyncio.mixins',
+        # 'asyncio.protocols',
+        # 'asyncio.queues',
+        # 'asyncio.runners',
+        # 'asyncio.selector_events',
+        # 'asyncio.sslproto',
+        # 'asyncio.staggered',
+        # 'asyncio.streams',
+        # 'asyncio.subprocess',
+        # 'asyncio.taskgroups',
+        # 'asyncio.tasks',
+        # 'asyncio.threads',
+        # 'asyncio.timeouts',
+        # 'asyncio.transports',
+        # 'asyncio.trsock',
+        # 'asyncio.unix_events',
+
+        'concurrent', 'concurrent.futures',
+
+        # 'distutils', 'distutils._log', 'distutils._modified',
+        # 'distutils.archive_util', 'distutils.cmd', 'distutils.command', 'distutils.command.bdist',
+        # 'distutils.compat', 'distutils.compat.py39', 'distutils.compilers', 'distutils.compilers.C',
+        # 'distutils.compilers.C.errors', 'distutils.core', 'distutils.debug', 'distutils.dir_util', 'distutils.dist',
+        # 'distutils.errors', 'distutils.extension', 'distutils.fancy_getopt', 'distutils.file_util',
+        # 'distutils.filelist', 'distutils.log', 'distutils.spawn', 'distutils.util',
+        #
+        #
+        # 'importlib', 'importlib._abc', 'importlib._bootstrap',
+        # 'importlib._bootstrap_external', 'importlib.abc', 'importlib.machinery', 'importlib.metadata',
+        # 'importlib.metadata._adapters', 'importlib.metadata._collections', 'importlib.metadata._functools',
+        # 'importlib.metadata._itertools', 'importlib.metadata._meta', 'importlib.metadata._text',
+        # 'importlib.readers', 'importlib.resources', 'importlib.resources._adapters', 'importlib.resources._common',
+        # 'importlib.resources._functional', 'importlib.resources._itertools', 'importlib.resources.abc',
+        # 'importlib.resources.readers', 'importlib.util',
+
+        # 'packaging', 'packaging._elffile',
+        # 'packaging._manylinux', 'packaging._musllinux', 'packaging._parser', 'packaging._structures',
+        # 'packaging._tokenizer', 'packaging.licenses', 'packaging.licenses._spdx', 'packaging.markers',
+        # 'packaging.requirements', 'packaging.specifiers', 'packaging.tags', 'packaging.utils', 'packaging.version',
+        #
+
+        # 'pysandboxes', 'pysandboxes.all_rules',
+        # 'pysandboxes.base_daemon', 'pysandboxes.config', 'pysandboxes.e', 'pysandboxes.guard_envs',
+        # 'pysandboxes.guard_files', 'pysandboxes.guard_import', 'pysandboxes.guard_provider',
+        # 'pysandboxes.guard_self', 'pysandboxes.guard_socket', 'pysandboxes.immutable_dict', 'pysandboxes.learning',
+        # 'pysandboxes.main_logger', 'pysandboxes.netfilter', 'pysandboxes.os_sandbox', 'pysandboxes.private_loop',
+        # 'pysandboxes.py_sandbox', 'pysandboxes.remote', 'pysandboxes.remote.main_shutdown',
+        # 'pysandboxes.remote.none_daemon', 'pysandboxes.remote.parameters', 'pysandboxes.remote.python_in_sb',
+        # 'pysandboxes.remote.sse_base_daemon', 'pysandboxes.remote.sse_client_subprocess_daemon',
+        # 'pysandboxes.remote.sse_firejail_daemon', 'pysandboxes.remote.sse_server_daemon',
+        # 'pysandboxes.remote.task_daemon', 'pysandboxes.remote.tools', 'pysandboxes.sandboxes_api',
+        # 'pysandboxes.sb_types', 'pysandboxes.tools',
+        #
+        # 'setuptools',
+        # 'setuptools._core_metadata', 'setuptools._distutils', 'setuptools._entry_points', 'setuptools._imp',
+        # 'setuptools._importlib', 'setuptools._itertools', 'setuptools._normalization', 'setuptools._path',
+        # 'setuptools._reqs', 'setuptools._static', 'setuptools.command', 'setuptools.config',
+        # 'setuptools.config._apply_pyprojecttoml', 'setuptools.config.expand', 'setuptools.config.pyprojecttoml',
+        # 'setuptools.config.setupcfg', 'setuptools.depends', 'setuptools.discovery', 'setuptools.dist',
+        # 'setuptools.errors', 'setuptools.extension', 'setuptools.logging', 'setuptools.monkey',
+        # 'setuptools.version', 'setuptools.warnings',
+
+        # 'warnings',
+        # 'weakref',
+    ]
+    pass
+    to_remove = []
+
+    for k in sys.modules:
+        if (
+                not k.startswith("_") and
+                not k.startswith("pysandboxes") and
+                k not in sys.builtin_module_names
+                and k not in safe
+        ):
+            to_remove.append(k)
+
+    pass
+    to_remove.reverse()
+    for k in to_remove:
+        logger.debug("Remove %s", k)
+        del sys.modules[k]
+
     _rules = rules
 
 

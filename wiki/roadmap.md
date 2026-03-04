@@ -41,6 +41,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [ ] Management of *Denial of Service*
 - [ ] Management of regular expressions
 - [ ] Control of `exec()` and `eval()`
+  - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
 - [ ] Compile a part of code
 - [ ] Propagate the tracability id
 - [ ] Use anyio

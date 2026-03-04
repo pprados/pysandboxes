@@ -103,7 +103,7 @@ async def sandbox_daemon(
         _active_requests += 1
 
         module_name, function_name = function_id.split(":", 1)
-        set_is_in_sandbox(True)
+        # set_is_in_sandbox(True)
         try:
             module = importlib.import_module(module_name)
             function = getattr(module, function_name)
@@ -170,7 +170,6 @@ async def sandbox_daemon(
         yield json.dumps({"session_id": session_id, "error": repr(e)})
     finally:
         _active_requests -= 1
-        set_is_in_sandbox(False)
 
 
 def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
@@ -438,7 +437,7 @@ class SSEServerDaemon(BaseSSESandbox):
             max_pending: Maximum number of pending requests to wait for.
         """
         logger.debug("Remote daemon_shutdown calling")
-        set_is_in_sandbox(False)
+        # set_is_in_sandbox(False)
         logger.debug("Refuse new incoming call")
         self._accept_incoming = False
         if not self.is_started:
@@ -475,6 +474,7 @@ class SSEServerDaemon(BaseSSESandbox):
             await self.task
             self.task = None
         self.uvicorn = None
+        set_is_in_sandbox(False)
         logger.debug("Remote shutdowned")
 
     @property

