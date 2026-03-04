@@ -30,8 +30,10 @@ from .sse_client_subprocess_daemon import BaseSubProcessDaemon, DEBUG
 from .tools import suggest_package_installation, which_command, get_default_interface, get_dns_servers
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
+from ..immutable_dict import ImmutableDict
+from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
-from ..sb_types import Args, ConfigLine, Envs
+from ..sb_types import Args, ConfigLine, Envs, ConfigLines
 from ..tools import (
     Environ,
     follow_links_executable,
@@ -171,6 +173,27 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     sandboxed processes with comprehensive OS-level isolation.
     """
 
+    def parse_rules(
+            self,
+            rules: ConfigLines,
+            errors: list[ErrorMsg],
+    ) -> tuple[ImmutableDict[str, Any],ConfigLines]:
+        firejail_params = {}
+        net: str | None = None
+        ignore_rules = []
+
+        for rule in rules:
+            if rule.rule.startswith("firejail."):
+                firejail_param = rule.rule[len("firejail."):]
+                if firejail_param.startswith("net="):
+                    net = firejail_param.split("=")[1]
+                    # TODO: check net?
+            else:
+                ignore_rules.append(rule)
+        if net:
+            firejail_params["net"]=net
+        return ImmutableDict(firejail_params), ignore_rules
+
     def update_rules(
             self,
             *,
@@ -232,7 +255,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             )
 
         # Add default parameters
-        firejail_path = importlib.resources.files(__name__) / "firejail.profile"
+        firejail_path = importlib.resources.files(__name__) / ".." / "templates" / "firejail.profile"
         firejail_conf = remove_comments(firejail_path.read_text().splitlines())
         firejail_conf = substitute_env_vars(firejail_conf, envs)
 
@@ -259,6 +282,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 if sp not in whitelist:
                     _follow_links(p, whitelist)
 
+        # Add ignore files rules
+        keep_files_rules = []
+        for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
+            args.append(f"--blacklist={rule.source}")
+
+
         for white in whitelist:
             args.extend(
                 [
@@ -267,10 +296,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 ]
             )
 
-        # Add ignore files rules
-        keep_files_rules = []
-        for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
-            args.append(f"--blacklist={rule.source}")
         for rule in sorted(
                 filter(
                     lambda x: isinstance(x, BindRule),
@@ -289,11 +314,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 whitelist.add(rule.source)
                 keep_files_rules.append(rule)
                 need_root = False
-            args.append(f"--whitelist={rule.source}")
+                args.append(f"--whitelist={rule.source}")
             if not rule.write:
                 args.append(f"--read-only={rule.source}")
-            else:
-                args.append(f"--read-write={rule.source}")
+            # else:
+            #     args.append(f"--read-write={rule.source}")
+
 
         if REPLACE:  # FIXME
             from ..guard_files import parse_rules as files_parse_rules
@@ -358,6 +384,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             default_interface = get_default_interface()
             if not default_interface:
                 raise ValueError("Impossible to detect the default network interface")
+            default_interface="br0"  # FIXME
             args.append(f"--net={default_interface}")
 
             if pipe_path:  # Update rules?

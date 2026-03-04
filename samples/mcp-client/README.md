@@ -57,7 +57,7 @@ Here\'s some examples. You must choice only one:
 
  ```
 
-Use the parameter `CONFIG='-c no_sandbox.json'`
+Use the parameter `CONFIG='-c stdio_no_sandbox.json'`
 
 #### MCP Client use `stdio` to call MCP Server with `python-sb` in complete mode
 
@@ -89,7 +89,7 @@ Use the parameter `CONFIG='-c no_sandbox.json'`
      style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
  ```
 
-Use the parameter `CONFIG='-c complete_mode.json'`
+Use the parameter `CONFIG='-c stdio_sandboxes_complete.json'`
 
 #### MCP Client use `stdio` to call MCP Server with `python-sb` in partial mode
 
@@ -124,7 +124,7 @@ This version allows isolating a part of the **MCP server** in `stdio` mode, with
 
  ```
 
-Use the parameter `CONFIG='-c partial_mode.json'`
+Use the parameter `CONFIG='-c stdio_sandboxes_partial.json'`
 
 ### Run the client
 
@@ -214,9 +214,15 @@ uv run -m pysandboxes.python_sb -m mcp_sample_chatbot.main ${CONFIG}
         style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
         style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
     ```
+   In this scenario, the sandbox layer must call the host ip. The
+
+   **With firejail:**
+   - A bridge must be used between the firejail and the host (`--eth=br0`)
+   - TODO:
+
    Execute the following command to launch this mode.
    ```bash
-   uv run -m mcp_simple_chatbot.main -c servers_config_http.json
+   uv run -m mcp_simple_chatbot.main -c http.json
    ```
 
 

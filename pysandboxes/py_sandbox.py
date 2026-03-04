@@ -36,6 +36,7 @@ from .tools import Environ, remove_config_comments, substitute_config_env_vars
 
 logger = logging.getLogger(__name__)
 
+
 def _search_module_config(config_path: Path | None) -> Path:
     if not config_path:
         config_path = Path(CONFIG_NAME)
@@ -44,7 +45,7 @@ def _search_module_config(config_path: Path | None) -> Path:
     # Search the module of the caller
     frame = sys._getframe()
     while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
-        pysb_module_name + "."
+            pysb_module_name + "."
     ):
         assert frame.f_back is not None
         frame = frame.f_back
@@ -97,10 +98,10 @@ def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
 
 
 def load_and_parse_config(
-    config_path: Path | None = None,
-    *,
-    envs: Environ | None = None,
-    **extra_rules: dict[str, Any],
+        config_path: Path | None = None,
+        *,
+        envs: Environ | None = None,
+        **extra_rules: dict[str, Any],
 ) -> AllRules:
     """Reads and parses the configuration file for the sandbox.
 
@@ -147,7 +148,7 @@ def load_and_parse_config(
         # Activate the learn mode
         # Load the template, and add learn mode
         with resources.as_file(
-            resources.files(pysb_module_name + ".templates") / "py-sandbox.template"
+                resources.files(pysb_module_name + ".templates") / "py-sandbox.template"
         ) as resource_path:
             config = extra_lines + _read_config_and_remove_comments(resource_path)
     else:
@@ -160,9 +161,9 @@ def load_and_parse_config(
 
 
 def _parse_include(
-    root_path: Path,
-    includes: set[Path],
-    rules: ConfigLines,
+        root_path: Path,
+        includes: set[Path],
+        rules: ConfigLines,
 ) -> ConfigLines:
     # includes parameter is to detect the recursive includes
     others: ConfigLines = []
@@ -182,8 +183,8 @@ def _parse_include(
                             [
                                 ConfigLine(line, filename, ln + 1)
                                 for ln, line in enumerate(
-                                    filename.read_text().split("\n")
-                                )
+                                filename.read_text().split("\n")
+                            )
                             ]
                         )
                         # Recursive include
@@ -198,11 +199,28 @@ def _parse_include(
     return others
 
 
+def parse_provider_rules(
+        rules: ConfigLines,
+) -> tuple[ConfigLines, ConfigLines]:
+    providers_rules = []
+    ignore_rules = []
+
+    for rule in rules:
+        if "=" in rule.rule:
+            if "." in rule.rule.split("=")[0]:
+                providers_rules.append(rule)
+            else:
+                ignore_rules.append(rule)
+        else:
+            ignore_rules.append(rule)
+    return providers_rules, ignore_rules
+
+
 def parse_config(
-    config: ConfigLines,
-    config_path: Path,
-    *,
-    envs: Environ | None = None,
+        config: ConfigLines,
+        config_path: Path,
+        *,
+        envs: Environ | None = None,
 ) -> AllRules:
     if envs is None:
         envs = os.environ
@@ -217,12 +235,19 @@ def parse_config(
 
     # 3. Parse others rules
     (
+        port,
         os_sandbox,
         use_py_sandbox,
         learning_path,
         learn,
         others,
     ) = guard_provider.parse_rules(config_path, others, errors)
+
+    from pysandboxes.os_sandbox import providers_factory
+
+    providers_rules, others = parse_provider_rules(others)
+    os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
+
     socket_rules, others = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
@@ -255,7 +280,9 @@ def parse_config(
         config=config,
         envs=sandbox_env,
         os_sandbox=os_sandbox,
+        os_sandbox_params=os_sandbox_params,
         use_py_sandbox=use_py_sandbox,
+        port=port,
         learning_path=learning_path,
         learn=learn,
         envs_rules=envs_rules,
@@ -266,8 +293,8 @@ def parse_config(
 
 
 def activate_sandboxes(
-    all_rules: AllRules,
-    envs: Environ | None = None,
+        all_rules: AllRules,
+        envs: Environ | None = None,
 ) -> None:
     if envs is None:
         envs = os.environ

@@ -2,8 +2,9 @@
 # License: Apache V2
 import argparse
 import logging
-import re
+import os
 import sys
+from pathlib import Path
 from shutil import which
 from typing import Any
 
@@ -12,6 +13,7 @@ import httpx
 import jsonc as json
 from dotenv import load_dotenv
 from fastmcp import Client
+from pysandboxes.tools import resolve_env_variables
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,8 +47,9 @@ class Configuration:
     @staticmethod
     def load_config(file_path: str) -> dict:
         """Load server configuration from JSON file."""
-        with open(file_path, "r") as f:
-            return json.load(f)
+        body = Path(file_path).read_text()
+        body = resolve_env_variables(body, os.environ)
+        return json.loads(body)
 
     @property
     def llm_api_key(self) -> str:
@@ -54,7 +57,7 @@ class Configuration:
         return self.api_key
 
 
-def _extract_first_json(text: str) -> dict[str, Any]| list[Any] | None:
+def _extract_first_json(text: str) -> dict[str, Any] | list[Any] | None:
     decoder: json.JSONDecoder = json.JSONDecoder()
 
     for i in range(len(text)):
@@ -62,7 +65,7 @@ def _extract_first_json(text: str) -> dict[str, Any]| list[Any] | None:
         if text[i] in ('{',):
             try:
                 # We use scan_once to find the first valid object
-                obj: dict[str, Any]|list[Any]
+                obj: dict[str, Any] | list[Any]
                 end_index: int
                 sub_text: str = text[i:].strip()
                 obj, end_index = decoder.raw_decode(sub_text)
@@ -72,6 +75,7 @@ def _extract_first_json(text: str) -> dict[str, Any]| list[Any] | None:
                 continue
 
     return None
+
 
 class LLMClient:
     """Manages communication with the LLM provider."""

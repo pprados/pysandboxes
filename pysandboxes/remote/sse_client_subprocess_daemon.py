@@ -321,7 +321,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self,
         all_rules: AllRules,
         *,
-        envs: Environ,
+            envs: Environ,
         log_level: int,
         init_fn: SyncOrAsyncFunc | None,
     ) -> None:
@@ -334,7 +334,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             init_fn: Optional initialization function.
         """
         self.restart = 0
-        self.port = find_free_port()
+        self.port = find_free_port() if all_rules.port == -1 else all_rules.port
 
         await self._re_start(
             all_rules,

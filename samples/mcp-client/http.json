@@ -4,7 +4,7 @@
   //  to use (complete mode) in `../mcp-server/.py-sandboxes`
     "mcp_server": {
       "transport": "http",
-       "url": "http://127.0.0.1:8000/mcp",
+       "url": "http://${MY_IP:-127.0.0.1}:8000/mcp",
     }
  }
 }

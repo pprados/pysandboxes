@@ -31,12 +31,12 @@ class NoneDaemon(BaseDaemon):
     #     super().__init__(token,**kwargs)
 
     async def _start(
-        self,
-        all_rules: "AllRules",
-        *,
-        envs: Environ,
-        log_level: int,
-        init_fn: SyncOrAsyncFunc | None,
+            self,
+            all_rules: "AllRules",
+            *,
+            envs: Environ,
+            log_level: int,
+            init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         """Start the daemon by simulating sandbox environment.
 
@@ -67,10 +67,10 @@ class NoneDaemon(BaseDaemon):
         self._is_started = False
 
     def update_rules(
-        self,
-        *,
-        envs: Envs,
-        all_rules: "AllRules",
+            self,
+            *,
+            envs: Envs,
+            all_rules: "AllRules",
     ) -> "AllRules":
         """Update security rules (no-op for none daemon).
 
@@ -95,7 +95,7 @@ class NoneDaemon(BaseDaemon):
         raise NotImplementedError
 
     async def async_call_in_sandbox(
-        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+            self, func: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> Any:
         """Execute async function in sandbox.
 
@@ -113,11 +113,11 @@ class NoneDaemon(BaseDaemon):
         raise NotImplementedError
 
     def call_in_sandbox(
-        self,
-        func: Callable[..., Any],
-        _force_incomming: bool,
-        *args: Any,
-        **kwargs: dict[str, Any],
+            self,
+            func: Callable[..., Any],
+            _force_incomming: bool,
+            *args: Any,
+            **kwargs: dict[str, Any],
     ) -> Any:
         """Execute function in sandbox.
 

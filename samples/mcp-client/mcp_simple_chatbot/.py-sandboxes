@@ -1,3 +1,5 @@
+firejail.net=br0
+
 include ".py-sandboxes.pycharm"
 # include "./.local.py-sandboxes"  # May be add to .gitignore
 py-sandbox=true
@@ -11,6 +13,7 @@ env=PATH=${PATH}
 env=PYTHONUSERBASE=${PYTHONUSERBASE}
 env=SHELL=${SHELL}
 env=USER=${USER}
+env=MY_IP=${MY_IP}
 
 # ⚠ Dangerous!
 python-import=subprocess
@@ -83,8 +86,9 @@ python-import=webcolors
 ro-bind=.,.
 
 net=ALLOW|TCP|api.groq.com|443|OUT      # For LLM model
-net=ALLOW|TCP|127.0.0.1|8000|OUT       # For communicate with the local MCP server
-
-net=ALLOW|TCP|*|8000|IN
+net=ALLOW|TCP|${MY_IP:-127.0.0.1}|8000|OUT  # For communicate with the local MCP server
+#net=ALLOW|TCP|*|8000|*
 net=ALLOW|TCP|www.google.com|80|OUT    # For MCP server with stdio protocol
+net=ALLOW|TCP|127.0.0.1|48000|*        # For communication between application and partial sandbox
+net=ALLOW|TCP|*|*|*   # FIXME
 

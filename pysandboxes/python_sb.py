@@ -145,7 +145,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     rc = 0
-    logger.error("run python-sb")
     try:
         rc = main()
     except SystemExit as e:

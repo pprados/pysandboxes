@@ -31,6 +31,7 @@ dependencies = [
     "netifaces (>=0.11.0)",
     # For CLI
     "python-dotenv (>=0.9.0)",
+    "email-validator>=2.3.0",
 ]
 
 
@@ -149,8 +150,7 @@ exclude = []
 #                       section of the configuration file raise errors.
 #
 # https://github.com/tophat/syrupy
-# --snapshot-warn-unused    Prints a warning on unused snapshots rather than fail the test suite.
-addopts = "--strict-markers --strict-config --durations=5 --snapshot-warn-unused -vv"
+addopts = "--strict-markers --strict-config --durations=5 -vv"
 # Registering custom markers.
 # https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
 markers = [
@@ -158,7 +158,7 @@ markers = [
     "scheduled: mark tests to run in scheduled testing",
     "compile: mark placeholder test used to compile integration tests without running them"
 ]
-asyncio_mode = "auto"
+#asyncio_mode = "auto"
 
 
 

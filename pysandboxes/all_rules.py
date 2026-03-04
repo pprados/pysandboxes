@@ -8,13 +8,14 @@ configuration object.
 """
 
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Any
 
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.guard_envs import EnvsRules
 from pysandboxes.guard_files import FileRules
 from pysandboxes.guard_import import ImportRules
 from pysandboxes.guard_socket import SocketRules
+from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.sb_types import ConfigLines, Envs
 
 
@@ -42,7 +43,9 @@ class AllRules(NamedTuple):
     config: ConfigLines
     envs: Envs
     os_sandbox: str
+    os_sandbox_params:ImmutableDict[str,Any]
     use_py_sandbox: bool
+    port: int
     learning_path: Path
     learn: bool
     envs_rules: EnvsRules
@@ -56,7 +59,9 @@ EmptyRules = AllRules(
     config=[],
     envs=Envs({}),
     os_sandbox="subprocess",
+    os_sandbox_params=ImmutableDict({}),
     use_py_sandbox=False,
+    port=-1,
     learning_path=Path(),
     learn=False,
     envs_rules=(),

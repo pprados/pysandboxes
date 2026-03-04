@@ -17,7 +17,7 @@ from pysandboxes.remote.tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
 
-level = logging.WARNING
+level = logging.DEBUG
 format = "MCPServer: %(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
@@ -129,7 +129,8 @@ def run_mcp_server(
         py_sandbox: str,
         os_sandbox: str,
         transport: str,
-        port: int,
+        port: int | None,
+        sandbox_port: int | None,
         pysandboxes_config: Path,
         **kwargs,
 ) -> int:
@@ -137,6 +138,7 @@ def run_mcp_server(
             sandboxes_config=pysandboxes_config,
             py_sandbox=py_sandbox,  # type: ignore[arg-type]
             os_sandbox=os_sandbox,  # type: ignore[arg-type]
+            port=sandbox_port,
             **kwargs,
     ):
         add_parameters: dict[str, Any] = {}
@@ -177,6 +179,14 @@ def main() -> int:
         help="The listened port",
     )
     parser.add_argument(
+        "--sandbox-port",
+        dest="sandbox_port",
+        type=int,
+        required=False,
+        default=os.environ.get("SANDBOX_PORT", 48000),
+        help="The port use for the sandbox communication",
+    )
+    parser.add_argument(
         "--pysandboxes-config",
         dest="config_path",
         type=Path,
@@ -214,11 +224,12 @@ def main() -> int:
         kwargs = {"learn": args.learn}
     logger.info(f"Start mcp_server with {args.transport} {args.config_path} {args.py_sandbox} {args.os_sandbox}")
     return run_mcp_server(
-        args.py_sandbox,
-        args.os_sandbox,
-        args.transport,
-        args.port,
-        args.config_path,
+        py_sandbox=args.py_sandbox,
+        os_sandbox=args.os_sandbox,
+        transport=args.transport,
+        port=args.port,
+        sandbox_port=args.sandbox_port,
+        pysandboxes_config=args.config_path,
         **kwargs
     )
 

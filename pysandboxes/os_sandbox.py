@@ -72,19 +72,19 @@ def is_accept_incoming_call() -> bool:
         True if the daemon is running and accepting calls, False otherwise.
     """
     return (
-        is_daemon_started()
-        and _current_daemon is not None
-        and _current_daemon._accept_incoming
+            is_daemon_started()
+            and _current_daemon is not None
+            and _current_daemon._accept_incoming
     )
 
 
 async def async_start_daemon(
-    all_rules: AllRules,
-    *,
-    envs: Environ,
-    log_level: int,
-    init_fn: SyncOrAsyncFunc | None,
-    python_args: list[str] | None = None,
+        all_rules: AllRules,
+        *,
+        envs: Environ,
+        log_level: int,
+        init_fn: SyncOrAsyncFunc | None,
+        python_args: list[str] | None = None,
 ) -> BaseDaemon:
     """
     Asynchronously starts a daemon by name.
@@ -115,11 +115,11 @@ _start_lock = threading.Lock()
 
 
 async def _async_start_daemon(
-    all_rules: AllRules,
-    envs: Environ,
-    log_level: int,
-    init_fn: SyncOrAsyncFunc | None,
-    python_args: list[str] | None = None,
+        all_rules: AllRules,
+        envs: Environ,
+        log_level: int,
+        init_fn: SyncOrAsyncFunc | None,
+        python_args: list[str] | None = None,
 ) -> BaseDaemon:
     """
     Core logic to asynchronously start a daemon.
@@ -216,11 +216,12 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
 
 
 def start_daemon(
-    all_rules: AllRules,
-    envs: Environ,
-    log_level: int,
-    init_fn: SyncOrAsyncFunc | None = None,
-    python_args: list[str] | None = None,
+        all_rules: AllRules,
+        *,
+        envs: Environ,
+        log_level: int,
+        init_fn: SyncOrAsyncFunc | None = None,
+        python_args: list[str] | None = None,
 ) -> BaseDaemon:
     """
     Synchronously starts a daemon by name.
@@ -358,7 +359,7 @@ def get_token() -> str:
 
 
 async def async_call_in_sandbox(
-    func: Callable[..., Any], *args: Any, **kwargs: Any
+        func: Callable[..., Any], *args: Any, **kwargs: Any
 ) -> Any:
     """
     Asynchronously executes a function inside the sandbox.

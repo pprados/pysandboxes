@@ -12,12 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 def parse_rules(
-    config_path: Path,
-    rules: ConfigLines,
-    errors: List[ErrorMsg],
-) -> Tuple[str, bool, Path | None, bool, ConfigLines]:
+        config_path: Path,
+        rules: ConfigLines,
+        errors: List[ErrorMsg],
+) -> Tuple[int, str, bool, Path | None, bool, ConfigLines]:
     from .os_sandbox import providers_factory
 
+    port=-1
     other_rules = []
     provider_rule: ConfigLines = []
     providers_set = []
@@ -28,7 +29,7 @@ def parse_rules(
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
             provider_rule.append(rule)
-            provider = rule.rule[len("os-sandbox=") :].strip().lower()
+            provider = rule.rule[len("os-sandbox="):].strip().lower()
             if provider not in providers_factory:
                 errors.append(
                     (
@@ -54,6 +55,24 @@ def parse_rules(
                         rule.ln,
                     )
                 )
+        elif rule.rule.startswith("port="):
+            value = rule.rule.split("=", 1)[1].strip()
+            try:
+                port = int(value)
+                if port < 0:
+                    errors.append(
+                        ("Port must be a positive value",
+                         rule.path,
+                         rule.ln,
+                         ))
+                    port = -1
+            except ValueError:
+                errors.append(
+                    ("Port must be a positive value",
+                     rule.path,
+                     rule.ln,
+                     ))
+
         elif rule.rule.startswith("learn="):
             if learning_path:
                 continue  # FIXME: error? prio for args?
@@ -122,4 +141,4 @@ def parse_rules(
     elif not learning_path.exists():
         learn = True
 
-    return provider, use_py_sandbox, learning_path, learn, other_rules
+    return port, provider, use_py_sandbox, learning_path, learn, other_rules

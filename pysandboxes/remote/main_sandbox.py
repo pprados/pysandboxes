@@ -40,6 +40,18 @@ from .tools import set_pdeathsig
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
+def _debug_log() -> None:
+    log_level = logging.DEBUG  # FIX_RELEASE
+    config_log(log_level)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp_sse_client.client").setLevel(logging.WARNING)
+    logging.getLogger("Pysandboxes").setLevel(logging.INFO)
+    logging.getLogger("pysandboxes").setLevel(log_level)
+    logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
+    logging.info("Start in python-sb")
+
 
 # %%
 
@@ -113,6 +125,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
+    _debug_log()  # FIXME
     threading.main_thread().name = "DaemonMainThread"
 
     parser = argparse.ArgumentParser(
@@ -131,7 +144,6 @@ def main() -> int:
     # -------------
     # Read all configuration from named-pipe until EOF
     assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
-    logger.error("\n".join(os.listdir(Path(sandboxes_parsed._named_pipe).parent)))  # FIXME
     pickle_data = Path(sandboxes_parsed._named_pipe).read_bytes()
     process_config: DaemonParameters = pickle.loads(pickle_data)
     if not process_config:

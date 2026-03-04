@@ -360,12 +360,14 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             else:
                 if _rules and _rules[0] != "*":
                     # Reactiver le filtre de module
-                    if module_name not in _rules:
+                    if (
+                            not module_name.startswith("pysandboxes") and
+                            module_name not in _rules
+                    ):
+                        logger.debug("Module named %s is not allowed by a rule", repr(module_name))
                         raise RuleModuleNotFoundError(
                             f"Module named {module_name!r} is not allowed by a rule"
                         )
-            if fullname == "pysandboxes_run":
-                logger.error(f"Pour pysandboxes_run {new_spec=}")  # FIXME
             return new_spec
 
         # For all other imports, return None to let the standard import
@@ -439,12 +441,11 @@ def activate_guard_import(
 
     # And now, remove some packages
     safe = [
-    # "_pytest.fixtures",
-    # "pytest",
-    # "pathlib",
-    # "subprocess",
-    'codecs',
-
+        # "_pytest.fixtures",
+        # "pytest",
+        # "pathlib",
+        # "subprocess",
+        'codecs',
 
         'abc',
 

@@ -6,6 +6,7 @@ ro-bind=${PWD},not_exist
 bind=not_exist,${PWD}
 ro-bind=abc
 ignore-parameter
+port=abc
 
 net=ERROR
 net=ERROR|tcp|127.0.0.1/32|8000|IN

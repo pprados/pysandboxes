@@ -3,8 +3,7 @@
 # See man firejail
 #--quiet
 --name=PYSANDBOXES
-#--caps.drop=all
-# --caps.keep=net_admin
+--caps.drop=all
 #--private # Any files created in this directory will be deleted when you daemon_shutdown the sandbox
 --noprofile
 --include=/etc/firejail/allow-python3.inc
@@ -13,8 +12,6 @@
 --include=/etc/firejail/disable-interpreters.inc
 --include=/etc/firejail/disable-programs.inc
 --include=/etc/firejail/disable-xdg.inc
---debug  # FIXME
---ignore=seccomp # FIXME
 # See /usr/share/doc/firejail/syscalls.txt
 # --seccomp=mkdir,@debug,@mount,@reboot,@raw-io,@setuid,@keyring
 --hostname=firejail-sandbox
@@ -24,43 +21,32 @@
 --private-tmp
 --noexec=/tmp
 
-# Disable extras FIXME
-#--x11=none
-#--restrict-namespaces
-#--nogroups
-#--nonewprivs
-#--noprinters
-#--noroot
-#--nosound
-#--notv
-#--nou2f
-#--novideo
-#--nodvd
-#--disable-mnt
-#--no3d  # Disable 3D hardware acceleration.
+# Disable extras
+--restrict-namespaces
+--nogroups
+--nonewprivs
+--noprinters
+--noroot
 
-# --blacklist=/etc/hosts
-#--blacklist=/etc/resolv.conf  # Protect DNS
-# --hosts-file=/dev/null
-
+--x11=none
+--nosound
+--notv
+--nou2f
+--novideo
+--nodvd
+--disable-mnt
+--no3d  # Disable 3D hardware acceleration.
 
 # *** Limits ***
-#--rlimit-as=${FIREJAIL_RELIMIT:=300m}
-#--rlimit-cpu=${FIREJAIL_CPU:=5}
-#--rlimit-fsize=${FIREJAIL_FSIZE:=100k}
-#--rlimit-nproc=${FIREJAIL_NPROC:=3}
-#--rlimit-nofile=${FIREJAIL_NOFILE:=50}
-#--rlimit-sigpending=${FIREJAIL_SIGPENDING:=1}
-#--nice=${NICE:=10}
-
-# *** Network ***
-# public DNS servers
-# FIXME: via les rules standards
-# --dns=1.1.1.1 --dns=4.4.4.4 --dns=8.8.8.8
-#--dns=8.8.8.8 --dns=8.8.4.4
-#--allow-debuggers
+--rlimit-as=${FIREJAIL_RELIMIT:-300m}
+--rlimit-fsize=${FIREJAIL_FSIZE:-102400}
+--rlimit-nproc=${FIREJAIL_NPROC:-20}
+--rlimit-nofile=${FIREJAIL_NOFILE:-50}
+--rlimit-sigpending=${FIREJAIL_SIGPENDING:-20}
+--nice=${NICE:-5}
 
 # Debug
+#--allow-debuggers
 #--nettrace=firejail-sandbox
 #--dnstrace
 
