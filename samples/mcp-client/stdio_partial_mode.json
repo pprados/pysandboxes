@@ -5,14 +5,15 @@
     "mcp_server": {
       "type": "stdio",
       "cwd": "../mcp-server",
-//      "command": "python", "cwd": "../mcp-server", "env": {"PYTHONPATH":"../..:../mcp-server"},
-      "command": "uv",
+      "command": "python",
       "args": [
-        "run",
         "-m", "mcp_server.main",
 //        "--learn=./.local.py-sandboxes",  // FIX_RELEASE
         "-t", "stdio"
-      ]
+      ],
+      "env": {
+        "OS_SANDBOX": "subprocess"
+      }
     }
   }
 }

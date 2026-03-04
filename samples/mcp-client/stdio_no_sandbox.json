@@ -6,12 +6,14 @@
       "command": "python","cwd": "../mcp-server",
       "args": [
         "-m", "pysandboxes.python_sb",
-        "--os-sandbox=none",
-        "--py-sandbox=none",
 //        "--learn=.py-sandboxesXX",
         "-m", "mcp_server.main",
         "-t", "stdio"
-      ]
+      ],
+      "env": {
+        "OS_SANDBOX": "None",
+        "PY_SANDBOX": "None"
+      }
     }
  }
 }

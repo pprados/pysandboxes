@@ -162,15 +162,18 @@ async def launch_sandbox(
     """
     os.mkfifo(pipe_path) # FIXME a remettre
     if DEBUG:
-        Path("run.sh").write_text(
-            "#!/bin/bash\n"
-            + cmd[0]
-            + " "
-            + " \\\n  ".join(
-                param if " " not in param else repr(param) for param in cmd[1:]
+        try:
+            Path("run.sh").write_text(
+                "#!/bin/bash\n"
+                + cmd[0]
+                + " "
+                + " \\\n  ".join(
+                    param if " " not in param else repr(param) for param in cmd[1:]
+                )
+                + "\n"
             )
-            + "\n"
-        )
+        except:
+            logger.debug("Can not write run.sh")
     try:
 
         def preexec_fn() -> None:

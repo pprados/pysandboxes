@@ -2,18 +2,20 @@
 # License: Apache V2
 import argparse
 import logging
+import re
 import sys
 from shutil import which
+from typing import Any
 
 import anyio
 import httpx
 import jsonc as json
 from dotenv import load_dotenv
 from fastmcp import Client
-from mcp.types import TextResourceContents
 
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
@@ -51,6 +53,25 @@ class Configuration:
         """Get the LLM API key."""
         return self.api_key
 
+
+def _extract_first_json(text: str) -> dict[str, Any]| list[Any] | None:
+    decoder: json.JSONDecoder = json.JSONDecoder()
+
+    for i in range(len(text)):
+        # A valid JSON object MUST start with '{' (for dict) or '[' (for list)
+        if text[i] in ('{',):
+            try:
+                # We use scan_once to find the first valid object
+                obj: dict[str, Any]|list[Any]
+                end_index: int
+                sub_text: str = text[i:].strip()
+                obj, end_index = decoder.raw_decode(sub_text)
+                return obj
+
+            except json.JSONDecodeError:
+                continue
+
+    return None
 
 class LLMClient:
     """Manages communication with the LLM provider."""
@@ -108,7 +129,7 @@ class ChatSession:
 
         try:
             client = self.client
-            action = json.loads(llm_response)
+            action = _extract_first_json(llm_response)
 
             if "tool" in action and "arguments" in action:
                 logging.info(f"Executing tool: {action['tool']}")
@@ -120,7 +141,7 @@ class ChatSession:
                         result = await client.call_tool(
                             action["tool"], action["arguments"]
                         )
-                        return f"Tool execution result: {result}"
+                        return f"Tool execution result: {"  ".join([x.text for x in result.content])}"
                     except Exception as e:
                         error_msg = f"Error executing tool: {str(e)}"
                         logging.error(error_msg)
@@ -146,10 +167,42 @@ class ChatSession:
 
     async def start(self) -> None:
         """Main chat session handler."""
+        messages = await self.initialize()
+
+        while True:
+            try:
+                user_input = input("You: ").strip().lower()
+                if user_input in ["quit", "exit"]:
+                    logging.info("\nExiting...")
+                    break
+
+                final_response = await self.invoke_llm(messages, user_input)
+                print(final_response)
+
+            except KeyboardInterrupt:
+                logging.info("\nExiting...")
+                break
+
+    async def invoke_llm(self, messages, user_input) -> str:
+        messages.append({"role": "user", "content": user_input})
+        llm_response = self.llm_client.get_response(messages)
+        logging.info("\nAssistant: %s", llm_response)
+        result = await self.process_llm_response(llm_response)
+        if result != llm_response:
+            messages.append({"role": "assistant", "content": llm_response})
+            messages.append({"role": "system", "content": result})
+
+            final_response = self.llm_client.get_response(messages)
+            messages.append({"role": "assistant", "content": final_response})
+            return final_response
+        else:
+            messages.append({"role": "assistant", "content": llm_response})
+            return llm_response
+
+    async def initialize(self):
         all_tools = await self.client.list_tools()
         all_resources = await self.client.list_resources()
         all_resource_templates = await self.client.list_resource_templates()
-
         tools_description = "\n".join(
             [
                 f"Tool: {tool.name}\n"
@@ -158,7 +211,6 @@ class ChatSession:
                 for tool in all_tools
             ]
         )
-
         resources_list = "\n".join(
             [
                 f"Resource URI: {res.uri}\n"
@@ -168,7 +220,6 @@ class ChatSession:
                 for res in all_resources
             ]
         )
-
         resource_templates_list = "\n".join(
             [
                 f"Resource Template: {res.uriTemplate}\n"
@@ -178,22 +229,17 @@ class ChatSession:
                 for res in all_resource_templates
             ]
         )
-
         system_message = (
             "You are a helpful assistant with access to tools " "and resources.\n\n"
         )
-
         if tools_description:
             system_message += f"Available tools:\n{tools_description}\n\n"
-
         if resources_list:
             system_message += f"Available resources:\n{resources_list}\n\n"
-
         if resource_templates_list:
             system_message += (
                 f"Available resource templates:\n" f"{resource_templates_list}\n\n"
             )
-
         system_message += (
             "Choose the appropriate tool or resource based on the "
             "user's question. "
@@ -220,35 +266,8 @@ class ChatSession:
             "5. Avoid simply repeating the raw data\n\n"
             "Use only the tools and resources explicitly defined above."
         )
-
         messages = [{"role": "system", "content": system_message}]
-
-        while True:
-            try:
-                user_input = input("You: ").strip().lower()
-                if user_input in ["quit", "exit"]:
-                    logging.info("\nExiting...")
-                    break
-
-                messages.append({"role": "user", "content": user_input})
-
-                llm_response = self.llm_client.get_response(messages)
-                logging.info("\nAssistant: %s", llm_response)
-
-                result = await self.process_llm_response(llm_response)
-                if result != llm_response:
-                    messages.append({"role": "assistant", "content": llm_response})
-                    messages.append({"role": "system", "content": result})
-
-                    final_response = self.llm_client.get_response(messages)
-                    print(final_response)
-                    messages.append({"role": "assistant", "content": final_response})
-                else:
-                    messages.append({"role": "assistant", "content": llm_response})
-
-            except KeyboardInterrupt:
-                logging.info("\nExiting...")
-                break
+        return messages
 
 
 async def run(args):
@@ -268,7 +287,11 @@ async def run(args):
 
         llm_client = LLMClient(config.llm_api_key)
         chat_session = ChatSession(client, llm_client)
-        await chat_session.start()
+        if args.print:
+            final_response = await chat_session.invoke_llm(await chat_session.initialize(), args.print)
+            print(final_response)
+        else:
+            await chat_session.start()
 
 
 def main() -> int:
@@ -284,6 +307,15 @@ def main() -> int:
         required=False,
         default="servers_config.json",
         help="The mcp server configuration file.",
+    )
+
+    parser.add_argument(
+        "-p",
+        dest="print",
+        type=str,
+        required=False,
+        default=None,
+        help="Print response and exit (useful for pipes).",
     )
 
     anyio.run(run, parser.parse_args())

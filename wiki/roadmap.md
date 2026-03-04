@@ -12,6 +12,10 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [X] Control file and network access
 - [X] Control life cycle of the daemon (restart if necessary)
 - [ ] Guard some criticals methods in Python (spawn, shell, etc.)
+- [ ] OS Compatible
+  - [X] Linux
+  - [ ] Windows
+  - [ ] Mac OS
 - [ ] New **OS-sandboxes**
   - [X] None 
   - [X] sub process 

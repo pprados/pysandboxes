@@ -14,11 +14,13 @@ Key utilities:
 """
 
 import base64
+import ipaddress
 import logging
 import os
 import pickle
 import shutil
 import signal
+import subprocess
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
 from ctypes import cdll
@@ -281,3 +283,76 @@ def from_b85(b85: str) -> Any:
     return pickle.loads(
         base64.b85decode(b85.encode("ascii")),
     )
+
+
+def get_default_interface() -> str|None:
+    """
+    Retrieves the name of the default network interface by reading the
+    /proc/net/route pseudo-file on Linux.
+
+    Returns the interface name (str) or None if not found.
+    """
+
+    # The default route destination is represented by '00000000' in the file
+    DEFAULT_DESTINATION: str = '00000000'
+
+    try:
+        # Open the file containing the routing table
+        with open('/proc/net/route', 'r') as f:
+            # Read all lines
+            content_lines: list[str] = f.readlines()
+
+        # Iterate over lines, skipping the header (first line)
+        for line in content_lines[1:]:
+            # Split the line by tabs or spaces
+            parts: list[str] = line.split()
+
+            # parts[1] is the Destination column
+            if len(parts) > 1 and parts[1] == DEFAULT_DESTINATION:
+                # parts[0] is the Iface (Interface name) column
+                interface_name: str = parts[0]
+                return interface_name
+
+    except FileNotFoundError:
+        # If the system is not Linux or the file is missing
+        print("Erreur: Le fichier /proc/net/route n'existe pas ou n'est pas accessible.")
+        return None
+    except Exception as e:
+        print(f"Une erreur inattendue est survenue lors de la lecture de la route par défaut: {e}")
+        return None
+
+    return None
+
+
+
+def get_dns_servers() -> tuple[list[ipaddress.IPv4Address],list[ipaddress.IPv6Address]]:
+    dns_servers: list[ipaddress.IPv4Address|ipaddress.IPv6Address] = []
+    with open('/etc/resolv.conf', 'r') as f:
+        for line in f:
+            # Cherche les lignes qui commencent par 'nameserver'
+            if line.strip().startswith('nameserver'):
+                parts = line.split()
+                if len(parts) > 1:
+                    # La deuxième partie devrait être l'adresse IP
+                    ip_address: str = parts[1]
+                    dns_servers.append(ipaddress.ip_address(ip_address))
+
+    ipv4_list: list[ipaddress.IPv4Address] = []
+    ipv6_list: list[ipaddress.IPv6Address] = []
+
+    for addr in dns_servers:
+        try:
+            # Tente de créer un objet IPv4 ou IPv6 à partir de la chaîne
+            ip = ipaddress.ip_address(addr)
+
+            # Utilise la propriété 'version' de l'objet IP
+            if ip.version == 4:
+                ipv4_list.append(addr)
+            elif ip.version == 6:
+                ipv6_list.append(addr)
+
+        except ValueError:
+            # Gère les chaînes qui ne sont pas des adresses IP valides
+            print(f"Avertissement : '{addr}' n'est pas une adresse IP valide et a été ignorée.")
+
+    return ipv4_list, ipv6_list

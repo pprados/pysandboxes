@@ -131,6 +131,7 @@ def main() -> int:
     # -------------
     # Read all configuration from named-pipe until EOF
     assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
+    logger.error("\n".join(os.listdir(Path(sandboxes_parsed._named_pipe).parent)))  # FIXME
     pickle_data = Path(sandboxes_parsed._named_pipe).read_bytes()
     process_config: DaemonParameters = pickle.loads(pickle_data)
     if not process_config:

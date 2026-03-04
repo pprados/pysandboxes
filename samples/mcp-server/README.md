@@ -187,7 +187,7 @@ flowchart TD
 To start the MCP server:
 ```bash
 cd path/to/mcp-server
-uv run -m mcp_server.main -t http
+uv run -m pysandboxes.python_sb -m mcp_server.main -t http
 ```
 and add the parameter in the client.
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
@@ -246,13 +246,13 @@ Without sandbox, you can try
 
 ![Path traversal](path_traversal.png)
 
-`./.secret` or `file:///etc/passwd`
+`./.secret`
 
 - a *Server-Side Request Forger*
 
 ![Server-Side Request Forger](SSRF.png)
 
-`http://localhost:636` for cups.
+`http://localhost:636` for cups or `file:///etc/passwd`
 
 - a *Remote Code Execution* (not detected now)
 

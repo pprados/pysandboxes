@@ -3,6 +3,8 @@
 
 [Home Page](https://www.github.com/pprados/pysandboxes/)
 
+> If you would like to participate in the beta tests, please check out [this](wiki/beta_test.md)
+
 Modern programming often relies on code generation or API invocation by language models (LLMs).
 However, these models can be manipulated to execute malicious commands.
 The [OWASP](https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/) provides a list of risks associated with using these models.

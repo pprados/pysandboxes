@@ -51,7 +51,7 @@ def _register_signal() -> None:
         It will kill daemon processes before exiting itself.
         """
         # Iterate through all child processes and send them SIGTERM
-        logger.error("Catch signal %s.", signum)  # FIXME
+        logger.info("Catch signal %s.", signum)  # FIXME
         generate_config_from_learning()  # Save learning rules
         handler = signals[signum]
         signal.signal(signum, handler)  # FIXME: doit etre après?

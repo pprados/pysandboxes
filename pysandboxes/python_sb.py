@@ -40,7 +40,7 @@ def _debug_log() -> None:
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(log_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(log_level)
-    logging.info("Start in python-db")
+    logging.info("Start in python-sb")
 
 
 def main() -> int:
@@ -100,6 +100,7 @@ def main() -> int:
     os_provider: BaseSubProcessDaemon = providers_factory[all_rules.os_sandbox](
         token, python_args=python_parsed_args
     )
+    logger.debug(f"{os_provider=} {all_rules.learn=}")
     if isinstance(os_provider, NoneDaemon):
         from .remote.python_in_sb import python_in_sb
 
@@ -144,6 +145,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     rc = 0
+    logger.error("run python-sb")
     try:
         rc = main()
     except SystemExit as e:

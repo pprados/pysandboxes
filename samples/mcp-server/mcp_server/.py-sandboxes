@@ -6,8 +6,8 @@
 os-sandbox=${OS_SANDBOX:-subprocess}
 
 #### ENVIRONMENT VARIABLES ####
-#env=HOME=${HOME}
 env=LANGUAGE=${LANGUAGE}
+env=OS_SANDBOX=${OS_SANDBOX}
 
 #### FILE SYSTEM ACCESS ####
 ignore=.secret
@@ -19,7 +19,7 @@ net=ALLOW|TCP|www.google.com|80|OUT
 
 #### PYTHON IMPORTS CONTROL ####
 # Standard Python
-python-import=_cffi_backend, _decimal, _markupbase, _multibytecodec
+python-import=_cffi_backend, _decimal, _markupbase, _multibytecodec, _pydecimal
 python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, _pydecimal, colorsys, decimal
 python-import=concurrent, encodings, fractions, getpass, hmac, html, http, importlib, mmap, numbers, pprint, secrets
 python-import=sysconfig, termios, webbrowser, zoneinfo

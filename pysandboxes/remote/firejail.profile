@@ -2,8 +2,8 @@
 # License: Apache V2
 # See man firejail
 #--quiet
---name=firejail-sandbox
---caps.drop=all
+--name=PYSANDBOXES
+#--caps.drop=all
 # --caps.keep=net_admin
 #--private # Any files created in this directory will be deleted when you daemon_shutdown the sandbox
 --noprofile
@@ -13,7 +13,8 @@
 --include=/etc/firejail/disable-interpreters.inc
 --include=/etc/firejail/disable-programs.inc
 --include=/etc/firejail/disable-xdg.inc
-
+--debug  # FIXME
+--ignore=seccomp # FIXME
 # See /usr/share/doc/firejail/syscalls.txt
 # --seccomp=mkdir,@debug,@mount,@reboot,@raw-io,@setuid,@keyring
 --hostname=firejail-sandbox
@@ -39,7 +40,7 @@
 #--no3d  # Disable 3D hardware acceleration.
 
 # --blacklist=/etc/hosts
---blacklist=/etc/resolv.conf  # Protect DNS
+#--blacklist=/etc/resolv.conf  # Protect DNS
 # --hosts-file=/dev/null
 
 
@@ -56,6 +57,7 @@
 # public DNS servers
 # FIXME: via les rules standards
 # --dns=1.1.1.1 --dns=4.4.4.4 --dns=8.8.8.8
+#--dns=8.8.8.8 --dns=8.8.4.4
 #--allow-debuggers
 
 # Debug

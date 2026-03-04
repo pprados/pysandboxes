@@ -14,6 +14,7 @@ Key components:
 """
 
 import importlib
+import ipaddress
 import logging
 import os
 import re
@@ -25,6 +26,8 @@ import threading
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
+from .sse_client_subprocess_daemon import BaseSubProcessDaemon, DEBUG
+from .tools import suggest_package_installation, which_command, get_default_interface, get_dns_servers
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..netfilter import rule_to_netfilter
@@ -35,13 +38,12 @@ from ..tools import (
     remove_comments,
     substitute_env_vars,
 )
-from .sse_client_subprocess_daemon import BaseSubProcessDaemon
-from .tools import suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True
-USE_WHITELIST = True
+DEBUG_NETFILTER = True  # DEBUG
+
+USE_WHITELIST = True  # FIXME: rename whitelist
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
@@ -170,10 +172,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     """
 
     def update_rules(
-        self,
-        *,
-        all_rules: AllRules,
-        envs: Envs,
+            self,
+            *,
+            all_rules: AllRules,
+            envs: Envs,
     ) -> AllRules:
         """Update rules by translating to firejail configuration.
 
@@ -188,10 +190,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         return updated_all_rules
 
     def _firejail_args(
-        self,
-        all_rules: AllRules,
-        envs: Environ | Envs,
-        pipe_path: Path | None,
+            self,
+            all_rules: AllRules,
+            envs: Environ | Envs,
+            pipe_path: Path | None,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -270,11 +272,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
             args.append(f"--blacklist={rule.source}")
         for rule in sorted(
-            filter(
-                lambda x: isinstance(x, BindRule),
-                all_rules.file_rules,
-            ),
-            key=lambda x: len(x.source),
+                filter(
+                    lambda x: isinstance(x, BindRule),
+                    all_rules.file_rules,
+                ),
+                key=lambda x: len(x.source),
         ):
             rule = cast(BindRule, rule)
             if rule.source == rule.dest:
@@ -312,8 +314,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         # with --private-tmp, need more parameters
         if pipe_path:
             args.append(f"--mkdir={str(pipe_path)}")
-            args.append(f"--whitelist={str(pipe_path)}")  # FIXME: whitelist ne semble pas nécessaire
-            args.append(f"--read-only={str(pipe_path)}")
+            args.append(f"--whitelist={str(pipe_path)}")  # Must be a whitelist
 
         if all_rules.socket_rules:
             if restricted_network:
@@ -324,43 +325,78 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 )
                 sys.exit(1)
 
+            dns_server_v4, dns_server_v6 = get_dns_servers()
+            # Simulate an ipv6 dns
+            # dns_server_v4=[]
+            # dns_server_v6=[
+            #     ipaddress.ip_address("::1"),
+            # ]
+            if dns_server_v4:
+                loopback_network = ipaddress.ip_network('127.0.0.0/8')
+                for dns in dns_server_v4:
+                    if dns in loopback_network:
+                        # Change to other, because inside the firejail, the loopback is not accessible
+                        dns_server_v4 = [
+                            ipaddress.ip_address("1.1.1.1"),
+                            ipaddress.ip_address("1.0.0.1"),
+                        ]
+                        args.append("--dns=1.1.1.1")
+                        args.append("--dns=1.0.0.1")
+                        break
+            else:
+                # FIXME: see https://github.com/netblue30/firejail/discussions/6931
+                for dns in dns_server_v6:
+                    if dns.is_loopback:
+                        loopback_dns = True
+                        dns_server_v6 = [
+                            ipaddress.ip_address("2606:4700:4700::1111"),
+                            ipaddress.ip_address("2606:4700:4700::1001"),
+                        ]
+                        args.append("--dns=2606:4700:4700::1111")
+                        args.append("--dns=2606:4700:4700::1001")
+                        break
+            default_interface = get_default_interface()
+            if not default_interface:
+                raise ValueError("Impossible to detect the default network interface")
+            args.append(f"--net={default_interface}")
+
             if pipe_path:  # Update rules?
-                net_filter4 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=False)
+                net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_server_v4, is_ipv6=False)
                 netfilter_tmp_file = tempfile.NamedTemporaryFile(
                     delete=False, suffix=".fifo"
                 )
                 netfilter_file = Path(netfilter_tmp_file.name)
                 netfilter_tmp_file.close()
                 netfilter_file.unlink(missing_ok=True)
-                if DEBUG:
+                if DEBUG_NETFILTER:
                     netfilter_file = Path("netfilter.net")
                 else:
                     os.mkfifo(netfilter_file)
 
                 def publich_netfilter() -> None:
                     netfilter_file.write_text("\n".join(net_filter4))
-                    if not DEBUG:
+                    if not DEBUG_NETFILTER:
                         netfilter_file.unlink(missing_ok=True)
 
                 threading.Thread(target=publich_netfilter, daemon=True).start()
 
                 args.append(f"--netfilter={netfilter_file}")
 
-                net_filter6 = rule_to_netfilter(all_rules.socket_rules, is_ipv6=True)
+                net_filter6 = rule_to_netfilter(all_rules.socket_rules, dns_server_v6, is_ipv6=True)
                 netfilter6_tmp_file = tempfile.NamedTemporaryFile(
                     delete=False, suffix=".fifo"
                 )
                 netfilter6_file = Path(netfilter_tmp_file.name)
                 netfilter6_tmp_file.close()
                 netfilter6_file.unlink(missing_ok=True)
-                if DEBUG:
+                if DEBUG_NETFILTER:
                     netfilter6_file = Path("netfilter6.net")
                 else:
                     os.mkfifo(netfilter6_file)
 
                 def publich_netfilter6() -> None:
                     netfilter6_file.write_text("\n".join(net_filter6))
-                    if not DEBUG:
+                    if not DEBUG_NETFILTER:
                         netfilter_file.unlink(missing_ok=True)
 
                 threading.Thread(target=publich_netfilter6, daemon=True).start()
@@ -386,10 +422,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         return args, all_rules
 
     def subprocess_cmd(
-        self,
-        all_rules: AllRules,
-        envs: Environ,
-        pipe_path: Path,
+            self,
+            all_rules: AllRules,
+            envs: Environ,
+            pipe_path: Path,
     ) -> list[str]:
         """Build complete command line for firejail subprocess.
 

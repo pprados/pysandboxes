@@ -4,7 +4,7 @@
   //  to use (complete mode) in `../mcp-server/.py-sandboxes`
     "mcp_server": {
       "cwd": "../mcp-server",
-      "command": "python","cwd": "../mcp-server",
+      "command": "python",
 //      "command": "uv",
       "args": [
 //        "run",
@@ -13,7 +13,10 @@
 //        "--learn=./.local.py-sandboxes",
         "-m", "mcp_server.main",
         "-t", "stdio"
-      ]
+      ],
+      "env": {
+         "OS_SANDBOX": "subprocess"
+      }
     }
  }
 }

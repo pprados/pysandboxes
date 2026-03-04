@@ -439,6 +439,13 @@ def activate_guard_import(
 
     # And now, remove some packages
     safe = [
+    # "_pytest.fixtures",
+    # "pytest",
+    # "pathlib",
+    # "subprocess",
+    'codecs',
+
+
         'abc',
 
         'asyncio',
@@ -531,10 +538,10 @@ def activate_guard_import(
         ):
             to_remove.append(k)
 
-    pass
+    pass  # FIXME
     to_remove.reverse()
     for k in to_remove:
-        logger.debug("Remove %s", k)
+        # logger.debug("Remove %s", k)
         del sys.modules[k]
 
     _rules = rules

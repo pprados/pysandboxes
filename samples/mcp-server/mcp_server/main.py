@@ -5,7 +5,6 @@ import importlib
 import logging
 import os
 import sys
-from operator import add, mul, sub, truediv
 from pathlib import Path
 from typing import Any
 
@@ -14,10 +13,11 @@ from fastmcp import FastMCP
 from httpx_file import FileTransport
 from markdownify import markdownify as md
 from pysandboxes import sandbox, sandboxes
+from pysandboxes.remote.tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
 
-level = logging.DEBUG
+level = logging.WARNING
 format = "MCPServer: %(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
@@ -40,9 +40,11 @@ RESOURCES_DIR = Path(__file__).parent.parent / "resources"
 def get_version() -> str:
     return "1.0.0"
 
+
 @mcp.resource("greeting://{name}")
 def greet(name: str) -> str:
     return f"Hello {name} from MCPServer!"
+
 
 # Note: @mcp.resource annotation return an object, not a method.
 # When importing the module into the sandbox, the function to be invoked is not
@@ -53,6 +55,7 @@ def greet(name: str) -> str:
 async def read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources."""
     return await _read_file_resource(path)
+
 
 @sandbox
 async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces direct
@@ -123,19 +126,18 @@ Use the fetch_webpage tool to get the content, then provide a concise summary.""
 
 
 def run_mcp_server(
-    py_sandbox: str,
-    os_sandbox: str,
-    transport: str,
-    port: int,
-    pysandboxes_config: Path,
-    **kwargs,
-) -> int:
-    logger.debug("with sandboxes...")  # FIXME
-    with sandboxes(
-        sandboxes_config=pysandboxes_config,
-        py_sandbox=py_sandbox,  # type: ignore[arg-type]
-        os_sandbox=os_sandbox,  # type: ignore[arg-type]
+        py_sandbox: str,
+        os_sandbox: str,
+        transport: str,
+        port: int,
+        pysandboxes_config: Path,
         **kwargs,
+) -> int:
+    with sandboxes(
+            sandboxes_config=pysandboxes_config,
+            py_sandbox=py_sandbox,  # type: ignore[arg-type]
+            os_sandbox=os_sandbox,  # type: ignore[arg-type]
+            **kwargs,
     ):
         add_parameters: dict[str, Any] = {}
         if transport == "http":
@@ -144,14 +146,14 @@ def run_mcp_server(
         mcp.run(
             transport=transport,
             show_banner=False,
-            log_level="DEBUG",  # Override global log level
+            log_level=logging.getLevelName(logger.getEffectiveLevel()),
             **add_parameters,
         )
     return 0
 
 
 def main() -> int:
-
+    set_pdeathsig()
     parser = argparse.ArgumentParser(
         prog="mcp_server",
         description="Run a MCP-server",
@@ -185,14 +187,14 @@ def main() -> int:
         "--os-sandbox",
         dest="os_sandbox",
         type=str,
-        default=os.environ.get("OS_SANDBOX","subprocess"),
+        default=os.environ.get("OS_SANDBOX", "subprocess"),
         help="Choice the os-sandbox provider.",
     )
     parser.add_argument(
         "--py-sandbox",
         dest="py_sandbox",
         type=str,
-        default=os.environ.get("PY_SANDBOX","True"),  # Use None as default value for clear checking
+        default=os.environ.get("PY_SANDBOX", "True"),  # Use None as default value for clear checking
         help="Choice to activate the py-sandbox.",
     )
     parser.add_argument(
@@ -231,4 +233,3 @@ if __name__ == "__main__":  # FIXME: resoudre le __main__
     except SystemExit:
         print("SystemExit", file=sys.stderr)
         pass
-
