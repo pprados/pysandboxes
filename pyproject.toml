@@ -88,7 +88,8 @@ test = [
     # dependencies used for running tests (e.g., pytest, freezegun, response).
     # Any dependencies that do not meet that criteria will be removed.
     "pytest>=7.3.0",
-    #"pytest-cov>=4.0.0",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=4.0.0",
     "pytest-dotenv>=0.5.2",
     #"pytest-watcher>=0.2.6",
     "freezegun>=1.2.2",
@@ -160,7 +161,7 @@ markers = [
     "scheduled: mark tests to run in scheduled testing",
     "compile: mark placeholder test used to compile integration tests without running them"
 ]
-#asyncio_mode = "auto"
+asyncio_mode = "auto"
 
 
 

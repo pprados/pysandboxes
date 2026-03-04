@@ -11,7 +11,6 @@ from pysandboxes.learning import (
     is_learning_mode,
     set_learning_mode,
     set_learning_path,
-    stop_learning_mode,
 )
 
 

@@ -545,9 +545,10 @@ def activate_guard_import(
 
     pass  # FIXME
     to_remove.reverse()
-    for k in to_remove:
-        # logger.debug("Remove %s", k)
-        del sys.modules[k]
+    logger.debug("********* NO DELETE")
+    # for k in to_remove:
+    #     # logger.debug("Remove %s", k)
+    #     del sys.modules[k]
 
     _rules = rules
 

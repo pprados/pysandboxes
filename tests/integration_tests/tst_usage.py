@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.DEBUG  # FIXME
+    sandboxes_level = logging.WARNING  # FIXME
     uvicorn_level = logging.ERROR
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)

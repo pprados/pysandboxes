@@ -42,7 +42,7 @@ from .tools import set_pdeathsig
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 def _debug_log() -> None:
-    sandbox_level = logging.DEBUG  # FIX_RELEASE
+    sandbox_level = logging.WARNING  # FIX_RELEASE
     uvicorn_log_level = logging.ERROR  # FIX_RELEASE
     config_log(sandbox_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)

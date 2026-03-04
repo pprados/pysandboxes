@@ -10,7 +10,7 @@ SIZE_OF_LOOP = 1  # Try multiple calls
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.DEBUG
+    sandboxes_level = logging.WARNING
     uvicorn_level = logging.WARNING
     format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
     if is_in_sandbox():
@@ -33,12 +33,12 @@ def init_log_level() -> None:
 
 
 def sync_init_sandbox() -> None:
-    logger.debug("sync: 'sync_init_sandbox()' called")
+    logger.info("sync: 'sync_init_sandbox()' called")
     init_log_level()
 
 
 async def async_init_sandbox() -> None:
-    logger.debug("sync: 'async_init_sandbox()' called")
+    logger.info("sync: 'async_init_sandbox()' called")
     init_log_level()
 
 

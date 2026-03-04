@@ -54,7 +54,7 @@ from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True  # FIXME
+DEBUG = False  # FIXME
 
 
 def get_log_formatter() -> str:
@@ -451,9 +451,9 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             )
 
         if first:
-            pysandboxes_logger.info("Child Sandbox started")
+            pysandboxes_logger.info("Daemon Sandbox started")
         else:
-            pysandboxes_logger.warning("Child Sandbox re-started")
+            pysandboxes_logger.warning("Daemon Sandbox re-started")
 
     async def _re_start_cmd(
             self,
@@ -509,11 +509,11 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         # Wait the server
         gc.collect()
         ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
+        logger.debug("Try to call %s", ping_url)  # FIXME
         async with aiohttp.ClientSession() as session:
             count_loop = 0
             while True:
                 try:
-                    logger.debug("Try to call %s", ping_url)  # FIXME
                     count_loop += 1
                     if count_loop > 100:
                         logger.error("Is not possible to connect to the sandbox daemon")
