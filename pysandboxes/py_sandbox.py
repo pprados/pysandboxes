@@ -246,7 +246,11 @@ def parse_config(
     from pysandboxes.os_sandbox import providers_factory
 
     providers_rules, others = parse_provider_rules(others)
-    os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
+
+    if os_sandbox != "error":
+        os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
+    else:
+        os_sandbox_params={}
 
     socket_rules, others, pin_dns = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)

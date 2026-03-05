@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
@@ -56,9 +57,11 @@ def reset_rules() -> None:
 def files() -> Dict[str, Path]:
     # Create test files and symlinks
     # It's executer without patch.
-    tmp_path = Path("/tmp/test")
-    shutil.rmtree(tmp_path, ignore_errors=True)
-    tmp_path.mkdir(exist_ok=True)
+    tmp_path = Path("/tmp/test")  # FIXME: real temp files
+    if tmp_path.exists():
+        # Remove, without sandboxes
+        subprocess.run(["rm","-rf",str(tmp_path)], check=True)
+    tmp_path.mkdir(exist_ok=False)
     (tmp_path / "visible.txt").write_text("Visible")
     (tmp_path / "ignore.log").write_text("Should be ignored")
     (tmp_path / "bound.txt").write_text("Bound target")
@@ -66,8 +69,8 @@ def files() -> Dict[str, Path]:
     # Create a bind destination
     bind_src = tmp_path / "bind_src"
     bind_dest = tmp_path / "bind_dest"
-    bind_src.mkdir(exist_ok=True)
-    bind_dest.mkdir(exist_ok=True)
+    bind_src.mkdir(exist_ok=False)
+    bind_dest.mkdir(exist_ok=False)
     (bind_src / "bound_file.txt").write_text("Content")
 
     # Symlink to ignore.log

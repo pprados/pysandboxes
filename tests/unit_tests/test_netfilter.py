@@ -153,7 +153,7 @@ class TestRuleToNetfilter:
 
         # Check that the rule was added (with correct spacing)
         tcp_rule_found = any(
-            '-A INPUT -p tcp -m conntrack--ctstate NEW,ESTABLISHED -s 192.168.1.0/24 '
+            '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.1.0/24 '
             '-m multiport --dports 80 -j ACCEPT' == rule
             for rule in result
         )
@@ -202,7 +202,7 @@ class TestRuleToNetfilter:
 
         # Check that the REJECT rule was added
         reject_rule_found = any(
-            '-A OUTPUT -p tcp -m conntrack--ctstate NEW '
+            '-A OUTPUT -p tcp -m conntrack --ctstate NEW '
             '-m multiport --dports 22 -j REJECT' in rule for rule in result)
         assert reject_rule_found
 

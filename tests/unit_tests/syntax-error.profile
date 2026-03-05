@@ -24,6 +24,6 @@ bind=${PWD},${PWD}/tests
 bind=${PWD},${PWD}/tests/unit_tests
 ro-bind=${PWD},${PWD}/tests
 py-sandbox=abc
-learning=True
+learn=True
 invalide-rule
 

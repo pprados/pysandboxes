@@ -125,7 +125,7 @@ def parse_rules(
                 0,
             )
         )
-        return "errors", use_py_sandbox, learning_path, learn, other_rules
+        return port, "error", use_py_sandbox, learning_path, learn, other_rules
     elif len(providers_set) == 1:
         provider = providers_set[0][0]
     else:

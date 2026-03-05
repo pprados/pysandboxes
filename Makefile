@@ -12,9 +12,6 @@ POETRY_WITH?=-with dev,lint,test,codespell
 # Default target executed when no arguments are given to make.
 all: help
 
-# Define a variable for the test file path.
-TEST_FILE ?= tests/unit_tests/
-
 .vscode/launch.json: .idea/runConfigurations/*
 	claude -p "Update the .vscode/launch.json file with the modification of the files in .idea/runConfigurations/"
 
@@ -25,7 +22,7 @@ integration_tests:
 	$(UV) run pytest tests/integration_tests
 
 test tests:
-	$(UV) run pytest -v $(TEST_FILE)
+	$(UV) run pytest -v tests/unit_tests/
 
 all-tests: tests integration_tests
 

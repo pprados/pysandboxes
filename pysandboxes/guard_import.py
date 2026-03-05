@@ -454,6 +454,7 @@ def activate_guard_import(
 
         'asyncio',
         'logging',
+        'pathlib',
         # 'asyncio.base_events',
         # 'asyncio.base_futures',
         # 'asyncio.base_subprocess',
@@ -493,13 +494,15 @@ def activate_guard_import(
         # 'distutils.filelist', 'distutils.log', 'distutils.spawn', 'distutils.util',
         #
         #
-        # 'importlib', 'importlib._abc', 'importlib._bootstrap',
-        # 'importlib._bootstrap_external', 'importlib.abc', 'importlib.machinery', 'importlib.metadata',
-        # 'importlib.metadata._adapters', 'importlib.metadata._collections', 'importlib.metadata._functools',
-        # 'importlib.metadata._itertools', 'importlib.metadata._meta', 'importlib.metadata._text',
-        # 'importlib.readers', 'importlib.resources', 'importlib.resources._adapters', 'importlib.resources._common',
-        # 'importlib.resources._functional', 'importlib.resources._itertools', 'importlib.resources.abc',
-        # 'importlib.resources.readers', 'importlib.util',
+        'importlib',
+        'importlib._abc',
+        'importlib._bootstrap',
+        'importlib._bootstrap_external', 'importlib.abc', 'importlib.machinery', 'importlib.metadata',
+        'importlib.metadata._adapters', 'importlib.metadata._collections', 'importlib.metadata._functools',
+        'importlib.metadata._itertools', 'importlib.metadata._meta', 'importlib.metadata._text',
+        'importlib.readers', 'importlib.resources', 'importlib.resources._adapters', 'importlib.resources._common',
+        'importlib.resources._functional', 'importlib.resources._itertools', 'importlib.resources.abc',
+        'importlib.resources.readers', 'importlib.util',
 
         # 'packaging', 'packaging._elffile',
         # 'packaging._manylinux', 'packaging._musllinux', 'packaging._parser', 'packaging._structures',
@@ -527,7 +530,8 @@ def activate_guard_import(
         # 'setuptools.config.setupcfg', 'setuptools.depends', 'setuptools.discovery', 'setuptools.dist',
         # 'setuptools.errors', 'setuptools.extension', 'setuptools.logging', 'setuptools.monkey',
         # 'setuptools.version', 'setuptools.warnings',
-
+        'sys',
+        'threading',
         'warnings',
         # 'weakref',
     ]
@@ -546,10 +550,12 @@ def activate_guard_import(
     pass  # FIXME
     to_remove.reverse()
     # logger.debug("********* NO DELETE")
+    to_remove=[x for x in to_remove if not x.startswith("pydev")]  # FIXME
     to_remove=[x for x in to_remove if not x.startswith("pytest")]  # FIXME
+    to_remove=[x for x in to_remove if not x.startswith("debugpy")]  # FIXME
     for k in to_remove:
         logger.debug("Remove %s", k)
-        del sys.modules[k]
+        del sys.modules[k]  # FIXME
 
     _rules = rules
 

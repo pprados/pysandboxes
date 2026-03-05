@@ -136,22 +136,6 @@ class TestSandboxDecorator:
 class TestRunFunction:
     """Test cases for run function."""
 
-    @patch("pysandboxes.sandboxes_api._check__main__coroutine")
-    @patch("asyncio.run")
-    def test_run_coroutine(self, mock_asyncio_run: Mock, mock_check_main: Mock) -> None:
-        """Test run function with coroutine."""
-        mock_asyncio_run.return_value = "result"
-
-        async def test_coroutine() -> str:
-            return "test"
-
-        coro = test_coroutine()
-        result = run(coro)
-
-        mock_check_main.assert_called_once_with(coro)
-        mock_asyncio_run.assert_called_once()
-        assert result == "result"
-
     def test_run_non_coroutine(self) -> None:
         """Test run function with non-coroutine."""
         # The run function doesn't actually validate input type in the

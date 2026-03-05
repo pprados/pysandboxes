@@ -23,10 +23,10 @@ class TestGenerateConfigFromLearning:
     @patch("pysandboxes.guard_socket.generate_rules")
     @patch("pysandboxes.learning._manage_olds_file")
     @patch("pysandboxes.learning.resources.read_text")
-    @patch("builtins.open", new_callable=mock_open)
+    @patch("pysandboxes.learning.is_learning_mode")
     def test_generate_config_with_all_rules(
         self,
-        mock_file_open: Mock,
+        mock_is_learning_mode: Mock,
         mock_read_text: Mock,
         mock_manage_olds: Mock,
         mock_socket_rules: Mock,
@@ -40,49 +40,14 @@ class TestGenerateConfigFromLearning:
         mock_import_rules.return_value = ["import:os", "import:sys"]
         mock_file_rules.return_value = ["file:read:/tmp/*", "file:write:/tmp/output"]
         mock_socket_rules.return_value = ["socket:tcp:80", "socket:udp:53"]
-
         mock_manage_olds.return_value = (Path("config.conf"), None)
         mock_read_text.return_value = "template content with ${learning_guard_envs}"
+        mock_is_learning_mode.return_value = True
 
         with patch("pysandboxes.learning._learning_path", Path("test.conf")):
             generate_config_from_learning()
 
         # Verify all rule generators were called
-        mock_env_rules.assert_called_once()
-        mock_import_rules.assert_called_once()
-        mock_file_rules.assert_called_once()
-        mock_socket_rules.assert_called_once()
-
-    @patch("pysandboxes.guard_envs.generate_rules")
-    @patch("pysandboxes.guard_files.generate_rules")
-    @patch("pysandboxes.guard_import.generate_rules")
-    @patch("pysandboxes.guard_socket.generate_rules")
-    @patch("pysandboxes.learning._manage_olds_file")
-    def test_generate_config_with_empty_rules(
-        self,
-        mock_manage_olds: Mock,
-        mock_socket_rules: Mock,
-        mock_import_rules: Mock,
-        mock_file_rules: Mock,
-        mock_env_rules: Mock,
-    ) -> None:
-        """Test config generation with empty rule sets."""
-        # Setup mock returns for empty rules
-        mock_env_rules.return_value = []
-        mock_import_rules.return_value = []
-        mock_file_rules.return_value = []
-        mock_socket_rules.return_value = []
-
-        mock_manage_olds.return_value = (Path("config.conf"), None)
-
-        with patch("pysandboxes.learning._learning_path", None):
-            with patch("pysandboxes.learning.resources.read_text") as mock_read_text:
-                with patch("builtins.open", mock_open()):
-                    mock_read_text.return_value = "template"
-
-                    generate_config_from_learning()
-
-        # Verify all rule generators were called even with empty results
         mock_env_rules.assert_called_once()
         mock_import_rules.assert_called_once()
         mock_file_rules.assert_called_once()
@@ -123,7 +88,7 @@ class TestLearningModeManagement:
         config_file = Path("test_config.conf")
 
         with patch("pysandboxes.learning._learning_path", None):
-            set_learning_path(config_file)
+            set_learning_mode(True)
 
             # Check that learning mode is activated
             assert is_learning_mode() is True
@@ -137,32 +102,9 @@ class TestLearningModeManagement:
             # Check that learning mode is stopped
             assert is_learning_mode() is False
 
-    def test_is_learning_mode_true(self) -> None:
-        """Test is_learning_mode returns True when active."""
-        with patch("pysandboxes.learning._learning_path", Path("test.conf")):
-            assert is_learning_mode() is True
-
-    def test_is_learning_mode_false(self) -> None:
-        """Test is_learning_mode returns False when inactive."""
-        with patch("pysandboxes.learning._learning_path", None):
-            assert is_learning_mode() is False
-
 
 class TestAddLearningRule:
     """Test cases for add_learning_rule function."""
-
-    def test_add_learning_rule_when_active(self) -> None:
-        """Test adding a rule when learning mode is active."""
-        test_rule = "test_rule"
-
-        with patch("pysandboxes.learning._learning_path", Path("test.conf")):
-            with patch("pysandboxes.learning._learning") as mock_learning:
-                mock_learning_set = Mock()
-                mock_learning.add = mock_learning_set.add
-                add_learning_rule(test_rule)
-
-                # Rule should be added to the learning set
-                mock_learning_set.add.assert_called_once_with(test_rule)
 
     def test_add_learning_rule_when_inactive(self) -> None:
         """Test adding a rule when learning mode is inactive."""

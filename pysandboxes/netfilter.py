@@ -101,7 +101,7 @@ def rule_to_netfilter(
                     ip_rule = (
                         f"-A {_map_direction[direction]} "
                         f"-p tcp "
-                        f"-m conntrack"
+                        f"-m conntrack "
                         f"{s_state}"
                         f"{s_network}"
                         f"{multiport}"

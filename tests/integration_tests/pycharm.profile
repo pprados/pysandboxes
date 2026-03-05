@@ -1,0 +1,4 @@
+ro-bind=${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm,${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm
+ro-bind=${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm_display,${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm_display
+ro-bind=${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm_matplotlib_backend,${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm_matplotlib_backend
+ro-bind=${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm_plotly_backend,${HOME}/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pycharm_plotly_backend

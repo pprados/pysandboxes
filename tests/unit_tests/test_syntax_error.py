@@ -36,23 +36,26 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
         assert without_filename == [
             "<arg>: Detect a missing '=' in rule: env=abc.",
             "<arg>: Invalid os-sandbox 'error'.",
+            "syntax-error(2) and syntax-error(3): Multiple os-sandbox parameters.",
             "<arg>: In 'bind=', source and destination must be separated with a comma.",
             "syntax-error(1): Invalid os-sandbox 'toto'.",
             "syntax-error(4): Invalid rule 'set-env=ERROR'",
-            "syntax-error(5): In 'bind=${PWD}/.,${PWD}/not_exist', source and destination must exists and be directories.",  # noqa: E501
-            "syntax-error(6): In 'bind=${PWD}/not_exist,${PWD}/.', source and destination must exists and be directories.",  # noqa: E501
-            "syntax-error(7): In 'ro-bind=abc', source and destination must be separated with a comma.",  # noqa: E501
+            "syntax-error(5): In 'bind=.,not_exist', source and destination must exists and must be directories.",
+            "syntax-error(6): In 'bind=not_exist,.', source and destination must exists and must be directories.",
+            "syntax-error(7): In 'ro-bind=abc', source and destination must be separated with a comma.",
             "syntax-error(8): Invalid rule 'ignore-parameter'",
-            "syntax-error(10): 'net=ERROR' has incorrect number of parts separated by '|'. Expected 5, got 1. Format: <DENY,ALLOW>|<TCP,UDP list or *>|<ip/mask>, *|<port list>|<IN, OUT>.",  # noqa: E501
-            "syntax-error(11): 'net=ERROR|tcp|127.0.0.1/32|8000|IN' use an invalid action. Must be 'ALLOW' or 'DENY'.",  # noqa: E501
-            "syntax-error(12): 'net=ALLOW||127.0.0.1/32|8000|IN' has empty socket specs.",  # noqa: E501
-            "syntax-error(13): In 'net=ALLOW|any,tcp,udp|127.0.0.1/32|8000|IN', 'ANY' must be used alone, not combined with other specifiers.",  # noqa: E501
-            "syntax-error(14): In 'net=ALLOW|*,tcp,udp|127.0.0.1/32|8000|IN', '*' must be used alone, not combined with other specifiers.",  # noqa: E501
-            "syntax-error(15): 'net=ALLOW|toto|127.0.0.1/32/32|8000|IN' has unknown socket specifier 'TOTO'. Valid specifiers: any, TCP, UDP.",  # noqa: E501
-            "syntax-error(16): In 'net=ALLOW|tcp||8000|IN', network part must be set.",
-            "syntax-error(19): In 'net=ALLOW|tcp|0.0.0.0/0|a,b|IN', invalid port list.",  # noqa: E501
-            "syntax-error(20): In 'net=ALLOW|tcp|0.0.0.0/0|*|', direction is not 'IN' or 'OUT'.",  # noqa: E501
-            "syntax-error(25): Invalid value 'abc' for py-sandbox. Use true or false.",
-            "syntax-error(26): Invalid rule 'learning=True'",
-            "syntax-error(27): Invalid rule 'invalide-rule'",
+            "Port must be a positive value",
+            "syntax-error(11): 'net=ERROR' has incorrect number of parts separated by '|'. Expected 5, got 1. "
+                "Format: <DENY,ALLOW>|<TCP,UDP list or *>|<ip/mask>, *|<port list>|<IN, OUT>.",
+            "syntax-error(12): 'net=ERROR|tcp|127.0.0.1/32|8000|IN' use an invalid action. Must be 'ALLOW' or 'DENY'.",
+            "syntax-error(13): 'net=ALLOW||127.0.0.1/32|8000|IN' has empty socket specs.",
+            "syntax-error(14): In 'net=ALLOW|any,tcp,udp|127.0.0.1/32|8000|IN', 'ANY' must be used alone, not combined with other specifiers.",
+            "syntax-error(15): In 'net=ALLOW|*,tcp,udp|127.0.0.1/32|8000|IN', '*' must be used alone, not combined with other specifiers.",
+            "syntax-error(16): 'net=ALLOW|toto|127.0.0.1/32/32|8000|IN' has unknown socket specifier 'TOTO'. Valid specifiers: any, TCP, UDP.",
+            "syntax-error(17): In 'net=ALLOW|tcp||8000|IN', network part must be set.",
+            "syntax-error(20): In 'net=ALLOW|tcp|0.0.0.0/0|a,b|IN', invalid port list.",
+            "syntax-error(21): In 'net=ALLOW|tcp|0.0.0.0/0|*|', direction is not 'IN' or 'OUT'.",
+            "syntax-error(26): Invalid value 'abc' for py-sandbox. Use true or false.",
+            "syntax-error(27): Invalid value 'True' for 'learn'. Use the filename instead.",
+            "syntax-error(28): Invalid rule 'invalide-rule'"
         ]

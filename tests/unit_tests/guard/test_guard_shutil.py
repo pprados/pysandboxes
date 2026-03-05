@@ -125,7 +125,9 @@ def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
     import shutil
 
     if (files["path"] / "tmp").exists():
-        (files["path"] / "tmp").rmdir()
+        shutil.rmtree(files["path"] / "tmp")
+    if (files["path"] / "tmp2").exists():
+        shutil.rmtree(files["path"] / "tmp2")
     shutil.copytree(files["bind_dest"], files["path"] / "tmp") is None
     shutil.move(files["path"] / "tmp", files["path"] / "tmp2") is None
     shutil.rmtree(files["path"] / "tmp2")
@@ -194,6 +196,11 @@ def test_shutil_move(files: Dict[str, Path]) -> None:  # noqa: F811
 
     s = files["path"] / "dir_to_move"
     d = files["path"] / "dir_moved"
+    if s.exists():
+        shutil.rmtree(s)
+    if d.exists():
+        shutil.rmtree(d)
+
     s.mkdir()
     (s / "inner").mkdir()
     shutil.move(s, d, copy_function=shutil.copy2)

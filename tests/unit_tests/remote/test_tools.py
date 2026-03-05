@@ -30,7 +30,7 @@ class TestWhichCommand:
             test_bin = Path(temp_dir) / "bin"
             test_bin.mkdir()
             test_cmd = test_bin / "testcmd"
-            test_cmd.write_text("#!/bin/bash\necho test")
+            test_cmd.write_text("#!/bin/bash\necho test\n")
             test_cmd.chmod(0o755)
 
             with patch("pysandboxes.remote.tools.known_paths", [test_bin]):

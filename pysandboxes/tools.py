@@ -265,6 +265,8 @@ def find_config_for_module(module: str) -> Path | None:
             return None
     except FileNotFoundError:
         return None
+    except ModuleNotFoundError:
+        return None
 
 
 SyncOrAsyncFunc = Callable[[], None] | Callable[[], Awaitable[None]]
