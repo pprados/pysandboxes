@@ -56,7 +56,6 @@ def rule_to_netfilter(
         ":OUTPUT DROP [0:0]",
         "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
         "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
-        "",
     ]
     for dns in dns_server:
         if not is_ipv6:
@@ -87,10 +86,10 @@ def rule_to_netfilter(
 
                 if direction == Direction.OUT:
                     s_state = "--ctstate NEW "
-                    s_network = f"-d {s_network} " if s_network else ""
+                    s_network = f"-d {s_network}" if s_network else ""
                 else:
                     s_state = "--ctstate NEW,ESTABLISHED "
-                    s_network = f"-s {s_network} " if s_network else ""
+                    s_network = f"-s {s_network}" if s_network else ""
 
                 if ports:
                     multiport = f"-m multiport --dports {ports} "
@@ -102,7 +101,7 @@ def rule_to_netfilter(
                     ip_rule = (
                         f"-A {_map_direction[direction]} "
                         f"-p tcp "
-                        f"-m conntrack "
+                        f"-m conntrack"
                         f"{s_state}"
                         f"{s_network}"
                         f"{multiport}"

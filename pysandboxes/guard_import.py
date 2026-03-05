@@ -279,7 +279,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             finders: List of meta path finders to delegate to.
         """
         self._finders = finders
-        self._debug = False
+        self._debug = True
 
     """
     A custom finder that locates our special module.
@@ -528,7 +528,7 @@ def activate_guard_import(
         # 'setuptools.errors', 'setuptools.extension', 'setuptools.logging', 'setuptools.monkey',
         # 'setuptools.version', 'setuptools.warnings',
 
-        # 'warnings',
+        'warnings',
         # 'weakref',
     ]
     pass
@@ -545,10 +545,11 @@ def activate_guard_import(
 
     pass  # FIXME
     to_remove.reverse()
-    logger.debug("********* NO DELETE")
-    # for k in to_remove:
-    #     # logger.debug("Remove %s", k)
-    #     del sys.modules[k]
+    # logger.debug("********* NO DELETE")
+    to_remove=[x for x in to_remove if not x.startswith("pytest")]  # FIXME
+    for k in to_remove:
+        logger.debug("Remove %s", k)
+        del sys.modules[k]
 
     _rules = rules
 

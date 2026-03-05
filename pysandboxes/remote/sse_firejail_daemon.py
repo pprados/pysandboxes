@@ -321,7 +321,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             )
 
         # Add default parameters
-        firejail_path = importlib.resources.files(__name__) / ".." / "templates" / "firejail.profile"
+        firejail_path = importlib.resources.files(__name__) / ".." / "templates" / "firejail.template"
         firejail_conf = remove_comments(firejail_path.read_text().splitlines())
         firejail_conf = substitute_env_vars(firejail_conf, envs)
 

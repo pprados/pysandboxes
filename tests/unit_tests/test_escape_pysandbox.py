@@ -4,7 +4,7 @@ from typing import Dict, Set, Tuple
 
 import pytest
 
-from pysandboxes import RuleAttributeError
+# from pysandboxes import RuleAttributeError
 
 
 def test_escape_with_closure() -> None:

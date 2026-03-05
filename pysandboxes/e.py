@@ -6,7 +6,6 @@ This module centralizes all exception types to provide better stack traces
 and consistent error handling throughout the framework.
 """
 
-
 class SandBoxError(RuntimeError):
     """Base exception class for all sandbox-related errors."""
 

@@ -72,7 +72,7 @@ def check_iptables_rules_syntax(
 
 def test_ip4_netfilter_conv() -> None:
     errors: List[ErrorMsg] = []
-    rules, _ = parse_rules(
+    rules, *_ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp|localhost|80,443|OUT", Path(), 0),
             ConfigLine("net=ALLOW|tcp|192.0.0.0/8|80,443|OUT", Path(), 0),
@@ -92,7 +92,7 @@ def test_ip4_netfilter_conv() -> None:
         ],
         errors,
     )
-    ipfilter = rule_to_netfilter(rules, is_ipv6=False)
+    ipfilter = rule_to_netfilter(rules, {}, is_ipv6=False)
     status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=False)
     assert status, msg
     assert sorted(
@@ -118,7 +118,7 @@ def test_ip4_netfilter_conv() -> None:
 
 def test_ip6_netfilter_conv() -> None:
     errors: List[ErrorMsg] = []
-    rules, _ = parse_rules(
+    rules, *_ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp|2001:db8::/32|80,443|OUT", Path(), 0),
             ConfigLine("net=ALLOW|tcp|192.168.0.0/16|80,443|OUT", Path(), 0),  # Skip,
@@ -135,6 +135,7 @@ def test_ip6_netfilter_conv() -> None:
             ConfigLine("net=ALLOW|udp|2001:db8::/32|53|OUT", Path(), 0),
             ConfigLine("net=DENY|any|10.0.0.0/8|*|OUT", Path(), 0),
         ],
+        {},
         errors,
     )
     ipfilter = rule_to_netfilter(rules, is_ipv6=True)

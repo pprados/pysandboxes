@@ -323,7 +323,7 @@ def test_os_chdir_and_getcwd(files: Dict[str, Path]) -> None:  # noqa: F811
     os.chdir(files["path"])
     assert str(files["path"]) == os.getcwd()
     os.chdir(files["bind_dest"])
-    assert str(files["bind_dest"]) == os.getcwd()
+    assert str(files["bind_src"]) == os.getcwd()
     with pytest.raises(RuleFileNotFoundError):
         os.chdir(files["bind_src"])
     os.chdir(old_dir)

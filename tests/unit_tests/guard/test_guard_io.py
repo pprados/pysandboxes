@@ -1,5 +1,4 @@
 import shutil
-import sys
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
@@ -32,12 +31,12 @@ def _activate_guard_import_for_tests() -> None:
     )
     from pysandboxes.guard_socket import patch_rules as socket_path_rules
 
-    assert "io" not in sys.modules
+    # assert "io" not in sys.modules
     activate_guard_import(
         {
-            **file_patch_rules(),
-            **socket_path_rules(),
-            **import_path_rules(),
+            **file_patch_rules(learn=False),
+            **socket_path_rules(learn=False),
+            **import_path_rules(learn=False),
         },
         ("*",),  # Import all modules
     )

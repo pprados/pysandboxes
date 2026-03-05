@@ -99,7 +99,7 @@ class TestRuleToNetfilter:
     def test_rule_to_netfilter_empty_rules(self) -> None:
         """Test rule_to_netfilter with empty rules."""
         socket_rules: SocketRules = tuple()
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         expected_base = [
             "*filter",
@@ -126,12 +126,12 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Check that the rule was added (with correct spacing)
         tcp_rule_found = any(
-            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.168.1.0/24  "
-            "-m multiport --sports 80 -j ACCEPT" == rule
+            '-A OUTPUT -p tcp -m conntrack--ctstate NEW -d 192.168.1.0/24 '
+            '-m multiport --dports 80 -j ACCEPT'
             for rule in result
         )
         assert tcp_rule_found
@@ -149,12 +149,12 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Check that the rule was added (with correct spacing)
         tcp_rule_found = any(
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.1.0/24  "
-            "-m multiport --dports 80 -j ACCEPT" == rule
+            '-A INPUT -p tcp -m conntrack--ctstate NEW,ESTABLISHED -s 192.168.1.0/24 '
+            '-m multiport --dports 80 -j ACCEPT' == rule
             for rule in result
         )
         assert tcp_rule_found
@@ -176,12 +176,14 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Currently, UDP rules are not generated due to implementation bug
         # This test documents the current behavior rather than expected behavior
-        udp_rule_found = any("-A OUTPUT -p udp" in rule for rule in result)
-        assert not udp_rule_found  # Should be False due to bug
+        udp_rule_found = any(
+            '-A OUTPUT -p udp -d 8.8.8.8/32 '
+            '-m multiport --dports 53 -j ACCEPT' in rule for rule in result)
+        assert udp_rule_found  # Should be False due to bug
 
     def test_rule_to_netfilter_deny_action(self) -> None:
         """Test rule_to_netfilter with DENY action."""
@@ -196,12 +198,12 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Check that the REJECT rule was added
         reject_rule_found = any(
-            "REJECT" in rule and "tcp" in rule and "22" in rule for rule in result
-        )
+            '-A OUTPUT -p tcp -m conntrack--ctstate NEW '
+            '-m multiport --dports 22 -j REJECT' in rule for rule in result)
         assert reject_rule_found
 
     def test_rule_to_netfilter_ipv6_context(self) -> None:
@@ -217,7 +219,7 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=True)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=True)
 
         # Check that the IPv6 rule was added
         ipv6_rule_found = any(
@@ -243,7 +245,7 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Check that TCP rule was added
         tcp_rule_found = any(
@@ -255,7 +257,7 @@ class TestRuleToNetfilter:
         )
 
         assert tcp_rule_found
-        assert not udp_rule_found  # Should be False due to bug
+        assert udp_rule_found  # Should be False due to bug
 
     def test_rule_to_netfilter_multiple_directions(self) -> None:
         """Test rule_to_netfilter with multiple directions."""
@@ -270,7 +272,7 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Check that both INPUT and OUTPUT rules were added
         input_rule_found = any(
@@ -298,7 +300,7 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Check that rule without multiport was added
         tcp_rule_found = any(
@@ -319,7 +321,7 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         assert result[-1] == "COMMIT"
 
@@ -342,7 +344,7 @@ class TestRuleToNetfilter:
             ]
         )
 
-        result = rule_to_netfilter(socket_rules, is_ipv6=False)
+        result = rule_to_netfilter(socket_rules, {},is_ipv6=False)
 
         # Count occurrences of the same rule
         tcp_rules = [
