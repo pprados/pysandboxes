@@ -17,7 +17,7 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Iterator,
+    Iterator, cast,
 )
 
 from .config import CONFIG_NAME
@@ -221,8 +221,6 @@ _sandboxed = 0
 _is_in_sandbox: int = 0
 
 
-
-
 def is_in_sandbox() -> bool:
     """Check if currently executing inside a sandbox.
 
@@ -257,7 +255,9 @@ def set_is_in_sandbox(value: bool) -> None:
 def find_config_for_module(module: str) -> Path | None:
     import importlib
     try:
-        resource_path = importlib.resources.files(module)
+        resource_path: Path | None = cast(Path | None, importlib.resources.files(module))
+        if not resource_path:
+            return None
         resource_config = resource_path / CONFIG_NAME
         if resource_config and resource_config.exists():
             return resource_config
@@ -291,7 +291,7 @@ def get_callable_info(func: Callable[..., Any]) -> tuple[str | None, str | None]
     # Get the module name using inspect.getmodule()
     # This works well for functions, methods, and class methods
     module_obj = inspect.getmodule(func)
-    if module_obj:
+    if module_obj and module_obj.__spec__:
         module_name = module_obj.__spec__.name
 
     # Get the qualified name of the callable

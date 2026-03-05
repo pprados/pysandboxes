@@ -261,7 +261,7 @@ class sandboxes:
                 )
                 loop = get_sandbox_loop()
 
-                async def _stop_and_propagate_signal():
+                async def _stop_and_propagate_signal() -> None:
                     await self._stop_daemon()
                     import _thread
                     logger.debug("Propagate {%i}", signum)
@@ -347,7 +347,7 @@ class sandboxes:
             )
             self.learning_path = all_rules.learning_path
 
-            def signal_handler(signum: int, frame: object) -> None:
+            def signal_handler(signum: int, frame: FrameType) -> Any|int:
                 """
                 Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
                 It will kill daemon processes before exiting itself.
@@ -357,8 +357,9 @@ class sandboxes:
 
                 asyncio.get_running_loop().create_task(self._stop_daemon())
                 handler = self._signals[signum]
-                if isinstance(handler, Callable):
-                    handler(signum, frame)
+                if handler and isinstance(handler, Callable):
+                    return handler(signum, frame)
+                return None  # FIXME: a vérifier
 
             if threading.current_thread() is threading.main_thread():
                 logger.debug("Activate signal handlers.")

@@ -29,6 +29,7 @@ from typing import Any, AsyncGenerator
 from uvicorn import Server
 
 from ..all_rules import AllRules
+from ..immutable_dict import ImmutableDict
 from ..private_loop import get_sandbox_loop
 from ..sb_types import Args, Envs
 from ..tools import (
@@ -352,11 +353,14 @@ class SSEServerDaemon(BaseSSESandbox):
             config=[],  # FIXME: a quoi sert config?
             envs=envs,
             os_sandbox="",
+            os_sandbox_params=ImmutableDict({}),
             use_py_sandbox=all_rules.use_py_sandbox,
+            port=all_rules.port,
             learning_path=all_rules.learning_path,
             learn=all_rules.learn,
             envs_rules=(),
             socket_rules=all_rules.socket_rules,
+            pin_dns=all_rules.pin_dns,
             file_rules=all_rules.file_rules,
             import_rules=all_rules.import_rules,
         )

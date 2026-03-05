@@ -17,7 +17,7 @@ import re
 import threading
 from pathlib import Path
 from types import FrameType
-from typing import Any, Callable, NamedTuple, cast
+from typing import Any, Callable, NamedTuple, cast, Generator, Iterator
 from weakref import WeakKeyDictionary
 
 from .main_logger import ErrorMsg, format_ruleref
@@ -153,33 +153,42 @@ class LearnEnviron(os._Environ):
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
             self._ignore_keys: WeakKeyDictionary[
                 threading.Thread, tuple[FrameType, set[str]]
-            ] = {}
+            ] = WeakKeyDictionary()
             self._keys_used: set[str] = set()
             self._original_envs = os.environ
 
-    def __iter__(self):
-        frame = inspect.currentframe()
+    def __iter__(self) -> Iterator[str]:
+        frame:FrameType|None = inspect.currentframe()
+        if not frame or not frame.f_back:
+            return super().__iter__()
         frame = frame.f_back.f_back
         root_iter = super().__iter__()
 
-        self._ignore_keys[threading.current_thread()] = (frame, set())
+        self._ignore_keys[threading.current_thread()] = (cast(FrameType,frame), set())
 
-        def _catch_for_all():
+        def _catch_for_all() -> Generator[Any, None, None]:
             t = threading.current_thread()
             for k in root_iter:
-                iter_frame = inspect.currentframe().f_back.f_back
+                cur_frame=inspect.currentframe()
+                if (cur_frame is None
+                        or cur_frame.f_back is None
+                        or cur_frame.f_back.f_back is None
+                ):
+                    continue
+                iter_frame:FrameType = cur_frame.f_back.f_back
+                keys:set[str]
                 if id(iter_frame) == id(frame):
-                    iter_frame, keys = self._ignore_keys.get(t, (frame, set()))
+                    iter_frame, keys = self._ignore_keys.get(t, (cast(FrameType,frame), set()))
                     keys.add(k)
                     self._ignore_keys[t] = (iter_frame, keys)
                 else:
                     # New frame, so remove the ignore_keys for this parent frame
-                    self._ignore_keys[t] = (frame, k)
+                    self._ignore_keys[t] = (cast(FrameType,frame), k)
                 yield k
 
         return _catch_for_all()  # TODO: items()
 
-    def __contains__(self, key: str) -> str:
+    def __contains__(self, key: object) -> bool:
         return super(LearnEnviron, self).__contains__(key)  # FIXME
 
     def __getitem__(self, key: str) -> str:
@@ -197,10 +206,10 @@ class LearnEnviron(os._Environ):
         try:
             result = super(LearnEnviron, self).__getitem__(key)
             frame = inspect.currentframe()
-
+            if not frame:
+                return result
             t = threading.current_thread()
             iter_frame, ignore_keys = self._ignore_keys.get(t, (None, set()))
-            ignore_keys: set[str]
             # Search the iter_frame
             for _ in range(0, 3):
                 frame = frame.f_back
@@ -212,7 +221,7 @@ class LearnEnviron(os._Environ):
                 ignore_keys.remove(key)  # Ignore one time
             if id(frame) != id(iter_frame):  # New frame, remove ignore_keys
                 # Use by a sub frame?
-                while frame.f_back:
+                while frame and frame.f_back:
                     frame = frame.f_back
                     if frame == iter_frame:
                         break

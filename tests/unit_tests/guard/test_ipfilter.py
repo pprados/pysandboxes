@@ -1,5 +1,7 @@
+import logging
 import subprocess
 from pathlib import Path
+from shutil import which
 from typing import List
 
 import pytest
@@ -14,6 +16,39 @@ from .test_guard_io import (
 )
 from ..conftest import init_log_level
 
+
+def _is_conntrack_kernel_module() -> bool:
+    """
+    Executes 'lsmod | grep nf_conntrack' and returns the corresponding lines.
+    This checks if the netfilter connection tracking module is loaded in the kernel.
+
+    Returns:
+        List[str]: A list of lines from the lsmod output containing 'nf_conntrack'.
+    """
+
+    try:
+        # Execute 'lsmod' and capture the output
+        if which("lsmod") == None:
+            return False
+
+        lsmod_result: subprocess.CompletedProcess = subprocess.run(
+            [which("lsmod")],
+            capture_output=True,
+            text=True,
+            check=True  # Raise an exception if lsmod fails
+        )
+
+        filtered_lines: List[str] = [
+            line.strip()
+            for line in lsmod_result.stdout.splitlines()
+            if "nf_conntrack" in line
+        ]
+        return len(filtered_lines) > 0
+
+    except subprocess.CalledProcessError as e:
+        return False
+    except FileNotFoundError as e:
+        return False
 
 @pytest.fixture(autouse=True)
 def reset() -> None:
@@ -51,7 +86,7 @@ def check_iptables_rules_syntax(
         subprocess.run(
             command_args,
             input=rules_content,
-            capture_output=True,
+            capture_output=False,
             text=True,
             check=True,
         )
@@ -93,8 +128,10 @@ def test_ip4_netfilter_conv() -> None:
         errors,
     )
     ipfilter = rule_to_netfilter(rules, {}, is_ipv6=False)
-    status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=False)
-    assert status, msg
+
+    if _is_conntrack_kernel_module():
+        status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=False)
+        assert status, msg
     assert sorted(
         ['*filter',
          ':INPUT DROP [0:0]',
@@ -143,8 +180,9 @@ def test_ip6_netfilter_conv() -> None:
         errors,
     )
     ipfilter = rule_to_netfilter(rules, {}, is_ipv6=True)
-    status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=True)
-    assert status, msg
+    if _is_conntrack_kernel_module():
+        status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=True)
+        assert status, msg
     assert sorted(
         ['*filter',
          ':INPUT DROP [0:0]',

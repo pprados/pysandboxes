@@ -28,7 +28,7 @@ import textwrap
 from ctypes import cdll
 from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import netifaces
 
@@ -391,9 +391,9 @@ def get_dns_servers() -> tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6A
 
             # Utilise la propriété 'version' de l'objet IP
             if ip.version == 4:
-                ipv4_list.append(addr)
+                ipv4_list.append(cast(ipaddress.IPv4Address, addr))
             elif ip.version == 6:
-                ipv6_list.append(addr)
+                ipv6_list.append(cast(ipaddress.IPv6Address, addr))
 
         except ValueError:
             # Gère les chaînes qui ne sont pas des adresses IP valides
@@ -471,14 +471,20 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address|IPv6Address]:
         return result
     try:
         # Execute the resolvectl status command
-        result = subprocess.run(
-            [shutil.which('resolvectl'), 'status'],
+        resolvectl=shutil.which('resolvectl')
+        if resolvectl is None:
+            logger.debug("Use default DNS servers because resolvectl not found")
+            return [
+                ipaddress.ip_address('1.1.1.1'),
+                ipaddress.ip_address('4.4.4.4')
+            ]
+        output = subprocess.run(
+            [resolvectl, 'status'],
             capture_output=True,
             text=True,
             check=True,  # Raise an error if resolvectl fails
             timeout=5
-        )
-        output: str = result.stdout
+        ).stdout
 
         # Regex to capture the IPs following "Current DNS Server" or "DNS Servers"
         # from both Global and Link configuration sections.
@@ -496,7 +502,7 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address|IPv6Address]:
             all_ips.extend([ipaddress.ip_address(ip) for ip in ip_string.split()])
         return list(set(all_ips))
     except FileNotFoundError:
-        pass
+        return []
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Error executing 'resolvectl status': {e.stderr.strip()}")
     except subprocess.TimeoutExpired:

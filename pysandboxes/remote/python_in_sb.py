@@ -46,7 +46,7 @@ def _register_signal() -> None:
         signal.SIGQUIT: signal.getsignal(signal.SIGQUIT),
     }
 
-    def signal_handler(signum: int, frame: FrameType) -> None:
+    def signal_handler(signum: int, frame: FrameType) -> Any|int:
         """
         Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
         It will kill daemon processes before exiting itself.
@@ -65,6 +65,7 @@ def _register_signal() -> None:
         # logger.error("Activate signal handlers.")
         for s in signals.keys():
             signal.signal(s, signal_handler)
+    return None  # FIXME
 
 
 def _python_interactive(

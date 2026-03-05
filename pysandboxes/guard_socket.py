@@ -52,7 +52,6 @@ from ipaddress import (
     ip_network,
 )
 from pathlib import Path
-from types import ModuleType
 from typing import (
     Any,
     Callable,
@@ -411,7 +410,7 @@ def _parse_rule(
                 rule.ln,
             )
         )
-        return None, {}
+        return None
 
 
 def parse_rules(
@@ -782,13 +781,13 @@ ReadableBuffer: TypeAlias = Buffer  # stable
 _Address: TypeAlias = tuple[Any, ...] | str | ReadableBuffer
 _RetAddress: TypeAlias = Any
 
-_pin_dns: ImmutableDict[str, list[str]] = {}
+_pin_dns: ImmutableDict[str, list[str]] = ImmutableDict({})
 
 
 def set_pin_dns(dns: ImmutableDict[str, list[str]]) -> None:
     global _pin_dns
     assert not _pin_dns
-    logger.debug("pin_dns=\n"+"\n".join(k + ": " + ", ".join(x[4][0] for x in v) for k, v in dns.items()))
+    logger.debug("pin_dns=\n" + "\n".join(k + ": " + ", ".join(x[4][0] for x in v) for k, v in dns.items()))
     _pin_dns = dns
 
 
@@ -812,7 +811,10 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
             for l in _pin_dns[name]:
                 if l[0] == socket.AF_INET:
                     return l[4][0]
-            raise socket.gaierror(errno=-3, strerror="Temporary failure in name resolution")
+            err = socket.gaierror()
+            err.errno = 3
+            err.strerror = "Temporary failure in name resolution"
+            raise err
         result = func(name, *args, **kwargs)
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
@@ -881,7 +883,9 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
             result = _pin_dns[host]
 
             # Patch port
-            def _patch_port(port: int, l: tuple[int, int, int, str, tuple[str, int] | tuple[str, int, int, int]]) -> \
+            def _patch_port(
+                    port: int,
+                    l: tuple[int, int, int, str, tuple[str, int] | tuple[str, int, int, int]]) -> \
                     tuple[int, int, int, str, tuple[str, int] | tuple[str, int, int, int]]:
                 address = list(l[4])
                 address[1] = port

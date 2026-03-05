@@ -54,7 +54,7 @@ class BaseSSESandbox(BaseDaemon):
         self.max_connect_retry = max_connect_retry
 
     @property
-    def base_url(self):
+    def base_url(self) -> str:
         return f"http://{self.host}:{{PORT}}"
 
     async def async_call_in_sandbox(

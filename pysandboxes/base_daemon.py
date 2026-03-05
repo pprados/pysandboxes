@@ -147,7 +147,7 @@ class BaseDaemon(ABC):
          Raises::
             Exception from the function
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @abstractmethod
     def call_in_sandbox(
@@ -170,7 +170,7 @@ class BaseDaemon(ABC):
          Raises::
             Exception from the function
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
 
 class FakeDaemon(BaseDaemon):
@@ -210,13 +210,13 @@ class FakeDaemon(BaseDaemon):
             *args: Any,
             **kwargs: Any,
     ) -> Any:
-        raise NotImplemented("It's a Fake daemon, because you use `python-sb`.")
+        raise NotImplementedError("It's a Fake daemon, because you use `python-sb`.")
 
     def call_in_sandbox(
             self,
             func: Callable[..., Any],
             _force_incomming: bool,
-            *args: Any,
+            *args: list[Any],
             **kwargs: dict[str, Any],
     ) -> Any:
-        raise NotImplemented("It's a Fake daemon, because you use `python-sb`.")
+        raise NotImplementedError("It's a Fake daemon, because you use `python-sb`.")

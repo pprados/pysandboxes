@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import socket
-from ipaddress import IPv4Network, IPv6Network
+from ipaddress import IPv4Network, IPv6Network, IPv4Address
 from typing import Iterable, List, Union
 
 from .guard_socket import Action, Direction, Kind, SocketRules
@@ -46,7 +46,7 @@ def _build_network(network_obj: Union[IPv4Network, IPv6Network], ipv6: bool) -> 
 
 def rule_to_netfilter(
         socket_rules: SocketRules,
-        dns_server:list[str],
+        dns_server:list[IPv4Address],
         is_ipv6: bool
 ) -> List[str]:
     netfilter = [

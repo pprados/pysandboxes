@@ -78,10 +78,9 @@ def format_error_list(errors: Sequence[str]) -> str:
     )
 
 
-def config_log(log_level: int, format: str | None = None):
+def config_log(log_level: int, format: str | None = None) -> None:
     handlers: list[logging.Handler] = []
     try:
-        raise ImportError()  # Force to classic logging
         from rich.console import Console
         from rich.logging import RichHandler
 

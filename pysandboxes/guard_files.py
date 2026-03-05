@@ -30,7 +30,7 @@ from typing import (
     NoReturn,
     Type,
     TypeAlias,
-    cast,
+    cast, TYPE_CHECKING,
 )
 
 from .config import OPTIMIZE
@@ -43,6 +43,9 @@ from .tools import follow_links_executable
 
 if io or os:
     pass
+
+if TYPE_CHECKING:
+    import pathlib
 
 _Path_glob = Path.glob
 _Path_rglob = Path.rglob

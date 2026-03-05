@@ -25,10 +25,25 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Install uv
-      uses: astral-sh/install-uv-action@v1
+      shell: bash
+      run: |
+        UV_VERSION="0.8.17"
+        UV_BIN_DIR="$RUNNER_TEMP/uv_bin"
+        mkdir -p "$UV_BIN_DIR"
+        
+        # Download binary Linux/x86_64
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
+    
+        echo "$UV_BIN_DIR" >> $GITHUB_PATH
+
+    - name: Check installation of uv
+      run: uv --version
 
     - name: Install make
       run: sudo apt-get update && sudo apt-get install -y make
+
+    - name: Run tests
+      run: uv sync --group test
 
     - name: Run tests
       run: make test

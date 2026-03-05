@@ -28,9 +28,9 @@ from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
-from .sse_client_subprocess_daemon import BaseSubProcessDaemon, DEBUG
-from .tools import suggest_package_installation, which_command, get_default_interface, get_dns_servers, \
-    get_bridge_interfaces, get_systemd_resolved_upstream_dns
+from .sse_client_subprocess_daemon import BaseSubProcessDaemon
+from .tools import suggest_package_installation, which_command, get_default_interface, get_bridge_interfaces, \
+    get_systemd_resolved_upstream_dns
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
@@ -168,6 +168,7 @@ def _follow_links(filename: str | Path, whitelist: WhiteList) -> None:
             "Impossible to resolve the sys.executable `%s`", sys.executable
         )
 
+
 # Use firejail --ip.print to return the ip of the daemon with a specific pid
 def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
     """
@@ -186,10 +187,15 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
     try:
         # 1. Execute the firejail command.
         # --ip.print <pid> queries the network namespace for the specified PID.
-        command: list[str] = [which_command("firejail"), f"--net.print={pid}"]
+        firejail_cmd=which_command("firejail")
+        if firejail_cmd is None:
+            logger.error("firejail not found. Install it with:")
+            logger.error(suggest_package_installation("firejail"))
+            raise SystemExit(1)
+        command: list[str] = [str(firejail_cmd), f"--net.print={pid}"]
 
         # Capture stdout and stderr, timeout if it takes too long.
-        result= subprocess.run(
+        result = subprocess.run(
             command,
             capture_output=True,
             text=True,
@@ -210,7 +216,7 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
         # Regex explanation: (\d{1,3}\.){3}\d{1,3} matches four groups of 1-3 digits separated by dots.
         for line in output.split("\n"):
             parts: list[str] = line.split()
-            if len(parts) >2 and parts[0] == "eth0":
+            if len(parts) > 2 and parts[0] == "eth0":
                 return ipaddress.IPv4Address(parts[2])
         return None
 
@@ -228,6 +234,7 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
         logger.error(f"with firejail command, an unexpected error occurred: {e}.")
         return None
 
+
 class FireJailSSEDaemon(BaseSubProcessDaemon):
     """Firejail-based subprocess daemon for OS-level sandboxing.
 
@@ -239,7 +246,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             self,
             rules: ConfigLines,
             errors: list[ErrorMsg],
-    ) -> tuple[ImmutableDict[str, Any],ConfigLines]:
+    ) -> tuple[ImmutableDict[str, Any], ConfigLines]:
         firejail_params = {}
         net: str | None = None
         ignore_rules = []
@@ -253,7 +260,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             else:
                 ignore_rules.append(rule)
         if net:
-            firejail_params["net"]=net
+            firejail_params["net"] = net
         return ImmutableDict(firejail_params), ignore_rules
 
     def update_rules(
@@ -275,7 +282,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         return updated_all_rules
 
     @property
-    def base_url(self):
+    def base_url(self) -> str:
         return f"http://{get_firejail_daemon_ip(self._process.pid)}:{{PORT}}"
 
     def _firejail_args(
@@ -353,7 +360,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
             args.append(f"--blacklist={rule.source}")
 
-
         for white in whitelist:
             args.extend(
                 [
@@ -385,7 +391,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 args.append(f"--read-only={rule.source}")
             else:
                 args.append(f"--read-write={rule.source}")
-
 
         if REPLACE:  # FIXME
             from ..guard_files import parse_rules as files_parse_rules
@@ -419,7 +424,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 )
                 sys.exit(1)
 
-            dns_servers = [ip for ip in get_systemd_resolved_upstream_dns() if isinstance(ip,IPv4Address)]
+            dns_servers = [ip for ip in
+                           get_systemd_resolved_upstream_dns() if isinstance(ip, IPv4Address)]
 
             if dns_servers:
                 for dns in dns_servers:
@@ -443,7 +449,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 # raise ValueError("Impossible to find a bridge (br*). "
                 #                  "Create a bridge to use firejail.")
             else:
-                bridge=bridges[0]  # FIXME: take first is a good idea?
+                bridge = bridges[0]  # FIXME: take first is a good idea?
             if not default_interface:
                 raise ValueError("Impossible to detect the default network interface")
             args.append(f"--net={bridge}")
@@ -494,7 +500,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             if REPLACE:
                 from ..guard_socket import parse_rules as socket_parse_rules
 
-                new_socket_rules, _ = socket_parse_rules(
+                new_socket_rules, *_ = socket_parse_rules(
                     [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], []
                 )
                 all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))

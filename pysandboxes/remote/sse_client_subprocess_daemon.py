@@ -269,7 +269,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             max_delay: Maximum delay between attempts.
             reset_delay: Delay after which attempt counter resets.
         """
-        super().__init__(token, host=host, max_connect_retry=max_connect_retry)
+        super().__init__(token, max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
         self._process: Process | None = None
         self._watchdog: Task | None = None

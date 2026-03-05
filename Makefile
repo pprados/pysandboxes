@@ -2,9 +2,8 @@ SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
 
 # Swith to poetry to uv
-UV=uv
 UV_EXTRA?=
-UV_GROUP?=--group dev --group lint --group test --group codespell
+UV_GROUP?=--group dev --group lint --group test
 
 POETRY_EXTRA?=
 POETRY_WITH?=-with dev,lint,test,codespell
@@ -19,15 +18,15 @@ all: help
 fix-vs-code: .vscode/launch.json
 
 integration_tests:
-	$(UV) run pytest tests/integration_tests
+	uv run pytest tests/integration_tests
 
 test tests:
-	$(UV) run pytest -v tests/unit_tests/
+	uv run pytest -v tests/unit_tests/
 
 all-tests: tests integration_tests
 
 test_watch:
-	$(UV) run ptw --now . -- tests/unit_tests
+	uv run ptw --now . -- tests/unit_tests
 
 
 ######################
@@ -35,27 +34,26 @@ test_watch:
 ######################
 
 # Define a variable for Python and notebook files.
-PYTHON_FILES=.
-lint format: PYTHON_FILES=.
+PYTHON_FILES=pysandboxes/
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
-lint lint_diff:
-	$(UV) run mypy $(PYTHON_FILES)
-	$(UV) run black $(PYTHON_FILES) --check
-	$(UV) run ruff .
+lint:
+	uv run mypy $(PYTHON_FILES)
+	uv run black $(PYTHON_FILES) --check
+	uv run ruff .
 
 claude-lint: lint
 	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'
 
 format format_diff:
-	$(UV) run black $(PYTHON_FILES)
-	$(UV) run ruff check --select I --fix $(PYTHON_FILES)
+	uv run black $(PYTHON_FILES)
+	uv run ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
-	$(UV) run codespell --toml pyproject.toml
+	uv run codespell --toml pyproject.toml
 
 spell_fix:
-	$(UV) run codespell --toml pyproject.toml -w
+	uv run codespell --toml pyproject.toml -w
 
 
 ######################
@@ -86,7 +84,7 @@ api_docs_clean:
 
 
 api_docs_linkcheck:
-	$(UV) run linkchecker docs/api_reference/_build/html/index.html
+	uv run linkchecker docs/api_reference/_build/html/index.html
 
 ######################
 # HELP
@@ -140,7 +138,7 @@ help:
 
 .PHONY: dist
 dist:
-	$(UV) build
+	uv build
 
 # ---------------------------------------------------------------------------------------
 # SNIPPET pour tester la publication d'une distribution
@@ -195,7 +193,7 @@ jupyter:
 	poetry run jupyter lab
 
 ## Validate the code
-validate: $(UV).lock format lint spell_check test
+validate: uv.lock format lint spell_check test
 
 
 _poetry-init:
@@ -213,6 +211,10 @@ _uv-init:
 inspector:
 	npx @modelcontextprotocol/inspector
 
-init: _$(UV)-init
+github-push-test:
+	gh act push
+
+init: _uv-init
 #	@pre-commit install
+	gh extension install https://github.com/nektos/gh-act
 	@git lfs install

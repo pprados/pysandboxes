@@ -69,14 +69,15 @@ def main() -> int:
     # If --learn and --pysandboxes-config=xxx, use --learn=xxx
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
     # If -m module  use resource
+    learn_path: Path
     if len(extra_rules.get("learn", [])):
-        learn_path: Path = Path(list(extra_rules["learn"])[0])
+        learn_path = Path(list(extra_rules["learn"])[0])
         if learn_path == Path():
             if config_path == Path():
                 learn_path = Path(CONFIG_NAME)
             else:
                 learn_path = config_path
-        extra_rules["learn"] = str(learn_path)
+        extra_rules["learn"] = set(str(learn_path))
     if config_path == Path():
         config_path = Path(CONFIG_NAME)
     try:
