@@ -38,8 +38,8 @@ dependencies = [
 
 
 [project.urls]
-repository = "https://www.github.com/pprados/langgraph-codeagent"
-homepage = "https://www.github.com/pprados/langgraph-codeagent"
+repository = "https://www.github.com/pprados/pysandboxes"
+homepage = "https://www.github.com/pprados/pysandboxes"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pysandboxes"]
@@ -101,6 +101,7 @@ test = [
     "syrupy>=4.0.2",
     #"lark>=1.1",
     "pydantic[email]>=2.11.9",
+    "gh>=0.0.4",
 ]
 lint = [
     "mypy>=1.8",

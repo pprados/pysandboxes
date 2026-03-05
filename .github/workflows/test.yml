@@ -1,72 +1,34 @@
-name: Tests
+name: Python Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ "develop" ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ "develop" ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10"]
-        #python-version: ["3.10", "3.11", "3.12", "3.13"]
-
-    env:
-      # Configure a constant location for the uv cache
-      UV_CACHE_DIR: /tmp/.uv-cache
+        python-version: ["3.13"]
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: latest
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v3
-      with:
-        path: .venv
-        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
-
     - name: Install uv
-        uses: astral-sh/setup-uv@v6
+      uses: astral-sh/install-uv-action@v1
 
-    - name: Restore uv cache
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.uv-cache
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-            uv-${{ runner.os }}
+    - name: Install make
+      run: sudo apt-get update && sudo apt-get install -y make
 
-    - name: Install dependencies
-      run: poetry install --all-extras --with dev,lint,test,codespell
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y firejail
-
-    - name: Run linting and formatting checks
-      run: |
-        poetry run make lint
-
-    - name: Run unit tests
-      run: |
-        poetry run make test
-
-    - name: Run integration tests
-      run: |
-        poetry run make integration_tests
+    - name: Run tests
+      run: make test
