@@ -6,6 +6,8 @@ python-import=subprocess
 
 # Standard Python
 python-import=_decimal, _pytest, _sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo
+python-import=_io, __future__, sys, abc, builtins, _socket, itertools, math, errno, concurrent, binascii, _operator, time, array, codecs
+python-import=atexit,unicodedata,marshal,gc
 python-import=argparse, ast, asyncio, base64, bdb, bisect, bz2, collections
 python-import=colorsys, configparser, contextlib, contextvars, copy, copyreg
 python-import=dataclasses, datetime, decimal, difflib, dis, email, encodings, enum
@@ -18,6 +20,7 @@ python-import=shutil, signal, socket, socketserver, ssl, stat, string, struct
 python-import=sysconfig, tempfile, textwrap, threading, token, tokenize, traceback
 python-import=types, typing, unittest, urllib, uuid, warnings, weakref, zipfile
 python-import=zoneinfo
+
 
 # External modules (Are you sure about the origin?)
 python-import=annotated_types

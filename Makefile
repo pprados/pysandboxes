@@ -25,8 +25,8 @@ unit-tests:
 integration_tests:
 	uv run pytest tests/integration_tests
 
-## Make gh tests locally
-gh-tests:
+## Make github tests locally
+gh-tests: lint
 	gh act push
 
 ## Make all tests
@@ -166,7 +166,7 @@ endif
 # SNIPPET pour publier la version sur pypi.org.
 .PHONY: release
 ## Publish distribution on pypi.org
-release: validate integration_tests clean dist
+release: validate all-tests clean dist
 ifeq ($(OFFLINE),True)
 	@echo -e "$(red)Can not release in offline mode$(normal)"
 else

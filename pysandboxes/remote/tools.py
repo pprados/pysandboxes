@@ -18,6 +18,7 @@ import ipaddress
 import logging
 import os
 import pickle
+import platform
 import re
 import shutil
 import signal
@@ -335,6 +336,7 @@ def get_bridge_interfaces() -> list[str]:
     Returns:
         list[str]: The list of names of the bridge interfaces found.
     """
+    assert platform.system() == "Linux"
     bridge_interfaces: list[str] = []
 
     # Standard path for network interfaces on Linux systems (sysfs)
@@ -375,6 +377,7 @@ def get_bridge_interfaces() -> list[str]:
 def get_dns_servers() -> (
     tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]
 ):
+    assert platform.system() == "Linux"
     dns_servers: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     with open("/etc/resolv.conf", "r") as f:
         for line in f:
@@ -422,6 +425,7 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
     Returns:
         list[str]: A list of static DNS server IP addresses.
     """
+    assert platform.system() == "Linux"
     dns_servers: list[IPv4Address | IPv6Address] = []
     config_path: str = "/run/systemd/resolve/resolv.conf"
 
@@ -477,6 +481,7 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
     Returns:
         list[str]: A sorted list of unique, external DNS server IP addresses.
     """
+    assert platform.system() == "Linux"
     result = get_systemd_resolved_static_dns()
     if result:
         return result

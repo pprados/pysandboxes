@@ -1,6 +1,8 @@
 # PY-SANDBOXES
 ![Sandboxes](py-sandboxes-small.png)
 
+> Protect Python programs without their knowledge
+
 [Home Page](https://www.github.com/pprados/pysandboxes/)
 
 > If you would like to participate in the beta tests, please check out [this](wiki/beta_test.md)

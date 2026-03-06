@@ -116,7 +116,9 @@ def generate_config_from_learning() -> None:
                 all_lines = resource_path.read_text().split("\n")
 
         # Insert new rules in the file
-        pattern: str = r"^# XX</([^\}]+)>"  # FIXME
+        pattern: str = (
+            r"^# XX</([^\}]+)>"  # FIX_RELEASE: inject in the middle of parameters
+        )
         for i, line in enumerate(all_lines):
             match = re.search(pattern, line)
             if match and match.group(1) in replaces:
@@ -145,12 +147,15 @@ def generate_config_from_learning() -> None:
             old_level = pysandboxes_logger.level
             pysandboxes_logger.setLevel(logging.INFO)
             logger.debug(f"{learning_path=} {old_learning_path=}")
-            msg = "\nWrite all learning rules in '%s'. %s" % (
-                learning_path.absolute().relative_to(Path().absolute()),
-                find_learning,
-            )
+            if learning_path.absolute().is_relative_to(Path().absolute()):
+                relative_lerning_path = learning_path.absolute().relative_to(
+                    Path().absolute()
+                )
+            else:
+                relative_lerning_path = learning_path
+            msg = f"\nWrite all learning rules in '{relative_lerning_path}'. {find_learning}"
             if old_learning_path:
-                msg += "The old version is here '%s'. " % (old_learning_path,)
+                msg += f"The old version is here '{old_learning_path}'. "
                 learning_path.rename(old_learning_path)
 
             msg += "Check and update this file to validate the rules."

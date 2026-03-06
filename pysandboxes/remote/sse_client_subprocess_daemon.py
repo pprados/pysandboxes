@@ -42,6 +42,7 @@ from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
+    LOOP_FOR_PING,
     MAX_CONNECT_RETRY,
     RETRY_BASE_DELAY,
     RETRY_FACTOR,
@@ -55,7 +56,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG = False  # FIXME
+DEBUG = True  # FIX_RELEASE
 
 
 def get_log_formatter() -> str:
@@ -308,8 +309,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         cmd_parameters = [
             sys.executable,
-            # don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
-            "-P",
+            "-P",  # Don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
             "-u",  # Unbuffered output
             "-d",  # Mode debug à la sortie
         ]
@@ -523,7 +523,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             while True:
                 try:
                     count_loop += 1
-                    if count_loop > 100:
+                    if count_loop > LOOP_FOR_PING:
                         logger.error("Is not possible to connect to the sandbox daemon")
                         raise SystemExit(
                             "Is not possible to connect to the sandbox daemon"

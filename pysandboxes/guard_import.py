@@ -18,6 +18,7 @@ import itertools
 import logging
 import os
 import sys
+from copy import copy
 from importlib import resources
 from importlib.abc import Loader
 from importlib.machinery import ModuleSpec
@@ -43,6 +44,7 @@ from .sb_types import ConfigLines
 from .tools import is_in_sandbox
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)  # FIX_RELEASE: comment this line
 
 if TYPE_CHECKING:
     from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
@@ -171,17 +173,21 @@ class GuardLoader(Loader):
     and apply patches to modules as they are loaded.
     """
 
-    __slots__ = ("original_spec", "original_loader")
+    __slots__ = ("fullname", "original_spec", "original_loader", "original_module")
 
-    def __init__(self, original_spec: ModuleSpec):
+    def __init__(
+        self, fullname: str, original_spec: ModuleSpec, module: ModuleType | None = None
+    ):
         """Initialize the guard loader.
 
         Args:
             original_spec: The original module specification to wrap.
         """
         # Store the _original spec and loader
+        self.fullname = fullname
         self.original_spec: ModuleSpec = original_spec
         self.original_loader: Loader | None = original_spec.loader
+        self.original_module = module
 
     def create_module(self, spec: ModuleSpec) -> ModuleType | None:
         """Delegate module creation to the original loader.
@@ -195,6 +201,8 @@ class GuardLoader(Loader):
         # logger.debug(f"create_module({spec=}")
         if self.original_loader is None:
             return None
+        if self.original_module:
+            return self.original_module
         module = self.original_loader.create_module(self.original_spec)
         return module  # Not initialized
 
@@ -212,16 +220,28 @@ class GuardLoader(Loader):
 
         if module is None:
             return
-        # logger.debug(f"exec_module({module.__name__})...")
         if not self.original_loader:
             return
+        if self.original_module:
+            logger.debug("move original module %s", self.original_module.__name__)
+            # Module is initialized
+            to_delete = []
+            for k, m in _pending_modules.items():
+                if k.startswith(self.fullname + "."):
+                    logger.debug("move original module %s", k)
+                    sys.modules[k] = m  # Reinject sub modules
+                    to_delete.append(k)
+            del _pending_modules[self.fullname]
+            for k in to_delete:
+                del _pending_modules[k]
+            return
+
+        # logger.debug(f"exec_module({module.__name__})...")
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
         if self.original_spec.name in _patch_rules:
             _apply_patch(module, self.original_spec.name)
-
-            # logger.error(f"GuardLoader: Injected patch into {module.__name__!r}.")
 
 
 # Define the custom finder class
@@ -281,7 +301,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             finders: List of meta path finders to delegate to.
         """
         self._finders = finders
-        self._debug = False
+        self._debug = True  # FIX_RELEASE
 
     """
     A custom finder that locates our special module.
@@ -310,16 +330,45 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         # Delegate to the rest of the chain to find the _original module spec
         # We skip our own finder by checking sys.meta_path from the next index
         # import builtins;builtins.print(f"finder {fullname}")
-        for finder in sys.meta_path:
-            if finder == cast(MetaPathFinderProtocol, self):
-                continue
-            if original_spec := finder.find_spec(fullname, path, target):
-                break
+        global _pending_modules
+        new_spec: ModuleSpec | None = None
+        finder: MetaPathFinderProtocol = self
+        if fullname in _pending_modules:
+            # Find a module that was already present
+            # Move it into sys.modules.
+            pending_module = _pending_modules[fullname]
+            original_spec: ModuleSpec | None = None
+            module_name: str | None = None
+            original_spec = cast(ModuleSpec, pending_module.__spec__)
+            if hasattr(original_spec, "name"):
+                module_name = original_spec.name
+            if not module_name:
+                if hasattr(pending_module, "__name__"):
+                    module_name = pending_module.__name__
+                else:
+                    module_name = fullname
+            # Change the loader to move in the right place
+            new_spec = importlib.machinery.ModuleSpec(
+                name=module_name,
+                loader=GuardLoader(fullname, original_spec, _pending_modules[fullname]),
+                origin=original_spec.origin,
+                loader_state=original_spec.loader_state,
+            )
+            original_spec = None
+
         else:
-            return None
+            for finder in sys.meta_path:
+                if finder == self:
+                    continue
+                if original_spec := finder.find_spec(fullname, path, target):
+                    break
+            else:
+                return None
         if original_spec:
-            # logger.debug(
-            #     f"GuardFinder: Found _original spec via {type(finder).__name__!r}.")
+            if self._debug:
+                logger.debug(
+                    f"GuardFinder: Found _original spec via {type(finder).__name__!r}."
+                )
             # Create a new spec using our custom GuardLoader,
             # but with the _original spec's data
 
@@ -336,22 +385,25 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                             return None
                         init_file = original_spec.origin
                     assert os.path.isfile(init_file), "module without __init__.py"
-                    logger.debug(f"Inject loader for {original_spec.name!r}")
+                    if self._debug:
+                        logger.debug(f"Inject loader for {original_spec.name!r}")
                     new_spec = importlib.util.spec_from_file_location(
                         fullname,
                         init_file,
-                        loader=GuardLoader(original_spec),
+                        loader=GuardLoader(fullname, original_spec, None),
                         submodule_search_locations=original_spec.submodule_search_locations,
                     )
                 else:
                     new_spec = importlib.machinery.ModuleSpec(
                         name=original_spec.name,
-                        loader=GuardLoader(original_spec),
+                        loader=GuardLoader(fullname, original_spec, None),
                         origin=original_spec.origin,
                         loader_state=original_spec.loader_state,
                     )
             else:
-                new_spec = original_spec
+                if not new_spec:
+                    new_spec = original_spec
+        if new_spec:
             module_name = fullname.split(".", 1)[0]
             if is_learning_mode() and is_in_sandbox():
                 if (
@@ -375,7 +427,6 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                             repr(module_name),
                         )
                         logger.exception(
-                            ex,
                             "Module named %s is not allowed by a rule",
                             repr(module_name),
                         )
@@ -387,6 +438,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         return None
 
 
+_pending_modules: dict[str, ModuleType] = {}
 _guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
 
 _activated = False
@@ -451,129 +503,15 @@ def activate_guard_import(
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
 
-    # And now, remove some packages
-    safe = [
-        # "_pytest.fixtures",
-        # "pytest",
-        # "pathlib",
-        # "subprocess",
-        "codecs",
-        "abc",
-        "asyncio",
-        "logging",
-        "pathlib",
-        # 'asyncio.base_events',
-        # 'asyncio.base_futures',
-        # 'asyncio.base_subprocess',
-        # 'asyncio.base_tasks',
-        # 'asyncio.constants',
-        # 'asyncio.coroutines',
-        # 'asyncio.events',
-        # 'asyncio.exceptions',
-        # 'asyncio.format_helpers',
-        # 'asyncio.futures',
-        # 'asyncio.locks',
-        # 'asyncio.log',
-        # 'asyncio.mixins',
-        # 'asyncio.protocols',
-        # 'asyncio.queues',
-        # 'asyncio.runners',
-        # 'asyncio.selector_events',
-        # 'asyncio.sslproto',
-        # 'asyncio.staggered',
-        # 'asyncio.streams',
-        # 'asyncio.subprocess',
-        # 'asyncio.taskgroups',
-        # 'asyncio.tasks',
-        # 'asyncio.threads',
-        # 'asyncio.timeouts',
-        # 'asyncio.transports',
-        # 'asyncio.trsock',
-        # 'asyncio.unix_events',
-        "concurrent",
-        "concurrent.futures",
-        # 'distutils', 'distutils._log', 'distutils._modified',
-        # 'distutils.archive_util', 'distutils.cmd', 'distutils.command', 'distutils.command.bdist',
-        # 'distutils.compat', 'distutils.compat.py39', 'distutils.compilers', 'distutils.compilers.C',
-        # 'distutils.compilers.C.errors', 'distutils.core', 'distutils.debug', 'distutils.dir_util', 'distutils.dist',
-        # 'distutils.errors', 'distutils.extension', 'distutils.fancy_getopt', 'distutils.file_util',
-        # 'distutils.filelist', 'distutils.log', 'distutils.spawn', 'distutils.util',
-        #
-        #
-        "importlib",
-        "importlib._abc",
-        "importlib._bootstrap",
-        "importlib._bootstrap_external",
-        "importlib.abc",
-        "importlib.machinery",
-        "importlib.metadata",
-        "importlib.metadata._adapters",
-        "importlib.metadata._collections",
-        "importlib.metadata._functools",
-        "importlib.metadata._itertools",
-        "importlib.metadata._meta",
-        "importlib.metadata._text",
-        "importlib.readers",
-        "importlib.resources",
-        "importlib.resources._adapters",
-        "importlib.resources._common",
-        "importlib.resources._functional",
-        "importlib.resources._itertools",
-        "importlib.resources.abc",
-        "importlib.resources.readers",
-        "importlib.util",
-        # 'packaging', 'packaging._elffile',
-        # 'packaging._manylinux', 'packaging._musllinux', 'packaging._parser', 'packaging._structures',
-        # 'packaging._tokenizer', 'packaging.licenses', 'packaging.licenses._spdx', 'packaging.markers',
-        # 'packaging.requirements', 'packaging.specifiers', 'packaging.tags', 'packaging.utils', 'packaging.version',
-        #
-        # 'pysandboxes', 'pysandboxes.all_rules',
-        # 'pysandboxes.base_daemon', 'pysandboxes.config', 'pysandboxes.e', 'pysandboxes.guard_envs',
-        # 'pysandboxes.guard_files', 'pysandboxes.guard_import', 'pysandboxes.guard_provider',
-        # 'pysandboxes.guard_self', 'pysandboxes.guard_socket', 'pysandboxes.immutable_dict', 'pysandboxes.learning',
-        # 'pysandboxes.main_logger', 'pysandboxes.netfilter', 'pysandboxes.os_sandbox', 'pysandboxes.private_loop',
-        # 'pysandboxes.py_sandbox', 'pysandboxes.remote', 'pysandboxes.remote.main_shutdown',
-        # 'pysandboxes.remote.none_daemon', 'pysandboxes.remote.parameters', 'pysandboxes.remote.python_in_sb',
-        # 'pysandboxes.remote.sse_base_daemon', 'pysandboxes.remote.sse_client_subprocess_daemon',
-        # 'pysandboxes.remote.sse_firejail_daemon', 'pysandboxes.remote.sse_server_daemon',
-        # 'pysandboxes.remote.task_daemon', 'pysandboxes.remote.tools', 'pysandboxes.sandboxes_api',
-        # 'pysandboxes.sb_types', 'pysandboxes.tools',
-        #
-        # 'setuptools',
-        # 'setuptools._core_metadata', 'setuptools._distutils', 'setuptools._entry_points', 'setuptools._imp',
-        # 'setuptools._importlib', 'setuptools._itertools', 'setuptools._normalization', 'setuptools._path',
-        # 'setuptools._reqs', 'setuptools._static', 'setuptools.command', 'setuptools.config',
-        # 'setuptools.config._apply_pyprojecttoml', 'setuptools.config.expand', 'setuptools.config.pyprojecttoml',
-        # 'setuptools.config.setupcfg', 'setuptools.depends', 'setuptools.discovery', 'setuptools.dist',
-        # 'setuptools.errors', 'setuptools.extension', 'setuptools.logging', 'setuptools.monkey',
-        # 'setuptools.version', 'setuptools.warnings',
-        "sys",
-        "threading",
-        "warnings",
-        # 'weakref',
-        "process",  # FIXME: hack pour gérer les process en debug avec pycharm?
-    ]
-    pass
-    to_remove = []
-
-    for k in sys.modules:
-        if (
-            not k.startswith("_")
-            and not k.startswith("pysandboxes")
-            and k not in sys.builtin_module_names
-            and k not in safe
-        ):
-            to_remove.append(k)
-
-    pass  # FIXME
-    to_remove.reverse()
-    # logger.debug("********* NO DELETE")
-    to_remove = [x for x in to_remove if not x.startswith("pydev")]  # FIXME
-    to_remove = [x for x in to_remove if not x.startswith("pytest")]  # FIXME
-    to_remove = [x for x in to_remove if not x.startswith("debugpy")]  # FIXME
-    for k in to_remove:
-        logger.debug("Remove %s", k)
-        # del sys.modules[k]  # FIXME
+    # Move the current modules in _pending_modules.
+    # The modules will be reinjected as needed.
+    global _pending_modules
+    _pending_modules = copy(sys.modules)
+    keep = ["warnings", "asyncio"]
+    for k in _pending_modules:
+        # logger.debug("Remove %s", k)
+        if k not in keep:
+            del sys.modules[k]
 
     _rules = rules
 

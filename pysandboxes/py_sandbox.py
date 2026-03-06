@@ -14,6 +14,7 @@ import re
 import sys
 import types
 from importlib import resources
+from importlib.abc import Traversable
 from pathlib import Path
 from typing import Any, cast
 
@@ -55,8 +56,8 @@ def _search_module_config(config_path: Path | None) -> Path:
     caller_module = frame.f_globals.get("__name__", "__main__").split(".", 1)[0]
     resource_config: Path | None = None
     if caller_module != "__main__":
-        resource_path = cast(Path, files(caller_module))
-        resource_config = resource_path / config_path
+        resource_path = cast(Traversable, files(caller_module))
+        resource_config = Path(resource_path.name) / config_path
     if resource_config and resource_config.exists():
         config_path = resource_config
         logger.info("Use the resource %s from the caller module", config_path)

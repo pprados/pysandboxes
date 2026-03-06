@@ -114,11 +114,11 @@ def _test_files() -> None:
         with io.open("tmp/test.remove", "w") as _:
             pass
         # assert not learning, "Must be stopped by pysandbox"
-    except Exception as e:
-        logger.exception(e)
-    except SandBoxError as e:
+    except Exception:
+        logger.exception("")
+    except SandBoxError:
         if learning:
-            logger.exception(e)
+            logger.exception("")
 
     try:
         with io.open("tst_wasm/factorial.wasm", "r"):
@@ -126,8 +126,8 @@ def _test_files() -> None:
         logger.error("Must be stopped by pysandbox")
     except SandBoxError:
         assert not is_learning_mode()
-    except Exception as e:
-        logger.exception(e)
+    except Exception:
+        logger.exception("")
 
     try:
         with io.open("pysandboxes/__init__.py", "r"):
@@ -135,8 +135,8 @@ def _test_files() -> None:
         # assert is_learning_mode() or False, "Must be stopped by pysandbox"
     except SandBoxError:
         assert not is_learning_mode()
-    except Exception as e:
-        logger.exception(e)
+    except Exception:
+        logger.exception("")
 
     print("---- Test scandir docs")
     use_alias_rule = False
@@ -224,7 +224,7 @@ async def main(argv: List[str]) -> int:
     if "learn" in extra_rules:
         learning_path, *_ = extra_rules.get("learn", set())
         if not learning_path:
-            learning_path = ".py-sandboxes.test"
+            learning_path = ".py-sandboxes"
         extra_rules["learn"] = {learning_path}
 
     for _ in range(0, 1):

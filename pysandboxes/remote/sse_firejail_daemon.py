@@ -8,7 +8,7 @@ It configures firejail profiles, manages file system access rules,
 and handles network filtering for comprehensive sandboxing.
 
 Key components:
-- WhiteList: Optimized directory path whitelist management
+- AllowList: Optimized directory path whitelist management
 - FireJailSSEDaemon: Firejail subprocess daemon implementation
 - Firejail profile generation and rule translation
 """
@@ -51,17 +51,15 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-DEBUG_NETFILTER = True  # DEBUG
-
-USE_WHITELIST = True  # FIXME: rename whitelist
+DEBUG_NETFILTER = True  # FIX_RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
 REPLACE = False  # FIXME
 
 
-class WhiteList(MutableSet):
-    """Optimized whitelist for directory paths with prefix logic.
+class AllowList(MutableSet):
+    """Optimized list for directory paths with prefix logic.
 
     This class manages directory paths efficiently by applying prefix rules:
     - If a new path is already covered by an existing parent path, it's not added
@@ -70,7 +68,7 @@ class WhiteList(MutableSet):
     """
 
     def __init__(self) -> None:
-        """Initialize empty WhiteList."""
+        """Initialize empty AllowList."""
         self._set: set[str] = set()
 
     def __contains__(self, item: Any) -> bool:
@@ -154,12 +152,12 @@ class WhiteList(MutableSet):
         self._set.discard(directory)
 
 
-def _follow_links(filename: str | Path, whitelist: WhiteList) -> None:
+def _follow_links(filename: str | Path, whitelist: AllowList) -> None:
     """Add file path and its symlink target to whitelist.
 
     Args:
         filename: File or directory path to add.
-        whitelist: WhiteList to add paths to.
+        whitelist: AllowList to add paths to.
 
     Raises:
         RuntimeError: If symlink cannot be resolved.
@@ -351,7 +349,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         # Extend mapping if the python version use some links
         major, minor, release_level, *_ = sys.version_info
-        whitelist = WhiteList()
+        whitelist = AllowList()
 
         # Manage sys.executable
         bin_path: set[Path] = set()
@@ -466,7 +464,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 # raise ValueError("Impossible to find a bridge (br*). "
                 #                  "Create a bridge to use firejail.")
             else:
-                bridge = bridges[0]  # FIXME: take first is a good idea?
+                # Search "docker*" else, the first bridge
+                for bridge in bridges:
+                    if bridge.startswith("docker"):
+                        break
+                else:
+                    bridge = bridges[0]  # FIXME: take first is a good idea?
             if not default_interface:
                 raise ValueError("Impossible to detect the default network interface")
             args.append(f"--net={bridge}")

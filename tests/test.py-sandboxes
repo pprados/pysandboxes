@@ -220,7 +220,7 @@ python-import=posixpath, pydoc, queue, quopri, random, re, reprlib, secrets
 python-import=selectors, shlex, shutil, signal, socket, socketserver, ssl, stat
 python-import=string, struct, sysconfig, tempfile, textwrap, threading, token
 python-import=tokenize, traceback, types, typing, urllib, uuid, weakref, xml, xmlrpc
-python-import=zipimport, zoneinfo
+python-import=*
 
 # External modules (Are you sure about the origin?)
 python-import=annotated_types

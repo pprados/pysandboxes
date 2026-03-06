@@ -49,8 +49,8 @@ class TestGenerateConfigFromLearning:
             mock_read_text.return_value = "template content with ${learning_guard_envs}"
             mock_is_learning_mode.return_value = True
 
-        with patch("pysandboxes.learning._learning_path", Path("test.conf")):
-            generate_config_from_learning()
+            with patch("pysandboxes.learning._learning_path", Path("test.conf")):
+                generate_config_from_learning()
 
         # Verify all rule generators were called
         mock_env_rules.assert_called_once()
