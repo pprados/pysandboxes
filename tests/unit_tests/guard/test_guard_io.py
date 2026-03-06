@@ -1,4 +1,3 @@
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
@@ -60,7 +59,7 @@ def files() -> Dict[str, Path]:
     tmp_path = Path("/tmp/test")  # FIXME: real temp files
     if tmp_path.exists():
         # Remove, without sandboxes
-        subprocess.run(["rm","-rf",str(tmp_path)], check=True)
+        subprocess.run(["rm", "-rf", str(tmp_path)], check=True)
     tmp_path.mkdir(exist_ok=False)
     (tmp_path / "visible.txt").write_text("Visible")
     (tmp_path / "ignore.log").write_text("Should be ignored")

@@ -41,6 +41,7 @@ from .tools import set_pdeathsig
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
+
 def _debug_log() -> None:
     sandbox_level = logging.WARNING  # FIX_RELEASE
     uvicorn_log_level = logging.ERROR  # FIX_RELEASE
@@ -52,7 +53,10 @@ def _debug_log() -> None:
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandbox_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
-    logger.debug(f"*** Start main_sandbox\n"+" ".join((repr(c) if ' ' in c else c for c in sys.argv)))  # FIXME
+    logger.debug(
+        "*** Start main_sandbox\n"
+        + " ".join((repr(c) if " " in c else c for c in sys.argv))
+    )  # FIXME
 
 
 # %%

@@ -9,11 +9,9 @@ arguments intended for the pysandbox environment, and from the actual command
 """
 
 import argparse
-import importlib
 import sys
 from pathlib import Path
 
-from pysandboxes.config import CONFIG_NAME
 from pysandboxes.tools import find_config_for_module
 
 
@@ -110,8 +108,8 @@ def parse_python_cmd_line(
     ):
         try:
             caller_module = python_run_args[1]
-            if (x:=find_config_for_module(caller_module)):
-                pysandboxes_config=x
+            if x := find_config_for_module(caller_module):
+                pysandboxes_config = x
         except FileNotFoundError:
             pass  # Ignore
 

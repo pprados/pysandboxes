@@ -46,7 +46,9 @@ def _register_signal() -> None:
         signal.SIGQUIT: signal.getsignal(signal.SIGQUIT),
     }
 
-    def signal_handler(signum: int, frame: FrameType) -> Any|int:
+    def signal_handler(
+        signum: int, frame: FrameType | None
+    ) -> Any | int | signal.Handlers:
         """
         Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
         It will kill daemon processes before exiting itself.
@@ -55,16 +57,16 @@ def _register_signal() -> None:
         logger.info("Catch signal %s.", signum)  # FIXME
         generate_config_from_learning()  # Save learning rules
         handler = signals[signum]
-        signal.signal(signum, handler)  # FIXME: doit etre après?
-        if isinstance(handler, Callable):
-            signal.raise_signal(signum)
+        if callable(handler):
+            signal.raise_signal(signal.Signals(signum))
+        return None
 
     if (
         threading.current_thread() is threading.main_thread()
     ):  # TODO: de meme pour les autres formes d'appel
         # logger.error("Activate signal handlers.")
         for s in signals.keys():
-            signal.signal(s, signal_handler)
+            signal.signal(signal.Signals(s), signal_handler)
     return None  # FIXME
 
 
@@ -87,9 +89,9 @@ def _python_interactive(
         RESET = " ***"
 
     if all_rules.learn:
-        conf_path=all_rules.learning_path
+        conf_path = all_rules.learning_path
         try:
-            conf_path=conf_path.relative_to(Path.cwd())
+            conf_path = conf_path.relative_to(Path.cwd())
         except ValueError:
             pass
         sb_mode = (
@@ -165,7 +167,7 @@ def _python_interactive(
 
         # Create a banner for the standard REPL
         if hasattr(sys, "ps1"):
-            sys.ps1 = prefix + getattr(sys, "ps1")
+            sys.ps1 = prefix + getattr(sys, "ps1")  # noqa: B009
         else:
             sys.ps1 = prefix + ">>> "
 

@@ -1,3 +1,5 @@
+from typing import Iterator
+
 from pysandboxes.guard_envs import LearnEnviron
 
 
@@ -39,7 +41,7 @@ def test_iter_use_by_child_detection_environ() -> None:
     envs = LearnEnviron()  # Reset singleton
     envs._keys_used.clear()
 
-    def use_key(envs, k):
+    def use_key(envs: LearnEnviron, k: str) -> None:
         print(envs[k])
 
     for k in envs:
@@ -51,7 +53,7 @@ def test_iter_use_by_brother_detection_environ() -> None:
     envs = LearnEnviron()  # Reset singleton
     envs._keys_used.clear()
 
-    def use_key(envs):
+    def use_key(envs: LearnEnviron) -> Iterator[str]:
         for k in envs:
             yield k
 
@@ -70,7 +72,7 @@ def test_for_comprenhension_detection_environ() -> None:
 def test_iter_items_detection_environ() -> None:
     envs = LearnEnviron()  # Reset singleton
     envs._keys_used.clear()
-    for k in envs.items():
+    for _ in envs.items():
         pass
     assert not envs._keys_used, "Can not add key during iteration"
 
@@ -103,7 +105,7 @@ def test_iter_use_directly_detection_environ() -> None:
 def test_update_from_environ() -> None:
     # env.update(os.environ)
     # FIXME:
-    d = {}
+    d: dict[str, str] = {}
     envs = LearnEnviron()  # Reset singleton
     envs._keys_used.clear()
     d.update(envs)

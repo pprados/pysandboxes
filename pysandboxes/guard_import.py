@@ -109,8 +109,8 @@ _patch_rules: PatchRules = ImmutableDict({})
 
 
 def parse_rules(
-        config: ConfigLines,
-        errors: list[ErrorMsg],
+    config: ConfigLines,
+    errors: list[ErrorMsg],
 ) -> tuple[ImportRules, ConfigLines]:
     """Parse import rules from configuration lines.
 
@@ -153,7 +153,7 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
             if __debug__ and isinstance(
-                    new_value, type(_apply_patch)
+                new_value, type(_apply_patch)
             ):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined]
             setattr(cur_object, paths[-1], new_value)
@@ -234,7 +234,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
     @classmethod
     def find_distributions(
-            cls, context: DistributionFinder.Context = DistributionFinder.Context()
+        cls, context: DistributionFinder.Context | None = None
     ) -> Iterable[importlib.metadata.PathDistribution]:
         """Find package distributions.
 
@@ -246,6 +246,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         """
         from importlib.metadata import PathDistribution
 
+        if context is None:
+            context = DistributionFinder.Context()
         if context.name and context.path:
             found = cls._search_paths(context.name, context.path)
         else:
@@ -279,17 +281,17 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             finders: List of meta path finders to delegate to.
         """
         self._finders = finders
-        self._debug = True
+        self._debug = False
 
     """
     A custom finder that locates our special module.
     """
 
     def find_spec(
-            self,
-            fullname: str,
-            path: Sequence[str] | None,
-            target: ModuleType | None = None,
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
     ) -> ModuleSpec | None:
         """Find module specification with import guarding.
 
@@ -353,23 +355,30 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             module_name = fullname.split(".", 1)[0]
             if is_learning_mode() and is_in_sandbox():
                 if (
-                        "*" not in _rules
-                        and module_name not in _rules
-                        and module_name != "pysandboxes"
+                    "*" not in _rules
+                    and module_name not in _rules
+                    and module_name != "pysandboxes"
                 ):
                     add_learning_rule(LearnImportRule(module_name))
             else:
                 if _rules and _rules[0] != "*":
                     # Reactiver le filtre de module
                     if (
-                            not module_name.startswith("pysandboxes") and
-                            module_name not in _rules
+                        not module_name.startswith("pysandboxes")
+                        and module_name not in _rules
                     ):
                         ex = RuleModuleNotFoundError(
                             f"Module named {module_name!r} is not allowed by a rule"
                         )
-                        logger.debug("Module named %s is not allowed by a rule", repr(module_name))
-                        logger.exception(ex, "Module named %s is not allowed by a rule", repr(module_name))
+                        logger.debug(
+                            "Module named %s is not allowed by a rule",
+                            repr(module_name),
+                        )
+                        logger.exception(
+                            ex,
+                            "Module named %s is not allowed by a rule",
+                            repr(module_name),
+                        )
                         raise ex
             return new_spec
 
@@ -384,7 +393,7 @@ _activated = False
 
 
 def _activate_patch_import(
-        patch_rules: PatchRules,
+    patch_rules: PatchRules,
 ) -> bool:
     """Activate import patching with specified rules.
 
@@ -421,8 +430,8 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
 
 
 def activate_guard_import(
-        str_patch_rules: dict[str, Callable],
-        rules: ImportRules,
+    str_patch_rules: dict[str, Callable],
+    rules: ImportRules,
 ) -> None:
     """Activate import guard with specified rules and patches.
 
@@ -448,13 +457,11 @@ def activate_guard_import(
         # "pytest",
         # "pathlib",
         # "subprocess",
-        'codecs',
-
-        'abc',
-
-        'asyncio',
-        'logging',
-        'pathlib',
+        "codecs",
+        "abc",
+        "asyncio",
+        "logging",
+        "pathlib",
         # 'asyncio.base_events',
         # 'asyncio.base_futures',
         # 'asyncio.base_subprocess',
@@ -483,9 +490,8 @@ def activate_guard_import(
         # 'asyncio.transports',
         # 'asyncio.trsock',
         # 'asyncio.unix_events',
-
-        'concurrent', 'concurrent.futures',
-
+        "concurrent",
+        "concurrent.futures",
         # 'distutils', 'distutils._log', 'distutils._modified',
         # 'distutils.archive_util', 'distutils.cmd', 'distutils.command', 'distutils.command.bdist',
         # 'distutils.compat', 'distutils.compat.py39', 'distutils.compilers', 'distutils.compilers.C',
@@ -494,22 +500,33 @@ def activate_guard_import(
         # 'distutils.filelist', 'distutils.log', 'distutils.spawn', 'distutils.util',
         #
         #
-        'importlib',
-        'importlib._abc',
-        'importlib._bootstrap',
-        'importlib._bootstrap_external', 'importlib.abc', 'importlib.machinery', 'importlib.metadata',
-        'importlib.metadata._adapters', 'importlib.metadata._collections', 'importlib.metadata._functools',
-        'importlib.metadata._itertools', 'importlib.metadata._meta', 'importlib.metadata._text',
-        'importlib.readers', 'importlib.resources', 'importlib.resources._adapters', 'importlib.resources._common',
-        'importlib.resources._functional', 'importlib.resources._itertools', 'importlib.resources.abc',
-        'importlib.resources.readers', 'importlib.util',
-
+        "importlib",
+        "importlib._abc",
+        "importlib._bootstrap",
+        "importlib._bootstrap_external",
+        "importlib.abc",
+        "importlib.machinery",
+        "importlib.metadata",
+        "importlib.metadata._adapters",
+        "importlib.metadata._collections",
+        "importlib.metadata._functools",
+        "importlib.metadata._itertools",
+        "importlib.metadata._meta",
+        "importlib.metadata._text",
+        "importlib.readers",
+        "importlib.resources",
+        "importlib.resources._adapters",
+        "importlib.resources._common",
+        "importlib.resources._functional",
+        "importlib.resources._itertools",
+        "importlib.resources.abc",
+        "importlib.resources.readers",
+        "importlib.util",
         # 'packaging', 'packaging._elffile',
         # 'packaging._manylinux', 'packaging._musllinux', 'packaging._parser', 'packaging._structures',
         # 'packaging._tokenizer', 'packaging.licenses', 'packaging.licenses._spdx', 'packaging.markers',
         # 'packaging.requirements', 'packaging.specifiers', 'packaging.tags', 'packaging.utils', 'packaging.version',
         #
-
         # 'pysandboxes', 'pysandboxes.all_rules',
         # 'pysandboxes.base_daemon', 'pysandboxes.config', 'pysandboxes.e', 'pysandboxes.guard_envs',
         # 'pysandboxes.guard_files', 'pysandboxes.guard_import', 'pysandboxes.guard_provider',
@@ -530,32 +547,33 @@ def activate_guard_import(
         # 'setuptools.config.setupcfg', 'setuptools.depends', 'setuptools.discovery', 'setuptools.dist',
         # 'setuptools.errors', 'setuptools.extension', 'setuptools.logging', 'setuptools.monkey',
         # 'setuptools.version', 'setuptools.warnings',
-        'sys',
-        'threading',
-        'warnings',
+        "sys",
+        "threading",
+        "warnings",
         # 'weakref',
+        "process",  # FIXME: hack pour gérer les process en debug avec pycharm?
     ]
     pass
     to_remove = []
 
     for k in sys.modules:
         if (
-                not k.startswith("_") and
-                not k.startswith("pysandboxes") and
-                k not in sys.builtin_module_names
-                and k not in safe
+            not k.startswith("_")
+            and not k.startswith("pysandboxes")
+            and k not in sys.builtin_module_names
+            and k not in safe
         ):
             to_remove.append(k)
 
     pass  # FIXME
     to_remove.reverse()
     # logger.debug("********* NO DELETE")
-    to_remove=[x for x in to_remove if not x.startswith("pydev")]  # FIXME
-    to_remove=[x for x in to_remove if not x.startswith("pytest")]  # FIXME
-    to_remove=[x for x in to_remove if not x.startswith("debugpy")]  # FIXME
+    to_remove = [x for x in to_remove if not x.startswith("pydev")]  # FIXME
+    to_remove = [x for x in to_remove if not x.startswith("pytest")]  # FIXME
+    to_remove = [x for x in to_remove if not x.startswith("debugpy")]  # FIXME
     for k in to_remove:
         logger.debug("Remove %s", k)
-        del sys.modules[k]  # FIXME
+        # del sys.modules[k]  # FIXME
 
     _rules = rules
 
@@ -598,7 +616,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
 
 
 def generate_rules(
-        learn: set[Any],
+    learn: set[Any],
 ) -> list[str]:
     """Generate import rules from learning data.
 
@@ -677,6 +695,7 @@ def generate_rules(
 
 
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+
     def _deactivate_guard_import() -> None:
         global _rules
         _rules = ("*",)

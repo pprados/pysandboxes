@@ -24,7 +24,8 @@ from pysandboxes.remote.sse_client_subprocess_daemon import (
     launch_sandbox,
 )
 from pysandboxes.sb_types import Envs
-from pysandboxes.tools import Environ, find_config_for_module
+from pysandboxes.tools import Environ
+
 from .remote.parse_cpython_args import parse_python_cmd_line
 
 logger = logging.getLogger(__name__)
@@ -81,8 +82,6 @@ def main() -> int:
     if config_path == Path():
         config_path = Path(CONFIG_NAME)
     try:
-        import importlib
-
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
         extra_rules["env"] = envs

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from .immutable_dict import ImmutableDict
 from .main_logger import ErrorMsg
-from .sb_types import Envs, ConfigLines
+from .sb_types import ConfigLines, Envs
 from .tools import Environ, SyncOrAsyncFunc
 
 if TYPE_CHECKING:
@@ -37,9 +37,9 @@ class BaseDaemon(ABC):
     __slots__ = ("_is_started", "_token", "_accept_incoming")
 
     def __init__(
-            self,
-            token: str,
-            **kwargs: dict[str, Any],
+        self,
+        token: str,
+        **kwargs: dict[str, Any],
     ) -> None:
         """Initialize the daemon with a unique token.
 
@@ -51,18 +51,19 @@ class BaseDaemon(ABC):
         self._token = token
         self._accept_incoming = False
 
-    def parse_rules(self,
-                    rules: ConfigLines,
-                    errors: list[ErrorMsg],
-                    ) -> tuple[ImmutableDict[str, Any],ConfigLines]:
-        return ImmutableDict({}),rules
+    def parse_rules(
+        self,
+        rules: ConfigLines,
+        errors: list[ErrorMsg],
+    ) -> tuple[ImmutableDict[str, Any], ConfigLines]:
+        return ImmutableDict({}), rules
 
     @abstractmethod
     def update_rules(
-            self,
-            *,
-            envs: Envs,
-            all_rules: "AllRules",
+        self,
+        *,
+        envs: Envs,
+        all_rules: "AllRules",
     ) -> "AllRules":
         """Some os-sandbox can update the rules (remove some duplicate rules)
 
@@ -82,12 +83,12 @@ class BaseDaemon(ABC):
 
     @abstractmethod
     async def _start(
-            self,
-            all_rules: "AllRules",
-            *,
-            envs: Environ,
-            log_level: int,
-            init_fn: SyncOrAsyncFunc | None,
+        self,
+        all_rules: "AllRules",
+        *,
+        envs: Environ,
+        log_level: int,
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         """Must be called via async_start_daemon().
 
@@ -128,11 +129,11 @@ class BaseDaemon(ABC):
 
     @abstractmethod
     async def async_call_in_sandbox(
-            self,
-            func: Callable[..., Any],
-            _force_incomming: bool,
-            *args: Any,
-            **kwargs: Any,
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: Any,
     ) -> Any:
         """Async call a function in the sandbox
 
@@ -151,11 +152,11 @@ class BaseDaemon(ABC):
 
     @abstractmethod
     def call_in_sandbox(
-            self,
-            func: Callable[..., Any],
-            _force_incomming: bool,
-            *args: Any,
-            **kwargs: dict[str, Any],
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: dict[str, Any],
     ) -> Any:
         """Sync call a function in the sandbox
 
@@ -175,22 +176,22 @@ class BaseDaemon(ABC):
 
 class FakeDaemon(BaseDaemon):
     def update_rules(
-            self,
-            *,
-            envs: Envs,
-            all_rules: "AllRules",
+        self,
+        *,
+        envs: Envs,
+        all_rules: "AllRules",
     ) -> "AllRules":
         return all_rules
 
     is_started = True
 
     async def _start(
-            self,
-            all_rules: "AllRules",
-            *,
-            envs: Environ,
-            log_level: int,
-            init_fn: SyncOrAsyncFunc | None,
+        self,
+        all_rules: "AllRules",
+        *,
+        envs: Environ,
+        log_level: int,
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         logger.debug("FakeDaemon._start...")
         self._is_started = True
@@ -204,19 +205,19 @@ class FakeDaemon(BaseDaemon):
         self._is_started = False
 
     async def async_call_in_sandbox(
-            self,
-            func: Callable[..., Any],
-            _force_incomming: bool,
-            *args: Any,
-            **kwargs: Any,
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: Any,
+        **kwargs: Any,
     ) -> Any:
         raise NotImplementedError("It's a Fake daemon, because you use `python-sb`.")
 
     def call_in_sandbox(
-            self,
-            func: Callable[..., Any],
-            _force_incomming: bool,
-            *args: list[Any],
-            **kwargs: dict[str, Any],
+        self,
+        func: Callable[..., Any],
+        _force_incomming: bool,
+        *args: list[Any],
+        **kwargs: dict[str, Any],
     ) -> Any:
         raise NotImplementedError("It's a Fake daemon, because you use `python-sb`.")

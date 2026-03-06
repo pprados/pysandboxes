@@ -1,20 +1,24 @@
 import logging
+import os
 import subprocess
+import sys
 from pathlib import Path
 from shutil import which
-from typing import List
+from typing import List, Literal
 
 import pytest
+
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.remote.tools import which_command
 from pysandboxes.sb_types import ConfigLine
+
+from ..conftest import init_log_level
 from .test_guard_io import (
     _activate_guard_import_for_tests,
     _deactivate_all_rules,
 )
-from ..conftest import init_log_level
 
 
 def _is_conntrack_kernel_module() -> bool:
@@ -28,14 +32,15 @@ def _is_conntrack_kernel_module() -> bool:
 
     try:
         # Execute 'lsmod' and capture the output
-        if which("lsmod") == None:
+        lsmod_cmd = which("lsmod")
+        if lsmod_cmd is None:
             return False
 
         lsmod_result: subprocess.CompletedProcess = subprocess.run(
-            [which("lsmod")],
+            [lsmod_cmd],
             capture_output=True,
             text=True,
-            check=True  # Raise an exception if lsmod fails
+            check=True,  # Raise an exception if lsmod fails
         )
 
         filtered_lines: List[str] = [
@@ -45,10 +50,11 @@ def _is_conntrack_kernel_module() -> bool:
         ]
         return len(filtered_lines) > 0
 
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         return False
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         return False
+
 
 @pytest.fixture(autouse=True)
 def reset() -> None:
@@ -59,8 +65,22 @@ def reset() -> None:
     _activate_guard_import_for_tests()
 
 
+def check_root_status() -> Literal["root", "user", "not_unix"]:
+    # Vérifie si le module 'os.geteuid' est disponible (systèmes POSIX)
+    if sys.platform in ("linux", "linux2", "darwin", "freebsd"):
+        # L'identifiant utilisateur effectif (EUID) est utilisé
+        # pour déterminer les permissions réelles du processus.
+        if os.geteuid() == 0:
+            return "root"
+        else:
+            return "user"
+    else:
+        # Pour les systèmes non-UNIX (comme Windows), cette méthode n'est pas applicable.
+        return "not_unix"
+
+
 def check_iptables_rules_syntax(
-        rules_content: str, is_ipv6: bool = False
+    rules_content: str, is_ipv6: bool = False
 ) -> tuple[bool, str]:
     """
     Checks the syntax of iptables/ip6tables rules without applying them.
@@ -75,6 +95,7 @@ def check_iptables_rules_syntax(
         tuple[bool, str]: A tuple containing (True if syntax is OK,
         error/success message).
     """
+
     # Determine the restore command based on IPv4 or IPv6
     restore_command: str = "ip6tables-restore" if is_ipv6 else "iptables-restore"
 
@@ -94,6 +115,7 @@ def check_iptables_rules_syntax(
 
     except subprocess.CalledProcessError as e:
         # If the command returns an error, it means the syntax is incorrect
+        logging.exception(e)
         responses = e.stderr.strip().split("\n")
         if "Permission denied" in responses[-1]:
             responses.pop()
@@ -101,8 +123,6 @@ def check_iptables_rules_syntax(
             return True, "Rules syntax checked successfully."
         error_message: str = f"Syntax error detected:\n" f"{e.stderr.strip()}"
         return False, error_message
-    except Exception as e:
-        pass  # FIXME
 
 
 def test_ip4_netfilter_conv() -> None:
@@ -127,34 +147,37 @@ def test_ip4_netfilter_conv() -> None:
         ],
         errors,
     )
-    ipfilter = rule_to_netfilter(rules, {}, is_ipv6=False)
+    ipfilter = rule_to_netfilter(rules, [], is_ipv6=False)
 
-    if _is_conntrack_kernel_module():
+    if check_root_status() == "root" and _is_conntrack_kernel_module():
         status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=False)
         assert status, msg
     assert sorted(
-        ['*filter',
-         ':INPUT DROP [0:0]',
-         ':FORWARD DROP [0:0]',
-         ':OUTPUT DROP [0:0]',
-         '-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
-         '-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
-         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 10.0.0.0/8 -j REJECT',
-         '-A OUTPUT -p udp -d 10.0.0.0/8 -j REJECT',
-         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.0/8 -j ACCEPT',
-         '-A OUTPUT -p udp -d 127.0.0.0/8 -j ACCEPT', '-A INPUT -p udp -s 192.168.0.1/32 -j ACCEPT',
-         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.0.1/32 -j ACCEPT',
-         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -m multiport --dports 80,443 -j ACCEPT',
-         '-A OUTPUT -p udp -m multiport --dports 80,443 -j ACCEPT',
-         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT',
-         '-A INPUT -p udp -s 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT',
-         '-A INPUT -p udp -m multiport --dports 12:44  -j ACCEPT',
-         '-A INPUT -p udp -s 123.0.0.0/32 -m multiport --dports 1,3,4,5 -j ACCEPT',
-         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT',
-         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.1/32 -m multiport --dports 80,443 -j ACCEPT',
-         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -m multiport --dports 80 -j ACCEPT',
-         '-A OUTPUT -p udp -m multiport --dports 53 -j ACCEPT',
-         'COMMIT']
+        [
+            "*filter",
+            ":INPUT DROP [0:0]",
+            ":FORWARD DROP [0:0]",
+            ":OUTPUT DROP [0:0]",
+            "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+            "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 10.0.0.0/8 -j REJECT",
+            "-A OUTPUT -p udp -d 10.0.0.0/8 -j REJECT",
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.0/8 -j ACCEPT",
+            "-A OUTPUT -p udp -d 127.0.0.0/8 -j ACCEPT",
+            "-A INPUT -p udp -s 192.168.0.1/32 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.0.1/32 -j ACCEPT",
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -m multiport --dports 80,443 -j ACCEPT",
+            "-A OUTPUT -p udp -m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",  # noqa E501
+            "-A INPUT -p udp -s 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p udp -m multiport --dports 12:44  -j ACCEPT",
+            "-A INPUT -p udp -s 123.0.0.0/32 -m multiport --dports 1,3,4,5 -j ACCEPT",
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.1/32 -m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -m multiport --dports 80 -j ACCEPT",
+            "-A OUTPUT -p udp -m multiport --dports 53 -j ACCEPT",
+            "COMMIT",
+        ]
     ) == sorted(ipfilter)
 
 
@@ -179,27 +202,32 @@ def test_ip6_netfilter_conv() -> None:
         ],
         errors,
     )
-    ipfilter = rule_to_netfilter(rules, {}, is_ipv6=True)
-    if _is_conntrack_kernel_module():
+    ipfilter = rule_to_netfilter(rules, [], is_ipv6=True)
+    if check_root_status() == "root" and _is_conntrack_kernel_module():
         status, msg = check_iptables_rules_syntax("\n".join(ipfilter), is_ipv6=True)
         assert status, msg
     assert sorted(
-        ['*filter',
-         ':INPUT DROP [0:0]',
-         ':FORWARD DROP [0:0]',
-         ':OUTPUT DROP [0:0]',
-         '-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
-         '-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
-         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32 -j ACCEPT',
-         '-A OUTPUT -p udp -d 2001:db8::/32 -j ACCEPT', '-A INPUT -p udp -s 2001:db8::/32 -j ACCEPT',
-         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 -j ACCEPT',
-         '-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT',
-         '-A OUTPUT -p udp -d 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT',
-         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT',
-         '-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT',
-         '-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 12:44  -j ACCEPT',
-         '-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 1,3,4,5 -j ACCEPT',
-         '-A OUTPUT -p udp -d 2001:db8::/32 -m multiport --dports 53 -j ACCEPT',
-         '-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 -m multiport --dports 80 -j ACCEPT',
-         'COMMIT']
+        [
+            "*filter",
+            ":INPUT DROP [0:0]",
+            ":FORWARD DROP [0:0]",
+            ":OUTPUT DROP [0:0]",
+            "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+            "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32 -j ACCEPT",
+            "-A OUTPUT -p udp -d 2001:db8::/32 -j ACCEPT",
+            "-A INPUT -p udp -s 2001:db8::/32 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 -j ACCEPT",
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT",
+            "-A OUTPUT -p udp -d 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 "
+            "-m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 12:44  -j ACCEPT",
+            "-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 1,3,4,5 -j ACCEPT",
+            "-A OUTPUT -p udp -d 2001:db8::/32 -m multiport --dports 53 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 "
+            "-m multiport --dports 80 -j ACCEPT",
+            "COMMIT",
+        ]
     ) == sorted(ipfilter)

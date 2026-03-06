@@ -21,7 +21,6 @@ import pickle
 import re
 import shutil
 import signal
-import socket
 import subprocess
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
@@ -297,11 +296,11 @@ def get_default_interface() -> str | None:
     """
 
     # The default route destination is represented by '00000000' in the file
-    DEFAULT_DESTINATION: str = '00000000'
+    DEFAULT_DESTINATION: str = "00000000"
 
     try:
         # Open the file containing the routing table
-        with open('/proc/net/route', 'r') as f:
+        with open("/proc/net/route", "r") as f:
             # Read all lines
             content_lines: list[str] = f.readlines()
 
@@ -339,7 +338,7 @@ def get_bridge_interfaces() -> list[str]:
     bridge_interfaces: list[str] = []
 
     # Standard path for network interfaces on Linux systems (sysfs)
-    net_path: Path = Path('/sys/class/net')
+    net_path: Path = Path("/sys/class/net")
 
     if not net_path.is_dir():
         # This should exist on Ubuntu, but it's good practice to check
@@ -357,24 +356,30 @@ def get_bridge_interfaces() -> list[str]:
                 # The /sys/class/net/<interface>/bridge directory exists
                 # if and only if the interface is a bridge.
                 # Check for the existence of the 'bridge' subdirectory
-                bridge_indicator_path: Path = interface_dir / 'bridge'
+                bridge_indicator_path: Path = interface_dir / "bridge"
 
                 if bridge_indicator_path.is_dir():
                     bridge_interfaces.append(interface_name)
 
         return bridge_interfaces
-    except PermissionError:
-        raise RuntimeError("Error: Insufficient permissions to read /sys/class/net.")
+    except PermissionError as e:
+        raise RuntimeError(
+            "Error: Insufficient permissions to read /sys/class/net."
+        ) from e
     except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred while reading interfaces: {e}")
+        raise RuntimeError(
+            f"An unexpected error occurred while reading interfaces: {e}"
+        ) from e
 
 
-def get_dns_servers() -> tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]:
+def get_dns_servers() -> (
+    tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]
+):
     dns_servers: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
-    with open('/etc/resolv.conf', 'r') as f:
+    with open("/etc/resolv.conf", "r") as f:
         for line in f:
             # Cherche les lignes qui commencent par 'nameserver'
-            if line.strip().startswith('nameserver'):
+            if line.strip().startswith("nameserver"):
                 parts = line.split()
                 if len(parts) > 1:
                     # La deuxième partie devrait être l'adresse IP
@@ -397,12 +402,14 @@ def get_dns_servers() -> tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6A
 
         except ValueError:
             # Gère les chaînes qui ne sont pas des adresses IP valides
-            print(f"Avertissement : '{addr}' n'est pas une adresse IP valide et a été ignorée.")
+            print(
+                f"Avertissement : '{addr}' n'est pas une adresse IP valide et a été ignorée."
+            )
 
     return ipv4_list, ipv6_list
 
 
-def get_systemd_resolved_static_dns() -> list[IPv4Address|IPv6Address]:
+def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
     """
     Reads the systemd-resolved configuration file to retrieve statically
     configured upstream DNS servers, avoiding external tool execution.
@@ -415,23 +422,23 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address|IPv6Address]:
     Returns:
         list[str]: A list of static DNS server IP addresses.
     """
-    dns_servers: list[IPv4Address|IPv6Address] = []
-    config_path: str = '/run/systemd/resolve/resolv.conf'
+    dns_servers: list[IPv4Address | IPv6Address] = []
+    config_path: str = "/run/systemd/resolve/resolv.conf"
 
     # Regex to capture IP addresses following the 'DNS=' directive
     # It handles multiple IPs separated by spaces.
-    dns_pattern: re.Pattern = re.compile(r'^\s*nameserver\s*(.*)$', re.IGNORECASE)
+    dns_pattern: re.Pattern = re.compile(r"^\s*nameserver\s*(.*)$", re.IGNORECASE)
 
     if not os.path.exists(config_path):
-        config_path = '/etc/systemd/resolved.conf'
+        config_path = "/etc/systemd/resolved.conf"
         if not os.path.exists(config_path):
             return []
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             for line in f:
                 line = line.strip()
                 # Skip comments and empty lines
-                if not line or line.startswith('#'):
+                if not line or line.startswith("#"):
                     continue
 
                 # Check for the DNS= line
@@ -440,8 +447,12 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address|IPv6Address]:
                     # The captured group (1) contains the IP list (e.g., "8.8.8.8 8.8.4.4")
                     ip_list: str = match.group(1).strip()
                     # Split the string by spaces and filter out any empty strings
-                    servers_found: list[str] = [ip.strip() for ip in ip_list.split() if ip]
-                    dns_servers.extend([ipaddress.ip_address(ip) for ip in servers_found])
+                    servers_found: list[str] = [
+                        ip.strip() for ip in ip_list.split() if ip
+                    ]
+                    dns_servers.extend(
+                        [ipaddress.ip_address(ip) for ip in servers_found]
+                    )
 
         return list(set(dns_servers))
     except IOError as e:
@@ -454,7 +465,7 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address|IPv6Address]:
     # Use a set to remove duplicates, then convert back to a sorted list
 
 
-def get_systemd_resolved_upstream_dns() -> list[IPv4Address|IPv6Address]:
+def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
     """
     Executes 'resolvectl status' to retrieve the list of active upstream DNS
     servers from the systemd-resolved service, filtering out the local stub
@@ -471,30 +482,26 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address|IPv6Address]:
         return result
     try:
         # Execute the resolvectl status command
-        resolvectl=shutil.which('resolvectl')
+        resolvectl = shutil.which("resolvectl")
         if resolvectl is None:
             logger.debug("Use default DNS servers because resolvectl not found")
-            return [
-                ipaddress.ip_address('1.1.1.1'),
-                ipaddress.ip_address('4.4.4.4')
-            ]
+            return [ipaddress.ip_address("1.1.1.1"), ipaddress.ip_address("4.4.4.4")]
         output = subprocess.run(
-            [resolvectl, 'status'],
+            [resolvectl, "status"],
             capture_output=True,
             text=True,
             check=True,  # Raise an error if resolvectl fails
-            timeout=5
+            timeout=5,
         ).stdout
 
         # Regex to capture the IPs following "Current DNS Server" or "DNS Servers"
         # from both Global and Link configuration sections.
         # Group 2 captures the list of IPs.
         dns_pattern: re.Pattern = re.compile(
-            r'^\s*(Current\s+)?DNS\s+Servers:\s*(.*?)\s*$',
-            re.MULTILINE
+            r"^\s*(Current\s+)?DNS\s+Servers:\s*(.*?)\s*$", re.MULTILINE
         )
 
-        all_ips: list[IPv4Address|IPv6Address] = []
+        all_ips: list[IPv4Address | IPv6Address] = []
         # Find all matches across the output
         matches = dns_pattern.findall(output)
         for _, ip_string in matches:
@@ -504,8 +511,10 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address|IPv6Address]:
     except FileNotFoundError:
         return []
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Error executing 'resolvectl status': {e.stderr.strip()}")
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Error: 'resolvectl status' command timed out.")
+        raise RuntimeError(
+            f"Error executing 'resolvectl status': {e.stderr.strip()}"
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("Error: 'resolvectl status' command timed out.") from e
     except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred during execution: {e}")
+        raise RuntimeError(f"An unexpected error occurred during execution: {e}") from e

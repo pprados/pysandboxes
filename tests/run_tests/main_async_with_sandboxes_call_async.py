@@ -14,7 +14,7 @@ from .differents_usages import (
 async def main() -> None:
     init_log_level()
     logger.info("--------- Async Run with sandboxes call Async")
-    for i in range(0, SIZE_OF_LOOP):
+    for _ in range(0, SIZE_OF_LOOP):
         logger.info("Use 'async with sandboxes'")
         async with sandboxes(
             init_fn=async_init_sandbox,

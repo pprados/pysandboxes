@@ -15,9 +15,8 @@ import logging
 import os
 import re
 import threading
-from pathlib import Path
 from types import FrameType
-from typing import Any, Callable, NamedTuple, cast, Generator, Iterator
+from typing import Any, Callable, Generator, Iterator, NamedTuple, cast
 from weakref import WeakKeyDictionary
 
 from .main_logger import ErrorMsg, format_ruleref
@@ -158,32 +157,35 @@ class LearnEnviron(os._Environ):
             self._original_envs = os.environ
 
     def __iter__(self) -> Iterator[str]:
-        frame:FrameType|None = inspect.currentframe()
+        frame: FrameType | None = inspect.currentframe()
         if not frame or not frame.f_back:
             return super().__iter__()
         frame = frame.f_back.f_back
         root_iter = super().__iter__()
 
-        self._ignore_keys[threading.current_thread()] = (cast(FrameType,frame), set())
+        self._ignore_keys[threading.current_thread()] = (cast(FrameType, frame), set())
 
         def _catch_for_all() -> Generator[Any, None, None]:
             t = threading.current_thread()
             for k in root_iter:
-                cur_frame=inspect.currentframe()
-                if (cur_frame is None
-                        or cur_frame.f_back is None
-                        or cur_frame.f_back.f_back is None
+                cur_frame = inspect.currentframe()
+                if (
+                    cur_frame is None
+                    or cur_frame.f_back is None
+                    or cur_frame.f_back.f_back is None
                 ):
                     continue
-                iter_frame:FrameType = cur_frame.f_back.f_back
-                keys:set[str]
+                iter_frame: FrameType = cur_frame.f_back.f_back
+                keys: set[str]
                 if id(iter_frame) == id(frame):
-                    iter_frame, keys = self._ignore_keys.get(t, (cast(FrameType,frame), set()))
+                    iter_frame, keys = self._ignore_keys.get(
+                        t, (cast(FrameType, frame), set())
+                    )
                     keys.add(k)
                     self._ignore_keys[t] = (iter_frame, keys)
                 else:
                     # New frame, so remove the ignore_keys for this parent frame
-                    self._ignore_keys[t] = (cast(FrameType,frame), k)
+                    self._ignore_keys[t] = (cast(FrameType, frame), k)
                 yield k
 
         return _catch_for_all()  # TODO: items()
@@ -318,7 +320,7 @@ def activate_guard(rules: EnvsRules) -> None:
     _rules = rules
 
 
-def patch_rules(learn:bool) -> dict[str, Callable]:
+def patch_rules(learn: bool) -> dict[str, Callable]:
     """Provide patch rules for environment variable monitoring.
 
     Args:
@@ -330,7 +332,7 @@ def patch_rules(learn:bool) -> dict[str, Callable]:
     if learn:
 
         def activate_learning_env_factory(x: Any) -> LearnEnviron:
-            os.environ = LearnEnviron()
+            os.environ = LearnEnviron()  # noqa: B003
             return os.environ
 
         return {

@@ -39,9 +39,9 @@ def test_shutil_copy(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import shutil
 
-    shutil.copy(files["visible"], files["new_replace"]) is None
+    shutil.copy(files["visible"], files["new_replace"])
     files["new_replace"].unlink()
-    shutil.copy(files["bound_file"], files["new_replace"]) is None
+    shutil.copy(files["bound_file"], files["new_replace"])
     files["new_replace"].unlink()
 
 
@@ -56,9 +56,9 @@ def test_shutil_copy2(files: Dict[str, Path]) -> None:  # noqa: F811
     import pathlib
     import shutil
 
-    shutil.copy2(files["visible"], files["new_replace"]) is None
+    shutil.copy2(files["visible"], files["new_replace"])
     files["new_replace"].unlink()
-    shutil.copy2(files["bound_file"], files["new_replace"]) is None
+    shutil.copy2(files["bound_file"], files["new_replace"])
     files["new_replace"].unlink()
     out = files["bind_dest"] / "copy.txt"
     assert shutil.copy2(files["bound_file"], out) is out
@@ -128,8 +128,8 @@ def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
         shutil.rmtree(files["path"] / "tmp")
     if (files["path"] / "tmp2").exists():
         shutil.rmtree(files["path"] / "tmp2")
-    shutil.copytree(files["bind_dest"], files["path"] / "tmp") is None
-    shutil.move(files["path"] / "tmp", files["path"] / "tmp2") is None
+    shutil.copytree(files["bind_dest"], files["path"] / "tmp")
+    shutil.move(files["path"] / "tmp", files["path"] / "tmp2")
     shutil.rmtree(files["path"] / "tmp2")
 
 
@@ -143,7 +143,7 @@ def test_shutil_disk_usage(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import shutil
 
-    shutil.disk_usage(files["bind_dest"]) is None
+    shutil.disk_usage(files["bind_dest"])
 
 
 def test_shutil_make_archive(files: Dict[str, Path]) -> None:  # noqa: F811

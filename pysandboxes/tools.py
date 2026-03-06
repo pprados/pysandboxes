@@ -17,7 +17,8 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Iterator, cast,
+    Iterator,
+    cast,
 )
 
 from .config import CONFIG_NAME
@@ -254,8 +255,11 @@ def set_is_in_sandbox(value: bool) -> None:
 
 def find_config_for_module(module: str) -> Path | None:
     import importlib
+
     try:
-        resource_path: Path | None = cast(Path | None, importlib.resources.files(module))
+        resource_path: Path | None = cast(
+            Path | None, importlib.resources.files(module)
+        )
         if not resource_path:
             return None
         resource_config = resource_path / CONFIG_NAME
@@ -310,7 +314,7 @@ def get_callable_info(func: Callable[..., Any]) -> tuple[str | None, str | None]
             callable_name = func.__func__.__name__
     elif isinstance(func, type):  # It's a class
         callable_name = func.__qualname__
-    elif hasattr(func, "__class__") and hasattr(func.__class__, "__call__"):
+    elif callable(func):
         # It's an instance of a class with a __call__ method
         callable_name = func.__class__.__qualname__
         if callable_name:
@@ -363,8 +367,8 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
     if executable.is_symlink():
         try:
             follow_links_executable(executable.resolve(strict=True), all_paths)
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             raise RuntimeError(
                 "Impossible to resolve the sys.executable `%s`", sys.executable
-            )
+            ) from e
     return all_paths

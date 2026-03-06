@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 def parse_rules(
-        config_path: Path,
-        rules: ConfigLines,
-        errors: List[ErrorMsg],
-) -> Tuple[int, str, bool, Path | None, bool, ConfigLines]:
+    config_path: Path,
+    rules: ConfigLines,
+    errors: List[ErrorMsg],
+) -> Tuple[int, str, bool, Path, bool, ConfigLines]:
     from .os_sandbox import providers_factory
 
-    port=-1
+    port = -1
     other_rules = []
     provider_rule: ConfigLines = []
     providers_set = []
@@ -29,7 +29,7 @@ def parse_rules(
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
             provider_rule.append(rule)
-            provider = rule.rule[len("os-sandbox="):].strip().lower()
+            provider = rule.rule[len("os-sandbox=") :].strip().lower()
             if provider not in providers_factory:
                 errors.append(
                     (
@@ -61,17 +61,21 @@ def parse_rules(
                 port = int(value)
                 if port < 0:
                     errors.append(
-                        ("Port must be a positive value",
-                         rule.path,
-                         rule.ln,
-                         ))
+                        (
+                            "Port must be a positive value",
+                            rule.path,
+                            rule.ln,
+                        )
+                    )
                     port = -1
             except ValueError:
                 errors.append(
-                    ("Port must be a positive value",
-                     rule.path,
-                     rule.ln,
-                     ))
+                    (
+                        "Port must be a positive value",
+                        rule.path,
+                        rule.ln,
+                    )
+                )
 
         elif rule.rule.startswith("learn="):
             if learning_path:
@@ -111,6 +115,9 @@ def parse_rules(
         else:
             other_rules.append(rule)
 
+    if learning_path is None:
+        learning_path = config_path
+
     # provider from command line is prioritized
     cmd_line_provider = list(filter(lambda x: x[1].ln == 0, providers_set))
     if len(cmd_line_provider) == 1:
@@ -130,9 +137,6 @@ def parse_rules(
         provider = providers_set[0][0]
     else:
         provider = "subprocess"  # default value
-
-    if learning_path is None:
-        learning_path = config_path
 
     # Remove learn mode if py-sandbox=False
     if not use_py_sandbox:

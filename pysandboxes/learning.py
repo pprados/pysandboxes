@@ -18,7 +18,6 @@ from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, Set
 
-
 from .main_logger import make_relative_path, pysandboxes_logger
 
 logger = logging.getLogger(__name__)
@@ -217,7 +216,6 @@ def add_learning_rule(rule: Any) -> None:
     """
 
     with _lock:
-
 
         if is_learning_mode() and rule not in _learning:
             _learning.add(rule)

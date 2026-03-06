@@ -22,6 +22,7 @@ from os import scandir as _scandir
 from pathlib import Path as Path
 from types import ModuleType, TracebackType
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     ContextManager,
@@ -30,7 +31,7 @@ from typing import (
     NoReturn,
     Type,
     TypeAlias,
-    cast, TYPE_CHECKING,
+    cast,
 )
 
 from .config import OPTIMIZE
@@ -465,15 +466,13 @@ def _apply_src_to_dest_rules(
     return path, None
 
 
-def _apply_ignore_rule(path: str) -> tuple[str | None, FilesRule | None]:
+def _apply_ignore_rule(path: str | os.PathLike) -> tuple[str | None, FilesRule | None]:
     for rule in _rules:
         if isinstance(rule, IgnoreRule):
             assert rule.source is not None
-            if fnmatch.fnmatch(
-                    Path(path).name, rule.source
-            ):
+            if fnmatch.fnmatch(Path(path).name, rule.source):
                 return None, rule
-    return path, None
+    return str(path), None
 
 
 # Helper to resolve symlinks and apply rules
@@ -553,7 +552,7 @@ def _apply_dest_to_src_rules(
                 ) or fnmatch.fnmatch(Path(fake_path).name, rule.source):
                     return None, rule
         else:
-            assert False, f"Invalid guard_files rules {type(rule)=}"
+            assert False, f"Invalid guard_files rules {type(rule)=}"  # noqa: B011
     return None, None
 
 
@@ -595,7 +594,7 @@ def _wrap_buitins_open(func: Callable) -> Callable:
     def wrapper(
         file: str | None,
         mode: str = "r",
-        buffering=-1,
+        buffering: int = -1,
         encoding: str | None = None,
         errors: str | None = None,
         newline: str | None = None,
@@ -876,8 +875,12 @@ def _wrap_os_open(func: Callable) -> Callable:
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         # Detect call from posixpath
-        if isinstance(path, int) or dir_fd is not None:
+        if isinstance(path, int):
+            return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
+        if dir_fd is not None:
             remapped, rule = _apply_ignore_rule(path)
+            if rule:
+                _raise_ignore(path, rule)
             return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
         if isinstance(path, _DirEntry):  # FIXME: vérifier si nécessaire
             path = path.path
@@ -1115,10 +1118,8 @@ def _wrap_os_symlink(func: Callable) -> Callable:
 
 def _wrap_os_unlink(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(
-            path: StrOrBytesPath, *, dir_fd: int | None = None
-    ) -> None:
-        if dir_fd != None:
+    def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
+        if dir_fd is not None:
             return func(path=path, dir_fd=dir_fd)
         if isinstance(path, bytes):
             path = os.fsdecode(path)
@@ -1133,15 +1134,14 @@ def _wrap_os_unlink(func: Callable) -> Callable:
             else:
                 _raise_access(path)
         return func(path=remapped, dir_fd=dir_fd)
+
     return wrapper
 
 
 def _wrap_os_rmdir(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(
-            path: StrOrBytesPath, *, dir_fd: int | None = None
-    ) -> None:
-        if dir_fd != None:
+    def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
+        if dir_fd is not None:
             return func(path=path, dir_fd=dir_fd)
         if isinstance(path, bytes):
             path = os.fsdecode(path)
@@ -1156,6 +1156,7 @@ def _wrap_os_rmdir(func: Callable) -> Callable:
             else:
                 _raise_access(path)
         return func(path=remapped, dir_fd=dir_fd)
+
     return wrapper
 
 
@@ -1262,6 +1263,7 @@ def _wrap_os_scandir(func: Callable) -> Callable:
 
 # %% io wrapper
 
+
 def _wrap_io_open(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(
@@ -1306,19 +1308,16 @@ def _wrap_io_open(func: Callable) -> Callable:
                 remapped = file
             else:
                 _raise_access(file)
-        try:
-            return func(
-                file=remapped,
-                mode=mode,
-                buffering=buffering,
-                encoding=encoding,
-                errors=errors,
-                newline=newline,
-                closefd=closefd,
-                opener=opener,
-            )
-        except Exception as e:  # FIXME: catch internal error for debug
-            raise
+        return func(
+            file=remapped,
+            mode=mode,
+            buffering=buffering,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+            closefd=closefd,
+            opener=opener,
+        )
 
     return wrapper
 
@@ -1359,17 +1358,15 @@ def _wrap_io_FileIO(func: Callable) -> Callable:
                 remapped = name
             else:
                 _raise_access(file)
-        try:
-            return func(
-                file=remapped,
-                mode=mode,
-                closefd=closefd,
-                opener=opener,
-            )
-        except Exception as e:  # FIXME: catch internal error for debug
-            raise
+        return func(
+            file=remapped,
+            mode=mode,
+            closefd=closefd,
+            opener=opener,
+        )
 
     return wrapper
+
 
 # %% _os
 def _wrap__os(module: ModuleType) -> ModuleType:
@@ -1556,7 +1553,7 @@ _default_rules: dict[str, Callable] = {
 }
 
 
-def patch_rules(learn:bool) -> dict[str, Callable]:
+def patch_rules(learn: bool) -> dict[str, Callable]:
     """Provide file system patching rules for guard activation.
 
     Returns:

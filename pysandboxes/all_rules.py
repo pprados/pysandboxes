@@ -7,12 +7,12 @@ from different guards (environment, files, network, imports) into a unified
 configuration object.
 """
 from pathlib import Path
-from typing import NamedTuple, Any
+from typing import Any, NamedTuple
 
 from pysandboxes.guard_envs import EnvsRules
 from pysandboxes.guard_files import FileRules
 from pysandboxes.guard_import import ImportRules
-from pysandboxes.guard_socket import SocketRules
+from pysandboxes.guard_socket import PinDNS, SocketRules
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.sb_types import ConfigLines, Envs
 
@@ -48,14 +48,7 @@ class AllRules(NamedTuple):
     learn: bool
     envs_rules: EnvsRules
     socket_rules: SocketRules
-    pin_dns: ImmutableDict[str, list[tuple[
-            int,  # Familly
-            int,  # Type
-            int,  # Proto
-            str,  # cononame
-            tuple[str, int] |  # Ipv4 host,port
-            tuple[str, int, int, int]  # Ipv6 host, port, flowinfo, scopeid
-        ]]]
+    pin_dns: PinDNS
     file_rules: FileRules
     import_rules: ImportRules
 

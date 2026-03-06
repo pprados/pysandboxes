@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import socket
-from ipaddress import IPv4Network, IPv6Network, IPv4Address
+from ipaddress import IPv4Address, IPv4Network, IPv6Network
 from typing import Iterable, List, Union
 
 from .guard_socket import Action, Direction, Kind, SocketRules
@@ -45,9 +45,7 @@ def _build_network(network_obj: Union[IPv4Network, IPv6Network], ipv6: bool) -> 
 
 
 def rule_to_netfilter(
-        socket_rules: SocketRules,
-        dns_server:list[IPv4Address],
-        is_ipv6: bool
+    socket_rules: SocketRules, dns_server: list[IPv4Address], is_ipv6: bool
 ) -> List[str]:
     netfilter = [
         "*filter",
@@ -59,16 +57,20 @@ def rule_to_netfilter(
     ]
     for dns in dns_server:
         if not is_ipv6:
-            netfilter.append(f"-A OUTPUT -p udp -d {dns}/32 --dport 53 -m conntrack --ctstate NEW -j ACCEPT")
+            netfilter.append(
+                f"-A OUTPUT -p udp -d {dns}/32 --dport 53 -m conntrack --ctstate NEW -j ACCEPT"
+            )
         else:
-            netfilter.append(f"-A OUTPUT -p udp -d {dns}/128 --dport 53 -m conntrack --ctstate NEW -j ACCEPT")
+            netfilter.append(
+                f"-A OUTPUT -p udp -d {dns}/128 --dport 53 -m conntrack --ctstate NEW -j ACCEPT"
+            )
     _map_direction = {Direction.IN: "INPUT", Direction.OUT: "OUTPUT"}
     _map_action = {Action.ALLOW: "ACCEPT", Action.DENY: "REJECT"}
     for (
         action,
         (rule_kind, network, rule_ports_list),
         rule_directions,
-        config,
+        _config,
     ) in socket_rules:
         for kind in rule_kind:
             # if is_ipv6 and isinstance(network_obj, ipaddress.IPv4Network):

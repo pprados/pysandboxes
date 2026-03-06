@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import Mock, patch
 
 from pysandboxes.learning import (
     _manage_olds_file,
@@ -10,7 +10,6 @@ from pysandboxes.learning import (
     generate_config_from_learning,
     is_learning_mode,
     set_learning_mode,
-    set_learning_path,
 )
 
 
@@ -85,7 +84,6 @@ class TestLearningModeManagement:
 
     def test_activate_learning(self) -> None:
         """Test activating learning mode."""
-        config_file = Path("test_config.conf")
 
         with patch("pysandboxes.learning._learning_path", None):
             set_learning_mode(True)

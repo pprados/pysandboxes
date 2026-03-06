@@ -34,13 +34,13 @@ test_watch:
 ######################
 
 # Define a variable for Python and notebook files.
-PYTHON_FILES=pysandboxes/
+PYTHON_FILES=pysandboxes/ tests/
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint:
 	uv run mypy $(PYTHON_FILES)
-	uv run black $(PYTHON_FILES) --check
-	uv run ruff .
+	uv run black --check $(PYTHON_FILES)
+	uv run ruff check $(PYTHON_FILES)
 
 claude-lint: lint
 	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'

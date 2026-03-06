@@ -1,9 +1,8 @@
 import asyncio
-import sys
-
 import io
 import logging
 import os
+import sys
 import tempfile
 from pathlib import Path
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
@@ -27,7 +26,6 @@ def init_log_level() -> None:
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logging.getLogger().setLevel(sandboxes_level)  # Set the default level for root
     logging.basicConfig(level=min(sandboxes_level, logging.INFO))
-
 
 
 @sandbox
@@ -90,6 +88,7 @@ def _test_network() -> None:
 
     # web connection
     import requests
+
     logger.debug("request")
     requests.get("http://www.google.com/")
     # udp connection ipv4
@@ -172,7 +171,7 @@ async def ainit_sandbox() -> None:
 
 
 async def async_manager() -> None:
-    for i in range(0, 2):
+    for _ in range(0, 2):
         async with sandboxes(init_fn=init_sandbox):
             assert await arun() == 42
 
@@ -228,7 +227,7 @@ async def main(argv: List[str]) -> int:
             learning_path = ".py-sandboxes.test"
         extra_rules["learn"] = {learning_path}
 
-    for i in range(0, 1):
+    for _ in range(0, 1):
         async with sandboxes(
             async_init_sandbox,
             sandboxes_config=config_path,

@@ -9,9 +9,9 @@ Useful for testing and scenarios where process isolation is not required.
 
 import logging
 
-from .sse_server_daemon import SSEServerDaemon
 from ..all_rules import AllRules
 from ..tools import Environ, SyncOrAsyncFunc
+from .sse_server_daemon import SSEServerDaemon
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +24,12 @@ class TaskDaemon(SSEServerDaemon):
     """
 
     async def _start(
-            self,
-            all_rules: AllRules,
-            *,
-            envs: Environ,
-            log_level: int,
-            init_fn: SyncOrAsyncFunc | None,
+        self,
+        all_rules: AllRules,
+        *,
+        envs: Environ,
+        log_level: int,
+        init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         """Start the task daemon.
 

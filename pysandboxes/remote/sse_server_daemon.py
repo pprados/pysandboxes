@@ -108,12 +108,14 @@ async def sandbox_daemon(
         try:
             module = importlib.import_module(module_name)
             function = getattr(module, function_name)
-        except ModuleNotFoundError:
+        except ModuleNotFoundError as e:
             logger.error("Module %s not found", module_name)
-            raise ValueError(f"Module {module_name} not found")
-        except AttributeError:
+            raise ValueError(f"Module {module_name} not found") from e
+        except AttributeError as e:
             logger.error("Function %s.%s() not found", module_name, function_name)
-            raise ValueError(f"Function {module_name}.{function_name}() not found")
+            raise ValueError(
+                f"Function {module_name}.{function_name}() not found"
+            ) from e
         use_async = inspect.iscoroutinefunction(function)
         logger.debug(
             "(%s) calling %s%s.%s(%s,%s)...",
@@ -126,7 +128,6 @@ async def sandbox_daemon(
         )
 
         stdio_queue: asyncio.Queue = asyncio.Queue()
-        async_fut: asyncio.Future | None = None
 
         async def _async_set_sandbox_and_catch_stdio() -> Any:
             from .catch_stdio import acatch_stdio
@@ -197,7 +198,7 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
     @app.post("/rpc")
     async def rpc_endpoint(
         request: Request,
-        payload: RPCPayload = Body(
+        payload: RPCPayload = Body(  # noqa: B008
             ..., description="Payload containing code and authentication token."
         ),
     ) -> StreamingResponse:
@@ -392,7 +393,9 @@ class SSEServerDaemon(BaseSSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            self.uvicorn = create_uvicorn_daemon(self.token, "0.0.0.0", self.port) # FIXME: que si os_sandbox?
+            self.uvicorn = create_uvicorn_daemon(
+                self.token, "0.0.0.0", self.port
+            )  # FIXME: que si os_sandbox?
 
             start_event = asyncio.Event()
 

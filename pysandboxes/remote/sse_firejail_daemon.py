@@ -28,20 +28,25 @@ from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
-from .sse_client_subprocess_daemon import BaseSubProcessDaemon
-from .tools import suggest_package_installation, which_command, get_default_interface, get_bridge_interfaces, \
-    get_systemd_resolved_upstream_dns
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
-from ..sb_types import Args, ConfigLine, Envs, ConfigLines
+from ..sb_types import Args, ConfigLine, ConfigLines, Envs
 from ..tools import (
     Environ,
     follow_links_executable,
     remove_comments,
     substitute_env_vars,
+)
+from .sse_client_subprocess_daemon import BaseSubProcessDaemon
+from .tools import (
+    get_bridge_interfaces,
+    get_default_interface,
+    get_systemd_resolved_upstream_dns,
+    suggest_package_installation,
+    which_command,
 )
 
 logger = logging.getLogger(__name__)
@@ -163,14 +168,14 @@ def _follow_links(filename: str | Path, whitelist: WhiteList) -> None:
     try:
         if Path(filename).is_symlink():
             whitelist.add(str(Path(filename).resolve(strict=True)))
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise RuntimeError(
             "Impossible to resolve the sys.executable `%s`", sys.executable
-        )
+        ) from e
 
 
 # Use firejail --ip.print to return the ip of the daemon with a specific pid
-def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
+def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address:
     """
     Retrieves the IP address of a Firejail-isolated daemon using the 'firejail --net.print' command.
 
@@ -187,7 +192,7 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
     try:
         # 1. Execute the firejail command.
         # --ip.print <pid> queries the network namespace for the specified PID.
-        firejail_cmd=which_command("firejail")
+        firejail_cmd = which_command("firejail")
         if firejail_cmd is None:
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
@@ -200,7 +205,7 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
             capture_output=True,
             text=True,
             check=False,  # We handle the error manually
-            timeout=2
+            timeout=2,
         )
 
         # 2. Check for command execution errors.
@@ -218,21 +223,24 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address | None:
             parts: list[str] = line.split()
             if len(parts) > 2 and parts[0] == "eth0":
                 return ipaddress.IPv4Address(parts[2])
-        return None
+        logger.error("firejail error: %s", result.stderr.strip())
+        raise SystemExit(1)
 
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         # firejail command is not in the system PATH.
         logger.error("firejail not found. Install it with:")
         logger.error(suggest_package_installation("firejail"))
-        raise SystemExit(1)
-    except subprocess.TimeoutExpired:
+        raise SystemExit(1) from e
+    except subprocess.TimeoutExpired as e:
         # Command took longer than the timeout.
         logger.error(f"firejail command timed out for PID {pid}.")
-        return None
+        raise RuntimeError(f"firejail command timed out for PID {pid}.") from e
     except Exception as e:
         # Catch any other unexpected error.
         logger.error(f"with firejail command, an unexpected error occurred: {e}.")
-        return None
+        raise RuntimeError(
+            f"with firejail command, an unexpected error occurred: {e}."
+        ) from e
 
 
 class FireJailSSEDaemon(BaseSubProcessDaemon):
@@ -243,9 +251,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     """
 
     def parse_rules(
-            self,
-            rules: ConfigLines,
-            errors: list[ErrorMsg],
+        self,
+        rules: ConfigLines,
+        errors: list[ErrorMsg],
     ) -> tuple[ImmutableDict[str, Any], ConfigLines]:
         firejail_params = {}
         net: str | None = None
@@ -253,7 +261,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         for rule in rules:
             if rule.rule.startswith("firejail."):
-                firejail_param = rule.rule[len("firejail."):]
+                firejail_param = rule.rule[len("firejail.") :]
                 if firejail_param.startswith("net="):
                     net = firejail_param.split("=")[1]
                     # TODO: check net?
@@ -264,10 +272,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         return ImmutableDict(firejail_params), ignore_rules
 
     def update_rules(
-            self,
-            *,
-            all_rules: AllRules,
-            envs: Envs,
+        self,
+        *,
+        all_rules: AllRules,
+        envs: Envs,
     ) -> AllRules:
         """Update rules by translating to firejail configuration.
 
@@ -283,13 +291,14 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
     @property
     def base_url(self) -> str:
+        assert self._process
         return f"http://{get_firejail_daemon_ip(self._process.pid)}:{{PORT}}"
 
     def _firejail_args(
-            self,
-            all_rules: AllRules,
-            envs: Environ | Envs,
-            pipe_path: Path | None,
+        self,
+        all_rules: AllRules,
+        envs: Environ | Envs,
+        pipe_path: Path | None,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -328,7 +337,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             )
 
         # Add default parameters
-        firejail_path = importlib.resources.files(__name__) / ".." / "templates" / "firejail.template"
+        firejail_path = (
+            importlib.resources.files(__name__)
+            / ".."
+            / "templates"
+            / "firejail.template"
+        )
         firejail_conf = remove_comments(firejail_path.read_text().splitlines())
         firejail_conf = substitute_env_vars(firejail_conf, envs)
 
@@ -369,11 +383,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             )
 
         for rule in sorted(
-                filter(
-                    lambda x: isinstance(x, BindRule),
-                    all_rules.file_rules,
-                ),
-                key=lambda x: len(x.source),
+            filter(
+                lambda x: isinstance(x, BindRule),
+                all_rules.file_rules,
+            ),
+            key=lambda x: len(x.source),
         ):
             rule = cast(BindRule, rule)
             if rule.source == rule.dest:
@@ -424,8 +438,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 )
                 sys.exit(1)
 
-            dns_servers = [ip for ip in
-                           get_systemd_resolved_upstream_dns() if isinstance(ip, IPv4Address)]
+            dns_servers = [
+                ip
+                for ip in get_systemd_resolved_upstream_dns()
+                if isinstance(ip, IPv4Address)
+            ]
 
             if dns_servers:
                 for dns in dns_servers:
@@ -455,7 +472,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append(f"--net={bridge}")
 
             if pipe_path:  # Update rules?
-                net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
+                net_filter4 = rule_to_netfilter(
+                    all_rules.socket_rules, dns_servers, is_ipv6=False
+                )
                 netfilter_tmp_file = tempfile.NamedTemporaryFile(
                     delete=False, suffix=".fifo"
                 )
@@ -476,7 +495,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                 args.append(f"--netfilter={netfilter_file}")  # FIXME
 
-                net_filter6 = rule_to_netfilter(all_rules.socket_rules, [], is_ipv6=True)
+                net_filter6 = rule_to_netfilter(
+                    all_rules.socket_rules, [], is_ipv6=True
+                )
                 netfilter6_tmp_file = tempfile.NamedTemporaryFile(
                     delete=False, suffix=".fifo"
                 )
@@ -516,10 +537,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         return args, all_rules
 
     def subprocess_cmd(
-            self,
-            all_rules: AllRules,
-            envs: Environ,
-            pipe_path: Path,
+        self,
+        all_rules: AllRules,
+        envs: Environ,
+        pipe_path: Path,
     ) -> list[str]:
         """Build complete command line for firejail subprocess.
 

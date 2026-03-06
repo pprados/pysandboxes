@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 from types import ModuleType
-from typing import Any, Callable, Dict, MutableMapping, Tuple, cast
+from typing import Any, Callable, Dict, MutableMapping, Tuple
 from weakref import WeakKeyDictionary
 
 from .e import RuleAttributeError
@@ -68,7 +68,7 @@ def _global_patch_in_sys_module(module: ModuleType) -> ModuleType:
     return module
 
 
-def patch_rules(learn:bool) -> Dict[str, Callable]:
+def patch_rules(learn: bool) -> Dict[str, Callable]:
     return {}
 
 

@@ -128,7 +128,6 @@ def test_pathlib_glob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
         ConfigLine("ro-bind=./pysandboxes,./pysandboxes", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
-    import sys
     import pathlib
 
     result: List[Any]

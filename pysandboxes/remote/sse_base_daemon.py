@@ -39,7 +39,7 @@ def _get_rpc_params(
 
 
 class BaseSSESandbox(BaseDaemon):
-    __slots__ = ("port", "host","max_connect_retry")
+    __slots__ = ("port", "host", "max_connect_retry")
 
     def __init__(
         self,
@@ -118,8 +118,6 @@ class BaseSSESandbox(BaseDaemon):
                 logger.debug("Connection error. Retry")
                 retry -= 1
                 continue
-            except ClientConnectorError:
-                raise RuntimeError("Impossible to connect to the sandbox")
             except SystemExit:
                 raise
             # Other exceptions are from the called function

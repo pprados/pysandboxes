@@ -46,16 +46,19 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
             "syntax-error(8): Invalid rule 'ignore-parameter'",
             "Port must be a positive value",
             "syntax-error(11): 'net=ERROR' has incorrect number of parts separated by '|'. Expected 5, got 1. "
-                "Format: <DENY,ALLOW>|<TCP,UDP list or *>|<ip/mask>, *|<port list>|<IN, OUT>.",
+            "Format: <DENY,ALLOW>|<TCP,UDP list or *>|<ip/mask>, *|<port list>|<IN, OUT>.",
             "syntax-error(12): 'net=ERROR|tcp|127.0.0.1/32|8000|IN' use an invalid action. Must be 'ALLOW' or 'DENY'.",
             "syntax-error(13): 'net=ALLOW||127.0.0.1/32|8000|IN' has empty socket specs.",
-            "syntax-error(14): In 'net=ALLOW|any,tcp,udp|127.0.0.1/32|8000|IN', 'ANY' must be used alone, not combined with other specifiers.",
-            "syntax-error(15): In 'net=ALLOW|*,tcp,udp|127.0.0.1/32|8000|IN', '*' must be used alone, not combined with other specifiers.",
-            "syntax-error(16): 'net=ALLOW|toto|127.0.0.1/32/32|8000|IN' has unknown socket specifier 'TOTO'. Valid specifiers: any, TCP, UDP.",
+            "syntax-error(14): In 'net=ALLOW|any,tcp,udp|127.0.0.1/32|8000|IN', 'ANY' must be used alone, "
+            "not combined with other specifiers.",
+            "syntax-error(15): In 'net=ALLOW|*,tcp,udp|127.0.0.1/32|8000|IN', '*' must be used alone, "
+            "not combined with other specifiers.",
+            "syntax-error(16): 'net=ALLOW|toto|127.0.0.1/32/32|8000|IN' has unknown socket specifier 'TOTO'. "
+            "Valid specifiers: any, TCP, UDP.",
             "syntax-error(17): In 'net=ALLOW|tcp||8000|IN', network part must be set.",
             "syntax-error(20): In 'net=ALLOW|tcp|0.0.0.0/0|a,b|IN', invalid port list.",
             "syntax-error(21): In 'net=ALLOW|tcp|0.0.0.0/0|*|', direction is not 'IN' or 'OUT'.",
             "syntax-error(26): Invalid value 'abc' for py-sandbox. Use true or false.",
             "syntax-error(27): Invalid value 'True' for 'learn'. Use the filename instead.",
-            "syntax-error(28): Invalid rule 'invalide-rule'"
+            "syntax-error(28): Invalid rule 'invalide-rule'",
         ]

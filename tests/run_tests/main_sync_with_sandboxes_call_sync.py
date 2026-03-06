@@ -12,7 +12,7 @@ from .differents_usages import (
 def main() -> None:
     init_log_level()
     logger.info("--------- Sync Run with sandboxes call Sync")
-    for i in range(0, SIZE_OF_LOOP):
+    for _ in range(0, SIZE_OF_LOOP):
         logger.info("Use 'with sandboxes'")
         with sandboxes(
             init_fn=async_init_sandbox,

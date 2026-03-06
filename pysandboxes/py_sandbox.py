@@ -29,7 +29,7 @@ from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
 from .e import ConfigSyntaxError
-from .learning import set_learning_path, set_learning_mode
+from .learning import set_learning_mode, set_learning_path
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import Environ, remove_config_comments, substitute_config_env_vars
@@ -45,7 +45,7 @@ def _search_module_config(config_path: Path | None) -> Path:
     # Search the module of the caller
     frame = sys._getframe()
     while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
-            pysb_module_name + "."
+        pysb_module_name + "."
     ):
         assert frame.f_back is not None
         frame = frame.f_back
@@ -98,10 +98,10 @@ def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
 
 
 def load_and_parse_config(
-        config_path: Path | None = None,
-        *,
-        envs: Environ | None = None,
-        **extra_rules: dict[str, Any],
+    config_path: Path | None = None,
+    *,
+    envs: Environ | None = None,
+    **extra_rules: dict[str, Any],
 ) -> AllRules:
     """Reads and parses the configuration file for the sandbox.
 
@@ -148,7 +148,7 @@ def load_and_parse_config(
         # Activate the learn mode
         # Load the template, and add learn mode
         with resources.as_file(
-                resources.files(pysb_module_name + ".templates") / "py-sandbox.template"
+            resources.files(pysb_module_name + ".templates") / "py-sandbox.template"
         ) as resource_path:
             config = extra_lines + _read_config_and_remove_comments(resource_path)
     else:
@@ -161,9 +161,9 @@ def load_and_parse_config(
 
 
 def _parse_include(
-        root_path: Path,
-        includes: set[Path],
-        rules: ConfigLines,
+    root_path: Path,
+    includes: set[Path],
+    rules: ConfigLines,
 ) -> ConfigLines:
     # includes parameter is to detect the recursive includes
     others: ConfigLines = []
@@ -183,8 +183,8 @@ def _parse_include(
                             [
                                 ConfigLine(line, filename, ln + 1)
                                 for ln, line in enumerate(
-                                filename.read_text().split("\n")
-                            )
+                                    filename.read_text().split("\n")
+                                )
                             ]
                         )
                         # Recursive include
@@ -200,7 +200,7 @@ def _parse_include(
 
 
 def parse_provider_rules(
-        rules: ConfigLines,
+    rules: ConfigLines,
 ) -> tuple[ConfigLines, ConfigLines]:
     providers_rules = []
     ignore_rules = []
@@ -217,10 +217,10 @@ def parse_provider_rules(
 
 
 def parse_config(
-        config: ConfigLines,
-        config_path: Path,
-        *,
-        envs: Environ | None = None,
+    config: ConfigLines,
+    config_path: Path,
+    *,
+    envs: Environ | None = None,
 ) -> AllRules:
     if envs is None:
         envs = os.environ
@@ -248,9 +248,11 @@ def parse_config(
     providers_rules, others = parse_provider_rules(others)
 
     if os_sandbox != "error":
-        os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
+        os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(
+            providers_rules, errors
+        )
     else:
-        os_sandbox_params={}
+        os_sandbox_params = {}
 
     socket_rules, others, pin_dns = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
@@ -298,8 +300,8 @@ def parse_config(
 
 
 def activate_sandboxes(
-        all_rules: AllRules,
-        envs: Environ | None = None,
+    all_rules: AllRules,
+    envs: Environ | None = None,
 ) -> None:
     if envs is None:
         envs = os.environ

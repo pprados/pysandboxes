@@ -135,8 +135,8 @@ class ImmutableDict(
         """
         try:
             idx = self._keys.index(key)
-        except ValueError:
-            raise KeyError(key)
+        except ValueError as e:
+            raise KeyError(key) from e
         return cast(ValueType, self._values[idx])
 
     def __iter__(self) -> Iterator[KeyType]:  # type: ignore[override]
@@ -176,7 +176,7 @@ class ImmutableDict(
         Returns:
             String representation in ImmutableDict format.
         """
-        return f"ImmutableDict({dict(zip(self._keys, self._values))})"
+        return f"ImmutableDict({dict(zip(self._keys, self._values,strict=True))})"
 
     # Keep Mapping's default .keys(), .items(), .values()
     def keys(self) -> KeysView[KeyType]:

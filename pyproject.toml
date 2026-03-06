@@ -68,21 +68,21 @@ ipython3-sb = "pysandboxes.python_sb:main"
 
 [dependency-groups]
 dev = [
-    "playwright>=1.28.0",
-    "setuptools>=67.6.1",
+#    "playwright>=1.28.0",
+#    "setuptools>=67.6.1",
     "ipython",
 #    "ipykernel",
 #    "jupyter>=1.0",
 #    "jupyterlab_rise>=0.42",
     "pre-commit>=3.6",
-    "twine>=5.1.0",
+#    "twine>=5.1.0",
     "importlib-metadata==7.2.1",
-    "scikit-learn>=1.6",
+#    "scikit-learn>=1.6",
 #    "pydevd-pycharm",
     "rich>=14.0",
-    "mcp[cli]>=1.14.0",
+#    "mcp[cli]>=1.14.0",
     "json-with-comments>=1.2.10",
-    "pdoc>=15.0.4",  # TODO
+#    "pdoc>=15.0.4",  # TODO
 ]
 test = [
     # The only dependencies that should be added are
@@ -90,24 +90,17 @@ test = [
     # Any dependencies that do not meet that criteria will be removed.
     "pytest>=7.3.0",
     "pytest-asyncio>=1.2.0",
-    "pytest-cov>=4.0.0",
+#    "pytest-cov>=4.0.0",
     "pytest-dotenv>=0.5.2",
     "pytest-asyncio>=0.20.3",
     "pytest-mock>=3.10.0",
-    "pydantic[email]>=2.11.9",
+#    "pydantic[email]>=2.11.9",
 ]
 lint = [
     "mypy>=1.8",
     "ruff>=0.1.9",
-#    "types-toml>=0.10.8.1",
-#    "types-redis>=4.3.21.6",
-#    "types-pytz>=2023.3.0.0",
     "black>=23.1.0",
     "types-chardet>=5.0.4.6",
-#    "mypy-protobuf>=3.0.0",
-#    "types-google-cloud-ndb>=2.0",
-#    "types-docutils>=0.20",
-#    "types-pyyaml>=6.0.12.2",
     "types-requests>=2.28.11.5",
 ]
 codespell = [
@@ -124,13 +117,14 @@ ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
 ignore-words-list = 'momento,collison,ned,foor,reworkd,parth,whats,aapply,mysogyny,unsecure,damon,crate'
 
 [tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
 select = [
-    "E", # pycodestyle
-    "F", # pyflakes
-    "I", # isort
-]
-exclude = [
-    "tests/integration_tests/examples/non-utf8-encoding.py",
+    "E",  # E: Error/Style violation (from Pycodestyle, e.g., indentation, whitespace)
+    "F",  # F: Pyflakes errors (e.g., unused imports, undefined names)
+    "B",  # B: Bugbear warnings (e.g., common pitfalls, function signatures, use of mutable defaults)
+    "W",  # W: Warning (from Pycodestyle, e.g., deprecated usage)
 ]
 
 

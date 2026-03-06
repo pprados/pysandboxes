@@ -59,7 +59,7 @@ def test_invalid_port_raises_value_error(mock_getaddrinfo: Mock) -> None:
     """
     errors: List[ErrorMsg] = []
     s_kind = Kind.TCP
-    rules,* _ = parse_rules([], errors)  # Rules don't matter here
+    rules, *_ = parse_rules([], errors)  # Rules don't matter here
     with pytest.raises(ValueError, match="Invalid port number: -1"):
         _check_address_with_rules(rules, s_kind, ("example.com", -1), Direction.OUT)
     with pytest.raises(ValueError, match="Invalid port number: 65536"):
