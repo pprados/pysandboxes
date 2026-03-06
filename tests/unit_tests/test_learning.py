@@ -35,13 +35,19 @@ class TestGenerateConfigFromLearning:
     ) -> None:
         """Test config generation with all rule types."""
         # Setup mock returns
-        mock_env_rules.return_value = ["env:HOME", "env:PATH"]
-        mock_import_rules.return_value = ["import:os", "import:sys"]
-        mock_file_rules.return_value = ["file:read:/tmp/*", "file:write:/tmp/output"]
-        mock_socket_rules.return_value = ["socket:tcp:80", "socket:udp:53"]
-        mock_manage_olds.return_value = (Path("config.conf"), None)
-        mock_read_text.return_value = "template content with ${learning_guard_envs}"
-        mock_is_learning_mode.return_value = True
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_path = Path(temp_dir) / "config.conf"
+            mock_env_rules.return_value = ["env:HOME", "env:PATH"]
+            mock_import_rules.return_value = ["import:os", "import:sys"]
+            mock_file_rules.return_value = [
+                "file:read:/tmp/*",
+                "file:write:/tmp/output",
+            ]
+            mock_socket_rules.return_value = ["socket:tcp:80", "socket:udp:53"]
+            mock_manage_olds.return_value = (test_path, None)
+            mock_read_text.return_value = "template content with ${learning_guard_envs}"
+            mock_is_learning_mode.return_value = True
 
         with patch("pysandboxes.learning._learning_path", Path("test.conf")):
             generate_config_from_learning()

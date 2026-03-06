@@ -26,7 +26,7 @@ integration_tests:
 	uv run pytest tests/integration_tests
 
 ## Make gh tests locally
-gh-test:
+gh-tests:
 	gh act push
 
 ## Make all tests

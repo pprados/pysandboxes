@@ -141,6 +141,8 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # - Prefer specific ports over wildcards
 # - Consider blocking internal networks to prevent lateral movement
 # - Review rules regularly and remove unused access
+#
+# If you use a hostname in a rule, read 'wiki/dns.md' to fully understand the limitations of this approach.
 
 # Common outbound web access:
 #net=ALLOW|tcp|0.0.0.0/0|443|OUT         # HTTPS to anywhere
