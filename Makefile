@@ -17,13 +17,20 @@ all: help
 # Fix VS Code launch.json
 fix-vs-code: .vscode/launch.json
 
+## Make unit test
+unit-tests:
+	uv run pytest -v tests/unit_tests/
+
+## Make integration tests
 integration_tests:
 	uv run pytest tests/integration_tests
 
-test tests:
-	uv run pytest -v tests/unit_tests/
+## Make gh tests locally
+gh-test:
+	gh act push
 
-all-tests: tests integration_tests
+## Make all tests
+all-tests: unit-tests integration_tests
 
 test_watch:
 	uv run ptw --now . -- tests/unit_tests
@@ -187,10 +194,6 @@ uv.lock: pyproject.toml
 
 ## Refresh lock
 lock: $(LOCK)
-
-## Start jupyter
-jupyter:
-	poetry run jupyter lab
 
 ## Validate the code
 validate: uv.lock format lint spell_check test

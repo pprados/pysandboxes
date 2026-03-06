@@ -240,8 +240,8 @@ def _parse_rule(
                 f"{rule.rule!r} has incorrect number of parts separated by '|'. "
                 f"Expected 5, got {len(rule_components)}. "
                 f"Format: "
-                f"<{{','.join([a.name for a in Action])}}>|"
-                f"<{{','.join([k.name for k in Kind])}} list or *>|"
+                f"<{','.join([a.name for a in Action])}>|"
+                f"<{','.join([k.name for k in Kind])} list or *>|"
                 f"<ip/mask>, *|"
                 f"<port list>|"
                 f"<IN, OUT>.",
@@ -302,7 +302,7 @@ def _parse_rule(
                         f"{format_ruleref(rule)}: "
                         f"{rule.rule!r} "
                         f"has unknown socket specifier {spec_part!r}. "
-                        f"Valid specifiers: any, {{', '.join([k.name for k in Kind])}}.",
+                        f"Valid specifiers: any, {', '.join([k.name for k in Kind])}.",
                         rule.path,
                         rule.ln,
                     )
@@ -858,14 +858,14 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
         host: bytes | str | None,
         port: bytes | str | int | None,
         family: int = 0,
-        socktype: int = 0,
+        type: int = 0,
         proto: int = 0,
         flags: int = 0,
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> list[AddrInfoType]:
         result: list[AddrInfoType] = func(
-            host, port, family, socktype, proto, flags, *args, **kwargs
+            host, port, family, type, proto, flags, *args, **kwargs
         )
         if isinstance(host, bytes):
             host = host.decode("utf-8")
