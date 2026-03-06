@@ -46,6 +46,7 @@ python-import=typing_extensions
 python-import=typing_inspection
 python-import=uvicorn
 python-import=pygments
+python-import=rich
 
 ro-bind=.,.
 

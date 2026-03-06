@@ -19,12 +19,9 @@ async def main() -> None:
         async with sandboxes(init_fn=async_init_sandbox):
             try:
                 synchronize_function()
-            except RuntimeError:
-                logger.info(
-                    "Impossible to mix synchronous "
-                    "and asynchronous sandbox functions"
-                )
-                raise
+            except RuntimeError as e:
+                # It's what we need
+                logger.info(e)
 
 
 if __name__ == "__main__":

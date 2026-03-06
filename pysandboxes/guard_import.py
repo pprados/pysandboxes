@@ -301,7 +301,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             finders: List of meta path finders to delegate to.
         """
         self._finders = finders
-        self._debug = True  # FIX_RELEASE
+        self._debug = False  # FIX_RELEASE
 
     """
     A custom finder that locates our special module.
@@ -426,10 +426,17 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                             "Module named %s is not allowed by a rule",
                             repr(module_name),
                         )
-                        logger.exception(
-                            "Module named %s is not allowed by a rule",
-                            repr(module_name),
-                        )
+                        try:
+                            logger.exception(
+                                "Module named %s is not allowed by a rule",
+                                repr(module_name),
+                            )
+                        except RecursionError:
+                            # Fall back if it's impossible to log the exception
+                            print(
+                                f"Module named {module_name!r} is not allowed by a rule",
+                                file=sys.stderr,
+                            )
                         raise ex
             return new_spec
 

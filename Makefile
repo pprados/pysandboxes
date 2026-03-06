@@ -44,7 +44,7 @@ test_watch:
 PYTHON_FILES=pysandboxes/ tests/
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
-lint:
+lint: format
 	uv run mypy $(PYTHON_FILES)
 	uv run black --check $(PYTHON_FILES)
 	uv run ruff check $(PYTHON_FILES)

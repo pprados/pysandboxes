@@ -240,5 +240,6 @@ python-import=tests
 python-import=typing_extensions
 python-import=typing_inspection
 python-import=uvicorn
+python-import=rich
 
 # </learning_guard_import>

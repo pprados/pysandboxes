@@ -80,23 +80,25 @@ def format_error_list(errors: Sequence[str]) -> str:
 
 def config_log(log_level: int, format: str | None = None) -> None:
     handlers: list[logging.Handler] = []
-    format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     try:
-        # from rich.console import Console
-        # from rich.logging import RichHandler
+        from rich.console import Console
+        from rich.logging import RichHandler
 
-        # FIXME: activer RichHandler if possible. Bug sur test_sync_function
-        # handlers.append(
-        #     RichHandler(
-        #         console=Console(stderr=True),
-        #         rich_tracebacks=False,
-        #         log_time_format="[%X]",
-        #         show_time=True,
-        #     )
-        # )
-        # format = "[%(process)d] %(message)s"
+        # Active RichHandler if possible.
+        handlers.append(
+            RichHandler(
+                console=Console(stderr=True),
+                rich_tracebacks=False,
+                log_time_format="[%X]",
+                show_time=True,
+            )
+        )
+        if not format:
+            format = "[%(process)d] %(message)s"
         pass
     except ImportError:
+        if not format:
+            format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
     logging.basicConfig(

@@ -51,7 +51,7 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-DEBUG_NETFILTER = True  # FIX_RELEASE
+DEBUG_NETFILTER = False  # FIX_RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
