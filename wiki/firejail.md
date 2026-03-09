@@ -1,20 +1,27 @@
-To use the [firejail](https://github.com/netblue30/firejail) technology, you must have a network bridge. Check-it with:
+# Firejail
+
+Firejail is a simple **OS-Sandbox** technology, allowing programs to be launched isolated from the rest of the system. It is possible to limit disk access, network access, system calls, etc. Consult the [documentation](https://man7.org/linux/man-pages/man1/firejail.1.html) for more information.
+
+If you want to use the network within a sandbox, it is preferable to set the `restricted-network no` parameter in the `/etc/firejail/firejail.config` file.
+
+For security reasons, code running in firejail cannot access servers present on the host. To allow this communication, it is necessary to add a network bridge, as Docker also does.
+
+To use the [firejail](https://github.com/netblue30/firejail) technology, you must have a network bridge. Check it with:
 ```bash
 ip link show type bridge
 ```
-If you find `docker0` or `br0`, it's cool.
+If you find `docker0` or `br0`, it's good.
 
-Else, you must create a bridge with:
+Otherwise, you must create a bridge. The `add-bridge.sh` script does this.
 ```bash
-sudo apt update
-sudo apt install bridge-utils
-sudo ip link add name br0 type bridge
-sudo ip addr add 10.10.10.1/24 dev br0
-sudo ip link set br0 up
-
-sudo sysctl -w net.ipv4.ip_forward=1
-DEFAULT_INTERFACE=$(ip route get 8.8.8.8 | awk '/dev/ {print $5; exit}')
-sudo iptables -t nat -A POSTROUTING -o ${DEFAULT_INTERFACE} -j MASQUERADE
+sudo uv run ./add-bridge.sh
 ```
-#TODO: pour
-sudo iptables -t nat -A PREROUTING -i docker0 -p udp --dport 53 -j DNAT --to-destination 192.168.0.99
+
+## Specific Parameters
+Some specific parameters can be added to `.py-sandboxes` for *Firejail*. Parameters of the form `firejail.<xxx>=<yyy>` will be added in the form `--<xxx>=<yyy>` when launching firejail.
+
+You can thus further strengthen security by limiting the system calls authorized by your application. To do this, you need to identify them. We offer a script to help you.
+```
+uv run extract_strace.sh <command to start your application>
+```
+The `extract_strace.sh` script displays the list of system calls of your application. All that remains is to add them to the `firejail.seccomp=<xxx>` parameter, separated by commas and without spaces.

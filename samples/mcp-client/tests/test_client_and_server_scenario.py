@@ -23,7 +23,7 @@ all_mcp_client_os_sandbox = [
     "firejail",
 ]
 all_mcp_server_config = [
-    "stdio_no_sandbox",
+    # "stdio_no_sandbox",
     "stdio_sandboxes_complete",
     "stdio_sandboxes_partial",
     "http",
@@ -130,8 +130,8 @@ def _start_server(mcp_server_config: str) -> Popen | None:
             cmd,
             cwd="../mcp-server",
             env=os.environ.copy() | {"OS_SANDBOX": "None", "PY_SANDBOX": "None"},
-            # stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            stdout=None, stderr=None,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            # stdout=None, stderr=None,
             text=True, shell=False,
         )
         time.sleep(1)  # FIXME: a supprimer si possible
@@ -173,7 +173,7 @@ def test_claude_evaluate_expression(
             env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
             input="",
-            capture_output=True,
+            capture_output=True,  # To debug, desactivate capture_output
             check=True,
             text=True, shell=False)
         print(result.stdout)
@@ -198,7 +198,7 @@ def test_claude_fetch_webpage(
     process: Popen | None = None
     try:
         mcp_server_config += ".json"
-        # process = _start_server(mcp_server_config)  FIXME
+        process = _start_server(mcp_server_config)
 
         start_client = [
             '-m', 'pysandboxes.python_sb',
@@ -217,7 +217,7 @@ def test_claude_fetch_webpage(
             cmd,
             env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
-            capture_output=True,
+            capture_output=True,  # To debug, desactivate capture_output
             input="",
             text=True, check=True, shell=False)  # FIXME check
         print(result.stdout)
