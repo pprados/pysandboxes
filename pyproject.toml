@@ -69,21 +69,12 @@ ipython3-sb = "pysandboxes.python_sb:main"
 
 [dependency-groups]
 dev = [
-#    "playwright>=1.28.0",
-#    "setuptools>=67.6.1",
     "ipython",
-#    "ipykernel",
-#    "jupyter>=1.0",
-#    "jupyterlab_rise>=0.42",
     "pre-commit>=3.6",
-#    "twine>=5.1.0",
     "importlib-metadata==7.2.1",
-#    "scikit-learn>=1.6",
     "pydevd-pycharm",
     "rich>=14.0",
-#    "mcp[cli]>=1.14.0",
     "json-with-comments>=1.2.10",
-#    "pdoc>=15.0.4",  # TODO
 ]
 test = [
     # The only dependencies that should be added are

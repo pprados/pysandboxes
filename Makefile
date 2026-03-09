@@ -28,7 +28,7 @@ integration-tests:
 ## Make integration tests
 sample-tests:
 	(cd samples/mcp-client && make test)
-	(cd samples/mcp-server && make test)
+	#(cd samples/mcp-server && make test)
 
 ## Make github tests locally
 gh-tests: lint

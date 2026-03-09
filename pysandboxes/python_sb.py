@@ -11,7 +11,6 @@ from typing import Any, Mapping, cast
 
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
-from pysandboxes.learning import set_learning_path, set_learning_mode
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
@@ -69,7 +68,7 @@ def main() -> int:
 
     # If --learn and --pysandboxes-config=xxx, use --learn=xxx
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
-    # If -m module  use resource
+    # If -m module  use resource module/.py-sandboxes
     learn_path: Path
     if len(extra_rules.get("learn", set())):
         learn_path = Path(list(extra_rules["learn"])[0])
@@ -82,19 +81,20 @@ def main() -> int:
     if config_path == Path():
         config_path = Path(CONFIG_NAME)
     if not config_path.exists() and "learn" not in extra_rules:
-        extra_rules["learn"]=set()
+        extra_rules["learn"] = set()
     try:
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
         extra_rules["env"] = envs
-        logger.info(f"Use {config_path=}")
+        if config_path.is_relative_to(Path()):
+            logger.info(f"Use {config_path.relative_to(Path())}")
+        else:
+            logger.info(f"Use {config_path=}")
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=os.environ,  # Use current environ
             **cast(Mapping[str, Any], extra_rules),
         )
-        # set_learning_path(all_rules.learning_path)  # Not necessary here
-        # set_learning_mode(all_rules.learn)
     except ConfigSyntaxError as e:
         print(str(e), file=sys.stderr)
         sys.exit(-1)
@@ -117,6 +117,7 @@ def main() -> int:
             all_rules,
             envs=os.environ,
             pipe_path=pipe_path,
+            temp=Path(tmpdir)
         )
         python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
         token = str(uuid.uuid4())

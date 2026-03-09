@@ -56,7 +56,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG_LAUNCH = True  # FIX_RELEASE
+DEBUG_LAUNCH = False  # FIX_RELEASE
 
 
 def get_log_formatter() -> str:
@@ -294,6 +294,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
+            temp:Path,
     ) -> Args:
         """Build command line arguments for subprocess.
 
@@ -313,7 +314,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             "-u",  # Unbuffered output
         ]
         if sys.flags.optimize:
-            cmd_parameters.append("-"+"O" * sys.flags.optimize)
+            cmd_parameters.append("-" + "O" * sys.flags.optimize)
         cmd_parameters.extend(self._python_args)
         cmd_parameters.extend(
             [
@@ -450,6 +451,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     all_rules=all_rules,
                     envs=envs,
                     pipe_path=pipe_path,
+                    temp=Path(tmpdir),
                 ),
                 pipe_path=pipe_path,
                 port=self.port,
@@ -623,6 +625,7 @@ class SubProcessDaemon(BaseSubProcessDaemon):
         *,
         envs: Envs,
         all_rules: AllRules,
+            temp:Path,
     ) -> AllRules:
         """Update security rules (no-op for basic subprocess daemon).
 

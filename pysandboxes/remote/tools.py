@@ -288,6 +288,65 @@ def from_b85(b85: str) -> Any:
     )
 
 
+def _get_default_interface_via_ip() -> str | None:
+    """
+    Retrieves the name of the default network interface on a Linux system
+    by parsing the output of the 'ip route' command.
+
+    The default interface is the one associated with the 'default' route
+    (0.0.0.0/0) in the routing table.
+
+    Returns:
+        str | None: The name of the default interface (e.g., 'eth0', 'wlan0'),
+                    or None if it cannot be determined.
+    """
+    try:
+        # 1. Execute the 'ip route' command to get the routing table
+        # We use a timeout to prevent the call from hanging indefinitely
+        # check=True will raise CalledProcessError on non-zero exit codes
+        result = subprocess.run(
+            ["ip", "route"], capture_output=True, text=True, check=True, timeout=5
+        )
+        output: str = result.stdout
+
+        # 2. Search for the default route line
+        # The line typically starts with 'default via <gateway_ip> dev <interface_name>'
+        # Example: 'default via 192.168.1.1 dev eth0 proto dhcp src 192.168.1.100 metric 100'
+        # We use a regex to capture the 'dev <interface_name>' part
+        default_route_pattern: re.Pattern = re.compile(
+            r"^default\s+.*dev\s+(\S+)", re.MULTILINE
+        )
+
+        match: re.Match[str] | None = default_route_pattern.search(output)
+
+        if match:
+            # Group 1 contains the interface name
+            interface_name: str = match.group(1)
+            return interface_name
+        else:
+            # Default route not found in the output
+            return None
+
+    except FileNotFoundError:
+        # This occurs if the 'ip' command is not found on the system (highly unlikely on Ubuntu)
+        logger.warning(
+            "Error: 'ip' command not found. Ensure iproute2 package is installed."
+        )
+        return None
+    except subprocess.CalledProcessError as e:
+        # This handles non-zero exit codes from the command
+        logger.warning("Error executing 'ip route': %s", e.stderr.strip())
+        return None
+    except subprocess.TimeoutExpired:
+        # This handles the command taking too long to execute
+        logger.warning("Error: 'ip route' command timed out.")
+        return None
+    except Exception as e:
+        # Catch any other unexpected errors
+        logger.warning("An unexpected error occurred: %s", str(e))
+        return None
+
+
 def get_default_interface() -> str | None:
     """
     Retrieves the name of the default network interface by reading the
@@ -295,7 +354,6 @@ def get_default_interface() -> str | None:
 
     Returns the interface name (str) or None if not found.
     """
-
     # The default route destination is represented by '00000000' in the file
     DEFAULT_DESTINATION: str = "00000000"
 
@@ -321,7 +379,7 @@ def get_default_interface() -> str | None:
         logger.info("The file /proc/net/route not found.")
         return None
 
-    return None
+    return _get_default_interface_via_ip()
 
 
 def get_bridge_interfaces() -> list[str]:

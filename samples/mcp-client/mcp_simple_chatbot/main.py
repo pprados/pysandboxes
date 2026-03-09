@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 from shutil import which
 from typing import Any
@@ -15,10 +16,12 @@ from dotenv import load_dotenv
 from fastmcp import Client
 from pysandboxes.tools import resolve_env_variables
 
-logging.basicConfig(
+logging.basicConfig(  # FIXME: manage all log level
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+logger = logging.getLogger(__name__)
 
 
 class Configuration:
@@ -39,9 +42,9 @@ class Configuration:
         """Get the LLM API key from environment."""
         import os
 
-        api_key = os.getenv("GROK_API_KEY")
+        api_key = os.getenv("API_KEY")
         if not api_key:
-            raise ValueError("GROK_API_KEY not found in environment variables")
+            raise ValueError("API_KEY not found in environment variables")
         return api_key
 
     @staticmethod
@@ -85,7 +88,7 @@ class LLMClient:
 
     def get_response(self, messages: list[dict[str, str]]) -> str:
         """Get a response from the LLM."""
-        url = "https://api.groq.com/openai/v1/chat/completions"
+        url = os.environ["API_URL"]
 
         headers = {
             "Content-Type": "application/json",
@@ -93,7 +96,7 @@ class LLMClient:
         }
         payload = {
             "messages": messages,
-            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+            "model": os.environ["MODEL"],
             "temperature": 0.7,
             "max_tokens": 4096,
             "top_p": 1,
@@ -107,15 +110,16 @@ class LLMClient:
                 response.raise_for_status()
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
+                # return '{"tool": "fetch_webpage","arguments": {"url": "http://www.google.com"}}'
 
         except httpx.RequestError as e:
             error_message = f"Error getting LLM response: {str(e)}"
-            logging.error(error_message)
+            logger.error(error_message)
 
             if isinstance(e, httpx.HTTPStatusError):
                 status_code = e.response.status_code
-                logging.error(f"Status code: {status_code}")
-                logging.error(f"Response details: {e.response.text}")
+                logger.error(f"Status code: {status_code}")
+                logger.error(f"Response details: {e.response.text}")
 
             return f"I encountered an error: {error_message}. Please try again or rephrase your request."
 
@@ -134,10 +138,10 @@ class ChatSession:
         try:
             client = self.client
             action = _extract_first_json(llm_response)
-
-            if "tool" in action and "arguments" in action:
-                logging.info(f"Executing tool: {action['tool']}")
-                logging.info(f"With arguments: {action['arguments']}")
+            logger.error(f"************ {action=}\n {llm_response=}")  # FIXME
+            if action and "tool" in action and "arguments" in action:
+                logger.info(f"Executing tool: {action['tool']}")
+                logger.info(f"With arguments: {action['arguments']}")
 
                 tools = await client.list_tools()
                 if any(tool.name == action["tool"] for tool in tools):
@@ -148,13 +152,13 @@ class ChatSession:
                         return f"Tool execution result: {"  ".join([x.text for x in result.content])}"
                     except Exception as e:
                         error_msg = f"Error executing tool: {str(e)}"
-                        logging.error(error_msg)
+                        logger.error(error_msg)
                         return error_msg
 
                 return f"No server found with tool: {action['tool']}"
 
-            elif "resource" in action:
-                logging.info(f"Reading resource: {action['resource']}")
+            elif action and "resource" in action:
+                logger.info(f"Reading resource: {action['resource']}")
 
                 try:
                     results = await client.read_resource(action["resource"])
@@ -162,7 +166,7 @@ class ChatSession:
                     return f"Resource content: {result}"
                 except Exception as e:
                     error_msg = f"Error reading resource: {str(e)}"
-                    logging.error(error_msg)
+                    logger.error(error_msg)
                     return error_msg
 
             return llm_response
@@ -177,20 +181,20 @@ class ChatSession:
             try:
                 user_input = input("You: ").strip().lower()
                 if user_input in ["quit", "exit"]:
-                    logging.info("\nExiting...")
+                    logger.info("\nExiting...")
                     break
 
                 final_response = await self.invoke_llm(messages, user_input)
                 print(final_response)
 
             except KeyboardInterrupt:
-                logging.info("\nExiting...")
+                logger.info("\nExiting...")
                 break
 
     async def invoke_llm(self, messages, user_input) -> str:
         messages.append({"role": "user", "content": user_input})
         llm_response = self.llm_client.get_response(messages)
-        logging.info("\nAssistant: %s", llm_response)
+        logger.info("\nAssistant: %s", llm_response)
         result = await self.process_llm_response(llm_response)
         if result != llm_response:
             messages.append({"role": "assistant", "content": llm_response})
@@ -292,14 +296,18 @@ async def run(args):
         llm_client = LLMClient(config.llm_api_key)
         chat_session = ChatSession(client, llm_client)
         if args.print:
+            logger.info("Invoke ")
             final_response = await chat_session.invoke_llm(await chat_session.initialize(), args.print)
             print(final_response)
         else:
             await chat_session.start()
-    logging.debug("End of run")
+    await client.close()
+    logger.debug("End of run")
+
 
 def main() -> int:
     """Initialize and run the chat session."""
+    threading.main_thread().name = "MCP Client"  # FIXME: ne sert à rien. Pas visible dans le debug
     parser = argparse.ArgumentParser(
         prog="mcp_client",
         description="Run a MCP-client with FastMCP",

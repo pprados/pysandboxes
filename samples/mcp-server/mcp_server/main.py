@@ -5,6 +5,7 @@ import importlib
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ import httpx
 from fastmcp import FastMCP
 from httpx_file import FileTransport
 from markdownify import markdownify as md
-from pysandboxes import sandbox, sandboxes
+from pysandboxes import sandbox, sandboxes, is_in_sandbox
 from pysandboxes.remote.tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ level = logging.DEBUG
 format = "MCPServer: %(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
+logging.getLogger().setLevel(level)
 # logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(level)
 
 logging.basicConfig(
@@ -57,7 +59,6 @@ async def read_file_resource(path: str) -> str:
     return await _read_file_resource(path)
 
 
-@sandbox
 async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces direct
     """Expose files from the resources directory as MCP resources in a sandbox."""
     file_path = RESOURCES_DIR / path
@@ -70,12 +71,9 @@ async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces dire
 
 
 @sandbox
-@mcp.tool(
-    name="fetch_webpage",
-    description="Fetches the content of a webpage from a given URL",
-)
-async def fetch_webpage(url: str) -> str:
+async def _fetch_webpage(url: str) -> str:
     """Fetches the content of a webpage and returns it as markdown."""
+    assert is_in_sandbox()
     try:
         logger.info(f"Fetching webpage: {url}")
         # For the demo, accept the 'file:' URL
@@ -87,15 +85,18 @@ async def fetch_webpage(url: str) -> str:
     except Exception as e:
         raise ValueError(f"Failed to fetch webpage: {e}")
 
+@mcp.tool(
+    name="fetch_webpage",
+    description="Fetches the content of a webpage from a given URL",
+)
+async def fetch_webpage(url: str) -> str:
+    return await _fetch_webpage(url)
 
 # Define the calculator tool
 @sandbox
-@mcp.tool(
-    name="evaluate_expression",
-    description="Evaluates a mathematical expression and returns the result",
-)
-async def evaluate_expression(expression: str) -> float:
+async def _evaluate_expression(expression: str) -> float:
     """Evaluates a mathematical expression and returns the result."""
+    assert is_in_sandbox()
     try:
         # Warning: eval() is unsafe for untrusted input;
         # use a proper parser in production
@@ -111,6 +112,12 @@ async def evaluate_expression(expression: str) -> float:
     except Exception as e:
         raise ValueError(f"Invalid expression: {e}")
 
+@mcp.tool(
+    name="evaluate_expression",
+    description="Evaluates a mathematical expression and returns the result",
+)
+async def evaluate_expression(expression: str) -> float:
+    return await _evaluate_expression(expression)
 
 @mcp.prompt()
 def analyze_data(expression: str) -> str:
@@ -130,7 +137,7 @@ def run_mcp_server(
         os_sandbox: str,
         transport: str,
         port: int | None,
-        sandbox_port: int | None,
+        sandbox_port: int,
         pysandboxes_config: Path,
         **kwargs,
 ) -> int:
