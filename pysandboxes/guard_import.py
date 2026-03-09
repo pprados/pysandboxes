@@ -187,8 +187,7 @@ class GuardLoader(Loader):
         # Store the _original spec and loader
         self.fullname = fullname
         self.original_spec: ModuleSpec = original_spec
-        assert original_spec, f"No original spec for {fullname=}"
-        self.original_loader: Loader | None = original_spec.loader
+        self.original_loader: Loader | None = original_spec.loader if original_spec else None
         self.original_module = module
 
     def create_module(self, spec: ModuleSpec) -> ModuleType | None:
@@ -205,6 +204,7 @@ class GuardLoader(Loader):
             return None
         if self.original_module:
             return self.original_module
+        assert self.original_spec, f"No original spec for {self.fullname=}"
         module = self.original_loader.create_module(self.original_spec)
         return module  # Not initialized
 
@@ -338,7 +338,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             # Find a module that was already present
             # Move it into sys.modules.
             pending_module = _pending_modules[fullname]
-            original_spec: ModuleSpec | None = None
+
             module_name: str | None = None
             original_spec = cast(ModuleSpec, pending_module.__spec__)
             if hasattr(original_spec, "name"):
@@ -352,8 +352,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             new_spec = importlib.machinery.ModuleSpec(
                 name=module_name,
                 loader=GuardLoader(fullname, original_spec, _pending_modules[fullname]),
-                origin=original_spec.origin,
-                loader_state=original_spec.loader_state,
+                origin=original_spec.origin if original_spec else None,
+                loader_state=original_spec.loader_state if original_spec else None,
             )
             original_spec = None
 

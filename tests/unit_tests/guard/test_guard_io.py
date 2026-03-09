@@ -259,11 +259,11 @@ def test_io_FileIO(files: Dict[str, Path]) -> None:
 
     import io
 
-    with io.FileIO(files["visible"], "r") as f:
+    with io.FileIO(files["visible"], "r") as f:  # FIXME
         assert f.read() == b"Visible"
 
-    with io.FileIO(files["bind_dest"] / "bound_file.txt", "r"):
-        pass
+    with io.FileIO(files["bind_dest"] / "bound_file.txt", "r") as f:
+        assert f.read() == b"Content"
 
     with pytest.raises(RuleFileNotFoundError):
         with io.FileIO(files["ignore"], "r"):

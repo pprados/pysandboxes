@@ -494,8 +494,8 @@ def _apply_dest_to_src_rules(
 
     if not path:
         return None, None
-    if isinstance(path, _DirEntry):  # FIXME: a vérifier
-        path = path.path
+    # if isinstance(path, _DirEntry):  # FIXME: check _DIREntry?
+    #     path = path.path
     fake_path = _os_path_abspath(path)
     if str(path).endswith("/"):
         fake_path = fake_path + "/"
@@ -653,8 +653,8 @@ def _wrap_filename(func: Callable, *, write: bool, learn: bool = True) -> Callab
         # Detect call from posixpath
         if isinstance(file, int):
             return func(file, *args, **kwargs)
-        if isinstance(file, _DirEntry):
-            file = file.path
+        # if isinstance(file, _DirEntry):  # FIXME: check _DIREntry?
+        #     file = file.path
         if isinstance(file, bytes):
             file = os.fsdecode(file)
         file = cast(str, file)
@@ -684,12 +684,10 @@ def _wrap_two_filenames(
         **kwargs: dict[str, Any],
     ) -> Any:
         # Detect call from posixpath
-        if isinstance(src, _DirEntry):
-            src = src.path
+        # if isinstance(src, _DirEntry):  # FIXME: check _DIREntry?
+        #     src = src.path
         if isinstance(src, bytes):
             src = os.fsdecode(src)
-        if isinstance(dest, _DirEntry):
-            dest = dest.path
         if isinstance(dest, bytes):
             dest = os.fsdecode(dest)
         src = cast(str, src)
@@ -723,24 +721,24 @@ def _wrap_two_filenames(
     return wrapper
 
 
-def _wrap_os_path_realpath(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(file: str | bytes | os.PathLike) -> Any:
-        # Detect call from posixpath
-        file = cast(str, file)
-        remapped, rule = _apply_dest_to_src_rules(cast(str, file), write=False)
-        if rule:
-            _raise_ignore(file, rule)
-        if not remapped:
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), False))
-                remapped = file
-                pass
-            else:
-                _raise_access(file)
-        return func(remapped)
-
-    return wrapper
+# def _wrap_os_path_realpath(func: Callable) -> Callable:
+#     @functools.wraps(func)
+#     def wrapper(file: str | bytes | os.PathLike) -> Any:
+#         # Detect call from posixpath
+#         file = cast(str, file)
+#         remapped, rule = _apply_dest_to_src_rules(cast(str, file), write=False)
+#         if rule:
+#             _raise_ignore(file, rule)
+#         if not remapped:
+#             if is_learning_mode():
+#                 add_learning_rule(LearnFileRule(Path(file), False))
+#                 remapped = file
+#                 pass
+#             else:
+#                 _raise_access(file)
+#         return func(remapped)
+#
+#     return wrapper
 
 
 def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
@@ -898,8 +896,8 @@ def _wrap_os_open(func: Callable) -> Callable:
             if rule:
                 _raise_ignore(path, rule)
             return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
-        if isinstance(path, _DirEntry):  # FIXME: vérifier si nécessaire
-            path = path.path
+        # if isinstance(path, _DirEntry):  # FIXME: check _DIREntry?
+        #     path = path.path
         path = cast(str, path)
         if isinstance(flags, int):
             need_to_write = bool(
@@ -946,8 +944,8 @@ def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
                 effective_ids=effective_ids,
                 follow_symlinks=follow_symlinks,
             )
-        if isinstance(path, _DirEntry):
-            path = path.path
+        # if isinstance(path, _DirEntry):  # FIXME: check _DIREntry?
+        #     path = path.path
         path = cast(str, path)
         remapped, rule = _apply_dest_to_src_rules(path, write=write)
         if rule:
@@ -1314,8 +1312,8 @@ def _wrap_io_open(func: Callable) -> Callable:
                 closefd=closefd,
                 opener=opener,
             )
-        if isinstance(file, _DirEntry):  # FIXME: validate
-            file = file.path
+        # if isinstance(file, _DirEntry):  # FIXME: check _DIREntry?
+        #     file = file.path
         if isinstance(file, bytes):
             file = os.fsdecode(file)
         file = str(file)
@@ -1346,49 +1344,51 @@ def _wrap_io_open(func: Callable) -> Callable:
 
 
 def _wrap_io_FileIO(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(
-        file: str | bytes | os.PathLike | int,
-        mode: str | None = "r",
-        closefd: bool = True,
-        opener: Callable | None = None,
-    ) -> Any:
+    from _io import FileIO as _io_FileIO
+    from io import FileIO as io_FileIO
+    from io import RawIOBase
+    class FileIO(io_FileIO):
+        def __new__(cls,
+                        file: str | bytes | os.PathLike | int,
+                        mode: str | None = "r",
+                        closefd: bool = True,
+                        opener: Callable | None = None,
 
-        # Detect call from posixpath
-        if mode is None:
-            mode = "r"
-        if isinstance(file, int):
-            return func(
-                file=file,
+                    ):
+            # Detect call from posixpath
+            if mode is None:
+                mode = "r"
+            if isinstance(file, int):
+                return func(
+                    file=file,
+                    mode=mode,
+                    closefd=closefd,
+                    opener=opener,
+                )
+            if isinstance(file, bytes):
+                file = os.fsdecode(file)
+            file = str(file)
+            need_to_write = mode is not None and (
+                    "w" in mode or "a" in mode or "x" in mode or "+" in mode
+            )
+            remapped, rule = _apply_dest_to_src_rules(file, write=need_to_write)
+            if rule:
+                _raise_ignore(file, rule)
+            if remapped is None:
+                if is_learning_mode():
+                    add_learning_rule(LearnFileRule(Path(file).absolute(), need_to_write))
+                    remapped = file
+                else:
+                    _raise_access(file)
+            instance= io_FileIO.__new__(io_FileIO)
+            instance.__init__(
+                file=remapped,
                 mode=mode,
                 closefd=closefd,
                 opener=opener,
             )
-        # if isinstance(name, _DirEntry):
-        #     file = file.path
-        if isinstance(file, bytes):
-            name = os.fsdecode(file)
-        file = str(file)
-        need_to_write = mode is not None and (
-            "w" in mode or "a" in mode or "x" in mode or "+" in mode
-        )
-        remapped, rule = _apply_dest_to_src_rules(file, write=need_to_write)
-        if rule:
-            _raise_ignore(file, rule)
-        if remapped is None:
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file).absolute(), need_to_write))
-                remapped = name
-            else:
-                _raise_access(file)
-        return func(
-            file=remapped,
-            mode=mode,
-            closefd=closefd,
-            opener=opener,
-        )
-
-    return wrapper
+            return instance
+    return FileIO
 
 
 # %% _os
@@ -1486,7 +1486,7 @@ _default_rules: dict[str, Callable] = {
     # %% high level access
     "io.open": _f(_wrap_io_open),
     "io.open_code": _f(_wrap_filename, write=False),
-    # FIXME "io.FileIO": _f(_wrap_io_FileIO),
+    "io.FileIO": _f(_wrap_io_FileIO),
     # %%
     # ALLOW os.path.abspath
     # ALLOW os.path.basename
@@ -1507,7 +1507,7 @@ _default_rules: dict[str, Callable] = {
     # ALLOW os.path.join
     # ALLOW os.path.normcase
     # ALLOW os.path.normpath
-    # "os.path.realpath": _f(_wrap_filename, write=False, learn=False),  # FIXME
+    # "os.path.realpath": _f(_wrap_filename, write=False, learn=False),
     # ALLOW os.path.relpath
     # ALLOW os.path.samefile
     # ALLOW os.path.expanduser
