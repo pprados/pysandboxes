@@ -28,14 +28,14 @@ integration-tests:
 ## Make integration tests
 sample-tests:
 	(cd samples/mcp-client && make test)
-	#(cd samples/mcp-server && make test)
+	(cd samples/mcp-server && make test)
 
 ## Make github tests locally
 gh-tests: lint
 	gh act push
 
 ## Make all tests
-all-tests: unit-tests integration-tests
+all-tests: unit-tests integration-tests sample-tests
 
 test_watch:
 	uv run ptw --now . -- tests/unit_tests

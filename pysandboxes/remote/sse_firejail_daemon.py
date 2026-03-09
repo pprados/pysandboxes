@@ -49,7 +49,6 @@ from .tools import (
     which_command,
 )
 
-# TODO: add custom firejail parametersv like --seccomp
 logger = logging.getLogger(__name__)
 
 DEBUG_NETFILTER = False  # FIX_RELEASE
