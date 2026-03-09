@@ -301,7 +301,7 @@ class sandboxes:
             return
 
         logger.debug("launch the shutdown_daemon")
-        # FIXME: je n'ai plus de boucle !
+        # FIXME: je n'ai plus de boucle pour l'exit!
         get_sandbox_loop()
         asyncio.run_coroutine_threadsafe(
             async_shutdown_daemon(self.graceful_shutdown), get_sandbox_loop()
@@ -365,7 +365,7 @@ class sandboxes:
                 handler = self._signals[signum]
                 if handler and callable(handler):
                     return handler(signum, frame)
-                return None  # FIXME: a vérifier
+                return None  # FIXME: signal a vérifier
 
             if threading.current_thread() is threading.main_thread():
                 logger.debug("Activate signal handlers.")

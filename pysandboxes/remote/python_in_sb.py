@@ -55,7 +55,7 @@ def _register_signal() -> None:
         It will kill daemon processes before exiting itself.
         """
         # Iterate through all child processes and send them SIGTERM
-        logger.info("Pysandboxes: Catch signal %s.", signum)  # FIXME
+        logger.info("Pysandboxes: Catch signal %s.", signum)  # FIXME: signal
         handler = signals[signum]
         signal.signal(signal.Signals(s), handler)  # Remove signal handler
         generate_config_from_learning()  # Save learning rules
@@ -70,7 +70,7 @@ def _register_signal() -> None:
         # logger.error("Activate signal handlers.")
         for s in signals.keys():
             signal.signal(signal.Signals(s), signal_handler)
-    return None  # FIXME
+    return None  # FIXME: signal
 
 
 def _python_interactive(
@@ -248,7 +248,7 @@ def python_in_sb(
     python_cmd: List[str],
 ) -> int:
     try:
-        _debug_log()  # FIXME: remove
+        _debug_log()  # FIXME: log remove
         set_is_in_sandbox(True)
 
         set_learning_path(

@@ -161,7 +161,7 @@ async def launch_sandbox(
     Returns:
         The launched subprocess.
     """
-    os.mkfifo(pipe_path)  # FIXME a remettre
+    os.mkfifo(pipe_path)
     if DEBUG_LAUNCH:
         try:
             Path("run.sh").write_text(
@@ -520,7 +520,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         # Wait the server
         gc.collect()
         ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
-        logger.debug("Try to call %s", ping_url)  # FIXME
+        logger.debug("Try to call %s", ping_url)
         async with aiohttp.ClientSession() as session:
             count_loop = 0
             while True:

@@ -12,6 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from pysandboxes.config import CONFIG_NAME
 from pysandboxes.tools import find_config_for_module
 
 
@@ -95,20 +96,21 @@ def parse_python_cmd_line(
         python_run_args = args[split_pos:]
         args = args[:split_pos]
 
-    pysandboxes_config: Path = Path()
+    pysandboxes_config: Path = Path(CONFIG_NAME)
+    module_mode = False
+    if (len(python_run_args) >= 2 and python_run_args[0] == "-m"):
+        module_mode=True
+
     for arg in args:
         if arg.startswith("--pysandboxes-config="):
+            # Accept full name or relative name of the module
             _, pysandboxes_config_p = arg.split("=", maxsplit=1)
             pysandboxes_config = Path(pysandboxes_config_p)
 
-    if (
-        pysandboxes_config == Path()
-        and len(python_run_args) >= 2
-        and python_run_args[0] == "-m"
-    ):
+    if ("/" not in str(pysandboxes_config) and module_mode):
         try:
             caller_module = python_run_args[1]
-            if x := find_config_for_module(caller_module):
+            if x := find_config_for_module(caller_module, str(pysandboxes_config)):
                 pysandboxes_config = x
         except FileNotFoundError:
             pass  # Ignore
@@ -117,7 +119,7 @@ def parse_python_cmd_line(
         arg
         for arg in args
         if arg.startswith("--") and arg not in long_params
-        # FIXME and not arg.startswith("--pysandboxes-config=")
+        and not arg.startswith("--pysandboxes-config=")
     ]
     args = [arg for arg in args if arg not in sandboxes_args]
 
@@ -274,7 +276,7 @@ def parse_python_cmd_line(
             "--<sb-option>=<value>",
             action="store_true",
             dest="config",
-            help="Add some Py-sandboxes parameters.",
+            help="Add some Py-sandboxes parameters. They have priority.",
         )
         group = parser.add_mutually_exclusive_group()
 

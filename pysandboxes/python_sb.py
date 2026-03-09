@@ -69,27 +69,27 @@ def main() -> int:
     # If --learn and --pysandboxes-config=xxx, use --learn=xxx
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
     # If -m module  use resource module/.py-sandboxes
-    learn_path: Path
-    if len(extra_rules.get("learn", set())):
-        learn_path = Path(list(extra_rules["learn"])[0])
-        if learn_path == Path():
-            if config_path == Path():
-                learn_path = Path(CONFIG_NAME)
-            else:
-                learn_path = config_path
-        extra_rules["learn"] = {str(learn_path)}
-    if config_path == Path():
-        config_path = Path(CONFIG_NAME)
-    if not config_path.exists() and "learn" not in extra_rules:
-        extra_rules["learn"] = set()
+    # learn_path: Path
+    # if len(extra_rules.get("learn", set())):
+    #     learn_path = Path(list(extra_rules["learn"])[0])
+    #     if learn_path == Path():
+    #         if config_path == Path():
+    #             learn_path = Path(CONFIG_NAME)
+    #         else:
+    #             learn_path = config_path
+    #     extra_rules["learn"] = {str(learn_path)}
+    # if config_path == Path():
+    #     config_path = Path(CONFIG_NAME)
+    # if not config_path.exists() and "learn" not in extra_rules:
+    #     extra_rules["learn"] = set()
     try:
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
         extra_rules["env"] = envs
-        if config_path.is_relative_to(Path()):
-            logger.info(f"Use {config_path.relative_to(Path())}")
-        else:
-            logger.info(f"Use {config_path=}")
+        # if config_path.is_relative_to(Path()):
+        #     logger.info(f"Use {config_path.relative_to(Path())}")
+        # else:
+        #     logger.info(f"Use {config_path=}")
         all_rules = load_and_parse_config(
             config_path=config_path,
             envs=os.environ,  # Use current environ

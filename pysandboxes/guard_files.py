@@ -1392,15 +1392,6 @@ def _wrap_io_FileIO(func: Callable) -> Callable:
 
 
 # %% _os
-def _wrap__os(module: ModuleType) -> ModuleType:
-    # if "os" in sys.modules:
-    #     del sys.modules["os"]  # FIXME: pourquoi del sur ce module ? Et io ?
-    import os
-
-    assert os.open.__pysandbox__  # type: ignore[attr-defined]
-    return os
-
-
 def _wrap__io(module: ModuleType) -> ModuleType:
     if "io" in sys.modules:
         del sys.modules["io"]
@@ -1495,7 +1486,7 @@ _default_rules: dict[str, Callable] = {
     # %% high level access
     "io.open": _f(_wrap_io_open),
     "io.open_code": _f(_wrap_filename, write=False),
-    "io.FileIO": _f(_wrap_io_FileIO),
+    # FIXME "io.FileIO": _f(_wrap_io_FileIO),
     # %%
     # ALLOW os.path.abspath
     # ALLOW os.path.basename
@@ -1567,10 +1558,6 @@ _default_rules: dict[str, Callable] = {
     # ALLOW shutil.move
     # "shutil.rmtree": _f(_wrap_filename, write=True),
     # ALLOW shutil.which
-    # "tempfile._os": _f(_wrap__os),  # TODO: check python version
-    # "pathlib._local.io": _f(_wrap__io),  # TODO: check python version
-    # "pathlib._local.os": _f(_wrap__os),
-    # "shutil.os": _f(_wrap__os),
     # builtins
     "builtins.open": _f(_wrap_buitins_open),
 }

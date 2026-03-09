@@ -144,11 +144,15 @@ def load_and_parse_config(
 
     if not config_path:
         config_path = Path(CONFIG_NAME)
-
     pysb_module_name = __name__.split(".", 1)[0]
 
     if "/" not in str(config_path):
         config_path = _search_module_config(config_path)
+
+    if config_path.is_relative_to(Path().absolute()):
+        logger.info(f"Use {str(config_path.relative_to(Path().absolute()))}")
+    else:
+        logger.info(f"Use {str(config_path)}")
 
     if not config_path.exists():
         # Activate the learn mode

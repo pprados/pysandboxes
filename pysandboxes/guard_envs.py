@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import threading
+from collections import defaultdict
 from types import FrameType
 from typing import Any, Callable, Generator, Iterator, NamedTuple, cast
 from weakref import WeakKeyDictionary
@@ -191,7 +192,7 @@ class LearnEnviron(os._Environ):
         return _catch_for_all()  # TODO: items()
 
     def __contains__(self, key: object) -> bool:
-        return super(LearnEnviron, self).__contains__(key)  # FIXME
+        return super(LearnEnviron, self).__contains__(key)  # FIXME: a virer?
 
     def __getitem__(self, key: str) -> str:
         """Get environment variable and track access in learning mode.

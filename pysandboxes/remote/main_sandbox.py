@@ -42,12 +42,12 @@ logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 
 def _debug_log() -> None:
-    logging.lastResort = logging._StderrHandler(logging.DEBUG)  # type: ignore[attr-defined] # FIXME
+    logging.lastResort = logging._StderrHandler(logging.DEBUG)  # type: ignore[attr-defined] # FIXME: log
     logging.basicConfig(
         force=True,
         level=logging.DEBUG,
         format="%(asctime)s - %(levelname)s - %(message)s",
-    )  # FIXME: a garder?
+    )  # FIXME: log a garder?
     sandbox_level = logging.DEBUG  # FIX_RELEASE
     uvicorn_log_level = logging.ERROR  # FIX_RELEASE
     config_log(sandbox_level)
@@ -62,7 +62,7 @@ def _debug_log() -> None:
     logger.debug(
         "*** Start main_sandbox\n"
         + " ".join((repr(c) if " " in c else c for c in sys.argv))
-    )  # FIXME
+    )  # FIXME: log
 
 
 # %%
