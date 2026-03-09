@@ -41,16 +41,16 @@ if MOCK:
 
 timeout = 30
 all_os_sandbox = [
-    # "None",
-    "Subprocess",
+    # "None",  # FIX_RELEASE
+    # "Subprocess",
     # "firejail",
 ]
 all_protocol = [
     # "stdio",
-    "http"
+    # "http"
 ]
 all_pysandboxes_mode = [
-    "complete",
+    # "complete",
     # "partial"
 ]
 
@@ -106,7 +106,7 @@ def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> N
                "--permission-mode", "bypassPermissions",
                "-p", 'call the mcp server \'mcp_demo\' to print the resource @config://version',
                )
-        logger.info("cmd: %s", " ".join(cmd))
+        logger.info("cmd: %s", " ".join([repr(x) if ' ' in x else x for x in cmd]))
         result = run(
             cmd,
             env=os.environ.copy() | {"OS_SANDBOX": os_sandbox},

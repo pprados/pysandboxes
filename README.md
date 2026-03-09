@@ -198,7 +198,7 @@ alias python-sb='uvx --from pysandboxes python-sb'
 
 ## Apply the sandbox to a part of the application (partial mode).
 
-Often, the application needs all privileges, has access to all API tokens, etc. Only a part of the application should be executed in a sandbox. For example, tools invoked by an LLM should not have access to all files or all environment variables. This makes it more difficult to abuse them.
+Often, the application needs all privileges, has access to all API tokens, etc. Only a part of the application should be executed in a sandbox. For example, tools invoked by an LLM should not have access to all files or all environment variables. This makes it more difficult to abuse them. The granularity is finer.
 
 In this scenario, your application will be split into two parts:
 

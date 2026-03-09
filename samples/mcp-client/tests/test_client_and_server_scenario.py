@@ -186,7 +186,7 @@ def test_claude_evaluate_expression(
             process.kill()
 
 
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)

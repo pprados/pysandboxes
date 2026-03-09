@@ -5,12 +5,12 @@
     "mcp_server": {
       "cwd": "../mcp-server",
       "command": "python",
-//      "command": "uv",
+      "command": "uv",
       "args": [
-//        "run",
+        "run",
         "-m", "pysandboxes.python_sb",
         "--pysandboxes-config=mcp_server/.py-sandboxes",
-        "--learn=mcp_server/.py-sandboxes",  // FIXME
+//        "--learn=mcp_server/.py-sandboxes",
         "-m", "mcp_server.main",
         "-t", "stdio"
       ],
