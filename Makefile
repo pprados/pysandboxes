@@ -23,7 +23,7 @@ unit-tests:
 
 ## Make integration tests
 integration-tests:
-	uv run pytest tests/integration-tests
+	uv run pytest tests/integration_tests
 
 ## Make integration tests
 sample-tests:
