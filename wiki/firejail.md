@@ -12,7 +12,7 @@ ip link show type bridge
 ```
 If you find `docker0` or `br0`, it's good.
 
-Otherwise, you must create a bridge. The `add-bridge.sh` script does this.
+Otherwise, you must create a bridge. The `[add-bridge.sh](https://github.com/pprados/pysandboxes/tree/master/scripts)` script does this.
 ```bash
 sudo uv run ./add-bridge.sh
 ```
@@ -20,7 +20,7 @@ sudo uv run ./add-bridge.sh
 ## Specific Parameters
 Some specific parameters can be added to `.py-sandboxes` for *Firejail*. Parameters of the form `firejail.<xxx>=<yyy>` will be added in the form `--<xxx>=<yyy>` when launching firejail.
 
-You can thus further strengthen security by limiting the system calls authorized by your application. To do this, you need to identify them. We offer a script to help you.
+You can thus further strengthen security by limiting the system calls authorized by your application. To do this, you need to identify them. We offer a script [extract_strace.sh](https://github.com/pprados/pysandboxes/tree/develop/scripts) to help you.
 ```
 uv run extract_strace.sh <command to start your application>
 ```
