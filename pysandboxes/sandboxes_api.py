@@ -300,6 +300,9 @@ class sandboxes:
             set_is_in_sandbox(False)
             return
 
+        logger.debug("launch the shutdown_daemon")
+        # FIXME: je n'ai plus de boucle !
+        get_sandbox_loop()
         asyncio.run_coroutine_threadsafe(
             async_shutdown_daemon(self.graceful_shutdown), get_sandbox_loop()
         ).result()

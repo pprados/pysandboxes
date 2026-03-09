@@ -58,6 +58,7 @@ def _debug_log() -> None:
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_log_level)
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandbox_level)
+    logging.getLogger("pysandboxes.guard_import").setLevel(logging.INFO)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
     logger.debug(
         "*** Start main_sandbox\n"
@@ -135,7 +136,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
-    _debug_log()  # FIXME
+    _debug_log()  # FIX_RELEASE
     threading.main_thread().name = "DaemonMainThread"
 
     parser = argparse.ArgumentParser(

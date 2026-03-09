@@ -44,7 +44,7 @@ from .sb_types import ConfigLines
 from .tools import is_in_sandbox
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)  # FIX_RELEASE: comment this line
+logger.setLevel(logging.DEBUG)  # FIX_RELEASE: comment this line
 
 if TYPE_CHECKING:
     from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
@@ -186,6 +186,7 @@ class GuardLoader(Loader):
         # Store the _original spec and loader
         self.fullname = fullname
         self.original_spec: ModuleSpec = original_spec
+        assert original_spec,f"No original spec for {fullname=}"
         self.original_loader: Loader | None = original_spec.loader
         self.original_module = module
 
@@ -301,7 +302,6 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             finders: List of meta path finders to delegate to.
         """
         self._finders = finders
-        self._debug = False  # FIX_RELEASE
 
     """
     A custom finder that locates our special module.
@@ -324,8 +324,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             Module specification with guard loader if applicable.
         """
         global _rules
-        if self._debug:
-            logger.debug(f"find_spec({fullname=},{path=},{target=})")
+        logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
         # Delegate to the rest of the chain to find the _original module spec
         # We skip our own finder by checking sys.meta_path from the next index
@@ -365,10 +364,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             else:
                 return None
         if original_spec:
-            if self._debug:
-                logger.debug(
-                    f"GuardFinder: Found _original spec via {type(finder).__name__!r}."
-                )
+            logger.debug(
+                f"GuardFinder: Found _original spec via {type(finder).__name__!r}."
+            )
             # Create a new spec using our custom GuardLoader,
             # but with the _original spec's data
 
@@ -385,8 +383,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                             return None
                         init_file = original_spec.origin
                     assert os.path.isfile(init_file), "module without __init__.py"
-                    if self._debug:
-                        logger.debug(f"Inject loader for {original_spec.name!r}")
+                    logger.debug(f"Inject loader for {original_spec.name!r}")
                     new_spec = importlib.util.spec_from_file_location(
                         fullname,
                         init_file,
@@ -500,13 +497,14 @@ def activate_guard_import(
     """
     global _rules
     global _activated
+
     patch_rules: PatchRules = _conv_patch_rules(str_patch_rules)
     if _activated:
         logger.debug("Guard_files was already activated.")
         return
     if _activate_patch_import(patch_rules):  # Add in sys.meta_path
         # For all loaded modules, apply patch
-        for module in sys.modules:
+        for module in sys.modules:  # FIXME: no prepatch
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
 
@@ -514,7 +512,8 @@ def activate_guard_import(
     # The modules will be reinjected as needed.
     global _pending_modules
     _pending_modules = copy(sys.modules)
-    keep = ["warnings", "asyncio"]
+    keep = ["warnings", "asyncio", "sys", "threadpool"]  # FIXME: add in rules ?
+    # logger.warning("NO DELETE MODULE")
     for k in _pending_modules:
         # logger.debug("Remove %s", k)
         if k not in keep:

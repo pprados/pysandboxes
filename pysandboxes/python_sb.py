@@ -11,7 +11,7 @@ from typing import Any, Mapping, cast
 
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
-from pysandboxes.learning import set_learning_path
+from pysandboxes.learning import set_learning_path, set_learning_mode
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
@@ -42,7 +42,7 @@ def _debug_log() -> None:
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandbox_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
-    logging.info("Start in python-sb")
+    logging.info("Start with python-sb")
 
 
 def main() -> int:
@@ -71,16 +71,18 @@ def main() -> int:
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
     # If -m module  use resource
     learn_path: Path
-    if len(extra_rules.get("learn", [])):
+    if len(extra_rules.get("learn", set())):
         learn_path = Path(list(extra_rules["learn"])[0])
         if learn_path == Path():
             if config_path == Path():
                 learn_path = Path(CONFIG_NAME)
             else:
                 learn_path = config_path
-        extra_rules["learn"] = set(str(learn_path))
+        extra_rules["learn"] = {str(learn_path)}
     if config_path == Path():
         config_path = Path(CONFIG_NAME)
+    if not config_path.exists() and "learn" not in extra_rules:
+        extra_rules["learn"]=set()
     try:
         envs = extra_rules.get("env", set())
         envs.add("TERM=${TERM}")
@@ -91,7 +93,8 @@ def main() -> int:
             envs=os.environ,  # Use current environ
             **cast(Mapping[str, Any], extra_rules),
         )
-        set_learning_path(all_rules.learning_path)
+        # set_learning_path(all_rules.learning_path)  # Not necessary here
+        # set_learning_mode(all_rules.learn)
     except ConfigSyntaxError as e:
         print(str(e), file=sys.stderr)
         sys.exit(-1)

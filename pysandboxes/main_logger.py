@@ -81,20 +81,20 @@ def format_error_list(errors: Sequence[str]) -> str:
 def config_log(log_level: int, format: str | None = None) -> None:
     handlers: list[logging.Handler] = []
     try:
-        from rich.console import Console
-        from rich.logging import RichHandler
-
-        # Active RichHandler if possible.
-        handlers.append(
-            RichHandler(
-                console=Console(stderr=True),
-                rich_tracebacks=False,
-                log_time_format="[%X]",
-                show_time=True,
-            )
-        )
-        if not format:
-            format = "[%(process)d] %(message)s"
+        # from rich.console import Console
+        # from rich.logging import RichHandler
+        #
+        # # Active RichHandler if possible.
+        # handlers.append(
+        #     RichHandler(
+        #         console=Console(stderr=True),
+        #         rich_tracebacks=False,
+        #         log_time_format="[%X]",
+        #         show_time=True,
+        #     )
+        # )
+        # if not format:
+        #     format = "[%(process)d] %(message)s"
         pass
     except ImportError:
         if not format:

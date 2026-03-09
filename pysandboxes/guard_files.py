@@ -18,7 +18,7 @@ import os
 import sys
 from collections import OrderedDict
 from errno import ENOENT
-from os import scandir as _scandir
+from os import scandir as _scandir, PathLike
 from pathlib import Path as Path
 from types import ModuleType, TracebackType
 from typing import (
@@ -398,6 +398,8 @@ def generate_rules(
                                 x = ""
                             if key == "PWD":
                                 value = "." + x
+                            elif key == "HOME":
+                                value = "~" + x
                             else:
                                 value = f"${{{key}}}" + x
                         break
@@ -408,6 +410,15 @@ def generate_rules(
             if path != home:
                 allready_added.append(LearnFileRule(path, write))
     return sorted(list(result))
+
+
+def _apply_ignore_rule(path: str | os.PathLike) -> tuple[str | None, FilesRule | None]:
+    for rule in _rules:
+        if isinstance(rule, IgnoreRule):
+            assert rule.source is not None
+            if fnmatch.fnmatch(Path(path).name, rule.source):
+                return None, rule
+    return str(path), None
 
 
 # Helper to resolve symlinks and apply rules
@@ -466,15 +477,6 @@ def _apply_src_to_dest_rules(
     return path, None
 
 
-def _apply_ignore_rule(path: str | os.PathLike) -> tuple[str | None, FilesRule | None]:
-    for rule in _rules:
-        if isinstance(rule, IgnoreRule):
-            assert rule.source is not None
-            if fnmatch.fnmatch(Path(path).name, rule.source):
-                return None, rule
-    return str(path), None
-
-
 # Helper to resolve symlinks and apply rules
 def _apply_dest_to_src_rules(
     path: str | os.PathLike | _DirEntry,
@@ -492,7 +494,7 @@ def _apply_dest_to_src_rules(
 
     if not path:
         return None, None
-    if isinstance(path, _DirEntry):
+    if isinstance(path, _DirEntry):  # FIXME: a vérifier
         path = path.path
     fake_path = _os_path_abspath(path)
     if str(path).endswith("/"):
@@ -702,6 +704,20 @@ def _wrap_two_filenames(
             _raise_ignore(dest, rule2)
         if remapped_src is None and rule1 is not None:
             _raise_ignore(src, rule1)
+        if remapped_src is None:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(src), in_write))
+                remapped_src = src
+            else:
+                _raise_access(src)
+
+        if remapped_dest is None:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(dest), out_write))
+                remapped_dest = dest
+            else:
+                _raise_access(dest)
+
         return func(str(remapped_src), str(remapped_dest), *args, **kwargs)
 
     return wrapper
@@ -717,7 +733,7 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
             _raise_ignore(file, rule)
         if not remapped:
             if is_learning_mode():
-                # add_learning_rule(LearnFileRule(Path(file), write))
+                add_learning_rule(LearnFileRule(Path(file), write))
                 remapped = file
                 pass
             else:
@@ -1007,8 +1023,12 @@ def _wrap_os_getcwdb(func: Callable) -> Callable:
 
 def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]:
     @functools.wraps(func)
-    def wrapper(path: str | os.PathLike | None = None) -> list[str]:
+    def wrapper(path: str | os.PathLike | bytes | int | None = None) -> list[str]:
 
+        if isinstance(path,int):
+            return func(path=path)
+        if isinstance(path, bytes):
+            path = os.fsdecode(path)
         if path is None:
             path = "."
         path = cast(str, path)
@@ -1025,15 +1045,18 @@ def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]
                 else:
                     _raise_access(path)
             entries = func(remapped)
-            filtered: list[str] = []
-            for entry in entries:
-                full_path = os.path.join(path, entry)
-                remapped_file, _ = _apply_dest_to_src_rules(
-                    full_path, write=False, accept_dest=True
-                )
-                if remapped_file and remapped_file not in filtered:
-                    filtered.append(entry)
-            return filtered
+            if not is_learning_mode():
+                filtered: list[str] = []
+                for entry in entries:
+                    full_path = os.path.join(path, entry)
+                    remapped_file, _ = _apply_dest_to_src_rules(
+                        full_path, write=False, accept_dest=True
+                    )
+                    if remapped_file and remapped_file not in filtered:
+                        filtered.append(entry)
+                return filtered
+            else:
+                return entries
         else:
             return []
 
@@ -1291,7 +1314,7 @@ def _wrap_io_open(func: Callable) -> Callable:
                 closefd=closefd,
                 opener=opener,
             )
-        if isinstance(file, _DirEntry):
+        if isinstance(file, _DirEntry):  # FIXME: validate
             file = file.path
         if isinstance(file, bytes):
             file = os.fsdecode(file)
@@ -1402,8 +1425,8 @@ def _f(func: Callable, **kwargs: Any) -> Callable:
 _default_rules: dict[str, Callable] = {
     "os.chdir": _f(_wrap_os_chdir, write=False),
     # ALLOW os.fchdir
-    # "os.getcwd": _f(_wrap_os_getcwd),
-    # "os.getcwdb": _f(_wrap_os_getcwdb),
+    "os.getcwd": _f(_wrap_os_getcwd),
+    "os.getcwdb": _f(_wrap_os_getcwdb),
     # ALLOW os.fdopen
     "os.open": _f(_wrap_os_open),
     "os.access": _f(_wrap_os_access, write=False),
@@ -1472,7 +1495,7 @@ _default_rules: dict[str, Callable] = {
     # %% high level access
     "io.open": _f(_wrap_io_open),
     "io.open_code": _f(_wrap_filename, write=False),
-    "io.FileIO": _f(_wrap_io_FileIO),
+    # FIXME "io.FileIO": _f(_wrap_io_FileIO),
     # %%
     # ALLOW os.path.abspath
     # ALLOW os.path.basename
@@ -1481,14 +1504,14 @@ _default_rules: dict[str, Callable] = {
     # "os.path.lexists": _f(_wrap_filename, write=False),
     # ALLOW os.path.expanduser
     # ALLOW os.path.expandvars
-    #     "os.path.getatime": _f(_wrap_filename, write=False),
-    #     "os.path.getmtime": _f(_wrap_filename, write=False),
-    #     "os.path.getctime": _f(_wrap_filename, write=False),
-    #     "os.path.getsize": _f(_wrap_filename, write=False),
+    # "os.path.getatime": _f(_wrap_filename, write=False),
+    # "os.path.getmtime": _f(_wrap_filename, write=False),
+    # "os.path.getctime": _f(_wrap_filename, write=False),
+    # "os.path.getsize": _f(_wrap_filename, write=False),
     # ALLOW os.path.isabs
-    #     "os.path.isfile": _f(_wrap_os_path_is, write=False),
-    #     "os.path.isdir": _f(_wrap_os_path_is, write=False),
-    #     "os.path.islink": _f(_wrap_os_path_is, write=False),
+    # "os.path.isfile": _f(_wrap_os_path_is, write=False),
+    # "os.path.isdir": _f(_wrap_os_path_is, write=False),
+    # "os.path.islink": _f(_wrap_os_path_is, write=False),
     # ALLOW os.path.ismount
     # ALLOW os.path.join
     # ALLOW os.path.normcase
@@ -1547,7 +1570,7 @@ _default_rules: dict[str, Callable] = {
     # "tempfile._os": _f(_wrap__os),  # TODO: check python version
     # "pathlib._local.io": _f(_wrap__io),  # TODO: check python version
     # "pathlib._local.os": _f(_wrap__os),
-    "shutil.os": _f(_wrap__os),
+    # "shutil.os": _f(_wrap__os),
     # builtins
     "builtins.open": _f(_wrap_buitins_open),
 }

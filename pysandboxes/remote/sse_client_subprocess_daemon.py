@@ -56,7 +56,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG = True  # FIX_RELEASE
+DEBUG_LAUNCH = True  # FIX_RELEASE
 
 
 def get_log_formatter() -> str:
@@ -162,7 +162,7 @@ async def launch_sandbox(
         The launched subprocess.
     """
     os.mkfifo(pipe_path)  # FIXME a remettre
-    if DEBUG:
+    if DEBUG_LAUNCH:
         try:
             Path("run.sh").write_text(
                 "#!/bin/bash\n"
@@ -311,8 +311,9 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             sys.executable,
             "-P",  # Don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
             "-u",  # Unbuffered output
-            "-d",  # Mode debug à la sortie
         ]
+        if sys.flags.optimize:
+            cmd_parameters.append("-"+"O" * sys.flags.optimize)
         cmd_parameters.extend(self._python_args)
         cmd_parameters.extend(
             [

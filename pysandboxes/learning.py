@@ -165,7 +165,7 @@ def generate_config_from_learning() -> None:
         _save_learning_done = True
 
 
-def _manage_olds_file(_learning_path: Path) -> tuple[Path, Path | None]:
+def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
     """Manage backup files for configuration updates.
 
     Args:
@@ -175,7 +175,7 @@ def _manage_olds_file(_learning_path: Path) -> tuple[Path, Path | None]:
         Tuple of (current_path, backup_path).
     """
     old_learning_path = None
-    learning_path = _learning_path
+
     if learning_path.exists() and not learning_path.is_dir():
         i = 0
         while True:
@@ -185,7 +185,7 @@ def _manage_olds_file(_learning_path: Path) -> tuple[Path, Path | None]:
                 break
             i += 1
         old_learning_path = Path(backup)
-    return Path(learning_path), old_learning_path
+    return learning_path, old_learning_path
 
 
 def set_learning_path(learning_path: Path) -> None:
