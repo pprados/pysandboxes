@@ -249,6 +249,17 @@ async def main(argv: List[str]) -> int:
 if __name__ == "__main__":
 
     try:
+        import aiofiles.threadpool.__init__
+        from io import FileIO
+
+        os.path.realpath("LICENSE.txt")
+        # @wrap.register(FileIO)
+        # def _(file, *, loop=None, executor=None):
+        #     return AsyncFileIO(file, loop=loop, executor=executor)
+        #
+        #
+        # from httpx_file import FileTransport
+
         asyncio.run(main(sys.argv))
     except KeyboardInterrupt:
         pass
