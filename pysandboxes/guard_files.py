@@ -1495,7 +1495,7 @@ _default_rules: dict[str, Callable] = {
     # %% high level access
     "io.open": _f(_wrap_io_open),
     "io.open_code": _f(_wrap_filename, write=False),
-    # FIXME "io.FileIO": _f(_wrap_io_FileIO),
+    "io.FileIO": _f(_wrap_io_FileIO),
     # %%
     # ALLOW os.path.abspath
     # ALLOW os.path.basename
