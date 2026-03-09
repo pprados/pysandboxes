@@ -22,7 +22,6 @@ import shlex
 import site
 import subprocess
 import sys
-import tempfile
 import threading
 from ipaddress import IPv4Address
 from pathlib import Path
@@ -281,7 +280,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
-            temp:Path,
+        temp: Path,
     ) -> AllRules:
         """Update rules by translating to firejail configuration.
 
@@ -292,7 +291,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         Returns:
             Updated security rules for firejail context.
         """
-        _, updated_all_rules = self._firejail_args(all_rules, envs, None,temp=temp)
+        _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp)
         return updated_all_rules
 
     @property
@@ -305,7 +304,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ | Envs,
         pipe_path: Path | None,
-            temp: Path,
+        temp: Path,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -334,7 +333,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         need_root = False
         args = [str(which_command("firejail"))]
-        for k,v in all_rules.os_sandbox_params.items():
+        for k, v in all_rules.os_sandbox_params.items():
             args.append(f"--{k}={v}")
 
         if logger.getEffectiveLevel() > logging.INFO:
@@ -483,7 +482,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     else:
                         bridge = bridges[0]
                 if not default_interface:
-                    raise ValueError("Impossible to detect the default network interface")
+                    raise ValueError(
+                        "Impossible to detect the default network interface"
+                    )
                 args.append(f"--net={bridge}")
 
             if pipe_path:  # Update rules?
@@ -548,7 +549,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
-            temp: Path,
+        temp: Path,
     ) -> list[str]:
         """Build complete command line for firejail subprocess.
 

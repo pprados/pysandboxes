@@ -65,7 +65,7 @@ class BaseDaemon(ABC):
         *,
         envs: Envs,
         all_rules: "AllRules",
-        temp:Path,
+        temp: Path,
     ) -> "AllRules":
         """Some os-sandbox can update the rules (remove some duplicate rules)
 
@@ -182,7 +182,7 @@ class FakeDaemon(BaseDaemon):
         *,
         envs: Envs,
         all_rules: "AllRules",
-        temp:Path,
+        temp: Path,
     ) -> "AllRules":
         return all_rules
 

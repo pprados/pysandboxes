@@ -57,6 +57,7 @@ def _search_module_config(config_path: Path | None) -> Path:
     resource_config: Path | None = None
     if caller_module != "__main__":
         from importlib.abc import Traversable
+
         resource_path = cast(Traversable, files(caller_module))
         resource_config = Path(resource_path.name) / config_path
     if resource_config and resource_config.exists():

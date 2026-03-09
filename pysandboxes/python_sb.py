@@ -114,10 +114,7 @@ def main() -> int:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
         cmd = os_provider.subprocess_cmd(
-            all_rules,
-            envs=os.environ,
-            pipe_path=pipe_path,
-            temp=Path(tmpdir)
+            all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
         )
         python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
         token = str(uuid.uuid4())

@@ -774,7 +774,9 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
     assert not _pin_dns
     logger.debug(
         "pin_dns=\n  "
-        + "\n  ".join(f"[{k}]:  " + ", ".join(x[4][0] for x in v) for k, v in dns.items())
+        + "\n  ".join(
+            f"[{k}]:  " + ", ".join(x[4][0] for x in v) for k, v in dns.items()
+        )
     )
     _pin_dns = dns
 
@@ -866,6 +868,7 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
     ) -> list[AddrInfoType]:
         if isinstance(host, bytes):
             host = host.decode("utf-8")
+        result: list[AddrInfoType]
         if (
             isinstance(host, str) and host in _pin_dns
         ):  # FIXME: manage others parameters
@@ -880,9 +883,7 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
             if port is not None:
                 result = list(_patch_port(int(port), dns_conf) for dns_conf in result)
         else:
-            result: list[AddrInfoType] = func(
-                host, port, family, type, proto, flags, *args, **kwargs
-            )
+            result = func(host, port, family, type, proto, flags, *args, **kwargs)
         if isinstance(host, str) and host and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(

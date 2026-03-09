@@ -72,7 +72,7 @@ class NoneDaemon(BaseDaemon):
         *,
         envs: Envs,
         all_rules: "AllRules",
-            temp:Path,
+        temp: Path,
     ) -> "AllRules":
         """Update security rules (no-op for none daemon).
 

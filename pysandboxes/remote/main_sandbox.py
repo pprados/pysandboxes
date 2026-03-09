@@ -21,7 +21,6 @@ import logging
 import os
 import pickle
 import sys
-import threading
 from pathlib import Path
 
 from pysandboxes.guard_socket import set_pin_dns

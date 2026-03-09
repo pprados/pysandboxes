@@ -340,7 +340,7 @@ class SSEServerDaemon(BaseSSESandbox):
         global _active_requests
         return _active_requests
 
-    def update_rules(self, *, envs: Envs, all_rules: AllRules, temp:Path) -> AllRules:
+    def update_rules(self, *, envs: Envs, all_rules: AllRules, temp: Path) -> AllRules:
         """Update security rules for server daemon.
 
         Args:

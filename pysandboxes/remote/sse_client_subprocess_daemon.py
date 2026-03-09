@@ -294,7 +294,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
-            temp:Path,
+        temp: Path,
     ) -> Args:
         """Build command line arguments for subprocess.
 
@@ -625,7 +625,7 @@ class SubProcessDaemon(BaseSubProcessDaemon):
         *,
         envs: Envs,
         all_rules: AllRules,
-            temp:Path,
+        temp: Path,
     ) -> AllRules:
         """Update security rules (no-op for basic subprocess daemon).
 
