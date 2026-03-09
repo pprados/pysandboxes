@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from _typeshed.importlib import MetaPathFinderProtocol
 else:
-    Prepared = Any  # FIXME
+    Prepared = Any  # FIXME: typing
     FastPath = Any
     MetaPathFinderProtocol = Any
 
@@ -507,7 +507,7 @@ def activate_guard_import(
         return
     if _activate_patch_import(patch_rules):  # Add in sys.meta_path
         # For all loaded modules, apply patch
-        for module in sys.modules:  # FIXME: no prepatch
+        for module in sys.modules:
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
 

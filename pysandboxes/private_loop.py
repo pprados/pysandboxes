@@ -110,7 +110,7 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
             except SystemExit as e:
                 import os
 
-                logger.error("Exit sandbox")  # FIXME
+                logger.error("Exit sandbox")  # FIXME: system exit
                 os._exit(e.args[0])
             except Exception:
                 import os

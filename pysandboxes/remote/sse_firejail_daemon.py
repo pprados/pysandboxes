@@ -54,7 +54,7 @@ DEBUG_NETFILTER = False  # FIX_RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
-REPLACE = False  # FIXME
+REPLACE = False  # FIXME: firejail
 
 
 class AllowList(MutableSet):
@@ -414,7 +414,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             else:
                 args.append(f"--read-write={rule.source}")
 
-        if REPLACE:  # FIXME
+        if REPLACE:
             from ..guard_files import parse_rules as files_parse_rules
 
             _new_files_rules, _ = files_parse_rules(
@@ -435,7 +435,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append(f"--mkdir={str(pipe_path)}")
             args.append(f"--whitelist={str(pipe_path)}")  # Must be a whitelist
             # args.append(f"--read-only={str(pipe_path)}")  # Must be a whitelist
-            # args.append(f"--read-write={str(pipe_path)}")  # FIXME
+            # args.append(f"--read-write={str(pipe_path)}")  # FIXME: firejail whitelist
 
         if all_rules.socket_rules:
             if restricted_network:
@@ -471,9 +471,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 default_interface = get_default_interface()
                 bridges = get_bridge_interfaces()
                 if not bridges:
-                    bridge = default_interface  # FIXME: c'est lors de l'update inside
-                    # raise ValueError("Impossible to find a bridge (br*). "
-                    #                  "Create a bridge to use firejail.")
+                    bridge = default_interface
                 else:
                     # Search "docker*" else, the first bridge
                     for bridge in bridges:
@@ -505,7 +503,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                 threading.Thread(target=publich_netfilter, daemon=True).start()
 
-                # logger.error(f"--netfilter={netfilter_file}")  # FIXME
                 args.append(f"--netfilter={netfilter_file}")
 
                 net_filter6 = rule_to_netfilter(

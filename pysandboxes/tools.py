@@ -18,7 +18,6 @@ from typing import (
     Awaitable,
     Callable,
     Iterator,
-    cast,
 )
 
 from .config import CONFIG_NAME
@@ -217,7 +216,7 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 # %% -----------------------
 
-# _sandboxed = contextvars.ContextVar("sanboxed", default=0)  FIXME
+# _sandboxed = contextvars.ContextVar("sanboxed", default=0)  FIXME: sandbox et is_in_sandbox?
 _sandboxed = 0
 _is_in_sandbox: int = 0
 
@@ -253,20 +252,18 @@ def set_is_in_sandbox(value: bool) -> None:
         assert _sandboxed >= 0, f"{_sandboxed=}"
 
 
-def find_config_for_module(module: str) -> Path | None:
+def find_config_for_module(module: str,config_name:str) -> Path | None:
     import importlib
 
+    # The importlib.resources.files() approach requires importing the file. We don't want to do that when
+    # invoking it via python-sb. It's too soon. The alternative is to search for the file itself.
     try:
-        resource_path: Path | None = cast(
-            Path | None, importlib.resources.files(module)
-        )
-        if not resource_path:
-            return None
-        resource_config = resource_path / CONFIG_NAME  # FIXME: why force name?
-        if resource_config and resource_config.exists():
-            return resource_config
-        else:
-            return None
+        spec_module = importlib.util.find_spec(module)
+        if spec_module and spec_module.origin:
+            config = Path(spec_module.origin).parent / config_name
+            if config.exists():
+                return config
+        return None
     except FileNotFoundError:
         return None
     except ModuleNotFoundError:

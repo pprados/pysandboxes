@@ -109,8 +109,7 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # WARNING: ignore=.* blocks access to .venv, .git, and other hidden directories
 
 # Block sensitive files by default:
-#ignore=.env  # FIXME
-#ignore=.mcp
+#ignore=.env
 #ignore=*.log
 
 # Example directory mounts:
