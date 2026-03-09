@@ -57,7 +57,7 @@ def _register_signal() -> None:
         # Iterate through all child processes and send them SIGTERM
         logger.info("Pysandboxes: Catch signal %s.", signum)  # FIXME
         handler = signals[signum]
-        signal.signal(signal.Signals(s), signals[signum])  # Remove signal handler
+        signal.signal(signal.Signals(s), handler)  # Remove signal handler
         generate_config_from_learning()  # Save learning rules
         # FIXME: propager signal?
         # if callable(handler):
@@ -251,7 +251,9 @@ def python_in_sb(
         _debug_log()  # FIXME: remove
         set_is_in_sandbox(True)
 
-        set_learning_path(all_rules.learning_path)  # FIXME: semble doublon dans main_sandbox
+        set_learning_path(
+            all_rules.learning_path
+        )  # FIXME: semble doublon dans main_sandbox
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
             _python_interactive(all_rules, True)

@@ -18,7 +18,6 @@ import os
 import sys
 from collections import OrderedDict
 from errno import ENOENT
-from os import PathLike
 from os import scandir as _scandir
 from pathlib import Path as Path
 from types import ModuleType, TracebackType
@@ -734,7 +733,7 @@ def _wrap_os_path_realpath(func: Callable) -> Callable:
             _raise_ignore(file, rule)
         if not remapped:
             if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(file), write))
+                add_learning_rule(LearnFileRule(Path(file), False))
                 remapped = file
                 pass
             else:
