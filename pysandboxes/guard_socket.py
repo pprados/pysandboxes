@@ -773,8 +773,8 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
     global _pin_dns
     assert not _pin_dns
     logger.debug(
-        "pin_dns="
-        + "\n  ".join(k + ": " + ", ".join(x[4][0] for x in v) for k, v in dns.items())
+        "pin_dns=\n  "
+        + "\n  ".join(f"[{k}]:  " + ", ".join(x[4][0] for x in v) for k, v in dns.items())
     )
     _pin_dns = dns
 

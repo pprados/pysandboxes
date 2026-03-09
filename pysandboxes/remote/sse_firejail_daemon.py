@@ -49,6 +49,7 @@ from .tools import (
     which_command,
 )
 
+# TODO: add custom firejail parametersv like --seccomp
 logger = logging.getLogger(__name__)
 
 DEBUG_NETFILTER = False  # FIX_RELEASE
@@ -263,6 +264,13 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 if firejail_param.startswith("net="):
                     net = firejail_param.split("=")[1]
                     # TODO: check net?
+                elif firejail_param.startswith("seccomp="):
+                    firejail_params["seccomp"] = firejail_param.split("=")[1]
+                elif firejail_param.startswith("seccomp.keep="):
+                    firejail_params["seccomp.keep"] = firejail_param.split("=")[1]
+                elif firejail_param.startswith("seccomp.block="):
+                    firejail_params["seccomp.block"] = firejail_param.split("=")[1]
+
             else:
                 ignore_rules.append(rule)
         if net:
@@ -327,6 +335,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         need_root = False
         args = [str(which_command("firejail"))]
+        for k,v in all_rules.os_sandbox_params.items():
+            args.append(f"--{k}={v}")
 
         if logger.getEffectiveLevel() > logging.INFO:
             args.append("--quiet")
@@ -459,22 +469,23 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 #         args.append(f"--pin_dns={pin_dns}")
                 #         break
                 pass
-            default_interface = get_default_interface()
-            bridges = get_bridge_interfaces()
-            if not bridges:
-                bridge = default_interface  # FIXME: c'est lors de l'update inside
-                # raise ValueError("Impossible to find a bridge (br*). "
-                #                  "Create a bridge to use firejail.")
-            else:
-                # Search "docker*" else, the first bridge
-                for bridge in bridges:
-                    if bridge.startswith("docker"):
-                        break
+            if "net" not in all_rules.os_sandbox_params:
+                default_interface = get_default_interface()
+                bridges = get_bridge_interfaces()
+                if not bridges:
+                    bridge = default_interface  # FIXME: c'est lors de l'update inside
+                    # raise ValueError("Impossible to find a bridge (br*). "
+                    #                  "Create a bridge to use firejail.")
                 else:
-                    bridge = bridges[0]
-            if not default_interface:
-                raise ValueError("Impossible to detect the default network interface")
-            args.append(f"--net={bridge}")
+                    # Search "docker*" else, the first bridge
+                    for bridge in bridges:
+                        if bridge.startswith("docker"):
+                            break
+                    else:
+                        bridge = bridges[0]
+                if not default_interface:
+                    raise ValueError("Impossible to detect the default network interface")
+                args.append(f"--net={bridge}")
 
             if pipe_path:  # Update rules?
                 net_filter4 = rule_to_netfilter(

@@ -427,6 +427,7 @@ The features of each technology are proposed:
 | import                    |     ✅      |    ❌     |  ❌   |
 | Resource limits           |     ❌     |    ✅      |  ❌   |
 | OS-sandbox                |     ❌     |     ✅     |  ❌   |
+| Seccomp                   |     ❌     |     ✅     |  ❌   |
 | Vm compatible             |     ✅      |     ✅     |  ❌   |
 | Container<br/> compatible |     ✅      |    ❌     |  ❌   |
 

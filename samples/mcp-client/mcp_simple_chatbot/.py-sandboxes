@@ -88,12 +88,14 @@ python-import=webcolors
 
 net=ALLOW|TCP|api.x.ai|443|OUT
 net=ALLOW|TCP|api.openai.com|443|OUT
+net=ALLOW|TCP|www.google.com|80|OUT
+
 # Uses MY_IP to allow code in an OS_SANDBOX to communicate with the host, via a bridge.
 net=ALLOW|TCP|${MY_IP:-localhost}|8000|OUT
-net=ALLOW|TCP|www.google.com|8000|OUT
 # In the case where an MCP client in a sandbox launches an MCP server with a partial sandbox,
 # communication with the sandbox on the server side must be authorized by forcing a port.
 net=ALLOW|TCP|localhost|48000|*
 
-#ro-bind=.,.
-bind=.,.
+ro-bind=.,.
+
+firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
