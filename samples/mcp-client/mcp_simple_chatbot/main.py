@@ -296,7 +296,7 @@ async def run(args):
             print(final_response)
         else:
             await chat_session.start()
-
+    logging.debug("End of run")
 
 def main() -> int:
     """Initialize and run the chat session."""

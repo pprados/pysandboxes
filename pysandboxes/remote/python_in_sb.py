@@ -34,6 +34,7 @@ def _debug_log() -> None:
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_log_level)
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandbox_level)
+    logging.getLogger("pysandboxes.guard_import").setLevel(logging.INFO)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
 
 
@@ -54,7 +55,7 @@ def _register_signal() -> None:
         It will kill daemon processes before exiting itself.
         """
         # Iterate through all child processes and send them SIGTERM
-        logger.info("Catch signal %s.", signum)  # FIXME
+        logger.info("Pysandboxes: Catch signal %s.", signum)  # FIXME
         generate_config_from_learning()  # Save learning rules
         handler = signals[signum]
         if callable(handler):

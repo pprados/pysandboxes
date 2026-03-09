@@ -133,7 +133,10 @@ def load_and_parse_config(
     for k, all_v in extra_rules.items():
         k = k.replace("_", "-")
         if isinstance(all_v, set):
-            extra_lines.extend([ConfigLine(f"{k}={v}", Path(), 0) for v in all_v])
+            if not all_v:
+                extra_lines.append(ConfigLine(f"{k}=", Path(), 0))
+            else:
+                extra_lines.extend([ConfigLine(f"{k}={v}", Path(), 0) for v in all_v])
         else:
             extra_lines.append(ConfigLine(f"{k}={all_v}", Path(), 0))
 

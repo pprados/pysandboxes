@@ -1,7 +1,6 @@
-firejail.net=br0
-
 include ".py-sandboxes.pycharm"
-# include "./.local.py-sandboxes"  # May be add to .gitignore
+#learn=mcp_simple_chatbot/.py-sandboxes
+
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
@@ -13,28 +12,30 @@ env=PATH=${PATH}
 env=PYTHONUSERBASE=${PYTHONUSERBASE}
 env=SHELL=${SHELL}
 env=USER=${USER}
-env=MY_IP=${MY_IP}
+env=MY_IP=${MY_IP:-127.0.0.1}
 
 # ⚠ Dangerous!
 python-import=subprocess
 
 # Standard Python
-python-import=_cffi_backend, _decimal, _sysconfigdata__linux_x86_64-linux-gnu
-python-import=_zoneinfo, argparse, ast, asyncio, base64, bisect, bz2, calendar
-python-import=collections, colorsys, configparser, contextlib, contextvars, copy
-python-import=copyreg, dataclasses, datetime, decimal, dis, email, encodings, enum
-python-import=fnmatch, fractions, functools, genericpath, getpass, gettext, glob
-python-import=hashlib, heapq, hmac, html, http, importlib, inspect, io, ipaddress
-python-import=json, keyword, linecache, locale, logging, lzma, mimetypes, mmap
-python-import=multiprocessing, ntpath, numbers, operator, os, pathlib, pickle
-python-import=pkgutil, platform, posixpath, pprint, queue, quopri, random, re
-python-import=reprlib, runpy, secrets, selectors, shlex, shutil, signal, socket
-python-import=socketserver, ssl, stat, string, stringprep, struct, sysconfig
-python-import=tempfile, termios, textwrap, threading, token, tokenize, traceback
-python-import=types, typing, urllib, uuid, warnings, weakref, webbrowser, zipfile
-python-import=zipimport, zoneinfo
+python-import=__future__, __main__, _cffi_backend, _decimal, _hashlib, _io, _socket
+python-import=_sysconfigdata__linux_x86_64-linux-gnu, _thread, _zoneinfo, abc
+python-import=argparse, array, ast, asyncio, atexit, base64, binascii, bisect
+python-import=builtins, calendar, codecs, collections, colorsys, concurrent
+python-import=configparser, contextlib, contextvars, copy, copyreg, dataclasses
+python-import=datetime, decimal, email, encodings, enum, errno, fnmatch, fractions
+python-import=functools, getpass, hashlib, heapq, hmac, html, http, importlib
+python-import=inspect, io, ipaddress, itertools, json, keyword, linecache, locale
+python-import=logging, marshal, math, mimetypes, mmap, numbers, operator, os
+python-import=pathlib, pickle, pkgutil, pprint, queue, random, re, reprlib, runpy
+python-import=secrets, select, shlex, shutil, signal, socket, ssl, stat, string
+python-import=stringprep, struct, sysconfig, tempfile, termios, textwrap, threading
+python-import=time, tokenize, traceback, types, typing, unicodedata, urllib, uuid
+python-import=weakref, webbrowser, zipfile, zlib, zoneinfo
+python-import=_suggestions
 
 # External modules (Are you sure about the origin?)
+python-import=pydevd_asyncio_utils
 python-import=annotated_types
 python-import=anyio
 python-import=arrow
@@ -62,7 +63,6 @@ python-import=jsonschema_specifications
 python-import=lark
 python-import=mcp
 python-import=mcp_simple_chatbot
-python-import=opcode
 python-import=pydantic
 python-import=pydantic_core
 python-import=pydantic_settings
@@ -83,12 +83,8 @@ python-import=typing_inspection
 python-import=uri_template
 python-import=uvicorn
 python-import=webcolors
+
+net=ALLOW|TCP|api.groq.com|443|OUT
+net=ALLOW|TCP|${MY_IP:-localhost}|8000|OUT
+
 ro-bind=.,.
-
-net=ALLOW|TCP|api.groq.com|443|OUT      # For LLM model
-net=ALLOW|TCP|${MY_IP:-127.0.0.1}|8000|OUT  # For communicate with the local MCP server
-#net=ALLOW|TCP|*|8000|*
-net=ALLOW|TCP|www.google.com|80|OUT    # For MCP server with stdio protocol
-net=ALLOW|TCP|127.0.0.1|48000|*        # For communication between application and partial sandbox
-net=ALLOW|TCP|*|*|*   # FIXME
-

@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests
 
 # Swith to poetry to uv
 UV_EXTRA?=
@@ -22,15 +22,20 @@ unit-tests:
 	uv run pytest -v tests/unit_tests/
 
 ## Make integration tests
-integration_tests:
-	uv run pytest tests/integration_tests
+integration-tests:
+	uv run pytest tests/integration-tests
+
+## Make integration tests
+sample-tests:
+	(cd samples/mcp-client && make test)
+	(cd samples/mcp-server && make test)
 
 ## Make github tests locally
 gh-tests: lint
 	gh act push
 
 ## Make all tests
-all-tests: unit-tests integration_tests
+all-tests: unit-tests integration-tests
 
 test_watch:
 	uv run ptw --now . -- tests/unit_tests

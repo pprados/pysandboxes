@@ -262,7 +262,7 @@ def find_config_for_module(module: str) -> Path | None:
         )
         if not resource_path:
             return None
-        resource_config = resource_path / CONFIG_NAME
+        resource_config = resource_path / CONFIG_NAME  # FIXME: why force name?
         if resource_config and resource_config.exists():
             return resource_config
         else:

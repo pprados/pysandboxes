@@ -22,6 +22,8 @@ dependencies = [
     "json-with-comments>=1.2.10",
     "pysandboxes",
     "fastmcp>=2.12.4",
+    "pydevd-pycharm",  # FIXME: dans dev?
+
 ]
 
 [project.scripts]

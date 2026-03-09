@@ -129,7 +129,7 @@ style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 
 This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
 ```shell
-python-db --learn -m my_module
+python-sb --learn -m my_module
 ```
 You can use it in interactive mode and continue to use the help shortcut.
 ```shell
@@ -168,6 +168,8 @@ If you want to restart a learning session to add missing rules:
 - or add `--learn=.py-sandboxes` (or just `--learn`) when you _start `python-sb`
 
 This way, only the missing rules will be added to the file.
+
+This approach allows for application isolation, but requires granting privileges to the entire application, such as access to API tokens. It's likely that only a small part of the application needs these privileges, but not the rest.
 
 ### Use with uvx
 [uvx](https://docs.astral.sh/uv/guides/tools/) is a solution for running a Python tool without installing it in the project. A temporary environment is created for the duration of the tool's execution.
