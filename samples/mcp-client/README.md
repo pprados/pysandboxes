@@ -20,7 +20,7 @@ uv sync
 Create a `.env` file in the root directory and add your API key:
 
 ```plaintext
-GROK_API_KEY=your_api_key_here
+OPENAI_API_KEY=your_api_key_here
 ```
 
 > **Note:** The current implementation is configured to use the Groq API endpoint (`https://api.groq.com/openai/v1/chat/completions`) with the `llama-3.2-90b-vision-preview` model. If you plan to use a different LLM provider, you\'ll need to modify the `LLMClient` class in `main.py` to use the appropriate endpoint URL and model parameters.

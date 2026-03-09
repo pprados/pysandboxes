@@ -15,20 +15,38 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
+    "pysandboxes",
     "python-dotenv>=1.0",
     "requests>=2.31",
     "mcp>=1.14",
     "uvicorn>=0.32",
     "json-with-comments>=1.2.10",
-    "pysandboxes",
     "fastmcp>=2.12.4",
-    "pydevd-pycharm",  # FIXME: dans dev?
-
+    "rich",
 ]
+
+[dependency-groups]
+dev = [
+    "ipython",
+    "pydevd-pycharm",
+    "mcp-server",
+]
+test = [
+    # The only dependencies that should be added are
+    # dependencies used for running tests (e.g., pytest, freezegun, response).
+    # Any dependencies that do not meet that criteria will be removed.
+    "pytest>=7.3.0",
+    "pytest-asyncio>=1.2.0",
+    "pytest-dotenv>=0.5.2",
+    "pytest-asyncio>=0.20.3",
+    "pytest-mock>=3.10.0",
+]
+
 
 [project.scripts]
 mcp-simple-chatbot = "mcp_simple_chatbot.main:main"
 mcp-simple-chatbot-sb = "mcp_simple_chatbot.main:main_sb"
+
 
 [build-system]
 requires = ["hatchling"]
@@ -53,12 +71,22 @@ target-version = "py310"
 [tool.uv]
 dev-dependencies = ["pyright>=1.1.379", "pytest>=8.3.3", "ruff>=0.6.9"]
 
-[dependency-groups]
-dev = [
-    "mcp-server",
-]
-
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository
 pysandboxes = { path = "../..", editable = true }
 mcp-server = { path = "../mcp-server", editable = true }
+
+[tool.pytest.ini_options]
+# --strict-markers will raise errors on unknown marks.
+# https://docs.pytest.org/en/7.1.x/how-to/mark.html#raising-errors-on-unknown-marks
+#
+# https://docs.pytest.org/en/7.1.x/reference/reference.html
+# --strict-config       any warnings encountered while parsing the `pytest`
+#                       section of the configuration file raise errors.
+#
+# https://github.com/tophat/syrupy
+addopts = "--strict-markers --strict-config -vv"
+#asyncio_mode = "auto"
+
+
+

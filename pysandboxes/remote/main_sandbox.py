@@ -137,7 +137,6 @@ def main() -> int:
         Exit code (0 for success, non-zero for errors).
     """
     _debug_log()  # FIX_RELEASE
-    threading.main_thread().name = "DaemonMainThread"
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."

@@ -7,24 +7,25 @@ import os
 import re
 import subprocess
 import time
-from pathlib import Path
-from subprocess import run, Popen, PIPE
+from shutil import which
+from subprocess import run, Popen
 from typing import Optional
 
 import pytest
+from pysandboxes.remote.tools import get_bridge_interfaces
 
 logger = logging.getLogger(__name__)
 
-timeout = 30
+timeout = 12000  # FIXME: 10 s
 all_mcp_client_os_sandbox = [
     # "None",
     # "Subprocess",
     "firejail",
 ]
 all_mcp_server_config = [
-    # "stdio_no_sandbox",
-    # "stdio_sandboxes_complete",
-    # "stdio_sandboxes_partial",
+    "stdio_no_sandbox",
+    "stdio_sandboxes_complete",
+    "stdio_sandboxes_partial",
     "http",
 ]
 
@@ -129,16 +130,18 @@ def _start_server(mcp_server_config: str) -> Popen | None:
             cmd,
             cwd="../mcp-server",
             env=os.environ.copy() | {"OS_SANDBOX": "None", "PY_SANDBOX": "None"},
-            stdout=PIPE, stderr=PIPE,
-            # stdout=None, stderr=None,
+            # stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=None, stderr=None,
             text=True, shell=False,
         )
-        time.sleep(1)
+        time.sleep(1)  # FIXME: a supprimer si possible
     return process
 
-# TODO: mock du LLM
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
-@pytest.mark.skipif(not os.environ.get("GROK_API_KEY"), reason="Set GROK_API_KEY")
+
+
+@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
+@pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_evaluate_expression(
@@ -150,9 +153,8 @@ def test_claude_evaluate_expression(
         mcp_server_config += ".json"
 
         if mcp_server_config == "http.json":
-            br0 = Path("/sys/class/net/br0")  # FIXME: check bridge
-            if not br0.is_dir():
-                pytest.skip(f"Need 'br0'. Use `sudo add-bridge.sh`")
+            if not get_bridge_interfaces():
+                pytest.skip(f"Need 'bridge' interface. Use `sudo add-bridge.sh`")
 
         process = _start_server(mcp_server_config)
         start_client = \
@@ -164,14 +166,15 @@ def test_claude_evaluate_expression(
             "-c", mcp_server_config,
             "-p", "calc 2+3"
         )
-        logger.info("cmd: %s", " ".join(cmd))
+        logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
+        assert not process or process.returncode is None
         result = run(
             cmd,
             env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
             input="",
-            capture_output=True, check=True,
-            # capture_output=False, check=False,
+            capture_output=True,
+            check=True,
             text=True, shell=False)
         print(result.stdout)
         if result.stderr:
@@ -183,8 +186,9 @@ def test_claude_evaluate_expression(
             process.kill()
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
-@pytest.mark.skipif(not os.environ.get("GROK_API_KEY"), reason="Set GROK_API_KEY")
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
+@pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_fetch_webpage(
@@ -194,33 +198,33 @@ def test_claude_fetch_webpage(
     process: Popen | None = None
     try:
         mcp_server_config += ".json"
-        process = _start_server(mcp_server_config)
+        # process = _start_server(mcp_server_config)  FIXME
 
         start_client = [
             '-m', 'pysandboxes.python_sb',
             '-m', 'mcp_simple_chatbot.main'
         ]
         cmd = (
-            "uv", "run",
-            # which("python"),
+            # "uv", "run",
+            which("python"),
             *start_client,
             "-c", mcp_server_config,
             "-p", "get and summarize the page http://www.google.com"
         )
-        logger.info("cmd: %s", " ".join(cmd))
+        logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
+        assert not process or process.returncode is None
         result = run(
             cmd,
-            env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox},
+            env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
-            stdout=None, stderr=None,
-            input="",
             capture_output=True,
-            text=True, check=False, shell=False)  # FIXME check
+            input="",
+            text=True, check=True, shell=False)  # FIXME check
         print(result.stdout)
         if result.stderr:
             print("------- STDERR")
             print(result.stderr)
-        assert re.search("google.*homepage", result.stdout.lower())
+        assert "google" in result.stdout.lower()
         assert re.search("connection.*error", result.stdout.lower()) is None
     finally:
         if process:

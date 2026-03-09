@@ -24,6 +24,7 @@ import traceback
 from asyncio import CancelledError, Task
 from dataclasses import dataclass
 from logging import getLogger
+from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from uvicorn import Server
@@ -339,7 +340,7 @@ class SSEServerDaemon(BaseSSESandbox):
         global _active_requests
         return _active_requests
 
-    def update_rules(self, *, envs: Envs, all_rules: AllRules) -> AllRules:
+    def update_rules(self, *, envs: Envs, all_rules: AllRules, temp:Path) -> AllRules:
         """Update security rules for server daemon.
 
         Args:

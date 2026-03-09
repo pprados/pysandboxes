@@ -51,7 +51,7 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-DEBUG_NETFILTER = True  # FIX_RELEASE
+DEBUG_NETFILTER = False  # FIX_RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
@@ -274,6 +274,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
+            temp:Path,
     ) -> AllRules:
         """Update rules by translating to firejail configuration.
 
@@ -284,7 +285,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         Returns:
             Updated security rules for firejail context.
         """
-        _, updated_all_rules = self._firejail_args(all_rules, envs, None)
+        _, updated_all_rules = self._firejail_args(all_rules, envs, None,temp=temp)
         return updated_all_rules
 
     @property
@@ -297,6 +298,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ | Envs,
         pipe_path: Path | None,
+            temp: Path,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -469,7 +471,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     if bridge.startswith("docker"):
                         break
                 else:
-                    bridge = bridges[0]  # FIXME: take first is a good idea?
+                    bridge = bridges[0]
             if not default_interface:
                 raise ValueError("Impossible to detect the default network interface")
             args.append(f"--net={bridge}")
@@ -478,15 +480,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 net_filter4 = rule_to_netfilter(
                     all_rules.socket_rules, dns_servers, is_ipv6=False
                 )
-                netfilter_tmp_file = tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".fifo"
-                )
-                netfilter_file = Path(netfilter_tmp_file.name)
-                netfilter_tmp_file.close()
-                netfilter_file.unlink(missing_ok=True)
+
                 if DEBUG_NETFILTER:
                     netfilter_file = Path("netfilter.net")
                 else:
+                    netfilter_file = temp / "netfilter.net"
                     os.mkfifo(netfilter_file)
 
                 def publich_netfilter() -> None:
@@ -496,20 +494,16 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                 threading.Thread(target=publich_netfilter, daemon=True).start()
 
-                args.append(f"--netfilter={netfilter_file}")  # FIXME
+                # logger.error(f"--netfilter={netfilter_file}")  # FIXME
+                args.append(f"--netfilter={netfilter_file}")
 
                 net_filter6 = rule_to_netfilter(
                     all_rules.socket_rules, [], is_ipv6=True
                 )
-                netfilter6_tmp_file = tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".fifo"
-                )
-                netfilter6_file = Path(netfilter_tmp_file.name)
-                netfilter6_tmp_file.close()
-                netfilter6_file.unlink(missing_ok=True)
                 if DEBUG_NETFILTER:
                     netfilter6_file = Path("netfilter6.net")
                 else:
+                    netfilter6_file = temp / "netfilter6.net"
                     os.mkfifo(netfilter6_file)
 
                 def publich_netfilter6() -> None:
@@ -544,6 +538,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
+            temp: Path,
     ) -> list[str]:
         """Build complete command line for firejail subprocess.
 
@@ -559,10 +554,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             all_rules,
             envs,
             pipe_path,
+            temp=temp,
         )
 
         cmd_parameters, _ = self._firejail_args(
-            all_rules=all_rules, envs=envs, pipe_path=pipe_path
+            all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp
         )
         cmd_parameters.extend(run_daemon_cmd)
         return cmd_parameters

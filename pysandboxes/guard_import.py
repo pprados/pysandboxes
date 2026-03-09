@@ -45,6 +45,7 @@ from .tools import is_in_sandbox
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # FIX_RELEASE: comment this line
+logging.getLogger().setLevel(logging.DEBUG)  # FIX_RELEASE:
 
 if TYPE_CHECKING:
     from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
@@ -111,8 +112,8 @@ _patch_rules: PatchRules = ImmutableDict({})
 
 
 def parse_rules(
-    config: ConfigLines,
-    errors: list[ErrorMsg],
+        config: ConfigLines,
+        errors: list[ErrorMsg],
 ) -> tuple[ImportRules, ConfigLines]:
     """Parse import rules from configuration lines.
 
@@ -155,7 +156,7 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
             if __debug__ and isinstance(
-                new_value, type(_apply_patch)
+                    new_value, type(_apply_patch)
             ):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined]
             setattr(cur_object, paths[-1], new_value)
@@ -176,7 +177,7 @@ class GuardLoader(Loader):
     __slots__ = ("fullname", "original_spec", "original_loader", "original_module")
 
     def __init__(
-        self, fullname: str, original_spec: ModuleSpec, module: ModuleType | None = None
+            self, fullname: str, original_spec: ModuleSpec, module: ModuleType | None = None
     ):
         """Initialize the guard loader.
 
@@ -186,7 +187,7 @@ class GuardLoader(Loader):
         # Store the _original spec and loader
         self.fullname = fullname
         self.original_spec: ModuleSpec = original_spec
-        assert original_spec,f"No original spec for {fullname=}"
+        assert original_spec, f"No original spec for {fullname=}"
         self.original_loader: Loader | None = original_spec.loader
         self.original_module = module
 
@@ -255,7 +256,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
     @classmethod
     def find_distributions(
-        cls, context: DistributionFinder.Context | None = None
+            cls, context: DistributionFinder.Context | None = None
     ) -> Iterable[importlib.metadata.PathDistribution]:
         """Find package distributions.
 
@@ -308,10 +309,10 @@ class GuardFinder(importlib.abc.MetaPathFinder):
     """
 
     def find_spec(
-        self,
-        fullname: str,
-        path: Sequence[str] | None,
-        target: ModuleType | None = None,
+            self,
+            fullname: str,
+            path: Sequence[str] | None,
+            target: ModuleType | None = None,
     ) -> ModuleSpec | None:
         """Find module specification with import guarding.
 
@@ -324,6 +325,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             Module specification with guard loader if applicable.
         """
         global _rules
+        # TODO: voir ici https://github.com/python/cpython/blob/44b6eead21080e1abb3ca9ee2e1c7bc8e7a3c3a6/Lib/importlib/_bootstrap.py#L1259
         logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
         # Delegate to the rest of the chain to find the _original module spec
@@ -398,23 +400,24 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                         loader_state=original_spec.loader_state,
                     )
             else:
+                # return None # Let the next guy take care of it?
                 if not new_spec:
                     new_spec = original_spec
         if new_spec:
             module_name = fullname.split(".", 1)[0]
             if is_learning_mode() and is_in_sandbox():
                 if (
-                    "*" not in _rules
-                    and module_name not in _rules
-                    and module_name != "pysandboxes"
+                        "*" not in _rules
+                        and module_name not in _rules
+                        and module_name != "pysandboxes"
                 ):
                     add_learning_rule(LearnImportRule(module_name))
             else:
                 if _rules and _rules[0] != "*":
                     # Reactiver le filtre de module
                     if (
-                        not module_name.startswith("pysandboxes")
-                        and module_name not in _rules
+                            not module_name.startswith("pysandboxes")
+                            and module_name not in _rules
                     ):
                         ex = RuleModuleNotFoundError(
                             f"Module named {module_name!r} is not allowed by a rule"
@@ -449,7 +452,7 @@ _activated = False
 
 
 def _activate_patch_import(
-    patch_rules: PatchRules,
+        patch_rules: PatchRules,
 ) -> bool:
     """Activate import patching with specified rules.
 
@@ -486,8 +489,8 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
 
 
 def activate_guard_import(
-    str_patch_rules: dict[str, Callable],
-    rules: ImportRules,
+        str_patch_rules: dict[str, Callable],
+        rules: ImportRules,
 ) -> None:
     """Activate import guard with specified rules and patches.
 
@@ -512,11 +515,21 @@ def activate_guard_import(
     # The modules will be reinjected as needed.
     global _pending_modules
     _pending_modules = copy(sys.modules)
-    keep = ["warnings", "asyncio", "sys", "threadpool"]  # FIXME: add in rules ?
-    # logger.warning("NO DELETE MODULE")
+    keep = [
+        "warnings",
+        "asyncio",
+        "sys",
+        "threadpool",
+        "builtins",
+        "__main__",
+    ]  # TODO: add in rules ?
+    # logger.warning("NO DELETE MODULE")  # FIXME
     for k in _pending_modules:
-        # logger.debug("Remove %s", k)
-        if k not in keep:
+        # logger.error("Remove %s", k)
+        if (
+                k not in keep
+                # and k[0]!='_'
+        ):
             del sys.modules[k]
 
     _rules = rules
@@ -560,7 +573,7 @@ def _group_by_width(items: Iterable[str], max_width: int) -> list[str]:
 
 
 def generate_rules(
-    learn: set[Any],
+        learn: set[Any],
 ) -> list[str]:
     """Generate import rules from learning data.
 
@@ -639,7 +652,6 @@ def generate_rules(
 
 
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
-
     def _deactivate_guard_import() -> None:
         global _rules
         _rules = ("*",)

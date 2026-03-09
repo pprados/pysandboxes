@@ -15,10 +15,10 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
+    "pysandboxes",
     "fastmcp>=2.12.4",
     "httpx-file>=0.2.0",
     "markdownify>=1.2.0",
-    "pysandboxes>=0.0",
 ]
 [dependency-groups]
 dev = [

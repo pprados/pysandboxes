@@ -18,7 +18,8 @@ import os
 import sys
 from collections import OrderedDict
 from errno import ENOENT
-from os import scandir as _scandir, PathLike
+from os import PathLike
+from os import scandir as _scandir
 from pathlib import Path as Path
 from types import ModuleType, TracebackType
 from typing import (
@@ -354,7 +355,7 @@ def generate_rules(
             if parent.is_relative_to(bin_path):
                 break
         else:
-            logger.debug("Generate rule for %s", learn_rule.path)
+            # logger.debug("Generate rule for %s", learn_rule.path)
             if not parent.is_dir():
                 parent = parent.parent
             if not parent_level.get(parent, False) and learn_rule.write:
@@ -1025,7 +1026,7 @@ def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]
     @functools.wraps(func)
     def wrapper(path: str | os.PathLike | bytes | int | None = None) -> list[str]:
 
-        if isinstance(path,int):
+        if isinstance(path, int):
             return func(path=path)
         if isinstance(path, bytes):
             path = os.fsdecode(path)

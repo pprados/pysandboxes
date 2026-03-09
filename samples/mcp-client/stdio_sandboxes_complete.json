@@ -10,7 +10,7 @@
 //        "run",
         "-m", "pysandboxes.python_sb",
         "--pysandboxes-config=mcp_server/.py-sandboxes",
-//        "--learn=./.local.py-sandboxes",
+        "--learn=mcp_server/.py-sandboxes",  // FIXME
         "-m", "mcp_server.main",
         "-t", "stdio"
       ],

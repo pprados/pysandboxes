@@ -171,6 +171,22 @@ This way, only the missing rules will be added to the file.
 
 This approach allows for application isolation, but requires granting privileges to the entire application, such as access to API tokens. It's likely that only a small part of the application needs these privileges, but not the rest.
 
+### How the python-sb work?
+```mermaid
+flowchart LR
+    subgraph Python_sb [<b>Pythob-sb</b><br/>Process:python]
+    end
+    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firjail,docker,..."]
+    end
+    subgraph PythonSandbox ["<b>PythonSandbox</b><br/>Process:python"]
+    end
+    Python_sb  -- launch --> OSSandbox
+    OSSandbox  -- launch --> PythonSandbox
+    
+    %% 🎨 Style personnalisé pour OSSandbox
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
+```
 ### Use with uvx
 [uvx](https://docs.astral.sh/uv/guides/tools/) is a solution for running a Python tool without installing it in the project. A temporary environment is created for the duration of the tool's execution.
 
@@ -322,6 +338,24 @@ There are a few peculiarities to note:
 
   - If an exception is raised in the sandbox, the stack trace is propagated to the main application to allow for a stack analysis as if the call had been made directly. This facilitates debugging.
   - If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox or mix the different impressions between several threads. They are executed in the correct process, in the same async loop.
+
+### How the partial mode work?
+```mermaid
+flowchart LR
+    subgraph Python [<b>Python</b><br/>Process:python]
+    end
+    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firjail,docker,..."]
+    end
+    subgraph PythonSandbox ["<b>PythonSandbox</b><br/>Process:python"]
+    end
+    Python  -- launch --> OSSandbox
+    OSSandbox  -- launch --> PythonSandbox
+    
+    %% 🎨 Style personnalisé pour OSSandbox
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
+
+```
 
 ---
 # Security Filters

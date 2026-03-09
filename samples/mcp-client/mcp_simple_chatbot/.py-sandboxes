@@ -4,7 +4,9 @@ include ".py-sandboxes.pycharm"
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
-env=GROK_API_KEY=${GROK_API_KEY}
+env=MODEL=${MODEL}
+env=API_URL=${API_URL}
+env=API_KEY=${API_KEY}
 env=HOME=${HOME}
 env=LANGUAGE=${LANGUAGE}
 env=LOGNAME=${LOGNAME}
@@ -84,7 +86,14 @@ python-import=uri_template
 python-import=uvicorn
 python-import=webcolors
 
-net=ALLOW|TCP|api.groq.com|443|OUT
+net=ALLOW|TCP|api.x.ai|443|OUT
+net=ALLOW|TCP|api.openai.com|443|OUT
+# Uses MY_IP to allow code in an OS_SANDBOX to communicate with the host, via a bridge.
 net=ALLOW|TCP|${MY_IP:-localhost}|8000|OUT
+net=ALLOW|TCP|www.google.com|8000|OUT
+# In the case where an MCP client in a sandbox launches an MCP server with a partial sandbox,
+# communication with the sandbox on the server side must be authorized by forcing a port.
+net=ALLOW|TCP|localhost|48000|*
 
-ro-bind=.,.
+#ro-bind=.,.
+bind=.,.
