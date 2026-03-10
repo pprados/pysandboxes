@@ -17,8 +17,7 @@ from fastmcp import Client
 from pysandboxes.tools import resolve_env_variables
 
 logging.basicConfig(  # FIXME: manage all log level
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ def _extract_first_json(text: str) -> dict[str, Any] | list[Any] | None:
 
     for i in range(len(text)):
         # A valid JSON object MUST start with '{' (for dict) or '[' (for list)
-        if text[i] in ('{',):
+        if text[i] in ("{",):
             try:
                 # We use scan_once to find the first valid object
                 obj: dict[str, Any] | list[Any]
@@ -297,7 +296,9 @@ async def run(args):
         chat_session = ChatSession(client, llm_client)
         if args.print:
             logger.info("Invoke ")
-            final_response = await chat_session.invoke_llm(await chat_session.initialize(), args.print)
+            final_response = await chat_session.invoke_llm(
+                await chat_session.initialize(), args.print
+            )
             print(final_response)
         else:
             await chat_session.start()
@@ -307,7 +308,9 @@ async def run(args):
 
 def main() -> int:
     """Initialize and run the chat session."""
-    threading.main_thread().name = "MCP Client"  # FIXME: ne sert à rien. Pas visible dans le debug
+    threading.main_thread().name = (
+        "MCP Client"  # FIXME: ne sert à rien. Pas visible dans le debug
+    )
     parser = argparse.ArgumentParser(
         prog="mcp_client",
         description="Run a MCP-client with FastMCP",
@@ -350,6 +353,8 @@ def main_sb() -> int:
     return python_sb()  # Launch 'python-sb'
 
 
-if __name__ == "__main__":  # TODO: try to place in __init__.py for python -m mcp_simple_chatbot
+if (
+    __name__ == "__main__"
+):  # TODO: try to place in __init__.py for python -m mcp_simple_chatbot
     sys.exit(main())  # FIXME: main() mcp client without sandbox
     # sys.exit(main_sb())  # Use Full SB

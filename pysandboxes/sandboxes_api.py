@@ -201,7 +201,9 @@ class sandboxes:
         self.sandboxes_config = (
             sandboxes_config
             if isinstance(sandboxes_config, Path)
-            else Path(sandboxes_config) if sandboxes_config else None
+            else Path(sandboxes_config)
+            if sandboxes_config
+            else None
         )
         if envs is None:
             envs = os.environ

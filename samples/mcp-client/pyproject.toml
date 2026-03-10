@@ -87,6 +87,3 @@ mcp-server = { path = "../mcp-server", editable = true }
 # https://github.com/tophat/syrupy
 addopts = "--strict-markers --strict-config -vv"
 #asyncio_mode = "auto"
-
-
-

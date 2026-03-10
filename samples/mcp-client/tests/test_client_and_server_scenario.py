@@ -39,11 +39,11 @@ def _get_default_interface() -> str | None:
     """
 
     # The default route destination is represented by '00000000' in the file
-    DEFAULT_DESTINATION: str = '00000000'
+    DEFAULT_DESTINATION: str = "00000000"
 
     try:
         # Open the file containing the routing table
-        with open('/proc/net/route', 'r') as f:
+        with open("/proc/net/route", "r") as f:
             # Read all lines
             content_lines: list[str] = f.readlines()
 
@@ -60,10 +60,14 @@ def _get_default_interface() -> str | None:
 
     except FileNotFoundError:
         # If the system is not Linux or the file is missing
-        print("Erreur: Le fichier /proc/net/route n'existe pas ou n'est pas accessible.")
+        print(
+            "Erreur: Le fichier /proc/net/route n'existe pas ou n'est pas accessible."
+        )
         return None
     except Exception as e:
-        print(f"Une erreur inattendue est survenue lors de la lecture de la route par défaut: {e}")
+        print(
+            f"Une erreur inattendue est survenue lors de la lecture de la route par défaut: {e}"
+        )
         return None
 
     return None
@@ -75,10 +79,10 @@ def _get_ip_from_interface(interface_name: str) -> str | None:
         # and capture the output.
         # check=True raises an error if the command fails.
         result: subprocess.CompletedProcess[str] = subprocess.run(
-            ['ip', 'addr', 'show', interface_name],
+            ["ip", "addr", "show", interface_name],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
 
         output: str = result.stdout
@@ -86,9 +90,7 @@ def _get_ip_from_interface(interface_name: str) -> str | None:
         # Regex to find the IPv4 address (e.g., 192.168.1.10/24)
         # and capture the IP part before the slash.
         # 'inet' is used for IPv4 addresses.
-        ip_match: Optional[re.Match[str]] = re.search(
-            r'inet\s+([\d.]+)/', output
-        )
+        ip_match: Optional[re.Match[str]] = re.search(r"inet\s+([\d.]+)/", output)
 
         if ip_match:
             # Return the captured IP address (group 1 of the regex)
@@ -117,12 +119,17 @@ def _start_server(mcp_server_config: str) -> Popen | None:
     process: Popen | None = None
     if mcp_server_config == "http.json":
         cmd = (
-            "uv", "run",
+            "uv",
+            "run",
             # "python",
-            "-m", "pysandboxes.python_sb",
-            "-m", "mcp_server.main",
-            "-t", "http",
-            "-p", "8000",
+            "-m",
+            "pysandboxes.python_sb",
+            "-m",
+            "mcp_server.main",
+            "-t",
+            "http",
+            "-p",
+            "8000",
             # "--sandbox-port", "48000",
         )
         logger.debug("Run " + " ".join(cmd))
@@ -130,13 +137,14 @@ def _start_server(mcp_server_config: str) -> Popen | None:
             cmd,
             cwd="../mcp-server",
             env=os.environ.copy() | {"OS_SANDBOX": "None", "PY_SANDBOX": "None"},
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             # stdout=None, stderr=None,
-            text=True, shell=False,
+            text=True,
+            shell=False,
         )
         time.sleep(1)  # FIXME: a supprimer si possible
     return process
-
 
 
 @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
@@ -145,8 +153,8 @@ def _start_server(mcp_server_config: str) -> Popen | None:
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_evaluate_expression(
-        mcp_client_os_sandbox: str,
-        mcp_server_config: str,
+    mcp_client_os_sandbox: str,
+    mcp_server_config: str,
 ) -> None:
     process: Popen | None = None
     try:
@@ -157,25 +165,24 @@ def test_claude_evaluate_expression(
                 pytest.skip(f"Need 'bridge' interface. Use `sudo add-bridge.sh`")
 
         process = _start_server(mcp_server_config)
-        start_client = \
-            (['-m', 'pysandboxes.python_sb'] +
-             ['-m', 'mcp_simple_chatbot.main'])
-        cmd = (
-            "python",
-            *start_client,
-            "-c", mcp_server_config,
-            "-p", "calc 2+3"
-        )
+        start_client = ["-m", "pysandboxes.python_sb"] + [
+            "-m",
+            "mcp_simple_chatbot.main",
+        ]
+        cmd = ("python", *start_client, "-c", mcp_server_config, "-p", "calc 2+3")
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
         result = run(
             cmd,
-            env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
+            env=os.environ.copy()
+            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
             input="",
             capture_output=True,  # To debug, desactivate capture_output
             check=True,
-            text=True, shell=False)
+            text=True,
+            shell=False,
+        )
         print(result.stdout)
         if result.stderr:
             print("------- STDERR")
@@ -192,34 +199,37 @@ def test_claude_evaluate_expression(
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_fetch_webpage(
-        mcp_client_os_sandbox: str,
-        mcp_server_config: str,
+    mcp_client_os_sandbox: str,
+    mcp_server_config: str,
 ) -> None:
     process: Popen | None = None
     try:
         mcp_server_config += ".json"
         process = _start_server(mcp_server_config)
 
-        start_client = [
-            '-m', 'pysandboxes.python_sb',
-            '-m', 'mcp_simple_chatbot.main'
-        ]
+        start_client = ["-m", "pysandboxes.python_sb", "-m", "mcp_simple_chatbot.main"]
         cmd = (
             # "uv", "run",
             which("python"),
             *start_client,
-            "-c", mcp_server_config,
-            "-p", "get and summarize the page http://www.google.com"
+            "-c",
+            mcp_server_config,
+            "-p",
+            "get and summarize the page http://www.google.com",
         )
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
         result = run(
             cmd,
-            env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
+            env=os.environ.copy()
+            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
             capture_output=True,  # To debug, desactivate capture_output
             input="",
-            text=True, check=True, shell=False)  # FIXME check
+            text=True,
+            check=True,
+            shell=False,
+        )  # FIXME check
         print(result.stdout)
         if result.stderr:
             print("------- STDERR")

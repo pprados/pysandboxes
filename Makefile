@@ -211,6 +211,7 @@ _poetry-init:
 	@poetry self add poetry-git-version-plugin
 	@poetry config virtualenvs.in-project true
 	@poetry install --sync $(POETRY_EXTRA) --with $(POETRY_WITH)
+	@pre-commit install
 
 _uv-init:
 	@uv sync $(UV_GROUP)

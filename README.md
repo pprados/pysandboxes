@@ -182,7 +182,7 @@ flowchart LR
     end
     Python_sb  -- launch --> OSSandbox
     OSSandbox  -- launch --> PythonSandbox
-    
+
     %% 🎨 Style personnalisé pour OSSandbox
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
@@ -299,7 +299,7 @@ async def init_app():
 async def main():
     await init_app()
     ...
-    
+
 if __name__ == "__main__":
     pysandboxes.run(main(), init_fn=init_app)  # in place of asyncio.run(main())
 
@@ -350,7 +350,7 @@ flowchart LR
     end
     Python  -- launch --> OSSandbox
     OSSandbox  -- launch --> PythonSandbox
-    
+
     %% 🎨 Style personnalisé pour OSSandbox
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
@@ -398,7 +398,7 @@ Our solution offers multiple layers of security:
 
 The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel.
 For example, database access is often done via compiled C drivers (See the appendix for more details).
-Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. 
+Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe.
 **We want to prevent abusive use of our code.**
 
 Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.

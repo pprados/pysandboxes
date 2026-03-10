@@ -56,7 +56,7 @@ check_dependencies() {
     if ! command -v jq &> /dev/null
     then
         echo "Error: 'jq' is not installed. Please install it (e.g., sudo apt install jq)." >&2
-        exit 
+        exit
     fi
 }
 

@@ -177,7 +177,10 @@ class GuardLoader(Loader):
     __slots__ = ("fullname", "original_spec", "original_loader", "original_module")
 
     def __init__(
-        self, fullname: str, original_spec: ModuleSpec, module: ModuleType | None = None
+        self,
+        fullname: str,
+        original_spec: ModuleSpec | None,
+        module: ModuleType | None = None,
     ):
         """Initialize the guard loader.
 
@@ -186,8 +189,8 @@ class GuardLoader(Loader):
         """
         # Store the _original spec and loader
         self.fullname = fullname
-        self.original_spec: ModuleSpec = original_spec
-        self.original_loader: Loader | None = original_spec.loader if original_spec else None
+        self.original_spec = original_spec
+        self.original_loader = original_spec.loader if original_spec else None
         self.original_module = module
 
     def create_module(self, spec: ModuleSpec) -> ModuleType | None:
@@ -242,7 +245,7 @@ class GuardLoader(Loader):
         self.original_loader.exec_module(module)
 
         # if not self.done and self.original_spec.name in _rules:
-        if self.original_spec.name in _patch_rules:
+        if self.original_spec and self.original_spec.name in _patch_rules:
             _apply_patch(module, self.original_spec.name)
 
 
@@ -340,8 +343,8 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             pending_module = _pending_modules[fullname]
 
             module_name: str | None = None
-            original_spec = cast(ModuleSpec, pending_module.__spec__)
-            if hasattr(original_spec, "name"):
+            original_spec: ModuleSpec | None = pending_module.__spec__
+            if original_spec and hasattr(original_spec, "name"):
                 module_name = original_spec.name
             if not module_name:
                 if hasattr(pending_module, "__name__"):

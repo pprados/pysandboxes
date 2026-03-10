@@ -25,7 +25,7 @@ except SandBoxError:
   ...  # Rule violated
 ```
 
-> Exceptions are thrown if violations are detected by *py-sandbox* and not by *os-sandbox*. 
+> Exceptions are thrown if violations are detected by *py-sandbox* and not by *os-sandbox*.
 
 ## How to activate the sandbox in a notebook?
 In on cell, you can use `with sandboxes()` or `run()`.
@@ -129,4 +129,3 @@ If you want to allow rules from the working directory to be added when using you
 include "./.py-sandboxes"
 # ... specific rules
 ```
-

@@ -63,7 +63,7 @@ claude mcp add mcp_demo -- uv run -m pysandboxes.python_sb -m mcp_server.main -t
 and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
 
 ### Partial Mode with stdio
-In this scenario, part of the MCP server is under the control of **py-sandboxes**. The client invokes the MCP server, part of which runs in a sandbox (`@sandbox` annotation). 
+In this scenario, part of the MCP server is under the control of **py-sandboxes**. The client invokes the MCP server, part of which runs in a sandbox (`@sandbox` annotation).
 ```mermaid
 flowchart TD
     subgraph MCPClient ["MCP Client"]
@@ -203,16 +203,16 @@ and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/
 To use the tool `fetch_webpage`:
 ```bash
 claude
-> get and summarize the page http://www.google.com 
+> get and summarize the page http://www.google.com
 ```
 
 To use the tool `evaluate_expression`:
 ```bash
 claude
-> use evaluate_expression to calc 112134+1433 
+> use evaluate_expression to calc 112134+1433
 
 ● mcp_demo - evaluate_expression (MCP)(expression: "112134+1433")
-  ⎿  113567                                                                                                                                                                   
+  ⎿  113567
 
 ● 113567
 ```
@@ -240,7 +240,7 @@ For the client, consult the specific documentation. For example, [here](../mcp-c
 
 ---
 ## Attack the MCP server
-Without sandbox, you can try 
+Without sandbox, you can try
 
 - a *Path Traversal*
 

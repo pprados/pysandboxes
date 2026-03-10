@@ -3,11 +3,11 @@
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple, cast
 
 from .config import CONFIG_NAME
 from .main_logger import ErrorMsg, format_error_list, format_ruleref
-from .sb_types import ConfigLines
+from .sb_types import ConfigLine, ConfigLines
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,10 @@ def parse_rules(
     from .os_sandbox import providers_factory
 
     port = -1
-    other_rules = []
-    parameters_multi_values=defaultdict(set)
+    other_rules: ConfigLines = []
+    parameters_multi_values: dict[str, set[Tuple[Any, ConfigLine]]] = defaultdict(set)
     use_py_sandbox = True
     learning_path = None
-
 
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
@@ -38,7 +37,7 @@ def parse_rules(
                     )
                 )
             else:
-                parameters_multi_values["os-sandbox"].add((provider,rule))
+                parameters_multi_values["os-sandbox"].add((provider, rule))
         elif rule.rule.startswith("py-sandbox="):
             value = rule.rule.split("=", 1)[1].strip().lower()
             if value in ("", "true", "1"):
@@ -118,13 +117,13 @@ def parse_rules(
             other_rules.append(rule)
 
     # Check multi-values. provider from command line is prioritized
-    parameters_prioritize_single_value={}
-    for k,s in parameters_multi_values.items():
+    parameters_prioritize_single_value: dict[str, Any] = {}
+    for k, s in parameters_multi_values.items():
         # Search the value from parameter
-        for v,rule in s:
-            if rule.path==Path("."):
+        for v, rule in s:
+            if rule.path == Path("."):
                 if len(s) <= 2:
-                    parameters_prioritize_single_value[k]=(v,rule)
+                    parameters_prioritize_single_value[k] = (v, rule)
                     break
         else:
             if len(s) > 1:
@@ -140,10 +139,14 @@ def parse_rules(
             else:
                 parameters_prioritize_single_value[k] = list(s)[0]
 
-    provider = parameters_prioritize_single_value.get("os-sandbox",["subprocess"])[0]
-    use_py_sandbox=parameters_prioritize_single_value.get("py-sandbox",[True])[0]
-    learning_path=parameters_prioritize_single_value.get("learning_path",[config_path])[0]
-    learn=parameters_prioritize_single_value.get("learn",[False])[0]
+    provider = parameters_prioritize_single_value.get("os-sandbox", ["subprocess"])[0]
+    use_py_sandbox = parameters_prioritize_single_value.get("py-sandbox", [True])[0]
+    learning_path = parameters_prioritize_single_value.get(
+        "learning_path", [config_path]
+    )[0]
+    learn: bool = cast(
+        bool, parameters_prioritize_single_value.get("learn", [False])[0]
+    )
     if learning_path is None:
         learning_path = config_path
 
@@ -157,3 +160,6 @@ def parse_rules(
     if errors:
         return port, "error", use_py_sandbox, learning_path, learn, other_rules
     return port, provider, use_py_sandbox, learning_path, learn, other_rules
+
+
+# Tuple[int, str, bool, Path, bool, ConfigLines]:

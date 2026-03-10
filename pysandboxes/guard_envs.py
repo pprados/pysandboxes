@@ -15,7 +15,6 @@ import logging
 import os
 import re
 import threading
-from collections import defaultdict
 from types import FrameType
 from typing import Any, Callable, Generator, Iterator, NamedTuple, cast
 from weakref import WeakKeyDictionary

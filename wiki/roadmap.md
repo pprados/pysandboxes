@@ -17,9 +17,9 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] Windows
   - [ ] Mac OS
 - [ ] New **OS-sandboxes**
-  - [X] None 
-  - [X] sub process 
-  - [ ] sub interpreter 
+  - [X] None
+  - [X] sub process
+  - [ ] sub interpreter
   - [X] firejail
   - [ ] bubblejail
   - [ ] bwrap
@@ -86,4 +86,3 @@ To strengthen security, we are considering compiling a part of the project to ma
 
 ## Propagate the tracability id
 The protocol break prevents tracking with OpenTelemetry. We want to propagate the necessary information to get a complete trace.
-

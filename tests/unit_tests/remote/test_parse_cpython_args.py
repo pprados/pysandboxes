@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from pysandboxes.config import CONFIG_NAME
 from pysandboxes.remote.parse_cpython_args import (
     parse_python_cmd_line,
 )
@@ -17,11 +18,10 @@ class TestParsePythonCmdLine:
 
         python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
-        assert "-v" in python_parsed
-        assert "-O" in python_parsed
-        assert sandboxes_args == []
-        assert python_cmd == ["script.py", "-v", "arg2"]
-        assert config == Path(".")
+        assert ["-v", "-O"] == python_parsed
+        assert [] == sandboxes_args
+        assert ["script.py", "-v", "arg2"] == python_cmd
+        assert Path(CONFIG_NAME) == config
 
     def test_parse_python_cmd_line_with_unknown_args(self) -> None:
         """Test parsing with unknown args (sandbox args)."""
@@ -29,11 +29,10 @@ class TestParsePythonCmdLine:
 
         python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
-        assert "-v" in python_parsed
-        assert "-O" in python_parsed
+        assert ["-v", "-O"] == python_parsed
         assert "--pysandboxes-config=config" not in sandboxes_args
-        assert python_cmd == ["script.py"]
-        assert config == Path("config")
+        assert ["script.py"] == python_cmd
+        assert Path("config") == config
 
     def test_parse_python_cmd_line_module_execution(self) -> None:
         """Test parsing module execution with -m."""
@@ -41,10 +40,10 @@ class TestParsePythonCmdLine:
 
         python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
-        assert "-B" in python_parsed
+        assert ["-B"] == python_parsed
         assert sandboxes_args == []
         assert python_cmd == ["-m", "module", "args"]
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_command_execution(self) -> None:
         """Test parsing command execution with -c."""
@@ -52,10 +51,10 @@ class TestParsePythonCmdLine:
 
         python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
-        assert "-u" in python_parsed
+        assert ["-u"] == python_parsed
         assert sandboxes_args == []
         assert python_cmd == ["-c", "print('hello world')", "extra"]
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_interactive_mode(self) -> None:
         """Test parsing interactive mode (no script/command)."""
@@ -63,11 +62,11 @@ class TestParsePythonCmdLine:
 
         python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
-        assert "-i" in python_parsed
-        assert "-v" in python_parsed
+        assert ["-i", "-v"] == python_parsed
+
         assert sandboxes_args == []
         assert python_cmd == []
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_x_option(self) -> None:
         """Test parsing with -X option."""
@@ -80,7 +79,7 @@ class TestParsePythonCmdLine:
         assert python_parsed == ["-X", "dev", "-X", "utf8"]
         assert sandboxes_args == ["--env=a=b"]
         assert python_cmd == ["script.py", "--param=value"]
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     @patch("sys.exit")
     def test_parse_python_cmd_line_help_flag(self, mock_exit: Mock) -> None:
@@ -161,7 +160,7 @@ class TestParsePythonCmdLine:
 
         assert sandboxes_args == []
         assert python_cmd == ["script.py"]
-        assert config == Path()
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_mixed_args(self) -> None:
         """Test parsing mixed Python args and sandbox args."""
@@ -179,7 +178,7 @@ class TestParsePythonCmdLine:
         assert "-O" in python_parsed
         assert "--env=a=b" in sandboxes_args
         assert python_cmd == ["script.py", "arg1"]
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_check_hash_based_pycs(self) -> None:
         """Test parsing --check-hash-based-pycs flag."""
@@ -189,7 +188,7 @@ class TestParsePythonCmdLine:
 
         assert "--check-hash-based-pycs" in python_parsed
         assert python_cmd == ["script.py"]
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_empty_args(self) -> None:
         """Test parsing empty arguments list."""
@@ -200,7 +199,7 @@ class TestParsePythonCmdLine:
         assert python_parsed == []
         assert sandboxes_args == []
         assert python_cmd == []
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_only_sandbox_args(self) -> None:
         """Test parsing with only sandbox arguments."""
@@ -212,7 +211,7 @@ class TestParsePythonCmdLine:
         assert "--env=a=b" in sandboxes_args
         assert "--learn" in sandboxes_args
         assert python_cmd == []
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_preserves_order(self) -> None:
         """Test that argument order is preserved."""
@@ -226,4 +225,4 @@ class TestParsePythonCmdLine:
         # Python parsed args should contain the flags
         expected_flags = {"-O", "-v", "-B"}
         assert set(python_parsed).issuperset(expected_flags)
-        assert config == Path(".")
+        assert config == Path(CONFIG_NAME)

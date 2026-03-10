@@ -20,7 +20,6 @@ from typing import (
     Iterator,
 )
 
-from .config import CONFIG_NAME
 from .sb_types import ConfigLine, ConfigLines, Envs
 
 Environ = dict[str, str] | os._Environ
@@ -252,7 +251,7 @@ def set_is_in_sandbox(value: bool) -> None:
         assert _sandboxed >= 0, f"{_sandboxed=}"
 
 
-def find_config_for_module(module: str,config_name:str) -> Path | None:
+def find_config_for_module(module: str, config_name: str) -> Path | None:
     import importlib
 
     # The importlib.resources.files() approach requires importing the file. We don't want to do that when
