@@ -79,32 +79,31 @@ def format_error_list(errors: Sequence[str]) -> str:
     )
 
 
-def config_log(log_level: int, format: str | None = None) -> None:
+def config_log(log_level: int, format: str | None = None, use_rich:bool=False) -> None:
     handlers: list[logging.Handler] = []
-    try:
-        # from rich.console import Console  # FIXME: log reactivate RichHandler
-        # from rich.logging import RichHandler
-        #
-        # # Active RichHandler if possible.
-        # handlers.append(
-        #     RichHandler(
-        #         console=Console(stderr=True),
-        #         rich_tracebacks=False,
-        #         log_time_format="[%X]",
-        #         show_time=True,
-        #     )
-        # )
-        # if not format:
-        #     format = "[%(process)d] %(message)s"
-        raise ImportError("")
-    except ImportError:
-        if not format:
-            format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+    if use_rich:
+        try:
+            from rich.console import Console  # FIXME: log reactivate RichHandler
+            from rich.logging import RichHandler
+
+            # Active RichHandler if possible.
+            handlers.append(
+                RichHandler(
+                    console=Console(stderr=True),
+                    rich_tracebacks=False,
+                    log_time_format="[%X]",
+                    show_time=True,
+                )
+            )
+            if not format:
+                format = "[%(process)d] %(message)s"
+            # raise ImportError("")
+        except ImportError:
+            pass  # Ignore
+
+    if not format:
+        format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+    if not handlers:
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
-    logging.basicConfig(
-        force=True,
-        level=log_level,
-        format=format,
-        handlers=handlers,
-    )
+    # It's not possible to use basicConfig here, else the next basicConfig() in init is not apply.

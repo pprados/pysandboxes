@@ -1,245 +1,40 @@
-# PySandboxes Configuration File
-# ===============================
-# This configuration defines security rules for Python code execution in a sandboxed
-# environment. It follows a default-deny security model where all access is prohibited
-# unless explicitly allowed through rules.
-
-#######################################################################################
-# LEARNING MODE
-# =============
-# Learning mode automatically observes your application's behavior and generates
-# security rules. When enabled, the sandbox monitors file access, network connections,
-# imports, and environment variable usage, then creates appropriate whitelist rules.
-#
-# How it works:
-# 1. If no configuration exists, learning mode activates automatically
-# 2. Run your application through all its features to capture required permissions
-# 3. Review and validate the generated rules before deploying to production
-# 4. Disable learning mode for production use
-#
-# Security note: Never use learning mode with untrusted code as it may generate
-# overly permissive rules.
-
-# Uncomment to enable continuous learning (development only):
-#learn=.py-sandboxes
-
-# Uncomment to generate rules to a specific file:
-#learn=/path/to/custom-rules.conf
-
-#######################################################################################
-# CONFIGURATION COMPOSITION
-# ==========================
-# You can include additional configuration files for better organization.
-# Missing files are silently ignored.
-
-include "./.local.py-sandboxes"  # May be add to .gitignore
-include "~/.config/pysandboxes/user-py-sandboxes.profile"
-include "/etc/pysandboxes/global-py-sandboxes.profile"
-
-#######################################################################################
-# PYTHON SANDBOX ACTIVATION
-# ==========================
-# Controls whether Python-level security guards are active.
-# Set to false to disable Python API patching while keeping OS-level sandboxing.
-
 py-sandbox=true
+os-sandbox=${OS_SANDBOX:-subprocess}
 
-#######################################################################################
-# OS-LEVEL SANDBOX PROVIDERS
-# ===========================
-# Python-level sandboxing alone cannot prevent all escapes (native code, syscalls).
-# OS-level sandboxing provides additional isolation through system namespaces.
-#
-# Available providers:
-# - subprocess: Isolates code in separate Python process (default, safest)
-# - firejail: Advanced Linux sandboxing with syscall filtering, network isolation
-# - none: Disables @sandbox decorator (for testing/debugging only)
-#
-# Note: Some providers may not work in containers without additional privileges.
-
-#os-sandbox=subprocess  # default
-#os-sandbox=firejail
-
-#######################################################################################
-# ENVIRONMENT VARIABLES
-# =====================
-# By default, sandbox processes have NO access to environment variables.
-# Use env rules to explicitly whitelist required variables.
-#
-# Syntax patterns:
-# - env=VAR=value                    Set fixed value
-# - env=VAR=${HOST_VAR}              Copy from host environment
-# - env=VAR=${HOST_VAR:=default}     Copy with fallback default
-# - env=PATTERN_*=${PATTERN_*}       Pattern matching for multiple vars
-# - unenv=VAR                        Explicitly remove variable
-#
-# Security considerations:
-# - Never expose secrets unnecessarily: review API keys, tokens, passwords
-# - Use specific variable names rather than wildcards when possible
-# - Consider using fixed values instead of copying sensitive host variables
-
-# Common safe variables:
-#env=USER=sandbox
-#env=TEMP=${TEMP:=${TMP}}
-
-# API access (high security risk):
-#env=*_API_KEY=${*_API_KEY}
-#unenv=OPENAI_API_KEY
-
-# Generated rules from learning mode:
-# <learning_guard_envs>
-
-# Add rules (16/09/25 at 17:02)
-env=ASYNCIO_DEBUGGER_ENV=${ASYNCIO_DEBUGGER_ENV}
-env=DISPLAY=${DISPLAY}
-env=HALT_VARIABLE_RESOLVE_THREADS_ON_STEP_RESUME=${HALT_VARIABLE_RESOLVE_THREADS_ON_STEP_RESUME}
 env=HOME=${HOME}
 env=LANGUAGE=${LANGUAGE}
-env=PYDEVD_LOAD_VALUES_ASYNC=${PYDEVD_LOAD_VALUES_ASYNC}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=USE_LOW_IMPACT_MONITORING=${USE_LOW_IMPACT_MONITORING}
-env=VIRTUAL_ENV=${VIRTUAL_ENV}
+env=LLM_TOKEN=${LLM_TOKEN}
 
-# </learning_guard_envs>
-
-#######################################################################################
-# FILE SYSTEM ACCESS
-# ===================
-# By default, all file system access is denied. Use explicit rules to grant access.
-#
-# Rules:
-# - ignore=<pattern>               Block access to files matching glob pattern
-# - bind=<source>,<dest>           Mount source directory at dest (read-write)
-# - ro-bind=<source>,<dest>        Mount source directory at dest (read-only)
-#
-# Security guidelines:
-# - Always use most restrictive access possible (prefer ro-bind over bind)
-# - Use specific paths rather than broad patterns when possible
-# - Be careful with ignore patterns that might affect expected directories
-#
-# WARNING: ignore=.* blocks access to .venv, .git, and other hidden directories
-
-# Block sensitive files by default:
-ignore=.env
-ignore=*.log
-
-# Example directory mounts:
-#ro-bind=/usr,/usr                    # Read-only system libraries
-#ro-bind=${PWD},${PWD}                # Read-only project directory
-#bind=${PWD}/data,${PWD}/data         # Read-write data directory
-#bind=/tmp,/tmp                       # Temporary files
-
-# Generated rules from learning mode:
-# <learning_guard_files>
-
-# Add rules (16/09/25 at 17:02)
-bind=${PWD}/tmp,${PWD}/tmp
-bind=${TMP},${TMP}
-ro-bind=/home,/home
-
-# </learning_guard_files>
-
-#######################################################################################
-# NETWORK ACCESS CONTROL
-# =======================
-# By default, ALL network connections are denied. Use explicit rules to allow access.
-#
-# Rule format: net=<ACTION>|<PROTOCOL>|<NETWORK>|<PORTS>|<DIRECTION>
-# - ACTION: ALLOW or DENY
-# - PROTOCOL: tcp, udp, or * (any)
-# - NETWORK: IP/CIDR, hostname, or * (any)
-# - PORTS: port number, range (80-443), list (80,443), or * (any)
-# - DIRECTION: IN (server), OUT (client), or * (both)
-#
-# Security guidelines:
-# - Use most restrictive rules possible
-# - Prefer specific ports over wildcards
-# - Consider blocking internal networks to prevent lateral movement
-# - Review rules regularly and remove unused access
-
-# Common outbound web access:
-#net=ALLOW|tcp|0.0.0.0/0|443|OUT         # HTTPS to anywhere
-#net=ALLOW|tcp|0.0.0.0/0|80|OUT          # HTTP to anywhere
-
-# Local server binding:
-#net=ALLOW|tcp|0.0.0.0/0|${PORT:=8000}|IN    # Accept connections on port
-
-# Block internal networks (recommended for production):
-#net=DENY|*|10.0.0.0/8|*|OUT             # Private Class A
-#net=DENY|*|172.16.0.0/12|*|OUT          # Private Class B
-#net=DENY|*|192.168.0.0/16|*|OUT         # Private Class C
-#net=DENY|*|169.254.0.0/16|*|OUT         # Link-local
-#net=DENY|*|127.0.0.0/8|*|OUT            # Loopback
-#net=DENY|*|fc00::/7|*|OUT               # IPv6 ULA
-#net=DENY|*|fe80::/10|*|OUT              # IPv6 Link-local
-
-# Generated rules from learning mode:
-# <learning_guard_socket>
-
-# </learning_guard_socket>
-
-#######################################################################################
-# PYTHON IMPORTS CONTROL
-# =======================
-# By default, all Python imports are denied. Use import rules to allow access.
-#
-# Syntax:
-# - python-import=module1,module2      Allow only specific modules
-# - python-import=*                    Allow all imports
-#
-# Security considerations:
-# - Restrict dangerous modules: subprocess, os, sys, ctypes, importlib
-# - Allow only necessary libraries for your application
-# - Consider using virtual environments with minimal packages
-#
-# Examples:
-#python-import=json,requests,pandas     # Allow only these modules
-#python-import=*                        # Allow all imports
-
-# Generated rules from learning mode:
-# <learning_guard_import>
-
-# Add rules (16/09/25 at 17:02)
 # ⚠ Dangerous!
-python-import=ctypes, inspect
+python-import=atexit, importlib, inspect
 
 # Standard Python
-python-import=__future__, _collections_abc, _colorize, _compat_pickle, _compression
-python-import=_frozen_importlib, _frozen_importlib_external, _opcode_metadata
-python-import=_pydev_bundle, _pydev_imps, _pydevd_bundle, _pyrepl, _suggestions
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _weakrefset, _zoneinfo, abc
-python-import=ast, base64, bisect, bz2, codecs, codeop, collections, colorsys
-python-import=configparser, contextlib, contextvars, copy, copyreg, dataclasses
-python-import=datetime, decimal, dis, email, encodings, enum, fnmatch, fractions
-python-import=functools, genericpath, gettext, gzip, hashlib, heapq, hmac, html
-python-import=http, io, ipaddress, json, keyword, linecache, locale, lzma, mimetypes
-python-import=multiprocessing, numbers, operator, os, pickle, pkgutil, platform
-python-import=posixpath, pydoc, queue, quopri, random, re, reprlib, secrets
-python-import=selectors, shlex, shutil, signal, socket, socketserver, ssl, stat
-python-import=string, struct, sysconfig, tempfile, textwrap, threading, token
-python-import=tokenize, traceback, types, typing, urllib, uuid, weakref, xml, xmlrpc
-python-import=*
+python-import=__future__, _decimal, _hashlib, _io, _multibytecodec, abc, array, ast
+python-import=base64, binascii, calendar, codecs, collections, colorsys
+python-import=configparser, contextlib, copy, dataclasses, datetime, decimal, email
+python-import=encodings, enum, errno, fnmatch, fractions, functools, getpass
+python-import=hashlib, hmac, html, http, io, ipaddress, itertools, json, linecache
+python-import=logging, marshal, math, mimetypes, netrc, numbers, operator, os
+python-import=pathlib, queue, random, re, reprlib, runpy, select, socket, ssl
+python-import=stringprep, struct, tempfile, termios, textwrap, threading, time
+python-import=traceback, types, typing, unicodedata, urllib, weakref, zipfile, zlib
 
 # External modules (Are you sure about the origin?)
-python-import=annotated_types
-python-import=anyio
-python-import=click
-python-import=fastapi
-python-import=h11
-python-import=opcode
-python-import=pydantic
-python-import=pydantic_core
-python-import=pydevd_asyncio_constants
-python-import=pydevd_asyncio_utils
-python-import=pydevd_nest_asyncio
-python-import=sniffio
-python-import=starlette
-python-import=tests
-python-import=typing_extensions
-python-import=typing_inspection
-python-import=uvicorn
+python-import=attr
+python-import=certifi
+python-import=charset_normalizer
+python-import=idna
+python-import=pygments
+python-import=requests
 python-import=rich
+python-import=tests
+python-import=urllib3
 
-# </learning_guard_import>
+bind=./tmp,./tmp
+
+net=ALLOW|TCP|ip6-localhost|9999,0|IN
+net=ALLOW|TCP|localhost|9999|IN
+net=ALLOW|TCP|www.google.com|80|OUT
+net=ALLOW|UDP|ip6-localhost|12345|OUT
+net=ALLOW|UDP|localhost|12345|IN
+net=ALLOW|UDP|localhost|12346,12345|OUT

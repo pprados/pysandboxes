@@ -42,7 +42,6 @@ logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 
 def _debug_log() -> None:
-    logging.lastResort = logging._StderrHandler(logging.DEBUG)  # type: ignore[attr-defined] # FIXME: log
     logging.basicConfig(
         force=True,
         level=logging.DEBUG,
@@ -62,7 +61,7 @@ def _debug_log() -> None:
     logger.debug(
         "*** Start main_sandbox\n"
         + " ".join((repr(c) if " " in c else c for c in sys.argv))
-    )  # FIXME: log
+    )
 
 
 # %%
@@ -135,7 +134,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
-    _debug_log()  # FIX_RELEASE
+    # _debug_log()  # FIX_RELEASE
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."
@@ -161,7 +160,9 @@ def main() -> int:
     # Add ident inside the sandbox
     log_format = " " + process_config.log_format
     # Adjuste the root log level and format
-    config_log(process_config.log_level, format=log_format)
+    config_log(process_config.log_level,
+               log_format,
+               process_config.use_rich_handler)
     logger.debug("config body and token successfully read from named pipe")
 
     all_rules = process_config.all_rules

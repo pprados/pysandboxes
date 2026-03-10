@@ -248,7 +248,6 @@ def python_in_sb(
     python_cmd: List[str],
 ) -> int:
     try:
-        _debug_log()  # FIXME: log remove
         set_is_in_sandbox(True)
 
         set_learning_path(

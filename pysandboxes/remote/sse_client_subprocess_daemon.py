@@ -75,6 +75,9 @@ def get_log_formatter() -> str:
         fmt = logging.Formatter()
     return fmt._fmt if fmt._fmt else "%(message)s"
 
+def use_rich_handler() -> bool:
+    root_handlers=logging.getLogger().handlers
+    return any(h.__class__.__name__ == "RichHandler" for h in root_handlers)
 
 async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
     """Write stdin data to child process.
@@ -125,11 +128,13 @@ async def _read_stream(
 
 class DaemonParameters(NamedTuple):
     """Configuration parameters for daemon processes.
-
+    To assist in scenarios where there is no sandbox initialization function, we propagate the main log
+    parameters as default behavior.
     Attributes:
         all_rules: Security rules configuration.
         log_level: Logging level for the daemon.
         log_format: Format string for log messages.
+        use_rich_handler: Use Rich Handler
         token: Authentication token for communication.
         port: Network port for communication.
         init_fn: Initialization function reference.
@@ -138,6 +143,7 @@ class DaemonParameters(NamedTuple):
     all_rules: AllRules
     log_level: int
     log_format: str
+    use_rich_handler: bool
     token: str
     port: int
     init_fn: str
@@ -496,6 +502,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             all_rules=all_rules,
             log_level=log_level,
             log_format=get_log_formatter(),
+            use_rich_handler=use_rich_handler(),
             token=self._token,
             port=port,
             init_fn=init_fn_ref,

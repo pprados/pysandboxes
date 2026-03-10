@@ -337,6 +337,8 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
 
         return {
             "os.environ": activate_learning_env_factory,
+            # "os.putenv": TODO
+            # "os.unsetenv": TODO
         }
     else:
         return {}

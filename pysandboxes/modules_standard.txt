@@ -7,9 +7,7 @@ argparse
 array
 ast
 asyncio
-atexit
 base64
-bdb
 binascii
 bisect
 builtins
@@ -17,9 +15,7 @@ bz2
 calendar
 cmath
 cmd
-code
 codecs
-codeop
 collections
 colorsys
 compileall
@@ -29,7 +25,6 @@ contextlib
 contextvars
 copy
 copyreg
-cProfile
 csv
 curses
 dataclasses
@@ -44,7 +39,6 @@ encodings
 ensurepip
 enum
 errno
-faulthandler
 fcntl
 filecmp
 fileinput
@@ -68,8 +62,6 @@ html
 http
 idlelib
 imaplib
-importlib
-inspect
 io
 ipaddress
 itertools
@@ -83,7 +75,6 @@ mailbox
 marshal
 math
 mimetypes
-mmap
 modulefinder
 msvcrt
 multiprocessing
@@ -94,14 +85,11 @@ operator
 optparse
 os
 pathlib
-pdb
 pickle
 pickletools
-pkgutil
 platform
 plistlib
 poplib
-posix
 posixpath
 pprint
 profile
@@ -174,7 +162,6 @@ venv
 warnings
 wave
 weakref
-webbrowser
 winreg
 winsound
 wsgiref

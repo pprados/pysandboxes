@@ -19,7 +19,7 @@ from pysandboxes.remote.sse_client_subprocess_daemon import (
     BaseSubProcessDaemon,
     DaemonParameters,
     get_log_formatter,
-    launch_sandbox,
+    launch_sandbox, use_rich_handler,
 )
 from pysandboxes.sb_types import Envs
 from pysandboxes.tools import Environ
@@ -47,7 +47,7 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    _debug_log()  # FIX_RELEASE
+    # _debug_log()  # FIX_RELEASE
 
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
         sys.argv[1:]
@@ -122,6 +122,7 @@ def main() -> int:
             all_rules=all_rules,
             log_level=log_level,
             log_format=get_log_formatter(),
+            use_rich_handler=use_rich_handler(),
             token=token,
             port=0,
             init_fn="",

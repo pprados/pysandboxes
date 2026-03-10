@@ -15,7 +15,27 @@ from pysandboxes.remote.python_in_sb import convert_extra_rules
 logger = logging.getLogger(__name__)
 
 
-def init_log_level() -> None:
+def init_log_level(use_rich: bool = True) -> None:
+    handlers = []
+    format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
+    if use_rich:
+        try:
+            from rich.console import Console
+            from rich.logging import RichHandler
+
+            # Active RichHandler if possible.
+            handlers.append(
+                RichHandler(
+                    console=Console(stderr=True),
+                    rich_tracebacks=False,
+                    log_time_format="[%X]",
+                    show_time=True,
+                )
+            )
+            format = "[%(process)d] %(message)s"
+        except ImportError:
+            pass  # Ignore
+
     sandboxes_level = logging.WARNING  # FIXME
     uvicorn_level = logging.ERROR
     logging.getLogger("asyncio").setLevel(uvicorn_level)
@@ -25,7 +45,14 @@ def init_log_level() -> None:
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logging.getLogger().setLevel(sandboxes_level)  # Set the default level for root
-    logging.basicConfig(level=min(sandboxes_level, logging.INFO))
+    logging.basicConfig(
+        level=min(sandboxes_level, logging.INFO),
+        format=format,
+        handlers=handlers)
+    # logging.error("ERROR test")
+    # logging.warning("WARNING test")
+    # logging.info("INFO test")
+    # logging.debug("DEBUG test")
 
 
 @sandbox
@@ -34,63 +61,54 @@ async def arun_in_sandbox() -> int:
     _test_envs()
     _test_files()
     _test_network()
-    print(42)
+    print("end of arun_in_sandbox()")
     return 42
 
 
 @sandbox
 def run_in_sandbox() -> int:
     logger.info("Run 'run_in_sandbox()' in sandbox")
-    _test_network()
-    _test_files()
     _test_envs()
+    _test_files()
+    _test_network()
     print(42)
     return 42
 
 
 def _test_envs() -> None:
-    if "PYENV_ROOT" in os.environ:
-        try:
-            os.listdir(os.environ.get("PYENV_ROOT"))
-            # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-        except FileNotFoundError:
-            print("Error catch by os-sandbox")
-        except SandBoxError:
-            print("Error catch by pysandboxes")
-    if "VIRTUAL_ENV" in os.environ:
-        try:
-            os.listdir(os.environ.get("VIRTUAL_ENV"))
-            # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-        except SandBoxError as e:
-            print(e)
     assert os.environ["LANGUAGE"]
+    os.putenv("My_ENV","hello")
+    os.getenv("My_ENV")
+    if not is_learning_mode():
+        assert "USER" not in os.environ,"USER must not be visible"
+
 
 
 def _test_network() -> None:
     # tcp connection
     import socket
 
+    import pysandboxes.learning
+    # 1. Learn and accept
+    # Learn a direct connection to google
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        logger.debug("gethostbyname")
         remote_ip = socket.gethostbyname("www.google.com")
-        logger.debug("gethostbyname_ex")
         socket.gethostbyname_ex("www.google.com")
-        logger.debug("getaddrinfo")
         socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
-        logger.debug(f"connect {remote_ip=}")
         sock.connect((remote_ip, 80))
-    # tcp bind ipv4
+
+    # learn tcp bind ipv4
     with socket.socket(AF_INET, SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-    # tcp bind ipv6
+        sock.bind(("127.0.0.1", 9999))
+    # learn tcp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-        sock.bind(("::1", 0))
+        sock.bind(("::1", 9999))
 
     # web connection
     import requests
 
-    logger.debug("request")
     requests.get("http://www.google.com/")
+
     # udp connection ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.sendto(b"hello", ("127.0.0.1", 12345))
@@ -104,66 +122,58 @@ def _test_network() -> None:
         sock.bind(("localhost", 12345))
     # udp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-        sock.bind(("::1", 0))
+        sock.bind(("::1", 9999))
+
+    # 2. Test denied access
+    learning_mode = is_learning_mode()
+    if not learning_mode:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                remote_ip = socket.gethostbyname("www.github.com")
+                sock.connect((remote_ip, 80))
+            assert learning_mode, "Must be stopped by pysandbox"
+        except SandBoxError:
+            print("Connect to github is stopped")
+
+        try:
+            with socket.socket(AF_INET, SOCK_STREAM) as sock:
+                sock.bind(("127.0.0.1", 0))
+            assert learning_mode, "Must be stopped by pysandbox"
+        except SandBoxError:
+            print("Connect to github is stopped")
+        try:
+            with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+                sock.bind(("::1", 12345))
+            assert learning_mode, "Must be stopped by pysandbox"
+        except SandBoxError:
+            print("Connect to github is stopped")
 
 
 def _test_files() -> None:
     print("---- Test files")
-    learning = is_learning_mode()
-    try:
-        with io.open("tmp/test.remove", "w") as _:
-            pass
-        # assert not learning, "Must be stopped by pysandbox"
-    except Exception:
-        logger.exception("")
-    except SandBoxError:
-        if learning:
-            logger.exception("")
+    learning_mode = is_learning_mode()
 
-    try:
-        with io.open("tst_wasm/factorial.wasm", "r"):
-            pass
-        logger.error("Must be stopped by pysandbox")
-    except SandBoxError:
-        assert not is_learning_mode()
-    except Exception:
-        logger.exception("")
+    # 1. Learn and accept
+    with io.open("tmp/test.remove", "w") as _:
+        pass
 
-    try:
-        with io.open("pysandboxes/__init__.py", "r"):
-            pass
-        # assert is_learning_mode() or False, "Must be stopped by pysandbox"
-    except SandBoxError:
-        assert not is_learning_mode()
-    except Exception:
-        logger.exception("")
+    # 2. Test denied access
+    if not is_learning_mode():
+        # Check access refused
+        try:
+            with io.open("hack.py", "w"):
+                pass
+            assert learning_mode, "Must be stopped by pysandbox"
+        except SandBoxError:
+            print("Write to hack.py is stopped")
 
-    print("---- Test scandir docs")
-    use_alias_rule = False
-    if use_alias_rule:
-        data = "tests/alias"
-    else:
-        data = "tests/data"
-    all_entries = []
-    with os.scandir(data) as entries:
-        all_entries = [entry.name for entry in entries]
-    assert "data.txt" in all_entries
-
-    try:
         with tempfile.TemporaryFile(mode="w+") as _:
             pass
-    except SandBoxError:
-        logger.exception("tempfile.TemporaryFile")
-    except Exception:
-        logger.exception("tempfile.TemporaryFile")
+        print("Write to TemporaryFile is accepted")
 
-    try:
         with tempfile.NamedTemporaryFile(mode="w+", delete=True) as _:
             pass
-    except SandBoxError:
-        logger.exception("tempfile.NamedTemporaryFile")
-    except Exception:
-        logger.exception("tempfile.NamedTemporaryFile")
+        print("Write to NamedTemporaryFile is accepted")
 
 
 async def ainit_sandbox() -> None:
@@ -178,8 +188,8 @@ async def async_manager() -> None:
 
 # %% --------------------------------------
 def init_sandbox() -> None:
-    logger.debug("INIT sandbox")
     init_log_level()
+    logger.debug("INIT sandbox")
 
 
 async def async_init_sandbox() -> None:
@@ -219,8 +229,7 @@ async def main(argv: List[str]) -> int:
     # sys.addaudithook(audit_hook)
 
     extra_rules = convert_extra_rules(argv[1:])
-    # pysandboxes_config = Path("tests/test.py-sandboxes")
-    config_path = Path(".py-sandboxes")
+    config_path = Path("tests/test.py-sandboxes")
     if "learn" in extra_rules:
         learning_path, *_ = extra_rules.get("learn", set())
         if not learning_path:
@@ -229,9 +238,9 @@ async def main(argv: List[str]) -> int:
 
     for _ in range(0, 1):
         async with sandboxes(
-            async_init_sandbox,
-            sandboxes_config=config_path,
-            **cast(Mapping[str, Any], extra_rules),
+                async_init_sandbox,
+                sandboxes_config=config_path,
+                **cast(Mapping[str, Any], extra_rules),
         ):
             await arun()
     return 0
