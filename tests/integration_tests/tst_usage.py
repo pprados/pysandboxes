@@ -79,6 +79,7 @@ def _test_envs() -> None:
     assert os.environ["LANGUAGE"]
     os.putenv("My_ENV","hello")
     os.getenv("My_ENV")
+    os.unsetenv("My_ENV")
     if not is_learning_mode():
         assert "USER" not in os.environ,"USER must not be visible"
 
@@ -167,13 +168,19 @@ def _test_files() -> None:
         except SandBoxError:
             print("Write to hack.py is stopped")
 
-        with tempfile.TemporaryFile(mode="w+") as _:
-            pass
-        print("Write to TemporaryFile is accepted")
+        try:
+            with tempfile.TemporaryFile(mode="w+") as _:
+                pass
+            assert learning_mode, "Must be stopped by pysandbox"
+        except SandBoxError:
+            print("Write to TemporaryFile is stopped")
 
-        with tempfile.NamedTemporaryFile(mode="w+", delete=True) as _:
-            pass
-        print("Write to NamedTemporaryFile is accepted")
+        try:
+            with tempfile.NamedTemporaryFile(mode="w+", delete=True) as _:
+                pass
+            assert learning_mode, "Must be stopped by pysandbox"
+        except SandBoxError:
+            print("Write to NamedTemporaryFile is stopped")
 
 
 async def ainit_sandbox() -> None:
