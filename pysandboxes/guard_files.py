@@ -53,11 +53,6 @@ _Path_rglob = Path.rglob
 
 logger = logging.getLogger(__name__)
 
-_white_list = [
-    "<frozen posixpath>",  # FIXME: use?
-    "<frozen genericpath>",
-]
-
 StrOrBytesPath: TypeAlias = (
     str | bytes | os.PathLike[str] | os.PathLike[bytes]
 )  # stable

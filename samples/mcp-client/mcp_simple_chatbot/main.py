@@ -4,7 +4,6 @@ import argparse
 import logging
 import os
 import sys
-import threading
 from pathlib import Path
 from shutil import which
 from typing import Any
@@ -307,9 +306,6 @@ async def run(args):
 
 def main() -> int:
     """Initialize and run the chat session."""
-    threading.main_thread().name = (
-        "MCP Client"  # FIXME: ne sert à rien. Pas visible dans le debug
-    )
     parser = argparse.ArgumentParser(
         prog="mcp_client",
         description="Run a MCP-client with FastMCP",
@@ -352,8 +348,6 @@ def main_sb() -> int:
     return python_sb()  # Launch 'python-sb'
 
 
-if (
-    __name__ == "__main__"
-):  # TODO: try to place in __init__.py for python -m mcp_simple_chatbot
+if __name__ == "__main__":
     sys.exit(main())  # FIXME: main() mcp client without sandbox
     # sys.exit(main_sb())  # Use Full SB
