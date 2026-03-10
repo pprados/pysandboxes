@@ -145,7 +145,7 @@ def _apply_patch(module: ModuleType, name: str) -> None:
         module: The loaded module to patch.
         name: Name of the module being patched.
     """
-    logger.debug(f"Apply patch for {module.__name__}")
+    # logger.debug(f"Apply patch for {module.__name__}")
     all_patch = cast(tuple[PatchRule, ...], _patch_rules[name])
     for patch in all_patch:
         cur_object = module
@@ -387,7 +387,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                             return None
                         init_file = original_spec.origin
                     assert os.path.isfile(init_file), "module without __init__.py"
-                    logger.debug(f"Inject loader for {original_spec.name!r}")
+                    # logger.debug(f"Inject loader for {original_spec.name!r}")
                     new_spec = importlib.util.spec_from_file_location(
                         fullname,
                         init_file,
@@ -429,10 +429,6 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                                 "Module named %s is not allowed by a rule",
                                 repr(module_name),
                             )
-                            logger.exception(
-                                "Module named %s is not allowed by a rule",
-                                repr(module_name),
-                            )
                         except RecursionError:
                             # Fall back if it's impossible to log the exception
                             # It's possible if the module for log is not in a rule.
@@ -440,7 +436,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                                 f"Module named {module_name!r} is not allowed by a rule",
                                 file=sys.stderr,
                             )
-                        raise SystemExit(-1) from ex
+                        raise ex
             return new_spec
 
         # For all other imports, return None to let the standard import
@@ -533,7 +529,6 @@ def activate_guard_import(
         if (
             k
             not in keep
-            # and k[0]!='_'
         ):
             del sys.modules[k]
 
