@@ -1,0 +1,22 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.3.0
+    hooks:
+    -   id: check-yaml
+        stages: [commit]
+    -   id: end-of-file-fixer
+        stages: [commit]
+    -   id: trailing-whitespace
+        stages: [commit]
+-   repo: https://github.com/psf/black
+    rev: 22.10.0
+    hooks:
+    -   id: black
+        stages: [commit]
+-   repo: local
+    hooks:
+    -   id: gh-test
+        name: Run Github tests
+        entry: make gh-test
+        language: system
+        stages: [push]
