@@ -137,7 +137,6 @@ class ChatSession:
         try:
             client = self.client
             action = _extract_first_json(llm_response)
-            logger.error(f"************ {action=}\n {llm_response=}")  # FIXME
             if action and "tool" in action and "arguments" in action:
                 logger.info(f"Executing tool: {action['tool']}")
                 logger.info(f"With arguments: {action['arguments']}")
@@ -148,7 +147,7 @@ class ChatSession:
                         result = await client.call_tool(
                             action["tool"], action["arguments"]
                         )
-                        return f"Tool execution result: {"  ".join([x.text for x in result.content])}"
+                        return f"Tool execution result: {'  '.join([x.text for x in result.content])}"
                     except Exception as e:
                         error_msg = f"Error executing tool: {str(e)}"
                         logger.error(error_msg)
@@ -245,7 +244,7 @@ class ChatSession:
             system_message += f"Available resources:\n{resources_list}\n\n"
         if resource_templates_list:
             system_message += (
-                f"Available resource templates:\n" f"{resource_templates_list}\n\n"
+                f"Available resource templates:\n{resource_templates_list}\n\n"
             )
         system_message += (
             "Choose the appropriate tool or resource based on the "
