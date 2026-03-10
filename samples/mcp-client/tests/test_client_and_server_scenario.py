@@ -229,7 +229,7 @@ def test_claude_fetch_webpage(
             text=True,
             check=True,
             shell=False,
-        )  # FIXME check
+        )
         print(result.stdout)
         if result.stderr:
             print("------- STDERR")
