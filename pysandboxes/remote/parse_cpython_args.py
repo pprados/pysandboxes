@@ -98,16 +98,20 @@ def parse_python_cmd_line(
 
     pysandboxes_config: Path = Path(CONFIG_NAME)
     module_mode = False
-    if (len(python_run_args) >= 2 and python_run_args[0] == "-m"):
-        module_mode=True
+    if len(python_run_args) >= 2 and python_run_args[0] == "-m":
+        module_mode = True
 
-    for arg in args:
+    remove_index = []
+    for i, arg in enumerate(args):
         if arg.startswith("--pysandboxes-config="):
             # Accept full name or relative name of the module
             _, pysandboxes_config_p = arg.split("=", maxsplit=1)
             pysandboxes_config = Path(pysandboxes_config_p)
+            remove_index.append(i)
+    for i in sorted(remove_index, reverse=True):
+        del args[i]
 
-    if ("/" not in str(pysandboxes_config) and module_mode):
+    if "/" not in str(pysandboxes_config) and module_mode:
         try:
             caller_module = python_run_args[1]
             if x := find_config_for_module(caller_module, str(pysandboxes_config)):
@@ -118,7 +122,8 @@ def parse_python_cmd_line(
     sandboxes_args = [
         arg
         for arg in args
-        if arg.startswith("--") and arg not in long_params
+        if arg.startswith("--")
+        and arg not in long_params
         and not arg.startswith("--pysandboxes-config=")
     ]
     args = [arg for arg in args if arg not in sandboxes_args]

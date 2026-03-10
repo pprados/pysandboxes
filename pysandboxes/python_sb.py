@@ -9,7 +9,6 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping, cast
 
-from pysandboxes.config import CONFIG_NAME
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory

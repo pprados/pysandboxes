@@ -28,7 +28,7 @@ Here is a brief description of the implementation in **complete mode**. You will
 - The sandbox is activated.
 - A simulation of a standard python startup (managing modules, scripts, commands, and interactive mode) is implemented to launch your program in the sandbox.
 - If interactive mode is used, the code detects whether it's a standard interface or the IPython CLI. The code then adjusts its headers and parameters to indicate the presence of the sandbox.
- 
+
 ## Selected mode
 Here is a brief description of the implementation in **partial mode**. You will find more details by consulting the code.
 

@@ -62,7 +62,10 @@ StrOrBytesPath: TypeAlias = (
     str | bytes | os.PathLike[str] | os.PathLike[bytes]
 )  # stable
 
-_check_alias: contextvars.ContextVar[bool] = contextvars.ContextVar('_check_alias', default=True)
+_check_alias: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_check_alias", default=True
+)
+
 
 # Internal representation of a rule
 class BindRule(NamedTuple):
@@ -675,13 +678,14 @@ def _wrap_filename(func: Callable, *, write: bool, learn: bool = True) -> Callab
 
 
 def _body_two_filenames(
-        func:Callable,
-        in_write: bool, out_write: bool,
-       src: str | bytes | os.PathLike,
-       dest: str | bytes | os.PathLike,
-       *args: Any,
-       **kwargs: dict[str, Any],
-       ):
+    func: Callable,
+    in_write: bool,
+    out_write: bool,
+    src: str | bytes | os.PathLike,
+    dest: str | bytes | os.PathLike,
+    *args: Any,
+    **kwargs: dict[str, Any],
+) -> Any:
     # Detect call from posixpath
     # if isinstance(src, _DirEntry):  # FIXME: check _DIREntry?
     #     src = src.path
@@ -694,9 +698,7 @@ def _body_two_filenames(
     remapped_src, rule1 = _apply_dest_to_src_rules(cast(str, src), write=in_write)
     if rule1:
         _raise_ignore(src, rule1)
-    remapped_dest, rule2 = _apply_dest_to_src_rules(
-        cast(str, dest), write=out_write
-    )
+    remapped_dest, rule2 = _apply_dest_to_src_rules(cast(str, dest), write=out_write)
     if rule2:
         _raise_ignore(dest, rule2)
     if remapped_src is None and rule1 is not None:
@@ -728,7 +730,10 @@ def _wrap_two_filenames(
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> Any:
-        return _body_two_filenames(func, in_write,out_write,src, dest, *args, **kwargs)
+        return _body_two_filenames(
+            func, in_write, out_write, src, dest, *args, **kwargs
+        )
+
     return wrapper
 
 
@@ -744,12 +749,11 @@ def _wrap_shutil_copytree(
     ) -> Any:
         try:
             _check_alias.set(False)
-            return _body_two_filenames(func, False,True,src, dest, *args, **kwargs)
+            return _body_two_filenames(func, False, True, src, dest, *args, **kwargs)
         finally:
             _check_alias.set(True)
+
     return wrapper
-
-
 
 
 # def _wrap_os_path_realpath(func: Callable) -> Callable:
@@ -1375,17 +1379,16 @@ def _wrap_io_open(func: Callable) -> Callable:
 
 
 def _wrap_io_FileIO(func: Callable) -> Callable:
-    from _io import FileIO as _io_FileIO
     from io import FileIO as io_FileIO
-    from io import RawIOBase
-    class FileIO(io_FileIO):
-        def __new__(cls,
-                        file: str | bytes | os.PathLike | int,
-                        mode: str | None = "r",
-                        closefd: bool = True,
-                        opener: Callable | None = None,
 
-                    ):
+    class FileIO(io_FileIO):
+        def __new__(
+            cls,
+            file: str | bytes | os.PathLike | int,
+            mode: str | None = "r",
+            closefd: bool = True,
+            opener: Callable | None = None,
+        ) -> Any:
             # Detect call from posixpath
             if mode is None:
                 mode = "r"
@@ -1400,25 +1403,28 @@ def _wrap_io_FileIO(func: Callable) -> Callable:
                 file = os.fsdecode(file)
             file = str(file)
             need_to_write = mode is not None and (
-                    "w" in mode or "a" in mode or "x" in mode or "+" in mode
+                "w" in mode or "a" in mode or "x" in mode or "+" in mode
             )
             remapped, rule = _apply_dest_to_src_rules(file, write=need_to_write)
             if rule:
                 _raise_ignore(file, rule)
             if remapped is None:
                 if is_learning_mode():
-                    add_learning_rule(LearnFileRule(Path(file).absolute(), need_to_write))
+                    add_learning_rule(
+                        LearnFileRule(Path(file).absolute(), need_to_write)
+                    )
                     remapped = file
                 else:
                     _raise_access(file)
-            instance= io_FileIO.__new__(io_FileIO)
-            instance.__init__(
+            instance = io_FileIO.__new__(io_FileIO)
+            instance.__init__(  # type: ignore[misc]
                 file=remapped,
                 mode=mode,
                 closefd=closefd,
                 opener=opener,
             )
             return instance
+
     return FileIO
 
 
@@ -1583,7 +1589,7 @@ _default_rules: dict[str, Callable] = {
     # ALLOW shutil.copyfileobj
     # ALLOW shutil.copymode
     # ALLOW shutil.copystat
-    "shutil.copytree":_f(_wrap_shutil_copytree),
+    "shutil.copytree": _f(_wrap_shutil_copytree),
     # ALLOW shutil.disk_usage
     # ALLOW shutil.make_archive
     # ALLOW shutil.move

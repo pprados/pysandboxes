@@ -85,12 +85,14 @@ async def _fetch_webpage(url: str) -> str:
     except Exception as e:
         raise ValueError(f"Failed to fetch webpage: {e}")
 
+
 @mcp.tool(
     name="fetch_webpage",
     description="Fetches the content of a webpage from a given URL",
 )
 async def fetch_webpage(url: str) -> str:
     return await _fetch_webpage(url)
+
 
 # Define the calculator tool
 @sandbox
@@ -112,12 +114,14 @@ async def _evaluate_expression(expression: str) -> float:
     except Exception as e:
         raise ValueError(f"Invalid expression: {e}")
 
+
 @mcp.tool(
     name="evaluate_expression",
     description="Evaluates a mathematical expression and returns the result",
 )
 async def evaluate_expression(expression: str) -> float:
     return await _evaluate_expression(expression)
+
 
 @mcp.prompt()
 def analyze_data(expression: str) -> str:
@@ -133,20 +137,20 @@ Use the fetch_webpage tool to get the content, then provide a concise summary.""
 
 
 def run_mcp_server(
-        py_sandbox: str,
-        os_sandbox: str,
-        transport: str,
-        port: int | None,
-        sandbox_port: int,
-        pysandboxes_config: Path,
-        **kwargs,
+    py_sandbox: str,
+    os_sandbox: str,
+    transport: str,
+    port: int | None,
+    sandbox_port: int,
+    pysandboxes_config: Path,
+    **kwargs,
 ) -> int:
     with sandboxes(
-            sandboxes_config=pysandboxes_config,
-            py_sandbox=py_sandbox,  # type: ignore[arg-type]
-            os_sandbox=os_sandbox,  # type: ignore[arg-type]
-            port=sandbox_port,
-            **kwargs,
+        sandboxes_config=pysandboxes_config,
+        py_sandbox=py_sandbox,  # type: ignore[arg-type]
+        os_sandbox=os_sandbox,  # type: ignore[arg-type]
+        port=sandbox_port,
+        **kwargs,
     ):
         add_parameters: dict[str, Any] = {}
         if transport == "http":
@@ -211,7 +215,9 @@ def main() -> int:
         "--py-sandbox",
         dest="py_sandbox",
         type=str,
-        default=os.environ.get("PY_SANDBOX", "True"),  # Use None as default value for clear checking
+        default=os.environ.get(
+            "PY_SANDBOX", "True"
+        ),  # Use None as default value for clear checking
         help="Choice to activate the py-sandbox.",
     )
     parser.add_argument(
@@ -229,7 +235,9 @@ def main() -> int:
     kwargs = {}
     if args.learn:
         kwargs = {"learn": args.learn}
-    logger.info(f"Start mcp_server with {args.transport} {args.config_path} {args.py_sandbox} {args.os_sandbox}")
+    logger.info(
+        f"Start mcp_server with {args.transport} {args.config_path} {args.py_sandbox} {args.os_sandbox}"
+    )
     return run_mcp_server(
         py_sandbox=args.py_sandbox,
         os_sandbox=args.os_sandbox,
@@ -237,7 +245,7 @@ def main() -> int:
         port=args.port,
         sandbox_port=args.sandbox_port,
         pysandboxes_config=args.config_path,
-        **kwargs
+        **kwargs,
     )
 
 

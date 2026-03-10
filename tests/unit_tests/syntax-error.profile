@@ -26,4 +26,3 @@ ro-bind=${PWD},${PWD}/tests
 py-sandbox=abc
 learn=True
 invalide-rule
-
