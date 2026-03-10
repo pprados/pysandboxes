@@ -138,13 +138,13 @@ def _test_network() -> None:
 
         try:
             with socket.socket(AF_INET, SOCK_STREAM) as sock:
-                sock.bind(("127.0.0.1", 0))
+                sock.bind(("127.0.0.1", 9999))
             assert learning_mode, "Must be stopped by pysandbox"
         except SandBoxError:
             print("Connect to github is stopped")
         try:
             with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-                sock.bind(("::1", 12345))
+                sock.bind(("::1", 9999))
             assert learning_mode, "Must be stopped by pysandbox"
         except SandBoxError:
             print("Connect to github is stopped")
@@ -236,7 +236,7 @@ async def main(argv: List[str]) -> int:
     # sys.addaudithook(audit_hook)
 
     extra_rules = convert_extra_rules(argv[1:])
-    config_path = Path("tests/test.py-sandboxes")
+    config_path = Path("tests/integration_tests/py-sandbox-test.profile")
     if "learn" in extra_rules:
         learning_path, *_ = extra_rules.get("learn", set())
         if not learning_path:

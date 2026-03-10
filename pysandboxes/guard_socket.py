@@ -1247,7 +1247,7 @@ def generate_rules(
                 f"{Direction.OUT.name}"
             )
             # Check if this rules is allready present
-            for rule in _rules:
+            for rule in _rules:  # FIXME: le match ne fonctionne pas si plusieurs ports
                 if rule.config.rule == rule_str:
                     break  # Ignore rule
             else:
