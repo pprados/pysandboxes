@@ -1,2 +1,17 @@
 ctypes
+bdb
+faulthandler
+mmap
+pdb
+cProfile
 subprocess
+webbrowser
+atexit
+inspect
+code
+codeop
+pkgutil
+importlib
+posix
+
+

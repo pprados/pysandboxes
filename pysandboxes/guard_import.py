@@ -228,12 +228,12 @@ class GuardLoader(Loader):
         if not self.original_loader:
             return
         if self.original_module:
-            logger.debug("move original module %s", self.original_module.__name__)
+            # logger.debug("move original module %s", self.original_module.__name__)
             # Module is initialized
             to_delete = []
             for k, m in _pending_modules.items():
                 if k.startswith(self.fullname + "."):
-                    logger.debug("move original module %s", k)
+                    # logger.debug("move original module %s", k)
                     sys.modules[k] = m  # Reinject sub modules
                     to_delete.append(k)
             del _pending_modules[self.fullname]
@@ -328,8 +328,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             Module specification with guard loader if applicable.
         """
         global _rules
-        # TODO: voir ici https://github.com/python/cpython/blob/44b6eead21080e1abb3ca9ee2e1c7bc8e7a3c3a6/Lib/importlib/_bootstrap.py#L1259
-        logger.debug(f"find_spec({fullname=},{path=},{target=})")
+        # logger.debug(f"find_spec({fullname=},{path=},{target=})")
 
         # Delegate to the rest of the chain to find the _original module spec
         # We skip our own finder by checking sys.meta_path from the next index
@@ -369,9 +368,9 @@ class GuardFinder(importlib.abc.MetaPathFinder):
             else:
                 return None
         if original_spec:
-            logger.debug(
-                f"GuardFinder: Found _original spec via {type(finder).__name__!r}."
-            )
+            # logger.debug(
+            #     f"GuardFinder: Found _original spec via {type(finder).__name__!r}."
+            # )
             # Create a new spec using our custom GuardLoader,
             # but with the _original spec's data
 
@@ -425,22 +424,23 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                         ex = RuleModuleNotFoundError(
                             f"Module named {module_name!r} is not allowed by a rule"
                         )
-                        logger.debug(
-                            "Module named %s is not allowed by a rule",
-                            repr(module_name),
-                        )
                         try:
+                            logger.debug(
+                                "Module named %s is not allowed by a rule",
+                                repr(module_name),
+                            )
                             logger.exception(
                                 "Module named %s is not allowed by a rule",
                                 repr(module_name),
                             )
                         except RecursionError:
                             # Fall back if it's impossible to log the exception
+                            # It's possible if the module for log is not in a rule.
                             print(
                                 f"Module named {module_name!r} is not allowed by a rule",
                                 file=sys.stderr,
                             )
-                        raise ex
+                        raise SystemExit(-1) from ex
             return new_spec
 
         # For all other imports, return None to let the standard import
@@ -520,6 +520,7 @@ def activate_guard_import(
     _pending_modules = copy(sys.modules)
     keep = [
         "warnings",
+        "tokenize",  # For assertion
         "asyncio",
         "sys",
         "threadpool",
