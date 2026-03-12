@@ -78,8 +78,6 @@ def parse_rules(
                 )
 
         elif rule.rule.startswith("learn="):
-            if learning_path:
-                continue  # FIXME: error? prio for args?
             value = rule.rule.split("=", 1)[1].strip()
             if value.lower() in ("true", "false", "0", "1"):
                 errors.append(

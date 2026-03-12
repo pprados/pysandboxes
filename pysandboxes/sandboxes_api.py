@@ -318,7 +318,6 @@ class sandboxes:
 
     async def _stop_daemon(self) -> bool:
         if self._daemon and self._daemon.is_started:
-            logger.debug("_stop_daemon...")  # FIXME
             if self._daemon:
                 self._daemon = None
                 await async_shutdown_daemon(self.graceful_shutdown)

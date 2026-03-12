@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
     from _typeshed.importlib import MetaPathFinderProtocol
 else:
-    Prepared = Any  # FIXME: typing
+    Prepared = Any
     FastPath = Any
     MetaPathFinderProtocol = Any
 
