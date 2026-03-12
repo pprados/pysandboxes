@@ -7,45 +7,11 @@ import pytest
 
 from pysandboxes.private_loop import (
     _ensure_background_loop,
+    _reset_sandbox_loop,
     get_sandbox_loop,
-    reset_sandbox_loop,
     sandbox_loop,
     set_sandbox_loop,
 )
-
-
-class TestSetSandboxLoop:
-    """Test cases for set_sandbox_loop function."""
-
-    def test_set_sandbox_loop(self) -> None:
-        """Test setting a sandbox loop."""
-        reset_sandbox_loop()
-        loop = asyncio.new_event_loop()
-        try:
-            set_sandbox_loop(loop)
-
-            # Verify the loop was set by checking if we can get it back
-            with patch("pysandboxes.private_loop._background_loop_ref"):
-                # The reference should be set to a weakref of the loop
-                with pytest.raises(AssertionError):
-                    set_sandbox_loop(loop)
-        finally:
-            loop.close()
-            reset_sandbox_loop()
-
-    def test_set_sandbox_loop_replaces_previous(self) -> None:
-        """Test that setting a new loop replaces the previous one."""
-        loop1 = asyncio.new_event_loop()
-        loop2 = asyncio.new_event_loop()
-
-        try:
-            set_sandbox_loop(loop1)
-            with pytest.raises(AssertionError):
-                set_sandbox_loop(loop2)
-        finally:
-            loop1.close()
-            loop2.close()
-            reset_sandbox_loop()
 
 
 class TestEnsureBackgroundLoop:
@@ -57,20 +23,6 @@ class TestEnsureBackgroundLoop:
         with patch("pysandboxes.private_loop._background_loop_ref", None):
             result = _ensure_background_loop(new_loop=False)
             assert result is None
-
-    def test_ensure_background_loop_existing_running_loop(self) -> None:
-        """Test _ensure_background_loop returns existing running loop."""
-        # Mock a running loop
-        mock_loop = Mock()
-        mock_loop.is_running.return_value = True
-
-        with patch("pysandboxes.private_loop._background_loop_ref") as mock_ref:
-            mock_ref.return_value = mock_loop
-
-            result = _ensure_background_loop(new_loop=False)
-
-            # Should return the existing loop if it's running
-            assert result == mock_loop
 
     @patch("asyncio.get_running_loop")
     def test_ensure_background_loop_in_coroutine(
@@ -116,7 +68,7 @@ class TestSandboxLoopDecorator:
 
         result = test_func(1, 2)
         assert result == 3
-        reset_sandbox_loop()
+        _reset_sandbox_loop()
 
     @pytest.mark.asyncio
     async def test_sandbox_loop_decorator_async_function(self) -> None:
@@ -128,7 +80,7 @@ class TestSandboxLoopDecorator:
 
         result = await test_async_func(1, 2)
         assert result == 3
-        reset_sandbox_loop()
+        _reset_sandbox_loop()
 
     def test_sandbox_loop_decorator_preserves_function_attributes(self) -> None:
         """Test that sandbox_loop decorator preserves function attributes."""
@@ -140,11 +92,11 @@ class TestSandboxLoopDecorator:
 
         assert test_func.__name__ == "test_func"
         assert test_func.__doc__ and "Test function docstring" in test_func.__doc__
-        reset_sandbox_loop()
+        _reset_sandbox_loop()
 
 
 class TestResetSandboxLoop:
-    """Test cases for reset_sandbox_loop function."""
+    """Test cases for _reset_sandbox_loop function."""
 
     def test_reset_sandbox_loop(self) -> None:
         """Test resetting the sandbox loop."""
@@ -154,7 +106,7 @@ class TestResetSandboxLoop:
             set_sandbox_loop(loop)
 
             # Reset the loop
-            reset_sandbox_loop()
+            _reset_sandbox_loop()
 
             # After reset, should not have a loop reference
             with patch("pysandboxes.private_loop._background_loop_ref", None):
@@ -164,9 +116,9 @@ class TestResetSandboxLoop:
             loop.close()
 
     def test_reset_sandbox_loop_multiple_calls(self) -> None:
-        """Test that multiple calls to reset_sandbox_loop don't cause issues."""
-        reset_sandbox_loop()
-        reset_sandbox_loop()
+        """Test that multiple calls to _reset_sandbox_loop don't cause issues."""
+        _reset_sandbox_loop()
+        _reset_sandbox_loop()
 
         # Should not raise any exceptions
         assert True

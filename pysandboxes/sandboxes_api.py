@@ -124,9 +124,6 @@ def sandbox(
         return decorator(_func)
 
 
-_SIGNAL_HANDLER = Callable[[int, FrameType | None], Any] | int | signal.Handlers | None
-
-
 class sandboxes:
     """Context manager for sandbox process lifecycle management.
 
@@ -174,7 +171,57 @@ class sandboxes:
         "graceful_shutdown",
         "_signals",
         "_daemon",
+        "_lock",
     )
+
+    def _register_signals_handlers(self) -> None:
+        with self._lock:
+            register_signal = (signal.SIGINT, signal.SIGTERM, signal.SIGQUIT)
+
+            self._signals: dict[signal.Signals, Any | int | signal.Handlers | None] = {
+                s: signal.getsignal(s) for s in register_signal
+            }
+
+            def signal_handler(
+                signum: int,
+                frame: FrameType | None,
+            ) -> Any | int | signal.Handlers:
+                """
+                Handles termination signals for the parent process.
+                It will save the rules before exiting itself.
+                """
+                # Iterate through all child processes and send them SIGTERM
+                logger.info(
+                    "with sandboxes(): Catch signal %s.", signum
+                )  # FIXME: signal
+                _no_val = object()
+                handler = self._signals.pop(signal.Signals(signum), _no_val)
+                if handler is _no_val:
+                    return _no_val
+                signal.signal(signum, handler)  # Remove myself
+
+                if callable(handler):
+                    if threading.current_thread() != threading.main_thread():
+                        import _thread
+
+                        _thread.interrupt_main(signal.Signals(signum))
+                    else:
+                        return handler(signum, frame)
+                return None
+
+            for s in self._signals.keys():
+                signal.signal(signal.Signals(s), signal_handler)
+
+    def _unregister_signals_handlers(self) -> None:
+        with self._lock:
+            # If use private a private loop, the signal will be removed if it's handle
+            if threading.current_thread() is threading.main_thread():
+                for s, h in self._signals.items():
+                    signal.signal(s, h)
+            else:
+                logging.info("Impossible to remove signals")  # FIXME
+                pass
+            self._signals.clear()
 
     def __init__(
         self,
@@ -201,9 +248,7 @@ class sandboxes:
         self.sandboxes_config = (
             sandboxes_config
             if isinstance(sandboxes_config, Path)
-            else Path(sandboxes_config)
-            if sandboxes_config
-            else None
+            else Path(sandboxes_config) if sandboxes_config else None
         )
         if envs is None:
             envs = os.environ
@@ -212,9 +257,9 @@ class sandboxes:
         self.learning_path: Path | None = None
         self.python_args = python_args
         self.graceful_shutdown = graceful_shutdown
-        self._signals: dict[int, _SIGNAL_HANDLER] = {}
 
         self._daemon: BaseDaemon | None = None
+        self._lock = threading.Lock()
 
     # ── synchronous API ────────────────────────────────
     def __enter__(self) -> BaseDaemon:
@@ -230,6 +275,7 @@ class sandboxes:
         from .os_sandbox import start_daemon
         from .py_sandbox import load_and_parse_config
 
+        self._register_signals_handlers()
         if not is_in_sandbox():  # Inner call
             check_mixte_async_async()
             log_level = logging.root.getEffectiveLevel()
@@ -249,40 +295,6 @@ class sandboxes:
                 python_args=self.python_args,
             )
             self.learning_path = all_rules.learning_path
-
-            def signal_handler(signum: int, frame: FrameType | None) -> None:
-                """
-                Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
-                It will kill daemon processes before exiting itself.
-                """
-                # Iterate through all child processes and send them SIGTERM
-                logger.debug("Catch signal %s. Propagate to the daemon.", signum)
-                # Remove this handler
-                signal.signal(signum, self._signals[signum])
-                loop = get_sandbox_loop()
-
-                async def _stop_and_propagate_signal() -> None:
-                    await self._stop_daemon()
-                    import _thread
-
-                    logger.debug("Propagate {%i}", signum)
-                    _thread.interrupt_main(signal.Signals(signum))
-
-                loop.call_soon_threadsafe(
-                    lambda: loop.create_task(_stop_and_propagate_signal())
-                )
-
-            if threading.current_thread() is threading.main_thread():
-                logger.debug("Activate signal handlers.")
-                self._signals[signal.SIGINT] = signal.signal(
-                    signal.SIGINT, signal_handler
-                )
-                self._signals[signal.SIGTERM] = signal.signal(
-                    signal.SIGTERM, signal_handler
-                )
-                self._signals[signal.SIGQUIT] = signal.signal(
-                    signal.SIGQUIT, signal_handler
-                )
         else:
             self._daemon = FakeDaemon(token="Fake token")
         assert self._daemon is not None
@@ -298,42 +310,31 @@ class sandboxes:
         Stop the sandbox daemon.
         """
         logger.debug("__exit__ _start...")
+        self._unregister_signals_handlers()
         if is_in_sandbox():
             set_is_in_sandbox(False)
             return
 
-        logger.debug("launch the shutdown_daemon")
-        # FIXME: je n'ai plus de boucle pour l'exit!
-        get_sandbox_loop()
-        asyncio.run_coroutine_threadsafe(
-            async_shutdown_daemon(self.graceful_shutdown), get_sandbox_loop()
-        ).result()
-        return
-
-    async def _stop_daemon(self) -> None:
-        if self._daemon and self._daemon.is_started:
-            logger.debug("_stop_daemon...")
-            if threading.current_thread() is threading.main_thread():
-                # Restore signal handler
-                signal.signal(signal.SIGINT, self._signals[signal.SIGINT])
-                signal.signal(signal.SIGTERM, self._signals[signal.SIGTERM])
-                signal.signal(signal.SIGQUIT, self._signals[signal.SIGQUIT])
-
-            # await self._daemon._stop(max_pending=0)
-            await self._daemon._shutdown()
-            logger.debug("daemon shutdowned")
-            self._daemon = None
-
-    def __delete__(self, instance: "sandboxes") -> None:
         asyncio.run_coroutine_threadsafe(
             self._stop_daemon(), get_sandbox_loop()
         ).result()
+        return
+
+    async def _stop_daemon(self) -> bool:
+        if self._daemon and self._daemon.is_started:
+            logger.debug("_stop_daemon...")
+            if self._daemon:
+                self._daemon = None
+                await async_shutdown_daemon(self.graceful_shutdown)
+                logger.debug("daemon stopped")
+        return True
 
     # ── asynchronous API ───────────────────────────────
     async def __aenter__(self) -> BaseDaemon:
         """
         Start the sandbox daemon.
         """
+        self._register_signals_handlers()
         if not is_in_sandbox():
             from pysandboxes.os_sandbox import async_start_daemon
 
@@ -353,37 +354,10 @@ class sandboxes:
             )
             self.learning_path = all_rules.learning_path
 
-            def signal_handler(
-                signum: int, frame: FrameType | None
-            ) -> Any | signal.Handlers | int:
-                """
-                Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
-                It will kill daemon processes before exiting itself.
-                """
-                # Iterate through all child processes and send them SIGTERM
-                logger.debug("Catch signal %s. Propagate to the daemon.", signum)
-
-                asyncio.get_running_loop().create_task(self._stop_daemon())
-                handler = self._signals[signum]
-                if handler and callable(handler):
-                    return handler(signum, frame)
-                return None  # FIXME: signal a vérifier
-
-            if threading.current_thread() is threading.main_thread():
-                logger.debug("Activate signal handlers.")
-                self._signals[signal.SIGINT] = signal.signal(
-                    signal.SIGINT, signal_handler
-                )
-                self._signals[signal.SIGTERM] = signal.signal(
-                    signal.SIGTERM, signal_handler
-                )
-                self._signals[signal.SIGQUIT] = signal.signal(
-                    signal.SIGQUIT, signal_handler
-                )
         else:
             self._daemon = FakeDaemon(token="Fake token")
         assert self._daemon is not None
-        return self._daemon
+        return self._daemon  # FIXME: doit retrouner daemon, pas self
 
     @sandbox_loop
     async def __aexit__(
@@ -395,8 +369,8 @@ class sandboxes:
         """
         Stop the sandbox daemon.
         """
-        if not is_in_sandbox() and self._daemon:
-            await async_shutdown_daemon(self.graceful_shutdown)
+        self._unregister_signals_handlers()
+        await self._stop_daemon()
         return False
 
 

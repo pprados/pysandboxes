@@ -5,10 +5,9 @@ import logging
 import os
 import signal
 import sys
-import threading
 from pathlib import Path
 from types import FrameType
-from typing import Any, Callable, Dict, List, Set
+from typing import Any, Dict, List, Set
 
 from pysandboxes.learning import (
     generate_config_from_learning,
@@ -38,39 +37,30 @@ def _debug_log() -> None:
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
 
 
-def _register_signal() -> None:
-    signals: dict[
-        int, Callable[[int, FrameType | None], Any] | int | signal.Handlers | None
-    ] = {
-        signal.SIGINT: signal.getsignal(signal.SIGINT),
-        signal.SIGTERM: signal.getsignal(signal.SIGTERM),
-        signal.SIGQUIT: signal.getsignal(signal.SIGQUIT),
-    }
+def _register_signals_handlers() -> None:
+    register_signal = (signal.SIGINT, signal.SIGTERM, signal.SIGQUIT)
+
+    signals = {s: signal.getsignal(s) for s in register_signal}
 
     def signal_handler(
-        signum: int, frame: FrameType | None
+        signum: int,
+        frame: FrameType | None,
     ) -> Any | int | signal.Handlers:
         """
-        Handles termination signa8ls (SIGINT, SIGTERM) for the parent process.
-        It will kill daemon processes before exiting itself.
+        Handles termination signals for the parent process.
+        It will save the rules before exiting itself.
         """
         # Iterate through all child processes and send them SIGTERM
-        logger.info("Pysandboxes: Catch signal %s.", signum)  # FIXME: signal
-        handler = signals[signum]
-        signal.signal(signal.Signals(s), handler)  # Remove signal handler
+        logger.info("Pysandboxes: Catch signal %s.", signum)
+        handler = signals.pop(signal.Signals(signum))
+        signal.signal(signal.Signals(s), handler)  # Remove myself
         generate_config_from_learning()  # Save learning rules
-        # FIXME: propager signal?
-        # if callable(handler):
-        #     signal.raise_signal(signal.Signals(signum))
+        if callable(handler):
+            return handler(signum, frame)
         return None
 
-    if (
-        threading.current_thread() is threading.main_thread()
-    ):  # TODO: de meme pour les autres formes d'appel
-        # logger.error("Activate signal handlers.")
-        for s in signals.keys():
-            signal.signal(signal.Signals(s), signal_handler)
-    return None  # FIXME: signal
+    for s in signals.keys():
+        signal.signal(signal.Signals(s), signal_handler)
 
 
 def _python_interactive(
@@ -192,7 +182,7 @@ def _python_interactive(
 def _python_module(all_rules: AllRules, mod_name: str) -> int:
     import runpy
 
-    _register_signal()
+    _register_signals_handlers()
 
     runpy.run_module(mod_name, run_name="__main__")
     if sys.flags.inspect:
@@ -202,7 +192,7 @@ def _python_module(all_rules: AllRules, mod_name: str) -> int:
 
 def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
     try:
-        _register_signal()
+        _register_signals_handlers()
         script_body = script.read_text()
         sys.argv = [str(script)] + args
         exec(script_body)
@@ -219,7 +209,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
 
 
 def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> int:
-    _register_signal()
+    _register_signals_handlers()
     sys.argv = args
     exec(script_body)
     if sys.flags.inspect:
@@ -252,7 +242,7 @@ def python_in_sb(
 
         set_learning_path(
             all_rules.learning_path
-        )  # FIXME: semble doublon dans main_sandbox
+        )  # TODO: semble doublon dans main_sandbox
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
             _python_interactive(all_rules, True)

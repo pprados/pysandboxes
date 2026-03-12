@@ -45,8 +45,8 @@ def _debug_log() -> None:
     logging.basicConfig(
         force=True,
         level=logging.DEBUG,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )  # FIXME: log a garder?
+        format="%(levelname)s - %(message)s",
+    )
     sandbox_level = logging.DEBUG  # FIX_RELEASE
     uvicorn_log_level = logging.ERROR  # FIX_RELEASE
     config_log(sandbox_level)
@@ -134,7 +134,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
-    # _debug_log()  # FIX_RELEASE
+    _debug_log()  # FIX_RELEASE
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."
@@ -160,9 +160,7 @@ def main() -> int:
     # Add ident inside the sandbox
     log_format = " " + process_config.log_format
     # Adjuste the root log level and format
-    config_log(process_config.log_level,
-               log_format,
-               process_config.use_rich_handler)
+    config_log(process_config.log_level, log_format, process_config.use_rich_handler)
     logger.debug("config body and token successfully read from named pipe")
 
     all_rules = process_config.all_rules

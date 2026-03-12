@@ -4,7 +4,7 @@
   //  to use (complete mode) in `../mcp-server/.py-sandboxes`
     "mcp_server": {
       "cwd": "../mcp-server",
-      "command": "python",
+//      "command": "python",
       "command": "uv",
       "args": [
         "run",

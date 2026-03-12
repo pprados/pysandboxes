@@ -79,7 +79,9 @@ def format_error_list(errors: Sequence[str]) -> str:
     )
 
 
-def config_log(log_level: int, format: str | None = None, use_rich:bool=False) -> None:
+def config_log(
+    log_level: int, format: str | None = None, use_rich: bool = False
+) -> None:
     handlers: list[logging.Handler] = []
     if use_rich:
         try:

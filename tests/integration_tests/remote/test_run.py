@@ -1,7 +1,6 @@
 import pytest
 
 import pysandboxes
-from pysandboxes.private_loop import reset_sandbox_loop
 from pysandboxes.tools import mixed_sync_and_async_error
 
 from ..sample import async_forty_two, async_sanboxes, bridge_async_to_sync, config_path
@@ -12,7 +11,6 @@ def test_run() -> None:
     Invoke the sandboxes.run() function
     """
     assert config_path.exists()
-    reset_sandbox_loop()
     pysandboxes.run(async_forty_two(), config_path=config_path)
 
 

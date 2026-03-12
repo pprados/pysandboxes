@@ -248,7 +248,7 @@ Without sandbox, you can try
 
 `./.secret`
 
-- a *Server-Side Request Forger*
+- a *Server-Side Request Forgery*
 
 ![Server-Side Request Forger](SSRF.png)
 
@@ -259,9 +259,8 @@ Without sandbox, you can try
 ![Remote Code Execution](RCE.png)
 
 ```python
-[_ for _ in [c for c in "".__class__.__base__.__subclasses__()
- if c.__name__ == "Popen"]
-][0]("cat README.md",shell=True,stdout=-1,text=True).communicate()[0]
+[c for c in "".__class__.__base__.__subclasses__()
+ if c.__name__ == "Popen"][0]("cat README.md",shell=True,stdout=-1,text=True).communicate()[0]
 ```
 
 - a *Deni of services* (not detected now)
