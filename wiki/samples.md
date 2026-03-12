@@ -15,4 +15,4 @@ Depending on the launch command, the MCP server will be more or less isolated fr
 The [MCP client](../samples/mcp-client/README.md) sub-project offers different launch scenarios to add sandboxes in an architecture combining an MCP client and an MCP server.
 
 #### MCP Server
-The [MCP server](../samples-mcp-server/README.md) sub-project offers different launch scenarios to isolate the MCP server to a greater or lesser extent.
+The [MCP server](../samples/mcp-server/README.md) sub-project offers different launch scenarios to isolate the MCP server to a greater or lesser extent.

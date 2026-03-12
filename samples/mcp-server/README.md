@@ -5,7 +5,7 @@ This code is an example implementation of an MCP server.
 ## Features
 
 It offers the following services:
-- [X] Publishing resources from the directory  ̀./resources`
+- [X] Publishing resources from the directory `./resources`
 - [X] Expose a prompt (`analyze_data`)
 - [X] Browsing a WEB page (tool `fetch_webpage`)
 - [X] Python code execution (tool `evaluate_expression`)
@@ -267,13 +267,15 @@ Without sandbox, you can try
 - a *Deni of services* (not detected now)
 
 ![Deny of Service](DOS.png)
-To use the prompt `analyze_data`:
-```bash
-claude
-> /mcp_demo:analyze_data (MCP) 2+3
-```
 
 ```python
 [_ for _ in [c for c in "".__class__.__base__.__subclasses__()
  if c.__name__ == "count"][0]()]
+```
+
+
+- To use the prompt `analyze_data`:
+```bash
+claude
+> /mcp_demo:analyze_data (MCP) 2+3
 ```

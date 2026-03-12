@@ -13,7 +13,7 @@ You can help us with this by participating in the beta tests. Here is how you ca
 2.  Activate the corresponding virtual environment (`source .venv/activate` or equivalent).
 3.  Install **Py-sandboxes**:
     ```bash
-    pip install git+[https://github.com/pprados/pysandboxes.git](https://github.com/pprados/pysandboxes.git)
+    pip install git+https://github.com/pprados/pysandboxes.git
     ```
 4.  Modify the launch command of your program, which should be something like `python ...`, to **`python-sb --learn ...`**.
     This launches your program in **learning mode**. Ideally, you should not notice any degradation in your application's performance. At the end of its execution, a **`.py-sandboxes`** file will be populated with the different privileges observed during the run.
