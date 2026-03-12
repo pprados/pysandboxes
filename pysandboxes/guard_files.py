@@ -493,8 +493,10 @@ def _apply_dest_to_src_rules(
 
     if not path:
         return None, None
-    # if isinstance(path, _DirEntry):  # FIXME: check _DIREntry?
-    #     path = path.path
+    from . import is_in_sandbox
+
+    if not is_in_sandbox():
+        return str(path),None
     fake_path = _os_path_abspath(path)
     if str(path).endswith("/"):
         fake_path = fake_path + "/"
@@ -632,7 +634,7 @@ def _wrap_buitins_open(func: Callable) -> Callable:
     return wrapper
 
 
-# def _wrap_test(func: Callable) -> Callable:  # FIXME
+# def _wrap_test(func: Callable) -> Callable:
 #     @functools.wraps(func)
 #     def wrapper(
 #             *args,**kwargs
@@ -652,8 +654,6 @@ def _wrap_filename(func: Callable, *, write: bool, learn: bool = True) -> Callab
         # Detect call from posixpath
         if isinstance(file, int):
             return func(file, *args, **kwargs)
-        # if isinstance(file, _DirEntry):  # FIXME: check _DIREntry?
-        #     file = file.path
         if isinstance(file, bytes):
             file = os.fsdecode(file)
         file = cast(str, file)
@@ -682,8 +682,6 @@ def _body_two_filenames(
     **kwargs: dict[str, Any],
 ) -> Any:
     # Detect call from posixpath
-    # if isinstance(src, _DirEntry):  # FIXME: check _DIREntry?
-    #     src = src.path
     if isinstance(src, bytes):
         src = os.fsdecode(src)
     if isinstance(dest, bytes):
@@ -926,8 +924,6 @@ def _wrap_os_open(func: Callable) -> Callable:
             if rule:
                 _raise_ignore(path, rule)
             return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
-        # if isinstance(path, _DirEntry):  # FIXME: check _DIREntry?
-        #     path = path.path
         path = cast(str, path)
         if isinstance(flags, int):
             need_to_write = bool(
@@ -974,8 +970,6 @@ def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
                 effective_ids=effective_ids,
                 follow_symlinks=follow_symlinks,
             )
-        # if isinstance(path, _DirEntry):  # FIXME: check _DIREntry?
-        #     path = path.path
         path = cast(str, path)
         remapped, rule = _apply_dest_to_src_rules(path, write=write)
         if rule:
@@ -1342,8 +1336,6 @@ def _wrap_io_open(func: Callable) -> Callable:
                 closefd=closefd,
                 opener=opener,
             )
-        # if isinstance(file, _DirEntry):  # FIXME: check _DIREntry?
-        #     file = file.path
         if isinstance(file, bytes):
             file = os.fsdecode(file)
         file = str(file)

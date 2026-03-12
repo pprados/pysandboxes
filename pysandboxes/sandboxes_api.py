@@ -38,7 +38,6 @@ from .tools import (
     SyncOrAsyncFunc,
     check_mixte_async_async,
     is_in_sandbox,
-    set_is_in_sandbox,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ def _check__main__coroutine(coroutine: Any) -> None:
 
 
 def sandbox(
-    _func: F | None = None,
+        _func: F | None = None,
 ) -> Callable[..., Any]:
     """Decorator to run a function in a sandbox.
 
@@ -183,17 +182,17 @@ class sandboxes:
             }
 
             def signal_handler(
-                signum: int,
-                frame: FrameType | None,
+                    signum: int,
+                    frame: FrameType | None,
             ) -> Any | int | signal.Handlers:
                 """
                 Handles termination signals for the parent process.
                 It will save the rules before exiting itself.
                 """
                 # Iterate through all child processes and send them SIGTERM
-                logger.info(
+                logger.debug(
                     "with sandboxes(): Catch signal %s.", signum
-                )  # FIXME: signal
+                )
                 _no_val = object()
                 handler = self._signals.pop(signal.Signals(signum), _no_val)
                 if handler is _no_val:
@@ -219,19 +218,19 @@ class sandboxes:
                 for s, h in self._signals.items():
                     signal.signal(s, h)
             else:
-                logging.info("Impossible to remove signals")  # FIXME
+                logging.info("Impossible to remove signals")
                 pass
             self._signals.clear()
 
     def __init__(
-        self,
-        init_fn: SyncOrAsyncFunc | None = None,
-        sandboxes_config: Path | str | None = None,
-        *,
-        envs: Environ | None = None,
-        python_args: list[str] | None = None,
-        graceful_shutdown: bool = True,
-        **extra_rules: dict[str, Any],
+            self,
+            init_fn: SyncOrAsyncFunc | None = None,
+            sandboxes_config: Path | str | None = None,
+            *,
+            envs: Environ | None = None,
+            python_args: list[str] | None = None,
+            graceful_shutdown: bool = True,
+            **extra_rules: dict[str, Any],
     ) -> None:
         """Initialize the sandbox context manager.
 
@@ -301,28 +300,25 @@ class sandboxes:
         return self._daemon
 
     def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: Any | None,
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: Any | None,
     ) -> None:
         """
         Stop the sandbox daemon.
         """
-        logger.debug("__exit__ _start...")
         self._unregister_signals_handlers()
-        if is_in_sandbox():
-            set_is_in_sandbox(False)
-            return
-
-        asyncio.run_coroutine_threadsafe(
-            self._stop_daemon(), get_sandbox_loop()
-        ).result()
+        if not is_in_sandbox():
+            asyncio.run_coroutine_threadsafe(
+                self._stop_daemon(), get_sandbox_loop()
+            ).result()
+        self._daemon = None
         return
 
     async def _stop_daemon(self) -> bool:
         if self._daemon and self._daemon.is_started:
-            logger.debug("_stop_daemon...")
+            logger.debug("_stop_daemon...")  # FIXME
             if self._daemon:
                 self._daemon = None
                 await async_shutdown_daemon(self.graceful_shutdown)
@@ -357,32 +353,34 @@ class sandboxes:
         else:
             self._daemon = FakeDaemon(token="Fake token")
         assert self._daemon is not None
-        return self._daemon  # FIXME: doit retrouner daemon, pas self
+        return self._daemon
 
     @sandbox_loop
     async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: Any,
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: Any,
     ) -> bool:
         """
         Stop the sandbox daemon.
         """
         self._unregister_signals_handlers()
-        await self._stop_daemon()
+        if not is_in_sandbox():
+            await self._stop_daemon()
+        self._daemon = None
         return False
 
 
 def run(
-    main: Coroutine[Any, Any, Any],  # TODO: accept function without parameter
-    *,
-    init_fn: SyncOrAsyncFunc | None = None,
-    config_path: Path | str | None = None,
-    envs: Environ | None = None,
-    python_args: list[str] | None = None,
-    graceful_shutdown: bool = True,
-    **kwargs: dict[str, Any],
+        main: Coroutine[Any, Any, Any],  # TODO: accept function without parameter
+        *,
+        init_fn: SyncOrAsyncFunc | None = None,
+        config_path: Path | str | None = None,
+        envs: Environ | None = None,
+        python_args: list[str] | None = None,
+        graceful_shutdown: bool = True,
+        **kwargs: dict[str, Any],
 ) -> Any:
     """
     Run the main coroutine in a new event loop, with the sandbox
@@ -390,20 +388,18 @@ def run(
     The parameters are the same as `asyncio.run()`.
     """
 
-    # FIXME _check__main__coroutine(main)
-
     async def _run() -> Any:
         # In this context, use the standard running loop.
         # the sandbox will be started before the main coroutine.
         # loop = asyncio.get_running_loop()
         set_sandbox_loop(asyncio.get_running_loop())
         async with sandboxes(
-            init_fn=init_fn,
-            sandboxes_config=config_path,
-            envs=envs,
-            python_args=python_args,
-            graceful_shutdown=graceful_shutdown,
-            **kwargs,
+                init_fn=init_fn,
+                sandboxes_config=config_path,
+                envs=envs,
+                python_args=python_args,
+                graceful_shutdown=graceful_shutdown,
+                **kwargs,
         ):
             result = (await asyncio.create_task(main), "_start sandbox in run")
             return result
