@@ -23,7 +23,7 @@ Create a `.env` file in the root directory and add your API key:
 OPENAI_API_KEY=your_api_key_here
 ```
 
-> **Note:** The current implementation is configured to use the Groq API endpoint (`https://api.groq.com/openai/v1/chat/completions`) with the `llama-3.2-90b-vision-preview` model. If you plan to use a different LLM provider, you\'ll need to modify the `LLMClient` class in `main.py` to use the appropriate endpoint URL and model parameters.
+> **Note:** The current implementation is configured to use the [Groq API endpoint](`https://api.groq.com/openai/v1/chat/completions`) with the `llama-3.2-90b-vision-preview` model or OpenAI. If you plan to use a different LLM provider, you\'ll need to modify the `LLMClient` class in `main.py` to use the appropriate endpoint URL and model parameters and the `.env` file.
 
 ### Configure servers
 
@@ -61,7 +61,7 @@ Use the parameter `CONFIG='-c stdio_no_sandbox.json'`
 
 #### MCP Client use `stdio` to call MCP Server with `python-sb` in complete mode
 
- This version allows isolating the mcp-server in `stdio` mode, with **PY-sandboxes**.
+ This version allows isolating the mcp-server in `stdio` mode, with **py-sandboxes**.
 
  ```mermaid
  flowchart TD
@@ -251,9 +251,8 @@ For this to work, the sandbox connects directly to your network, bypassing local
 
 To do this:
 
-- Run `sudo add-bridge.sh` to add a bridge named br0.
-- Set `MY_IP` environment variable to your own IP address. The `mcp_simple_chatbot/.py-sandboxes` file takes this into account.
-- Ensure `firejail.net=br0` is present in the latter file.
+- Run `sudo add-bridge.sh` to add a bridge named `br0`.
+- Set `MY_IP` environment variable to your own *host* IP address. The `mcp_simple_chatbot/.py-sandboxes` file takes this into account.
 
 ```mermaid
 graph TD

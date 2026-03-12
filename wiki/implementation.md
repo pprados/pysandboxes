@@ -12,7 +12,7 @@ For file management, names will be checked against exclusion rules and modified 
 
 ## Current implementation
 
-## complete mode
+## Complete mode
 Here is a brief description of the implementation in **complete mode**. You will find more details by consulting the code.
 
 - Command-line parameters are parsed and classified into two groups: python program parameters and py-sandboxes parameters.
@@ -72,6 +72,6 @@ Here is a brief description of the implementation in **partial mode**. You will 
     - The current requests are retry multiple times to be reconnected to the new child process.
 
 ## Pin DNS
-DNS is a significant difficulty when using OS-Sandbox. Indeed, if we want to add netfilter rules, it is the host that must resolve the domain names to obtain a list of IP addresses. Then, a netfilter file allows these addresses to be used to limit access. But, the sandbox will itself want to resolve the same domain names. It is possible that it will receive different IP addresses. The network rules are then no longer compatible. For example, google.com can be resolved to dozens of IP addresses. Netfilter is not compatible with DNS.
+DNS is a significant difficulty when using **OS-Sandbox**. Indeed, if we want to add netfilter rules, it is the host that must resolve the domain names to obtain a list of IP addresses. Then, a netfilter file allows these addresses to be used to limit access. But, the sandbox will itself want to resolve the same domain names. It is possible that it will receive different IP addresses. The network rules are then no longer compatible. For example, google.com can be resolved to dozens of IP addresses. Netfilter is not compatible with DNS.
 
 To work around this difficulty, before launching the sandbox, during the analysis of the rules, a pined-DNS is created, with the rules injected into netfilter. This DNS is then injected into the python APIs, so that the domain names return the same IP addresses and the netfilter rules work correctly.

@@ -369,7 +369,7 @@ What are the security filters offered by **Py-Sandboxes**?
 Consult the [parameter file](pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
 
 ## Manage config file locations
-By default, the program looks for the file in the root directory of the module that launches the sandbox. Otherwise, the `./py-sandboxes` file is used. This can be modified before the program is launched.
+By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./py-sandboxes` file is used. This can be modified before the program is launched.
 If you package your application in a Wheel, place your parameters within your module.
 
 To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
@@ -386,9 +386,12 @@ The goal is to be able to save the `./.py-sandboxes` file in the Git repository 
 
 Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
 
-By adding or removing `include` statements, you can select the different personalization scenarios you want.
+By adding or removing `include` statements, you can select the different personalization scenarios you want. Note, if the is not exist, it's just ignored.
 
-TODO: --pysandboxes-config=...
+With **python-sb**, a special parameter can be used to select the configuration.
+```bash
+python-sb --pysandboxes-config=./.py-sandboxes -m ...
+```
 ---
 # OS-sandbox vs Py-sandbox
 Our solution offers multiple layers of security:
