@@ -70,7 +70,7 @@ async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces dire
     return file_path.read_text()
 
 
-@sandbox
+@sandbox  # FIXME
 async def _fetch_webpage(url: str) -> str:
     """Fetches the content of a webpage and returns it as markdown."""
     assert is_in_sandbox()
@@ -95,7 +95,7 @@ async def fetch_webpage(url: str) -> str:
 
 
 # Define the calculator tool
-@sandbox
+@sandbox  # FIXME
 async def _evaluate_expression(expression: str) -> float:
     """Evaluates a mathematical expression and returns the result."""
     assert is_in_sandbox()

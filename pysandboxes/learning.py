@@ -155,10 +155,10 @@ def generate_config_from_learning() -> None:
                 relative_lerning_path = learning_path
             msg = f"\nWrite all learning rules in '{relative_lerning_path}'. {find_learning}"
             if old_learning_path:
-                msg += f"The old version is here '{old_learning_path}'. "
+                msg += f"\nThe old version is here '{old_learning_path}'. "
                 learning_path.rename(old_learning_path)
 
-            msg += "Check and update this file to validate the rules."
+            msg += "\nCheck and update this file to validate the rules."
             pysandboxes_logger.info(msg)
             pysandboxes_logger.setLevel(old_level)
             learning_path.write_text("\n".join(all_lines))

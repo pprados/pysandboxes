@@ -352,7 +352,7 @@ class SSEServerDaemon(BaseSSESandbox):
         """
         return AllRules(
             root_path=all_rules.root_path,
-            config=[],  # FIXME: a quoi sert config?
+            config=[],
             envs=envs,
             os_sandbox="",
             os_sandbox_params=ImmutableDict({}),
@@ -389,6 +389,9 @@ class SSEServerDaemon(BaseSSESandbox):
                 await init_fn()
             else:
                 init_fn()
+        logging.basicConfig(
+            level=logging.INFO
+        )  # Set logs if it's not already set by init_fn()
         loop = get_sandbox_loop()
         initial_threshold: float = loop.slow_callback_duration
         try:

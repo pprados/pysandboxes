@@ -10,6 +10,7 @@ import logging
 import time
 
 from pysandboxes.learning import generate_config_from_learning, is_learning_mode
+from pysandboxes.private_loop import purge_loop
 from pysandboxes.remote.parameters import POLLING_DELAY
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,8 @@ async def daemon_shutdown(graceful_shutdown: bool) -> None:
         async def _delay_for_send_the_response() -> None:
             time.sleep(POLLING_DELAY)
             # And after, daemon_shutdown the daemon and exit
-            await async_shutdown_daemon()
+            await purge_loop()  # Remove all pending task
+            await async_shutdown_daemon(graceful_shutdown=False)
 
         from pysandboxes.private_loop import get_sandbox_loop
 

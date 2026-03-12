@@ -16,7 +16,11 @@ from typing import Any, Callable, Type, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
-from .private_loop import get_sandbox_loop, reset_sandbox_loop, sandbox_loop
+from .private_loop import (
+    _reset_sandbox_loop,
+    get_sandbox_loop,
+    sandbox_loop,
+)
 from .remote.none_daemon import NoneDaemon
 from .remote.parameters import TIMEOUT_FOR_STOP_DAEMON
 from .remote.sse_client_subprocess_daemon import SubProcessDaemon
@@ -87,41 +91,6 @@ async def async_start_daemon(
     python_args: list[str] | None = None,
 ) -> BaseDaemon:
     """
-    Asynchronously starts a daemon by name.
-
-    This is a wrapper around _async_start_daemon.
-
-    Args:
-        all_rules: The security rules for the sandbox.
-        envs: Environment variables for the sandbox process.
-        log_level: The logging level for the daemon.
-        init_fn: An optional initialization function to run in the sandbox.
-        python_args: Optional arguments for the Python interpreter in the sandbox.
-
-    Returns:
-        The started daemon instance.
-    """
-    return await _async_start_daemon(
-        all_rules,
-        envs=envs,
-        log_level=log_level,
-        init_fn=init_fn,
-        python_args=python_args,
-    )
-
-
-_async_start_lock = asyncio.Lock()
-_start_lock = threading.Lock()
-
-
-async def _async_start_daemon(
-    all_rules: AllRules,
-    envs: Environ,
-    log_level: int,
-    init_fn: SyncOrAsyncFunc | None,
-    python_args: list[str] | None = None,
-) -> BaseDaemon:
-    """
     Core logic to asynchronously start a daemon.
 
     It ensures that only one daemon is started at a time using a lock.
@@ -168,6 +137,10 @@ async def _async_start_daemon(
             raise e
 
 
+_async_start_lock = asyncio.Lock()
+_start_lock = threading.Lock()
+
+
 async def async_stop_daemon(max_pending: int = 0) -> None:
     """
     Asynchronously stops the current daemon.
@@ -207,12 +180,11 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return
-        logger.debug(f"============== {type(_current_daemon)}")
+        # Try a gracefull shutdown
         await _current_daemon._shutdown(graceful_shutdown)
         assert not _current_daemon.is_started
         _current_daemon = None
         _startup_counter -= 1
-        reset_sandbox_loop()
 
 
 def start_daemon(
@@ -261,7 +233,7 @@ def start_daemon(
 
         async def _start_daemon_and_signal() -> None:
             """Helper to run async start and signal completion."""
-            await _async_start_daemon(
+            await async_start_daemon(
                 all_rules,
                 envs=envs,
                 log_level=log_level,
@@ -278,7 +250,7 @@ def start_daemon(
             raise RuntimeError("Import to _start the sandbox")
         assert _current_daemon
 
-        return cast(BaseDaemon, _current_daemon)
+    return cast(BaseDaemon, _current_daemon)
 
 
 def is_daemon_started() -> bool:
@@ -332,7 +304,7 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
             """Helper to run async shutdown and signal completion."""
             await async_shutdown_daemon()
             stop_event.set()
-            reset_sandbox_loop()
+            _reset_sandbox_loop()
 
         loop.call_soon_threadsafe(
             lambda: loop.create_task(
@@ -340,7 +312,7 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
             )
         )
         if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
-            raise RuntimeError("Impossible to daemon_shutdown the sandbox")
+            raise RuntimeError("Impossible to shutdown the sandbox")
 
 
 def get_token() -> str:
@@ -354,7 +326,7 @@ def get_token() -> str:
         AssertionError: If the daemon is not started.
     """
     global _current_daemon
-    assert _current_daemon is not None, "Daemon not started when trying to get token"
+    assert _current_daemon
     return _current_daemon.token
 
 

@@ -75,9 +75,11 @@ def get_log_formatter() -> str:
         fmt = logging.Formatter()
     return fmt._fmt if fmt._fmt else "%(message)s"
 
+
 def use_rich_handler() -> bool:
-    root_handlers=logging.getLogger().handlers
+    root_handlers = logging.getLogger().handlers
     return any(h.__class__.__name__ == "RichHandler" for h in root_handlers)
+
 
 async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
     """Write stdin data to child process.
@@ -535,9 +537,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     count_loop += 1
                     if count_loop > LOOP_FOR_PING:
                         logger.error("Is not possible to connect to the sandbox daemon")
-                        raise SystemExit(
-                            "Is not possible to connect to the sandbox daemon"
-                        )
+                        raise SystemExit(-1)
                     async with session.get(
                         ping_url,
                         timeout=ClientTimeout(

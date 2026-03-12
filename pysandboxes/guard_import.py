@@ -526,10 +526,7 @@ def activate_guard_import(
     # logger.warning("NO DELETE MODULE")  # FIXME
     for k in _pending_modules:
         # logger.error("Remove %s", k)
-        if (
-            k
-            not in keep
-        ):
+        if k not in keep:
             del sys.modules[k]
 
     _rules = rules

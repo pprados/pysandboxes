@@ -49,9 +49,9 @@ _rules: EnvsRules = cast(EnvsRules, ())
 
 
 def parse_rules(
-        rules: ConfigLines,
-        source_vars: Environ,
-        errors: list[ErrorMsg],
+    rules: ConfigLines,
+    source_vars: Environ,
+    errors: list[ErrorMsg],
 ) -> tuple[EnvsRules, Envs, ConfigLines]:
     """Process environment variable rules to create filtered environment.
 
@@ -73,7 +73,7 @@ def parse_rules(
     for orule in rules:
         if orule.rule.startswith("env="):
             # Remove prefix
-            rule = ConfigLine(orule.rule[len("env="):], orule.path, orule.ln)
+            rule = ConfigLine(orule.rule[len("env=") :], orule.path, orule.ln)
 
             if "=" not in rule.rule:
                 errors.append(
@@ -107,7 +107,7 @@ def parse_rules(
                     EnvRule(re.compile(re.escape(key_pattern)), False, orule)
                 )
         elif orule.rule.startswith("unenv="):
-            remove_key = orule.rule[len("unenv="):]
+            remove_key = orule.rule[len("unenv=") :]
             new_vars.pop(remove_key, None)
             envs_rules.add(EnvRule(re.compile(re.escape(remove_key)), True, orule))
         else:
@@ -127,7 +127,7 @@ class LearnEnviron(os._Environ):
     _instance: "LearnEnviron | None" = None
 
     def __new__(
-            cls,
+        cls,
     ) -> "LearnEnviron":
         """Create or return existing singleton instance.
 
@@ -171,9 +171,9 @@ class LearnEnviron(os._Environ):
             for k in root_iter:
                 cur_frame = inspect.currentframe()
                 if (
-                        cur_frame is None
-                        or cur_frame.f_back is None
-                        or cur_frame.f_back.f_back is None
+                    cur_frame is None
+                    or cur_frame.f_back is None
+                    or cur_frame.f_back.f_back is None
                 ):
                     continue
                 iter_frame: FrameType = cur_frame.f_back.f_back
@@ -394,7 +394,7 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
             "os.environ": activate_learning_env_factory,
             "os.getenv": _f(_wrap_os_getenv),
             "os.putenv": _f(_wrap_os_putenv),
-            "os.unsetenv": _f(_wrap_os_unsetenv)
+            "os.unsetenv": _f(_wrap_os_unsetenv),
         }
     else:
         return {}

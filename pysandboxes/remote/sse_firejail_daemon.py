@@ -54,7 +54,7 @@ DEBUG_NETFILTER = False  # FIX_RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
-REPLACE = False  # FIXME: firejail
+REPLACE = False  # TODO: firejail
 
 
 class AllowList(MutableSet):

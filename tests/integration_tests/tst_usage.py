@@ -2,21 +2,27 @@ import asyncio
 import io
 import logging
 import os
+import signal
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
+from types import FrameType
 from typing import Any, List, Mapping, cast
 
-from pysandboxes import SandBoxError, sandbox, sandboxes
+from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
 logger = logging.getLogger(__name__)
 
 
+RANGETEST = 2
+
+
 def init_log_level(use_rich: bool = True) -> None:
-    handlers = []
+    handlers: list[logging.Handler] = []
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     if use_rich:
         try:
@@ -36,7 +42,11 @@ def init_log_level(use_rich: bool = True) -> None:
         except ImportError:
             pass  # Ignore
 
-    sandboxes_level = logging.WARNING  # FIXME
+    if not handlers:
+        handlers = [logging.StreamHandler()]
+        handlers[0].setFormatter(logging.Formatter(format))
+
+    sandboxes_level = logging.DEBUG  # FIXME
     uvicorn_level = logging.ERROR
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
@@ -46,13 +56,35 @@ def init_log_level(use_rich: bool = True) -> None:
     logging.getLogger("pysandboxes").setLevel(sandboxes_level)
     logging.getLogger().setLevel(sandboxes_level)  # Set the default level for root
     logging.basicConfig(
+        force=True,
         level=min(sandboxes_level, logging.INFO),
         format=format,
-        handlers=handlers)
+        handlers=handlers,
+    )
     # logging.error("ERROR test")
     # logging.warning("WARNING test")
     # logging.info("INFO test")
     # logging.debug("DEBUG test")
+
+
+def signal_handler_main(
+    signum: int, frame: FrameType | None
+) -> Any | int | signal.Handlers:
+    logger.info("********** catch signal in main")
+    return None
+
+
+_old_sigint_handler = None
+
+
+def signal_handler_sandbox(
+    signum: int, frame: FrameType | None
+) -> Any | int | signal.Handlers:
+    global _old_sigint_handler
+    logger.info("********** catch signal in sandbox")
+    if callable(_old_sigint_handler):
+        return _old_sigint_handler(signum, frame)
+    return None
 
 
 @sandbox
@@ -62,6 +94,13 @@ async def arun_in_sandbox() -> int:
     _test_files()
     _test_network()
     print("end of arun_in_sandbox()")
+    global _old_sigint_handler
+    _old_sigint_handler = signal.signal(signal.SIGTERM, signal_handler_sandbox)
+
+    print(f"arun_in_sandbox {threading.current_thread()=}")
+
+    # os.kill(os.getpid(),signal.SIGTERM)
+    # await asyncio.sleep(5)
     return 42
 
 
@@ -77,19 +116,17 @@ def run_in_sandbox() -> int:
 
 def _test_envs() -> None:
     assert os.environ["LANGUAGE"]
-    os.putenv("My_ENV","hello")
+    os.putenv("My_ENV", "hello")
     os.getenv("My_ENV")
     os.unsetenv("My_ENV")
     if not is_learning_mode():
-        assert "USER" not in os.environ,"USER must not be visible"
-
+        assert "USER" not in os.environ, "USER must not be visible"
 
 
 def _test_network() -> None:
     # tcp connection
     import socket
 
-    import pysandboxes.learning
     # 1. Learn and accept
     # Learn a direct connection to google
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -196,6 +233,10 @@ async def async_manager() -> None:
 # %% --------------------------------------
 def init_sandbox() -> None:
     init_log_level()
+    if is_in_sandbox():
+        signal.signal(signal.SIGQUIT, signal_handler_sandbox)
+    else:
+        signal.signal(signal.SIGQUIT, signal_handler_main)
     logger.debug("INIT sandbox")
 
 
@@ -226,15 +267,53 @@ def call_llm() -> None:
     _call_llm(token=os.environ["USER"])
 
 
-async def main(argv: List[str]) -> int:
+async def async_main(argv: List[str]) -> int:
     init_log_level()
+
     os.environ["LLM_TOKEN"] = "abc"
 
-    # def audit_hook(event, args):
-    #     logger.debug(f'Audit event: {event} {" XX ,".join(map(repr, args))}')
-    # import sys
-    # sys.addaudithook(audit_hook)
+    config_path, extra_rules = _config(argv)
 
+    for _ in range(0, RANGETEST):
+        async with sandboxes(
+            async_init_sandbox,
+            sandboxes_config=config_path,
+            **cast(Mapping[str, Any], extra_rules),
+        ):
+            # await arun()
+            logger.info("async_main.kill...")
+            # os.kill(os.getpid(), signal.SIGTERM)
+            logger.info("async_main.kill... done")
+            # await asyncio.sleep(5)  # The signal may be catch
+
+    logger.info("async_main.return 0")
+    return 0
+
+
+def sync_main(argv: List[str]) -> int:
+    init_log_level()
+
+    os.environ["LLM_TOKEN"] = "abc"
+
+    config_path, extra_rules = _config(argv)
+
+    for _ in range(0, RANGETEST):
+        with sandboxes(
+            init_sandbox,
+            sandboxes_config=config_path,
+            **cast(Mapping[str, Any], extra_rules),
+        ):
+            logger.info("sync_main.run...")
+            run()
+            logger.info("sync_main.run...done")
+            # logger.info("sync_main.kill...")
+            # os.kill(os.getpid(), signal.SIGTERM)
+            # logger.info("sync_main.kill done")
+
+    return 0
+
+
+def _config(argv: list[str]) -> tuple[Path, dict[str, set[str]]]:
     extra_rules = convert_extra_rules(argv[1:])
     config_path = Path("tests/integration_tests/py-sandbox-test.profile")
     if "learn" in extra_rules:
@@ -242,15 +321,7 @@ async def main(argv: List[str]) -> int:
         if not learning_path:
             learning_path = ".py-sandboxes"
         extra_rules["learn"] = {learning_path}
-
-    for _ in range(0, 1):
-        async with sandboxes(
-                async_init_sandbox,
-                sandboxes_config=config_path,
-                **cast(Mapping[str, Any], extra_rules),
-        ):
-            await arun()
-    return 0
+    return config_path, extra_rules
 
 
 # from pysandboxes.sandboxes_api import sandboxes
@@ -263,8 +334,8 @@ async def main(argv: List[str]) -> int:
 #         print("ok")
 
 if __name__ == "__main__":
-
-    try:
-        asyncio.run(main(sys.argv))
-    except KeyboardInterrupt:
-        pass
+    init_log_level()
+    sync_main(sys.argv)
+    logger.info("-------------------------")
+    asyncio.run(async_main(sys.argv))
+    logger.info("End of __main__")

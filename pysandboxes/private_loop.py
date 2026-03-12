@@ -13,15 +13,14 @@ import asyncio
 import functools
 import logging
 import threading
-import weakref
-from _weakref import ReferenceType
-from asyncio import AbstractEventLoop
+from asyncio import AbstractEventLoop, Future
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 # Weak reference to the background event loop to allow for garbage collection.
-_background_loop_ref: ReferenceType[AbstractEventLoop] | None = None
+_background_loop_ref: AbstractEventLoop | None = None
+_new_event_loop: bool = False  # True if use a private loop
 
 # Thread-safe lock for creating and managing the background loop.
 _lock = threading.Lock()
@@ -38,8 +37,7 @@ def set_sandbox_loop(loop: AbstractEventLoop) -> None:
         loop: The asyncio event loop to set.
     """
     global _background_loop_ref
-    assert _background_loop_ref is None or _background_loop_ref() is None
-    _background_loop_ref = weakref.ref(loop)
+    _background_loop_ref = loop
 
 
 # The background thread running the event loop.
@@ -64,7 +62,7 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
     global _background_loop_ref
 
     if _background_loop_ref is not None:
-        loop = _background_loop_ref()
+        loop = _background_loop_ref
         if loop is not None and loop.is_running():
             return loop
     if not new_loop:
@@ -73,13 +71,13 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
     with _lock:
         # Double-check inside the lock to prevent race conditions.
         if _background_loop_ref is not None:
-            loop = _background_loop_ref()
+            loop = _background_loop_ref
             if loop is not None and loop.is_running():
                 return loop
         try:
             # If we are already in a coroutine, reuse the running loop.
             loop = asyncio.get_running_loop()
-            _background_loop_ref = weakref.ref(loop)
+            _background_loop_ref = loop
             return loop
         except RuntimeError:
             logger.debug("Create a private event loop for sandbox without async call")
@@ -87,7 +85,9 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
         # Create a new loop and run it in a background thread.
         loop = asyncio.new_event_loop()
         loop.__pysandbox__ = True  # type: ignore[attr-defined]
-        _background_loop_ref = weakref.ref(loop)
+        _background_loop_ref = loop
+        global _new_event_loop
+        _new_event_loop = True
         asyncio.set_event_loop(loop)
 
         start_event = threading.Event()
@@ -95,11 +95,11 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
         def _start_background_loop() -> None:
             """Target for the thread; runs the event loop forever."""
             try:
-                asyncio.set_event_loop(loop)
                 start_event.set()
                 logger.debug("Start thread for sandbox event loop")
                 loop.run_forever()
                 logger.debug("Stop thread for sandbox event loop")
+                _background_loop_ref = None
             except KeyboardInterrupt:
                 import _thread
                 import os
@@ -162,7 +162,7 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-def reset_sandbox_loop() -> None:
+def _reset_sandbox_loop() -> None:
     """
     Resets the global sandbox loop reference.
 
@@ -171,8 +171,7 @@ def reset_sandbox_loop() -> None:
     stopped from another part of the code.
     """
     global _background_loop_ref
-    with _lock:
-        _background_loop_ref = None
+    _background_loop_ref = None
 
 
 def get_sandbox_loop() -> AbstractEventLoop:
@@ -194,3 +193,50 @@ def get_sandbox_loop() -> AbstractEventLoop:
     # Fallback to the current running loop, though this may not be the sandbox loop.
     loop = asyncio.get_running_loop()
     return loop
+
+
+async def purge_loop() -> AbstractEventLoop | None:
+    """
+    Cancels all running tasks.
+    """
+    global _background_loop_ref
+    logger.debug(f"{_background_loop_ref=}")
+    global _new_event_loop
+
+    if _new_event_loop:
+        loop = _background_loop_ref
+        _background_loop_ref = None
+
+        # 1. Get all currently running tasks
+        # We exclude the current task (shutdown_async) and the main task that runs the loop (usually).
+        # asyncio.all_tasks() returns the set of all tasks scheduled by the loop.
+        tasks: set[asyncio.Task[Any]] = asyncio.all_tasks(loop)
+
+        # Exclude the task that is currently running this shutdown function (to avoid self-cancellation)
+        current_task = asyncio.current_task(loop)
+        if current_task is not None:
+            tasks.discard(current_task)
+
+        if loop and not tasks:
+            return loop
+
+        # 2. Cancel all tasks
+        for task in tasks:
+            task.cancel()
+
+        # 3. Wait for tasks to be cancelled/finished
+        # Return exceptions=True to not raise CancelledError here,
+        # as we expect the tasks to be cancelled.
+        results: list[Future[tuple[Any, ...]]] = await asyncio.gather(
+            *tasks, return_exceptions=True
+        )
+
+        # Optional: Log the results of cancellation attempts
+        for res in results:
+            if isinstance(res, Exception) and not isinstance(
+                res, asyncio.CancelledError
+            ):
+                logger.debug("Task finished with unexpected error: %s" % res)
+
+        return loop
+    return None

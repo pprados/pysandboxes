@@ -19,7 +19,8 @@ from pysandboxes.remote.sse_client_subprocess_daemon import (
     BaseSubProcessDaemon,
     DaemonParameters,
     get_log_formatter,
-    launch_sandbox, use_rich_handler,
+    launch_sandbox,
+    use_rich_handler,
 )
 from pysandboxes.sb_types import Envs
 from pysandboxes.tools import Environ
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 def _debug_log() -> None:
     sandbox_level = logging.DEBUG  # FIX_RELEASE
     uvicorn_log_level = logging.ERROR
+    format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     config_log(sandbox_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(uvicorn_log_level)
@@ -41,13 +43,17 @@ def _debug_log() -> None:
     logging.getLogger("pysandboxes").setLevel(sandbox_level)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
     logging.info("Start with python-sb")
+    logging.basicConfig(
+        level=sandbox_level,
+        format=format,
+    )
 
 
 def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    # _debug_log()  # FIX_RELEASE
+    _debug_log()  # FIX_RELEASE
 
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
         sys.argv[1:]
