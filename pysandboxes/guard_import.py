@@ -523,7 +523,7 @@ def activate_guard_import(
         "builtins",
         "__main__",
     ]  # TODO: add in rules ?
-    # logger.warning("NO DELETE MODULE")  # FIXME
+    # logger.warning("NO DELETE MODULE")
     for k in _pending_modules:
         # logger.error("Remove %s", k)
         if k not in keep:

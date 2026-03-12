@@ -433,9 +433,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         # with --private-tmp, need more parameters
         if pipe_path:
             args.append(f"--mkdir={str(pipe_path)}")
-            args.append(f"--whitelist={str(pipe_path)}")  # Must be a whitelist
-            # args.append(f"--read-only={str(pipe_path)}")  # Must be a whitelist
-            # args.append(f"--read-write={str(pipe_path)}")  # FIXME: firejail whitelist
+            args.append(f"--read-only={str(pipe_path)}")
 
         if all_rules.socket_rules:
             if restricted_network:

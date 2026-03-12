@@ -18,7 +18,7 @@ from pysandboxes.remote.python_in_sb import convert_extra_rules
 logger = logging.getLogger(__name__)
 
 
-RANGETEST = 2
+RANGETEST = 1
 
 
 def init_log_level(use_rich: bool = True) -> None:
@@ -175,13 +175,13 @@ def _test_network() -> None:
 
         try:
             with socket.socket(AF_INET, SOCK_STREAM) as sock:
-                sock.bind(("127.0.0.1", 9999))
+                sock.bind(("127.0.0.1", 9998))
             assert learning_mode, "Must be stopped by pysandbox"
         except SandBoxError:
             print("Connect to github is stopped")
         try:
             with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-                sock.bind(("::1", 9999))
+                sock.bind(("::1", 9998))
             assert learning_mode, "Must be stopped by pysandbox"
         except SandBoxError:
             print("Connect to github is stopped")
@@ -280,10 +280,10 @@ async def async_main(argv: List[str]) -> int:
             sandboxes_config=config_path,
             **cast(Mapping[str, Any], extra_rules),
         ):
-            # await arun()
-            logger.info("async_main.kill...")
+            await arun()
+            # logger.info("async_main.kill...")
             # os.kill(os.getpid(), signal.SIGTERM)
-            logger.info("async_main.kill... done")
+            # logger.info("async_main.kill... done")
             # await asyncio.sleep(5)  # The signal may be catch
 
     logger.info("async_main.return 0")
@@ -335,7 +335,7 @@ def _config(argv: list[str]) -> tuple[Path, dict[str, set[str]]]:
 
 if __name__ == "__main__":
     init_log_level()
-    sync_main(sys.argv)
+    # sync_main(sys.argv)
     logger.info("-------------------------")
     asyncio.run(async_main(sys.argv))
     logger.info("End of __main__")
