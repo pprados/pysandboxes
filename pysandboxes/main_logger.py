@@ -85,7 +85,7 @@ def config_log(
     handlers: list[logging.Handler] = []
     if use_rich:
         try:
-            from rich.console import Console  # FIXME: log reactivate RichHandler
+            from rich.console import Console
             from rich.logging import RichHandler
 
             # Active RichHandler if possible.
