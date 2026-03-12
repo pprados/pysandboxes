@@ -399,7 +399,7 @@ class SSEServerDaemon(BaseSSESandbox):
             loop.slow_callback_duration = 1.0
             self.uvicorn = create_uvicorn_daemon(
                 self.token, "0.0.0.0", self.port
-            )  # FIXME: que si os_sandbox?
+            )
 
             start_event = asyncio.Event()
 

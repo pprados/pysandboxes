@@ -119,7 +119,11 @@ def _test_envs() -> None:
     os.putenv("My_ENV", "hello")
     os.getenv("My_ENV")
     os.unsetenv("My_ENV")
-    if not is_learning_mode():
+    learning_mode = is_learning_mode()
+    if "OS_SANDBOX" in os.environ:
+        learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
+
+    if not learning_mode:
         assert "USER" not in os.environ, "USER must not be visible"
 
 
@@ -164,6 +168,8 @@ def _test_network() -> None:
 
     # 2. Test denied access
     learning_mode = is_learning_mode()
+    if "OS_SANDBOX" in os.environ:
+        learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
     if not learning_mode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -196,7 +202,10 @@ def _test_files() -> None:
         pass
 
     # 2. Test denied access
-    if not is_learning_mode():
+    learning_mode = is_learning_mode()
+    if "OS_SANDBOX" in os.environ:
+        learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
+    if not learning_mode:
         # Check access refused
         try:
             with io.open("hack.py", "w"):

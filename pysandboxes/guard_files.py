@@ -493,10 +493,6 @@ def _apply_dest_to_src_rules(
 
     if not path:
         return None, None
-    from . import is_in_sandbox
-
-    if not is_in_sandbox():
-        return str(path),None
     fake_path = _os_path_abspath(path)
     if str(path).endswith("/"):
         fake_path = fake_path + "/"

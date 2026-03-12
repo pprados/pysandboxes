@@ -1,14 +1,11 @@
 include "./.local.py-sandboxes"  # May be add to .gitignore
 include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
 include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
+
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
-env=HOME=${HOME}
 env=LANGUAGE=${LANGUAGE}
 env=My_ENV=${My_ENV}
-env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
-env=PYDANTIC_VALIDATE_CORE_SCHEMAS=${PYDANTIC_VALIDATE_CORE_SCHEMAS}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
 
 python-import=*
 
