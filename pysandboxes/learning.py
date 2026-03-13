@@ -117,7 +117,7 @@ def generate_config_from_learning() -> None:
 
         # Insert new rules in the file
         pattern: str = (
-            r"^# XX</([^\}]+)>"  # FIX_RELEASE: inject in the middle of parameters
+            r"^# </([^\}]+)>"  # FIX_RELEASE: inject in the middle of parameters
         )
         for i, line in enumerate(all_lines):
             match = re.search(pattern, line)

@@ -18,14 +18,14 @@ logger = logging.getLogger(__name__)
 timeout = 30
 all_mcp_client_os_sandbox: list[str] = [
     "None",
-    # "Subprocess",  # FIXME
-    # "firejail",
+    "Subprocess",
+    "firejail",
 ]
 all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",
-    # "stdio_sandboxes_complete",
-    # "stdio_sandboxes_partial",
-    # "http",
+    "stdio_sandboxes_complete",
+    "stdio_sandboxes_partial",
+    "http",
 ]
 
 
@@ -104,9 +104,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
     process: Popen | None = None
     if mcp_server_config == "http.json":
         cmd = (
-            "uv",
-            "run",
-            # "python",
+            "uv","run",
             "-m",
             "pysandboxes.python_sb",
             "-m",
@@ -137,8 +135,8 @@ def _start_server(mcp_server_config: str) -> Popen | None:
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_evaluate_expression(
-    mcp_client_os_sandbox: str,
-    mcp_server_config: str,
+        mcp_client_os_sandbox: str,
+        mcp_server_config: str,
 ) -> None:
     process: Popen | None = None
     try:
@@ -149,28 +147,30 @@ def test_claude_evaluate_expression(
                 pytest.skip("Need 'bridge' interface. Use `sudo add-bridge.sh`")
 
         process = _start_server(mcp_server_config)
-        start_client = ["-m", "pysandboxes.python_sb"] + [
-            "-m",
-            "mcp_simple_chatbot.main",
-        ]
-        cmd = ("python", *start_client, "-c", mcp_server_config, "-p", "calc 2+3")
-        logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
+        start_client = (
+                ["-m", "pysandboxes.python_sb"] +
+                # ["--version"]
+                ["-m","mcp_simple_chatbot.main"]
+        )
+        cmd = (which("python"), '-u', *start_client, "-c", mcp_server_config, "-p", "calc 2+3")
+        logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))  # FIXME: logger.info
+        # FIXME logger.error(os.environ.copy()| {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP})
         assert not process or process.returncode is None
         assert MY_IP is not None
         result = run(
             cmd,
             env=os.environ.copy()
-            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
+                | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
             input="",
-            # capture_output=True,  # To debug, deactivate capture_output
+            capture_output=True,  # To debug, deactivate capture_output
             check=True,
             text=True,
             shell=False,
         )
         print(result.stdout)
         if result.stderr:
-            print("------- STDERR")
+            print("-------")
             print(result.stderr)
         assert "5" in result.stdout
     finally:
@@ -184,8 +184,8 @@ def test_claude_evaluate_expression(
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_fetch_webpage(
-    mcp_client_os_sandbox: str,
-    mcp_server_config: str,
+        mcp_client_os_sandbox: str,
+        mcp_server_config: str,
 ) -> None:
     process: Popen | None = None
     try:
@@ -211,7 +211,7 @@ def test_claude_fetch_webpage(
         result = run(
             cmd,
             env=os.environ.copy()
-            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
+                | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
             capture_output=True,  # To debug, deactivate capture_output
             input="",
