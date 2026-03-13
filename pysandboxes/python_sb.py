@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def _debug_log() -> None:
-    sandbox_level = logging.DEBUG  # FIX_RELEASE
+    sandbox_level = logging.DEBUG
     uvicorn_log_level = logging.ERROR
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
     config_log(sandbox_level)

@@ -23,7 +23,7 @@ def event_loop() -> Iterator[AbstractEventLoop]:
 
 @pytest.fixture(scope="module", autouse=True)
 async def start_daemon_for_tests() -> AsyncGenerator[None, None]:
-    config_path = Path(__file__).parent.parent / "test.py-sandboxes"
+    config_path = Path(__file__).parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
     all_rules = load_and_parse_config(config_path=config_path)
@@ -43,7 +43,7 @@ def sync_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-@pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")  # FIXME
+@pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")
 def test_sync_function() -> None:
     result_sync = sync_function("a", b="b")
     assert result_sync == "a b"
@@ -57,7 +57,7 @@ async def async_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-@pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")  # FIXME
+@pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")
 async def test_async_function() -> None:
     result_async = await async_function("a", b="b")
     assert result_async == "a b"

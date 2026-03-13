@@ -8,9 +8,9 @@ from typing import List
 
 from pysandboxes import sandboxes
 
-from ..sample import config_path
 from .test_rpc import sync_function
 
+config_path =Path(__file__).parent / "py-sandbox-test.profile"
 
 def find_process_childrens(parent_pid: int) -> List[int]:
     children_pids: List[int] = []

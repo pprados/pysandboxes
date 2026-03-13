@@ -1,25 +1,24 @@
 import re
 from pathlib import Path
+from socket import AddressFamily, SocketKind
 from typing import (
     Iterator,
     List,
     Tuple,
     Union,
 )
-
 # Added Tuple and Any for mock_getaddrinfo clarity
 from unittest.mock import Mock, patch
 
 import pytest
-
 from pysandboxes import RuleSocketConnectionRefusedError
 from pysandboxes.guard_socket import (
     Direction,
     Kind,
     _check_address_with_rules,
     _convert_ports_range,
-    parse_rules,
-)
+    parse_rules, )
+from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
 
@@ -67,7 +66,7 @@ def test_invalid_port_raises_value_error(mock_getaddrinfo: Mock) -> None:
 
 
 def test_hostname_resolution_failure_raises_value_error(
-    mock_getaddrinfo: Mock,
+        mock_getaddrinfo: Mock,
 ) -> None:
     """
     If hostname resolution fails (socket.gaierror), a ValueError should be raised.
@@ -87,18 +86,18 @@ def test_hostname_resolution_failure_raises_value_error(
     assert not errors
     address: Tuple[str, int] = ("nonexistent.example.com", 80)
     with pytest.raises(
-        ValueError,
-        match=re.escape(
-            r"Invalid hostname or IP address (resolution failed): "
-            r"nonexistent.example.com"
-        ),
+            ValueError,
+            match=re.escape(
+                r"Invalid hostname or IP address (resolution failed): "
+                r"nonexistent.example.com"
+            ),
     ):
         _check_address_with_rules(rules, s_kind, address, Direction.OUT)
     pass
 
 
 def test_hostname_resolves_to_no_valid_ips_raises_value_error(
-    mock_getaddrinfo: Mock,
+        mock_getaddrinfo: Mock,
 ) -> None:
     """
     If getaddrinfo returns no parsable IP addresses matching the socket family,
@@ -122,10 +121,10 @@ def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     # This ValueError is unlikely to be raised by the current guard_socket.py code
     # in this scenario.
     with pytest.raises(
-        ValueError,
-        match=re.escape(
-            r"Invalid hostname or IP address (resolution failed): empty.resolve.com"
-        ),
+            ValueError,
+            match=re.escape(
+                r"Invalid hostname or IP address (resolution failed): empty.resolve.com"
+            ),
     ):
         _check_address_with_rules(rules, s_kind, address, Direction.OUT)
 
@@ -135,8 +134,8 @@ def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     ]  # type: ignore
     # This ValueError is also unlikely. Corrected s_family.value to s_family.
     with pytest.raises(
-        ValueError,
-        match=re.escape(r"'/' does not appear to be an IPv4 or IPv6 address"),
+            ValueError,
+            match=re.escape(r"'/' does not appear to be an IPv4 or IPv6 address"),
     ):
         _check_address_with_rules(rules, s_kind, address, Direction.OUT)
 
@@ -267,7 +266,7 @@ def test_multiple_ips_one_matches_deny_blocks(mock_getaddrinfo: Mock) -> None:
 
 
 def test_explicit_allow_rule_not_triggers_allow_exception(
-    mock_getaddrinfo: Mock,
+        mock_getaddrinfo: Mock,
 ) -> None:
     """
     Tests that an explicit ALLOW rule, when matched, raises a specific
@@ -419,7 +418,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: Mock) -> None:
     ],
 )
 def test_convert_ports_range_valid_cases(
-    port_spec: str, expected_output: Union[int, Tuple[int, ...], range]
+        port_spec: str, expected_output: Union[int, Tuple[int, ...], range]
 ) -> None:
     """
     Tests the _convert_ports_range function with valid port specification syntaxes
@@ -437,14 +436,14 @@ def test_convert_ports_range_valid_cases(
         ("80-abc", "Invalid end port number 'abc' in range '80-abc'."),
         ("abc-8080", "Invalid _start port number 'abc' in range 'abc-8080'."),
         (
-            "8080-8000",
-            "Invalid range: _start port 8080 is greater than end port 8000 in '8080-8000'.",  # noqa: E501
+                "8080-8000",
+                "Invalid range: _start port 8080 is greater than end port 8000 in '8080-8000'.",  # noqa: E501
         ),
         ("-1", "Invalid range format: '-1'. Range _start cannot be empty."),
         ("65536", "Invalid port number '65536'."),
         (
-            "0-65536",
-            "End port 65536 in range '0-65536' is out of valid range (0-65535).",
+                "0-65536",
+                "End port 65536 in range '0-65536' is out of valid range (0-65535).",
         ),
         ("80,abc,443", "Invalid port number 'abc'."),
         ("80-82,def,100-102", "Invalid port number 'def'."),
@@ -453,7 +452,7 @@ def test_convert_ports_range_valid_cases(
     ],
 )
 def test_convert_ports_range_invalid_cases(
-    port_spec: str, expected_exception_message: str
+        port_spec: str, expected_exception_message: str
 ) -> None:
     """
     Tests the _convert_ports_range function with invalid port specification syntaxes
@@ -481,3 +480,28 @@ def test_invalid_sendTo() -> None:
     with pytest.raises(BrokenPipeError):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:  # Invalid type
             sock.sendto(b"hello", ("127.0.0.1", 12345))
+
+
+def test_getaddrinfo() -> None:
+    from socket import getaddrinfo
+    x = getaddrinfo("www.google.com", 0)#,family=AddressFamily.AF_INET)
+    print(x)
+    default_values=[
+                (AddressFamily.AF_INET6, SocketKind.SOCK_STREAM, 6, '',('2a00:1450:4007:809::2004', 0,0,0)),
+                (AddressFamily.AF_INET6, SocketKind.SOCK_DGRAM, 17, '',('2a00:1450:4007:809::2004', 0,0,0)),
+                (AddressFamily.AF_INET6, SocketKind.SOCK_RAW, 0, '',('2a00:1450:4007:809::2004', 0,0,0)),
+                (AddressFamily.AF_INET, SocketKind.SOCK_STREAM, 6, '',('142.250.179.68', 0,0,0)),
+                (AddressFamily.AF_INET, SocketKind.SOCK_DGRAM, 17, '',('142.250.179.68', 0,0,0)),
+                (AddressFamily.AF_INET, SocketKind.SOCK_RAW, 0, '',('142.250.179.68', 0,0,0))
+            ]
+    import pysandboxes.guard_socket
+    pysandboxes.guard_socket._pin_dns = ImmutableDict(
+        {
+            "www.google.com": default_values
+        })
+
+    assert getaddrinfo("www.google.com",0) == pysandboxes.guard_socket._pin_dns["www.google.com"]
+    assert all(x[4][1] == 80 for x in getaddrinfo("www.google.com",80))
+    assert all(x[0] == AddressFamily.AF_INET for x in getaddrinfo("www.google.com",0,family=AddressFamily.AF_INET))
+    assert all(x[1] == SocketKind.SOCK_STREAM for x in getaddrinfo("www.google.com",0,type=SocketKind.SOCK_STREAM))
+    assert all(x[2] == 6 for x in getaddrinfo("www.google.com",0,proto=6))

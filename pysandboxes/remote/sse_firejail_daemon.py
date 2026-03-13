@@ -458,7 +458,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                             args.append(f"--dns={dns}")
                         break
             else:
-                # FIXME: see https://github.com/netblue30/firejail/discussions/6931
+                # TODO: see https://github.com/netblue30/firejail/discussions/6931
                 # for pin_dns in dns_server_v6:
                 #     if not pin_dns.is_loopback:
                 #         loopback_dns = True

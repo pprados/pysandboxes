@@ -1,11 +1,18 @@
 # %% Test exception
+import logging
+from pathlib import Path
 from typing import NoReturn
 
 import pytest
 
 from pysandboxes import sandbox, sandboxes
 
-from ..sample import config_path, init_sandbox
+
+config_path =Path(__file__).parent / "py-sandbox-test.profile"
+logger = logging.getLogger(__name__)
+
+def init_sandbox() -> None:
+    logger.info("init_sandbox called")
 
 
 @sandbox

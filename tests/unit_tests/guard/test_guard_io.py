@@ -1,9 +1,9 @@
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
 import pytest
-
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.guard_files import BindRule, activate_guard, parse_rules
 from pysandboxes.main_logger import ErrorMsg
@@ -52,11 +52,14 @@ def reset_rules() -> None:
     _reset_rules()
 
 
+tmp_path = Path(tempfile.TemporaryDirectory(prefix="pysandboxes_test_").name)
+
+
 @pytest.fixture
 def files() -> Dict[str, Path]:
     # Create test files and symlinks
     # It's executer without patch.
-    tmp_path = Path("/tmp/test")  # FIXME: real temp files
+    global tmp_path
     if tmp_path.exists():
         # Remove, without sandboxes
         subprocess.run(["rm", "-rf", str(tmp_path)], check=True)
@@ -110,7 +113,7 @@ def files() -> Dict[str, Path]:
         "new_link_to_bind": tmp_path / "bind_dest/new_link_to_bind_src",
         "link_relative_to_bind": tmp_path / "bind_dest/link_relative_to_bind_src",
         "new_link_relative_to_bind": tmp_path
-        / "bind_dest/new_link_relative_to_bind_src",
+                                     / "bind_dest/new_link_relative_to_bind_src",
         "to_rename": tmp_path / "to_rename.txt",
         "new_rename": tmp_path / "new_rename.txt",
         "bind_to_rename": tmp_path / "bind_dest/to_rename.txt",
@@ -175,7 +178,7 @@ def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]) -> None:
 
 
 def test_io_open_code_ignore_rule_blocks_open_code_file_access(
-    files: Dict[str, Path],
+        files: Dict[str, Path],
 ) -> None:
     rules = [ConfigLine(f"ignore={files['ignore']}", Path(), 0)]
     activate_guard_files_rules(rules)

@@ -36,7 +36,6 @@ def sync_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-# FIXME: RichHandler if possible. Bug sur test_sync_function
 def test_sync_function() -> None:
     result_sync = sync_function("a", b="b")
     assert result_sync == "a b"
