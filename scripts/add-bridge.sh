@@ -1,5 +1,10 @@
 #!/bin/bash
 set -x
+
+if [[ $EUID -ne 0 ]]; then
+    exec sudo "$0" "$@"
+fi
+
 DEFAULT_INTERFACE=$(ip route get 8.8.8.8 | awk '/dev/ {print $5; exit}')
 BRIDGE_NAME=${1:-br0}
 #
@@ -10,7 +15,9 @@ brctl delbr ${BRIDGE_NAME}
 
 # bridge setup
 brctl addbr ${BRIDGE_NAME}
-ifconfig ${BRIDGE_NAME} 10.10.20.1/24 up
+brctl addif br0 ${DEFAULT_INTERFACE}
+ip link set ${BRIDGE_NAME} up
+ip addr add 10.10.20.1/24 dev ${BRIDGE_NAME}
 
 # enable ipv4 forwarding
 echo "1" > /proc/sys/net/ipv4/ip_forward

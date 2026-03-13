@@ -397,9 +397,7 @@ class SSEServerDaemon(BaseSSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            self.uvicorn = create_uvicorn_daemon(
-                self.token, "0.0.0.0", self.port
-            )
+            self.uvicorn = create_uvicorn_daemon(self.token, "0.0.0.0", self.port)
 
             start_event = asyncio.Event()
 

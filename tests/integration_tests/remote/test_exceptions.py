@@ -7,9 +7,9 @@ import pytest
 
 from pysandboxes import sandbox, sandboxes
 
-
-config_path =Path(__file__).parent / "py-sandbox-test.profile"
+config_path = Path(__file__).parent / "py-sandbox-test.profile"
 logger = logging.getLogger(__name__)
+
 
 def init_sandbox() -> None:
     logger.info("init_sandbox called")

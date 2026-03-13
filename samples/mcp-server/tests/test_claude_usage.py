@@ -40,17 +40,17 @@ if MOCK:
 
 timeout = 30
 all_os_sandbox = [
-    # "None",  # FIX_RELEASE
-    # "Subprocess",
-    # "firejail",
+    "None",  # FIX_RELEASE
+    "Subprocess",
+    "firejail",
 ]
 all_protocol = [
-    # "stdio",
-    # "http"
+    "stdio",
+    "http"
 ]
 all_pysandboxes_mode = [
-    # "complete",
-    # "partial"
+    "complete",
+    "partial"
 ]
 
 
@@ -115,7 +115,7 @@ def _init_mcp_server(
     return process
 
 
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
