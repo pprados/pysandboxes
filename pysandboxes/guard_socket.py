@@ -774,7 +774,7 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
     logger.debug(
         "pin_dns=\n  "
         + "\n  ".join(
-            f"[{k}]:  " + ", ".join(x[4][0] for x in v) for k, v in dns.items()
+            f"[{k}]:  " + ", ".join({x[4][0] for x in v}) for k, v in dns.items()
         )
     )
     _pin_dns = dns

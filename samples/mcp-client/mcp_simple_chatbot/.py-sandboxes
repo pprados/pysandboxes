@@ -9,11 +9,6 @@ env=API_URL=${API_URL}
 env=API_KEY=${API_KEY}
 env=HOME=${HOME}
 env=LANGUAGE=${LANGUAGE}
-env=LOGNAME=${LOGNAME}
-env=PATH=${PATH}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
-env=SHELL=${SHELL}
-env=USER=${USER}
 env=MY_IP=${MY_IP:-127.0.0.1}
 
 # ⚠ Dangerous!
@@ -99,3 +94,4 @@ net=ALLOW|TCP|localhost|48000|*
 ro-bind=.,.
 
 firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
+#firejail.net=br0  # Use specific brige ? Else, use docker0 if exist

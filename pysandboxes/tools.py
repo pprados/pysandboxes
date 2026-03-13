@@ -239,7 +239,7 @@ def set_is_in_sandbox(value: bool) -> None:
         _is_in_sandbox += 1
     else:
         _is_in_sandbox -= 1
-        assert _is_in_sandbox >=0
+        assert _is_in_sandbox >= 0
 
 
 def find_config_for_module(module: str, config_name: str) -> Path | None:
