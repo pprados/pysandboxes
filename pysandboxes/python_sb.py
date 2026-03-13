@@ -98,7 +98,7 @@ def main() -> int:
         from .remote.python_in_sb import python_in_sb
 
         if "--version" in python_parsed_args:
-            print("Python ", '.'.join(map(str,sys.version_info[0:3])))
+            print("Python ", ".".join(map(str, sys.version_info[0:3])))
             sys.exit(0)
         return python_in_sb(all_rules, python_cmd)
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -152,6 +152,8 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Exception: {e}", exc_info=True)
         rc = -1
-    sys.stdout.flush()
-    sys.stderr.flush()
+    if not sys.stdout.closed:
+        sys.stdout.flush()
+    if not sys.stderr.closed:
+        sys.stderr.flush()
     os._exit(rc)

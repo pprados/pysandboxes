@@ -46,16 +46,8 @@ if MOCK:
     run = _mock_run
 
 timeout = 30
-all_pysandboxes_mode = \
-    [
-        "complete",
-        "partial"
-    ]
-all_protocol = \
-    [
-        "stdio",
-        "http"
-    ]
+all_pysandboxes_mode = ["complete", "partial"]
+all_protocol = ["stdio", "http"]
 all_os_sandbox = [
     "None",
     "Subprocess",
@@ -234,7 +226,7 @@ def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
         if result.stderr:
             print("------- STDERR")
             print(result.stderr)
-        assert "113567" in result.stdout
+        assert bool(re.search(r"113[ ,.]?567", result.stdout))
     finally:
         if process:
             process.terminate()

@@ -2,8 +2,7 @@ SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests
 
 # Switch to poetry to uv
-UV_EXTRA?=
-UV_GROUP?=--group dev --group lint --group test
+UV_GROUP?=--group dev --group test --group lint
 
 POETRY_EXTRA?=
 POETRY_WITH?=-with dev,lint,test,codespell
@@ -41,9 +40,9 @@ test_watch:
 	uv run ptw --now . -- tests/unit_tests
 
 
-######################
+########################
 # LINTING AND FORMATTING
-######################
+########################
 
 # Define a variable for Python and notebook files.
 PYTHON_FILES=pysandboxes/ tests/
@@ -51,15 +50,15 @@ lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimenta
 
 lint: format
 	uv run mypy $(PYTHON_FILES)
-	uv run black --check $(PYTHON_FILES)
-	uv run ruff check $(PYTHON_FILES)
+	uvx black --check $(PYTHON_FILES)
+	uvx ruff check $(PYTHON_FILES)
 
 claude-lint: lint
 	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'
 
 format format_diff:
-	uv run black $(PYTHON_FILES)
-	uv run ruff check --select I --fix $(PYTHON_FILES)
+	uvx black $(PYTHON_FILES)
+	uvx ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
 	uvx codespell --toml pyproject.toml
@@ -68,9 +67,9 @@ spell_fix:
 	uvx codespell --toml pyproject.toml -w
 
 
-######################
+###############
 # DOCUMENTATION
-######################
+###############
 
 # Clean the environment
 clean: docs_clean api_docs_clean
@@ -98,9 +97,9 @@ api_docs_clean:
 api_docs_linkcheck:
 	uv run linkchecker docs/api_reference/_build/html/index.html
 
-######################
+######
 # HELP
-######################
+######
 
 .DEFAULT: help
 ## Print all majors target
@@ -193,7 +192,7 @@ poetry.lock: pyproject.toml
 
 uv.lock: pyproject.toml
 	uv lock
-	git add poetry.lock
+	git add uv.lock
 	uv sync $(UV_GROUP)
 
 
@@ -201,7 +200,7 @@ uv.lock: pyproject.toml
 lock: $(LOCK)
 
 ## Validate the code
-validate: uv.lock format lint spell_check test
+validate: uv.lock format lint spell_check all-tests
 
 
 _poetry-init:
