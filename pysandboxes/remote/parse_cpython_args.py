@@ -71,6 +71,7 @@ def parse_python_cmd_line(
             return help
 
     long_params = [
+        "--version",
         "--help",
         "--help-env",
         "--help-xoptions",

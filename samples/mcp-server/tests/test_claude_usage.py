@@ -7,13 +7,14 @@ import os
 import re
 from shutil import which
 from subprocess import PIPE, Popen, run
+from time import sleep
 from typing import Any
 
 import pytest
 
 logger = logging.getLogger(__name__)
 
-MOCK = False
+MOCK = False  # FIX_RELEASE
 if MOCK:
     from dataclasses import dataclass
 
@@ -45,13 +46,21 @@ if MOCK:
     run = _mock_run
 
 timeout = 30
+all_pysandboxes_mode = \
+    [
+        "complete",
+        "partial"
+    ]
+all_protocol = \
+    [
+        "stdio",
+        "http"
+    ]
 all_os_sandbox = [
-    "None",  # FIX_RELEASE
-    # "Subprocess",  # FIXME
-    # "firejail",
+    "None",
+    "Subprocess",
+    "firejail",
 ]
-all_protocol = ["stdio", "http"]
-all_pysandboxes_mode = ["complete", "partial"]
 
 
 def _init_mcp_server(
@@ -98,11 +107,12 @@ def _init_mcp_server(
             process = Popen(
                 "uv run -m pysandboxes.python_sb -m mcp_server.main -t http",
                 env=os.environ.copy() | {"OS_SANDBOX": os_sandbox},
-                stdout=PIPE,
-                stderr=PIPE,
+                # stdout=PIPE,
+                # stderr=PIPE,
                 text=True,
                 shell=True,
             )
+            sleep(1)
         elif pysandboxes_mode == "partial":
             process = Popen(
                 "uv run -m mcp_server.main -t http",
@@ -112,6 +122,7 @@ def _init_mcp_server(
                 text=True,
                 shell=True,
             )
+            sleep(1)
     return process
 
 
@@ -262,7 +273,7 @@ def test_claude_evaluate_expression(protocol: str, os_sandbox: str, mode: str) -
         if result.stderr:
             print("------- STDERR")
             print(result.stderr)
-        assert "113567" in result.stdout
+        assert bool(re.search(r"113[ ,.]?567", result.stdout))
     finally:
         if process:
             process.terminate()

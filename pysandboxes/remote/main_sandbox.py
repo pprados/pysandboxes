@@ -204,10 +204,19 @@ if __name__ == "__main__":
         generate_config_from_learning()
         rc = 0
     except RuntimeError as e:
+        if logger.getEffectiveLevel()<=logging.DEBUG:
+            import traceback
+
+            traceback.print_exc()
+        import pydevd
         print(str(e), file=sys.stderr)
         rc = 1
     except Exception as e:
         logger.error(f"Exception: {e}", exc_info=True)
+        if logger.getEffectiveLevel()<=logging.DEBUG:
+            import traceback
+
+            traceback.print_tb()
         rc = 1
     logger.debug("main_sandbox exit with errorlevel=%s", rc)
     os._exit(rc)

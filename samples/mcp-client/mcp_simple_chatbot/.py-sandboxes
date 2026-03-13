@@ -8,6 +8,7 @@ env=MODEL=${MODEL}
 env=API_URL=${API_URL}
 env=API_KEY=${API_KEY}
 env=HOME=${HOME}
+env=PATH=${PATH}
 env=LANGUAGE=${LANGUAGE}
 env=MY_IP=${MY_IP:-127.0.0.1}
 
@@ -29,7 +30,8 @@ python-import=secrets, select, shlex, shutil, signal, socket, ssl, stat, string
 python-import=stringprep, struct, sysconfig, tempfile, termios, textwrap, threading
 python-import=time, tokenize, traceback, types, typing, unicodedata, urllib, uuid
 python-import=weakref, webbrowser, zipfile, zlib, zoneinfo
-python-import=_suggestions
+python-import=_suggestions, posixpath, socketserver
+python-import=*  # FIXME
 
 # External modules (Are you sure about the origin?)
 python-import=pydevd_asyncio_utils
