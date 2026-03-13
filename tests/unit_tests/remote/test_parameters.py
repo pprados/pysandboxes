@@ -43,13 +43,13 @@ class TestParameterValues:
 
     def test_timeout_graceful_shutdown_value(self) -> None:
         """Test TIMEOUT_GRACEFUL_SHUTDOWN has correct value and type."""
-        assert TIMEOUT_GRACEFUL_SHUTDOWN == 1
+        assert TIMEOUT_GRACEFUL_SHUTDOWN == 2
         assert isinstance(TIMEOUT_GRACEFUL_SHUTDOWN, (int, float))
 
     def test_timeout_for_stop_daemon_value(self) -> None:
         """Test TIMEOUT_FOR_STOP_DAEMON has correct value and type."""
         assert TIMEOUT_FOR_STOP_DAEMON == TIMEOUT_GRACEFUL_SHUTDOWN * 2
-        assert TIMEOUT_FOR_STOP_DAEMON == 2
+        assert TIMEOUT_FOR_STOP_DAEMON == 4
         assert isinstance(TIMEOUT_FOR_STOP_DAEMON, (int, float))
 
     def test_timeout_for_ping_value(self) -> None:

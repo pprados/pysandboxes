@@ -37,7 +37,7 @@ It's time to control, as much as possible, the allowed capabilities for your app
   - [How to catch rule violation exceptions?](#how-to-catch-rule-violation-exceptions)
   - [How to activate the sandbox in a notebook?](#how-to-activate-the-sandbox-in-a-notebook)
   - [How to propagate a token to an API in the sandbox?](#how-to-propagate-a-token-to-an-api-in-the-sandbox)
-  - [How to ensure a new version of a module doesnt hide new network accesses?](#how-to-ensure-a-new-version-of-a-module-doesnt-hide-new-network-accesses)
+  - [How to ensure a new version of a module doesn't hide new network accesses?](#how-to-ensure-a-new-version-of-a-module-doesnt-hide-new-network-accesses)
   - [Do I have any new rule violations since the update?](#do-i-have-any-new-rule-violations-since-the-update)
   - [Debugging](#debugging)
     - [OS-sandbox debugging](#os-sandbox-debugging)
@@ -70,7 +70,7 @@ Our solution helps reduce the following risks:
   - [X] **Remote Code Execution (RCE)**: Sensitive APIs are not available.
   - [X] **Reverse Shells**: Network connections are limited.
   - [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
-  - [X] **Token Theft**: Accessible files and enviroment variables are filtered.
+  - [X] **Token Theft**: Accessible files and environment variables are filtered.
   - [X] **Remote Access**: Network and code actions are limited.
   - [ ] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules (not yet implemented).
   - [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (not yet implemented).
@@ -491,7 +491,7 @@ my-script = "my_module:main_sb"
 You can find some samples for major framework:
 - MCP Client/Server
 
-See [here for more informations](wiki/samples.md)
+See [here for more information](wiki/samples.md)
 
 ---
 ## FAQ
@@ -511,7 +511,7 @@ See [here](wiki/roadmap.md)
 ---
 # Appendix
 
-1. Connexion to Databases: See [here](wiki/database.md)
+1. Connection to Databases: See [here](wiki/database.md)
 
 ## CVE in relation
 Some CVE in relations

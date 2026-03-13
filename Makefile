@@ -1,7 +1,7 @@
 SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests
 
-# Swith to poetry to uv
+# Switch to poetry to uv
 UV_EXTRA?=
 UV_GROUP?=--group dev --group lint --group test
 
@@ -19,16 +19,16 @@ fix-vs-code: .vscode/launch.json
 
 ## Make unit test
 unit-tests:
-	uv run pytest -v tests/unit_tests/
+	set -a && source .env && uv run pytest -v tests/unit_tests/
 
 ## Make integration tests
 integration-tests:
-	uv run pytest tests/integration_tests
+	set -a && source .env && uv run pytest tests/integration_tests
 
 ## Make integration tests
 sample-tests:
-	(cd samples/mcp-client && make test)
-	(cd samples/mcp-server && make test)
+	(cd samples/mcp-client && make tests && true)
+	(cd samples/mcp-server && make tests && true)
 
 ## Make github tests locally
 gh-tests: lint
@@ -62,10 +62,10 @@ format format_diff:
 	uv run ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
-	uv run codespell --toml pyproject.toml
+	uvx codespell --toml pyproject.toml
 
 spell_fix:
-	uv run codespell --toml pyproject.toml -w
+	uvx codespell --toml pyproject.toml -w
 
 
 ######################

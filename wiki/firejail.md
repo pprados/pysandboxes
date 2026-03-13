@@ -20,7 +20,7 @@ sudo uv run ./add-bridge.sh
 ## Specific Parameters
 Some specific parameters can be added to `.py-sandboxes` for *Firejail*. Parameters of the form `firejail.<xxx>=<yyy>` will be added in the form `--<xxx>=<yyy>` when launching firejail.
 
-To force to use a specifc bridge, add `--firejail.eth=my_bridge`.
+To force to use a specific bridge, add `--firejail.eth=my_bridge`.
 
 You can thus further strengthen security by limiting the system calls authorized by your application. To do this, you need to identify them. We offer a script [extract_strace.sh](https://github.com/pprados/pysandboxes/tree/develop/scripts) to help you.
 ```

@@ -559,7 +559,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         # One more time
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
-        logger.debug("Sandbox daemon is up and runnning")
+        logger.debug("Sandbox daemon is up and running")
         self._is_started = True
         self._accept_incoming = True
 

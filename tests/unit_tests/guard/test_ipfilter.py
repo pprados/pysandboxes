@@ -66,16 +66,12 @@ def reset() -> None:
 
 
 def check_root_status() -> Literal["root", "user", "not_unix"]:
-    # Vérifie si le module 'os.geteuid' est disponible (systèmes POSIX)
     if sys.platform in ("linux", "linux2", "darwin", "freebsd"):
-        # L'identifiant utilisateur effectif (EUID) est utilisé
-        # pour déterminer les permissions réelles du processus.
         if os.geteuid() == 0:
             return "root"
         else:
             return "user"
     else:
-        # Pour les systèmes non-UNIX (comme Windows), cette méthode n'est pas applicable.
         return "not_unix"
 
 

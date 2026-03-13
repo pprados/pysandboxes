@@ -84,7 +84,7 @@ Adresse_Type: TypeAlias = (
 )
 
 AddrInfoType = tuple[
-    int,  # Familly
+    int,  # Family
     int,  # Type
     int,  # Proto
     str,  # cononame
@@ -1234,7 +1234,7 @@ def generate_rules(
                 f"{','.join(in_ports)}|"
                 f"{Direction.IN.name}"
             )
-            # Check if this rules is allready present
+            # Check if this rules is already present
             for rule in _rules:
                 if rule.config.rule == rule_str:
                     break  # Ignore rule
@@ -1251,7 +1251,7 @@ def generate_rules(
                 f"{','.join(out_ports)}|"
                 f"{Direction.OUT.name}"
             )
-            # Check if this rules is allready present
+            # Check if this rules is already present
             for rule in _rules:  # FIXME: le match ne fonctionne pas si plusieurs ports
                 if rule.config.rule == rule_str:
                     break  # Ignore rule

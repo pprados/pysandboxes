@@ -5,7 +5,6 @@ import importlib
 import logging
 import os
 import sys
-import threading
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +12,7 @@ import httpx
 from fastmcp import FastMCP
 from httpx_file import FileTransport
 from markdownify import markdownify as md
-from pysandboxes import sandbox, sandboxes, is_in_sandbox
+from pysandboxes import is_in_sandbox, sandbox, sandboxes
 from pysandboxes.remote.tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
@@ -58,6 +57,7 @@ async def read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources."""
     return await _read_file_resource(path)
 
+
 @sandbox
 async def _read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources in a sandbox."""
@@ -65,7 +65,7 @@ async def _read_file_resource(path: str) -> str:
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {path}")
     if not file_path.is_relative_to(RESOURCES_DIR):
-        raise ValueError(f"Access denied: path outside resources directory")
+        raise ValueError("Access denied: path outside resources directory")
     logger.debug(f"Reading myresource:{path}")
     return file_path.read_text()
 
@@ -125,7 +125,7 @@ async def evaluate_expression(expression: str) -> float:
 
 @mcp.prompt()
 def analyze_data(expression: str) -> str:
-    """Caculate expression."""
+    """Calculate expression."""
     return f"with evaluate_expression calcul: {expression}"
 
 
@@ -143,7 +143,7 @@ def run_mcp_server(
     port: int | None,
     sandbox_port: int,
     pysandboxes_config: Path,
-    **kwargs,
+    **kwargs: Any,
 ) -> int:
     with sandboxes(
         sandboxes_config=pysandboxes_config,
