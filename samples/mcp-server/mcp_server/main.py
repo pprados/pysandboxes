@@ -18,7 +18,7 @@ from pysandboxes.remote.tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
 
-level = logging.DEBUG
+level = logging.INFO
 format = "MCPServer: %(levelname)-5s [%(process)d] %(name)s: %(message)s"
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 logging.getLogger("pysandboxes").setLevel(level)
@@ -58,8 +58,8 @@ async def read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources."""
     return await _read_file_resource(path)
 
-
-async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces direct
+@sandbox
+async def _read_file_resource(path: str) -> str:
     """Expose files from the resources directory as MCP resources in a sandbox."""
     file_path = RESOURCES_DIR / path
     if not file_path.exists():
@@ -70,7 +70,7 @@ async def _read_file_resource(path: str) -> str:  # FIXME: trouver un acces dire
     return file_path.read_text()
 
 
-@sandbox  # FIXME
+@sandbox
 async def _fetch_webpage(url: str) -> str:
     """Fetches the content of a webpage and returns it as markdown."""
     assert is_in_sandbox()
@@ -95,7 +95,7 @@ async def fetch_webpage(url: str) -> str:
 
 
 # Define the calculator tool
-@sandbox  # FIXME
+@sandbox
 async def _evaluate_expression(expression: str) -> float:
     """Evaluates a mathematical expression and returns the result."""
     assert is_in_sandbox()
@@ -155,7 +155,6 @@ def run_mcp_server(
         add_parameters: dict[str, Any] = {}
         if transport == "http":
             add_parameters = {"host": "0.0.0.0", "port": port}
-        logger.debug("mcp.run...")  # FIXME
         mcp.run(
             transport=transport,
             show_banner=False,
@@ -250,12 +249,11 @@ def main() -> int:
 
 
 # Run the mcp over stdio
-if __name__ == "__main__":  # FIXME: resoudre le __main__
+if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
         print("KeyboardInterrupt", file=sys.stderr)
         pass
     except SystemExit:
-        print("SystemExit", file=sys.stderr)
         pass

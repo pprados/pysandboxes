@@ -6,7 +6,7 @@ from pysandboxes import sandbox, sandboxes
 
 logger = logging.getLogger(__name__)
 
-config_path = Path(__file__).parent.parent / "config" / "test.py-sandboxes"
+config_path = Path(__file__).parent  / "py-sandbox-test.profile"
 assert config_path.exists()
 
 

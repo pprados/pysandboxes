@@ -103,8 +103,6 @@ def test_iter_use_directly_detection_environ() -> None:
 
 
 def test_update_from_environ() -> None:
-    # env.update(os.environ)
-    # FIXME:
     d: dict[str, str] = {}
     envs = LearnEnviron()  # Reset singleton
     envs._keys_used.clear()

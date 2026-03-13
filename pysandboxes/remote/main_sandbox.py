@@ -21,6 +21,7 @@ import logging
 import os
 import pickle
 import sys
+from logging import StreamHandler
 from pathlib import Path
 
 from pysandboxes.guard_socket import set_pin_dns
@@ -47,8 +48,8 @@ def _debug_log() -> None:
         level=logging.DEBUG,
         format="%(levelname)s - %(message)s",
     )
-    sandbox_level = logging.DEBUG  # FIX_RELEASE
-    uvicorn_log_level = logging.ERROR  # FIX_RELEASE
+    sandbox_level = logging.DEBUG
+    uvicorn_log_level = logging.WARNING
     config_log(sandbox_level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("uvicorn").setLevel(uvicorn_log_level)
@@ -134,6 +135,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
+    logging.getLogger().addHandler(StreamHandler(None))  # Set default handler to stderr
     _debug_log()  # FIX_RELEASE
 
     parser = argparse.ArgumentParser(

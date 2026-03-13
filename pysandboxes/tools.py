@@ -215,8 +215,6 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 # %% -----------------------
 
-# _sandboxed = contextvars.ContextVar("sanboxed", default=0)  FIXME: sandbox et is_in_sandbox?
-_sandboxed = 0
 _is_in_sandbox: int = 0
 
 
@@ -227,7 +225,6 @@ def is_in_sandbox() -> bool:
         True if inside sandbox, False otherwise.
     """
     global _is_in_sandbox
-    # return _sandboxed.get() > 0
     return _is_in_sandbox > 0
 
 
@@ -238,17 +235,11 @@ def set_is_in_sandbox(value: bool) -> None:
         value: True to enter sandbox context, False to exit.
     """
     global _is_in_sandbox
-    global _sandboxed
     if value:
-        # _sandboxed.set(_sandboxed.get() + 1)
-        _sandboxed += 1
         _is_in_sandbox += 1
     else:
-        # _sandboxed.set(_sandboxed.get() - 1)
-        _sandboxed -= 1
         _is_in_sandbox -= 1
-        # assert _sandboxed.get() >= 0
-        assert _sandboxed >= 0, f"{_sandboxed=}"
+        assert _is_in_sandbox >=0
 
 
 def find_config_for_module(module: str, config_name: str) -> Path | None:

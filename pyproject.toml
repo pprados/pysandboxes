@@ -44,20 +44,16 @@ homepage = "https://www.github.com/pprados/pysandboxes"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pysandboxes"]
-# FIXME
-#  { include = "my-package/.py-sandboxes", from=".py-sandboxes" },
 
 
 [tool.setuptools.packages.find]
 packages = [
     { include = "pysandboxes" },
-    # FIXME
-    #  { include = "my-package/.py-sandboxes", from=".py-sandboxes" },
 ]
 
 [tool.uv]
 package = true
-#executable-path = "/home/philippe-prados/workspace.bda/langgraph-codeagent/.venv/bin/python-sb"
+#executable-path = "~/workspace.bda/langgraph-codeagent/.venv/bin/python-sb"
 #executable-name = "python-sb"
 # dev-dependencies = ["pysandboxes"] #FIXME
 

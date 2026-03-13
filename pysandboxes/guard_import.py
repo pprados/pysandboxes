@@ -44,8 +44,6 @@ from .sb_types import ConfigLines
 from .tools import is_in_sandbox
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # FIX_RELEASE: comment this line
-logging.getLogger().setLevel(logging.DEBUG)  # FIX_RELEASE:
 
 if TYPE_CHECKING:
     from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]

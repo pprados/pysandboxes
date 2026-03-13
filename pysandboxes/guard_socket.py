@@ -194,17 +194,16 @@ def _yield_networks_from_string(
         # Case 1: The input is a network in CIDR notation (e.g., '192.168.1.0/24')
         network = ip_network(input_str, strict=False)
         yield network
-        # for subnet in network.subnets():
-        #     yield subnet
     except ValueError:
         # Case 2: The input is a hostname (e.g., 'www.google.com')
         # Resolve all IPs for the hostname and treat each as a /32 or /128 network
         if input_str in host_dns:
+            # Use pined dns?
             for ip in host_dns[input_str]:
                 pin_dns[input_str] = getaddrinfo(input_str, 0)
                 yield ip_network(ip, strict=False)
         else:
-            all_adresss = set()  # FIXME: Implement DNS resolution fallback
+            all_adresss = set()
             addr_info = cast(
                 list[AddrInfoType], socket.getaddrinfo(host=input_str, port=0)
             )
@@ -869,10 +868,16 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
         if isinstance(host, bytes):
             host = host.decode("utf-8")
         result: list[AddrInfoType]
-        if (
-            isinstance(host, str) and host in _pin_dns
-        ):  # FIXME: manage others parameters
+        if isinstance(host, str) and host in _pin_dns:
             result = list(cast(tuple[AddrInfoType], _pin_dns[host]))
+
+            # Filter results based on family, type, proto, and flags.
+            if family != 0:
+                result = [r for r in result if r[0] == family]
+            if type != 0:
+                result = [r for r in result if r[1] == type]
+            if proto != 0:
+                result = [r for r in result if r[2] == proto]
 
             # Patch port
             def _patch_port(new_port: int, addr: AddrInfoType) -> AddrInfoType:

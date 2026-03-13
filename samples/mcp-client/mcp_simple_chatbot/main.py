@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from fastmcp import Client
 from pysandboxes.tools import resolve_env_variables
 
-logging.basicConfig(  # FIXME: manage all log level
+logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
@@ -285,8 +285,8 @@ async def run(args):
             if w_command:
                 mcp_server["command"] = w_command
 
-    logging.getLogger("mcp").setLevel(logging.DEBUG)
-    # client = Client(server_config, roots=["resource://"]) FIXME
+    logging.getLogger("mcp").setLevel(logging.WARNING)
+    # client = Client(server_config, roots=[str(Path("./resources").resolve().as_uri())])
     client = Client(server_config)
     async with client:
 
@@ -349,5 +349,7 @@ def main_sb() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())  # FIXME: main() mcp client without sandbox
-    # sys.exit(main_sb())  # Use Full SB
+    rc = main()  # main() mcp client without sandbox
+    # rc=main_sb()  # Use Full SB
+    if rc:
+        sys.exit(rc)

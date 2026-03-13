@@ -16,7 +16,7 @@ from pysandboxes.remote.tools import get_bridge_interfaces
 
 logger = logging.getLogger(__name__)
 
-timeout = 12000  # FIXME: 10 s
+timeout = 10
 all_mcp_client_os_sandbox = [
     # "None",
     # "Subprocess",
@@ -143,7 +143,6 @@ def _start_server(mcp_server_config: str) -> Popen | None:
             text=True,
             shell=False,
         )
-        time.sleep(1)  # FIXME: a supprimer si possible
     return process
 
 
