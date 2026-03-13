@@ -1,9 +1,7 @@
 SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
 
-# Swith to poetry to uv
-UV=uv
-UV_EXTRA?=
+UV_EXTRA?=--group dev --group test --group codepsell
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -12,8 +10,8 @@ all: help
 TEST_FILE ?= tests
 
 ## Test the code
-test:
-	$(UV) run pytest -v $(TEST_FILE)
+tests:
+	set -a && source .env && uv run pytest -v $(TEST_FILE)
 
 ######################
 # LINTING AND FORMATTING
@@ -25,19 +23,19 @@ lint format: PYTHON_FILES=.
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint lint_diff:
-	$(UV) run mypy $(PYTHON_FILES)
-	$(UV) run black $(PYTHON_FILES) --check
-	$(UV) run ruff .
+	uv run mypy $(PYTHON_FILES)
+	uv run black $(PYTHON_FILES) --check
+	uv run ruff check $(PYTHON_FILES)
 
 format format_diff:
-	$(UV) run black $(PYTHON_FILES)
-	$(UV) run ruff check --select I --fix $(PYTHON_FILES)
+	uv run black $(PYTHON_FILES)
+	uv run ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
-	$(UV) run codespell --toml pyproject.toml
+	uvx codespell --toml pyproject.toml
 
 spell_fix:
-	$(UV) run codespell --toml pyproject.toml -w
+	uvx codespell --toml pyproject.toml -w
 
 
 ######################
@@ -101,14 +99,14 @@ help:
 
 .PHONY: dist
 dist:
-	$(UV) build
+	uv build
 
 # ---------------------------------------------------------------------------------------
 # SNIPPET pour publier la version sur pypi.org.
 .PHONY: release
 uv.lock: pyproject.toml
 	uv lock
-	git add poetry.lock
+	git add uv.lock
 	uv sync $(UV_GROUP)
 
 
@@ -116,7 +114,7 @@ uv.lock: pyproject.toml
 lock: $(LOCK)
 
 ## Validate the code
-validate: $(UV).lock format lint spell_check test
+validate: uv.lock format lint spell_check tests
 
 
 _uv-init:
@@ -126,4 +124,4 @@ _uv-init:
 inspector:
 	npx @modelcontextprotocol/inspector
 
-init: _$(UV)-init
+init: _uv-init

@@ -5,7 +5,7 @@ This example demonstrates how to integrate the Model Context Protocol (MCP) into
 ## Installation
 
 You must:
-- Intall the dependencies
+- Install the dependencies
 - Configure the servers
 - and run the MCS Client inside in a sandbox or not
 

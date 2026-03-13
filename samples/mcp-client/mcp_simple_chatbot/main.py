@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 from shutil import which
-from typing import Any
+from typing import Any, Dict, List
 
 import anyio
 import httpx
@@ -46,7 +46,7 @@ class Configuration:
         return api_key
 
     @staticmethod
-    def load_config(file_path: str) -> dict:
+    def load_config(file_path: str) -> Dict[str, Any]:
         """Load server configuration from JSON file."""
         body = Path(file_path).read_text()
         body = resolve_env_variables(body, os.environ)
@@ -58,7 +58,7 @@ class Configuration:
         return self.api_key
 
 
-def _extract_first_json(text: str) -> dict[str, Any] | list[Any] | None:
+def _extract_first_json(text: str) -> Dict[str, Any] | List[Any] | None:
     decoder: json.JSONDecoder = json.JSONDecoder()
 
     for i in range(len(text)):
@@ -66,7 +66,7 @@ def _extract_first_json(text: str) -> dict[str, Any] | list[Any] | None:
         if text[i] in ("{",):
             try:
                 # We use scan_once to find the first valid object
-                obj: dict[str, Any] | list[Any]
+                obj: Dict[str, Any] | List[Any]
                 end_index: int
                 sub_text: str = text[i:].strip()
                 obj, end_index = decoder.raw_decode(sub_text)
@@ -84,7 +84,7 @@ class LLMClient:
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
 
-    def get_response(self, messages: list[dict[str, str]]) -> str:
+    def get_response(self, messages: List[Dict[str, str]]) -> str:
         """Get a response from the LLM."""
         url = os.environ["API_URL"]
 
@@ -136,7 +136,12 @@ class ChatSession:
         try:
             client = self.client
             action = _extract_first_json(llm_response)
-            if action and "tool" in action and "arguments" in action:
+            if (
+                action
+                and isinstance(action, dict)
+                and "tool" in action
+                and "arguments" in action
+            ):
                 logger.info(f"Executing tool: {action['tool']}")
                 logger.info(f"With arguments: {action['arguments']}")
 
@@ -154,7 +159,7 @@ class ChatSession:
 
                 return f"No server found with tool: {action['tool']}"
 
-            elif action and "resource" in action:
+            elif action and isinstance(action, dict) and "resource" in action:
                 logger.info(f"Reading resource: {action['resource']}")
 
                 try:
@@ -188,7 +193,7 @@ class ChatSession:
                 logger.info("\nExiting...")
                 break
 
-    async def invoke_llm(self, messages, user_input) -> str:
+    async def invoke_llm(self, messages: List[Dict[str, str]], user_input: str) -> str:
         messages.append({"role": "user", "content": user_input})
         llm_response = self.llm_client.get_response(messages)
         logger.info("\nAssistant: %s", llm_response)
@@ -204,7 +209,7 @@ class ChatSession:
             messages.append({"role": "assistant", "content": llm_response})
             return llm_response
 
-    async def initialize(self):
+    async def initialize(self) -> List[Dict[str, str]]:
         all_tools = await self.client.list_tools()
         all_resources = await self.client.list_resources()
         all_resource_templates = await self.client.list_resource_templates()
@@ -271,11 +276,11 @@ class ChatSession:
             "5. Avoid simply repeating the raw data\n\n"
             "Use only the tools and resources explicitly defined above."
         )
-        messages = [{"role": "system", "content": system_message}]
+        messages: List[Dict[str, str]] = [{"role": "system", "content": system_message}]
         return messages
 
 
-async def run(args):
+async def run(args: argparse.Namespace) -> None:
     config = Configuration()
     server_config = config.load_config(args.mcp)
 

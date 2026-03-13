@@ -433,42 +433,55 @@ def get_bridge_interfaces() -> list[str]:
 
 
 def get_dns_servers() -> (
-    tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]
+        tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]
 ):
+    """
+    Reads /etc/resolv.conf and extracts all nameserver IP addresses,
+    separating them into IPv4 and IPv6 lists.
+
+    Returns:
+        tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]:
+            A tuple containing the list of IPv4 DNS servers and the list
+            of IPv6 DNS servers.
+    """
     assert platform.system() == "Linux"
     dns_servers: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+
     with open("/etc/resolv.conf", "r") as f:
         for line in f:
-            # Cherche les lignes qui commencent par 'nameserver'
+            # Look for lines starting with 'nameserver'
             if line.strip().startswith("nameserver"):
                 parts = line.split()
                 if len(parts) > 1:
-                    # La deuxième partie devrait être l'adresse IP
+                    # The second part should be the IP address
                     ip_address: str = parts[1]
+                    # Note: ipaddress.ip_address() returns the correct type
+                    # (IPv4Address or IPv6Address)
                     dns_servers.append(ipaddress.ip_address(ip_address))
 
     ipv4_list: list[ipaddress.IPv4Address] = []
     ipv6_list: list[ipaddress.IPv6Address] = []
 
     for addr in dns_servers:
-        try:
-            # Tente de créer un objet IPv4 ou IPv6 à partir de la chaîne
-            ip = ipaddress.ip_address(addr)
+        # Note: In the original Python code, 'addr' is already an IP address object
+        # (IPv4Address or IPv6Address) because it was appended as such above.
+        # The 'try/except' block and 'ipaddress.ip_address(addr)' call
+        # inside the loop are redundant if the parsing above was successful.
+        # We simplify the logic here for efficiency and type-correctness
+        # based on the objects already in dns_servers.
 
-            # Utilise la propriété 'version' de l'objet IP
-            if ip.version == 4:
-                ipv4_list.append(cast(ipaddress.IPv4Address, addr))
-            elif ip.version == 6:
-                ipv6_list.append(cast(ipaddress.IPv6Address, addr))
+        # Use the 'version' property of the IP object
+        if addr.version == 4:
+            # Cast is not strictly necessary here but maintains the original
+            # intention of separating the types explicitly.
+            ipv4_list.append(cast(ipaddress.IPv4Address, addr))
+        elif addr.version == 6:
+            ipv6_list.append(cast(ipaddress.IPv6Address, addr))
 
-        except ValueError:
-            # Gère les chaînes qui ne sont pas des adresses IP valides
-            print(
-                f"Avertissement : '{addr}' n'est pas une adresse IP valide et a été ignorée."
-            )
+        # We remove the ValueError block as the original parsing
+        # already handled the conversion to IP address objects.
 
     return ipv4_list, ipv6_list
-
 
 def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
     """

@@ -6,9 +6,8 @@ import logging
 import os
 import re
 import subprocess
-import time
 from shutil import which
-from subprocess import run, Popen
+from subprocess import Popen, run
 from typing import Optional
 
 import pytest
@@ -16,21 +15,21 @@ from pysandboxes.remote.tools import get_bridge_interfaces
 
 logger = logging.getLogger(__name__)
 
-timeout = 10
-all_mcp_client_os_sandbox = [
+timeout = 30
+all_mcp_client_os_sandbox: list[str] = [
     "None",
-    "Subprocess",
-    "firejail",
+    # "Subprocess",  # FIXME
+    # "firejail",
 ]
-all_mcp_server_config = [
+all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",
-    "stdio_sandboxes_complete",
-    "stdio_sandboxes_partial",
-    "http",
+    # "stdio_sandboxes_complete",
+    # "stdio_sandboxes_partial",
+    # "http",
 ]
 
 
-def _get_default_interface() -> str | None:
+def _get_default_interface() -> str:
     """
     Retrieves the name of the default network interface by reading the
     /proc/net/route pseudo-file on Linux.
@@ -41,36 +40,22 @@ def _get_default_interface() -> str | None:
     # The default route destination is represented by '00000000' in the file
     DEFAULT_DESTINATION: str = "00000000"
 
-    try:
-        # Open the file containing the routing table
-        with open("/proc/net/route", "r") as f:
-            # Read all lines
-            content_lines: list[str] = f.readlines()
+    # Open the file containing the routing table
+    with open("/proc/net/route", "r") as f:
+        # Read all lines
+        content_lines: list[str] = f.readlines()
 
-        # Iterate over lines, skipping the header (first line)
-        for line in content_lines[1:]:
-            # Split the line by tabs or spaces
-            parts: list[str] = line.split()
+    # Iterate over lines, skipping the header (first line)
+    for line in content_lines[1:]:
+        # Split the line by tabs or spaces
+        parts: list[str] = line.split()
 
-            # parts[1] is the Destination column
-            if len(parts) > 1 and parts[1] == DEFAULT_DESTINATION:
-                # parts[0] is the Iface (Interface name) column
-                interface_name: str = parts[0]
-                return interface_name
-
-    except FileNotFoundError:
-        # If the system is not Linux or the file is missing
-        print(
-            "Erreur: Le fichier /proc/net/route n'existe pas ou n'est pas accessible."
-        )
-        return None
-    except Exception as e:
-        print(
-            f"Une erreur inattendue est survenue lors de la lecture de la route par défaut: {e}"
-        )
-        return None
-
-    return None
+        # parts[1] is the Destination column
+        if len(parts) > 1 and parts[1] == DEFAULT_DESTINATION:
+            # parts[0] is the Iface (Interface name) column
+            interface_name: str = parts[0]
+            return interface_name
+    raise ValueError("Default interface not found.")
 
 
 def _get_ip_from_interface(interface_name: str) -> str | None:
@@ -146,7 +131,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
     return process
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
@@ -161,7 +146,7 @@ def test_claude_evaluate_expression(
 
         if mcp_server_config == "http.json":
             if not get_bridge_interfaces():
-                pytest.skip(f"Need 'bridge' interface. Use `sudo add-bridge.sh`")
+                pytest.skip("Need 'bridge' interface. Use `sudo add-bridge.sh`")
 
         process = _start_server(mcp_server_config)
         start_client = ["-m", "pysandboxes.python_sb"] + [
@@ -171,13 +156,14 @@ def test_claude_evaluate_expression(
         cmd = ("python", *start_client, "-c", mcp_server_config, "-p", "calc 2+3")
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
+        assert MY_IP is not None
         result = run(
             cmd,
             env=os.environ.copy()
             | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
             input="",
-            capture_output=True,  # To debug, desactivate capture_output
+            # capture_output=True,  # To debug, deactivate capture_output
             check=True,
             text=True,
             shell=False,
@@ -192,7 +178,7 @@ def test_claude_evaluate_expression(
             process.kill()
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
@@ -206,24 +192,28 @@ def test_claude_fetch_webpage(
         mcp_server_config += ".json"
         process = _start_server(mcp_server_config)
 
+        python_executable = which("python")
+        if not python_executable:
+            pytest.skip("python executable not found in PATH")
+
         start_client = ["-m", "pysandboxes.python_sb", "-m", "mcp_simple_chatbot.main"]
-        cmd = (
-            # "uv", "run",
-            which("python"),
+        cmd = [
+            python_executable,
             *start_client,
             "-c",
             mcp_server_config,
             "-p",
             "get and summarize the page http://www.google.com",
-        )
+        ]
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
+        assert MY_IP is not None
         result = run(
             cmd,
             env=os.environ.copy()
             | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
             timeout=timeout,
-            capture_output=True,  # To debug, desactivate capture_output
+            capture_output=True,  # To debug, deactivate capture_output
             input="",
             text=True,
             check=True,

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pysandboxes"  # FIXME: envisager python-sb (voir completement si cela fonction avec uvx)
+name = "pysandboxes"
 version = "0.0.0"  # Set with git tag
 description = "Lite sandbox for python code execution"
 #requires-python = ">=3.12,<4.0"
@@ -99,10 +99,7 @@ codespell = [
 skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,./PPR/*'
 # Ignore latin etc
 ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
-# whats is a typo but used frequently in queries so kept as is
-# aapply - async apply
-# unsecure - typo but part of API, decided to not bother for now
-ignore-words-list = 'momento,collison,ned,foor,reworkd,parth,whats,aapply,mysogyny,unsecure,damon,crate'
+#ignore-words-list = ''
 
 [tool.ruff]
 line-length = 120

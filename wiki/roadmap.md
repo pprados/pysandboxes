@@ -29,7 +29,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] micro-VM
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
-    - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers managment)
+    - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
     - [ ] [Cloud morph](https://cloud.morph.so/)

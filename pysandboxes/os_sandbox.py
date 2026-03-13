@@ -180,7 +180,7 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return
-        # Try a gracefull shutdown
+        # Try a graceful shutdown
         await _current_daemon._shutdown(graceful_shutdown)
         assert not _current_daemon.is_started
         _current_daemon = None

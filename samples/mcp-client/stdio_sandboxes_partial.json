@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     // The MCP-server decide the portion of code to isolate (selected mode).
-    // The confugration is in `../mcp-server/mcp_server/.py-sandboxes`
+    // The configuration is in `../mcp-server/mcp_server/.py-sandboxes`
     "mcp_server": {
       "type": "stdio",
       "cwd": "../mcp-server",

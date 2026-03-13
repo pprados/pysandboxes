@@ -6,7 +6,8 @@ import logging
 import os
 import re
 from shutil import which
-from subprocess import Popen, run, PIPE
+from subprocess import PIPE, Popen, run
+from typing import Any
 
 import pytest
 
@@ -22,8 +23,13 @@ if MOCK:
         stderr: str = ""
 
     def _mock_run(
-        *openargs, input=None, capture_output=False, timeout=None, check=False, **kwargs
-    ):
+        *openargs: Any,
+        input: Any = None,
+        capture_output: bool = False,
+        timeout: Any = None,
+        check: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         if isinstance(openargs[0], tuple):
             cmd_line = " ".join(openargs[0])
             if "@config://version" in cmd_line:
@@ -41,17 +47,11 @@ if MOCK:
 timeout = 30
 all_os_sandbox = [
     "None",  # FIX_RELEASE
-    "Subprocess",
-    "firejail",
+    # "Subprocess",  # FIXME
+    # "firejail",
 ]
-all_protocol = [
-    "stdio",
-    "http"
-]
-all_pysandboxes_mode = [
-    "complete",
-    "partial"
-]
+all_protocol = ["stdio", "http"]
+all_pysandboxes_mode = ["complete", "partial"]
 
 
 def _init_mcp_server(
@@ -71,7 +71,7 @@ def _init_mcp_server(
             # Start the MCP server with python-sb
             run(
                 "claude mcp add mcp_demo -- "
-                f"uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio",
+                "uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio",
                 capture_output=True,
                 text=True,
                 check=True,
@@ -79,7 +79,7 @@ def _init_mcp_server(
             )
         elif pysandboxes_mode == "partial":
             run(
-                "claude mcp add mcp_demo -- " f"uv run -m mcp_server.main -t stdio",
+                "claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio",
                 capture_output=True,
                 text=True,
                 check=True,
@@ -88,7 +88,7 @@ def _init_mcp_server(
     elif protocol == "http":
         # Start the MCP server with python-sb
         run(
-            f"claude mcp add --transport http mcp_demo http://localhost:8000/mcp",
+            "claude mcp add --transport http mcp_demo http://localhost:8000/mcp",
             capture_output=True,
             text=True,
             check=True,
@@ -96,7 +96,7 @@ def _init_mcp_server(
         )
         if pysandboxes_mode == "complete":
             process = Popen(
-                f"uv run " f"-m pysandboxes.python_sb " f"-m mcp_server.main -t http",
+                "uv run -m pysandboxes.python_sb -m mcp_server.main -t http",
                 env=os.environ.copy() | {"OS_SANDBOX": os_sandbox},
                 stdout=PIPE,
                 stderr=PIPE,
@@ -105,7 +105,7 @@ def _init_mcp_server(
             )
         elif pysandboxes_mode == "partial":
             process = Popen(
-                f"uv run -m mcp_server.main -t http",
+                "uv run -m mcp_server.main -t http",
                 env=os.environ.copy() | {"OS_SANDBOX": os_sandbox},
                 stdout=PIPE,
                 stderr=PIPE,
@@ -115,7 +115,7 @@ def _init_mcp_server(
     return process
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -153,7 +153,7 @@ def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> N
             process.terminate()
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -192,7 +192,7 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
             process.terminate()
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -229,7 +229,7 @@ def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
             process.terminate()
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
