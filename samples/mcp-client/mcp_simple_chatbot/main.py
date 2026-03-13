@@ -290,7 +290,9 @@ async def run(args: argparse.Namespace) -> None:
             if w_command:
                 mcp_server["command"] = w_command
             else:
-                logger.debug("Impossible to find the command %s",repr(mcp_server["command"]))
+                logger.debug(
+                    "Impossible to find the command %s", repr(mcp_server["command"])
+                )
 
     logging.getLogger("mcp").setLevel(logging.WARNING)
     client = Client(server_config, roots=[str(Path("./resources").resolve().as_uri())])

@@ -433,7 +433,7 @@ def get_bridge_interfaces() -> list[str]:
 
 
 def get_dns_servers() -> (
-        tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]
+    tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]
 ):
     """
     Reads /etc/resolv.conf and extracts all nameserver IP addresses,
@@ -482,6 +482,7 @@ def get_dns_servers() -> (
         # already handled the conversion to IP address objects.
 
     return ipv4_list, ipv6_list
+
 
 def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
     """

@@ -3,7 +3,7 @@ SHELL=/bin/bash
 
 # Switch to poetry to uv
 UV=uv
-UV_EXTRA?=
+UV_GROUP?=--group dev --group test
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -25,13 +25,13 @@ lint format: PYTHON_FILES=.
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint lint_diff:
-	uv run mypy $(PYTHON_FILES)
-	uv run black $(PYTHON_FILES) --check
-	uv run ruff check .
+	uvx mypy $(PYTHON_FILES)
+	uvx black $(PYTHON_FILES) --check
+	uvx ruff check .
 
 format format_diff:
-	uv run black $(PYTHON_FILES)
-	uv run ruff check --select I --fix $(PYTHON_FILES)
+	uvx black $(PYTHON_FILES)
+	uvx ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
 	uvx codespell --toml pyproject.toml

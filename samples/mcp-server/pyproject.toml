@@ -44,10 +44,6 @@ test = [
     "pytest-mock>=3.10.0",
     "syrupy>=5.0.0",
 ]
-lint = [
-    "mypy>=1.8",
-    "ruff>=0.1.9",
-]
 codespell = [
     "codespell>=2.2.5",
 ]
