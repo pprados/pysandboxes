@@ -911,6 +911,22 @@ def _check_address(
     _check_address_with_rules(_rules, Kind(self.type), address, conn_direction)
 
 
+def _socket_add_learning_rule(
+    self: Any,
+    address: tuple[str, int],
+    conn_direction: Direction,
+    rule: LearnSocketRule,
+) -> None:
+    try:
+        _check_address(
+            self,
+            address,
+            conn_direction,
+        )
+    except RuleSocketConnectionRefusedError:
+        add_learning_rule(rule)
+
+
 def _wrap_socket_bind(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> None:
@@ -921,7 +937,10 @@ def _wrap_socket_bind(func: Callable) -> Callable:
             and isinstance(address[1], int)
         ):
             if is_learning_mode():
-                add_learning_rule(
+                _socket_add_learning_rule(
+                    self,
+                    (str(address[0]), int(address[1])),
+                    Direction.IN,
                     LearnSocketRule(
                         "bind",
                         Kind(self.type),
@@ -929,7 +948,7 @@ def _wrap_socket_bind(func: Callable) -> Callable:
                         int(address[1]),
                         Direction.IN,
                         (),  # pin_dns
-                    )
+                    ),
                 )
             else:
                 _check_address(
@@ -962,7 +981,10 @@ def _wrap_socket_connect(func: Callable) -> Callable:
             and isinstance(address[1], int)
         ):
             if is_learning_mode():
-                add_learning_rule(
+                _socket_add_learning_rule(
+                    self,
+                    (str(address[0]), int(address[1])),
+                    Direction.OUT,
                     LearnSocketRule(
                         "connect",
                         Kind(self.type),
@@ -970,7 +992,7 @@ def _wrap_socket_connect(func: Callable) -> Callable:
                         int(address[1]),
                         Direction.OUT,
                         (),  # pin_dns
-                    )
+                    ),
                 )
             else:
                 _check_address(
@@ -1007,7 +1029,10 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
             and isinstance(address[1], int)
         ):
             if is_learning_mode():
-                add_learning_rule(
+                _socket_add_learning_rule(
+                    self,
+                    (str(address[0]), int(address[1])),
+                    Direction.OUT,
                     LearnSocketRule(
                         "connect_ex",
                         Kind(self.type),
@@ -1015,7 +1040,7 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
                         int(address[1]),
                         Direction.OUT,
                         (),  # pin_dns
-                    )
+                    ),
                 )
             else:
                 self._check_address(
@@ -1049,7 +1074,10 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
         ):
             if self.type == Kind.UDP.value:
                 if is_learning_mode():
-                    add_learning_rule(
+                    _socket_add_learning_rule(
+                        self,
+                        (str(address[0]), int(address[1])),
+                        Direction.OUT,
                         LearnSocketRule(
                             "sendto",
                             Kind(self.type),
@@ -1057,7 +1085,7 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
                             int(address[1]),
                             Direction.OUT,
                             (),  # pin_dns
-                        )
+                        ),
                     )
                 else:
                     _check_address(
@@ -1251,12 +1279,7 @@ def generate_rules(
                 f"{','.join(out_ports)}|"
                 f"{Direction.OUT.name}"
             )
-            # Check if this rules is already present
-            for rule in _rules:  # FIXME: le match ne fonctionne pas si plusieurs ports
-                if rule.config.rule == rule_str:
-                    break  # Ignore rule
-            else:
-                result.add(rule_str)
+            result.add(rule_str)
     return sorted(list(result))
 
 

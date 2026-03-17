@@ -121,6 +121,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         log_level=process_config.log_level,
         init_fn=init_fn,
     )
+    set_learning_mode(all_rules.learn)
     logger.debug("join server_daemon")
     await server_daemon.join()
     return 0
@@ -169,7 +170,6 @@ def main() -> int:
 
     # Initialize learn
     set_learning_path(all_rules.learning_path)
-    set_learning_mode(all_rules.learn)
     set_pin_dns(all_rules.pin_dns)
 
     # In this case, use the standard loop in place of the private sandbox loop
@@ -182,6 +182,7 @@ def main() -> int:
 
     # Use python-sb command?
     if sandboxes_parsed._python_sb:
+        set_learning_mode(all_rules.learn)
         return python_in_sb(all_rules, sandboxes_args)
 
     # Else _start the server
