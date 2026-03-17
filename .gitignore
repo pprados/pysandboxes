@@ -168,3 +168,9 @@ cython_debug/
 netfilter*.net
 run.sh
 .local.py-sandboxes*
+.devpi/
+.claude/
+etudes/
+samples/langgraph-demo/
+tmp/
+tst_wasm/

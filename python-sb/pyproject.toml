@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "python-sb"
+version = "0.0.1"  # Set with git tag
+description = "Invoke python code in a sandbox"
+requires-python = ">=3.13,<4.0"
+authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
+license = "Apache-2.0"
+readme = "README.md"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "pysandboxes",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "python_sb"
+]
+
+[project.scripts]
+python-sb = "python_sb.__init__:main"
+python3-sb = "python_sb.__init__:main"
+ipython-sb = "python_sb.__init__:main"
+ipython3-sb = "python_sb.__init__:main"
+
+[tool.uv]
+package = true

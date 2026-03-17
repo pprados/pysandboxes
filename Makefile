@@ -219,6 +219,57 @@ _poetry-init:
 _uv-init:
 	@uv sync $(UV_GROUP)
 
+
+# Variables for the devpi environment
+DEVPI_URL := http://localhost:3141
+PIP_INDEX_URL=http://localhost:3141/$(USER)/dev
+UV_INDEX=http://localhost:3141/$(USER)/dev
+# User credentials (Adjust these or export them via 'export' from the shell)
+DEVPI_USER := $(USER)
+DEVPI_PASS := 123
+
+.PHONY: devpi-start devpi-stop devpi-web devpi-install-devpi
+
+.devpi:
+	@echo "--- 🛠️ Initializing User and Index ---"
+	@devpi-init --serverdir .devpi  --role master
+	@devpi-server --serverdir .devpi > /dev/null 2>&1 & echo $$!>.devpi/devpi.pid
+	@sleep 3
+	@devpi use $(DEVPI_URL)
+	@devpi user -c $(DEVPI_USER) password=$(DEVPI_PASS)
+	@devpi login $(DEVPI_USER) --password=$(DEVPI_PASS)
+	@devpi index -c dev bases=root/pypi
+	@$(MAKE) devpi-stop
+	@echo "✅ devpi initialized."
+
+## Start Devpi server
+devpi-start: .devpi
+	@if [ ! -f ".devpi/devpi.pid" ]; then \
+		devpi-server --serverdir .devpi > /dev/null 2>&1 & echo $$!>.devpi/devpi.pid ; \
+		echo "✅ devpi-server started." ;\
+	fi
+
+devpi-stop:
+	@if [ -f ".devpi/devpi.pid" ]; then \
+		PID=$$(cat .devpi/devpi.pid); \
+		kill $$PID; \
+		rm .devpi/devpi.pid; \
+		echo "devpi Server (PID $$PID) stopped."; \
+	else \
+		echo "PID file not found. Please stop the devpi-server process manually if necessary."; \
+	fi
+
+## Start Devpi console
+devpi-web:
+	xdg-open $(PIP_INDEX_URL)
+
+devpi-install-devpi:
+	 uv pip install -i $(REPO) .
+
+devpi-deploy:
+	uv build
+	devpi upload
+
 ## Start MCP inspector
 inspector:
 	npx @modelcontextprotocol/inspector

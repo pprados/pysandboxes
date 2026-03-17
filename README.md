@@ -192,8 +192,7 @@ flowchart LR
 
 Uvx can start some tools like `python-sb`. However, since `python-sb` does not match the project name, you must proceed as follows:
 ```bash
-uvx --from pysandboxes python-sb --help
-alias python-sb='uvx --from pysandboxes python-sb'
+uvx python-sb --help
 ```
 
 ## Apply the sandbox to a part of the application (partial mode).
