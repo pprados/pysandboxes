@@ -55,7 +55,7 @@ packages = [
 package = true
 #executable-path = "~/workspace.bda/langgraph-codeagent/.venv/bin/python-sb"
 #executable-name = "python-sb"
-# dev-dependencies = ["pysandboxes"] #FIXME
+# dev-dependencies = ["pysandboxes"] # TODO
 
 [project.scripts]
 python-sb = "pysandboxes.python_sb:main"
@@ -68,7 +68,7 @@ dev = [
     "ipython",
     "pre-commit>=3.6",
     "importlib-metadata==7.2.1",
-    "pydevd-pycharm",
+#    "pydevd-pycharm>=253.28086.55",
     "rich>=14.0",
     "json-with-comments>=1.2.10",
 ]
@@ -83,6 +83,7 @@ test = [
 ]
 lint = [
     "mypy>=1.8",
+    "types-requests>=2.28.11.5",
 ]
 
 [tool.codespell]

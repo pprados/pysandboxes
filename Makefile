@@ -16,13 +16,15 @@ all: help
 # Fix VS Code launch.json
 fix-vs-code: .vscode/launch.json
 
+.env:
+
 ## Make unit test
 unit-tests:
-	set -a && source .env && uv run pytest -v tests/unit_tests/
+	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v tests/unit_tests/
 
 ## Make integration tests
 integration-tests:
-	set -a && source .env && uv run pytest tests/integration_tests
+	set -a && if [ -f .env ]; then source .env; fi && uv run pytest tests/integration_tests
 
 ## Make integration tests
 sample-tests:
@@ -30,8 +32,10 @@ sample-tests:
 	(cd samples/mcp-server && make tests && true)
 
 ## Make github tests locally
-gh-tests: lint
+gh-tests:
+	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
 	gh act push
+	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi
 
 ## Make all tests
 all-tests: unit-tests integration-tests sample-tests

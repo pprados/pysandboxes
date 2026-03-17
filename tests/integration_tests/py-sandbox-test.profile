@@ -1,6 +1,4 @@
 include "./.local.py-sandboxes"  # May be add to .gitignore
-include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
-include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
@@ -11,9 +9,6 @@ python-import=*
 
 bind=./tmp,./tmp
 ro-bind=.,.
-ro-bind=~/.cache/JetBrains/,~/.cache/JetBrains/
-ro-bind=~/.local/share/JetBrains/,~/.local/share/JetBrains/
-ro-bind=~/.local/share/uv/,~/.local/share/uv/
 
 net=ALLOW|TCP|0.0.0.0/32|50983|IN
 net=ALLOW|TCP|ip6-localhost|9999,0|IN
