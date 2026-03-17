@@ -31,7 +31,7 @@ dev = [
     "ipython",
     "mcp-server",
     "pydevd>=3.4.1",
-    "pydevd-pycharm>=253.28086.55",
+#    "pydevd-pycharm>=253.28086.55",
 ]
 test = [
     # The only dependencies that should be added are

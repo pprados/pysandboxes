@@ -32,7 +32,7 @@ dev = [
     "twine>=5.1.0",
     "importlib-metadata==7.2.1",
     "scikit-learn>=1.6",
-    "pydevd-pycharm",
+#    "pydevd-pycharm>=253.28086.55",
     "rich>=14.0",
     "mcp[cli]>=1.14.0",
     "json-with-comments>=1.2.10",

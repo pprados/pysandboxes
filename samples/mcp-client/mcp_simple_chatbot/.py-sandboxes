@@ -31,7 +31,6 @@ python-import=stringprep, struct, sysconfig, tempfile, termios, textwrap, thread
 python-import=time, tokenize, traceback, types, typing, unicodedata, urllib, uuid
 python-import=weakref, webbrowser, zipfile, zlib, zoneinfo
 python-import=_suggestions, posixpath, socketserver
-python-import=*  # FIXME
 
 # External modules (Are you sure about the origin?)
 python-import=pydevd_asyncio_utils
