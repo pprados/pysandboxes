@@ -16,10 +16,11 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+#    "Programming Language :: Python :: 3.10",
+#    "Programming Language :: Python :: 3.11",
+#    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+#    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "httpcore (>=1.0.9)",
@@ -68,9 +69,12 @@ dev = [
     "ipython",
     "pre-commit>=3.6",
     "importlib-metadata==7.2.1",
-#    "pydevd-pycharm>=253.28086.55",
+    #    "pydevd-pycharm>=253.28086.55",
     "rich>=14.0",
     "json-with-comments>=1.2.10",
+    "devpi-server>=6.17.0",
+    "devpi-web>=5.0.1",
+    "devpi-client>=7.2.0",
 ]
 test = [
     "pytest>=7.3.0",
