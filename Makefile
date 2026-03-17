@@ -281,3 +281,122 @@ init: _uv-init
 #	@pre-commit install
 	gh extension install https://github.com/nektos/gh-act
 	@git lfs install
+
+
+### RELEASE ###
+
+.PHONY: get-new-version publish-patch publish-minor prepare-future-changelog
+
+## Helper target to calculate next version
+get-new-version:
+	@CURRENT_VERSION=$$(python -c "import importlib.metadata; print(importlib.metadata.version('pysandboxes'))"); \
+	MAJOR=$$(echo $$CURRENT_VERSION | cut -d. -f1); \
+	MINOR=$$(echo $$CURRENT_VERSION | cut -d. -f2); \
+	PATCH=$$(echo $$CURRENT_VERSION | cut -d. -f3); \
+	if [ "$(BUMP)" = "patch" ]; then \
+		echo "$$MAJOR.$$MINOR.$$((PATCH+1))"; \
+	elif [ "$(BUMP)" = "minor" ]; then \
+		echo "$$MAJOR.$$((MINOR+1)).0"; \
+	else \
+		echo "Error: BUMP variable must be 'patch' or 'minor'" >&2; \
+		exit 1; \
+	fi
+
+# Function to prepare the changelog with a specific version
+define _prepare-changelog
+	echo "Starting changelog preparation..."; \
+	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
+	TODAY_DATE=$$(date +%Y-%m-%d); \
+	echo "Updating CHANGELOG.md to version $$NEW_VERSION ($$TODAY_DATE)"; \
+	SEARCH_PATTERN="## \[0\.0\.0\] - 202.-XX-XX"; \
+	REPLACE_PATTERN="## [$$NEW_VERSION] - $$TODAY_DATE"; \
+	sed -i "s/$$SEARCH_PATTERN/$$REPLACE_PATTERN/" CHANGELOG.md; \
+	echo "CHANGELOG.md updated successfully."
+endef
+
+# Function to update version and tag
+define _update-and-tag-version
+	echo "Committing and tagging version..."; \
+	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
+	git add CHANGELOG.md; \
+	git commit -m "Release v$$NEW_VERSION"; \
+	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"; \
+	echo "Tagged version v$$NEW_VERSION"
+endef
+
+# Function to prepare future changelog entry
+define _prepare-future-changelog
+	echo "Preparing future changelog entry..."; \
+	FIRST_VERSION=$$(grep -m 1 -oP '## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md); \
+	echo "Inserting new entry before version $$FIRST_VERSION..."; \
+	SEARCH_LINE="## \[$$FIRST_VERSION\]"; \
+	NEW_ENTRY="## [0.0.0] - 202X-XX-XX\n"; \
+	sed -i "/$$SEARCH_LINE/i $$NEW_ENTRY" CHANGELOG.md; \
+	echo "Future changelog entry added."
+endef
+
+# Function to publish release on GitHub
+define _publish-github-release
+	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
+	TAG="v$$NEW_VERSION"; \
+	gh release create $$TAG --title \"$(2)\" --notes-file CHANGELOG.md"; \
+	echo "Release $$TAG would be published on GitHub with title: $(2)"
+endef
+
+## Publish a patch release (complete workflow)
+publish-patch:
+	@echo "=== Starting PATCH release workflow ==="
+	@echo ""
+	@echo "Enter the release title (e.g., v0.0.1 - Bug fixes):"
+	@read -r RELEASE_TITLE; \
+	if [ -z "$$RELEASE_TITLE" ]; then \
+		echo "Title is required. Aborting release."; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "Step 1/5: Preparing changelog..."; \
+	$(call _prepare-changelog,patch); \
+	echo ""; \
+	echo "Step 2/5: Committing and tagging..."; \
+	$(call _update-and-tag-version,patch); \
+	echo ""; \
+	echo "Step 3/5: Publishing to GitHub..."; \
+	$(call _publish-github-release,patch,$$RELEASE_TITLE); \
+	echo ""; \
+	echo "Step 4/5: Preparing future changelog..."; \
+	$(call _prepare-future-changelog); \
+	echo ""; \
+	echo "Step 5/5: Committing future changelog..."; \
+	git add CHANGELOG.md; \
+	git commit -m "Prepare next release"; \
+	echo ""; \
+	echo "=== PATCH release workflow completed successfully ==="
+
+## Publish a minor release (complete workflow)
+publish-minor:
+	@echo "=== Starting MINOR release workflow ==="
+	@echo ""
+	@echo "Enter the release title (e.g., v0.1.0 - New Features):"
+	@read -r RELEASE_TITLE; \
+	if [ -z "$$RELEASE_TITLE" ]; then \
+		echo "Title is required. Aborting release."; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "Step 1/5: Preparing changelog..."; \
+	$(call _prepare-changelog,minor); \
+	echo ""; \
+	echo "Step 2/5: Committing and tagging..."; \
+	$(call _update-and-tag-version,minor); \
+	echo ""; \
+	echo "Step 3/5: Publishing to GitHub..."; \
+	$(call _publish-github-release,minor,$$RELEASE_TITLE); \
+	echo ""; \
+	echo "Step 4/5: Preparing future changelog..."; \
+	$(call _prepare-future-changelog); \
+	echo ""; \
+	echo "Step 5/5: Committing future changelog..."; \
+	git add CHANGELOG.md; \
+	git commit -m "Prepare next release"; \
+	echo ""; \
+	echo "=== MINOR release workflow completed successfully ==="
