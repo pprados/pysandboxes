@@ -30,7 +30,7 @@ from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import CONFIG_NAME
 from .e import ConfigSyntaxError
-from .learning import set_learning_mode, set_learning_path
+from .learning import set_learning_path
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import Environ, remove_config_comments, substitute_config_env_vars
@@ -349,6 +349,5 @@ def activate_sandboxes(
     guard_envs.activate_guard(all_rules.envs_rules)
     guard_socket.activate_guard(all_rules.socket_rules)
     guard_files.activate_guard(all_rules.file_rules)
-    set_learning_mode(all_rules.learn)
     set_learning_path(all_rules.learning_path)
     guard_self.activate_guard()
