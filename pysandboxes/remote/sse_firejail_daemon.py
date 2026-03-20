@@ -19,7 +19,6 @@ import logging
 import os
 import re
 import shlex
-import site
 import subprocess
 import sys
 import threading
@@ -50,7 +49,7 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-DEBUG_NETFILTER = False  # FIX_RELEASE
+DEBUG_NETFILTER = True  # FIX_RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
@@ -151,7 +150,7 @@ class AllowList(MutableSet):
         self._set.discard(directory)
 
 
-def _follow_links(filename: str | Path, whitelist: AllowList) -> None:
+def _follow_links(filename: Path, whitelist: AllowList) -> None:
     """Add file path and its symlink target to whitelist.
 
     Args:
@@ -161,6 +160,8 @@ def _follow_links(filename: str | Path, whitelist: AllowList) -> None:
     Raises:
         RuntimeError: If symlink cannot be resolved.
     """
+    if str(filename).startswith("/usr/lib"):
+        return
     whitelist.add(str(filename))
     try:
         if Path(filename).is_symlink():
@@ -367,15 +368,15 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         for p in bin_path:
             _follow_links(p, whitelist)
 
-        for sp in sys.path:
-            if os.path.isdir(sp):
-                if sp not in whitelist:
-                    _follow_links(sp, whitelist)
+        # for sp in sys.path:
+        #     if os.path.isdir(sp):
+        #         if sp not in whitelist:
+        #             _follow_links(Path(sp), whitelist)
 
-        for sp in site.getsitepackages():
-            if os.path.isdir(sp):
-                if sp not in whitelist:
-                    _follow_links(p, whitelist)
+        # for sp in site.getsitepackages():
+        #     if os.path.isdir(sp):
+        #         if sp not in whitelist:
+        #             _follow_links(sp, whitelist)
 
         # Add ignore files rules
         keep_files_rules = []

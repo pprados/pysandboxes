@@ -166,13 +166,16 @@ def _python_interactive(
 
         # Start the standard interactive console
         try:
+            extra: dict[str, Any] = {}
+            if sys.version_info[:2] >= (3, 13):
+                extra = {"local_exit": True}
             code.interact(
                 banner=banner if ban else "",
                 exitmsg=exit_msg,
                 # When self.local_exit is True, we overwrite the builtins so
                 # exit() and quit() only raises SystemExit and we can catch that
                 # to only exit the interactive shell
-                local_exit=True,
+                **extra,
             )
         except SystemExit:
             pass  # Ignore and continue

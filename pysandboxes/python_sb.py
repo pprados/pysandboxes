@@ -53,7 +53,7 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    # _debug_log()  # FIX_RELEASE
+    _debug_log()  # FIX_RELEASE
 
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
         sys.argv[1:]
