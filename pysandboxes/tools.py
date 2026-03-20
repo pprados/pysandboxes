@@ -341,6 +341,8 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
     Raises:
         RuntimeError: If unable to resolve executable symlink.
     """
+    if str(executable.resolve(strict=True)).startswith("/usr/bin"):
+        return all_paths
     if executable.parents[0].name == "bin":
         if str(executable.parent.parent) not in all_paths:
             all_paths.add(executable.parent.parent)
