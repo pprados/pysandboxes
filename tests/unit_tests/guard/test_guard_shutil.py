@@ -129,7 +129,7 @@ def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
         shutil.rmtree(files["path"] / "tmp")
     if (files["path"] / "tmp2").exists():
         shutil.rmtree(files["path"] / "tmp2")
-    shutil.copytree(files["bind_dest"], files["path"] / "tmp")
+    shutil.copytree(files["bind_src"], files["path"] / "tmp")
     shutil.move(files["path"] / "tmp", files["path"] / "tmp2")
     shutil.rmtree(files["path"] / "tmp2")
 
