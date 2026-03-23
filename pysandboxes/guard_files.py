@@ -884,16 +884,16 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
                     # yield Path(remapped_filter).relative_to(self)
                     yield Path(remapped_filter)
 
-        extra = {}
+        extra: dict[str, Any] = {}
         if sys.version_info[:2] >= (3, 12):
             extra = {"case_sensitive": case_sensitive}
-        if sys.version_info.major >= 3 and sys.version_info.minor >= 13:
+        if sys.version_info[:2] >= (3, 13):
             extra = {"recurse_symlinks": recurse_symlinks}
 
-        if _check_alias.get():
+        if remapped and _check_alias.get():
             _check_alias.set(False)
             do_filter = filter(
-                Path(self).glob(  # FIXME:
+                Path(remapped).glob(
                     pattern=pattern,
                     **extra,
                 )
