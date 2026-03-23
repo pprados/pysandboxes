@@ -302,6 +302,22 @@ get-new-version:
 		exit 1; \
 	fi
 
+# Function to check if git working directory is clean
+define _check_git_status
+	@if ! git diff-index --quiet HEAD --; then \
+		echo "Git working directory is not clean. Please commit or stash your changes."; \
+		exit 1; \
+	fi
+endef
+
+# Function to check if git branch is develop
+define _check_git_branch
+	@if [ `git rev-parse --abbrev-ref HEAD` != "develop" ]; then \
+		echo "You must be on the 'develop' branch to publish a release."; \
+		exit 1; \
+	fi
+endef
+
 # Function to prepare the changelog with a specific version
 define _prepare-changelog
 	echo "Starting changelog preparation..."; \
@@ -339,7 +355,7 @@ endef
 define _publish-github-release
 	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
 	TAG="v$$NEW_VERSION"; \
-	gh release create $$TAG --title \"$(2)\" --notes-file CHANGELOG.md"; \
+	gh release create --draft $$TAG --title "$(2)" --notes-file CHANGELOG.md; \
 	echo "Release $$TAG would be published on GitHub with title: $(2)"
 endef
 
@@ -347,6 +363,8 @@ endef
 publish-patch:
 	@echo "=== Starting PATCH release workflow ==="
 	@echo ""
+	$(call _check_git_status)
+	$(call _check_git_branch)
 	@echo "Enter the release title (e.g., v0.0.1 - Bug fixes):"
 	@read -r RELEASE_TITLE; \
 	if [ -z "$$RELEASE_TITLE" ]; then \
@@ -354,49 +372,67 @@ publish-patch:
 		exit 1; \
 	fi; \
 	echo ""; \
-	echo "Step 1/5: Preparing changelog..."; \
+	echo "Step 1/7: Merge in master..."; \
+	git checkout master; \
+	git merge --allow-unrelated-histories develop -m "Merge from develop"; \
+	echo ""; \
+	echo "Step 2/7: Preparing changelog..."; \
 	$(call _prepare-changelog,patch); \
 	echo ""; \
-	echo "Step 2/5: Committing and tagging..."; \
+	echo "Step 3/7: Committing and tagging..."; \
 	$(call _update-and-tag-version,patch); \
 	echo ""; \
-	echo "Step 3/5: Publishing to GitHub..."; \
+	echo "Step 4/7: Publishing to GitHub..."; \
+	git push origin master; \
+	git push origin v$$NEW_VERSION; \
 	$(call _publish-github-release,patch,$$RELEASE_TITLE); \
 	echo ""; \
-	echo "Step 4/5: Preparing future changelog..."; \
+	echo "Step 5/7: Return to develop..."; \
+	git checkout develop; \
+	git merge master -m "Merge from master"; \
+	echo ""; \
+	echo "Step 6/7: Preparing future changelog..."; \
 	$(call _prepare-future-changelog); \
-	echo ""; \
-	echo "Step 5/5: Committing future changelog..."; \
+	echo "Step 7/7: Commit future changelog..."; \
 	git add CHANGELOG.md; \
-	git commit -m "Prepare next release"; \
-	echo ""; \
-	echo "=== PATCH release workflow completed successfully ==="
+	git commit -m "Preparing future changelog" ; \
+	echo "=== PATCH draft release $$RELEASE_TITLE workflow completed successfully ==="
 
 ## Publish a minor release (complete workflow)
 publish-minor:
 	@echo "=== Starting MINOR release workflow ==="
 	@echo ""
-	@echo "Enter the release title (e.g., v0.1.0 - New Features):"
+	$(call _check_git_status)
+	$(call _check_git_branch)
+	@echo "Enter the release title (e.g., v0.1.0 - new features):"
 	@read -r RELEASE_TITLE; \
 	if [ -z "$$RELEASE_TITLE" ]; then \
 		echo "Title is required. Aborting release."; \
 		exit 1; \
 	fi; \
 	echo ""; \
-	echo "Step 1/5: Preparing changelog..."; \
+	echo "Step 1/7: Merge in master..."; \
+	git checkout master; \
+	git merge --allow-unrelated-histories develop -m "Merge from develop"; \
+	echo ""; \
+	echo "Step 2/7: Preparing changelog..."; \
 	$(call _prepare-changelog,minor); \
 	echo ""; \
-	echo "Step 2/5: Committing and tagging..."; \
+	echo "Step 3/7: Committing and tagging..."; \
 	$(call _update-and-tag-version,minor); \
 	echo ""; \
-	echo "Step 3/5: Publishing to GitHub..."; \
+	echo "Step 4/7: Publishing to GitHub..."; \
+	git push origin master; \
+	git push origin v$$NEW_VERSION; \
 	$(call _publish-github-release,minor,$$RELEASE_TITLE); \
 	echo ""; \
-	echo "Step 4/5: Preparing future changelog..."; \
+	echo "Step 5/7: Return to develop..."; \
+	git checkout develop; \
+	git merge master -m "Merge from master"; \
+	echo ""; \
+	echo "Step 6/7: Preparing future changelog..."; \
 	$(call _prepare-future-changelog); \
-	echo ""; \
-	echo "Step 5/5: Committing future changelog..."; \
+	echo "Step 7/7: Commit future changelog..."; \
 	git add CHANGELOG.md; \
-	git commit -m "Prepare next release"; \
-	echo ""; \
-	echo "=== MINOR release workflow completed successfully ==="
+	git commit -m "Preparing future changelog" ; \
+	echo "=== MINOR draft release $$RELEASE_TITLE workflow completed successfully ==="
