@@ -760,7 +760,7 @@ def _check_address_with_rules(
 
 
 # see _scoket.pyi
-if sys.version_info[:2] >= (3, 11):
+if sys.version_info[:2] >= (3, 12):
     from collections.abc import Buffer
 
     ReadableBuffer: TypeAlias = Buffer  # stable

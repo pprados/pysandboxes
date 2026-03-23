@@ -178,7 +178,7 @@ def test_shutil_rmtree(files: Dict[str, Path]) -> None:  # noqa: F811
     d.mkdir()
     (d / "inner").mkdir()
     extra: dict[str, Any] = {}
-    if sys.version_info[:2] > (3, 10):
+    if sys.version_info[:2] > (3, 11):
         extra = {"onexc": None, "dir_fd": None}
     shutil.rmtree(d, ignore_errors=False, onerror=None, **extra)
 
