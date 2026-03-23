@@ -885,7 +885,7 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
                     yield Path(remapped_filter)
 
         extra = {}
-        if sys.version_info[:2] >= (3, 11):
+        if sys.version_info[:2] >= (3, 12):
             extra = {"case_sensitive": case_sensitive}
         if sys.version_info.major >= 3 and sys.version_info.minor >= 13:
             extra = {"recurse_symlinks": recurse_symlinks}
