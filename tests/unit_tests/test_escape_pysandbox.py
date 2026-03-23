@@ -6,8 +6,6 @@ import pytest
 
 from pysandboxes import RuleAttributeError
 
-# from pysandboxes import RuleAttributeError
-
 
 def test_escape_with_closure() -> None:
     # Find the _original version of io.open (possible if the code is in Python)
@@ -15,7 +13,7 @@ def test_escape_with_closure() -> None:
 
     assert hasattr(io.open, "__closure__"), "Not in a pysandbox"
     original_open = io.open.__closure__[0].cell_contents  # type: ignore[index]
-    assert original_open.__module__ == "_io", "Not the _original io.open"
+    assert original_open.__module__ in ["_io", "io"], "Not the _original io.open"
 
 
 @pytest.mark.skip

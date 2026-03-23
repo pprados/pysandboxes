@@ -1,5 +1,6 @@
+import sys
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 import pytest
 
@@ -176,12 +177,15 @@ def test_shutil_rmtree(files: Dict[str, Path]) -> None:  # noqa: F811
     d = files["path"] / "dir_to_remove"
     d.mkdir()
     (d / "inner").mkdir()
-    shutil.rmtree(d, ignore_errors=False, onerror=None, onexc=None, dir_fd=None)
+    extra: dict[str, Any] = {}
+    if sys.version_info[:2] > (3, 10):
+        extra = {"onexc": None, "dir_fd": None}
+    shutil.rmtree(d, ignore_errors=False, onerror=None, **extra)
 
     d = files["bind_dest"] / "dir_to_remove"
     d.mkdir()
     (d / "inner").mkdir()
-    shutil.rmtree(d, ignore_errors=False, onerror=None, onexc=None, dir_fd=None)
+    shutil.rmtree(d, ignore_errors=False, onerror=None, **extra)
 
 
 def test_shutil_move(files: Dict[str, Path]) -> None:  # noqa: F811

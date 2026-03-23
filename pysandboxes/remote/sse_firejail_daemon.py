@@ -347,7 +347,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         # Add default parameters
         firejail_path = (
-            importlib.resources.files(__name__)
+            importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1]))
             / ".."
             / "templates"
             / "firejail.template"
@@ -368,15 +368,17 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         for p in bin_path:
             _follow_links(p, whitelist)
 
-        # for sp in sys.path:
-        #     if os.path.isdir(sp):
-        #         if sp not in whitelist:
-        #             _follow_links(Path(sp), whitelist)
+        for sp in sys.path:
+            if os.path.isdir(sp):
+                if sp not in whitelist:
+                    _follow_links(Path(sp), whitelist)
 
-        # for sp in site.getsitepackages():
-        #     if os.path.isdir(sp):
-        #         if sp not in whitelist:
-        #             _follow_links(sp, whitelist)
+        import site
+
+        for sp in site.getsitepackages():
+            if os.path.isdir(sp):
+                if sp not in whitelist:
+                    _follow_links(Path(sp), whitelist)
 
         # Add ignore files rules
         keep_files_rules = []

@@ -41,7 +41,6 @@ import logging
 import os
 import socket
 import sys
-from collections.abc import Buffer
 from enum import Enum, IntEnum
 from ipaddress import (
     IPv4Address,
@@ -761,7 +760,12 @@ def _check_address_with_rules(
 
 
 # see _scoket.pyi
-ReadableBuffer: TypeAlias = Buffer  # stable
+if sys.version_info[:2] >= (3, 11):
+    from collections.abc import Buffer
+
+    ReadableBuffer: TypeAlias = Buffer  # stable
+else:
+    ReadableBuffer: TypeAlias = Any  # stable
 _Address: TypeAlias = tuple[Any, ...] | str | ReadableBuffer
 _RetAddress: TypeAlias = Any
 

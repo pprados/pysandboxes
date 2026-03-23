@@ -3,7 +3,7 @@ name = "mcp-server"
 version = "0.1.0"
 description = "A simple MCP server"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 authors = [{ name = "Anthropic" }]
 keywords = ["mcp", ]
 license = { text = "MIT" }

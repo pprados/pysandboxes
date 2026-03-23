@@ -153,7 +153,6 @@ def test_claude_evaluate_expression(
         start_client = (
             ["-m", "pysandboxes.python_sb"]
             +
-            # ["--version"]
             ["-m", "mcp_simple_chatbot.main"]
         )
         cmd: list[str] = [

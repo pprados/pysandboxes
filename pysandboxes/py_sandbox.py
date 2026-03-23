@@ -53,12 +53,17 @@ def _search_module_config(config_path: Path | None) -> Path:
     # Module of the caller
     from importlib.resources import files
 
-    caller_module = frame.f_globals.get("__name__", "__main__").split(".", 1)[0]
+    caller_modules = frame.f_globals.get("__name__", "__main__").split(".")
     resource_config: Path | None = None
-    if caller_module != "__main__":
-
-        resource_path = files(caller_module)
-        resource_config = Path(resource_path.name) / config_path
+    if caller_modules[0] != "__main__":
+        pos = 1
+        while True:
+            try:
+                resource_path = files(".".join(caller_modules[0:pos]))
+                resource_config = Path(resource_path.name) / config_path
+                break
+            except TypeError:  # For python 3.10
+                pos += 1
     if resource_config and resource_config.exists():
         config_path = resource_config
         logger.info("Use the resource %s from the caller module", config_path)

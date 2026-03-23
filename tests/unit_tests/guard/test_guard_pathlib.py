@@ -91,8 +91,9 @@ def test_pathlib_is(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     assert pathlib.Path(files["bind_dest"] / "bound_file.txt").is_file()
     assert not pathlib.Path(files["path"]).is_mount()
     assert not pathlib.Path(files["bind_dest"]).is_mount()
-    assert not pathlib.Path(files["path"]).is_junction()
-    assert not pathlib.Path(files["bind_dest"]).is_junction()
+    if hasattr(pathlib.Path, "is_junction"):
+        assert not pathlib.Path(files["path"]).is_junction()  # type: ignore[attr-defined]
+        assert not pathlib.Path(files["bind_dest"]).is_junction()  # type: ignore[attr-defined]
     assert pathlib.Path(files["path"]).is_relative_to(files["path"])
     assert pathlib.Path(files["bind_dest"]).is_relative_to(files["bind_dest"])
     assert not pathlib.Path(files["path"]).is_reserved()
@@ -479,13 +480,14 @@ def test_pathlib_walk(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 
     import pathlib
 
-    rc = list(pathlib.Path(files["path"]).walk())
-    assert rc[0][0] == pathlib.Path(files["path"])
-    assert "bind_src" not in rc[0][1]
-    assert "bind_dest" in rc[0][1]
-    assert rc[1][0] == pathlib.Path(files["bind_dest"])
-    assert "bound_file.txt" in rc[1][2]
+    if hasattr(pathlib.Path, "walk"):
+        rc = list(pathlib.Path(files["path"]).walk())  # type: ignore[attr-defined]
+        assert rc[0][0] == pathlib.Path(files["path"])
+        assert "bind_src" not in rc[0][1]
+        assert "bind_dest" in rc[0][1]
+        assert rc[1][0] == pathlib.Path(files["bind_dest"])
+        assert "bound_file.txt" in rc[1][2]
 
-    rc = list(pathlib.Path(files["bind_dest"]).walk())
-    assert rc[0][0] == pathlib.Path(files["bind_dest"])
-    assert "bound_file.txt" in rc[0][2]
+        rc = list(pathlib.Path(files["bind_dest"]).walk())  # type: ignore[attr-defined]
+        assert rc[0][0] == pathlib.Path(files["bind_dest"])
+        assert "bound_file.txt" in rc[0][2]
