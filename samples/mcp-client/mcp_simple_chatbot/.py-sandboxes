@@ -82,6 +82,8 @@ python-import=uri_template
 python-import=uvicorn
 python-import=webcolors
 
+python-import=*
+
 net=ALLOW|TCP|api.x.ai|443|OUT
 net=ALLOW|TCP|api.openai.com|443|OUT
 net=ALLOW|TCP|www.google.com|80|OUT
@@ -95,4 +97,4 @@ net=ALLOW|TCP|localhost|48000|*
 ro-bind=.,.
 
 firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
-#firejail.net=br0  # Use specific brige ? Else, use docker0 if exist
+firejail.net=br0  # Use specific brige ? Else, use docker0 if exist

@@ -32,7 +32,7 @@ sample-tests:
 	(cd samples/mcp-server && make tests && true)
 
 ## Make github tests locally
-gh-tests:
+gh-tests: format lint
 	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
 	gh act push
 	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi

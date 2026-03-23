@@ -504,7 +504,7 @@ def activate_guard_import(
         return
     if _activate_patch_import(patch_rules):  # Add in sys.meta_path
         # For all loaded modules, apply patch
-        for module in sys.modules:
+        for module in sys.modules.copy():  # FIXME: copy nécessaire ?
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
 

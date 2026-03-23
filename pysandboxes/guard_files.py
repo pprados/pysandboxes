@@ -885,6 +885,8 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
                     yield Path(remapped_filter)
 
         extra = {}
+        if sys.version_info[:2] >= (3, 11):
+            extra = {"case_sensitive": case_sensitive}
         if sys.version_info.major >= 3 and sys.version_info.minor >= 13:
             extra = {"recurse_symlinks": recurse_symlinks}
 
@@ -893,7 +895,6 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
             do_filter = filter(
                 Path(self).glob(  # FIXME:
                     pattern=pattern,
-                    case_sensitive=case_sensitive,
                     **extra,
                 )
             )
@@ -902,7 +903,6 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
             do_filter = func(
                 self,
                 pattern=pattern,
-                case_sensitive=case_sensitive,
                 **extra,
             )
         return do_filter
@@ -1596,6 +1596,29 @@ _default_rules: dict[str, Callable] = {
 }
 
 
+def _wrap_pathlib_3_10(normal_accessor: Any) -> Callable:
+    # set to the patched version
+    normal_accessor.stat = os.stat
+    normal_accessor.open = io.open
+    normal_accessor.listdir = os.listdir
+    normal_accessor.scandir = os.scandir
+    normal_accessor.chmod = os.chmod
+    normal_accessor.mkdir = os.mkdir
+    normal_accessor.unlink = os.unlink
+    if hasattr(os, "link"):
+        normal_accessor.link = os.link
+    normal_accessor.rmdir = os.rmdir
+    normal_accessor.rename = os.rename
+    normal_accessor.replace = os.replace
+    if hasattr(os, "symlink"):
+        normal_accessor.symlink = os.symlink
+    if hasattr(os, "readlink"):
+        normal_accessor.readlink = os.readlink
+    normal_accessor.getcwd = os.getcwd
+    normal_accessor.realpath = os.path.realpath
+    return normal_accessor
+
+
 def patch_rules(learn: bool) -> dict[str, Callable]:
     """Provide file system patching rules for guard activation.
 
@@ -1603,6 +1626,8 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         Dictionary of file system module patches.
     """
     rules: dict[str, Callable] = dict(_default_rules)
+    if sys.version_info[:2] == (3, 10):
+        rules |= {"pathlib._normal_accessor": _f(_wrap_pathlib_3_10)}
     if sys.platform != "win32" and sys.platform != "linux":
         rules |= {
             "os.chflags": _f(_wrap_filename, write=True),

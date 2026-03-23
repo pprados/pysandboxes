@@ -270,7 +270,9 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
         "handlers": {
             "default": {
                 "formatter": "default",
-                "class": root_handler.__class__,
+                "class": ".".join(
+                    [root_handler.__module__, root_handler.__class__.__qualname__]
+                ),
                 "stream": stream,
             },
             "access": {

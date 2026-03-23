@@ -6,8 +6,7 @@ build-backend = "hatchling.build"
 name = "pysandboxes"
 version = "0.0.0"  # Set with git tag
 description = "Lite sandbox for python code execution"
-#requires-python = ">=3.12,<4.0"
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.10,<3.14"
 authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
 license = "Apache-2.0"
 readme = "README.md"
@@ -17,8 +16,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
-#    "Programming Language :: Python :: 3.11",
-#    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 #    "Programming Language :: Python :: 3.14",
 ]

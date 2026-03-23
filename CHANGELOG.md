@@ -2,9 +2,9 @@
 
 | Python   | OS-Sandbox   | OS        | Feature   |
 |----------|--------------|-----------|-----------|
-| ☐ 3.10   | ✅ subprocess | ✅ Linux   | ✅ Env     |
-| ☐ 3.11   | ✅ Firejail   | ☐ MacOS   | ✅ Files   |
-| ☐ 3.12   | ☐ Docker     | ☐ Windows | ✅ Network |
+| ✅ 3.10   | ✅ subprocess | ✅ Linux   | ✅ Env     |
+| ✅ 3.11   | ✅ Firejail   | ☐ MacOS   | ✅ Files   |
+| ✅ 3.12   | ☐ Docker     | ☐ Windows | ✅ Network |
 | ✅ 3.13   | ☐ Podman     |           | ✅ Import  |
 | ☐ 3.14   | ☐ qemu       |           | ☐ API     |
 |          | ☐ VM         |           | ☐ Source  |

@@ -318,9 +318,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         cmd_parameters = [
             sys.executable,
-            "-P",  # Don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
             "-u",  # Unbuffered output
         ]
+        if sys.version_info[:2] >= (3, 11):
+            cmd_parameters.append(
+                "-P"
+            )  # Don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
         if sys.flags.optimize:
             cmd_parameters.append("-" + "O" * sys.flags.optimize)
         cmd_parameters.extend(self._python_args)
