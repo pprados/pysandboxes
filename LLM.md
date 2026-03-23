@@ -12,7 +12,8 @@ PySandboxes is a Python security framework that provides sandbox environments fo
 ```bash
 make test                    # Run unit tests
 make integration_tests       # Run integration tests
-make all-tests       # Run integration and unit tests
+make all-tests               # Run integration and unit tests
+make gh-test                 # Run test in a simulation of github action
 ```
 
 ### Code Quality
@@ -27,6 +28,8 @@ make validate                # All validation
 ```bash
 make clean                   # Clean build artifacts
 make dist                    # Build distribution packages
+make publish-minor           # Increment and publish a minor version
+make publish-patch           # Increment and publish a patch version
 ```
 
 ## Architecture

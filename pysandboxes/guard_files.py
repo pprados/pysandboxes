@@ -126,6 +126,9 @@ class _DirEntry:
     def __setattr__(self, name: str, value: Any) -> None:
         setattr(self._target, name, value)
 
+    def __str__(self) -> str:
+        return str(self._target.path)
+
 
 # Internal state for the file filter
 _rules: FileRules = cast(FileRules, ())
@@ -600,6 +603,8 @@ def _wrap_buitins_open(func: Callable) -> Callable:
         closefd: bool = True,
         opener: Callable | None = None,
     ) -> Any:
+        if isinstance(file, _DirEntry):
+            file = str(file)
 
         need_to_write = mode is not None and (
             "w" in mode or "a" in mode or "x" in mode or "+" in mode
@@ -777,16 +782,22 @@ def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
             return func(path=path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
         if isinstance(path, bytes):
             path = os.fsdecode(path)
-        path = cast(str, path)
-        remapped, rule = _apply_dest_to_src_rules(cast(str, path), write=write)
+        if isinstance(path, _DirEntry):
+            path = str(path)
+        if _check_alias.get():
+            remapped, rule = _apply_dest_to_src_rules(
+                cast(str, path), write=write, accept_dest=_check_alias.get()
+            )
+        else:
+            remapped, rule = str(path), None
         if rule:
             _raise_ignore(path, rule)
         if not remapped:
             if is_learning_mode():
                 # add_learning_rule(LearnFileRule(Path(path), write))
-                remapped = path
+                remapped = str(path)
             else:
-                _raise_access(path)
+                _raise_access(str(path))
         return func(path=remapped, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
 
     return wrapper
@@ -863,6 +874,8 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
     ) -> Iterator["Path"]:
 
         remapped, rule = _apply_dest_to_src_rules(self, write=False)
+        if not _check_alias.get():
+            remapped = str(self)
         if not remapped:
             if is_learning_mode():
                 add_learning_rule(LearnFileRule(self, write=False))
@@ -872,17 +885,27 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
 
         def filter(it: Iterator[Path]) -> Iterator[Path]:
             abs_remapper = _os_path_realpath(remapped)
-            for name in it:
-                remapped_filter, rule = _apply_src_to_dest_rules(
-                    str(name), accept_src=False, accept_dest=True
-                )
-                if remapped_filter:
-                    if not str(self).startswith("/"):
-                        remapped_filter = remapped_filter[len(abs_remapper) + 1 :]
-                    if remapped_filter == "":
-                        remapped_filter = "."
-                    # yield Path(remapped_filter).relative_to(self)
-                    yield Path(remapped_filter)
+            check_alias = _check_alias.get()
+            while True:
+                try:
+                    if check_alias:
+                        _check_alias.set(False)
+                    name = next(it)
+                    if check_alias:
+                        _check_alias.set(True)
+                    remapped_filter, rule = _apply_src_to_dest_rules(
+                        str(name), accept_src=False, accept_dest=True
+                    )
+                    if remapped_filter:
+                        if not str(self).startswith("/"):
+                            remapped_filter = remapped_filter[len(abs_remapper) + 1 :]
+                        if remapped_filter == "":
+                            remapped_filter = "."
+                        # yield Path(remapped_filter).relative_to(self)
+                        yield Path(remapped_filter)
+                except StopIteration:
+                    _check_alias.set(True)
+                    break
 
         extra: dict[str, Any] = {}
         if sys.version_info[:2] >= (3, 12):
@@ -893,17 +916,20 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
         if remapped and _check_alias.get():
             _check_alias.set(False)
             do_filter = filter(
-                Path(remapped).glob(
+                func(
+                    Path(remapped),
                     pattern=pattern,
                     **extra,
                 )
             )
             _check_alias.set(True)
         else:
-            do_filter = func(
-                self,
-                pattern=pattern,
-                **extra,
+            do_filter = filter(
+                func(
+                    self,
+                    pattern=pattern,
+                    **extra,
+                )
             )
         return do_filter
 
@@ -1223,7 +1249,13 @@ class _ScanDirContextManager(Iterator):
 
     def __init__(self, directory: str):
         self.directory = directory
-        new_path, rule = _apply_dest_to_src_rules(directory, write=False)
+        if _check_alias.get():
+            new_path, rule = _apply_dest_to_src_rules(
+                directory,
+                write=False,
+            )
+        else:
+            new_path, rule = directory, None
         if rule:
             _raise_ignore(directory, rule)
         if new_path is None:
@@ -1284,9 +1316,12 @@ class _ScanDirContextManager(Iterator):
             try:
                 while True:
                     entry = cast(Iterator, self.scanner).__next__()
-                    dest_path, rule = _apply_src_to_dest_rules(
-                        entry.path, accept_src=False, accept_dest=True
-                    )
+                    if _check_alias.get():
+                        dest_path, rule = _apply_src_to_dest_rules(
+                            entry.path, accept_src=False, accept_dest=True
+                        )
+                    else:
+                        dest_path, rule = entry.path, None
                     if rule:
                         pass  # Ignore
                     elif dest_path is not None:
@@ -1566,7 +1601,7 @@ _default_rules: dict[str, Callable] = {
     # ALLOW pathlib.Path.write_text
     # ALLOW pathlib.Path.iterdir
     "pathlib.Path.glob": _f(_wrap_pathlib_Path_glob),
-    # ALLOW pathlib.Path.rglob
+    "pathlib.Path.rglob": _f(_wrap_pathlib_Path_glob),
     # ALLOW pathlib.Path.walk
     # ALLOW pathlib.Path.relative_to
     # ALLOW pathlib.Path.is_relative_to
