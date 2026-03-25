@@ -355,8 +355,9 @@ endef
 define _publish-github-release
 	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
 	TAG="v$$NEW_VERSION"; \
+	rm -Rf ./dist/*; \
 	uv build ;\
-	gh release create --draft $$TAG --title "$(2)" --notes-file CHANGELOG.md; \
+	gh release create --draft $$TAG ./dist/* --title "$(2)" --notes-file CHANGELOG.md; \
 	echo "Release $$TAG would be published on GitHub with title: $(2)"
 endef
 
