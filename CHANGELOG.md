@@ -11,7 +11,7 @@
 |          |              |           | ☐ Regexp  |
 |          |              |           | ☐ DoS     |
 
-## [0.0.0] - 202X-XX-XX
+## [0.1.0] - 2025-11-27
 
 ### Added
 - First stable version
