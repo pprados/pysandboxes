@@ -86,6 +86,8 @@ A learning mechanism allows for continuous improvement of security rules and rap
 
 To install the component:
 
+Download last release from `https://github.com/pprados/pysandboxes/releases`
+
 ```bash
  pip install pysandboxes
 ```
