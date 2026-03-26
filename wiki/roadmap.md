@@ -26,6 +26,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] Docker (Docker or OCI images, oci-a,rchive) (See [here](https://github.com/anthropics/claude-code/tree/main/.devcontainer))
   - [ ] podman
   - [ ] kubernetes
+  - [ ] libslirp
   - [ ] micro-VM
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
