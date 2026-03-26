@@ -84,6 +84,7 @@ test = [
     "pytest-asyncio>=0.20.3",
     "pytest-mock>=3.10.0",
     "types-requests>=2.28.11.5",
+    "toml>=0.10.2",
 ]
 lint = [
     "mypy>=1.8",
