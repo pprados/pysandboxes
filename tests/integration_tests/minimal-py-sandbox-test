@@ -1,0 +1,3 @@
+#learn=tests/integration_tests/py-sandbox-test.profile
+py-sandbox=true
+os-sandbox=${OS_SANDBOX:-subprocess}

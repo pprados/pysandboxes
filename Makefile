@@ -54,6 +54,7 @@ lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimenta
 
 lint: format
 	uv run mypy $(PYTHON_FILES)
+	uvx pyright $(PYTHON_FILES)
 	uvx black --check $(PYTHON_FILES)
 	uvx ruff check $(PYTHON_FILES)
 

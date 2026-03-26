@@ -12,17 +12,19 @@ import inspect
 import os
 import re
 import sys
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import (
     Any,
     Awaitable,
     Callable,
     Iterator,
+    cast,
 )
 
 from .sb_types import ConfigLine, ConfigLines, Envs
 
-Environ = dict[str, str] | os._Environ
+Environ = dict[str, str] | os._Environ[str]  # type: ignore
 """Type alias for environment variable mappings."""
 
 
@@ -58,7 +60,7 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
 
         if default_value is None:
             default_value = ""
-        value = envs.get(var_name, default_value)
+        value = cast(str, envs.get(var_name, default_value))
         return value
 
     while re.search(r"\${.*}", s):
@@ -248,7 +250,7 @@ def find_config_for_module(module: str, config_name: str) -> Path | None:
     # The importlib.resources.files() approach requires importing the file. We don't want to do that when
     # invoking it via python-sb. It's too soon. The alternative is to search for the file itself.
     try:
-        spec_module = importlib.util.find_spec(module)
+        spec_module: ModuleSpec = cast(ModuleSpec, importlib.util.find_spec(module))  # type: ignore[attr-defined]
         if spec_module and spec_module.origin:
             config = Path(spec_module.origin).parent / config_name
             if config.exists():
@@ -344,7 +346,7 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
     if str(executable.resolve(strict=True)).startswith("/usr/bin"):
         return all_paths
     if executable.parents[0].name == "bin":
-        if str(executable.parent.parent) not in all_paths:
+        if executable.parent.parent not in all_paths:
             all_paths.add(executable.parent.parent)
         else:
             return all_paths

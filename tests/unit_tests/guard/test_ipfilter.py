@@ -6,7 +6,7 @@ from pathlib import Path
 from shutil import which
 from typing import List, Literal
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.main_logger import ErrorMsg

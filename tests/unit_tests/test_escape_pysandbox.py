@@ -2,7 +2,7 @@ import inspect
 from types import ModuleType
 from typing import Dict, Set, Tuple
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleAttributeError
 

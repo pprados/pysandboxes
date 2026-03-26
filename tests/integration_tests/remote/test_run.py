@@ -1,4 +1,4 @@
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 import pysandboxes
 from pysandboxes.tools import mixed_sync_and_async_error

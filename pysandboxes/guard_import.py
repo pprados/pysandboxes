@@ -151,7 +151,11 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             paths = patch.code_path.split(".")
             for node in paths[:-1]:
                 cur_object = cur_object.__dict__[node]
-            new_value = patch.patch_factory(getattr(cur_object, paths[-1]))
+            original_value = getattr(cur_object, paths[-1])
+            # FIXME # Skip if already patched
+            # if hasattr(original_value, "__pysandbox__"):
+            #     continue
+            new_value = patch.patch_factory(original_value)
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
             if __debug__ and isinstance(
                 new_value, type(_apply_patch)
@@ -502,16 +506,16 @@ def activate_guard_import(
     if _activated:
         logger.debug("Guard_files was already activated.")
         return
+
+    # Save the current modules BEFORE patching
+    global _pending_modules
+    _pending_modules = copy(sys.modules)
+
     if _activate_patch_import(patch_rules):  # Add in sys.meta_path
         # For all loaded modules, apply patch
         for module in sys.modules.copy():  # FIXME: copy nécessaire ?
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
-
-    # Move the current modules in _pending_modules.
-    # The modules will be reinjected as needed.
-    global _pending_modules
-    _pending_modules = copy(sys.modules)
     keep = [
         "warnings",
         "tokenize",  # For assertion
@@ -649,5 +653,42 @@ def generate_rules(
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_import() -> None:
-        global _rules
+        """Deactivate import guard and restore original state.
+
+        This function completely restores the Python import system to its state
+        before activation, including:
+        - Removing the guard finder from sys.meta_path
+        - Restoring all modules to sys.modules from _pending_modules
+        - Resetting activation flags
+
+        Note: Modules that are kept in sys.modules (builtins, warnings, etc.)
+        are not restored to avoid conflicts with patched versions.
+        """
+        global _rules, _activated, _pending_modules, _patch_rules
+
+        # Remove guard finder from sys.meta_path
+        if _guard_finder in sys.meta_path:
+            sys.meta_path.remove(_guard_finder)
+
+        # Restore pending modules back to sys.modules, except those that were kept
+        keep = [
+            "warnings",
+            "tokenize",
+            "asyncio",
+            "sys",
+            "threadpool",
+            "builtins",
+            "__main__",
+        ]
+
+        if _pending_modules:
+            for module_name, module in _pending_modules.items():
+                # Only restore modules that were removed from sys.modules
+                if module_name not in keep and module_name not in sys.modules:
+                    sys.modules[module_name] = module
+            _pending_modules = {}
+
+        # Reset flags and rules
         _rules = ("*",)
+        _activated = False
+        _patch_rules = ImmutableDict({})

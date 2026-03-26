@@ -27,7 +27,7 @@ OPENAI_API_KEY=your_api_key_here
 
 ### Configure servers
 
-The `servers_config.json` follows the same structure as Claude Desktop, allowing for easy integration of multiple servers.
+The `servers_config.jsonc` follows the same structure as Claude Desktop, allowing for easy integration of multiple servers.
 MCP's `stdio` mode consists of launching a child process with the MCP server. The client can then configure the launch to use different sandboxing scenarios.
 
 Here\'s some examples. You must choice only one:
@@ -57,7 +57,7 @@ Here\'s some examples. You must choice only one:
 
  ```
 
-Use the parameter `CONFIG='-c stdio_no_sandbox.json'`
+Use the parameter `CONFIG='-c stdio_no_sandbox.jsonc'`
 
 #### MCP Client use `stdio` to call MCP Server with `python-sb` in complete mode
 
@@ -89,7 +89,7 @@ Use the parameter `CONFIG='-c stdio_no_sandbox.json'`
      style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
  ```
 
-Use the parameter `CONFIG='-c stdio_sandboxes_complete.json'`
+Use the parameter `CONFIG='-c stdio_sandboxes_complete.jsonc'`
 
 #### MCP Client use `stdio` to call MCP Server in partial mode
 
@@ -124,7 +124,7 @@ This version allows isolating a part of the **MCP server** in `stdio` mode, with
 
  ```
 
-Use the parameter `CONFIG='-c stdio_sandboxes_partial.json'`
+Use the parameter `CONFIG='-c stdio_sandboxes_partial.jsonc'`
 
 ### Run the client
 
@@ -287,7 +287,7 @@ graph TD
 
 Start with
 ```bash
-uv run -m mcp_simple_chatbot.main -c http.json
+uv run -m mcp_simple_chatbot.main -c http.jsonc
 ```
 
 ### Interact with the assistant

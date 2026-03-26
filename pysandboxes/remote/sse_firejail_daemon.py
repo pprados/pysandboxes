@@ -26,6 +26,11 @@ from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
+try:
+    from typing import override  # type: ignore[attr-defined]
+except ImportError:
+    from typing_extensions import override
+
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
@@ -56,7 +61,7 @@ DEBUG_NETFILTER = False  # FIX_RELEASE
 REPLACE = False  # TODO: firejail
 
 
-class AllowList(MutableSet):
+class AllowList(MutableSet[str]):
     """Optimized list for directory paths with prefix logic.
 
     This class manages directory paths efficiently by applying prefix rules:
@@ -67,8 +72,10 @@ class AllowList(MutableSet):
 
     def __init__(self) -> None:
         """Initialize empty AllowList."""
+        super().__init__()
         self._set: set[str] = set()
 
+    @override
     def __contains__(self, item: Any) -> bool:
         """Check if directory path is covered by whitelist.
 
@@ -92,6 +99,7 @@ class AllowList(MutableSet):
 
         return False
 
+    @override
     def __iter__(self) -> Iterator[str]:
         """Iterate over whitelisted directory paths.
 
@@ -100,6 +108,7 @@ class AllowList(MutableSet):
         """
         return iter(self._set)
 
+    @override
     def __len__(self) -> int:
         """Get number of whitelisted paths.
 
@@ -108,46 +117,46 @@ class AllowList(MutableSet):
         """
         return len(self._set)
 
-    def add(self, directory: str) -> None:
+    @override
+    def add(self, value: str) -> None:
         """Add directory path to whitelist with prefix optimization.
 
         Args:
             directory: Directory path to add.
         """
         # Ensure the path ends with a separator to simplify prefix checks.
-        if not directory.endswith("/"):
-            directory += "/"
+        if not value.endswith("/"):
+            value += "/"
 
         # Check if an existing directory already prefixes the new one.
         for existing_dir in self._set:
-            if directory.startswith(existing_dir):
+            if value.startswith(existing_dir):
                 return
 
         # Find existing directories that are prefixed by the new directory.
         to_remove = {
-            existing_dir
-            for existing_dir in self._set
-            if existing_dir.startswith(directory)
+            existing_dir for existing_dir in self._set if existing_dir.startswith(value)
         }
 
         # If any directories are to be removed, perform the replacement.
         if to_remove:
             self._set -= to_remove
-            self._set.add(directory)
+            self._set.add(value)
         else:
             # If no replacements are needed, just add the new directory.
-            self._set.add(directory)
+            self._set.add(value)
 
-    def discard(self, directory: str) -> None:
+    @override
+    def discard(self, value: str) -> None:
         """Remove directory path from whitelist.
 
         Args:
             directory: Directory path to remove.
         """
         # Ensure the path ends with a separator for consistency.
-        if not directory.endswith("/"):
-            directory += "/"
-        self._set.discard(directory)
+        if not value.endswith("/"):
+            value += "/"
+        self._set.discard(value)
 
 
 def _follow_links(filename: Path, whitelist: AllowList) -> None:
@@ -248,6 +257,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     sandboxed processes with comprehensive OS-level isolation.
     """
 
+    @override
     def parse_rules(
         self,
         rules: ConfigLines,
@@ -255,7 +265,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     ) -> tuple[ImmutableDict[str, Any], ConfigLines]:
         firejail_params = {}
         net: str | None = None
-        ignore_rules = []
+        ignore_rules: ConfigLines = []
 
         for rule in rules:
             if rule.rule.startswith("firejail."):
@@ -276,6 +286,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             firejail_params["net"] = net
         return ImmutableDict(firejail_params), ignore_rules
 
+    @override
     def update_rules(
         self,
         *,
@@ -296,6 +307,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         return updated_all_rules
 
     @property
+    @override
     def base_url(self) -> str:
         assert self._process
         return f"http://{get_firejail_daemon_ip(self._process.pid)}:{{PORT}}"
@@ -326,15 +338,30 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             sys.exit(1)
         firejail_config = Path("/etc/firejail/firejail.config")
         restricted_network = True
+        # If explicit_yes is True it means the admin set 'restricted-network yes'
+        # in /etc/firejail/firejail.config. In that case we will log a warning and
+        # skip the network-specific filtering setup (netfilter, --net, --dns, ...).
+        restricted_network_explicit_yes = False
         if firejail_config.exists():
             for line in firejail_config.read_text().split("\n"):
                 if re.match(r"restricted-network\s+no", line):
                     restricted_network = False
+                    restricted_network_explicit_yes = False
+                    break
+                if re.match(r"restricted-network\s+yes", line):
+                    # Explicit yes -> respect it but warn that we will skip
+                    # firejail-specific network filtering configuration.
+                    restricted_network = True
+                    restricted_network_explicit_yes = True
+                    logger.warning(
+                        "firejail config: 'restricted-network yes' detected; "
+                        "network-specific filtering will be skipped."
+                    )
                     break
 
         need_root = False
         args = [str(which_command("firejail"))]
-        for k, v in all_rules.os_sandbox_params.items():
+        for k, v in all_rules.os_sandbox_params.items():  # type: ignore[attr-defined]
             args.append(f"--{k}={v}")
 
         if logger.getEffectiveLevel() > logging.INFO:
@@ -346,8 +373,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             )
 
         # Add default parameters
-        firejail_path = (
-            importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1]))
+        firejail_path: Path = (
+            cast(Path, importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])))  # type: ignore[attr-defined]
             / ".."
             / "templates"
             / "firejail.template"
@@ -359,12 +386,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.extend(shlex.split(line))
 
         # Extend mapping if the python version use some links
-        major, minor, release_level, *_ = sys.version_info
         whitelist = AllowList()
 
         # Manage sys.executable
         bin_path: set[Path] = set()
-        follow_links_executable(Path(sys.executable), bin_path)
+        bin_path = follow_links_executable(Path(sys.executable), bin_path)  # FIXME
         for p in bin_path:
             _follow_links(p, whitelist)
 
@@ -381,7 +407,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     _follow_links(Path(sp), whitelist)
 
         # Add ignore files rules
-        keep_files_rules = []
+        keep_rules: list[Any] = []
         for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
             args.append(f"--blacklist={rule.source}")
 
@@ -409,7 +435,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             else:
                 # Note: py-sandbox manage the alias
                 whitelist.add(rule.source)
-                keep_files_rules.append(rule)
+                keep_rules.append(rule)
                 need_root = False
                 args.append(f"--whitelist={rule.source}")
             if not rule.write:
@@ -439,7 +465,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append(f"--read-only={str(pipe_path)}")
 
         if all_rules.socket_rules:
-            if restricted_network:
+            # If restricted_network is True and it was NOT explicitly set to
+            # 'yes' in the firejail config, then we cannot use firejail with
+            # network rules: keep existing behavior (error + exit).
+            if restricted_network and not restricted_network_explicit_yes:
                 logger.error(
                     "Set 'restricted_network no' in %s "
                     "to use firejail with networks rules.",
@@ -447,81 +476,95 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 )
                 sys.exit(1)
 
-            dns_servers = [
-                ip
-                for ip in get_systemd_resolved_upstream_dns()
-                if isinstance(ip, IPv4Address)
-            ]
-
-            if dns_servers:
-                for dns in dns_servers:
-                    if not dns.is_loopback:
-                        # Change to other, because inside the firejail, the loopback is not accessible
-                        for dns in dns_servers:
-                            args.append(f"--dns={dns}")
-                        break
+            # If admin explicitly set 'restricted-network yes', tolerate it:
+            # warn and skip the network-specific filtering setup (netfilter,
+            # --net, --dns, --netfilter6, ...). Socket rules will be ignored in
+            # that case for the firejail-level network filtering.
+            if restricted_network and restricted_network_explicit_yes:
+                logger.warning(
+                    "firejail config 'restricted-network yes' detected: "
+                    "skipping network-specific filtering (socket rules ignored)."
+                )
+                skip_network_setup = True
             else:
-                # TODO: see https://github.com/netblue30/firejail/discussions/6931
-                # for pin_dns in dns_server_v6:
-                #     if not pin_dns.is_loopback:
-                #         loopback_dns = True
-                #         args.append(f"--pin_dns={pin_dns}")
-                #         break
-                pass
-            if "net" not in all_rules.os_sandbox_params:
-                default_interface = get_default_interface()
-                bridges = get_bridge_interfaces()
-                if not bridges:
-                    bridge = default_interface
-                else:
-                    # Search "docker*" else, the first bridge
-                    for bridge in bridges:
-                        if bridge.startswith("docker"):
+                skip_network_setup = False
+
+            if not skip_network_setup:
+                dns_servers = [
+                    ip
+                    for ip in get_systemd_resolved_upstream_dns()
+                    if isinstance(ip, IPv4Address)
+                ]
+
+                if dns_servers:
+                    for dns in dns_servers:
+                        if not dns.is_loopback:
+                            # Change to other, because inside the firejail, the loopback is not accessible
+                            for dns in dns_servers:
+                                args.append(f"--dns={dns}")
                             break
+                else:
+                    # TODO: see https://github.com/netblue30/firejail/discussions/6931
+                    # for pin_dns in dns_server_v6:
+                    #     if not pin_dns.is_loopback:
+                    #         loopback_dns = True
+                    #         args.append(f"--pin_dns={pin_dns}")
+                    #         break
+                    pass
+                if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
+                    default_interface = get_default_interface()
+                    bridges = get_bridge_interfaces()
+                    if not bridges:
+                        bridge = default_interface
                     else:
-                        bridge = bridges[0]
-                if not default_interface:
-                    raise ValueError(
-                        "Impossible to detect the default network interface"
+                        # Search "docker*" else, the first bridge
+                        for bridge in bridges:
+                            if bridge.startswith("docker"):
+                                break
+                        else:
+                            bridge = bridges[0]
+                    if not default_interface:
+                        raise ValueError(
+                            "Impossible to detect the default network interface"
+                        )
+                    args.append(f"--net={bridge}")
+
+                if pipe_path:  # Update rules?
+                    net_filter4 = rule_to_netfilter(
+                        all_rules.socket_rules, dns_servers, is_ipv6=False
                     )
-                args.append(f"--net={bridge}")
 
-            if pipe_path:  # Update rules?
-                net_filter4 = rule_to_netfilter(
-                    all_rules.socket_rules, dns_servers, is_ipv6=False
-                )
+                    if DEBUG_NETFILTER:
+                        netfilter_file = Path("netfilter.net")
+                    else:
+                        netfilter_file = temp / "netfilter.net"
+                        os.mkfifo(netfilter_file)
 
-                if DEBUG_NETFILTER:
-                    netfilter_file = Path("netfilter.net")
-                else:
-                    netfilter_file = temp / "netfilter.net"
-                    os.mkfifo(netfilter_file)
+                    def publish_netfilter() -> None:
+                        _ = netfilter_file.write_text("\n".join(net_filter4))
+                        if not DEBUG_NETFILTER:
+                            netfilter_file.unlink(missing_ok=True)
 
-                def publich_netfilter() -> None:
-                    netfilter_file.write_text("\n".join(net_filter4))
-                    if not DEBUG_NETFILTER:
-                        netfilter_file.unlink(missing_ok=True)
+                    threading.Thread(target=publish_netfilter, daemon=True).start()
 
-                threading.Thread(target=publich_netfilter, daemon=True).start()
+                    args.append(f"--netfilter={netfilter_file}")
 
-                args.append(f"--netfilter={netfilter_file}")
+                    net_filter6 = rule_to_netfilter(
+                        all_rules.socket_rules, [], is_ipv6=True
+                    )
+                    if DEBUG_NETFILTER:
+                        netfilter6_file = Path("netfilter6.net")
+                    else:
+                        netfilter6_file = temp / "netfilter6.net"
+                        os.mkfifo(netfilter6_file)
 
-                net_filter6 = rule_to_netfilter(
-                    all_rules.socket_rules, [], is_ipv6=True
-                )
-                if DEBUG_NETFILTER:
-                    netfilter6_file = Path("netfilter6.net")
-                else:
-                    netfilter6_file = temp / "netfilter6.net"
-                    os.mkfifo(netfilter6_file)
+                    def publich_netfilter6() -> None:
+                        _ = netfilter6_file.write_text("\n".join(net_filter6))
+                        if not DEBUG_NETFILTER:
+                            netfilter_file.unlink(missing_ok=True)
 
-                def publich_netfilter6() -> None:
-                    netfilter6_file.write_text("\n".join(net_filter6))
-                    if not DEBUG_NETFILTER:
-                        netfilter_file.unlink(missing_ok=True)
-
-                threading.Thread(target=publich_netfilter6, daemon=True).start()
-                args.append(f"--netfilter6={netfilter6_file}")
+                    threading.Thread(target=publich_netfilter6, daemon=True).start()
+                    args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove redondant sockets rules
             if REPLACE:
@@ -534,7 +577,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
             # Clean env variable
             args.extend(["env", "-i"])
-            for env, val in all_rules.envs.items():
+            for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
                 args.append(f"{env}={val}")
 
             if need_root:
@@ -542,6 +585,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         return args, all_rules
 
+    @override
     def subprocess_cmd(
         self,
         all_rules: AllRules,

@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any, Generator, Mapping
 
-from _pytest.logging import LogCaptureFixture
+from _pytest.logging import LogCaptureFixture  # type: ignore[import-untyped]
 
 from pysandboxes import ConfigSyntaxError
 from pysandboxes.py_sandbox import load_and_parse_config

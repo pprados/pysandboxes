@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.guard_files import BindRule, activate_guard, parse_rules

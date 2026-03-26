@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import Dict
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.sb_types import ConfigLine

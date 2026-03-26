@@ -12,7 +12,7 @@ from typing import (
 # Added Tuple and Any for mock_getaddrinfo clarity
 from unittest.mock import Mock, patch
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleSocketConnectionRefusedError
 from pysandboxes.guard_socket import (

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterator
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandbox
 from pysandboxes.os_sandbox import shutdown_daemon, start_daemon

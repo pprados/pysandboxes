@@ -48,8 +48,8 @@ def init_log_level(use_rich: bool = True) -> None:
 
     sandboxes_level = logging.WARNING
     uvicorn_level = logging.ERROR
-    logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
+    logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)

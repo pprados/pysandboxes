@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.remote.tools import (
     configure_logging_level,

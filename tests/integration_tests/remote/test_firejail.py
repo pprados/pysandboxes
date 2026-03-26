@@ -5,7 +5,7 @@ from asyncio import AbstractEventLoop
 from pathlib import Path
 from typing import AsyncGenerator, Iterator
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandbox
 from pysandboxes.os_sandbox import async_shutdown_daemon, async_start_daemon
