@@ -1,4 +1,4 @@
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.immutable_dict import ImmutableDict
 

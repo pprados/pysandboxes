@@ -3,7 +3,7 @@
 import asyncio
 from unittest.mock import Mock, patch
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.private_loop import (
     _ensure_background_loop,

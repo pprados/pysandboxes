@@ -1,6 +1,6 @@
 from typing import Any
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -11,4 +11,4 @@ def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
     loop.stop()
     # Fix a problem with pycharm. It's call close() on a running loop
     if hasattr(loop, "_thread_id"):
-        loop._thread_id = None
+        loop._thread_id = None  # type: ignore[attr-defined]

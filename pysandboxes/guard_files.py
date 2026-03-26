@@ -25,7 +25,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    ContextManager,
     Iterator,
     NamedTuple,
     NoReturn,
@@ -93,7 +92,7 @@ class IgnoreRule(NamedTuple):
 
 FilesRule = BindRule | IgnoreRule
 
-FileRules = tuple[FilesRule, ...]
+FilesRules = tuple[FilesRule, ...]
 
 
 class LearnFileRule(NamedTuple):
@@ -110,7 +109,7 @@ class LearnFileRule(NamedTuple):
 
 class _DirEntry:
     def __init__(self, target: Any, path: str) -> None:
-        super()
+        super().__init__()
         # self._target = target
         # self._path = path
 
@@ -131,7 +130,7 @@ class _DirEntry:
 
 
 # Internal state for the file filter
-_rules: FileRules = cast(FileRules, ())
+_rules: FilesRules = cast(FilesRules, ())
 
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
@@ -140,7 +139,7 @@ _os_path_abspath = os.path.abspath
 def parse_rules(
     config: ConfigLines,
     errors: list[ErrorMsg],
-) -> tuple[FileRules, ConfigLines]:
+) -> tuple[FilesRules, ConfigLines]:
     """Parse file system access rules from configuration.
 
     Supports bind=src,dest and ignore=glob_pattern rules.
@@ -290,14 +289,14 @@ _learn_env = LearnEnviron()
 _special_env = OrderedDict(
     sorted(
         (
-            (k, _learn_env._get(k))
+            (k, cast(str, v))
             for k in [
                 "PWD",
                 "HOME",
                 "TMP",
                 "TEMP",
             ]
-            if _learn_env._has(k)
+            if (v := _learn_env.get(k)) is not None
         ),
         key=lambda x: len(x[1]),
         reverse=True,
@@ -307,7 +306,7 @@ _special_env = OrderedDict(
 _special_home = OrderedDict(
     sorted(
         (
-            (k, _learn_env._get(k))
+            (k, cast(str, v))
             for k in [
                 "PYENV_ROOT",
                 "VIRTUAL_ENV",
@@ -323,7 +322,7 @@ _special_home = OrderedDict(
                 "NLTK_DATA",
                 "SPACY_DATA",
             ]
-            if _learn_env._has(k)
+            if (v := _learn_env.get(k)) is not None
         ),
         key=lambda x: len(x[1]),
         reverse=True,
@@ -414,11 +413,13 @@ def generate_rules(
     return sorted(list(result))
 
 
-def _apply_ignore_rule(path: str | os.PathLike) -> tuple[str | None, FilesRule | None]:
+def _apply_ignore_rule(
+    path: str | os.PathLike[str] | os.PathLike[bytes],
+) -> tuple[str | None, FilesRule | None]:
     for rule in _rules:
         if isinstance(rule, IgnoreRule):
             assert rule.source is not None
-            if fnmatch.fnmatch(Path(path).name, rule.source):
+            if fnmatch.fnmatch(Path(str(path)).name, rule.source):
                 return None, rule
     return str(path), None
 
@@ -481,7 +482,7 @@ def _apply_src_to_dest_rules(
 
 # Helper to resolve symlinks and apply rules
 def _apply_dest_to_src_rules(
-    path: str | os.PathLike | _DirEntry,
+    path: str | os.PathLike[str] | _DirEntry,
     *,
     write: bool,
     accept_src: bool = False,
@@ -496,7 +497,7 @@ def _apply_dest_to_src_rules(
 
     if not path:
         return None, None
-    fake_path = _os_path_abspath(path)
+    fake_path: str = _os_path_abspath(str(path))
     if str(path).endswith("/"):
         fake_path = fake_path + "/"
     original_path = path
@@ -514,11 +515,14 @@ def _apply_dest_to_src_rules(
             if rule.source != rule.dest and fake_path.startswith(rule.source[:-1]):
                 if not accept_src and _check_alias.get():
                     return None, rule
-                relative = fake_path[len(rule.source) :]
-                new_path = os.path.join(rule.dest, relative)
-                if not fake_path.endswith("/") and relative == "":
-                    new_path = new_path[:-1]
-                return new_path, None
+                if _check_alias.get():
+                    relative = fake_path[len(rule.source) :]
+                    new_path = os.path.join(rule.dest, relative)
+                    if not fake_path.endswith("/") and relative == "":
+                        new_path = new_path[:-1]
+                    return new_path, None
+                # When _check_alias is False, allow direct access to source without remapping
+                return fake_path, None
 
             if fake_path.startswith(rule.dest) or fake_path == rule.dest[:-1]:
                 if fake_path == rule.dest[:-1]:
@@ -527,7 +531,7 @@ def _apply_dest_to_src_rules(
                     fake_path_dir = fake_path
                 if not rule.write and write:
                     if is_learning_mode():
-                        add_learning_rule(LearnFileRule(Path(path), True))
+                        add_learning_rule(LearnFileRule(Path(str(path)), True))
                     else:
                         raise RulePermissionError(
                             f"Cannot write to {rule.dest!r}. "
@@ -550,7 +554,7 @@ def _apply_dest_to_src_rules(
                     return None, rule
             else:
                 if fnmatch.fnmatch(
-                    Path(original_path).name, rule.source
+                    Path(str(original_path)).name, rule.source
                 ) or fnmatch.fnmatch(Path(fake_path).name, rule.source):
                     return None, rule
         else:
@@ -558,7 +562,9 @@ def _apply_dest_to_src_rules(
     return None, None
 
 
-def _raise_ignore(file: str | bytes | os.PathLike | int, rule: FilesRule) -> NoReturn:
+def _raise_ignore(
+    file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int, rule: FilesRule
+) -> NoReturn:
     assert rule is not None
 
     ex = RuleFileNotFoundError(
@@ -581,17 +587,17 @@ def _raise_access(file: str) -> NoReturn:
 
 
 # %% Generic wrapper
-# def _wrap_empty(func: Callable) -> Callable:
+# def _wrap_empty(func: [...,Any]) -> Callable[...,Any]:
 #     return func
 
 
-# def _wrap_reload_module(func: Callable, *, name: str) -> ModuleType:
+# def _wrap_reload_module(func: Callable[...,Any], *, name: str) -> ModuleType:
 #     # Use _f(_wrap_reload_module, name="io") to refresh a module in another module
 #     import sys
 #     return sys.modules[name]
 
 
-def _wrap_buitins_open(func: Callable) -> Callable:
+def _wrap_buitins_open(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
         file: str | None,
@@ -601,7 +607,7 @@ def _wrap_buitins_open(func: Callable) -> Callable:
         errors: str | None = None,
         newline: str | None = None,
         closefd: bool = True,
-        opener: Callable | None = None,
+        opener: Callable[..., Any] | None = None,
     ) -> Any:
         if isinstance(file, _DirEntry):
             file = str(file)
@@ -635,7 +641,7 @@ def _wrap_buitins_open(func: Callable) -> Callable:
     return wrapper
 
 
-# def _wrap_test(func: Callable) -> Callable:
+# def _wrap_test(func: Callable[...,Any]) -> Callable[...,Any]:
 #     @functools.wraps(func)
 #     def wrapper(
 #             *args,**kwargs
@@ -646,10 +652,14 @@ def _wrap_buitins_open(func: Callable) -> Callable:
 #
 
 
-def _wrap_filename(func: Callable, *, write: bool, learn: bool = True) -> Callable:
+def _wrap_filename(
+    func: Callable[..., Any], *, write: bool, learn: bool = True
+) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        file: str | bytes | os.PathLike | int, *args: Any, **kwargs: dict[str, Any]
+        file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
+        *args: Any,
+        **kwargs: dict[str, Any],
     ) -> Any:
 
         # Detect call from posixpath
@@ -658,7 +668,7 @@ def _wrap_filename(func: Callable, *, write: bool, learn: bool = True) -> Callab
         if isinstance(file, bytes):
             file = os.fsdecode(file)
         file = cast(str, file)
-        remapped, rule = _apply_dest_to_src_rules(cast(str, file), write=write)
+        remapped, rule = _apply_dest_to_src_rules(file, write=write)
         if rule:
             _raise_ignore(file, rule)
         if not remapped:
@@ -674,11 +684,11 @@ def _wrap_filename(func: Callable, *, write: bool, learn: bool = True) -> Callab
 
 
 def _body_two_filenames(
-    func: Callable,
+    func: Callable[..., Any],
     in_write: bool,
     out_write: bool,
-    src: str | bytes | os.PathLike,
-    dest: str | bytes | os.PathLike,
+    src: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+    dest: str | bytes | os.PathLike[str] | os.PathLike[bytes],
     *args: Any,
     **kwargs: dict[str, Any],
 ) -> Any:
@@ -689,10 +699,10 @@ def _body_two_filenames(
         dest = os.fsdecode(dest)
     src = cast(str, src)
     dest = cast(str, dest)
-    remapped_src, rule1 = _apply_dest_to_src_rules(cast(str, src), write=in_write)
+    remapped_src, rule1 = _apply_dest_to_src_rules(src, write=in_write)
     if rule1:
         _raise_ignore(src, rule1)
-    remapped_dest, rule2 = _apply_dest_to_src_rules(cast(str, dest), write=out_write)
+    remapped_dest, rule2 = _apply_dest_to_src_rules(dest, write=out_write)
     if rule2:
         _raise_ignore(dest, rule2)
     if remapped_src is None and rule1 is not None:
@@ -715,12 +725,12 @@ def _body_two_filenames(
 
 
 def _wrap_two_filenames(
-    func: Callable, *, in_write: bool = False, out_write: bool = True
-) -> Callable:
+    func: Callable[..., Any], *, in_write: bool = False, out_write: bool = True
+) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        src: str | bytes | os.PathLike,
-        dest: str | bytes | os.PathLike,
+        src: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        dest: str | bytes | os.PathLike[str] | os.PathLike[bytes],
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> Any:
@@ -732,25 +742,25 @@ def _wrap_two_filenames(
 
 
 def _wrap_shutil_copytree(
-    func: Callable,
-) -> Callable:
+    func: Callable[..., Any],
+) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        src: str | bytes | os.PathLike,
-        dest: str | bytes | os.PathLike,
+        src: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        dest: str | bytes | os.PathLike[str] | os.PathLike[bytes],
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> Any:
         try:
-            _check_alias.set(False)
+            _ = _check_alias.set(False)
             return _body_two_filenames(func, False, True, src, dest, *args, **kwargs)
         finally:
-            _check_alias.set(True)
+            _ = _check_alias.set(True)
 
     return wrapper
 
 
-# def _wrap_os_path_realpath(func: Callable) -> Callable:
+# def _wrap_os_path_realpath(func: Callable[...,Any]) -> Callable[...,Any]:
 #     @functools.wraps(func)
 #     def wrapper(file: str | bytes | os.PathLike) -> Any:
 #         # Detect call from posixpath
@@ -770,10 +780,10 @@ def _wrap_shutil_copytree(
 #     return wrapper
 
 
-def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
+def _wrap_os_stat(func: Callable[..., Any], *, write: bool) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        path: str | bytes | os.PathLike | int,
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         *,
         dir_fd: int | None = None,
         follow_symlinks: bool = True,
@@ -803,11 +813,11 @@ def _wrap_os_stat(func: Callable, *, write: bool) -> Callable:
     return wrapper
 
 
-def _wrap_os_path_samefile(func: Callable) -> Callable:
+def _wrap_os_path_samefile(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        f1: str | bytes | os.PathLike,
-        f2: str | bytes | os.PathLike,
+        f1: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        f2: str | bytes | os.PathLike[str] | os.PathLike[bytes],
     ) -> Any:
         if isinstance(f1, int) or isinstance(f2, int):
             return func(f1, f2)
@@ -818,12 +828,12 @@ def _wrap_os_path_samefile(func: Callable) -> Callable:
         f1 = cast(str, f1)
         f2 = cast(str, f2)
         # Detect call from posixpath
-        remapped_src, rule1 = _apply_dest_to_src_rules(cast(str, f1), write=False)
+        remapped_src, rule1 = _apply_dest_to_src_rules(f1, write=False)
         if rule1:
             _raise_ignore(f1, rule1)
         remapped_dest = None
         if remapped_src is not None:
-            remapped_dest, rule2 = _apply_dest_to_src_rules(cast(str, f2), write=False)
+            remapped_dest, rule2 = _apply_dest_to_src_rules(f2, write=False)
             if rule2:
                 _raise_ignore(f2, rule2)
         if remapped_dest is None:
@@ -833,20 +843,24 @@ def _wrap_os_path_samefile(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_os_chdir(func: Callable, *, write: bool) -> Callable:
+def _wrap_os_chdir(func: Callable[..., Any], *, write: bool) -> Callable[..., Any]:
     @functools.wraps(func)
-    def wrapper(path: str | bytes | os.PathLike | int) -> None:
+    def wrapper(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
+    ) -> None:
 
         # Detect call from posixpath
         if isinstance(path, int):
             return func(path)
         if isinstance(path, bytes):
             path = os.fsdecode(path)
+        if isinstance(path, _DirEntry):
+            path = str(path)
         path = cast(str, path)
 
         if isinstance(path, int):
             return func(path)
-        new_dir = cast(str, os.fspath(path))
+        new_dir = os.fspath(path)
         if not new_dir.endswith("/"):
             new_dir = new_dir + "/"
         remapped, rule = _apply_dest_to_src_rules(new_dir, write=write)
@@ -863,7 +877,7 @@ def _wrap_os_chdir(func: Callable, *, write: bool) -> Callable:
     return wrapper
 
 
-def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
+def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
         self: Any,
@@ -889,10 +903,10 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
             while True:
                 try:
                     if check_alias:
-                        _check_alias.set(False)
+                        _ = _check_alias.set(False)
                     name = next(it)
                     if check_alias:
-                        _check_alias.set(True)
+                        _ = _check_alias.set(True)
                     remapped_filter, rule = _apply_src_to_dest_rules(
                         str(name), accept_src=False, accept_dest=True
                     )
@@ -904,7 +918,7 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
                         # yield Path(remapped_filter).relative_to(self)
                         yield Path(remapped_filter)
                 except StopIteration:
-                    _check_alias.set(True)
+                    _ = _check_alias.set(True)
                     break
 
         extra: dict[str, Any] = {}
@@ -914,7 +928,7 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
             extra = {"recurse_symlinks": recurse_symlinks}
 
         if remapped and _check_alias.get():
-            _check_alias.set(False)
+            _ = _check_alias.set(False)
             do_filter = filter(
                 func(
                     Path(remapped),
@@ -922,7 +936,7 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
                     **extra,
                 )
             )
-            _check_alias.set(True)
+            _ = _check_alias.set(True)
         else:
             do_filter = filter(
                 func(
@@ -937,10 +951,10 @@ def _wrap_pathlib_Path_glob(func: Callable) -> Callable:
 
 
 # %% os wrapper
-def _wrap_os_open(func: Callable) -> Callable:
+def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        path: str | bytes | os.PathLike | int,
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         flags: int,
         mode: int = 0x777,
         *,
@@ -954,12 +968,12 @@ def _wrap_os_open(func: Callable) -> Callable:
         # Detect call from posixpath
         if isinstance(path, int):
             return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
+        path = cast(str, path)
         if dir_fd is not None:
             remapped, rule = _apply_ignore_rule(path)
             if rule:
                 _raise_ignore(path, rule)
             return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
-        path = cast(str, path)
         if isinstance(flags, int):
             need_to_write = bool(
                 (flags & os.O_WRONLY) or (flags & os.O_RDWR) or (flags & os.O_APPEND)
@@ -976,10 +990,10 @@ def _wrap_os_open(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
+def _wrap_os_access(func: Callable[..., Any], *, write: bool) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        path: str | bytes | os.PathLike | int,
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         mode: int,
         *,
         dir_fd: int | None = None,
@@ -1025,7 +1039,7 @@ def _wrap_os_access(func: Callable, *, write: bool) -> Callable:
     return wrapper
 
 
-def _wrap_os_getcwd(func: Callable) -> Callable:
+def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper() -> str:
         # Detect call from posixpath
@@ -1051,12 +1065,12 @@ def _wrap_os_getcwd(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_os_getcwdb(func: Callable) -> Callable:
+def _wrap_os_getcwdb(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper() -> bytes:
         # Detect call from posixpath
-        dir = func()
-        new_dir = os.fspath(dir.decode())
+        dir: bytes = func()
+        new_dir: str = os.fspath(dir.decode())
         if not new_dir.endswith("/"):
             new_dir = new_dir + "/"
 
@@ -1073,14 +1087,16 @@ def _wrap_os_getcwdb(func: Callable) -> Callable:
             remapped = remapped[:-1]
         if remapped == new_dir:
             return dir
-        return str(remapped).encode(sys.getfilesystemencoding())
+        return remapped.encode(sys.getfilesystemencoding())
 
     return wrapper
 
 
 def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]:
     @functools.wraps(func)
-    def wrapper(path: str | os.PathLike | bytes | int | None = None) -> list[str]:
+    def wrapper(
+        path: str | os.PathLike[str] | os.PathLike[bytes] | bytes | int | None = None,
+    ) -> list[str]:
 
         if isinstance(path, int):
             return func(path=path)
@@ -1120,14 +1136,18 @@ def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]
     return wrapper
 
 
-def _wrap_os_readlink(func: Callable) -> Callable:
+def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
-    def wrapper(path: str | bytes | os.PathLike, *, dir_fd: int | None = None) -> str:
+    def wrapper(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        *,
+        dir_fd: int | None = None,
+    ) -> str:
 
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
-        remapped_first, rule = _apply_dest_to_src_rules(cast(str, path), write=False)
+        remapped_first, rule = _apply_dest_to_src_rules(path, write=False)
         if rule:
             _raise_ignore(path, rule)
         if not remapped_first:
@@ -1147,7 +1167,7 @@ def _wrap_os_readlink(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_os_symlink(func: Callable) -> Callable:
+def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
         src: StrOrBytesPath,
@@ -1170,7 +1190,7 @@ def _wrap_os_symlink(func: Callable) -> Callable:
             src = os.fsdecode(dst)
         src = cast(str, src)
         dst = cast(str, dst)
-        remapped, rule = _apply_dest_to_src_rules(cast(str, dst), write=True)
+        remapped, rule = _apply_dest_to_src_rules(dst, write=True)
         if rule:
             _raise_ignore(dst, rule)
         if not remapped:
@@ -1196,7 +1216,7 @@ def _wrap_os_symlink(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_os_unlink(func: Callable) -> Callable:
+def _wrap_os_unlink(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
         if dir_fd is not None:
@@ -1204,7 +1224,7 @@ def _wrap_os_unlink(func: Callable) -> Callable:
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
-        remapped, rule = _apply_dest_to_src_rules(cast(str, path), write=False)
+        remapped, rule = _apply_dest_to_src_rules(path, write=False)
         if rule:
             _raise_ignore(path, rule)
         if not remapped:
@@ -1218,7 +1238,7 @@ def _wrap_os_unlink(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_os_rmdir(func: Callable) -> Callable:
+def _wrap_os_rmdir(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
         if dir_fd is not None:
@@ -1226,7 +1246,7 @@ def _wrap_os_rmdir(func: Callable) -> Callable:
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
-        remapped, rule = _apply_dest_to_src_rules(cast(str, path), write=False)
+        remapped, rule = _apply_dest_to_src_rules(path, write=False)
         if rule:
             _raise_ignore(path, rule)
         if not remapped:
@@ -1240,7 +1260,7 @@ def _wrap_os_rmdir(func: Callable) -> Callable:
     return wrapper
 
 
-class _ScanDirContextManager(Iterator):
+class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
     """
     A context manager that wraps os.scandir and implements the context manager kind.
     """
@@ -1248,6 +1268,7 @@ class _ScanDirContextManager(Iterator):
     __slot__ = ("directory", "real_directory", "scanner")
 
     def __init__(self, directory: str):
+        super().__init__()
         self.directory = directory
         if _check_alias.get():
             new_path, rule = _apply_dest_to_src_rules(
@@ -1265,7 +1286,7 @@ class _ScanDirContextManager(Iterator):
             else:
                 _raise_access(directory)
         self.real_directory = new_path
-        self.scanner: ContextManager | Iterator | None = None
+        self.scanner: Any = None
 
     def close(self) -> None:
         if self.scanner and hasattr(self.scanner, "close"):
@@ -1276,7 +1297,7 @@ class _ScanDirContextManager(Iterator):
         Enter the context manager, opening the scandir iterator.
         """
         self.scanner = _scandir(self.real_directory)
-        self.scanner.__enter__()
+        _ = self.scanner.__enter__()
         return self
 
     def __exit__(
@@ -1289,20 +1310,18 @@ class _ScanDirContextManager(Iterator):
         Exit the context manager, closing the scandir iterator.
         """
         if self.scanner is not None:
-            return cast(ContextManager, self.scanner).__exit__(
-                exc_type, exc_val, exc_tb
-            )
+            return self.scanner.__exit__(exc_type, exc_val, exc_tb)
         return False  # Don't suppress exceptions
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[os.DirEntry[str]]:
         """h
         Make the context manager iterable.
         """
         if is_learning_mode() and OPTIMIZE:
-            return cast(Iterator, self.scanner).__iter__()  # type: ignore[union-attr]
+            return cast(Any, self.scanner).__iter__()  # type: ignore[union-attr]
         return self
 
-    def __next__(self) -> os.DirEntry:
+    def __next__(self) -> os.DirEntry[str]:
         """
         Get the next file entry from the directory.
         """
@@ -1315,7 +1334,7 @@ class _ScanDirContextManager(Iterator):
         while True:
             try:
                 while True:
-                    entry = cast(Iterator, self.scanner).__next__()
+                    entry: os.DirEntry[str] = self.scanner.__next__()
                     if _check_alias.get():
                         dest_path, rule = _apply_src_to_dest_rules(
                             entry.path, accept_src=False, accept_dest=True
@@ -1326,18 +1345,20 @@ class _ScanDirContextManager(Iterator):
                         pass  # Ignore
                     elif dest_path is not None:
                         _entry = _DirEntry(entry, dest_path)
-                        return cast(os.DirEntry, _entry)
+                        return cast(os.DirEntry[str], _entry)
             except StopIteration:
                 raise
 
 
-def _wrap_os_scandir(func: Callable) -> Callable:
+def _wrap_os_scandir(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Wrap os.scandir to handle exceptions and return an iterator or None.
     """
 
     @functools.wraps(func)
-    def wrapper(path: str | bytes | os.PathLike | None = None) -> Iterator:
+    def wrapper(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | None = None,
+    ) -> Iterator[os.DirEntry[str]]:
         if path is None:
             path = "."
         if isinstance(path, int):
@@ -1353,17 +1374,17 @@ def _wrap_os_scandir(func: Callable) -> Callable:
 # %% io wrapper
 
 
-def _wrap_io_open(func: Callable) -> Callable:
+def _wrap_io_open(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(
-        file: str | bytes | os.PathLike | int,
+        file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         mode: str | None = "r",
         buffering: int | None = -1,
         encoding: str | None = None,
         errors: str | None = None,
         newline: str | None = None,
         closefd: bool = True,
-        opener: Callable | None = None,
+        opener: Callable[..., Any] | None = None,
     ) -> Any:
 
         # Detect call from posixpath
@@ -1409,16 +1430,16 @@ def _wrap_io_open(func: Callable) -> Callable:
     return wrapper
 
 
-def _wrap_io_FileIO(func: Callable) -> Callable:
+def _wrap_io_FileIO(func: Callable[..., Any]) -> Callable[..., Any]:
     from io import FileIO as io_FileIO
 
     class FileIO(io_FileIO):
         def __new__(
             cls,
-            file: str | bytes | os.PathLike | int,
+            file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
             mode: str | None = "r",
             closefd: bool = True,
-            opener: Callable | None = None,
+            opener: Callable[..., Any] | None = None,
         ) -> Any:
             # Detect call from posixpath
             if mode is None:
@@ -1449,11 +1470,11 @@ def _wrap_io_FileIO(func: Callable) -> Callable:
                     _raise_access(file)
             instance = io_FileIO.__new__(io_FileIO)
             instance.__init__(  # type: ignore[misc]
-                file=remapped,
-                mode=mode,
-                closefd=closefd,
-                opener=opener,
-            )
+                    file=remapped,
+                    mode=mode,
+                    closefd=closefd,
+                    opener=opener,
+                )
             return instance
 
     return FileIO
@@ -1470,7 +1491,7 @@ def _wrap__io(module: ModuleType) -> ModuleType:
 
 
 # Wrapper for factory to wrapper ;-)
-def _f(func: Callable, **kwargs: Any) -> Callable:
+def _f(func: Callable[..., Any], **kwargs: Any) -> Callable[..., Any]:
     def wrapper() -> Any:
         def wrapper2(original: Any) -> Any:
             return func(original, **kwargs)
@@ -1481,7 +1502,7 @@ def _f(func: Callable, **kwargs: Any) -> Callable:
     return wrapper()
 
 
-_default_rules: dict[str, Callable] = {
+_default_rules: dict[str, Callable[..., Any]] = {
     "os.chdir": _f(_wrap_os_chdir, write=False),
     # ALLOW os.fchdir
     "os.getcwd": _f(_wrap_os_getcwd),
@@ -1631,7 +1652,7 @@ _default_rules: dict[str, Callable] = {
 }
 
 
-def _wrap_pathlib_3_10(normal_accessor: Any) -> Callable:
+def _wrap_pathlib_3_10(normal_accessor: Any) -> Callable[..., Any]:
     # set to the patched version
     normal_accessor.stat = os.stat
     normal_accessor.open = io.open
@@ -1654,13 +1675,13 @@ def _wrap_pathlib_3_10(normal_accessor: Any) -> Callable:
     return normal_accessor
 
 
-def patch_rules(learn: bool) -> dict[str, Callable]:
+def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
     """Provide file system patching rules for guard activation.
 
     Returns:
         Dictionary of file system module patches.
     """
-    rules: dict[str, Callable] = dict(_default_rules)
+    rules: dict[str, Callable[..., Any]] = dict(_default_rules)
     if sys.version_info[:2] == (3, 10):
         rules |= {"pathlib._normal_accessor": _f(_wrap_pathlib_3_10)}
     if sys.platform != "win32" and sys.platform != "linux":
@@ -1678,7 +1699,7 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
 
 
 # %%
-def activate_guard(rules: FileRules) -> None:
+def activate_guard(rules: FilesRules) -> None:
     """Activate file system guard with specified rules.
 
     Args:

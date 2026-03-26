@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.sb_types import ConfigLine
 

@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import NoReturn
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandbox, sandboxes
 

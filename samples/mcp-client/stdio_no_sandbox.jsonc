@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-  // Version without `python-sb`. The user MCP client decide the rules to use
+  "mcp_server": {
     "mcp_server": {
       "cwd": "../mcp-server",
       "command": "python",

@@ -1,6 +1,6 @@
 import logging
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from .guard.test_guard_io import (
     _activate_guard_import_for_tests,

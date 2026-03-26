@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.sandboxes_api import (
     _check__main__coroutine,
