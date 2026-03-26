@@ -7,7 +7,7 @@ after creation. Used for security configurations and environment variables
 where immutability ensures configuration integrity.
 """
 
-import collections
+import collections.abc
 from typing import (
     Any,
     Callable,
@@ -88,7 +88,9 @@ class ImmutableDict(
 
                 # Build parallel tuples of keys and values
                 keys = tuple(item[0] for item in items if item)
-                values = tuple(item[1] if len(item) > 1 else None for item in items)
+                values = tuple(
+                    item[1] if len(item) > 1 else None for item in items  # type: ignore[misc]
+                )
 
         # Create the tuple-subclass with two items: (keys, values)
         obj = tuple.__new__(cls, (keys, values))

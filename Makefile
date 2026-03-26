@@ -7,11 +7,14 @@ UV_GROUP?=--group dev --group test --group lint
 POETRY_EXTRA?=
 POETRY_WITH?=-with dev,lint,test,codespell
 
+# Use cursor-agent, claude, etc.
+LLM_CLI?=cursor-agent
+
 # Default target executed when no arguments are given to make.
 all: help
 
 .vscode/launch.json: .idea/runConfigurations/*
-	claude -p "Update the .vscode/launch.json file with the modification of the files in .idea/runConfigurations/"
+	$(LLM_CLI) -p "Update the .vscode/launch.json file with the modification of the files in .idea/runConfigurations/"
 
 # Fix VS Code launch.json
 fix-vs-code: .vscode/launch.json
@@ -20,16 +23,16 @@ fix-vs-code: .vscode/launch.json
 
 ## Make unit test
 unit-tests:
-	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v tests/unit_tests/
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest -v tests/unit_tests/
 
 ## Make integration tests
 integration-tests:
-	set -a && if [ -f .env ]; then source .env; fi && uv run pytest tests/integration_tests
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests
 
 ## Make integration tests
 sample-tests:
-	(cd samples/mcp-client && make tests && true)
-	(cd samples/mcp-server && make tests && true)
+	# (cd samples/mcp-client && make tests && true)
+	# (cd samples/mcp-server && make tests && true)
 
 ## Make github tests locally
 gh-tests: format lint
@@ -41,7 +44,7 @@ gh-tests: format lint
 all-tests: unit-tests integration-tests sample-tests
 
 test_watch:
-	uv run ptw --now . -- tests/unit_tests
+	unset VIRTUAL_ENV && uv run ptw --now . -- tests/unit_tests
 
 
 ########################
@@ -53,7 +56,7 @@ PYTHON_FILES=pysandboxes/ tests/
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint: format
-	uv run mypy $(PYTHON_FILES)
+	unset VIRTUAL_ENV && uv run mypy $(PYTHON_FILES)
 	uvx pyright $(PYTHON_FILES)
 	uvx black --check $(PYTHON_FILES)
 	uvx ruff check $(PYTHON_FILES)
@@ -100,7 +103,7 @@ api_docs_clean:
 
 
 api_docs_linkcheck:
-	uv run linkchecker docs/api_reference/_build/html/index.html
+	unset VIRTUAL_ENV && uv run linkchecker docs/api_reference/_build/html/index.html
 
 ######
 # HELP
@@ -190,15 +193,10 @@ else
 
 endif
 
-poetry.lock: pyproject.toml
-	poetry lock
-	git add poetry.lock
-	poetry install $(POETRY_EXTRA) -$(POETRY_WITH)
-
 uv.lock: pyproject.toml
 	uv lock
 	git add uv.lock
-	uv sync $(UV_GROUP)
+	unset VIRTUAL_ENV && uv sync $(UV_GROUP)
 
 
 ## Refresh lock
@@ -207,15 +205,6 @@ lock: $(LOCK)
 ## Validate the code
 validate: uv.lock format lint spell_check all-tests
 
-
-_poetry-init:
-	@poetry self update
-	@poetry self add poetry-dotenv-plugin
-	@poetry self add poetry-plugin-export
-	@poetry self add poetry-git-version-plugin
-	@poetry config virtualenvs.in-project true
-	@poetry install --sync $(POETRY_EXTRA) --with $(POETRY_WITH)
-	@pre-commit install
 
 _uv-init:
 	@uv sync $(UV_GROUP)

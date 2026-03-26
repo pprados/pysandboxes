@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import importlib
+import importlib.util
 import logging
 import os
 import signal
@@ -143,10 +144,10 @@ def _python_interactive(
         if ban:
             print(banner)
         print(
-            f"IPython {IPython.__version__} -- An enhanced Interactive Python. "
+            f"IPython {getattr(IPython, '__version__', 'unknown')} -- An enhanced Interactive Python. "
             f"Type '?' for help."
         )
-        IPython.start_ipython(
+        IPython.start_ipython(  # type: ignore[attr-defined]
             argv=[],
             user_ns=None,
             config=c,

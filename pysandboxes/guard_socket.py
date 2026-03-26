@@ -346,6 +346,7 @@ def _parse_rule(
         else:
             parser_directions = tuple([Direction[d] for d in split_directions])
 
+    ports_list_or_range: tuple[int, ...] | range = ()
     try:
         ports_list_or_range = _convert_ports_range(port_spec_str)
     except ValueError:
@@ -760,13 +761,10 @@ def _check_address_with_rules(
 
 
 # see _scoket.pyi
-if sys.version_info[:2] >= (3, 12):
-    from collections.abc import Buffer
-
-    ReadableBuffer: TypeAlias = Buffer  # stable
-else:
-    ReadableBuffer: TypeAlias = Any  # stable
-_Address: TypeAlias = tuple[Any, ...] | str | ReadableBuffer
+# ReadableBuffer type for socket operations
+# Using Any to avoid Buffer import issues with pyright
+ReadableBuffer: TypeAlias = Any
+_Address: TypeAlias = tuple[Any, ...] | str | Any
 _RetAddress: TypeAlias = Any
 
 _pin_dns: ImmutableDict[str, tuple[AddrInfoType, ...]] = ImmutableDict({})

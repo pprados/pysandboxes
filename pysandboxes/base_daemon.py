@@ -186,8 +186,6 @@ class FakeDaemon(BaseDaemon):
     ) -> "AllRules":
         return all_rules
 
-    is_started = True
-
     async def _start(
         self,
         all_rules: "AllRules",

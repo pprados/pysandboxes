@@ -26,7 +26,6 @@ from typing import (
     Any,
     Callable,
     Coroutine,
-    TypeVar,
 )
 
 from .base_daemon import BaseDaemon, FakeDaemon
@@ -43,8 +42,6 @@ from .tools import (
 logger = logging.getLogger(__name__)
 
 _lock = Lock()
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 def _check__main__coroutine(coroutine: Any) -> None:
@@ -65,7 +62,7 @@ def _check__main__coroutine(coroutine: Any) -> None:
 
 
 def sandbox(
-    _func: F | None = None,
+    _func: Callable[..., Any] | None = None,
 ) -> Callable[..., Any]:
     """Decorator to run a function in a sandbox.
 
