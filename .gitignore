@@ -169,9 +169,13 @@ netfilter*.net
 run.sh
 .local.py-sandboxes*
 .devpi/
-.claude/
 etudes/
 samples/langgraph-demo/
 tmp/
 tst_wasm/
 reports/
+
+.container-use/
+# https://oraios.github.io/serena
+.serena/
+

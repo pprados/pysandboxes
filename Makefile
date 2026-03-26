@@ -16,8 +16,16 @@ all: help
 .vscode/launch.json: .idea/runConfigurations/*
 	$(LLM_CLI) -p "Update the .vscode/launch.json file with the modification of the files in .idea/runConfigurations/"
 
+.PHONY: fix-vs-code
 # Fix VS Code launch.json
 fix-vs-code: .vscode/launch.json
+
+
+.PHONY: fix-gemini
+.gemini/commands/*: .ia/commands/*.md scripts/update_gemini_cmd.py
+	uv run ./scripts/update_gemini_cmd.py
+
+fix-gemini: .gemini/commands/*
 
 .env:
 
