@@ -432,7 +432,7 @@ class SSEServerDaemon(BaseSSESandbox):
             self.task = loop.create_task(_run_daemon(), name="ServerTask")
 
             await start_event.wait()
-            while not self.uvicorn.started:
+            while self.uvicorn and not self.uvicorn.started:
                 await asyncio.sleep(POLLING_DELAY)
             self._accept_incoming = True
             self.stopped = False

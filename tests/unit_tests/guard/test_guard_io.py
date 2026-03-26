@@ -22,7 +22,14 @@ def _deactivate_all_rules() -> None:
     _deactivate_guard_import()
 
 
+_guard_import_for_tests_activated: bool = False
+
+
 def _activate_guard_import_for_tests() -> None:
+    global _guard_import_for_tests_activated
+    if _guard_import_for_tests_activated:
+        return
+    _guard_import_for_tests_activated = True
     from pysandboxes.guard_files import patch_rules as file_patch_rules
     from pysandboxes.guard_import import (
         activate_guard_import,

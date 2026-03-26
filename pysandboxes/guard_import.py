@@ -13,6 +13,8 @@ matching and learning mode for automatic rule generation.
 
 import importlib
 import importlib.abc
+import importlib.machinery
+import importlib.metadata
 import importlib.util
 import itertools
 import logging

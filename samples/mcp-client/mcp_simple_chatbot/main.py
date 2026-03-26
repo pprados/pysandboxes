@@ -47,7 +47,7 @@ class Configuration:
 
     @staticmethod
     def load_config(file_path: str) -> Dict[str, Any]:
-        """Load server configuration from JSON file."""
+        """Load server configuration from JSONC file."""
         body = Path(file_path).read_text()
         body = resolve_env_variables(body, os.environ)
         return json.loads(body)
@@ -323,7 +323,7 @@ def main() -> int:
         dest="mcp",
         type=str,
         required=False,
-        default="servers_config.json",
+        default="servers_config.jsonc",
         help="The mcp server configuration file.",
     )
 

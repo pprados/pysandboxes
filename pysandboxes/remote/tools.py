@@ -107,7 +107,7 @@ def get_default_gateway_info() -> tuple[str, str] | None:
     Returns:
         Tuple of (gateway_ip, interface_name) or None if no gateway found.
     """
-    gws: dict[str, Any] = netifaces.gateways()
+    gws: dict[Any, Any] = netifaces.gateways()
 
     # Retrieve default IPv4 gateway
     try:

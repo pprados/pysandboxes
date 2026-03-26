@@ -259,14 +259,17 @@ def parse_config(
 
     from pysandboxes.os_sandbox import providers_factory
 
+    from .immutable_dict import ImmutableDict
+
     providers_rules, others = parse_provider_rules(others)
 
+    os_sandbox_params: ImmutableDict[str, Any]
     if os_sandbox != "error":
         os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(
             providers_rules, errors
         )
     else:
-        os_sandbox_params = {}
+        os_sandbox_params = ImmutableDict({})
 
     socket_rules, others, pin_dns = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
@@ -300,7 +303,7 @@ def parse_config(
         config=config,
         envs=sandbox_env,
         os_sandbox=os_sandbox,
-        os_sandbox_params=os_sandbox_params,
+        os_sandbox_params=os_sandbox_params,  # Already ImmutableDict from parse_rules
         use_py_sandbox=use_py_sandbox,
         port=port,
         learning_path=learning_path,

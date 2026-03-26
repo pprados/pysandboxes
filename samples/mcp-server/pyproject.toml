@@ -36,6 +36,9 @@ dev = [
     "rich>=14.0",
     "mcp[cli]>=1.14.0",
     "json-with-comments>=1.2.10",
+    "pyright>=1.1", 
+    "pytest>=8.3.3", 
+    "ruff>=0.6.9"
 ]
 test = [
     "pytest>=7.3.0",
@@ -72,7 +75,7 @@ line-length = 120
 target-version = "py310"
 
 [tool.uv]
-dev-dependencies = ["pyright>=1.1.379", "pytest>=8.3.3", "ruff>=0.6.9"]
+
 
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository

@@ -515,14 +515,11 @@ def _apply_dest_to_src_rules(
             if rule.source != rule.dest and fake_path.startswith(rule.source[:-1]):
                 if not accept_src and _check_alias.get():
                     return None, rule
-                if _check_alias.get():
-                    relative = fake_path[len(rule.source) :]
-                    new_path = os.path.join(rule.dest, relative)
-                    if not fake_path.endswith("/") and relative == "":
-                        new_path = new_path[:-1]
-                    return new_path, None
-                # When _check_alias is False, allow direct access to source without remapping
-                return fake_path, None
+                relative = fake_path[len(rule.source) :]
+                new_path = os.path.join(rule.dest, relative)
+                if not fake_path.endswith("/") and relative == "":
+                    new_path = new_path[:-1]
+                return new_path, None
 
             if fake_path.startswith(rule.dest) or fake_path == rule.dest[:-1]:
                 if fake_path == rule.dest[:-1]:
@@ -1470,11 +1467,11 @@ def _wrap_io_FileIO(func: Callable[..., Any]) -> Callable[..., Any]:
                     _raise_access(file)
             instance = io_FileIO.__new__(io_FileIO)
             instance.__init__(  # type: ignore[misc]
-                    file=remapped,
-                    mode=mode,
-                    closefd=closefd,
-                    opener=opener,
-                )
+                file=remapped,
+                mode=mode,
+                closefd=closefd,
+                opener=opener,
+            )
             return instance
 
     return FileIO

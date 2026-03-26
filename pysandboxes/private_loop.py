@@ -13,7 +13,7 @@ import asyncio
 import functools
 import logging
 import threading
-from asyncio import AbstractEventLoop, Future
+from asyncio import AbstractEventLoop
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
@@ -227,9 +227,7 @@ async def purge_loop() -> AbstractEventLoop | None:
         # 3. Wait for tasks to be cancelled/finished
         # Return exceptions=True to not raise CancelledError here,
         # as we expect the tasks to be cancelled.
-        results: list[Future[tuple[Any, ...]]] = await asyncio.gather(
-            *tasks, return_exceptions=True
-        )
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Optional: Log the results of cancellation attempts
         for res in results:

@@ -102,7 +102,7 @@ MY_IP = _get_ip_from_interface(_get_default_interface())
 
 def _start_server(mcp_server_config: str) -> Popen | None:
     process: Popen | None = None
-    if mcp_server_config == "http.json":
+    if mcp_server_config == "http.jsonc":
         cmd = (
             "uv",
             "run",
@@ -141,9 +141,9 @@ def test_claude_evaluate_expression(
 ) -> None:
     process: Popen | None = None
     try:
-        mcp_server_config += ".json"
+        mcp_server_config += ".jsonc"
 
-        if mcp_server_config == "http.json":
+        if mcp_server_config == "http.jsonc":
             if not get_bridge_interfaces():
                 pytest.skip("Need 'bridge' interface. Use `sudo add-bridge.sh`")
 
@@ -199,7 +199,7 @@ def test_claude_fetch_webpage(
 ) -> None:
     process: Popen | None = None
     try:
-        mcp_server_config += ".json"
+        mcp_server_config += ".jsonc"
         process = _start_server(mcp_server_config)
 
         python_executable = which("python")

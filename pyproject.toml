@@ -118,6 +118,8 @@ exclude = []
 [tool.pyright]
 include = ["pysandboxes", "tests", "samples", "python-sb"]
 extraPaths = ["pysandboxes", "python-sb"]
+venvPath = "."
+venv = ".venv"
 pythonVersion = "3.10"
 typeCheckingMode = "basic"
 reportImplicitStringConcatenation = false

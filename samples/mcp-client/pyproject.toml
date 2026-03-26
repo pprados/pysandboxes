@@ -31,6 +31,8 @@ dev = [
     "ipython",
     "mcp-server",
     "pydevd>=3.4.1",
+    "pyright>=1.1.379",
+    "ruff>=0.6.9",
 #    "pydevd-pycharm>=253.28086.55",
 ]
 test = [
@@ -38,6 +40,7 @@ test = [
     # dependencies used for running tests (e.g., pytest, freezegun, response).
     # Any dependencies that do not meet that criteria will be removed.
     "pytest>=7.3.0",
+    "pytest>=8.3.3",
     "pytest-asyncio>=1.2.0",
     "pytest-dotenv>=0.5.2",
     "pytest-asyncio>=0.20.3",
@@ -80,7 +83,6 @@ line-length = 120
 target-version = "py310"
 
 [tool.uv]
-dev-dependencies = ["pyright>=1.1.379", "pytest>=8.3.3", "ruff>=0.6.9"]
 
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository
