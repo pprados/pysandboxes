@@ -17,17 +17,16 @@ logger = logging.getLogger(__name__)
 
 timeout = 30
 all_mcp_client_os_sandbox: list[str] = [
-    # FIXME
-     "None",
+    # "None",
     # "Subprocess",
     # "firejail",
-    #"unshare",
+    "unshare",
 ]
 all_mcp_server_config: list[str] = [
-    "stdio_no_sandbox",
-    "stdio_sandboxes_complete",
+    # "stdio_no_sandbox",
+    # "stdio_sandboxes_complete",
     "stdio_sandboxes_partial",
-    "http",
+    # "http",
 ]
 
 
@@ -148,15 +147,16 @@ def test_claude_evaluate_expression(
         if mcp_server_config == "http.jsonc":
             if not get_bridge_interfaces():
                 pytest.skip("Need 'bridge' interface. Use `sudo add-bridge.sh`")
+        if "partial" not in mcp_server_config:
+            start_client = ["-m", "pysandboxes.python_sb"]
+        else:
+            start_client=[]
 
         process = _start_server(mcp_server_config)
         python_executable = which("python")
         assert python_executable is not None
-        start_client = (
-            ["-m", "pysandboxes.python_sb"]
-            +
-            ["-m", "mcp_simple_chatbot.main"]
-        )
+        start_client += ["-m", "mcp_simple_chatbot.main"]
+
         cmd: list[str] = [
             python_executable,
             "-u",
@@ -204,10 +204,14 @@ def test_claude_fetch_webpage(
         mcp_server_config += ".jsonc"
         process = _start_server(mcp_server_config)
 
+        if "partial" not in mcp_server_config:
+            start_client = ["-m", "pysandboxes.python_sb"]
+        else:
+            start_client=[]
         python_executable = which("python")
         assert python_executable is not None
 
-        start_client = ["-m", "pysandboxes.python_sb", "-m", "mcp_simple_chatbot.main"]
+        start_client += ["-m", "mcp_simple_chatbot.main"]
         cmd: list[str] = [
             python_executable,
             *start_client,

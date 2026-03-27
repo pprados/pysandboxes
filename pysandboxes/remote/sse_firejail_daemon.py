@@ -369,7 +369,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         else:
             logger.debug(
                 "Activate Firejail's output (to remove, "
-                "change the level of this logger)"
+                "change the level of the logger %s)", __name__
             )
 
         # Add default parameters
