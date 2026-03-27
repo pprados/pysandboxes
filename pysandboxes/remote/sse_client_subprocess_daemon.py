@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Callable, NamedTuple
 
 import aiohttp
-from aiohttp import ClientConnectorError, ClientTimeout
+from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..guard_socket import SocketRule
@@ -195,8 +195,6 @@ async def launch_sandbox(
             *cmd,
             env=dict(envs),
             preexec_fn=preexec_fn,
-            stdout=asyncio.subprocess.PIPE,  # FIXME
-            stderr=asyncio.subprocess.PIPE,
         )
 
         # It's a good time for that
@@ -326,10 +324,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             sys.executable,
             "-u",  # Unbuffered output
         ]
-        if sys.version_info[:2] >= (3, 11):
-            cmd_parameters.append(
-                "-P"
-            )  # Don't prepend a potentially unsafe path to sys.path; also PYTHONSAFEPATH
         if sys.flags.optimize:
             cmd_parameters.append("-" + "O" * sys.flags.optimize)
         cmd_parameters.extend(self._python_args)
@@ -528,7 +522,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             env = {**os.environ, **all_rules.envs}
         else:
             env = dict(all_rules.envs)
-        env = env | extra_envs
+        env = {**os.environ, **extra_envs}
         logger.debug(
             "Launch process:" + " ".join((repr(c) if " " in c else c for c in args))
         )
@@ -551,7 +545,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 try:
                     count_loop += 1
                     if count_loop > LOOP_FOR_PING:
-                        logger.error("Is not possible to connect to the sandbox daemon")
+                        logger.error(
+                            "Is not possible to connect " "to the sandbox daemon (%s)",
+                            ping_url,
+                        )
                         raise SystemExit(-1)
                     async with session.get(
                         ping_url,
@@ -567,7 +564,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                             )
                 except TimeoutError:
                     pass  # Ignore and continue
-                except ClientConnectorError:
+                except (ClientConnectorError, ServerDisconnectedError):
                     pass  # Ignore and continue
 
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)

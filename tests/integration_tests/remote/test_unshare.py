@@ -27,7 +27,6 @@ async def start_daemon_for_tests() -> AsyncGenerator[None, None]:
 
     log_level = logging.root.getEffectiveLevel()
     all_rules = load_and_parse_config(config_path=config_path)
-    # all_rules = all_rules._replace(os_sandbox="unshare")
     all_rules = all_rules._replace(os_sandbox="unshare")
 
     await async_start_daemon(
@@ -50,23 +49,22 @@ def sync_function(a: str, b: str) -> str:
     reason="Install unshare and slirp4netns",
 )
 def test_sync_function() -> None:
-    print("hello")
-    # result_sync = sync_function("a", b="b")
-    # assert result_sync == "a b"
+    result_sync = sync_function("a", b="b")
+    assert result_sync == "a b"
 
 
-# @sandbox()
-# async def async_function(a: str, b: str) -> str:
-#     import asyncio
-#
-#     await asyncio.sleep(0)  # Simulate async operation
-#     return f"{a} {b}"
-#
-#
-# @pytest.mark.skipif(
-#     not which_command("unshare") or not which_command("slirp4netns"),
-#     reason="Install unshare and slirp4netns",
-# )
-# async def test_async_function() -> None:
-#     result_async = await async_function("a", b="b")
-#     assert result_async == "a b"
+@sandbox()
+async def async_function(a: str, b: str) -> str:
+    import asyncio
+
+    await asyncio.sleep(0)  # Simulate async operation
+    return f"{a} {b}"
+
+
+@pytest.mark.skipif(
+    not which_command("unshare") or not which_command("slirp4netns"),
+    reason="Install unshare and slirp4netns",
+)
+async def test_async_function() -> None:
+    result_async = await async_function("a", b="b")
+    assert result_async == "a b"

@@ -17,7 +17,7 @@ MAX_CONNECT_RETRY = 5  # Maximum connection attempts before raising error
 # Start and lifecycle timing
 INTERVAL_FOR_PING_DAEMON = POLLING_DELAY * 2  # Daemon ping interval
 TIMEOUT_FOR_PING = 1.0  # Ping response timeout
-LOOP_FOR_PING = 100  # Try to ping how many time?
+LOOP_FOR_PING = 100  # Try to ping how many times?
 
 # Shutdown and lifecycle timing
 TIMEOUT_GRACEFUL_SHUTDOWN = 2  # Graceful shutdown timeout

@@ -28,6 +28,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [X] unshare
   - [ ] kubernetes
   - [ ] libslirp
+  - [ ] [conainer2wasm](https://github.com/container2wasm/container2wasm)
   - [ ] micro-VM
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)

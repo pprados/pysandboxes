@@ -282,7 +282,6 @@ async def async_main(argv: List[str]) -> int:
     os.environ["LLM_TOKEN"] = "abc"
 
     config_path, extra_rules = _config(argv)
-
     for _ in range(0, RANGETEST):
         async with sandboxes(
             async_init_sandbox,

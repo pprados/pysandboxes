@@ -783,7 +783,7 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
 
 
 # Not used
-def _get_fammily(ip: str) -> int:
+def _get_family(ip: str) -> int:
     ip_object = ip_address(ip)
     if ip_object.version == 4:
         family = socket.AF_INET

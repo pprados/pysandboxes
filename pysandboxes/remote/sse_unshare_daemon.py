@@ -10,14 +10,12 @@ for networking, and standard Linux tools (mount, iptables) for isolation.
 import logging
 import os
 import site
-import subprocess
 import sys
 import threading
 from pathlib import Path
 from typing import Any, cast
 
 from pysandboxes.remote.sse_client_subprocess_daemon import DEBUG_LAUNCH
-from pysandboxes.remote.tools import suggest_package_installation
 
 try:
     from typing import override  # type: ignore[attr-defined]
@@ -206,9 +204,15 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         mounts: set[tuple[str, str, bool]] = set()
 
         # System paths
-        for p in ["/bin", "/usr", "/lib", "/lib64", "/etc"]:
+        for p in [
+            "/bin",
+            "/usr",
+            "/lib",
+            "/lib64",
+            "/etc",
+        ]:  # FIXME: tmp?
             mounts.add((p, p, False))
-
+        mounts.add((str(pipe_path), str(pipe_path), True))
         # Python environment
         python_paths = [sys.executable] + sys.path
         if hasattr(site, "getsitepackages"):
@@ -230,15 +234,21 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             elif isinstance(rule, IgnoreRule):
                 pass  # FIXME
 
-        mounts_cmds = [f'mount_readonly  "{m[0]}" "{m[1]}"' for m in mounts if not m[2]]
-        mounts_cmds += [f'mount_readwrite "{m[0]}" "{m[1]}"' for m in mounts if m[2]]
+        mounts_cmds = [f'mount_ro  "{m[0]}" "{m[1]}"' for m in mounts if not m[2]]
+        mounts_cmds += [f'mount_rw "{m[0]}" "{m[1]}"' for m in mounts if m[2]]
 
         setup_script_content = setup_sh_path.read_text().replace(
             "${PYSANDBOXES_MOUNTS}", "\n".join(mounts_cmds)
         )
         hosts = []  # FIXME
         setup_script_content = setup_script_content.replace(
+            "${PYSANDBOXES_DNS}", " ".join(map(str, dns_servers))
+        )
+        setup_script_content = setup_script_content.replace(
             "${PYSANDBOXES_HOSTS}", "\n".join(hosts)
+        )
+        setup_script_content = setup_script_content.replace(
+            "${PYSANDBOXES_NAMED_PIPE}", str(pipe_path)
         )
         # Ensure the script uses the correct netfilter file path
         setup_script_content = setup_script_content.replace(
@@ -275,6 +285,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             pipe_path,
             temp=temp,
         )
+        # Pass port for slirp4netns host→sandbox port forwarding
+        extra_envs["PYSANDBOXES_PORT"] = str(self.port)
         args.extend(run_daemon_cmd)
 
         template_launch_sh_path: Path = (
@@ -296,49 +308,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # }
         return args, extra_envs
 
-    def _get_slirp4netns(self):
-        slirp_cmd = which_command("slirp4netns")
-        if not slirp_cmd:
-            logger.error("slirp4netns not found. Install it with:")
-            logger.error(suggest_package_installation("slirp4netns"))
-            try:
-                if self._process:
-                    self._process.kill()
-            except Exception:
-                pass
-            sys.exit(1)
-        return slirp_cmd
-
     @override
     async def _on_process_started(self) -> None:
-        """Start slirp4netns after the unshare process is created."""
-
-        assert self._process
-        slirp_cmd = self._get_slirp4netns()
-        slirp_args = [
-            str(slirp_cmd),
-            "--configure",
-            "--mtu=65520",
-            "--disable-host-loopback",
-            str(self._process.pid),
-            "tap0",
-        ]
-
-        logger.debug("Starting slirp4netns: %s", slirp_args)
-        self._slirp_process = subprocess.Popen(
-            slirp_args,
-            text=True,
-            encoding="utf-8",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-    @override
-    async def _stop(self, max_pending: int) -> None:
-        await super()._stop(max_pending)
-        if hasattr(self, "_slirp_process") and self._slirp_process:
-            try:
-                self._slirp_process.terminate()
-                self._slirp_process.wait(timeout=1)
-            except Exception:
-                pass
+        """No-op: slirp4netns is managed by unshare_launch.sh with port forwarding."""
+        pass
