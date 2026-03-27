@@ -99,7 +99,7 @@ async def run_server(process_config: DaemonParameters) -> int:
     # Else, _start the daemon
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
-    assert os_sandbox in ("subprocess", "firejail")
+    assert os_sandbox in ("subprocess", "firejail", "unshare")
     if all_rules.use_py_sandbox:
         pysandboxes_logger.info(
             f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}"
@@ -137,7 +137,7 @@ def main() -> int:
         Exit code (0 for success, non-zero for errors).
     """
     logging.getLogger().addHandler(StreamHandler(None))  # Set default handler to stderr
-    # _debug_log()  # FIX_RELEASE
+    _debug_log()  # FIX_RELEASE
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."

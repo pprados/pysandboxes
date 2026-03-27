@@ -603,7 +603,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         Returns:
             Complete command line arguments including firejail and subprocess args.
         """
-        run_daemon_cmd = super().subprocess_cmd(
+        run_daemon_cmd, extra_env = super().subprocess_cmd(
             all_rules,
             envs,
             pipe_path,

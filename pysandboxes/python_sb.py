@@ -53,7 +53,7 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    # _debug_log()  # FIX_RELEASE
+    _debug_log()  # FIX_RELEASE
 
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
         sys.argv[1:]
@@ -104,7 +104,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
-        cmd = os_provider.subprocess_cmd(
+        cmd, envs = os_provider.subprocess_cmd(
             all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
         )
         python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
