@@ -122,7 +122,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         init_fn=init_fn,
     )
     set_learning_mode(all_rules.learn)
-    logger.debug("join server_daemon")
+    logger.debug("join server_daemon...")
     await server_daemon.join()
     return 0
 
@@ -137,7 +137,7 @@ def main() -> int:
         Exit code (0 for success, non-zero for errors).
     """
     logging.getLogger().addHandler(StreamHandler(None))  # Set default handler to stderr
-    # _debug_log()  # FIX_RELEASE
+    _debug_log()  # FIX_RELEASE
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."

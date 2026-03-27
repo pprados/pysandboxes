@@ -76,3 +76,12 @@ net=ALLOW|TCP|0.0.0.0/32|8000|IN  # For MCP Server
 net=ALLOW|TCP|www.google.com|80|OUT
 
 ro-bind=.,.
+
+# Add rules (2026/02/12 at 16:11)
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+
+# Add rules (2026/02/13 at 12:50)
+env=TERM=${TERM}
+
+# Add rules (2026/02/13 at 13:01)
+ro-bind=~/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pydev,~/.local/share/JetBrains/Toolbox/apps/pycharm/plugins/python-ce/helpers/pydev
