@@ -63,7 +63,7 @@ The **Py-Sandboxes** solution we propose aims to address these difficulties. The
 
 The approach consists of filtering and strengthening standard Python APIs to limit the application's action capabilities. This API interception approach is effective but cannot guarantee that there are no workarounds. This is why our solution allows the nesting of other technologies, such as **os-sandbox**. These technologies rely on the OS's ability to limit network, disk, resource, and other accesses. Nesting an **os-sandbox** with a **py-sandbox** is an interesting combination for controlling application security.
 
-Our solution helps reduce the following risks:
+Like [TypeScript Deno](https://docs.deno.com/runtime/fundamentals/security/#permissions), our solution helps reduce the following risks:
 
 - [X] **Path Traversal**: Only authorized directories can be accessed.
 - [X] **Remote Code Execution (RCE)**: Sensitive APIs are not available.
@@ -431,32 +431,32 @@ Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is po
 
 We offer several implementations to encapsulate the Python sandbox:
 
-| Technology                                     | Configuration                                   | Specifics                                                                              | Description                                                                                                                                    |
-| ---------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| subprocess                                     |                                                 | - no complementary security                                                            |                                                                                                                                                |
-| [firejail](https://github.com/netblue30/firejail) | [here](wiki/firejail.md)                           | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                                     |
-| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html)                                        | [here](wiki/unshare.md) | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
+| Technology                                                   | Configuration         | Specifics                                                                            | Description                                                                                                                                    |
+| ------------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| subprocess                                                   |                       | - no complementary security                                                          |                                                                                                                                                |
+| [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md) | - Disk mapping (without rename)``- File filtering``- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                                     |
+| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)  | - Disk mapping (without rename)``- File filtering``- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 
 *Other implementations will be added soon*
 
 The features of each technology are proposed:
 
-| Guard                         | py-sandbox | firejail | unshare | none |
-| ----------------------------- | :--------: | :-------: | :--: | :--: |
-| Isolation                     |  Process  | Container |  Container  |  ❌  |
-| Python code                   |     ✅     |    ❌    |  ❌  |  ❌  |
-| Compiled code                 |     ❌     |    ✅    |  ✅  |  ❌  |
-| env                           |     ✅     |    ❌    |  ❌  |  ❌  |
-| bind=a,a                      |     ✅     |    ✅    |  ✅  |  ❌  |
-| bind=a,b                      |     ✅     |    ❌    |  ✅  |  ❌  |
-| ignore=*                      |     ✅     |    ✅    |  ❌  |  ❌  |
-| network                       |     ✅     |    ✅    |  ✅  |  ❌  |
-| import                        |     ✅     |    ❌    |  ❌  |  ❌  |
-| Resource limits               |     ❌     |    ✅    |  ✅  |  ❌  |
-| OS-sandbox                    |     ❌     |    ✅    |  ✅  |  ❌  |
-| Seccomp                       |     ❌     |    ✅    |  ✅  |  ❌  |
-| Vm compatible                 |     ✅     |    ✅    |  ✅  |  ❌  |
-| Container`` compatible |     ✅     |    ❌    |  ❌  |  ✅  |  ❌  |
+| Guard                  | py-sandbox | firejail |  unshare  | none |
+| ---------------------- | :--------: | :-------: | :-------: | :--: |
+| Isolation              |  Process  | Container | Container |  ❌  |
+| Python code            |     ✅     |    ❌    |    ❌    |  ❌  |
+| Compiled code          |     ❌     |    ✅    |    ✅    |  ❌  |
+| env                    |     ✅     |    ❌    |    ❌    |  ❌  |
+| bind=a,a               |     ✅     |    ✅    |    ✅    |  ❌  |
+| bind=a,b               |     ✅     |    ❌    |    ✅    |  ❌  |
+| ignore=*               |     ✅     |    ✅    |    ❌    |  ❌  |
+| network                |     ✅     |    ✅    |    ✅    |  ❌  |
+| import                 |     ✅     |    ❌    |    ❌    |  ❌  |
+| Resource limits        |     ❌     |    ✅    |    ✅    |  ❌  |
+| OS-sandbox             |     ❌     |    ✅    |    ✅    |  ❌  |
+| Seccomp                |     ❌     |    ✅    |    ✅    |  ❌  |
+| Vm compatible          |     ✅     |    ✅    |    ✅    |  ❌  |
+| Container`` compatible |     ✅     |    ❌    |    ❌    |  ✅  |
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
 >>

@@ -29,7 +29,7 @@ from ..guard_files import BindRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
-from ..sb_types import ConfigLines, Envs
+from ..sb_types import Args, ConfigLines, Envs
 from ..tools import Environ, remove_comments, substitute_env_vars
 from .sse_client_subprocess_daemon import BaseSubProcessDaemon
 from .tools import which_command
@@ -90,7 +90,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         envs: Environ,
         pipe_path: Path,
         temp: Path,
-    ) -> list[str]:
+    ) -> tuple[Args, Environ]:
         """Build complete command line for unshare subprocess.
 
         Args:
@@ -118,20 +118,60 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             pass
 
         # 2. Prepare arguments
-        args = [str(unshare_cmd)]
-
-        # Load template
         import importlib.resources
 
+        launch_sh_path: Path = (
+            cast(
+                Path,
+                importlib.resources.files(
+                    ".".join(__name__.rsplit(".", maxsplit=1)[:-1])
+                ),
+            )
+            / ".."
+            / "templates"
+            / "./unshare_launch.sh"
+        ).resolve()
+        setup_sh_path: Path = (
+            cast(
+                Path,
+                importlib.resources.files(
+                    ".".join(__name__.rsplit(".", maxsplit=1)[:-1])
+                ),
+            )
+            / ".."
+            / "templates"
+            / "./unshare_setup.sh"
+        ).resolve()
         template_path: Path = (
             cast(
                 Path,
-                importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])),
+                importlib.resources.files(
+                    ".".join(__name__.rsplit(".", maxsplit=1)[:-1])
+                ),
             )
             / ".."
             / "templates"
             / "unshare.template"
-        )
+        ).resolve()
+        if DEBUG_LAUNCH:
+            netfilter_file = Path("iptables.rules")
+        else:
+            netfilter_file = temp / "iptables.rules"
+            if netfilter_file.exists():
+                netfilter_file.unlink()
+            os.mkfifo(netfilter_file)
+
+        # Load and fill unshare.sh template
+        if DEBUG_LAUNCH:
+            setup_file = Path("unshare_setup.sh")
+        else:
+            setup_file = temp / "unshare_setup.sh"
+            os.mkfifo(setup_file)
+
+        args = [str(launch_sh_path), str(setup_file.resolve())]
+
+        # Load template
+
         template_conf = remove_comments(template_path.read_text().splitlines())
         envs["UID"] = str(os.getuid())
         envs["GID"] = str(os.getgid())
@@ -152,30 +192,22 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         from .tools import get_systemd_resolved_upstream_dns
 
-        dns_servers = [ip for ip in get_systemd_resolved_upstream_dns() if isinstance(ip, IPv4Address)]
-        net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
+        dns_servers = [
+            ip
+            for ip in get_systemd_resolved_upstream_dns()
+            if isinstance(ip, IPv4Address)
+        ]
+        net_filter4 = rule_to_netfilter(
+            all_rules.socket_rules, dns_servers, is_ipv6=False
+        )
 
         # 4. Generate Setup Script and Netfilter via FIFOs
-        if DEBUG_LAUNCH:
-            setup_script_path = Path("unshare_setup.sh")
-            netfilter_file = Path("iptables.rules")
-        else:
-            setup_script_path = temp / "unshare_setup.sh"
-            if setup_script_path.exists():
-                setup_script_path.unlink()
-            os.mkfifo(setup_script_path)
-
-            netfilter_file = temp / "iptables.rules"
-            if netfilter_file.exists():
-                netfilter_file.unlink()
-            os.mkfifo(netfilter_file)
-
         # Build MOUNTS block
-        mounts:set[tuple[str,str,bool]] = set() 
+        mounts: set[tuple[str, str, bool]] = set()
 
         # System paths
         for p in ["/bin", "/usr", "/lib", "/lib64", "/etc"]:
-            mounts.add((p,p,False))
+            mounts.add((p, p, False))
 
         # Python environment
         python_paths = [sys.executable] + sys.path
@@ -184,7 +216,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         for p in python_paths:
             if p and os.path.exists(p):
-                mounts.add((p,p,False))
+                mounts.add((p, p, False))
 
         # Ipython directory
         # ipython_path = str(Path("~/.ipython").expanduser())
@@ -201,25 +233,23 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         mounts_cmds = [f'mount_readonly  "{m[0]}" "{m[1]}"' for m in mounts if not m[2]]
         mounts_cmds += [f'mount_readwrite "{m[0]}" "{m[1]}"' for m in mounts if m[2]]
 
-        # Load and fill unshare.sh template
-        template_sh_path: Path = (
-            cast(
-                Path,
-                importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])),
-            )
-            / ".."
-            / "templates"
-            / "unshare_setup.sh"
+        setup_script_content = setup_sh_path.read_text().replace(
+            "${PYSANDBOXES_MOUNTS}", "\n".join(mounts_cmds)
         )
-        setup_script_content = template_sh_path.read_text().replace("${MOUNTS}", "\n".join(mounts_cmds))
+        hosts = []  # FIXME
+        setup_script_content = setup_script_content.replace(
+            "${PYSANDBOXES_HOSTS}", "\n".join(hosts)
+        )
         # Ensure the script uses the correct netfilter file path
-        setup_script_content = setup_script_content.replace("iptables.rules", str(netfilter_file))
+        setup_script_content = setup_script_content.replace(
+            "iptables.rules", str(netfilter_file)
+        )
 
         def publish_setup() -> None:
-            setup_script_path.write_text(setup_script_content)
+            setup_file.write_text(setup_script_content)
             if not DEBUG_LAUNCH:
                 try:
-                    setup_script_path.unlink(missing_ok=True)
+                    setup_file.unlink(missing_ok=True)
                 except Exception:
                     pass
 
@@ -236,11 +266,9 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         # 5. Construct final command
         args.append("--")
-        args.append("/bin/bash")
-        args.append(str(setup_script_path))
 
         # Append the python command
-        run_daemon_cmd = BaseSubProcessDaemon.subprocess_cmd(
+        run_daemon_cmd, extra_envs = BaseSubProcessDaemon.subprocess_cmd(
             self,
             all_rules,
             envs,
@@ -252,16 +280,21 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         template_launch_sh_path: Path = (
             cast(
                 Path,
-                importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])),
+                importlib.resources.files(
+                    ".".join(__name__.rsplit(".", maxsplit=1)[:-1])
+                ),
             )
             / ".."
             / "templates"
             / "unshare_launch.sh"
         )
         template_launch_sh_path = template_launch_sh_path.relative_to(Path.cwd())
-        args = ["/bin/bash", str(template_launch_sh_path)] + args
-
-        return args
+        # args = ["/bin/bash", str(template_launch_sh_path)] + args
+        # extra_envs = extra_envs | {
+        #     "PYSANDBOXES_HOSTS": "1.2.3.4 my-test.local;8.8.8.8 dns.google",  # FIXME
+        #     "PYSANDBOXES_MOUNTS": "mount_readonly /bin; mount_readonly /usr; mount_readonly /lib; mount_readonly /lib64"
+        # }
+        return args, extra_envs
 
     def _get_slirp4netns(self):
         slirp_cmd = which_command("slirp4netns")

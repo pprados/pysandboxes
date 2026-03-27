@@ -52,6 +52,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [ ] Compile a part of code
 - [ ] Propagate the tracability id
 - [ ] Use anyio
+- [ ] Use [Condon JIT](https://docs.exaloop.io/integrations/python/codon-from-python/#using-codonjit)
 
 ## Guard some critical methods
 Certain methods must be rejected, even if the package is authorized (`spawn`, `system`, `sys.exit()`, ....)

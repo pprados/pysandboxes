@@ -177,43 +177,35 @@ def suggest_package_installation(package_name: str) -> str:
             return f"sudo pacman -S {package_name}"
         else:
             # Fallback for unknown or other Linux distributions
-            return textwrap.dedent(
-                f"""
+            return textwrap.dedent(f"""
                 You can try installing {package_name!r} using common package managers like:
                 sudo apt update && sudo apt install {package_name}  (Debian/Ubuntu based systems)
                 sudo yum install {package_name}          (CentOS/RHEL based systems)
                 sudo dnf install {package_name}          (Fedora based systems)
                 sudo pacman -S {package_name}            (Arch Linux based systems)
                 Please refer to your distribution's documentation for the correct command.
-                """  # noqa: E501
-            ).strip()  # noqa
+                """).strip()  # noqa: E501  # noqa
 
     elif system == "darwin":
         # For macOS, suggest Homebrew
-        return textwrap.dedent(
-            f"""
+        return textwrap.dedent(f"""
             /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
             brew install {package_name}
-            """
-        ).strip()  # noqa
+            """).strip()  # noqa
     elif system == "win32":
         # For Windows, suggest Winget or Chocolatey
-        return textwrap.dedent(
-            f"""
+        return textwrap.dedent(f"""
             You can try installing {package_name!r} using:")
               winget install {package_name}            (Windows Package Manager)
               choco install {package_name}             (Chocolatey - if installed)
             You might need to install Winget or Chocolatey first if you don't have them.
-            """
-        ).strip()
+            """).strip()
     else:
         # For other or unknown systems
-        return textwrap.dedent(
-            f"""
+        return textwrap.dedent(f"""
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for {package_name!r} to find installation instructions for your system.
-            """  # noqa: E501
-        ).strip()
+            """).strip()  # noqa: E501
 
 
 def return_level_parameter(log_level: int) -> str:

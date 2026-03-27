@@ -54,7 +54,7 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-DEBUG_NETFILTER = False  # FIX_RELEASE
+DEBUG_NETFILTER = True  # FIX_RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different
@@ -592,7 +592,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         envs: Environ,
         pipe_path: Path,
         temp: Path,
-    ) -> list[str]:
+    ) -> tuple[Args, Environ]:
         """Build complete command line for firejail subprocess.
 
         Args:
@@ -614,4 +614,4 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp
         )
         cmd_parameters.extend(run_daemon_cmd)
-        return cmd_parameters
+        return cmd_parameters, Envs({})
