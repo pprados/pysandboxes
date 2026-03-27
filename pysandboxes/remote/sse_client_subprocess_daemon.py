@@ -56,7 +56,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG_LAUNCH = False  # FIX_RELEASE
+DEBUG_LAUNCH = True  # FIX_RELEASE
 
 
 def get_log_formatter() -> str:
@@ -254,6 +254,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         "_python_args",
         "restart",
     )
+
+    async def _on_process_started(self) -> None:
+        """Hook called after the subprocess is started but before the ping loop."""
+        pass
 
     def __init__(
         self,
@@ -528,6 +532,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             envs=Envs(env),
             process_config=process_config,
         )
+
+        await self._on_process_started()
 
         # Wait the server
         gc.collect()

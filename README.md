@@ -1,4 +1,5 @@
 # PY-SANDBOXES
+
 ![Sandboxes](py-sandboxes-small.png)
 
 > Protect Python programs without their knowledge
@@ -19,36 +20,34 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
 
 It's time to control, as much as possible, the allowed capabilities for your application.
 
------
+---
 
 # Table of Contents
+
+- [PY-SANDBOXES](#py-sandboxes)
+- [Table of Contents](#table-of-contents)
 - [Principle](#principle)
 - [Usage](#usage)
-  - [Apply the sandbox to the entire application](#apply-the-sandbox-to-the-entire-application)
-  - [Apply the sandbox to a part of the application](#apply-the-sandbox-to-a-part-of-the-application)
+  - [Apply the sandbox to the entire application  (complete mode)](#apply-the-sandbox-to-the-entire-application--complete-mode)
+    - [How the python-sb work?](#how-the-python-sb-work)
+    - [Use with uvx](#use-with-uvx)
+  - [Apply the sandbox to a part of the application (partial mode).](#apply-the-sandbox-to-a-part-of-the-application-partial-mode)
     - [Launching the Sandbox](#launching-the-sandbox)
-    - [Executing a function in the sandbox](#executing-a-function-in-the-sandbox)
+    - [Executing a function in the sandbox (partial mode)](#executing-a-function-in-the-sandbox-partial-mode)
+    - [How the partial mode work?](#how-the-partial-mode-work)
 - [Security Filters](#security-filters)
   - [Manage config file locations](#manage-config-file-locations)
 - [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
 - [Integration in a module](#integration-in-a-module)
-- [FAQ](#faq)
-  - [How to display py-sandbox logs?](#how-to-display-py-sandbox-logs)
-  - [How to catch rule violation exceptions?](#how-to-catch-rule-violation-exceptions)
-  - [How to activate the sandbox in a notebook?](#how-to-activate-the-sandbox-in-a-notebook)
-  - [How to propagate a token to an API in the sandbox?](#how-to-propagate-a-token-to-an-api-in-the-sandbox)
-  - [How to ensure a new version of a module doesn't hide new network accesses?](#how-to-ensure-a-new-version-of-a-module-doesnt-hide-new-network-accesses)
-  - [Do I have any new rule violations since the update?](#do-i-have-any-new-rule-violations-since-the-update)
-  - [Debugging](#debugging)
-    - [OS-sandbox debugging](#os-sandbox-debugging)
-    - [How to disable py-sandbox?](#how-to-disable-py-sandbox)
-  - [How to package the project](#how-to-package-the-project)
+  - [Samples](#samples)
+  - [FAQ](#faq)
   - [Implementation](#implementation)
   - [What are the weaknesses of py-sandbox?](#what-are-the-weaknesses-of-py-sandbox)
-- [Samples](#samples)
 - [Roadmap](#roadmap)
 - [Appendix](#appendix)
-  - [Databases](#databases)
+  - [CVE in relation](#cve-in-relation)
+    - [Langchain](#langchain)
+    - [Smolagent](#smolagent)
 
 The **Py-Sandboxes** project proposes to add multiple layers of security to limit the actions of your application, and thus, indirectly, the actions caused by an LLM or a malicious user of your application.
 
@@ -66,18 +65,20 @@ The approach consists of filtering and strengthening standard Python APIs to lim
 
 Our solution helps reduce the following risks:
 
-  - [X] **Path Traversal**: Only authorized directories can be accessed.
-  - [X] **Remote Code Execution (RCE)**: Sensitive APIs are not available.
-  - [X] **Reverse Shells**: Network connections are limited.
-  - [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
-  - [X] **Token Theft**: Accessible files and environment variables are filtered.
-  - [X] **Remote Access**: Network and code actions are limited.
-  - [ ] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules (not yet implemented).
-  - [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (not yet implemented).
-  - [ ] **Malicious syntax**: The syntax of python code may be filtered
+- [X] **Path Traversal**: Only authorized directories can be accessed.
+- [X] **Remote Code Execution (RCE)**: Sensitive APIs are not available.
+- [X] **Reverse Shells**: Network connections are limited.
+- [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
+- [X] **Token Theft**: Accessible files and environment variables are filtered.
+- [X] **Remote Access**: Network and code actions are limited.
+- [ ] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules (not yet implemented).
+- [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (not yet implemented).
+- [ ] **Malicious syntax**: The syntax of python code may be filtered
 
 ---
+
 # Principle
+
 The approach is based on the principle of **Least Privilege** and **Defense in Depth**, with an exclusively "*whitelist*" configuration. By default, everything is forbidden. You must explicitly authorize actions.
 
 A learning mechanism allows for continuous improvement of security rules and rapid implementation.
@@ -91,12 +92,15 @@ Download last release from `https://github.com/pprados/pysandboxes/releases`
 ```bash
  pip install pysandboxes
 ```
+
 or
+
 ```bash
 pip install git+https://github.com/pprados/pysandboxes.git
 ```
 
 We propose only four think:
+
 - A Command Line Interface: `python-sb`
 - A function: `run`
 - A resource provider: `sandboxes`
@@ -104,8 +108,8 @@ We propose only four think:
 
 There are two usage modes:
 
-  - Apply the sandbox to the entire application (complete mode).
-  - Apply the sandbox to a part of the application, with the rest being free  (partial mode).
+- Apply the sandbox to the entire application (complete mode).
+- Apply the sandbox to a part of the application, with the rest being free  (partial mode).
 
 ## Apply the sandbox to the entire application  (complete mode)
 
@@ -130,10 +134,13 @@ style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
 This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
+
 ```shell
 python-sb --learn -m my_module
 ```
+
 You can use it in interactive mode and continue to use the help shortcut.
+
 ```shell
 > python-sb
 SANDBOXES Python 3.13.5 | packaged by Anaconda, Inc. | [GCC 11.2.0] on linux
@@ -166,6 +173,7 @@ When the application is stopped, a `.pysandboxes` file is created in the current
 From now on, during subsequent launches, the application runs by limiting the application's capabilities to the previously learned whitelist.
 
 If you want to restart a learning session to add missing rules:
+
 - activate the `learn` parameter in the configuration file
 - or add `--learn=.py-sandboxes` (or just `--learn`) when you _start `python-sb`
 
@@ -174,9 +182,10 @@ This way, only the missing rules will be added to the file.
 This approach allows for application isolation, but requires granting privileges to the entire application, such as access to API tokens. It's likely that only a small part of the application needs these privileges, but not the rest.
 
 ### How the python-sb work?
+
 ```mermaid
 flowchart LR
-    subgraph Python_sb [<b>Pythob-sb</b><br/>Process:python]
+    subgraph Python_sb [<b>Python-sb</b><br/>Process:python]
     end
     subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firjail,docker,..."]
     end
@@ -189,10 +198,13 @@ flowchart LR
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
+
 ### Use with uvx
+
 [uvx](https://docs.astral.sh/uv/guides/tools/) is a solution for running a Python tool without installing it in the project. A temporary environment is created for the duration of the tool's execution.
 
 Uvx can start some tools like `python-sb`. However, since `python-sb` does not match the project name, you must proceed as follows:
+
 ```bash
 uvx python-sb --help
 ```
@@ -203,8 +215,8 @@ Often, the application needs all privileges, has access to all API tokens, etc. 
 
 In this scenario, your application will be split into two parts:
 
-  - The core of the application, with all privileges.
-  - A sandbox, where the code annotated with `@sandbox` will be executed.
+- The core of the application, with all privileges.
+- A sandbox, where the code annotated with `@sandbox` will be executed.
 
 ```mermaid
 flowchart TD
@@ -257,9 +269,9 @@ async with sandboxes(init_fn=init_sandbox):
 
 The `init_fn` parameter is optional. It can contain a function that will be invoked during the initialization of the sandbox. This is the ideal place to put:
 
-  - log level initialization
-  - opening database connection pools
-  - all important initializations that need to be done on the sandbox side.
+- log level initialization
+- opening database connection pools
+- all important initializations that need to be done on the sandbox side.
 
 ```python
 def init_log_level():
@@ -278,6 +290,7 @@ def init_fn():
     init_log_level()
     ...
 ```
+
 For asynchronous use, you can more simply initialize your application this way:
 
 ```python
@@ -307,6 +320,7 @@ if __name__ == "__main__":
 ```
 
 If you want to restart a learning session to add missing rules:
+
 - Add `learn='.py-sandboxes'` with `sandboxes()`
 - Or add `learn='.py-sandboxes'` with `run()`
 
@@ -337,10 +351,11 @@ The sandbox receives the request, loads the corresponding module, finds the func
 
 There are a few peculiarities to note:
 
-  - If an exception is raised in the sandbox, the stack trace is propagated to the main application to allow for a stack analysis as if the call had been made directly. This facilitates debugging.
-  - If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox or mix the different impressions between several threads. They are executed in the correct process, in the same async loop.
+- If an exception is raised in the sandbox, the stack trace is propagated to the main application to allow for a stack analysis as if the call had been made directly. This facilitates debugging.
+- If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox or mix the different impressions between several threads. They are executed in the correct process, in the same async loop.
 
 ### How the partial mode work?
+
 ```mermaid
 flowchart LR
     subgraph Python [<b>Python</b><br/>Process:python]
@@ -359,17 +374,20 @@ flowchart LR
 ```
 
 ---
+
 # Security Filters
+
 What are the security filters offered by **Py-Sandboxes**?
 
-  - **Environment variable control**: The environment variables visible in the sandbox are limited. Mapping rules allow easily forwarding sets of variables from the outside to the inside of the sandbox (e.g., `env=*_API_KEY=${*_API_KEY}`).
-  - **Network access control**: It is possible to control the direction, IP addresses, domain names, and ports available to the sandbox.
-  - **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. It is also possible to use a different directory name in the sandbox than the original name. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
-  - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
+- **Environment variable control**: The environment variables visible in the sandbox are limited. Mapping rules allow easily forwarding sets of variables from the outside to the inside of the sandbox (e.g., `env=*_API_KEY=${*_API_KEY}`).
+- **Network access control**: It is possible to control the direction, IP addresses, domain names, and ports available to the sandbox.
+- **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. It is also possible to use a different directory name in the sandbox than the original name. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
+- **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
 
 Consult the [parameter file](pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
 
 ## Manage config file locations
+
 By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./py-sandboxes` file is used. This can be modified before the program is launched.
 If you package your application in a Wheel, place your parameters within your module.
 
@@ -390,15 +408,19 @@ Parameters for all of the user's projects can be present in `~/.config/py-sandbo
 By adding or removing `include` statements, you can select the different personalization scenarios you want. Note, if the is not exist, it's just ignored.
 
 With **python-sb**, a special parameter can be used to select the configuration.
+
 ```bash
 python-sb --pysandboxes-config=./.py-sandboxes -m ...
 ```
+
 ---
+
 # OS-sandbox vs Py-sandbox
+
 Our solution offers multiple layers of security:
 
-  - a sandbox at the Python API level (**py-sandbox**)
-  - another sandbox at the OS level (**os-sandbox**)
+- a sandbox at the Python API level (**py-sandbox**)
+- another sandbox at the OS level (**os-sandbox**)
 
 The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel.
 For example, database access is often done via compiled C drivers (See the appendix for more details).
@@ -409,43 +431,49 @@ Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is po
 
 We offer several implementations to encapsulate the Python sandbox:
 
-| Technology                                        | Configuration            | Specifics                                                                      | Description                                                                                               |
-|---------------------------------------------------|--------------------------|--------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| subprocess                                        |                          | - no complementary security                                                    | |This is the default implementation. It is simply a child Python process that holds the sandbox. |
-| [firejail](https://github.com/netblue30/firejail) | [here](wiki/firejail.md) | - Disk mapping (without rename)<br/> - File filtering<br/> - Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels. |
+| Technology                                     | Configuration                                   | Specifics                                                                              | Description                                                                                                                                    |
+| ---------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| subprocess                                     |                                                 | - no complementary security                                                            |                                                                                                                                                |
+| [firejail](https://github.com/netblue30/firejail) | [here](wiki/firejail.md)                           | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                                     |
+| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html)                                        | [here](wiki/unshare.md) | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 
 *Other implementations will be added soon*
 
 The features of each technology are proposed:
 
-| Guard                     | py-sandbox | firejail  | none |
-|---------------------------|:----------:|:---------:|:----:|
-| Isolation                 |  Process   | Container |  ❌   |
-| Python code               |     ✅      |    ❌     |  ❌   |
-| Compiled code             |     ❌     |     ✅     |  ❌   |
-| env                       |     ✅      |    ❌     |  ❌   |
-| bind=a,a                  |     ✅      |     ✅     |  ❌   |
-| bind=a,b                  |     ✅      |    ❌     |  ❌   |
-| ignore=*                  |     ✅      |     ✅     |  ❌   |
-| network                   |     ✅      |     ✅     |  ❌   |
-| import                    |     ✅      |    ❌     |  ❌   |
-| Resource limits           |     ❌     |    ✅      |  ❌   |
-| OS-sandbox                |     ❌     |     ✅     |  ❌   |
-| Seccomp                   |     ❌     |     ✅     |  ❌   |
-| Vm compatible             |     ✅      |     ✅     |  ❌   |
-| Container<br/> compatible |     ✅      |    ❌     |  ❌   |
+| Guard                         | py-sandbox | firejail | unshare | none |
+| ----------------------------- | :--------: | :-------: | :--: | :--: |
+| Isolation                     |  Process  | Container |  Container  |  ❌  |
+| Python code                   |     ✅     |    ❌    |  ❌  |  ❌  |
+| Compiled code                 |     ❌     |    ✅    |  ✅  |  ❌  |
+| env                           |     ✅     |    ❌    |  ❌  |  ❌  |
+| bind=a,a                      |     ✅     |    ✅    |  ✅  |  ❌  |
+| bind=a,b                      |     ✅     |    ❌    |  ✅  |  ❌  |
+| ignore=*                      |     ✅     |    ✅    |  ❌  |  ❌  |
+| network                       |     ✅     |    ✅    |  ✅  |  ❌  |
+| import                        |     ✅     |    ❌    |  ❌  |  ❌  |
+| Resource limits               |     ❌     |    ✅    |  ✅  |  ❌  |
+| OS-sandbox                    |     ❌     |    ✅    |  ✅  |  ❌  |
+| Seccomp                       |     ❌     |    ✅    |  ✅  |  ❌  |
+| Vm compatible                 |     ✅     |    ✅    |  ✅  |  ❌  |
+| Container`` compatible |     ✅     |    ❌    |  ❌  |  ✅  |  ❌  |
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
+>>
 
 >> Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
+>>
 
 To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file, or set the environment variable `OS_SANDBOX`.
 
 ```shell
 OS_SANDBOX=firejail python-sb -m my-module
 ```
+
 ---
+
 # Integration in a module
+
 It is possible to use the solution to integrate it into a module, when you install your *wheel*. To do this, the `.py-sandboxes` file must be placed at the root of your module, as a resource.
 
 When the sandbox is activated, the code searches for the caller's module and checks whether the resource exists. If so, it is used to apply the security rules. Otherwise, the same file is searched for in the working directory.
@@ -459,6 +487,7 @@ include "./.py-sandboxes"
 ```
 
 To create a CLI that uses **py-sanboxes**, use the following pattern:
+
 ```python
 def main() -> int:
     # ...
@@ -481,6 +510,7 @@ def main_sb() -> int:
 ```
 
 And declare it in your TOML file.
+
 ```TOML
 [project.scripts]
 my-script = "my_module:main_sb"
@@ -488,36 +518,49 @@ my-script = "my_module:main_sb"
 ```
 
 ---
+
 ## Samples
+
 You can find some samples for major framework:
+
 - MCP Client/Server
 
 See [here for more information](wiki/samples.md)
 
 ---
+
 ## FAQ
+
 see [here](wiki/faq.md)
 
 ---
+
 ## Implementation
+
 see [here](wiki/implementation.md)
 
 ## What are the weaknesses of py-sandbox?
+
 See [here](wiki/weaknesses.md)
 
 ---
+
 # Roadmap
+
 See [here](wiki/roadmap.md)
 
 ---
+
 # Appendix
 
 1. Connection to Databases: See [here](wiki/database.md)
 
 ## CVE in relation
+
 Some CVE in relations
 
 ### Langchain
+
 - [CVE-2023-46229](https://nvd.nist.gov/vuln/detail/CVE-2023-46229)
 - [CVE-2023-32786](https://nvd.nist.gov/vuln/detail/CVE-2023-32786)
 - [CVE-2024-28088](https://nvd.nist.gov/vuln/detail/CVE-2024-28088)
@@ -529,4 +572,5 @@ Some CVE in relations
 - [CVE-2025-6985](https://nvd.nist.gov/vuln/detail/CVE-2025-6985)
 
 ### Smolagent
+
 - [CVE-2025-5120](https://nvd.nist.gov/vuln/detail/CVE-2025-5120)

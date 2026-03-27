@@ -1,49 +1,103 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 # See man firejail
+
+# Drop all capabilities
 --caps.drop=all
-#--private # Any files created in this directory will be deleted when you daemon_shutdown the sandbox
+
+# Do not use any profile
 --noprofile
+
+# Include standard profiles for restrictions
 --include=/etc/firejail/allow-python3.inc
 --include=/etc/firejail/disable-common.inc
 --include=/etc/firejail/disable-devel.inc
 --include=/etc/firejail/disable-interpreters.inc
 --include=/etc/firejail/disable-programs.inc
 --include=/etc/firejail/disable-xdg.inc
+
 # See /usr/share/doc/firejail/syscalls.txt
 # See https://linux-audit.com/systemd/systemd-syscall-filtering/
 #--seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
 # --seccomp.keep=  See scripts/extract_strace.sh
+
+# Set the hostname
 --hostname=firejail-sandbox
+
+# Kill all processes when the sandbox is closed
 --deterministic-shutdown
+
+# Enable IPv4 and IPv6 only
 --protocol=inet,inet6
+
+# Clear PYTHONSTARTUP to avoid loading user configuration
 --env=PYTHONSTARTUP=
+
 # --private-dev
 # --private-tmp
+
+# Remount /tmp as noexec
 --noexec=/tmp
 
 # Disable extras
+
+# Restrict namespaces
 --restrict-namespaces
+
+# Disable groups
 --nogroups
+
+# No new privileges can be gained
 --nonewprivs
+
+# Disable printers
 --noprinters
+
+# Disable root access
 --noroot
 
+# Disable X11
 --x11=none
+
+# Disable sound
 --nosound
+
+# Disable TV
 --notv
+
+# Disable U2F
 --nou2f
+
+# Disable video
 --novideo
+
+# Disable DVD
 --nodvd
+
+# Disable /mnt
 --disable-mnt
---no3d  # Disable 3D hardware acceleration.
+
+# Disable 3D hardware acceleration.
+--no3d
 
 # *** Limits ***
+
+# Address space limit
 --rlimit-as=${FIREJAIL_RELIMIT:-300m}
+
+# File size limit
 --rlimit-fsize=${FIREJAIL_FSIZE:-102400}
+
+# Number of processes limit
 --rlimit-nproc=${FIREJAIL_NPROC:-20}
+
+# Number of open files limit
 --rlimit-nofile=${FIREJAIL_NOFILE:-50}
+
+# Pending signals limit
 --rlimit-sigpending=${FIREJAIL_SIGPENDING:-20}
+
+# Nice value (CPU priority)
 --nice=${NICE:-5}
 
 # Debug

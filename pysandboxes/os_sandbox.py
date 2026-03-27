@@ -26,6 +26,7 @@ from .remote.parameters import TIMEOUT_FOR_STOP_DAEMON
 from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
+from .remote.sse_unshare_daemon import UnshareSSEDaemon
 from .remote.task_daemon import TaskDaemon
 from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox
 
@@ -39,6 +40,7 @@ providers_factory: dict[str, Type] = {
     "subprocess": SubProcessDaemon,
     # "bwrap": BWrapDaemon(),
     "firejail": FireJailSSEDaemon,
+    "unshare": UnshareSSEDaemon,
     # TODO: podman, https://www.redhat.com/en/blog/podman-inside-container https://www.redhat.com/en/blog/podman-inside-kubernetes
     #  docker, lxc, ...
     # docker alternative
