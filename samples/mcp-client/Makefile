@@ -124,4 +124,5 @@ _uv-init:
 inspector:
 	npx @modelcontextprotocol/inspector
 
+# Initialize the environment
 init: _uv-init

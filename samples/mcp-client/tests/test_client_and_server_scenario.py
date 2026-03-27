@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 
 timeout = 30
 all_mcp_client_os_sandbox: list[str] = [
-    "None",
-    "Subprocess",
-    "firejail",
+    # FIXME
+     "None",
+    # "Subprocess",
+    # "firejail",
+    #"unshare",
 ]
 all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",

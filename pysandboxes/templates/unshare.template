@@ -1,20 +1,52 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
-# Unshare configuration
-# See man unshare
-# Create a new network namespace
+# Unshare configuration template
+# See: man unshare(1)
+
+# This template creates an isolated sandbox environment using Linux namespaces
+
+# --net: Create a new network namespace
+# Isolates the process from the host network stack, providing network isolation.
+# The process will have its own network interfaces, routing tables, and firewall rules.
+# Used in combination with slirp4netns to provide user-mode networking.
 --net
-# Create a new user namespace
+
+# --user: Create a new user namespace
+# Allows unprivileged users to have root capabilities within the namespace.
+# This is essential for creating other namespaces without requiring actual root privileges.
+# Requires kernel.unprivileged_userns_clone=1 on some systems.
 --user
-# Map the current user to the root user in the namespace
---map-users=0:${UID}:1
---map-groups=0:${GID}:1
-# Create a new mount namespace
+
+# -r (--map-root-user): Map the current user to root inside the namespace
+# Maps the current UID/GID to 0 (root) within the user namespace.
+# This allows the sandboxed process to perform privileged operations within its namespace
+# without having actual root privileges on the host system.
+-r
+
+# --mount: Create a new mount namespace
+# Isolates the filesystem mount points from the host.
+# Changes to mounts inside the namespace won't affect the host or other namespaces.
+# Used with mount --bind to create custom filesystem layouts.
 --mount
+
+# --propagation private: Set mount propagation to private
+# Prevents mount/unmount events from propagating between the namespace and the host.
+# This ensures complete mount isolation and prevents interference with the host filesystem.
 --propagation private
-# Create a new pid namespace (requires --fork)
+
+# --pid: Create a new PID namespace
+# Isolates the process ID number space, making the sandboxed process tree independent.
+# The first process in the namespace becomes PID 1 (init-like process).
+# Requires --fork to work correctly.
 --pid
+
+# --fork: Fork a new process before applying namespaces
+# Required when using --pid to ensure the calling process doesn't become PID 1.
+# The parent process maintains the original namespaces while the child runs in the new ones.
 --fork
-# Signal the child process when the parent terminates
+
+# --kill-child: Send SIGKILL to the child when the parent exits
+# Ensures cleanup of the sandboxed process if the parent terminates unexpectedly.
+# Prevents orphaned processes from continuing to run after the sandbox manager exits.
 --kill-child
 

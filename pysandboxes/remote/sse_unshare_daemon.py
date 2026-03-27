@@ -7,16 +7,17 @@ Linux namespaces directly via the `unshare` command, `slirp4netns`
 for networking, and standard Linux tools (mount, iptables) for isolation.
 """
 
-from pysandboxes.remote.tools import suggest_package_installation
-from pysandboxes.remote.sse_client_subprocess_daemon import DEBUG_LAUNCH
 import logging
 import os
+import site
 import subprocess
 import sys
 import threading
-import site
 from pathlib import Path
 from typing import Any, cast
+
+from pysandboxes.remote.sse_client_subprocess_daemon import DEBUG_LAUNCH
+from pysandboxes.remote.tools import suggest_package_installation
 
 try:
     from typing import override  # type: ignore[attr-defined]
@@ -148,6 +149,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         # 3. Networking (IPTables)
         from ipaddress import IPv4Address
+
         from .tools import get_systemd_resolved_upstream_dns
 
         dns_servers = [ip for ip in get_systemd_resolved_upstream_dns() if isinstance(ip, IPv4Address)]
@@ -155,10 +157,10 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         # 4. Generate Setup Script and Netfilter via FIFOs
         if DEBUG_LAUNCH:
-            setup_script_path = Path("setup_unshare.sh")
+            setup_script_path = Path("unshare_setup.sh")
             netfilter_file = Path("iptables.rules")
         else:
-            setup_script_path = temp / "setup_unshare.sh"
+            setup_script_path = temp / "unshare_setup.sh"
             if setup_script_path.exists():
                 setup_script_path.unlink()
             os.mkfifo(setup_script_path)
@@ -169,17 +171,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             os.mkfifo(netfilter_file)
 
         # Build MOUNTS block
-        mounts_cmds = []
-        seen_mounts = set()
-
-        def add_mount(cmd: str) -> None:
-            if cmd not in seen_mounts:
-                mounts_cmds.append(cmd)
-                seen_mounts.add(cmd)
+        mounts:set[tuple[str,str,bool]] = set() 
 
         # System paths
         for p in ["/bin", "/usr", "/lib", "/lib64", "/etc"]:
-            add_mount(f'mount_readonly "{p}"')
+            mounts.add((p,p,False))
 
         # Python environment
         python_paths = [sys.executable] + sys.path
@@ -188,20 +184,22 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         for p in python_paths:
             if p and os.path.exists(p):
-                add_mount(f'mount_readonly "{p}"')
+                mounts.add((p,p,False))
 
-        # Current directory
-        add_mount(f'mount_readwrite "{os.getcwd()}"')
+        # Ipython directory
+        # ipython_path = str(Path("~/.ipython").expanduser())
+        # mounts.add((p,p,True))
 
         # Rules from configuration
         for rule in all_rules.file_rules:
             if isinstance(rule, BindRule):
-                if rule.write:
-                    add_mount(f'mount_readwrite "{rule.source}" "{rule.dest}"')
-                else:
-                    add_mount(f'mount_readonly "{rule.source}" "{rule.dest}"')
+                dest = rule.dest if rule.dest is not None else rule.source
+                mounts.add((rule.source, dest, rule.write))
             elif isinstance(rule, IgnoreRule):
-                add_mount(f'hide_path "{rule.source}"')
+                pass  # FIXME
+
+        mounts_cmds = [f'mount_readonly  "{m[0]}" "{m[1]}"' for m in mounts if not m[2]]
+        mounts_cmds += [f'mount_readwrite "{m[0]}" "{m[1]}"' for m in mounts if m[2]]
 
         # Load and fill unshare.sh template
         template_sh_path: Path = (
@@ -211,7 +209,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             )
             / ".."
             / "templates"
-            / "unshare.sh"
+            / "unshare_setup.sh"
         )
         setup_script_content = template_sh_path.read_text().replace("${MOUNTS}", "\n".join(mounts_cmds))
         # Ensure the script uses the correct netfilter file path
@@ -251,6 +249,18 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         )
         args.extend(run_daemon_cmd)
 
+        template_launch_sh_path: Path = (
+            cast(
+                Path,
+                importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])),
+            )
+            / ".."
+            / "templates"
+            / "unshare_launch.sh"
+        )
+        template_launch_sh_path = template_launch_sh_path.relative_to(Path.cwd())
+        args = ["/bin/bash", str(template_launch_sh_path)] + args
+
         return args
 
     def _get_slirp4netns(self):
@@ -270,10 +280,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
     async def _on_process_started(self) -> None:
         """Start slirp4netns after the unshare process is created."""
 
-        self.extracted_method()
-
         assert self._process
-        slirp_cmd=self._get_slirp4netns()
+        slirp_cmd = self._get_slirp4netns()
         slirp_args = [
             str(slirp_cmd),
             "--configure",
@@ -284,7 +292,13 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         ]
 
         logger.debug("Starting slirp4netns: %s", slirp_args)
-        self._slirp_process = subprocess.Popen(slirp_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._slirp_process = subprocess.Popen(
+            slirp_args,
+            text=True,
+            encoding="utf-8",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
     @override
     async def _stop(self, max_pending: int) -> None:

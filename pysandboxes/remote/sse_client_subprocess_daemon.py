@@ -56,7 +56,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG_LAUNCH = True  # FIX_RELEASE
+DEBUG_LAUNCH = False  # FIX_RELEASE
 
 
 def get_log_formatter() -> str:

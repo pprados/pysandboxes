@@ -43,7 +43,8 @@ def sync_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-@pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")
+@pytest.mark.skipif(
+    not which_command("firejail"), reason="Install firejail")
 def test_sync_function() -> None:
     result_sync = sync_function("a", b="b")
     assert result_sync == "a b"
@@ -53,7 +54,7 @@ def test_sync_function() -> None:
 async def async_function(a: str, b: str) -> str:
     import asyncio
 
-    await asyncio.sleep(0)  # Simule une opération asynchrone
+    await asyncio.sleep(0)  # Simulate async operation
     return f"{a} {b}"
 
 
