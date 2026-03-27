@@ -122,7 +122,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         init_fn=init_fn,
     )
     set_learning_mode(all_rules.learn)
-    logger.debug("join server_daemon")
+    logger.debug("join server_daemon...")
     await server_daemon.join()
     return 0
 
