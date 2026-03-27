@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Exit on error and print commands
-set -e
-# set -x
+# Exit on error, undefined variables, and pipe failures
+set -euo pipefail
+#set -x
 
 # --- 1. NETWORK SETUP ---
 # Initialize loopback interface
 ip link set lo up
 # Apply firewall rules if present
-if [ -e "iptables.rules" ]; then
-    iptables-restore < iptables.rules
+if [ -f "iptables.rules" ]; then
+    iptables-restore < "iptables.rules"
 fi
 
 # --- 2. PREPARE NEW ISOLATED ROOT ---
@@ -21,9 +21,12 @@ mount -t tmpfs none "$NEW_ROOT"
 mkdir -p "$NEW_ROOT"/{dev,proc,tmp,bin,lib,lib64,usr,etc,home,root}
 
 # Helper function for secure read-only bind mounts
+# Usage: mount_readonly <source_path> [destination_path]
+# If destination_path is not provided, it defaults to source_path
 mount_readonly() {
     local src=$1
-    local dst="$NEW_ROOT${2:-$1}"
+    local dst_path=${2:-$1}
+    local dst="$NEW_ROOT$dst_path"
     if [ -e "$src" ]; then
         if [ -d "$src" ]; then
             mkdir -p "$dst"
@@ -37,9 +40,12 @@ mount_readonly() {
 }
 
 # Helper function for secure read-write bind mounts
+# Usage: mount_readwrite <source_path> [destination_path]
+# If destination_path is not provided, it defaults to source_path
 mount_readwrite() {
     local src=$1
-    local dst="$NEW_ROOT${2:-$1}"
+    local dst_path=${2:-$1}
+    local dst="$NEW_ROOT$dst_path"
     if [ -e "$src" ]; then
         if [ -d "$src" ]; then
             mkdir -p "$dst"
@@ -86,8 +92,15 @@ mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs "$NEW_ROOT/dev/shm"
 mount -t proc proc "$NEW_ROOT/proc"
 
 # --- 4. ENTER SANDBOX ---
+# Save original working directory before chroot
+ORIGINAL_CWD=$(pwd)
 # Move to the new root directory and drop privileges
 cd "$NEW_ROOT"
-# Use chroot to enter the isolated environment and setpriv to drop all capabilities
-echo "Sandbox locked. Entering environment..."
-exec chroot . setpriv --inh-caps=-all --bounding-set=-all -- "$@"
+# Use chroot to enter the isolated environment, then cd to original directory
+# and use setpriv to drop all capabilities
+# Verify setpriv is available
+if ! command -v setpriv >/dev/null 2>&1; then
+    echo "Error: setpriv command not found" >&2
+    exit 1
+fi
+exec chroot . sh -c "cd \"$ORIGINAL_CWD\" && exec setpriv --inh-caps=-all --bounding-set=-all -- \"\$@\"" sh "$@"
