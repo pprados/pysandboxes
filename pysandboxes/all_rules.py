@@ -6,6 +6,7 @@ This module provides data structures to collect and organize all security rules
 from different guards (environment, files, network, imports) into a unified
 configuration object.
 """
+
 from pathlib import Path
 from typing import Any, NamedTuple
 

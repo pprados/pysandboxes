@@ -56,7 +56,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG_LAUNCH = False  # FIX_RELEASE
+DEBUG_LAUNCH = True  # FIX_RELEASE
 
 
 def get_log_formatter() -> str:
@@ -195,6 +195,8 @@ async def launch_sandbox(
             *cmd,
             env=dict(envs),
             preexec_fn=preexec_fn,
+            stdout=asyncio.subprocess.PIPE,  # FIXME
+            stderr=asyncio.subprocess.PIPE,
         )
 
         # It's a good time for that
@@ -307,7 +309,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         envs: Environ,
         pipe_path: Path,
         temp: Path,
-    ) -> Args:
+    ) -> tuple[Args, Environ]:
         """Build command line arguments for subprocess.
 
         Args:
@@ -337,7 +339,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 main_sandbox.__name__,
             ]
         )
-        return cmd_parameters
+        return cmd_parameters, {}
 
     async def _start(
         self,
@@ -460,14 +462,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
             all_rules = all_rules._replace(socket_rules=SocketRules(socket_rules))
 
+            cmds, env = self.subprocess_cmd(
+                all_rules=all_rules,
+                envs=envs,
+                pipe_path=pipe_path,
+                temp=Path(tmpdir),
+            )
+
             await self._re_start_cmd(
                 all_rules,
-                self.subprocess_cmd(
-                    all_rules=all_rules,
-                    envs=envs,
-                    pipe_path=pipe_path,
-                    temp=Path(tmpdir),
-                ),
+                cmds,
+                env,
                 pipe_path=pipe_path,
                 port=self.port,
                 log_level=log_level,
@@ -483,6 +488,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self,
         all_rules: AllRules,
         args: Args,
+        extra_envs: Environ,
         pipe_path: Path,
         port: int,
         *,
@@ -522,7 +528,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             env = {**os.environ, **all_rules.envs}
         else:
             env = dict(all_rules.envs)
-
+        env = env | extra_envs
         logger.debug(
             "Launch process:" + " ".join((repr(c) if " " in c else c for c in args))
         )

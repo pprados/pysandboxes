@@ -9,6 +9,7 @@ where only explicitly allowed environment variables are accessible.
 The guard supports pattern matching, variable substitution, and learning mode
 for automatic rule generation based on observed environment variable usage.
 """
+
 import functools
 import inspect
 import logging

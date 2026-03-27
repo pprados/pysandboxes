@@ -9,6 +9,7 @@ model with support for ignore patterns, bind mounts, and access logging.
 The guard patches standard library functions like open(), Path operations, and
 directory scanning to enforce security rules defined in the configuration.
 """
+
 import contextvars
 import fnmatch
 import functools

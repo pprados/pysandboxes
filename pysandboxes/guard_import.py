@@ -515,7 +515,8 @@ def activate_guard_import(
 
     if _activate_patch_import(patch_rules):  # Add in sys.meta_path
         # For all loaded modules, apply patch
-        for module in sys.modules.copy():  # FIXME: copy nécessaire ?
+        # Use a copy, because the sys.modules may change during iteration
+        for module in sys.modules.copy():
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
     keep = [

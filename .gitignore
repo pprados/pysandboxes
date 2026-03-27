@@ -173,9 +173,12 @@ etudes/
 samples/langgraph-demo/
 tmp/
 tst_wasm/
-reports/
+#reports/
 
 .container-use/
 # https://oraios.github.io/serena
 .serena/
 
+
+# Auto Claude data directory
+.auto-claude/
