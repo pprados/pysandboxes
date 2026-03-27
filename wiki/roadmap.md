@@ -25,6 +25,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] bwrap
   - [ ] Docker (Docker or OCI images, oci-a,rchive) (See [here](https://github.com/anthropics/claude-code/tree/main/.devcontainer))
   - [ ] podman
+  - [X] unshare
   - [ ] kubernetes
   - [ ] libslirp
   - [ ] micro-VM

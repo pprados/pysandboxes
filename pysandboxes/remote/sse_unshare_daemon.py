@@ -1,0 +1,297 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+"""Unshare-based daemon for OS-level sandboxing.
+
+This module implements a unshare-based sandbox daemon that uses
+Linux namespaces directly via the `unshare` command, `slirp4netns`
+for networking, and standard Linux tools (mount, iptables) for isolation.
+"""
+
+from pysandboxes.remote.tools import suggest_package_installation
+from pysandboxes.remote.sse_client_subprocess_daemon import DEBUG_LAUNCH
+import logging
+import os
+import subprocess
+import sys
+import threading
+import site
+from pathlib import Path
+from typing import Any, cast
+
+try:
+    from typing import override  # type: ignore[attr-defined]
+except ImportError:
+    from typing_extensions import override
+
+from ..all_rules import AllRules
+from ..guard_files import BindRule, IgnoreRule
+from ..immutable_dict import ImmutableDict
+from ..main_logger import ErrorMsg
+from ..netfilter import rule_to_netfilter
+from ..sb_types import ConfigLines, Envs
+from ..tools import Environ, remove_comments, substitute_env_vars
+from .sse_client_subprocess_daemon import BaseSubProcessDaemon
+from .tools import which_command
+
+logger = logging.getLogger(__name__)
+
+
+class UnshareSSEDaemon(BaseSubProcessDaemon):
+    """Unshare-based subprocess daemon for OS-level sandboxing.
+
+    Uses `unshare`, `slirp4netns`, `iptables`, and `mount` to create
+    an isolated environment.
+    """
+
+    @override
+    def parse_rules(
+        self,
+        rules: ConfigLines,
+        errors: list[ErrorMsg],
+    ) -> tuple[ImmutableDict[str, Any], ConfigLines]:
+        unshare_params = {}
+        ignore_rules: ConfigLines = []
+
+        for rule in rules:
+            if rule.rule.startswith("unshare."):
+                param = rule.rule[len("unshare.") :]
+                key, _, val = param.partition("=")
+                unshare_params[key] = val
+            else:
+                ignore_rules.append(rule)
+        return ImmutableDict(unshare_params), ignore_rules
+
+    @override
+    def update_rules(
+        self,
+        *,
+        all_rules: AllRules,
+        envs: Envs,
+        temp: Path,
+    ) -> AllRules:
+        """Update rules for unshare context.
+
+        Args:
+            all_rules: Current security rules.
+            envs: Environment variables.
+
+        Returns:
+            Updated security rules.
+        """
+        # We don't change the rules themselves, but we prepare the environment
+        # in subprocess_cmd.
+        return all_rules
+
+    @override
+    def subprocess_cmd(
+        self,
+        all_rules: AllRules,
+        envs: Environ,
+        pipe_path: Path,
+        temp: Path,
+    ) -> list[str]:
+        """Build complete command line for unshare subprocess.
+
+        Args:
+            all_rules: Security rules configuration.
+            envs: Environment variables.
+            pipe_path: Path to configuration pipe.
+
+        Returns:
+            Complete command line arguments.
+        """
+        # 1. Verify availability
+        unshare_cmd = which_command("unshare")
+        if not unshare_cmd:
+            logger.error("unshare not found.")
+            sys.exit(1)
+
+        # Verify sysctl kernel.unprivileged_userns_clone
+        try:
+            with open("/proc/sys/kernel/unprivileged_userns_clone", "r") as f:
+                content = f.read().strip()
+                if content != "1":
+                    raise RuntimeError("kernel.unprivileged_userns_clone must be 1")
+        except FileNotFoundError:
+            # If the file doesn't exist, we assume it's capable (mainstream kernel)
+            pass
+
+        # 2. Prepare arguments
+        args = [str(unshare_cmd)]
+
+        # Load template
+        import importlib.resources
+
+        template_path: Path = (
+            cast(
+                Path,
+                importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])),
+            )
+            / ".."
+            / "templates"
+            / "unshare.template"
+        )
+        template_conf = remove_comments(template_path.read_text().splitlines())
+        envs["UID"] = str(os.getuid())
+        envs["GID"] = str(os.getgid())
+        template_conf = substitute_env_vars(template_conf, envs)
+
+        for line in template_conf:
+            args.extend(line.split())
+
+        # Add custom params
+        for k, v in all_rules.os_sandbox_params.items():
+            if v:
+                args.append(f"--{k}={v}")
+            else:
+                args.append(f"--{k}")
+
+        # 3. Networking (IPTables)
+        from ipaddress import IPv4Address
+        from .tools import get_systemd_resolved_upstream_dns
+
+        dns_servers = [ip for ip in get_systemd_resolved_upstream_dns() if isinstance(ip, IPv4Address)]
+        net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
+
+        # 4. Generate Setup Script and Netfilter via FIFOs
+        if DEBUG_LAUNCH:
+            setup_script_path = Path("setup_unshare.sh")
+            netfilter_file = Path("iptables.rules")
+        else:
+            setup_script_path = temp / "setup_unshare.sh"
+            if setup_script_path.exists():
+                setup_script_path.unlink()
+            os.mkfifo(setup_script_path)
+
+            netfilter_file = temp / "iptables.rules"
+            if netfilter_file.exists():
+                netfilter_file.unlink()
+            os.mkfifo(netfilter_file)
+
+        # Build MOUNTS block
+        mounts_cmds = []
+        seen_mounts = set()
+
+        def add_mount(cmd: str) -> None:
+            if cmd not in seen_mounts:
+                mounts_cmds.append(cmd)
+                seen_mounts.add(cmd)
+
+        # System paths
+        for p in ["/bin", "/usr", "/lib", "/lib64", "/etc"]:
+            add_mount(f'mount_readonly "{p}"')
+
+        # Python environment
+        python_paths = [sys.executable] + sys.path
+        if hasattr(site, "getsitepackages"):
+            python_paths += site.getsitepackages()
+
+        for p in python_paths:
+            if p and os.path.exists(p):
+                add_mount(f'mount_readonly "{p}"')
+
+        # Current directory
+        add_mount(f'mount_readwrite "{os.getcwd()}"')
+
+        # Rules from configuration
+        for rule in all_rules.file_rules:
+            if isinstance(rule, BindRule):
+                if rule.write:
+                    add_mount(f'mount_readwrite "{rule.source}" "{rule.dest}"')
+                else:
+                    add_mount(f'mount_readonly "{rule.source}" "{rule.dest}"')
+            elif isinstance(rule, IgnoreRule):
+                add_mount(f'hide_path "{rule.source}"')
+
+        # Load and fill unshare.sh template
+        template_sh_path: Path = (
+            cast(
+                Path,
+                importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])),
+            )
+            / ".."
+            / "templates"
+            / "unshare.sh"
+        )
+        setup_script_content = template_sh_path.read_text().replace("${MOUNTS}", "\n".join(mounts_cmds))
+        # Ensure the script uses the correct netfilter file path
+        setup_script_content = setup_script_content.replace("iptables.rules", str(netfilter_file))
+
+        def publish_setup() -> None:
+            setup_script_path.write_text(setup_script_content)
+            if not DEBUG_LAUNCH:
+                try:
+                    setup_script_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+        def publish_netfilter() -> None:
+            netfilter_file.write_text("\n".join(net_filter4))
+            if not DEBUG_LAUNCH:
+                try:
+                    netfilter_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+        threading.Thread(target=publish_setup, daemon=True).start()
+        threading.Thread(target=publish_netfilter, daemon=True).start()
+
+        # 5. Construct final command
+        args.append("--")
+        args.append("/bin/bash")
+        args.append(str(setup_script_path))
+
+        # Append the python command
+        run_daemon_cmd = BaseSubProcessDaemon.subprocess_cmd(
+            self,
+            all_rules,
+            envs,
+            pipe_path,
+            temp=temp,
+        )
+        args.extend(run_daemon_cmd)
+
+        return args
+
+    def _get_slirp4netns(self):
+        slirp_cmd = which_command("slirp4netns")
+        if not slirp_cmd:
+            logger.error("slirp4netns not found. Install it with:")
+            logger.error(suggest_package_installation("slirp4netns"))
+            try:
+                if self._process:
+                    self._process.kill()
+            except Exception:
+                pass
+            sys.exit(1)
+        return slirp_cmd
+
+    @override
+    async def _on_process_started(self) -> None:
+        """Start slirp4netns after the unshare process is created."""
+
+        self.extracted_method()
+
+        assert self._process
+        slirp_cmd=self._get_slirp4netns()
+        slirp_args = [
+            str(slirp_cmd),
+            "--configure",
+            "--mtu=65520",
+            "--disable-host-loopback",
+            str(self._process.pid),
+            "tap0",
+        ]
+
+        logger.debug("Starting slirp4netns: %s", slirp_args)
+        self._slirp_process = subprocess.Popen(slirp_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    @override
+    async def _stop(self, max_pending: int) -> None:
+        await super()._stop(max_pending)
+        if hasattr(self, "_slirp_process") and self._slirp_process:
+            try:
+                self._slirp_process.terminate()
+                self._slirp_process.wait(timeout=1)
+            except Exception:
+                pass

@@ -1,0 +1,20 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+# Unshare configuration
+# See man unshare
+# Create a new network namespace
+--net
+# Create a new user namespace
+--user
+# Map the current user to the root user in the namespace
+--map-users=0:${UID}:1
+--map-groups=0:${GID}:1
+# Create a new mount namespace
+--mount
+--propagation private
+# Create a new pid namespace (requires --fork)
+--pid
+--fork
+# Signal the child process when the parent terminates
+--kill-child
+
