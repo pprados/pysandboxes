@@ -5,7 +5,7 @@
       "command": "python",
       "args": [
         "-m", "pysandboxes.python_sb",
-//        "--learn=.py-sandboxesXX",
+//        "--learn=.py-sandboxes",
         "-m", "mcp_server.main",
         "-t", "stdio"
       ],

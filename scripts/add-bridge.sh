@@ -1,5 +1,4 @@
 #!/bin/bash
-set -x
 
 if [[ $EUID -ne 0 ]]; then
     exec sudo "$0" "$@"

@@ -46,7 +46,7 @@ def _debug_log() -> None:
     logging.basicConfig(
         force=True,
         level=logging.DEBUG,
-        format="%(levelname)s - %(message)s",
+        format="- %(levelname)s - %(message)s",
     )
     sandbox_level = logging.DEBUG
     uvicorn_log_level = logging.WARNING
@@ -177,7 +177,6 @@ def main() -> int:
     if all_rules.use_py_sandbox:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
-
         activate_sandboxes(all_rules, os.environ)
 
     # Use python-sb command?

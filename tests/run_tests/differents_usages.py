@@ -17,11 +17,11 @@ def init_log_level() -> None:
         format = "  " + format
     logging.basicConfig(level=min(sandboxes_level, logging.INFO), format=format)
 
-    # if is_in_sandbox():
-    #     # Ident logs inside the sandbox
-    #     root_logger = logging.getLogger()
-    #     root_logger.setLevel(min(sandboxes_level, logging.INFO))
-    #     root_logger.handlers[0].setFormatter(logging.Formatter("  " + format))
+    if is_in_sandbox():
+         # Ident logs inside the sandbox
+         root_logger = logging.getLogger()
+         root_logger.setLevel(min(sandboxes_level, logging.INFO))
+         root_logger.handlers[0].setFormatter(logging.Formatter("  " + format))
 
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)

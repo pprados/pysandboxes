@@ -303,8 +303,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         Returns:
             Updated security rules for firejail context.
         """
-        _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp)
-        return updated_all_rules
+        if REPLACE:
+            _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp, update= True)
+        return all_rules
 
     @property
     @override
@@ -318,6 +319,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         envs: Environ | Envs,
         pipe_path: Path | None,
         temp: Path,
+        update:bool = False,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -515,6 +517,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
                     default_interface = get_default_interface()
                     bridges = get_bridge_interfaces()
+                    logger.debug(f"get_bridge_interfaces()={bridges}")
                     if not bridges:
                         bridge = default_interface
                     else:
@@ -524,6 +527,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                                 break
                         else:
                             bridge = bridges[0]
+                    logger.debug(f"Select bridge {bridges}")
                     if not default_interface:
                         raise ValueError(
                             "Impossible to detect the default network interface"

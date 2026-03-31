@@ -1,5 +1,5 @@
 {
-  "servers": {
+  "mcpServers": {
   // Version with `python-sb`. The user MCP client decide the rules
   //  to use (complete mode) in `../mcp-server/.py-sandboxes`
     "mcp_server": {
@@ -8,7 +8,7 @@
       "args": [
         "-m", "pysandboxes.python_sb",
         "--pysandboxes-config=mcp_server/.py-sandboxes",
-//        "--learn=mcp_server/.py-sandboxes",
+//        "--learn=.py-sandboxes",
         "-m", "mcp_server.main",
         "-t", "stdio"
       ],
