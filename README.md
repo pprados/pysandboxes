@@ -452,9 +452,9 @@ The features of each technology are proposed:
 | ignore=*               |     ✅     |    ✅    |    ❌    |  ❌  |
 | network                |     ✅     |    ✅    |    ✅    |  ❌  |
 | import                 |     ✅     |    ❌    |    ❌    |  ❌  |
-| Resource limits        |     ❌     |    ✅    |    ✅    |  ❌  |
+| Resource limits        |     ❌     |    ✅    |    ❌    |  ❌  |
 | OS-sandbox             |     ❌     |    ✅    |    ✅    |  ❌  |
-| Seccomp                |     ❌     |    ✅    |    ✅    |  ❌  |
+| Seccomp                |     ❌     |    ✅    |    ❌    |  ❌  |
 | Vm compatible          |     ✅     |    ✅    |    ✅    |  ❌  |
 | Container compatible   |     ✅     |    ❌    |    ✅    |  ✅  |
 | Kubernetes compatible  |     ✅     |    ❌    |    ✅    |  ✅  |

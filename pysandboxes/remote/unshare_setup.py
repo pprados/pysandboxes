@@ -54,6 +54,9 @@ class UnshareSetupConfig:
     named_pipe: str
     netfilter_rules: list[str]
     current_dir: str
+    ignore_paths: list[
+        str
+    ]  # paths relative to current_dir to mask (overlay with no-access)
 
     def to_json(self) -> str:
         return json.dumps(
@@ -65,6 +68,7 @@ class UnshareSetupConfig:
                 "named_pipe": self.named_pipe,
                 "netfilter_rules": self.netfilter_rules,
                 "current_dir": self.current_dir,
+                "ignore_paths": self.ignore_paths,
             }
         )
 
@@ -79,6 +83,7 @@ class UnshareSetupConfig:
             named_pipe=d["named_pipe"],
             netfilter_rules=d["netfilter_rules"],
             current_dir=d["current_dir"],
+            ignore_paths=d.get("ignore_paths", []),
         )
 
 
@@ -221,6 +226,36 @@ def main() -> None:
         _mount_bind(src, dst, new_root, readonly=True)
     for src, dst in config.mounts_rw:
         _mount_bind(src, dst, new_root, readonly=False)
+
+    # --- G.2. Apply ignore overlays (mask paths with no-access placeholder) ---
+    if config.ignore_paths and config.current_dir:
+        logger.debug("Apply ignore overlays:")
+        prefix = config.current_dir.rstrip("/") + "/"
+        for rel_path in config.ignore_paths:
+            rel_path = rel_path.lstrip("/")
+            # Path in chroot = new_root + current_dir + rel_path (current_dir can be absolute)
+            full_in_chroot = os.path.normpath(new_root + prefix + rel_path)
+            if not os.path.exists(full_in_chroot):
+                logger.debug(
+                    "ignore path %s not present in chroot, skip", full_in_chroot
+                )
+                continue
+            try:
+                if os.path.isfile(full_in_chroot):
+                    fd, placeholder = tempfile.mkstemp(
+                        dir=os.path.join(new_root, "tmp")
+                    )
+                    os.close(fd)
+                    os.chmod(placeholder, 0o000)
+                    _run(["mount", "--bind", placeholder, full_in_chroot])
+                else:
+                    placeholder = tempfile.mkdtemp(dir=os.path.join(new_root, "tmp"))
+                    os.chmod(placeholder, 0o000)
+                    _run(["mount", "--bind", placeholder, full_in_chroot])
+            except Exception as e:
+                logger.warning(
+                    "Could not overlay ignore path %s: %s", full_in_chroot, e
+                )
 
     # --- H. Pseudo-filesystems ---
     logger.debug("Pseudo-filesystems:")
