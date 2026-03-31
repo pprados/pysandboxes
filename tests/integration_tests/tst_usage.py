@@ -46,7 +46,7 @@ def init_log_level(use_rich: bool = True) -> None:
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
 
-    sandboxes_level = logging.WARNING
+    sandboxes_level = logging.DEBUG
     uvicorn_level = logging.ERROR
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("asyncio").setLevel(uvicorn_level)

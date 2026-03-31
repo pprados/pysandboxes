@@ -10,7 +10,7 @@ SIZE_OF_LOOP = 1  # Try multiple calls
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.WARNING
+    sandboxes_level = logging.DEBUG
     uvicorn_level = logging.WARNING
     format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
     if is_in_sandbox():
@@ -18,10 +18,10 @@ def init_log_level() -> None:
     logging.basicConfig(level=min(sandboxes_level, logging.INFO), format=format)
 
     if is_in_sandbox():
-         # Ident logs inside the sandbox
-         root_logger = logging.getLogger()
-         root_logger.setLevel(min(sandboxes_level, logging.INFO))
-         root_logger.handlers[0].setFormatter(logging.Formatter("  " + format))
+        # Ident logs inside the sandbox
+        root_logger = logging.getLogger()
+        root_logger.setLevel(min(sandboxes_level, logging.INFO))
+        root_logger.handlers[0].setFormatter(logging.Formatter("  " + format))
 
     logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)

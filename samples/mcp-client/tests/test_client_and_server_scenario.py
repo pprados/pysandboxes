@@ -18,16 +18,16 @@ logger = logging.getLogger(__name__)
 
 timeout = 30
 all_mcp_client_os_sandbox: list[str] = [
-    # "None",
-    # "Subprocess",
-    # "firejail",
+    "None",
+    "Subprocess",
+    "firejail",
     "unshare",
 ]
 all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",
-    # "stdio_sandboxes_complete",
-    # "stdio_sandboxes_partial",
-    # "http",
+    "stdio_sandboxes_complete",
+    "stdio_sandboxes_partial",
+    "http",
 ]
 
 
@@ -132,7 +132,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
     return process
 
 
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+#@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
@@ -151,7 +151,7 @@ def test_claude_evaluate_expression(
         if "partial" not in mcp_server_config:
             start_client = ["-m", "pysandboxes.python_sb"]
         else:
-            start_client=[]
+            start_client = []
 
         process = _start_server(mcp_server_config)
         python_executable = which("python")
@@ -192,7 +192,7 @@ def test_claude_evaluate_expression(
             sleep(1)
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+#@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
@@ -209,7 +209,7 @@ def test_claude_fetch_webpage(
         if "partial" not in mcp_server_config:
             start_client = ["-m", "pysandboxes.python_sb"]
         else:
-            start_client=[]
+            start_client = []
         python_executable = which("python")
         assert python_executable is not None
 

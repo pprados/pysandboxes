@@ -177,6 +177,7 @@ def main() -> int:
     if all_rules.use_py_sandbox:
         # Activate python sandbox
         from pysandboxes.py_sandbox import activate_sandboxes
+
         activate_sandboxes(all_rules, os.environ)
 
     # Use python-sb command?
