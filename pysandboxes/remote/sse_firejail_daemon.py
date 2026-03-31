@@ -26,6 +26,8 @@ from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
+from ..config import RELEASE
+
 try:
     from typing import override  # type: ignore[attr-defined]
 except ImportError:
@@ -54,7 +56,7 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-DEBUG_NETFILTER = True  # FIX_RELEASE
+DEBUG_NETFILTER = not RELEASE
 
 # Replace rules to delegate the filter to firejail.
 # The exception are different

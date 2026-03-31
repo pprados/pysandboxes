@@ -23,7 +23,12 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from pysandboxes.config import RELEASE
+
+SLIRP_INTERFACE = "tap0"
+
 logger = logging.getLogger(__name__)
+
 
 def _debug_log() -> None:
     sandbox_level = logging.DEBUG
@@ -35,6 +40,7 @@ def _debug_log() -> None:
         level=sandbox_level,
         format=format,
     )
+
 
 @dataclass
 class UnshareSetupConfig:
@@ -77,8 +83,8 @@ class UnshareSetupConfig:
 
 def _run(cmd: list[str], check=True, **kwargs) -> None:  # type: ignore[no-untyped-def]
     """Run a command, raising on failure."""
-    logger.debug("  %s"," ".join(cmd))
-    subprocess.run(cmd, check=check,**kwargs)
+    logger.debug("  %s", " ".join(cmd))
+    subprocess.run(cmd, check=check, **kwargs)
 
 
 def _mount_bind(src: str, dst: str, new_root: str, readonly: bool) -> None:
@@ -138,23 +144,25 @@ def main() -> None:
 
     # Read configuration
     logger.debug(f"load config ...")
-    txt_config=Path(config_path).read_text()
+    txt_config = Path(config_path).read_text()
     config = UnshareSetupConfig.from_json(txt_config)
     logger.debug(f"config loader {txt_config}")
     logger.debug(f"config dns {config.dns_servers}")
 
-    # --- A. Signal readiness and wait for network ---
-    pid_file = os.environ.get("PID_FILE", "")
-    logger.debug(f"{pid_file=}")
-    if pid_file:
-        Path(pid_file).write_text(str(os.getpid()))
+    # --- A. Wait for network ---
+    # Note: PID_FILE is written by the daemon (sse_unshare_daemon.py) with the
+    # host-visible PID needed by slirp4netns. Do NOT overwrite it here with
+    # os.getpid() which returns the namespace PID (useless for slirp4netns).
 
-    # Wait for slirp4netns readiness on fd 3
+    # Wait for slirp4netns readiness on the fd passed via SLIRP_READY_FD env var
+    ready_fd = int(os.environ.get("SLIRP_READY_FD", "3"))
     try:
-        os.read(3, 1)
-        os.close(3)
-    except OSError:
-        pass
+        logger.debug(f"waiting for slirp4netns readiness on fd {ready_fd}...")
+        data = os.read(ready_fd, 1)
+        logger.debug(f"slirp4netns readiness received: {data!r}")
+        os.close(ready_fd)
+    except OSError as e:
+        logger.debug(f"slirp4netns readiness fd {ready_fd} error: {e}")
 
     # --- B. Configure loopback ---
     _run(["ip", "link", "set", "lo", "up"])
@@ -166,16 +174,15 @@ def main() -> None:
     logger.debug("configure loopback done")
 
     # --- C. Apply iptables rules ---
-    # FIXME
-    # if config.dns_servers and config.netfilter_rules:
-    #     rules_text = "\n".join(config.netfilter_rules)
-    #     subprocess.run(
-    #         ["/usr/sbin/iptables-restore"],
-    #         input=rules_text,
-    #         text=True,
-    #         check=True,
-    #     )
-    # logger.debug("Apply iptables rules done")
+    if config.dns_servers and config.netfilter_rules:
+        rules_text = "\n".join(config.netfilter_rules)
+        subprocess.run(
+            ["/usr/sbin/iptables-restore"],
+            input=rules_text,
+            text=True,
+            check=True,
+        )
+    logger.debug("Apply iptables rules done")
 
     # --- D. Create chroot root ---
     new_root = tempfile.mkdtemp()
@@ -184,6 +191,10 @@ def main() -> None:
         os.makedirs(os.path.join(new_root, d), exist_ok=True)
     os.chmod(os.path.join(new_root, "tmp"), 0o1777)
     logger.debug("Create chroot root done")
+
+    # --- E. System mounts (SSL certs etc.) ---
+    for cert_path in ["/etc/ssl", "/etc/pki", "/etc/ca-certificates"]:
+        _mount_bind(cert_path, cert_path, new_root, readonly=True)
 
     # --- F. Mount current directory ---
     if config.current_dir:
@@ -196,12 +207,6 @@ def main() -> None:
     for src, dst in config.mounts_rw:
         _mount_bind(src, dst, new_root, readonly=False)
     logger.debug("User-defined mounts done")
-
-    # --- E. System mounts (SSL certs etc.) ---
-    for cert_path in ["/etc/ssl", "/etc/pki", "/etc/ca-certificates"]:
-        _mount_bind(cert_path, cert_path, new_root, readonly=True)
-    logger.debug("System mounts done")
-
 
     # --- H. Pseudo-filesystems ---
     dev_path = os.path.join(new_root, "dev")
@@ -229,31 +234,31 @@ def main() -> None:
     logger.debug("Mount named pipe done")
 
     # --- I. DNS/hosts setup ---
-    # if config.dns_servers:
-    #     # Custom DNS: create resolv.conf and hosts
-    #     resolv_tmp = tempfile.NamedTemporaryFile(
-    #         mode="w", delete=False, suffix=".resolv"
-    #     )
-    #     logger.debug(f"write dns {config.dns_servers=}")
-    #     for dns in config.dns_servers:
-    #         resolv_tmp.write(f"nameserver {dns}\n")
-    #     resolv_tmp.close()
-    #
-    #     hosts_tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".hosts")
-    #     hosts_tmp.write("127.0.0.1 localhost\n")
-    #     for h in config.hosts:
-    #         hosts_tmp.write(h + "\n")
-    #     hosts_tmp.close()
-    #
-    #     source_resolv = resolv_tmp.name
-    #     source_hosts = hosts_tmp.name
-    # else:
-    #     # Use host's config (resolve symlinks)
-    #     source_resolv = os.path.realpath("/etc/resolv.conf")
-    #     source_hosts = os.path.realpath("/etc/hosts")
-    # logger.debug("DNS/hosts setup step 1")
-    source_resolv = os.path.realpath("/etc/resolv.conf") # FIXME
-    source_hosts = os.path.realpath("/etc/hosts")  # FIXME
+    if config.dns_servers:
+        # Custom DNS: create resolv.conf and hosts
+        resolv_tmp = tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".resolv"
+        )
+        logger.debug(f"write dns {config.dns_servers=}")
+        dns_servers = config.dns_servers
+        dns_server = ["10.0.2.3"]  # FIXME
+        for dns in dns_servers:
+            resolv_tmp.write(f"nameserver {dns}\n")
+        resolv_tmp.close()
+
+        hosts_tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".hosts")
+        hosts_tmp.write("127.0.0.1 localhost\n")
+        for h in config.hosts:
+            hosts_tmp.write(h + "\n")
+        hosts_tmp.close()
+
+        source_resolv = resolv_tmp.name
+        source_hosts = hosts_tmp.name
+    else:
+        # Use host's config (resolve symlinks)
+        source_resolv = os.path.realpath("/etc/resolv.conf")
+        source_hosts = os.path.realpath("/etc/hosts")
+    logger.debug("DNS/hosts setup step 1")
 
     resolv_target = os.path.join(new_root, "etc", "resolv.conf")
     _ensure_mount_target(resolv_target, new_root)
@@ -287,33 +292,13 @@ def main() -> None:
         "--inh-caps=-all",
         "--bounding-set=-all",
         "--",
-        "/usr/bin/bash"
-        # FIXME *command,
+        *command,
     ]
     os.execvp(exec_args[0], exec_args)
-    logger.debug("enter sandbox done")
-
-def test_raw_dns(server: str = "8.8.8.8") -> None:
-    print(f"Testing raw UDP connection to {server}:53...")
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(2)
-    try:
-        # On n'envoie rien, on teste juste si le port est atteignable
-        sock.connect((server, 53))
-        print("Successfully connected (UDP port reachable).")
-    except Exception as e:
-        print(f"Connection failed: {e}")
-    finally:
-        sock.close()
 
 
 if __name__ == "__main__":
-    _debug_log()  # FIX_RELEASE
-    # Path("/tmp/toto").mkdir(exist_ok=True)
-    # _mount_bind("/etc","/etc","/tmp/toto",readonly=True)
-    import socket
-    resolv=Path("/etc/resolv.conf").read_text()
-    logger.debug("resolv au debut")
-    logger.debug(resolv)
+    if not RELEASE:
+        _debug_log()
 
     main()

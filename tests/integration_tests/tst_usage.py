@@ -11,12 +11,14 @@ from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
 from types import FrameType
 from typing import Any, List, Mapping, cast
 
-from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes, all_rules
+from pysandboxes import SandBoxError, all_rules, is_in_sandbox, sandbox, sandboxes
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
 logger = logging.getLogger(__name__)
 
+OK:str="\u2705\uFE0F "
+KO:str="\u274C\uFE0F "
 
 RANGETEST = 1
 
@@ -124,7 +126,8 @@ def _test_envs() -> None:
         learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
 
     if not learning_mode:
-        assert "USER" not in os.environ, "USER must not be visible"
+        assert "USER" not in os.environ, f"{KO} USER must not be visible"
+    logger.info(f"{OK} Test ENV")
 
 
 def _test_network() -> None:
@@ -175,22 +178,23 @@ def _test_network() -> None:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 remote_ip = socket.gethostbyname("www.github.com")
                 sock.connect((remote_ip, 80))
-            assert learning_mode, "Must be stopped by pysandbox"
+            assert learning_mode, f"{KO} Must be stopped by pysandbox"
         except SandBoxError:
-            print("Connect to github is stopped")
+            logger.info(f"{OK} Connect to github is stopped")
 
         try:
             with socket.socket(AF_INET, SOCK_STREAM) as sock:
                 sock.bind(("127.0.0.1", 9998))
-            assert learning_mode, "Must be stopped by pysandbox"
+            assert learning_mode, f"{KO} Must be stopped by pysandbox"
         except SandBoxError:
-            print("Connect to github is stopped")
+            logger.info(f"{OK} Connect to github is stopped")
         try:
             with socket.socket(AF_INET6, SOCK_STREAM) as sock:
                 sock.bind(("::1", 9998))
-            assert learning_mode, "Must be stopped by pysandbox"
+            assert learning_mode, f"{KO} Must be stopped by pysandbox"
         except SandBoxError:
-            print("Connect to github is stopped")
+            logger.info(f"{OK} Connect to github is stopped")
+    logger.info(f"{OK} Test Network")
 
 
 def _test_files() -> None:
@@ -212,21 +216,22 @@ def _test_files() -> None:
                 pass
             assert learning_mode, "Must be stopped by pysandbox"
         except SandBoxError:
-            print("Write to hack.py is stopped")
+            logger.info(f"{OK} Write to hack.py is stopped")
 
         try:
             with tempfile.TemporaryFile(mode="w+") as _:
                 pass
             assert learning_mode, "Must be stopped by pysandbox"
         except SandBoxError:
-            print("Write to TemporaryFile is stopped")
+            logger.info(f"{OK} Write to TemporaryFile is stopped")
 
         try:
             with tempfile.NamedTemporaryFile(mode="w+", delete=True) as _:
                 pass
             assert learning_mode, "Must be stopped by pysandbox"
         except SandBoxError:
-            print("Write to NamedTemporaryFile is stopped")
+            logger.info(f"{OK} Write to NamedTemporaryFile is stopped")
+    logger.info(f"{OK} Test File")
 
 
 async def ainit_sandbox() -> None:
@@ -257,6 +262,7 @@ async def arun() -> int:
     rc = await arun_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42
+    logger.info(f"{OK} arun()")
     return rc
 
 
@@ -264,6 +270,7 @@ def run() -> int:
     rc = run_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42
+    logger.info(f"{OK} run()")
     return rc
 
 
@@ -294,7 +301,7 @@ async def async_main(argv: List[str]) -> int:
             # logger.info("async_main.kill... done")
             # await asyncio.sleep(5)  # The signal may be catch
 
-    logger.info("async_main.return 0")
+    logger.info(f"{OK} async_main.return 0")
     return 0
 
 
@@ -313,7 +320,7 @@ def sync_main(argv: List[str]) -> int:
         ):
             logger.info("sync_main.run...")
             run()
-            logger.info("sync_main.run...done")
+            logger.info(f"{OK} sync_main.run()")
             # logger.info("sync_main.kill...")
             # os.kill(os.getpid(), signal.SIGTERM)
             # logger.info("sync_main.kill done")
@@ -341,8 +348,10 @@ def _config(argv: list[str]) -> tuple[Path, dict[str, set[str]]]:
 #     with sandboxes(init_fn=init_sandbox):
 #         print("ok")
 
+
 def test_raw_dns(server: str = "8.8.8.8") -> None:
     import socket
+
     print(f"Testing raw UDP connection to {server}:53...")
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(2)
@@ -355,14 +364,12 @@ def test_raw_dns(server: str = "8.8.8.8") -> None:
     finally:
         sock.close()
 
+
 if __name__ == "__main__":
     init_log_level()
-    resolv=Path("/etc/resolv.conf").read_text() # FIXME
-    logger.debug("resolv au dans tst usage")
-    logger.debug(resolv)
-    test_raw_dns("192.168.0.254")
 
-    # sync_main(sys.argv)
+    sync_main(sys.argv)
+
     logger.info("-------------------------")
     asyncio.run(async_main(sys.argv))
     logger.info("End of __main__")

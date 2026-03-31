@@ -34,6 +34,7 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
+from ..config import RELEASE
 from ..guard_socket import SocketRule
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
@@ -56,7 +57,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG_LAUNCH = False  # FIX_RELEASE
+DEBUG_LAUNCH = False
 
 
 def get_log_formatter() -> str:
@@ -159,6 +160,7 @@ async def launch_sandbox(
     process_config: DaemonParameters,
     extra_preexec_fn: Callable[[], None] | None = None,
     pass_fds: tuple[int, ...] = (),
+    on_launched: Callable[[int], None] | None = None,
 ) -> Process:
     """Launch a sandbox subprocess with the given configuration.
 
@@ -169,6 +171,8 @@ async def launch_sandbox(
         process_config: Configuration parameters to send to subprocess.
         extra_preexec_fn: Optional additional preexec function to run in child.
         pass_fds: File descriptors to keep open in the child process.
+        on_launched: Optional callback invoked with the process PID after
+            subprocess creation but before writing config to the FIFO.
 
     Returns:
         The launched subprocess.
@@ -208,6 +212,10 @@ async def launch_sandbox(
             *cmd,
             **subprocess_kwargs,
         )
+
+        # Notify caller before blocking on FIFO write (e.g., to start slirp4netns)
+        if on_launched and process.pid is not None:
+            on_launched(process.pid)
 
         # It's a good time for that
         gc.collect()
