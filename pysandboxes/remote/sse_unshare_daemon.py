@@ -12,6 +12,7 @@ process. The daemon itself manages slirp4netns networking and port forwarding.
 """
 
 import asyncio
+import fnmatch
 import gc
 import json
 import logging
@@ -92,6 +93,37 @@ def _is_socket(path: str) -> bool:
         return stat.S_ISSOCK(os.stat(path).st_mode)
     except (OSError, ValueError):
         return False
+
+
+def _resolve_ignore_paths(
+    current_dir: str,
+    ignore_rules: list[IgnoreRule],
+) -> list[str]:
+    """Resolve ignore rules to concrete paths under current_dir.
+
+    Walks the directory tree and collects paths whose basename matches any
+    ignore pattern (same semantics as guard_files). Returns paths relative
+    to current_dir.
+    """
+    if not ignore_rules:
+        return []
+    patterns = [r.source for r in ignore_rules]
+    result: list[str] = []
+    try:
+        cur = Path(current_dir).resolve()
+        for root, _dirs, files in os.walk(cur):
+            root_path = Path(root)
+            for name in list(_dirs) + files:
+                if any(fnmatch.fnmatch(name, p) for p in patterns):
+                    rel = root_path / name
+                    try:
+                        rel = rel.relative_to(cur)
+                    except ValueError:
+                        continue
+                    result.append(str(rel))
+    except OSError:
+        pass
+    return result
 
 
 class UnshareSSEDaemon(BaseSubProcessDaemon):
@@ -246,7 +278,13 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 dest = rule.dest if rule.dest is not None else rule.source
                 mounts.add((rule.source, dest, rule.write))
             elif isinstance(rule, IgnoreRule):
-                pass  # FIXME
+                pass  # Handled via ignore_paths overlay in unshare_setup
+
+        current_dir = os.getcwd()
+        ignore_paths = _resolve_ignore_paths(
+            current_dir,
+            [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)],
+        )
 
         config = UnshareSetupConfig(
             dns_servers=[str(ip) for ip in dns_servers],
@@ -255,7 +293,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             mounts_rw=[(m[0], m[1]) for m in mounts if m[2]],
             named_pipe=str(pipe_path),
             netfilter_rules=net_filter4,
-            current_dir=os.getcwd(),
+            current_dir=current_dir,
+            ignore_paths=ignore_paths,
         )
         return config, dns_servers
 
