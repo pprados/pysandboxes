@@ -56,7 +56,6 @@ from ..tools import (
     remove_comments,
     substitute_env_vars,
 )
-from . import main_shutdown
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
@@ -67,16 +66,13 @@ from .parameters import (
     RETRY_MAX_DELAY,
     RETRY_RESET_DELAY,
     TIMEOUT_FOR_PING,
-    TIMEOUT_FOR_STOP_DAEMON,
 )
-from .sse_base_daemon import BaseSSESandbox
 from .sse_client_subprocess_daemon import (
     DEBUG_LAUNCH,
     BaseSubProcessDaemon,
     DaemonParameters,
     find_free_port,
     get_log_formatter,
-    launch_sandbox,
     use_rich_handler,
 )
 from .tools import get_upstream_dns, which_command
@@ -85,7 +81,10 @@ from .unshare_setup import UnshareSetupConfig
 logger = logging.getLogger(__name__)
 
 SLIRP_INTERFACE = "tap0"
+
+
 # TODO: demander de gérer le plantage de slirp4netns
+
 
 def _is_socket(path: str) -> bool:
     """Check if a path is a Unix socket."""
@@ -320,13 +319,27 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
     # -- slirp4netns management (integrated from unshare_launcher) --
 
+    SLIRP_WATCHER_TIMEOUT = 30  # seconds to wait for PID file
+
     def _slirp_watcher(self, pid_file: str, api_socket: str, pipe_w: int) -> None:
         """Background thread: waits for PID, launches slirp4netns, signals readiness."""
         # Wait for the PID file to be written
         logger.debug(
             "slirp_watcher: waiting for pid_file %s, pipe_w=%d", pid_file, pipe_w
         )
+        deadline = time.monotonic() + self.SLIRP_WATCHER_TIMEOUT
         while True:
+            if time.monotonic() > deadline:
+                logger.error(
+                    "slirp_watcher: timed out waiting for pid_file %s after %ds",
+                    pid_file,
+                    self.SLIRP_WATCHER_TIMEOUT,
+                )
+                try:
+                    os.close(pipe_w)
+                except OSError:
+                    pass
+                return
             try:
                 content = Path(pid_file).read_text().strip()
                 if content:
@@ -354,17 +367,31 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             proc = subprocess.Popen(
                 slirp_arg,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=(
+                    subprocess.PIPE
+                    if logger.getEffectiveLevel() == logging.DEBUG
+                    else subprocess.DEVNULL
+                ),
                 pass_fds=(pipe_w,),
             )
             self._slirp_process = proc
             logger.debug("slirp_watcher: slirp4netns launched (pid=%d)", proc.pid)
             proc.wait()
+            stderr_output = (
+                proc.stderr.read().decode(errors="replace") if proc.stderr else ""
+            )
             logger.debug(
                 "slirp_watcher: slirp4netns exited with code %d", proc.returncode
             )
+            if stderr_output:
+                logger.error(
+                    "slirp_watcher: slirp4netns stderr: %s", stderr_output.strip()
+                )
+            if proc.returncode != 0:
+                sys.exit(-1)
         except Exception:
             logger.exception("slirp_watcher: exception launching slirp4netns")
+            sys.exit(-1)
         finally:
             self._slirp_process = None
             try:
@@ -379,12 +406,14 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             return
 
         # Wait for API socket (timeout ~5s)
-        for _ in range(50):
+        for _ in range(10):
             if os.path.exists(api_socket) and _is_socket(api_socket):
                 break
             time.sleep(0.1)
             logger.debug("sleep setup port")
         else:
+            logger.error("Impossible to read the setup port")
+            sys.exit(-1)
             return
 
         for spec in ports_spec.split():
@@ -484,7 +513,15 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         self._slirp_pid_file_for_watcher = pid_file
         self._slirp_api_socket_for_watcher = api_socket
 
+        # unshare_setup.py runs BEFORE the sandbox is built (it creates the
+        # chroot, configures networking, etc.). It needs a full working
+        # environment (PATH for mount/ip/iptables, PYTHONPATH for module
+        # imports, HOME, LANG, etc.). When learn=False, python_sb.py strips
+        # os.environ — but for unshare mode, isolation comes from the
+        # namespaces + chroot, NOT from env stripping. So we re-inject the
+        # full host environment here.
         extra_envs: Environ = {
+            # **os.environ,  # FIXME
             "PID_FILE": pid_file,
             "SLIRP_READY_FD": str(slirp_pipe_r),
         }

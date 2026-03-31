@@ -456,18 +456,17 @@ The features of each technology are proposed:
 | OS-sandbox             |     ❌     |    ✅    |    ✅    |  ❌  |
 | Seccomp                |     ❌     |    ✅    |    ✅    |  ❌  |
 | Vm compatible          |     ✅     |    ✅    |    ✅    |  ❌  |
-| Container`` compatible |     ✅     |    ❌    |    ❌    |  ✅  |
+| Container compatible   |     ✅     |    ❌    |    ✅    |  ✅  |
+| Kubernetes compatible  |     ✅     |    ❌    |    ✅    |  ✅  |
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
->>
 
 >> Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
->>
 
 To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file, or set the environment variable `OS_SANDBOX`.
 
 ```shell
-OS_SANDBOX=firejail python-sb -m my-module
+OS_SANDBOX=unshare python-sb -m my-module
 ```
 
 ---

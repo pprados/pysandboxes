@@ -1,6 +1,6 @@
 .agent/
-.auto-claude/
-.claude/
+#.auto-claude/
+#.claude/
 .devpi/
 .entire/
 .gemini/

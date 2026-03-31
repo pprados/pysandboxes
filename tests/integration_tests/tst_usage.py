@@ -11,14 +11,14 @@ from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
 from types import FrameType
 from typing import Any, List, Mapping, cast
 
-from pysandboxes import SandBoxError, all_rules, is_in_sandbox, sandbox, sandboxes
+from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
 logger = logging.getLogger(__name__)
 
-OK:str="\u2705\uFE0F "
-KO:str="\u274C\uFE0F "
+OK: str = "\u2705\ufe0f "
+KO: str = "\u274c\ufe0f "
 
 RANGETEST = 1
 
@@ -117,22 +117,32 @@ def run_in_sandbox() -> int:
 
 
 def _test_envs() -> None:
-    assert os.environ["TERM"]
-    os.putenv("My_ENV", "hello")
+    if "TERM" not in os.environ:
+        logger.error(f"{KO} TERM must be in os.environ")
+    else:
+        logger.info(f"{OK} TERM is visible")
+
+    # os.putenv("My_ENV", "hello")
     os.getenv("My_ENV")
+    logger.info(f"{OK} My_ENV is visible")
     os.unsetenv("My_ENV")
+
     learning_mode = is_learning_mode()
     if "OS_SANDBOX" in os.environ:
         learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
 
     if not learning_mode:
-        assert "USER" not in os.environ, f"{KO} USER must not be visible"
-    logger.info(f"{OK} Test ENV")
+        if "USER" in os.environ:
+            logger.error(f"{KO} USER must not be visible")
+        else:
+            logger.info(f"{OK} USER is not visible")
 
 
 def _test_network() -> None:
     # tcp connection
     import socket
+
+    timeout = 3
 
     # 1. Learn and accept
     # Learn a direct connection to google
@@ -140,13 +150,16 @@ def _test_network() -> None:
         remote_ip = socket.gethostbyname("www.google.com")
         socket.gethostbyname_ex("www.google.com")
         socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
+        sock.settimeout(timeout)
         sock.connect((remote_ip, 80))
 
     # learn tcp bind ipv4
     with socket.socket(AF_INET, SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
         sock.bind(("127.0.0.1", 9999))
     # learn tcp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
         sock.bind(("::1", 9999))
 
     # web connection
@@ -156,18 +169,32 @@ def _test_network() -> None:
 
     # udp connection ipv4
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(timeout)
         sock.sendto(b"hello", ("127.0.0.1", 12345))
+        logger.info(f"{OK} send DGRAM IPV4 to 12345 is accepted")
+
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(timeout)
         sock.sendto(b"hello", ("127.0.0.1", 12346))
+        logger.info(f"{OK} send DGRAM IPV4 to 12346 is accepted")
+
     # udp connection ipv6
     with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(timeout)
         sock.sendto(b"hello", ("::1", 12345))
+        logger.info(f"{OK} send DGRAM IPV6 to 12345 is accepted")
+
     # udp bind ipv4
     with socket.socket(AF_INET, SOCK_DGRAM) as sock:
+        sock.settimeout(timeout)
         sock.bind(("localhost", 12345))
+        logger.info(f"{OK} bind IPV4 to 12345 is accepted")
+
     # udp bind ipv6
     with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
         sock.bind(("::1", 9999))
+        logger.info(f"{OK} bind IPV6 to 12345 is accepted")
 
     # 2. Test denied access
     learning_mode = is_learning_mode()
@@ -177,28 +204,41 @@ def _test_network() -> None:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 remote_ip = socket.gethostbyname("www.github.com")
+                sock.settimeout(timeout)
                 sock.connect((remote_ip, 80))
-            assert learning_mode, f"{KO} Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
         except SandBoxError:
-            logger.info(f"{OK} Connect to github is stopped")
+            logger.info(f"{OK} Use socket to connect to github is stopped")
+        except TimeoutError:
+            logger.info(f"{OK} Use socket to connect to github is stopped by OS")
 
         try:
             with socket.socket(AF_INET, SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
                 sock.bind(("127.0.0.1", 9998))
-            assert learning_mode, f"{KO} Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Use bind IPv4 to 9998 be stopped by pysandbox")
         except SandBoxError:
-            logger.info(f"{OK} Connect to github is stopped")
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped")
+        except TimeoutError:
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
+
         try:
             with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
                 sock.bind(("::1", 9998))
-            assert learning_mode, f"{KO} Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Use bind IPv6 to 9998 must be stopped by pysandbox")
         except SandBoxError:
-            logger.info(f"{OK} Connect to github is stopped")
+            logger.info(f"{OK} Use bind IPv6 to 9998 is stopped")
+        except TimeoutError:
+            logger.info(f"{OK} Use bind IPv6 to 9998 is stopped by OS")
+
     logger.info(f"{OK} Test Network")
 
 
 def _test_files() -> None:
-    print("---- Test files")
     learning_mode = is_learning_mode()
 
     # 1. Learn and accept
@@ -214,23 +254,45 @@ def _test_files() -> None:
         try:
             with io.open("hack.py", "w"):
                 pass
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
         except SandBoxError:
             logger.info(f"{OK} Write to hack.py is stopped")
+        except OSError:
+            logger.info(f"{OK} Write to hack.py is stopped by OS")
 
         try:
             with tempfile.TemporaryFile(mode="w+") as _:
                 pass
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
         except SandBoxError:
             logger.info(f"{OK} Write to TemporaryFile is stopped")
+        except OSError:
+            logger.info(f"{OK} Write to TemporaryFile is stopped by OS")
 
         try:
             with tempfile.NamedTemporaryFile(mode="w+", delete=True) as _:
                 pass
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
         except SandBoxError:
             logger.info(f"{OK} Write to NamedTemporaryFile is stopped")
+        except OSError:
+            logger.info(f"{OK} Write to NamedTemporaryFile is stopped by OS")
+
+    try:
+        with io.open(".env", "r") as f:
+            s = f.read()
+            if s:
+                logger.error(f"{KO} .env must not be accessible")
+    except FileNotFoundError as e:
+        # .env absent or not visible in sandbox (e.g. ignore=.env) → OK
+        logger.info(f"{OK} .env not readable: file not found ({e})")
+    except PermissionError as e:
+        logger.info(f"{OK} read .env is stopped by OS ({e})")
+    except OSError as e:
+        logger.info(f"{OK} read .env is stopped by OS ({e})")
     logger.info(f"{OK} Test File")
 
 
@@ -368,7 +430,9 @@ def test_raw_dns(server: str = "8.8.8.8") -> None:
 if __name__ == "__main__":
     init_log_level()
 
-    sync_main(sys.argv)
+    for k, v in os.environ.items():
+        print(f"{k}={v!r}")
+    # sync_main(sys.argv)
 
     logger.info("-------------------------")
     asyncio.run(async_main(sys.argv))

@@ -61,7 +61,7 @@ def _debug_log() -> None:
     logging.getLogger("pysandboxes.guard_import").setLevel(logging.INFO)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
     logger.debug(
-        "*** Start main_sandbox\n"
+        "*** Start main_sandbox ***\n"
         + " ".join((repr(c) if " " in c else c for c in sys.argv))
     )
 

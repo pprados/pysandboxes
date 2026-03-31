@@ -8,6 +8,13 @@ spec:
       image: python:latest
       workingDir: /app
       command: [ "/bin/sh", "-c","sleep infinity" ] # Garde le pod en vie
+      securityContext:
+        capabilities:
+          add:
+            - SYS_ADMIN   # Permet unshare (créer des namespaces)
+            - NET_ADMIN    # Permet la configuration réseau (ip link, etc.)
+        seccompProfile:
+          type: Unconfined  # Désactive le filtre qui bloque unshare
 #      command: [ "/bin/sh", "-c" ] # Garde le pod en vie
 #      args:
 #        - |
@@ -18,8 +25,14 @@ spec:
       volumeMounts:
         - name: code-local
           mountPath: /app  # Chemin à l'intérieur du Pod
+        - name: dev-net-tun
+          mountPath: /dev/net/tun  # Requis par slirp4netns
   volumes:
     - name: code-local
       hostPath:
         path: /mnt/pysandboxes
         type: Directory
+    - name: dev-net-tun
+      hostPath:
+        path: /dev/net/tun
+        type: CharDevice

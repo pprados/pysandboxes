@@ -118,13 +118,9 @@ def generate_config_from_learning() -> None:
 
         # Insert new rules in the file
         if RELEASE:
-            pattern: str = (
-                r"^# </([^\}]+)>"
-            )
+            pattern: str = r"^# </([^\}]+)>"
         else:
-            pattern: str = (
-                r"^<!IGNORE!>"
-            )
+            pattern: str = r"^<!IGNORE!>"
         for i, line in enumerate(all_lines):
             match = re.search(pattern, line)
             if match and match.group(1) in replaces:
