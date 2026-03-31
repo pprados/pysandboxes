@@ -8,7 +8,7 @@
       "command": "python",
       "args": [
         "-m", "mcp_server.main",
-        "--learn=mcp_server/.py-sandboxes",
+        //"--learn=.py-sandboxes",
         "-t", "stdio",
         "--sandbox-port", "48000"  // Force a port to communicate with the sandbox, and add it in .py-sandboxes
       ],

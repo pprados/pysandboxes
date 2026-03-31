@@ -8,6 +8,7 @@ import re
 import subprocess
 from shutil import which
 from subprocess import Popen, run
+from time import sleep
 from typing import Optional
 
 import pytest
@@ -23,9 +24,9 @@ all_mcp_client_os_sandbox: list[str] = [
     "unshare",
 ]
 all_mcp_server_config: list[str] = [
-    # "stdio_no_sandbox",
+    "stdio_no_sandbox",
     # "stdio_sandboxes_complete",
-    "stdio_sandboxes_partial",
+    # "stdio_sandboxes_partial",
     # "http",
 ]
 
@@ -188,9 +189,10 @@ def test_claude_evaluate_expression(
     finally:
         if process:
             process.kill()
+            sleep(1)
 
 
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)

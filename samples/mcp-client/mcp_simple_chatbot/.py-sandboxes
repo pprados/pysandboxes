@@ -97,4 +97,5 @@ net=ALLOW|TCP|localhost|48000|*
 ro-bind=.,.
 
 firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
-firejail.net=br0  # Use specific brige ? Else, use docker0 if exist
+#firejail.net=br0  # Use specific brige ? Else, use docker0 if exist
+include ".py-sandboxes.pycharm"
