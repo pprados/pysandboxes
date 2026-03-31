@@ -304,7 +304,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             Updated security rules for firejail context.
         """
         if REPLACE:
-            _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp, update= True)
+            _, updated_all_rules = self._firejail_args(
+                all_rules, envs, None, temp=temp, update=True
+            )
         return all_rules
 
     @property
@@ -319,7 +321,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         envs: Environ | Envs,
         pipe_path: Path | None,
         temp: Path,
-        update:bool = False,
+        update: bool = False,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 

@@ -324,7 +324,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             / "templates"
             / "unshare_launch.sh"
         )
-        template_launch_sh_path = template_launch_sh_path.relative_to(Path.cwd())
+        # FIXME
+        # template_launch_sh_path = template_launch_sh_path.relative_to(Path.cwd())
         # args = ["/bin/bash", str(template_launch_sh_path)] + args
         # extra_envs = extra_envs | {
         #     "PYSANDBOXES_HOSTS": "1.2.3.4 my-test.local;8.8.8.8 dns.google",  # FIXME

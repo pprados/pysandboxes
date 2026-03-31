@@ -43,11 +43,14 @@ if [ "$FOUND_SEP" -eq 0 ]; then
     COMMAND_ARGS=("${ARGS[@]}")
 fi
 
-# Resolve the command to an absolute path, following symlinks
+# Resolve the command to an absolute path, preserving symlinks.
+# IMPORTANT: We must NOT follow symlinks (no readlink -f) because virtual
+# environment Python binaries are symlinks, and Python uses argv[0] to
+# detect the venv and locate its site-packages.
 if [ ${#COMMAND_ARGS[@]} -gt 0 ]; then
     CMD="${COMMAND_ARGS[0]}"
     if command -v "$CMD" >/dev/null 2>&1; then
-        RESOLVED=$(readlink -f "$(which "$CMD")")
+        RESOLVED=$(realpath -s "$(which "$CMD")")
         COMMAND_ARGS[0]="$RESOLVED"
     fi
 fi

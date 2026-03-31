@@ -289,6 +289,8 @@ async def run(args: argparse.Namespace) -> None:
             w_command = which(mcp_server["command"])
             if w_command:
                 mcp_server["command"] = w_command
+            elif mcp_server["command"] in ("python", "python3"):
+                mcp_server["command"] = sys.executable
             else:
                 logger.debug(
                     "Impossible to find the command %s", repr(mcp_server["command"])
