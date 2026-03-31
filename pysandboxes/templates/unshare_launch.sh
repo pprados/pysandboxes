@@ -80,9 +80,9 @@ exec 4<&-
 echo "$UNSHARE_PID" > "$SLIRP_PID_FILE"
 
 # --- 2.5. SET UP PORT FORWARDING ---
-# If PYSANDBOXES_PORT is set, forward host:PORT -> sandbox 10.0.2.100:PORT
-# This allows the host to reach the FastAPI server inside the network namespace.
-if [ -n "${PYSANDBOXES_PORT:-}" ]; then
+# Forward all INPUT-allowed ports: host:PORT -> sandbox 10.0.2.100:PORT
+# PYSANDBOXES_PORTS format: space-separated "proto:port" pairs (e.g. "tcp:8080 udp:9090")
+if [ -n "${PYSANDBOXES_PORTS:-}" ]; then
     # Wait for API socket to be created by slirp4netns (timeout ~5s)
     _timeout=50
     while [ ! -S "$API_SOCKET" ] && [ $_timeout -gt 0 ]; do
@@ -92,22 +92,29 @@ if [ -n "${PYSANDBOXES_PORT:-}" ]; then
     if [ -S "$API_SOCKET" ]; then
         python3 -c "
 import socket, json, sys
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-s.connect(sys.argv[1])
-cmd = json.dumps({
-    'execute': 'add_hostfwd',
-    'arguments': {
-        'proto': 'tcp',
-        'host_addr': '127.0.0.1',
-        'host_port': int(sys.argv[2]),
-        'guest_addr': '10.0.2.100',
-        'guest_port': int(sys.argv[2])
-    }
-})
-s.sendall(cmd.encode() + b'\0')
-s.recv(4096)
-s.close()
-" "$API_SOCKET" "$PYSANDBOXES_PORT" 2>/dev/null || true
+api = sys.argv[1]
+for spec in sys.argv[2:]:
+    proto, port = spec.split(':', 1)
+    port = int(port)
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(api)
+        cmd = json.dumps({
+            'execute': 'add_hostfwd',
+            'arguments': {
+                'proto': proto,
+                'host_addr': '127.0.0.1',
+                'host_port': port,
+                'guest_addr': '10.0.2.100',
+                'guest_port': port
+            }
+        })
+        s.sendall(cmd.encode() + b'\0')
+        s.recv(4096)
+        s.close()
+    except Exception:
+        pass
+" "$API_SOCKET" ${PYSANDBOXES_PORTS} 2>/dev/null || true
     fi
 fi
 

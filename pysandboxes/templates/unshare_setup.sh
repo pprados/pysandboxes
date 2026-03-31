@@ -37,9 +37,9 @@ if [ -n "${DNS_SERVER:-}" ]; then
     fi
 
     # --- C. APPLY FIREWALL RULES ---
-#    if [ -f "iptables.rules" ]; then
-#        iptables-restore < "iptables.rules"
-#    fi
+    if [ -f "iptables.rules" ]; then
+        iptables-restore < "iptables.rules"
+    fi
 fi
 
 # --- D. PREPARE NEW ISOLATED ROOT (CHROOT) ---

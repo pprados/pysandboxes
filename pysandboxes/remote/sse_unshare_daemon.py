@@ -24,6 +24,7 @@ except ImportError:
 
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
+from ..guard_socket import Action, Direction, Kind
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
@@ -285,8 +286,31 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             pipe_path,
             temp=temp,
         )
-        # Pass port for slirp4netns host→sandbox port forwarding
-        extra_envs["PYSANDBOXES_PORT"] = str(self.port)
+        # Extract all INPUT-ALLOW ports from socket_rules for slirp4netns forwarding
+        tcp_ports: set[int] = {self.port}  # Always include daemon port
+        udp_ports: set[int] = set()
+
+        for rule in all_rules.socket_rules:
+            if rule.action != Action.ALLOW or Direction.IN not in rule.directions:
+                continue
+            ports = rule.mask.ports
+            if isinstance(ports, range) and len(ports) > 1000:
+                logger.warning(
+                    "Cannot forward wildcard port range from rule '%s'. "
+                    "Use explicit ports instead.",
+                    rule.config.rule,
+                )
+                continue
+            port_list = list(ports)
+            for kind in rule.mask.kinds:
+                if kind == Kind.TCP:
+                    tcp_ports.update(port_list)
+                elif kind == Kind.UDP:
+                    udp_ports.update(port_list)
+
+        port_forwards = [f"tcp:{p}" for p in sorted(tcp_ports)]
+        port_forwards += [f"udp:{p}" for p in sorted(udp_ports)]
+        extra_envs["PYSANDBOXES_PORTS"] = " ".join(port_forwards)
         args.extend(run_daemon_cmd)
 
         template_launch_sh_path: Path = (
