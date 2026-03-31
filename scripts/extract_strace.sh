@@ -2,6 +2,7 @@
 # Script: extract_syscalls_from_app.sh
 # Purpose: Traces a program using strace -c and generates a comma-separated
 # list of syscalls for Seccomp profiling.
+set -euo pipefail
 
 # Check if an application was provided
 if [ "$#" -eq 0 ]; then

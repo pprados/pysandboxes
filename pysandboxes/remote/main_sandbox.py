@@ -24,6 +24,7 @@ import sys
 from logging import StreamHandler
 from pathlib import Path
 
+from pysandboxes.config import RELEASE
 from pysandboxes.guard_socket import set_pin_dns
 from pysandboxes.learning import (
     generate_config_from_learning,
@@ -137,7 +138,8 @@ def main() -> int:
         Exit code (0 for success, non-zero for errors).
     """
     logging.getLogger().addHandler(StreamHandler(None))  # Set default handler to stderr
-    _debug_log()  # FIX_RELEASE
+    if not RELEASE:
+        _debug_log()
 
     parser = argparse.ArgumentParser(
         description="Start a Python-sandbox daemon inside os-sandbox."

@@ -12,14 +12,14 @@ spec:
 #      args:
 #        - |
 #          apt update && \
-#          apt install -y libvirt-dev pkg-config iptables && \
-#          pip install . && \
-#          python-sb -m tests.integration_tests.tst_usage && \
+#          apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns && \
+#          pip install -e . && \
+#          OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage
       volumeMounts:
         - name: code-local
           mountPath: /app  # Chemin à l'intérieur du Pod
   volumes:
     - name: code-local
       hostPath:
-        path: /mnt/pysandboxes # MODIFIEZ CECI
+        path: /mnt/pysandboxes
         type: Directory

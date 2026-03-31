@@ -18,6 +18,7 @@ from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, Set
 
+from .config import RELEASE
 from .main_logger import make_relative_path, pysandboxes_logger
 
 logger = logging.getLogger(__name__)
@@ -116,9 +117,14 @@ def generate_config_from_learning() -> None:
                 all_lines = resource_path.read_text().split("\n")
 
         # Insert new rules in the file
-        pattern: str = (
-            r"^# </([^\}]+)>"  # FIX_RELEASE: inject in the middle of parameters
-        )
+        if RELEASE:
+            pattern: str = (
+                r"^# </([^\}]+)>"
+            )
+        else:
+            pattern: str = (
+                r"^<!IGNORE!>"
+            )
         for i, line in enumerate(all_lines):
             match = re.search(pattern, line)
             if match and match.group(1) in replaces:

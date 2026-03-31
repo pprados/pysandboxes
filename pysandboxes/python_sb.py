@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping, cast
 
+from pysandboxes.config import RELEASE
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.main_logger import config_log
 from pysandboxes.os_sandbox import providers_factory
@@ -53,7 +54,8 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    _debug_log()  # FIX_RELEASE
+    if not RELEASE:
+        _debug_log()
 
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
         sys.argv[1:]
@@ -132,15 +134,15 @@ def main() -> int:
 
         async def launch_and_wait() -> int:
             process = await launch_sandbox(
-                cmd + python_cmd, # FIXME
+                cmd + python_cmd,  # FIXME
                 # cmd,
                 pipe_path,
                 envs=Envs(env),
                 process_config=process_config,
                 extra_preexec_fn=extra_preexec_fn,
                 pass_fds=pass_fds,
+                on_launched=os_provider.on_process_launched,
             )
-            os_provider.on_process_launched(process.pid)
             try:
                 return await process.wait()
             finally:
