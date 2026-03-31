@@ -180,5 +180,10 @@ tst_wasm/
 .serena/
 
 
-# Auto Claude data directory
+# IA
 .auto-claude/
+.gemini/
+.ia/
+.opencode/
+.claude/
+.entire/

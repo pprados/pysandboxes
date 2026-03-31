@@ -1,19 +1,19 @@
 # Unshare
 
-Unshare is a user-space container technology that allows programs to be launched in isolation from the rest of the system, with a **user stack IP**. It enables limiting disk access, network access, system calls, and more. For more information, consult the [documentation](https://man7.org/linux/man-pages/man2/unshare.2.html).
+Unshare is a user-space containerization technology that allows programs to run in isolation from the rest of the system, featuring a **user-mode network stack**. It enables restrictions on disk access, network usage and more. For further details, consult the [documentation](https://man7.org/linux/man-pages/man2/unshare.2.html).
 
-Root privileges are not required to add firewall rules.
+Root privileges are not required to configure firewall rules within the namespace.
 
 ## Prerequisites
 
-To use the unshare technology, you must install [slirp4netns](https://manpages.debian.org/experimental/slirp4netns/slirp4netns.1.en.html), [iptables](https://man7.org/linux/man-pages/man8/iptables.8.html) and set `kernel.unprivileged_userns_clone` to `1` (Normally, this is enabled by default.).
+To utilize unshare, you must install [slirp4netns](https://manpages.debian.org/experimental/slirp4netns/slirp4netns.1.en.html) and [iptables](https://man7.org/linux/man-pages/man8/iptables.8.html), and ensure `kernel.unprivileged_userns_clone` is set to `1` (this is typically enabled by default).
 
 ```bash
-# Check permissions
+# Verify permissions
 sysctl kernel.unprivileged_userns_clone
 sysctl kernel.apparmor_restrict_unprivileged_userns
 
-# Set permissions
+# Configure permissions
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 sudo sysctl -w kernel.unprivileged_userns_clone=1
 
@@ -23,40 +23,101 @@ sudo apt install slirp4netns iptables
 
 ## Execution Model
 
-During launch, a local `root` user within the sandbox is used for code execution. This user has no privileges once directory mounts and iptables rules have been activated.
+When launched, code execution occurs as a local `root` user within the sandbox. This user retains no elevated privileges on the host system once directory mounts and iptables rules are active.
 
 > **Note:** Some applications may behave differently when running as the 'root' user.
 
+## Usage inside Docker
+Unshare is compatible with Docker, though it requires elevated privileges.
 
-## Use inside Docker
-The unshare technology is compatible with 
 ```bash
-docker run -it --rm \
+docker \
+  run -it --rm \
     --privileged \
     --network bridge \
     -v "$(pwd)":/app \
     -w /app \
     python:3.11 \
-    bash
-
-apt update && apt install -y libvirt-dev pkg-config iptables && pip install .
+    sh -c 'apt update && \
+      apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns &&
+      pip install -e . && \
+      OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
+The `scripts/test-kubernetes.sh` script provides a usage example.
 
-or podman:
+## Usage inside Podman
+Unshare is compatible with Podman, though it requires elevated privileges.
 
 ```bash
-podman run -it --rm \
+podman \
+  run -it --rm \
     --privileged \
     --network bridge \
     -v "$(pwd)":/app \
     -w /app \
     python:3.11 \
-    bash
-
-apt update && apt install -y libvirt-dev pkg-config iptables && pip install .
+    sh -c 'apt update && \
+      apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns &&
+      pip install -e . && \
+      OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
 
 ## Kubernetes
+
+Example YAML configuration:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pysandboxes-test
+spec:
+  containers:
+    - name: pysandboxes-test
+      image: python:latest
+      workingDir: /app
+      securityContext:
+        capabilities:
+          add:
+            - SYS_ADMIN    # Allows unshare (namespace creation)
+            - NET_ADMIN    # Allows network configuration (ip link, etc.)
+        seccompProfile:
+          type: Unconfined # Disables the filter blocking unshare
+      command: [ "/bin/sh", "-c" ] # Keeps the pod alive
+      args:
+        - |
+          apt update && \
+          apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns && \
+          pip install -e . && \
+          OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage
+      volumeMounts:
+        - name: code-local
+          mountPath: /app          # Path inside the Pod
+        - name: dev-net-tun
+          mountPath: /dev/net/tun  # Required by slirp4netns
+  volumes:
+    - name: code-local
+      hostPath:
+        path: /mnt/pysandboxes
+        type: Directory
+    - name: dev-net-tun
+      hostPath:
+        path: /dev/net/tun
+        type: CharDevice
+```
+
+Note the restrictions lifted to enable unshare usage within a pod:
+```yaml
+      securityContext:
+        capabilities:
+          add:
+            - SYS_ADMIN    # Allows unshare (namespace creation)
+            - NET_ADMIN    # Allows network configuration (ip link, etc.)
+        seccompProfile:
+          type: Unconfined # Disables the filter blocking unshare
+```
+
+The `scripts/test-kubernetes.sh` script demonstrates this usage.
 
 ```bash
 minikube mount .:/mnt/pysandboxes &

@@ -18,3 +18,5 @@ net=ALLOW|TCP|www.google.com|80|OUT
 net=ALLOW|UDP|ip6-localhost|12345|OUT
 net=ALLOW|UDP|localhost|12345|IN
 net=ALLOW|UDP|localhost|12346,12345|OUT
+
+ignore=.env

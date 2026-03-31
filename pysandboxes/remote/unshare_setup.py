@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import select
 import shutil
 import subprocess
 import sys
@@ -93,7 +94,7 @@ def _mount_bind(src: str, dst: str, new_root: str, readonly: bool) -> None:
         logger.debug(f"mount {src=} not exist")
         return
     full_dst = new_root + dst
-    logger.debug(f"mount {full_dst=}")
+    # logger.debug(f"mount {full_dst=}")
     if os.path.isdir(src):
         os.makedirs(full_dst, exist_ok=True)
     else:
@@ -103,7 +104,7 @@ def _mount_bind(src: str, dst: str, new_root: str, readonly: bool) -> None:
     _run(["mount", "--rbind", src, full_dst])
     if readonly:
         _run(["mount", "-o", "remount,ro,bind,nosuid,nodev", full_dst])
-    logger.debug(f"")
+    # logger.debug(f"")
 
 
 def _ensure_mount_target(target: str, new_root: str) -> None:
@@ -126,7 +127,7 @@ def _ensure_mount_target(target: str, new_root: str) -> None:
 def main() -> None:
     """Entry point for unshare_setup, called as `python -m pysandboxes.remote.unshare_setup`."""
     # Usage: python -m ... <config_path> -- <command> [args...]
-    logger.debug("************* unshare_setup")
+    logger.debug("************* unshare_setup *************")
     args = sys.argv[1:]
     if not args:
         print(
@@ -146,8 +147,7 @@ def main() -> None:
     logger.debug(f"load config ...")
     txt_config = Path(config_path).read_text()
     config = UnshareSetupConfig.from_json(txt_config)
-    logger.debug(f"config loader {txt_config}")
-    logger.debug(f"config dns {config.dns_servers}")
+    logger.debug(f"\n{json.dumps(json.loads(txt_config),indent=2)}")
 
     # --- A. Wait for network ---
     # Note: PID_FILE is written by the daemon (sse_unshare_daemon.py) with the
@@ -156,8 +156,21 @@ def main() -> None:
 
     # Wait for slirp4netns readiness on the fd passed via SLIRP_READY_FD env var
     ready_fd = int(os.environ.get("SLIRP_READY_FD", "3"))
+    slirp_timeout = 30  # seconds
     try:
         logger.debug(f"waiting for slirp4netns readiness on fd {ready_fd}...")
+        ready, _, _ = select.select([ready_fd], [], [], slirp_timeout)
+        if not ready:
+            logger.error(
+                "Timed out waiting for slirp4netns readiness on fd %d after %ds",
+                ready_fd,
+                slirp_timeout,
+            )
+            print(
+                f"ERROR: slirp4netns readiness timeout after {slirp_timeout}s",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         data = os.read(ready_fd, 1)
         logger.debug(f"slirp4netns readiness received: {data!r}")
         os.close(ready_fd)
@@ -165,16 +178,17 @@ def main() -> None:
         logger.debug(f"slirp4netns readiness fd {ready_fd} error: {e}")
 
     # --- B. Configure loopback ---
+    logger.debug("configure loopback:")
     _run(["ip", "link", "set", "lo", "up"])
     _run(
         ["ip", "addr", "add", "127.0.0.1/8", "dev", "lo"],
         check=False,
         stderr=subprocess.DEVNULL,
     )  # May already exist
-    logger.debug("configure loopback done")
 
     # --- C. Apply iptables rules ---
     if config.dns_servers and config.netfilter_rules:
+        logger.debug("Apply iptables rules:")
         rules_text = "\n".join(config.netfilter_rules)
         subprocess.run(
             ["/usr/sbin/iptables-restore"],
@@ -182,33 +196,34 @@ def main() -> None:
             text=True,
             check=True,
         )
-    logger.debug("Apply iptables rules done")
 
     # --- D. Create chroot root ---
+    logger.debug("Create chroot root:")
     new_root = tempfile.mkdtemp()
     _run(["mount", "-t", "tmpfs", "none", new_root])
     for d in ["dev", "proc", "tmp", "etc", "home", "root"]:
         os.makedirs(os.path.join(new_root, d), exist_ok=True)
     os.chmod(os.path.join(new_root, "tmp"), 0o1777)
-    logger.debug("Create chroot root done")
 
     # --- E. System mounts (SSL certs etc.) ---
+    logger.debug("Mount SSL certs:")
     for cert_path in ["/etc/ssl", "/etc/pki", "/etc/ca-certificates"]:
         _mount_bind(cert_path, cert_path, new_root, readonly=True)
 
     # --- F. Mount current directory ---
     if config.current_dir:
+        logger.debug("Mount current directory:")
         _mount_bind(config.current_dir, config.current_dir, new_root, readonly=False)
-        logger.debug("Mount current directory done")
 
     # --- G. User-defined mounts ---
+    logger.debug("User-defined mounts:")
     for src, dst in config.mounts_ro:
         _mount_bind(src, dst, new_root, readonly=True)
     for src, dst in config.mounts_rw:
         _mount_bind(src, dst, new_root, readonly=False)
-    logger.debug("User-defined mounts done")
 
     # --- H. Pseudo-filesystems ---
+    logger.debug("Pseudo-filesystems:")
     dev_path = os.path.join(new_root, "dev")
     _run(["mount", "-t", "tmpfs", "-o", "mode=755,nosuid", "none", dev_path])
     for dev in ["null", "zero", "full", "random", "urandom", "tty"]:
@@ -217,7 +232,6 @@ def main() -> None:
             target = os.path.join(dev_path, dev)
             Path(target).touch()
             _run(["mount", "--bind", host_dev, target])
-    logger.debug("Pseudo-filesystems done")
 
     shm_path = os.path.join(dev_path, "shm")
     os.makedirs(shm_path, exist_ok=True)
@@ -225,16 +239,17 @@ def main() -> None:
 
     # Mount named pipe
     if config.named_pipe and os.path.exists(config.named_pipe):
+        logger.debug("Mount named pipe:")
         pipe_dir = os.path.dirname(config.named_pipe)
         chroot_pipe_dir = new_root + pipe_dir
         chroot_pipe = new_root + config.named_pipe
         os.makedirs(chroot_pipe_dir, exist_ok=True)
         Path(chroot_pipe).touch()
         _run(["mount", "--bind", config.named_pipe, chroot_pipe])
-    logger.debug("Mount named pipe done")
 
     # --- I. DNS/hosts setup ---
     if config.dns_servers:
+        logger.debug("DNS/hosts setup:")
         # Custom DNS: create resolv.conf and hosts
         resolv_tmp = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".resolv"
@@ -258,7 +273,6 @@ def main() -> None:
         # Use host's config (resolve symlinks)
         source_resolv = os.path.realpath("/etc/resolv.conf")
         source_hosts = os.path.realpath("/etc/hosts")
-    logger.debug("DNS/hosts setup step 1")
 
     resolv_target = os.path.join(new_root, "etc", "resolv.conf")
     _ensure_mount_target(resolv_target, new_root)
@@ -269,7 +283,6 @@ def main() -> None:
     _ensure_mount_target(hosts_target, new_root)
     if os.path.exists(source_hosts):
         _run(["mount", "--bind", source_hosts, hosts_target])
-    logger.debug("DNS/hosts setup done")
 
     # --- J. Enter sandbox (PID namespace + chroot) ---
     chroot_cmd = shutil.which("chroot") or "/usr/sbin/chroot"
@@ -278,7 +291,7 @@ def main() -> None:
     os.chdir(new_root)
     proc_path = os.path.join(new_root, "proc")
 
-    logger.debug("enter sandbox...")
+    logger.debug("Enter in sandbox...")
     exec_args = [
         "/usr/bin/unshare",
         "-p",
@@ -301,4 +314,13 @@ if __name__ == "__main__":
     if not RELEASE:
         _debug_log()
 
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as e:
+        import traceback
+
+        print(f"unshare_setup FATAL: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        sys.exit(1)
