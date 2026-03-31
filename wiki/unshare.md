@@ -28,6 +28,7 @@ When launched, code execution occurs as a local `root` user within the sandbox. 
 > **Note:** Some applications may behave differently when running as the 'root' user.
 
 ## Usage inside Docker
+
 Unshare is compatible with Docker, though it requires elevated privileges.
 
 ```bash
@@ -46,6 +47,7 @@ docker \
 The `scripts/test-kubernetes.sh` script provides a usage example.
 
 ## Usage inside Podman
+
 Unshare is compatible with Podman, though it requires elevated privileges.
 
 ```bash

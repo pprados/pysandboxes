@@ -496,13 +496,13 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # Prepare UnshareSetupConfig
         config, _ = self._prepare_unshare_config(all_rules, pipe_path)
 
-        # Write config via FIFO (or file in debug mode)
-        if DEBUG_LAUNCH:
-            config_file = Path("unshare_config.json")
-        else:
-            config_file = temp / "unshare_config.json"
-            if config_file.exists():
-                config_file.unlink()
+        # Write config via FIFO (or file in debug mode). Always pass a path under
+        # temp so the unshare child can read it (e.g. under /tmp); with Docker the
+        # child may not have access to /app when using unshare -r.
+        config_file = temp / "unshare_config.json"
+        if config_file.exists():
+            config_file.unlink()
+        if not DEBUG_LAUNCH:
             os.mkfifo(config_file)
 
         def publish_config() -> None:
@@ -559,10 +559,16 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # os.environ — but for unshare mode, isolation comes from the
         # namespaces + chroot, NOT from env stripping. So we re-inject the
         # full host environment here.
-        extra_envs: Environ = {
-            # **os.environ,  # FIXME
+        # Ensure the unshare child can import pysandboxes: in Docker the
+        # editable install (.pth) may not be visible in the new mount namespace,
+        # so set PYTHONPATH to the project root explicitly.
+        project_root = os.getcwd()
+        existing_pp = os.environ.get("PYTHONPATH", "")
+        pythonpath = f"{project_root}:{existing_pp}" if existing_pp else project_root
+        extra_envs = {
             "PID_FILE": pid_file,
             "SLIRP_READY_FD": str(slirp_pipe_r),
+            "PYTHONPATH": pythonpath,
         }
 
         # Extract ports for forwarding
@@ -819,9 +825,14 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 init_fn=init_fn_ref,
             )
 
-            # Build environment
+            # Build environment (PYTHONPATH so unshare child finds pysandboxes in Docker)
             env: Environ = {**os.environ}
             env["PID_FILE"] = pid_file
+            project_root = os.getcwd()
+            existing_pp = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = (
+                f"{project_root}:{existing_pp}" if existing_pp else project_root
+            )
 
             # Extract ports for forwarding
             ports_spec = self._extract_port_forwards(all_rules)
