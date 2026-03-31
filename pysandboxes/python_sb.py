@@ -132,7 +132,8 @@ def main() -> int:
 
         async def launch_and_wait() -> int:
             process = await launch_sandbox(
-                cmd + python_cmd,
+                cmd + python_cmd, # FIXME
+                # cmd,
                 pipe_path,
                 envs=Envs(env),
                 process_config=process_config,

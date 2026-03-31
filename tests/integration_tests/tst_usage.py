@@ -11,7 +11,7 @@ from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
 from types import FrameType
 from typing import Any, List, Mapping, cast
 
-from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
+from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes, all_rules
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
@@ -341,8 +341,27 @@ def _config(argv: list[str]) -> tuple[Path, dict[str, set[str]]]:
 #     with sandboxes(init_fn=init_sandbox):
 #         print("ok")
 
+def test_raw_dns(server: str = "8.8.8.8") -> None:
+    import socket
+    print(f"Testing raw UDP connection to {server}:53...")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(2)
+    try:
+        # On n'envoie rien, on teste juste si le port est atteignable
+        sock.connect((server, 53))
+        print("Successfully connected (UDP port reachable).")
+    except Exception as e:
+        print(f"Connection failed: {e}")
+    finally:
+        sock.close()
+
 if __name__ == "__main__":
     init_log_level()
+    resolv=Path("/etc/resolv.conf").read_text() # FIXME
+    logger.debug("resolv au dans tst usage")
+    logger.debug(resolv)
+    test_raw_dns("192.168.0.254")
+
     # sync_main(sys.argv)
     logger.info("-------------------------")
     asyncio.run(async_main(sys.argv))

@@ -182,6 +182,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         envs: Envs,
         temp: Path,
     ) -> AllRules:
+        # FIXME: todo, ajouter /etc ? all_rules = all_rules._replace()
+
         return all_rules
 
     # -- Private helpers for building the unshare command --
@@ -208,6 +210,10 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             logger.error("unshare not found.")
             sys.exit(1)
 
+        if not which_command("iptables"):
+            logger.error("unshare not found.")
+            sys.exit(1)
+
         # Check unprivileged user namespaces
         try:
             with open("/proc/sys/kernel/unprivileged_userns_clone", "r") as f:
@@ -222,6 +228,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             for ip in get_upstream_dns()
             if isinstance(ip, IPv4Address)
         ]
+        # FIXME dns_servers=[IPv4Address('10.0.2.2'),IPv4Address('10.0.2.3'),]  # FIXME: force DNS du slirp4netns
         net_filter4 = rule_to_netfilter(
             all_rules.socket_rules, dns_servers, is_ipv6=False
         )
@@ -331,25 +338,30 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             time.sleep(0.05)
 
         try:
-            proc = subprocess.Popen(
-                [
+            slirp_arg=[
                     "slirp4netns",
                     "-c",
                     "-m",
                     "1500",
                     "-r",
                     "4",
+#                "--outbound-addr=4.4.4.4",  # FIXME: force dns ?
+               "--outbound-addr=192.168.0.254",  # FIXME: force dns ?
                     "--api-socket",
                     api_socket,
                     child_pid,
                     SLIRP_INTERFACE,
-                ],
+                ]
+            proc = subprocess.Popen(
+                slirp_arg,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 # fd 4 is the ready fd for slirp4netns - we dup pipe_w to fd 4
                 preexec_fn=lambda: os.dup2(pipe_w, 4),
             )
             self._slirp_process = proc
+            logger.debug(" ".join(slirp_arg))
+            logger.debug("slirp4netns started")
             proc.wait()
         except Exception:
             pass
@@ -442,6 +454,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             "unshare",
             *unshare_flags,
             "--",
+            # "/usr/bin/bash" # FIXME
             sys.executable,
             "-m",
             "pysandboxes.remote.unshare_setup",
@@ -450,7 +463,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         ]
 
         daemon_cmd = self._build_daemon_cmd()
-        args.extend(daemon_cmd)
+        args.extend(daemon_cmd)  # FIXME
 
         # Create slirp4netns temp files
         fd, pid_file = tempfile.mkstemp()
