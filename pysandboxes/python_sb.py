@@ -94,17 +94,17 @@ def main() -> int:
         token, python_args=python_parsed_args
     )
     logger.debug(f"{os_provider=} {all_rules.learn=}")
+    if "--version" in python_parsed_args:
+        print("Python", ".".join(map(str, sys.version_info[0:3])))
+        sys.exit(0)
     if isinstance(os_provider, NoneDaemon):
         from .remote.python_in_sb import python_in_sb
 
-        if "--version" in python_parsed_args:
-            print("Python ", ".".join(map(str, sys.version_info[0:3])))
-            sys.exit(0)
         return python_in_sb(all_rules, python_cmd)
     with tempfile.TemporaryDirectory() as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
-        cmd, envs = os_provider.subprocess_cmd(
+        cmd, extra_envs = os_provider.subprocess_cmd(
             all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
         )
         python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
@@ -124,6 +124,11 @@ def main() -> int:
             env = {**os.environ, **all_rules.envs}
         else:
             env = dict(all_rules.envs)
+        env = {**env, **extra_envs}
+
+        # Get optional launch extras (preexec_fn, pass_fds) for providers
+        # that need custom child setup (e.g., unshare with slirp4netns fd)
+        extra_preexec_fn, pass_fds = os_provider.get_launch_extras()
 
         async def launch_and_wait() -> int:
             process = await launch_sandbox(
@@ -131,8 +136,15 @@ def main() -> int:
                 pipe_path,
                 envs=Envs(env),
                 process_config=process_config,
+                extra_preexec_fn=extra_preexec_fn,
+                pass_fds=pass_fds,
             )
-            return await process.wait()
+            os_provider.on_process_launched(process.pid)
+            try:
+                return await process.wait()
+            finally:
+                if hasattr(os_provider, "_kill_slirp"):
+                    os_provider._kill_slirp()
 
         return_code = asyncio.run(launch_and_wait())
         return return_code

@@ -115,7 +115,7 @@ def run_in_sandbox() -> int:
 
 
 def _test_envs() -> None:
-    assert os.environ["LANGUAGE"]
+    assert os.environ["TERM"]
     os.putenv("My_ENV", "hello")
     os.getenv("My_ENV")
     os.unsetenv("My_ENV")

@@ -553,8 +553,7 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
         # Execute the resolvectl status command
         resolvectl = shutil.which("resolvectl")
         if resolvectl is None:
-            logger.debug("Use default DNS servers because resolvectl not found")
-            return [ipaddress.ip_address("1.1.1.1"), ipaddress.ip_address("4.4.4.4")]
+            return []
         output = subprocess.run(
             [resolvectl, "status"],
             capture_output=True,
@@ -580,10 +579,63 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
     except FileNotFoundError:
         return []
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"Error executing 'resolvectl status': {e.stderr.strip()}"
-        ) from e
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError("Error: 'resolvectl status' command timed out.") from e
+        logger.debug("Error executing 'resolvectl status': %s", e.stderr.strip())
+        return []
+    except subprocess.TimeoutExpired:
+        logger.debug("'resolvectl status' command timed out.")
+        return []
     except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred during execution: {e}") from e
+        logger.debug("Unexpected error during resolvectl execution: %s", e)
+        return []
+
+
+# Stub resolver addresses used by systemd-resolved
+_STUB_RESOLVERS = {
+    ipaddress.ip_address("127.0.0.53"),
+    ipaddress.ip_address("127.0.0.54"),
+}
+
+# Well-known public DNS servers used as last resort
+_FALLBACK_DNS: list[IPv4Address | IPv6Address] = [
+    ipaddress.ip_address("1.1.1.1"),
+    ipaddress.ip_address("8.8.8.8"),
+]
+
+
+def get_upstream_dns() -> list[IPv4Address | IPv6Address]:
+    """Get upstream DNS servers, with or without systemd.
+
+    Tries multiple strategies in order:
+    1. systemd-resolved (static config then resolvectl)
+    2. /etc/resolv.conf (filtering out stub resolvers like 127.0.0.53)
+    3. Well-known public DNS as last resort
+
+    Returns:
+        List of upstream DNS server addresses.
+    """
+    if platform.system() != "Linux":
+        return list(_FALLBACK_DNS)
+
+    # Strategy 1: systemd-resolved
+    result = get_systemd_resolved_upstream_dns()
+    if result:
+        return result
+
+    # Strategy 2: /etc/resolv.conf (works on any Linux)
+    try:
+        ipv4_list, ipv6_list = get_dns_servers()
+        all_dns: list[IPv4Address | IPv6Address] = []
+        all_dns.extend(ipv4_list)
+        all_dns.extend(ipv6_list)
+        # Filter out stub resolvers (systemd-resolved writes 127.0.0.53)
+        real_dns = [
+            ip for ip in all_dns if ip not in _STUB_RESOLVERS and not ip.is_loopback
+        ]
+        if real_dns:
+            return real_dns
+    except (OSError, AssertionError):
+        logger.debug("Could not read /etc/resolv.conf")
+
+    # Strategy 3: fallback to well-known public DNS
+    logger.debug("Using fallback public DNS servers")
+    return list(_FALLBACK_DNS)

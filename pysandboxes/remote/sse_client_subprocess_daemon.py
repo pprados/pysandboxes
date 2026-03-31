@@ -28,7 +28,7 @@ from asyncio import CancelledError, Task
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
-from typing import Callable, NamedTuple
+from typing import Any, Callable, NamedTuple
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
@@ -56,7 +56,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG_LAUNCH = True  # FIX_RELEASE
+DEBUG_LAUNCH = False  # FIX_RELEASE
 
 
 def get_log_formatter() -> str:
@@ -157,6 +157,8 @@ async def launch_sandbox(
     pipe_path: Path,
     envs: Envs,
     process_config: DaemonParameters,
+    extra_preexec_fn: Callable[[], None] | None = None,
+    pass_fds: tuple[int, ...] = (),
 ) -> Process:
     """Launch a sandbox subprocess with the given configuration.
 
@@ -165,6 +167,8 @@ async def launch_sandbox(
         pipe_path: Path to named pipe for configuration transfer.
         envs: Environment variables for the subprocess.
         process_config: Configuration parameters to send to subprocess.
+        extra_preexec_fn: Optional additional preexec function to run in child.
+        pass_fds: File descriptors to keep open in the child process.
 
     Returns:
         The launched subprocess.
@@ -186,15 +190,23 @@ async def launch_sandbox(
     try:
 
         def preexec_fn() -> None:
+            if extra_preexec_fn:
+                extra_preexec_fn()
             os.umask(0o006)  # Only user:RW
 
         logger.debug(
             "Start process: " + " ".join((repr(c) if " " in c else c for c in cmd))
         )
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
+        subprocess_kwargs: dict[str, Any] = dict(
             env=dict(envs),
             preexec_fn=preexec_fn,
+        )
+        if pass_fds:
+            subprocess_kwargs["pass_fds"] = pass_fds
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            **subprocess_kwargs,
         )
 
         # It's a good time for that
@@ -631,6 +643,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         finally:
             self._process = None
             self._is_started = False
+
+    def on_process_launched(self, process_pid: int) -> None:
+        pass
+
+    def get_launch_extras(self) -> tuple[Any, tuple[int, ...]]:
+        return None, ()
 
 
 class SubProcessDaemon(BaseSubProcessDaemon):
