@@ -47,7 +47,7 @@ from .sse_client_subprocess_daemon import BaseSubProcessDaemon
 from .tools import (
     get_bridge_interfaces,
     get_default_interface,
-    get_systemd_resolved_upstream_dns,
+    get_upstream_dns,
     suggest_package_installation,
     which_command,
 )
@@ -496,9 +496,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
             if not skip_network_setup:
                 dns_servers = [
-                    ip
-                    for ip in get_systemd_resolved_upstream_dns()
-                    if isinstance(ip, IPv4Address)
+                    ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)
                 ]
 
                 if dns_servers:

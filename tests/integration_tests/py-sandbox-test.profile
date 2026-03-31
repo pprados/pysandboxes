@@ -2,7 +2,7 @@ include "./.local.py-sandboxes"  # May be add to .gitignore
 
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
-env=LANGUAGE=${LANGUAGE}
+env=TERM=${TERM}
 env=My_ENV=${My_ENV}
 
 python-import=*

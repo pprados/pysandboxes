@@ -286,7 +286,7 @@ async def run(args: argparse.Namespace) -> None:
 
     for mcp_server in server_config["mcpServers"].values():
         if "command" in mcp_server:
-            w_command = which(mcp_server["command"])
+            w_command = which(Path(mcp_server["command"]))
             if w_command:
                 mcp_server["command"] = w_command
             elif mcp_server["command"] in ("python", "python3"):
