@@ -50,10 +50,9 @@ all_pysandboxes_mode = ["complete", "partial"]
 all_protocol = ["stdio", "http"]
 all_os_sandbox = [
 
-    # FIXME
-    # "None",
-    # "Subprocess",
-    # "firejail",
+    "None",
+    "Subprocess",
+    "firejail",
     "unshare",
 ]
 

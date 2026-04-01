@@ -22,7 +22,7 @@ from .private_loop import (
     sandbox_loop,
 )
 from .remote.none_daemon import NoneDaemon
-from .remote.parameters import TIMEOUT_FOR_STOP_DAEMON
+from .remote.parameters import TIMEOUT_FOR_START_DAEMON, TIMEOUT_FOR_STOP_DAEMON
 from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
@@ -248,8 +248,11 @@ def start_daemon(
         loop.call_soon_threadsafe(
             lambda: loop.create_task(_start_daemon_and_signal(), name="Start daemon")
         )
-        if not start_event.wait():
-            raise RuntimeError("Import to _start the sandbox")
+        if not start_event.wait(timeout=TIMEOUT_FOR_START_DAEMON):
+            raise RuntimeError(
+                f"Daemon failed to start within {TIMEOUT_FOR_START_DAEMON}s. "
+                "Check that unshare/slirp4netns are installed and the environment allows namespaces."
+            )
         assert _current_daemon
 
     return cast(BaseDaemon, _current_daemon)

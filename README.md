@@ -45,7 +45,7 @@ It's time to control, as much as possible, the allowed capabilities for your app
   - [What are the weaknesses of py-sandbox?](#what-are-the-weaknesses-of-py-sandbox)
 - [Roadmap](#roadmap)
 - [Appendix](#appendix)
-  - [CVE in relation](#cve-in-relation)
+  - [Related CVEs](#related-cves)
     - [Langchain](#langchain)
     - [Smolagent](#smolagent)
 
@@ -99,7 +99,7 @@ or
 pip install git+https://github.com/pprados/pysandboxes.git
 ```
 
-We propose only four think:
+We propose only four things:
 
 - A Command Line Interface: `python-sb`
 - A function: `run`
@@ -127,8 +127,7 @@ flowchart TD
     A -- "1- my_function(param)" --> C
     C -- "4- Propagate to caller" --> A
 
-
-%% 🎨 Style personnalisé pour OSSandbox
+%% Custom style for OSSandbox
 style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
 style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
@@ -161,7 +160,7 @@ dir_fd may not be implemented on your platform.
 Type:      function
 ```
 
-If *IPython* is installed, it's used. All the standard python parameters are availables.
+If *IPython* is installed, it's used. All the standard python parameters are available.
 
 It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
 
@@ -175,7 +174,7 @@ From now on, during subsequent launches, the application runs by limiting the ap
 If you want to restart a learning session to add missing rules:
 
 - activate the `learn` parameter in the configuration file
-- or add `--learn=.py-sandboxes` (or just `--learn`) when you _start `python-sb`
+- or add `--learn=.py-sandboxes` (or just `--learn`) when you start `python-sb`
 
 This way, only the missing rules will be added to the file.
 
@@ -194,7 +193,7 @@ flowchart LR
     Python_sb  -- launch --> OSSandbox
     OSSandbox  -- launch --> PythonSandbox
 
-    %% 🎨 Style personnalisé pour OSSandbox
+    %% Custom style for OSSandbox
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
@@ -235,13 +234,12 @@ flowchart TD
         end
     end
 
-
     A -- "1- my_function(param)" --> B
     B -- "2- Execute via IPC (Pickle)" --> C
     C -- "3- Return result/<br/>exception" --> B
     B -- "4- Propagate to caller" --> A
 
-    %% 🎨 Style personnalisé pour OSSandbox
+    %% Custom style for OSSandbox
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 
@@ -352,7 +350,7 @@ The sandbox receives the request, loads the corresponding module, finds the func
 There are a few peculiarities to note:
 
 - If an exception is raised in the sandbox, the stack trace is propagated to the main application to allow for a stack analysis as if the call had been made directly. This facilitates debugging.
-- If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox or mix the different impressions between several threads. They are executed in the correct process, in the same async loop.
+- If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox or mixing the different outputs between several threads. They are executed in the correct process, in the same async loop.
 
 ### How the partial mode work?
 
@@ -367,7 +365,7 @@ flowchart LR
     Python  -- launch --> OSSandbox
     OSSandbox  -- launch --> PythonSandbox
 
-    %% 🎨 Style personnalisé pour OSSandbox
+    %% Custom style for OSSandbox
     style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 
@@ -395,8 +393,8 @@ To address different scenarios, parameter files can have `include` instructions.
 
 By default, you'll find this:
 
-```
-include "./.local.py-sandboxes"  # May be add to .gitignore
+```text
+include "./.local.py-sandboxes"  # May be added to .gitignore
 include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
 include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
 ```
@@ -405,7 +403,7 @@ The goal is to be able to save the `./.py-sandboxes` file in the Git repository 
 
 Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
 
-By adding or removing `include` statements, you can select the different personalization scenarios you want. Note, if the is not exist, it's just ignored.
+By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is simply ignored.
 
 With **python-sb**, a special parameter can be used to select the configuration.
 
@@ -434,8 +432,8 @@ We offer several implementations to encapsulate the Python sandbox:
 | Technology                                                   | Configuration         | Specifics                                                                            | Description                                                                                                                                    |
 | ------------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | subprocess                                                   |                       | - no complementary security                                                          |                                                                                                                                                |
-| [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md) | - Disk mapping (without rename)``- File filtering``- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                                     |
-| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)  | - Disk mapping (without rename)``- File filtering``- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
+| [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md) | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                                     |
+| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)  | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 
 *Other implementations will be added soon*
 
@@ -443,10 +441,10 @@ The features of each technology are proposed:
 
 | Guard                  | py-sandbox | firejail |  unshare  | none |
 | ---------------------- | :--------: | :-------: | :-------: | :--: |
-| Isolation              |  Process  | Container | Container |  ❌  |
+| Isolation              |  Process   | Container | Container |  ❌  |
 | Python code            |     ✅     |    ❌    |    ❌    |  ❌  |
 | Compiled code          |     ❌     |    ✅    |    ✅    |  ❌  |
-| env                    |     ✅     |    ❌    |    ❌    |  ❌  |
+| env                    |     ✅     |    ✅    |    ✅    |  ❌  |
 | bind=a,a               |     ✅     |    ✅    |    ✅    |  ❌  |
 | bind=a,b               |     ✅     |    ❌    |    ✅    |  ❌  |
 | ignore=*               |     ✅     |    ✅    |    ❌    |  ❌  |
@@ -485,14 +483,13 @@ include "./.py-sandboxes"
 # ... specific rules
 ```
 
-To create a CLI that uses **py-sanboxes**, use the following pattern:
+To create a CLI that uses **py-sandboxes**, use the following pattern:
 
 ```python
 def main() -> int:
     # ...
     print("hello")
     return 99
-
 
 def main_sb() -> int:
     import sys
@@ -554,9 +551,9 @@ See [here](wiki/roadmap.md)
 
 1. Connection to Databases: See [here](wiki/database.md)
 
-## CVE in relation
+## Related CVEs
 
-Some CVE in relations
+Some related CVEs
 
 ### Langchain
 

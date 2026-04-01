@@ -147,8 +147,9 @@ def main() -> int:
             try:
                 return await process.wait()
             finally:
-                if hasattr(os_provider, "_kill_slirp"):
-                    os_provider._kill_slirp()
+                kill_slirp = getattr(os_provider, "_kill_slirp", None)
+                if callable(kill_slirp):
+                    kill_slirp()
 
         return_code = asyncio.run(launch_and_wait())
         return return_code

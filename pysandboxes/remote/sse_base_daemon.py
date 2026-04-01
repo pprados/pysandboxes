@@ -11,7 +11,7 @@ from aiohttp import ClientConnectorError, ClientPayloadError
 from aiohttp_sse_client import client as sse_client
 
 from ..base_daemon import BaseDaemon
-from ..private_loop import sandbox_loop
+from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..tools import get_callable_info, is_in_sandbox
 from .parameters import INTERVAL_FOR_RETRY_CONNECTION
 from .tools import from_b85, to_b85
@@ -137,9 +137,10 @@ class BaseSSESandbox(BaseDaemon):
         if not _force_incomming and not self._accept_incoming:
             raise RuntimeError("The sandbox demon is being stopped.")
 
-        loop = (
-            asyncio.get_event_loop()
-        )  # Get the current running loop. May be != sandbox loop
+        # Use sandbox loop so the coroutine runs on the loop that is actually
+        # running (e.g. in a background thread), avoiding deadlock when the
+        # daemon was started from another loop (e.g. pytest async fixture).
+        loop = get_sandbox_loop()
 
         return asyncio.run_coroutine_threadsafe(
             self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs), loop

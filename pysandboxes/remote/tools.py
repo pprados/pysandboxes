@@ -59,6 +59,27 @@ def which_command(command: str) -> Path | None:
     return Path(full_path)
 
 
+def unshare_user_namespace_available() -> bool:
+    """Return True if unshare and slirp4netns exist and user namespaces are allowed.
+
+    When user namespaces are disabled (e.g. in containers, Cursor, or kernel
+    setting), unshare fails with 'Operation not permitted'. This avoids hanging
+    or long timeouts in tests.
+    """
+    if not which_command("unshare") or not which_command("slirp4netns"):
+        return False
+    try:
+        result = subprocess.run(
+            ["unshare", "--user", "--map-root-user", "true"],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
 def get_venv() -> str | None:
     """Get current virtual environment path.
 

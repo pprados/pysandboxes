@@ -155,6 +155,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         "_slirp_api_socket_for_watcher",
         "_ports_spec",
         "_slirp_process",
+        "_slirp_shutdown_event",
     )
 
     def __init__(
@@ -186,6 +187,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         self._slirp_pid_file: str | None = None
         self._slirp_api_socket: str | None = None
         self._slirp_process: subprocess.Popen[bytes] | None = None
+        self._slirp_shutdown_event: threading.Event = threading.Event()
 
     @override
     def parse_rules(
@@ -368,6 +370,12 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         )
         deadline = time.monotonic() + self.SLIRP_WATCHER_TIMEOUT
         while True:
+            if self._slirp_shutdown_event.is_set():
+                try:
+                    os.close(pipe_w)
+                except OSError:
+                    pass
+                return
             if time.monotonic() > deadline:
                 logger.error(
                     "slirp_watcher: timed out waiting for pid_file %s after %ds",
@@ -415,10 +423,18 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             )
             self._slirp_process = proc
             logger.debug("slirp_watcher: slirp4netns launched (pid=%d)", proc.pid)
-            proc.wait()
+            while True:
+                try:
+                    proc.wait(timeout=1.0)
+                    break
+                except subprocess.TimeoutExpired:
+                    if self._slirp_shutdown_event.is_set():
+                        return
             stderr_output = (
                 proc.stderr.read().decode(errors="replace") if proc.stderr else ""
             )
+            if self._slirp_shutdown_event.is_set():
+                return
             logger.debug(
                 "slirp_watcher: slirp4netns exited with code %d", proc.returncode
             )
@@ -426,11 +442,13 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 logger.error(
                     "slirp_watcher: slirp4netns stderr: %s", stderr_output.strip()
                 )
-            if proc.returncode != 0:
-                sys.exit(-1)
+            # Non-zero exit is expected when we kill slirp during shutdown (e.g. -9)
+            if proc.returncode != 0 and proc.returncode != -9:
+                logger.warning(
+                    "slirp_watcher: slirp4netns exited with code %d", proc.returncode
+                )
         except Exception:
             logger.exception("slirp_watcher: exception launching slirp4netns")
-            sys.exit(-1)
         finally:
             self._slirp_process = None
             try:
@@ -452,7 +470,6 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             logger.debug("sleep setup port")
         else:
             logger.error("Impossible to read the setup port")
-            sys.exit(-1)
             return
 
         for spec in ports_spec.split():
@@ -629,6 +646,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
     def _kill_slirp(self) -> None:
         """Terminate the slirp4netns process if it is still running."""
+        self._slirp_shutdown_event.set()
         proc = self._slirp_process
         if proc is not None:
             try:
@@ -641,10 +659,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
     @override
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
         """Shutdown the sandbox and kill slirp4netns."""
+        self._slirp_shutdown_event.set()
         try:
             await super()._shutdown(graceful_shutdown)
         finally:
-            self._kill_slirp()
+            await asyncio.to_thread(self._kill_slirp)
 
     # -- Daemon lifecycle --
 
@@ -873,17 +892,19 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 )
 
             self._process = await _do_launch()
-            logger.debug("_launch: process started pid=%s", self._process.pid)
+            process = self._process
+            assert process is not None
+            logger.debug("_launch: process started pid=%s", process.pid)
 
             # Close read end in parent (child has its own copy via pass_fds)
             os.close(slirp_pipe_r)
 
             # Write unshare PID for slirp4netns to attach to the namespace
-            assert self._process.pid is not None
-            Path(pid_file).write_text(str(self._process.pid))
+            assert process.pid is not None
+            Path(pid_file).write_text(str(process.pid))
             logger.debug(
                 "_launch: wrote pid %d to pidfile, starting slirp_watcher pipe_w=%d",
-                self._process.pid,
+                process.pid,
                 slirp_pipe_w,
             )
 
