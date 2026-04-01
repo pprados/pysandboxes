@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run tests with pre-built image pysandboxes:ready (python-sb directly, no apt/pip at runtime).
+# Run tests with pre-built image pysandboxes:latest (python-sb directly, no apt/pip at runtime).
 # Builds the image if missing. Used by test-docker.sh via DOCKER_CMD=docker.
 set -euo pipefail
 
 DOCKER_CMD="${DOCKER_CMD:-podman}"
-IMAGE_NAME="pysandboxes:ready"
+IMAGE_NAME="pysandboxes:latest"
 OS_SANDBOX="${OS_SANDBOX:-unshare}"
 #PYTHON_SB_ARGS="${OS_SANDBOX:- --py-sandbox=false}"
 PYTHON_SB_ARGS="--py-sandbox=false"
@@ -46,3 +46,4 @@ $DOCKER_CMD run $TTY_FLAGS --rm \
     OS_SANDBOX=$OS_SANDBOX \
     python-sb $PYTHON_SB_ARGS \
     -m tests.integration_tests.tst_usage"
+echo "********* $DOCKER_CMD test terminate ********* \n"

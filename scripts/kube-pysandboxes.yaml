@@ -5,23 +5,18 @@ metadata:
 spec:
   containers:
     - name: pysandboxes-test
-      image: python:latest
+      image: pysandboxes:latest
+      imagePullPolicy: Never   # Image construite localement dans minikube (eval $(minikube docker-env) + docker build)
       workingDir: /app
       command: [ "/bin/sh", "-c","sleep infinity" ] # Garde le pod en vie
       securityContext:
+        privileged: true   # Requis pour mount /proc dans le namespace unshare (sandbox)
         capabilities:
           add:
             - SYS_ADMIN   # Permet unshare (créer des namespaces)
-            - NET_ADMIN    # Permet la configuration réseau (ip link, etc.)
+            - NET_ADMIN   # Permet la configuration réseau (ip link, etc.)
         seccompProfile:
           type: Unconfined  # Désactive le filtre qui bloque unshare
-#      command: [ "/bin/sh", "-c" ] # Garde le pod en vie
-#      args:
-#        - |
-#          apt update && \
-#          apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns && \
-#          pip install -e . && \
-#          OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage
       volumeMounts:
         - name: code-local
           mountPath: /app  # Chemin à l'intérieur du Pod

@@ -6,6 +6,6 @@ This module contains global configuration constants used throughout the
 PySandboxes framework.
 """
 
-RELEASE: bool = False  # Set to False to add some traces
+RELEASE: bool = True  # Set to False to add some traces
 OPTIMIZE: bool = False  # With True, remove some wrapper
 CONFIG_NAME = ".py-sandboxes"

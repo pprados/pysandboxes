@@ -16,13 +16,13 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Minimal copy for pip install (pyproject + readme required by hatch + package + tests)
-# FIXME: final Dockerfile should use the published project version.
-COPY pyproject.toml README.md ./
-COPY pysandboxes/ pysandboxes/
-COPY tests/ tests/
-
-RUN pip install --no-cache-dir -e .
+## Minimal copy for pip install (pyproject + readme required by hatch + package + tests)
+## FIXME: final Dockerfile should use the published project version.
+#COPY pyproject.toml README.md ./
+#COPY pysandboxes/ pysandboxes/
+#COPY tests/ tests/
+#
+#RUN pip install --no-cache-dir -e .
 
 # No ENTRYPOINT: you can run python-sb, bash, or a module.
 # Example: python-sb --help  or  OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage
