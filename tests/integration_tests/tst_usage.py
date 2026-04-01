@@ -12,6 +12,7 @@ from types import FrameType
 from typing import Any, List, Mapping, cast
 
 from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
+from pysandboxes.config import RELEASE
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
@@ -48,7 +49,11 @@ def init_log_level(use_rich: bool = True) -> None:
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
 
-    sandboxes_level = logging.DEBUG
+    if not RELEASE:
+        sandboxes_level = logging.DEBUG
+    else:
+        sandboxes_level = logging.INFO
+
     uvicorn_level = logging.ERROR
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
     logging.getLogger("asyncio").setLevel(uvicorn_level)
@@ -95,14 +100,14 @@ async def arun_in_sandbox() -> int:
     _test_envs()
     _test_files()
     _test_network()
-    print("end of arun_in_sandbox()")
     global _old_sigint_handler
     _old_sigint_handler = signal.signal(signal.SIGTERM, signal_handler_sandbox)
 
-    print(f"arun_in_sandbox {threading.current_thread()=}")
+    logger.info(f"arun_in_sandbox {threading.current_thread()=}")
 
     # os.kill(os.getpid(),signal.SIGTERM)
     # await asyncio.sleep(5)
+    logger.info("end of arun_in_sandbox()")
     return 42
 
 
@@ -112,7 +117,7 @@ def run_in_sandbox() -> int:
     _test_envs()
     _test_files()
     _test_network()
-    print(42)
+    logger.info("end of run_in_sandbox()")
     return 42
 
 
@@ -430,9 +435,7 @@ def test_raw_dns(server: str = "8.8.8.8") -> None:
 if __name__ == "__main__":
     init_log_level()
 
-    for k, v in os.environ.items():
-        print(f"{k}={v!r}")
-    # sync_main(sys.argv)
+    sync_main(sys.argv)
 
     logger.info("-------------------------")
     asyncio.run(async_main(sys.argv))

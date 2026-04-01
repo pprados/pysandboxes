@@ -33,6 +33,12 @@ fix-gemini: .gemini/commands/*
 unit-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest -v tests/unit_tests/
 
+## Make docker/podman/kubernetes tests
+container-tests:
+	scripts/test-podman.sh
+	scripts/test-docker.sh
+	scripts/test-kubernetes.sh
+
 ## Make integration tests
 integration-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests
@@ -49,7 +55,7 @@ gh-tests: format lint
 	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi
 
 ## Make all tests
-all-tests: unit-tests integration-tests sample-tests
+all-tests: unit-tests integration-tests container-tests sample-tests
 
 test_watch:
 	unset VIRTUAL_ENV && uv run ptw --now . -- tests/unit_tests
