@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-docker build-image-clean
 
 # Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
@@ -33,11 +33,11 @@ fix-gemini: .gemini/commands/*
 unit-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest -v tests/unit_tests/
 
-## Make docker/podman/kubernetes tests
-container-tests:
-	scripts/test-podman.sh
-	scripts/test-docker.sh
-	scripts/test-kubernetes.sh
+## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed)
+container-tests: build-image
+	tests/containers/test-podman.sh
+	tests/containers/test-docker.sh
+	tests/containers/test-kubernetes.sh
 
 ## Make integration tests
 integration-tests:
@@ -169,16 +169,73 @@ help:
 
 
 
-.PHONY: dist
-dist:
+# Build inputs: rebuild dist/ when any of these change.
+BUILD_SOURCES = pyproject.toml README.md $(shell find pysandboxes -type f \( -name '*.py' -o -name '*.toml' \) 2>/dev/null)
+
+# Sentinel updated after a successful build; dist depends on it so we only run uv build when sources are newer.
+.make-dist: $(BUILD_SOURCES)
 	uv build
+	@touch .make-dist
+
+## Build distribution (wheel/sdist); only runs when pyproject.toml, README.md or pysandboxes sources changed.
+.PHONY: dist
+dist: .make-dist
 
 # ---------------------------------------------------------------------------------------
-# SNIPPET pour tester la publication d'une distribution
-# sur test.pypi.org.
+# Image python-sb:$(PYTHON_VERSION), with tag python-sb:latest added (wheel from dist/).
+# Rebuild only if image missing or Dockerfile/wheel newer than image.
+# Builds one image in Podman and one in Docker. PYTHON_VERSION is taken from uv's current Python.
+PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
+IMAGE_TAG_VERSION := python-sb:$(PYTHON_VERSION)
+IMAGE_NAME := python-sb:latest
+
+.make-build-image: Dockerfile .make-dist
+	@WHEEL="$$(find dist -maxdepth 1 -name '*.whl' -print -quit)"; \
+	if [ -z "$$WHEEL" ]; then echo "No wheel in dist/"; exit 1; fi; \
+	DOCKERFILE_TS=$$(stat -c %Y Dockerfile 2>/dev/null); \
+	WHEEL_TS=$$(stat -c %Y "$$WHEEL" 2>/dev/null); \
+	for CONTAINER_CMD in podman docker; do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  NEED_REBUILD=0; \
+	  if ! $$CONTAINER_CMD image inspect $(IMAGE_NAME) >/dev/null 2>&1; then \
+	    echo "Image $(IMAGE_NAME) missing for $$CONTAINER_CMD, building..."; \
+	    NEED_REBUILD=1; \
+	  else \
+	    echo "Checking if image $(IMAGE_NAME) needs rebuild ($$CONTAINER_CMD)..."; \
+	    IMAGE_TS=$$($$CONTAINER_CMD image inspect -f '{{.Created}}' $(IMAGE_NAME) 2>/dev/null | xargs -I {} date -d "{}" +%s 2>/dev/null || echo "0"); \
+	    [ -n "$$DOCKERFILE_TS" ] && [ "$$DOCKERFILE_TS" -gt "$$IMAGE_TS" ] 2>/dev/null && NEED_REBUILD=1; \
+	    [ -n "$$WHEEL_TS" ] && [ "$$WHEEL_TS" -gt "$$IMAGE_TS" ] 2>/dev/null && NEED_REBUILD=1; \
+	  fi; \
+	  if [ "$$NEED_REBUILD" = "1" ]; then \
+	    echo "Building $(IMAGE_TAG_VERSION) (and $(IMAGE_NAME)) with $$CONTAINER_CMD (Python $(PYTHON_VERSION))..."; \
+	    $$CONTAINER_CMD build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) -t $(IMAGE_TAG_VERSION) -t $(IMAGE_NAME) -f Dockerfile .; \
+	  fi; \
+	done; \
+	touch .make-build-image
+
+## Build image python-sb:$(PYTHON_VERSION) and tag python-sb:latest (only if wheel or Dockerfile newer than each image)
+build-image: .make-build-image
+
+## Build image with docker only (for minikube: eval $(minikube docker-env) && make build-image-docker)
+build-image-docker: Dockerfile .make-dist
+	@WHEEL="$$(find dist -maxdepth 1 -name '*.whl' -print -quit)"; \
+	if [ -z "$$WHEEL" ]; then echo "No wheel in dist/"; exit 1; fi; \
+	echo "Building $(IMAGE_TAG_VERSION) (and $(IMAGE_NAME)) with docker (Python $(PYTHON_VERSION))..."; \
+	docker build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) -t $(IMAGE_TAG_VERSION) -t $(IMAGE_NAME) -f Dockerfile .
+
+## Prune container build caches and force full rebuild (fixes "parent snapshot does not exist" and similar cache errors)
+build-image-clean:
+	@echo "Pruning build caches and forcing rebuild..."
+	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true
+	@command -v podman >/dev/null 2>&1 && (podman builder prune -f 2>/dev/null || podman system prune -f 2>/dev/null) || true
+	@rm -f .make-build-image
+	@$(MAKE) build-image
+
+# ---------------------------------------------------------------------------------------
+# Snippet to test publishing a distribution to test.pypi.org.
 .PHONY: test-twine
 ## Publish distribution on test.pypi.org
-test-twine: dist
+test-twine: .make-dist
 ifeq ($(OFFLINE),True)
 	@echo -e "$(red)Can not test-twine in offline mode$(normal)"
 else
@@ -189,10 +246,10 @@ else
 endif
 
 # ---------------------------------------------------------------------------------------
-# SNIPPET pour publier la version sur pypi.org.
+# Snippet to publish the release to pypi.org.
 .PHONY: release
 ## Publish distribution on pypi.org
-release: validate all-tests clean dist
+release: validate all-tests clean .make-dist
 ifeq ($(OFFLINE),True)
 	@echo -e "$(red)Can not release in offline mode$(normal)"
 else

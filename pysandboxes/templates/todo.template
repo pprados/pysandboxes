@@ -10,7 +10,7 @@
 #python-exec-import=ALLOW:threads
 #python-exec=ALLOW:annotations,async,class,def
 
-# TODO: build=file  pour apprentissage (ou verbe utilisé dans AppArmor)
+# TODO: build=file for learning (or verb used in AppArmor)
 # TODO: no-dotenv
 # TODO: firejail=file.template
 # TODO: dns=1.1.1.1,4,4,4,4

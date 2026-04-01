@@ -8,7 +8,8 @@ __pycache__
 .mypy_cache
 .ruff_cache
 *.egg-info
-dist
+dist/*
+!dist/*.whl
 build
 .eggs
 *.md

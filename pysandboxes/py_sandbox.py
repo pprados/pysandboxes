@@ -137,6 +137,7 @@ def load_and_parse_config(
     # Extra rules can be in form k=v or k=[v1,v2,...]
     extra_lines = []
     for k, all_v in extra_rules.items():
+
         k = k.replace("_", "-")
         if isinstance(all_v, set):
             if not all_v:

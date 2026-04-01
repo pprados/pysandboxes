@@ -103,12 +103,26 @@ def parse_python_cmd_line(
         module_mode = True
 
     remove_index = []
+    skip_next = False
     for i, arg in enumerate(args):
+        if (
+            skip_next
+        ):  # Skip the next argument if the previous one was a value for an option
+            skip_next = False
+            continue
         if arg.startswith("--pysandboxes-config="):
             # Accept full name or relative name of the module
             _, pysandboxes_config_p = arg.split("=", maxsplit=1)
             pysandboxes_config = Path(pysandboxes_config_p)
             remove_index.append(i)
+        if arg == "--pysandboxes-config":
+            # Accept full name or relative name of the module
+            pysandboxes_config_p = args[i + 1]
+            pysandboxes_config = Path(pysandboxes_config_p)
+            remove_index.append(i)
+            remove_index.append(i + 1)
+            skip_next = True
+
     for i in sorted(remove_index, reverse=True):
         del args[i]
 
