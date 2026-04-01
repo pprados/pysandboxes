@@ -223,7 +223,7 @@ build-image-docker: Dockerfile .make-dist
 	echo "Building $(IMAGE_TAG_VERSION) (and $(IMAGE_NAME)) with docker (Python $(PYTHON_VERSION))..."; \
 	docker build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) -t $(IMAGE_TAG_VERSION) -t $(IMAGE_NAME) -f Dockerfile .
 
-## Prune container build caches and force full rebuild (fixes "parent snapshot does not exist" and similar cache errors)
+## Prune container build caches and force full rebuild
 build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."
 	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true

@@ -6,6 +6,12 @@ set -euo pipefail
 DOCKER_CMD="${DOCKER_CMD:-podman}"
 IMAGE_NAME="python-sb:latest"
 OS_SANDBOX="${OS_SANDBOX:-unshare}"
+
+if [ "$OS_SANDBOX" = "firejail" ]; then
+  echo "Error: OS_SANDBOX=firejail is not compatible with containers."
+  exit 1
+fi
+
 PYTHON_SB_ARGS="--py-sandbox=false --pysandboxes-config=tests/integration_tests/py-sandbox-test.profile"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,18 +26,13 @@ fi
 TTY_FLAGS=""
 [ -t 0 ] && TTY_FLAGS="-it"
 
-# With Docker, the unshare child often cannot see the bind-mounted /app in its mount namespace,
-# so the editable install is invisible there. Use a regular install so the package lives in
-# site-packages (container fs) and is visible to the unshare child. Podman keeps /app visible.
-# Ensure /app is readable by the unshare child (mapped user) so env --chdir=/app works.
+# Ensure /app is readable by the unshare child (mapped user).
+# The package is already installed in the image via the Dockerfile.
+VOLUME_MOUNT=(-v "$(pwd)":/app)
 if [ "$DOCKER_CMD" = "docker" ]; then
-  PIP_INSTALL="pip install ."
-  VOLUME_MOUNT=(-v "$(pwd)":/app)
   # Unshare child may run as mapped user; make /app readable and /app/tmp writable for tests
   DOCKER_PREFIX="chmod -R a+rX /app && mkdir -p /app/tmp && chmod -R a+rwX /app/tmp &&"
 else
-  PIP_INSTALL="pip install -e ."
-  VOLUME_MOUNT=(-v "$(pwd)":/app)
   DOCKER_PREFIX=""
 fi
 
@@ -42,10 +43,8 @@ $DOCKER_CMD run $TTY_FLAGS --rm \
   "${VOLUME_MOUNT[@]}" \
   -w /app \
   "$IMAGE_NAME" \
-  sh -c "${DOCKER_PREFIX} $PIP_INSTALL && \
-    cd /app && \
+  sh -c "${DOCKER_PREFIX} \
     OS_SANDBOX=$OS_SANDBOX My_ENV=1 \
     python-sb \
     $PYTHON_SB_ARGS \
     -m tests.integration_tests.tst_usage"
-echo "********* $DOCKER_CMD test terminate *********"

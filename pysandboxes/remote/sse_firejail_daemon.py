@@ -583,7 +583,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
             # Clean env variable
-            args.extend(["env", "-i"])
+            # FIXME: remove dependencies ?
+            args.extend(["/usr/bin/env", "-i"])
             for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
                 args.append(f"{env}={val}")
 

@@ -9,12 +9,16 @@ RUN apt-get update && \
     build-essential \
     libvirt-dev \
     pkg-config \
-    iptables \
-    iproute2 \
-    slirp4netns \
+    && pip install --upgrade pip && pip install --no-cache-dir ipython \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip && pip install --no-cache-dir ipython
+# For unshare sandbox
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    iptables \
+    iproute2 \
+    slirp4netns
+
 
 # Same working directory as the base python image
 WORKDIR /app  # FIXME
