@@ -21,12 +21,13 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [X] sub process
   - [ ] sub interpreter
   - [X] firejail
+  - [X] unshare
+  - [ ] langlock
   - [ ] bubblejail
   - [ ] bwrap
-  - [ ] Docker (Docker or OCI images, oci-a,rchive) (See [here](https://github.com/anthropics/claude-code/tree/main/.devcontainer))
-  - [ ] podman
-  - [X] unshare
-  - [ ] kubernetes
+  - [X] Docker (--privileged with unshare)
+  - [X] podman (--privileged with unshare)
+  - [X] kubernetes
   - [ ] libslirp
   - [ ] [conainer2wasm](https://github.com/container2wasm/container2wasm)
   - [ ] micro-VM

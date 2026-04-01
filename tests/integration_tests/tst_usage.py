@@ -148,6 +148,7 @@ def _test_envs() -> int:
             rc = 1
         else:
             logger.info(f"{OK} USER is not visible")
+    logger.info(f"{OK} Test Env")
     return rc
 
 
@@ -384,7 +385,7 @@ def _test_files() -> int:
         with io.open(".env", "r") as f:
             s = f.read()
             if s:
-                logger.error(f"{KO} .env must not be accessible")
+                logger.error(f"{KO} .env must not be accessible ({s[:40]}...)")
                 rc = 1
     except FileNotFoundError as e:
         # .env absent or not visible in sandbox (e.g. ignore=.env) → OK
@@ -532,8 +533,8 @@ if __name__ == "__main__":
     init_log_level()
     rc = 0
     rc += sync_main(sys.argv)
-    # FIXME
-    # logger.info("-------------------------")
-    # rc += asyncio.run(async_main(sys.argv))
-    # logger.info("End of __main__")
+    logger.info(f"End of sync_main {rc=}")
+    logger.info("-------------------------")
+    rc += asyncio.run(async_main(sys.argv))
+    logger.info(f"End of async_main {rc=}")
     sys.exit(rc)

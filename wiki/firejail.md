@@ -21,6 +21,9 @@ Otherwise, you must create a bridge. The `[add-bridge.sh](https://github.com/ppr
 sudo uv run ./add-bridge.sh
 ```
 
+## Using with docker/podman
+Firejail is not compatible with docker and podman.
+
 ## Specific Parameters
 
 Some specific parameters can be added to `.py-sandboxes` for *Firejail*. Parameters of the form `firejail.<xxx>=<yyy>` will be added in the form `--<xxx>=<yyy>` when launching firejail.
