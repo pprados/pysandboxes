@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 DEBUG_NETFILTER = not RELEASE
 
 # Replace rules to delegate the filter to firejail.
-# The exception are different
+# Exceptions differ from unshare backend
 REPLACE = False  # TODO: firejail
 
 

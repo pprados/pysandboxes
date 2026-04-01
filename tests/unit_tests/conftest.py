@@ -25,7 +25,7 @@ def init_log_level() -> None:
 @pytest.fixture(autouse=True)
 def activate_guard() -> None:
     # Create test files and symlinks
-    # It's executer without patch.
+    # Runs without patch.
     init_log_level()
     _deactivate_all_rules()
     _activate_guard_import_for_tests()

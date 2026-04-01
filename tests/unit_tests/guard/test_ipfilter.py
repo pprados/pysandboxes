@@ -59,7 +59,7 @@ def _is_conntrack_kernel_module() -> bool:
 @pytest.fixture(autouse=True)
 def reset() -> None:
     # Create test files and symlinks
-    # It's executer without patch.
+    # Runs without patch.
     init_log_level()
     _deactivate_all_rules()
     _activate_guard_import_for_tests()

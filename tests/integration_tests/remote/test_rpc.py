@@ -45,7 +45,7 @@ def test_sync_function() -> None:
 async def async_function(a: str, b: str) -> str:
     import asyncio
 
-    await asyncio.sleep(0)  # Simule une opération asynchrone
+    await asyncio.sleep(0)  # Simulate an async operation
     return f"{a} {b}"
 
 

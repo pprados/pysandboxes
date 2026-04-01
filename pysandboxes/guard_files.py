@@ -263,7 +263,6 @@ def parse_rules(
     rules_bind = sorted(
         rules_bind, key=lambda r: len(r.dest) if r.dest else 0, reverse=True
     )
-
     return tuple(rules_ignore + cast(list[FilesRule], rules_bind)), ignore_rules
 
 
@@ -1056,7 +1055,7 @@ def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
 
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
-        if remapped.endswith(os.path.sep):
+        if remapped != os.path.sep and remapped.endswith(os.path.sep):
             remapped = remapped[:-1]
         return str(remapped)
 

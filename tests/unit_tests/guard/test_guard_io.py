@@ -66,7 +66,7 @@ tmp_path = Path(tempfile.TemporaryDirectory(prefix="pysandboxes_test_").name)
 @pytest.fixture
 def files() -> Dict[str, Path]:
     # Create test files and symlinks
-    # It's executer without patch.
+    # Runs without patch.
     global tmp_path
     if tmp_path.exists():
         # Remove, without sandboxes

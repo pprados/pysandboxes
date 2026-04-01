@@ -1144,7 +1144,7 @@ def _read_host_file() -> tuple[
     dns: dict[str, set[IPv4Address | IPv6Address]] = {}
     inverse_dns: dict[IPv4Address | IPv6Address, set[str]] = {}
     # Read the host file
-    # Détecter le système d'exploitation pour trouver le bon chemin
+    # Detect the OS to find the correct hosts file path
     if sys.platform == "win32":
         system_root = os.environ.get("SystemRoot")
         if not system_root:

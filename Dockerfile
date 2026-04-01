@@ -1,8 +1,8 @@
 # Ready image to run python-sb directly (no apt/pip at runtime).
-# Build: podman build -t pysandboxes:ready .   (or docker build)
-# Run:  podman run -it --rm --privileged -v $(pwd):/app -w /app pysandboxes:ready \
-#         OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage
-FROM python:3.11-slim
+# Python version comes from build-arg (make build-image uses uv's Python version).
+# Build: make build-image   or   podman/docker build --build-arg PYTHON_VERSION=3.13 -t python-sb:latest .
+ARG PYTHON_VERSION=3.10
+FROM python:${PYTHON_VERSION}-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -14,16 +14,15 @@ RUN apt-get update && \
     slirp4netns \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+RUN pip install --upgrade pip && pip install --no-cache-dir ipython
 
-## Minimal copy for pip install (pyproject + readme required by hatch + package + tests)
-## FIXME: final Dockerfile should use the published project version.
-#COPY pyproject.toml README.md ./
-#COPY pysandboxes/ pysandboxes/
-#COPY tests/ tests/
-#
-#RUN pip install --no-cache-dir -e .
+# Same working directory as the base python image
+WORKDIR /app  # FIXME
+
+## Copy wheel from dist/ (build with: make dist) and install the module
+COPY dist/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl
 
 # No ENTRYPOINT: you can run python-sb, bash, or a module.
 # Example: python-sb --help  or  OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage
-CMD ["python-sb", "--help"]
+CMD ["python-sb"]

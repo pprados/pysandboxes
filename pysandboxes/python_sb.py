@@ -67,9 +67,10 @@ def main() -> int:
     try:
         import IPython  # noqa: F401
 
-        binds = extra_rules.get("bind", set())  # bind=~/.ipython,~/.ipython
-        binds.add("~/.ipython,~/.ipython")
-        extra_rules["bind"] = binds
+        binds = extra_rules.get("bind", set())
+        if Path("~/.ipython").expanduser().is_dir():
+            binds.add("~/.ipython,~/.ipython")
+            extra_rules["bind"] = binds
     except ImportError:
         pass  # Ignore. IPython not found
 

@@ -246,7 +246,7 @@ def python_in_sb(
 
         set_learning_path(
             all_rules.learning_path
-        )  # TODO: semble doublon dans main_sandbox
+        )  # TODO: may be duplicate of main_sandbox
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
             _python_interactive(all_rules, True)

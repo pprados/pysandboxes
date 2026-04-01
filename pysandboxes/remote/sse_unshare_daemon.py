@@ -84,7 +84,7 @@ logger = logging.getLogger(__name__)
 SLIRP_INTERFACE = "tap0"
 
 
-# TODO: demander de gérer le plantage de slirp4netns
+# TODO: handle slirp4netns crash
 
 
 def _is_socket(path: str) -> bool:
@@ -213,7 +213,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         envs: Envs,
         temp: Path,
     ) -> AllRules:
-        # FIXME: todo, ajouter /etc ? all_rules = all_rules._replace()
+        # FIXME: consider adding /etc ? all_rules = all_rules._replace()
 
         return all_rules
 
@@ -255,7 +255,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         # DNS servers
         dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
-        # FIXME dns_servers=[IPv4Address('10.0.2.2'),IPv4Address('10.0.2.3'),]  # FIXME: force DNS du slirp4netns
+        # FIXME dns_servers=[IPv4Address('10.0.2.2'),IPv4Address('10.0.2.3'),]  # FIXME: force slirp4netns DNS
         net_filter4 = rule_to_netfilter(
             all_rules.socket_rules, dns_servers, is_ipv6=False
         )
