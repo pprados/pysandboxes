@@ -306,9 +306,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             Updated security rules for firejail context.
         """
         if REPLACE:
-            _, updated_all_rules = self._firejail_args(
-                all_rules, envs, None, temp=temp, update=True
-            )
+            _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp)
         return all_rules
 
     @property
@@ -323,7 +321,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         envs: Environ | Envs,
         pipe_path: Path | None,
         temp: Path,
-        update: bool = False,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -519,7 +516,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
                     default_interface = get_default_interface()
                     bridges = get_bridge_interfaces()
-                    logger.debug(f"get_bridge_interfaces()={bridges}")
                     if not bridges:
                         bridge = default_interface
                     else:
@@ -583,7 +579,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
             # Clean env variable
-            # FIXME: remove dependencies ?
+            # TODO: remove dependencies ?
             args.extend(["/usr/bin/env", "-i"])
             for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
                 args.append(f"{env}={val}")
@@ -622,4 +618,4 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp
         )
         cmd_parameters.extend(run_daemon_cmd)
-        return cmd_parameters, Envs({})
+        return cmd_parameters, {}

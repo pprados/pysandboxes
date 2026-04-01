@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PYTHON_SB_ARGS="--py-sandbox=false --pysandboxes-config=tests/integration_tests/py-sandbox-test.profile"
-# FIXME: confirm NET_ADMIN capability is required in the manifest
+
 # --- Configuration ---
 POD_NAME="pysandboxes-test"
 IMAGE_NAME="python-sb:latest"

@@ -149,7 +149,7 @@ def main() -> None:
         command = args[1:]
 
     # Read configuration
-    logger.debug(f"load config ...")
+    logger.debug("load config ...")
     txt_config = Path(config_path).read_text()
     config = UnshareSetupConfig.from_json(txt_config)
     logger.debug(f"\n{json.dumps(json.loads(txt_config),indent=2)}")
@@ -291,7 +291,6 @@ def main() -> None:
         )
         logger.debug(f"write dns {config.dns_servers=}")
         dns_servers = config.dns_servers
-        dns_server = ["10.0.2.3"]  # FIXME
         for dns in dns_servers:
             resolv_tmp.write(f"nameserver {dns}\n")
         resolv_tmp.close()

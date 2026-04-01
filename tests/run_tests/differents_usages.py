@@ -10,7 +10,7 @@ SIZE_OF_LOOP = 1  # Try multiple calls
 
 
 def init_log_level() -> None:
-    sandboxes_level = logging.DEBUG
+    sandboxes_level = logging.INFO
     uvicorn_level = logging.WARNING
     format = "[%(process)d] %(levelname)-5s %(name)s %(message)s"
     if is_in_sandbox():

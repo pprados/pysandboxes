@@ -19,6 +19,9 @@ INTERVAL_FOR_PING_DAEMON = POLLING_DELAY * 2  # Daemon ping interval
 TIMEOUT_FOR_PING = 1.0  # Ping response timeout
 LOOP_FOR_PING = 100  # Try to ping how many times?
 
+# Start daemon timeout (sync start_daemon() wait for async start to complete)
+TIMEOUT_FOR_START_DAEMON = 30  # seconds
+
 # Shutdown and lifecycle timing
 TIMEOUT_GRACEFUL_SHUTDOWN = 2  # Graceful shutdown timeout
 TIMEOUT_FOR_STOP_DAEMON = TIMEOUT_GRACEFUL_SHUTDOWN * 2  # Daemon stop timeout

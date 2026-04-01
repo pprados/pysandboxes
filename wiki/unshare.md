@@ -6,21 +6,39 @@ Root privileges are not required to configure firewall rules within the namespac
 
 ## Prerequisites
 
+### userns clone
 To utilize unshare, you must install [slirp4netns](https://manpages.debian.org/experimental/slirp4netns/slirp4netns.1.en.html) and [iptables](https://man7.org/linux/man-pages/man8/iptables.8.html), and ensure `kernel.unprivileged_userns_clone` is set to `1` (this is typically enabled by default).
 
 ```bash
 # Verify permissions
-sysctl kernel.unprivileged_userns_clone
-sysctl kernel.apparmor_restrict_unprivileged_userns
+sudo sysctl kernel.unprivileged_userns_clone  # Must be 1
+sudo sysctl kernel.apparmor_restrict_unprivileged_userns # Must be 0
 
 # Configure permissions
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 sudo sysctl -w kernel.unprivileged_userns_clone=1
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+# Permamently configure permissions
+echo -e "kernel.unprivileged_userns_clone = 1
+kernel.apparmor_restrict_unprivileged_userns = 0" | sudo tee /etc/sysctl.d/99-userns.conf > /dev/null
+sudo sysctl -p /etc/sysctl.d/99-userns.conf
+
+# Check
+unshare -U -r /bin/sh -c "whoami"
 
 # Install slirp4netns and iptables
 sudo apt install slirp4netns iptables
 ```
 
+### AppArmor
+
+Check the privileged
+```
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+```
+```
+echo "kernel.apparmor_restrict_unprivileged_userns = 0" | sudo tee /etc/sysctl.d/60-apparmor-unprivileged.conf
+```
 ## Execution Model
 
 When launched, code execution occurs as a local `root` user within the sandbox. This user retains no elevated privileges on the host system once directory mounts and iptables rules are active.
