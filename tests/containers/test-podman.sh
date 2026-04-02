@@ -44,7 +44,7 @@ $DOCKER_CMD run $TTY_FLAGS --rm \
   -w /app \
   "$IMAGE_NAME" \
   sh -c "${DOCKER_PREFIX} \
-    OS_SANDBOX=$OS_SANDBOX My_ENV=1 \
+    TERM=\${TERM:-dumb} OS_SANDBOX=$OS_SANDBOX My_ENV=1 \
     python-sb \
     $PYTHON_SB_ARGS \
     -m tests.integration_tests.tst_usage"

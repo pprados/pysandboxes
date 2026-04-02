@@ -33,17 +33,15 @@ fix-gemini: .gemini/commands/*
 unit-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest -v tests/unit_tests/
 
-## Ensure minikube is running (start if installed but not running).
-## When we start minikube, wait for node and CoreDNS so pods get DNS (avoids "name resolution" failures).
+# Ensure minikube is running (start if installed but not running).
+# When we start minikube, wait for node and CoreDNS so pods get DNS (avoids "name resolution" failures).
 minikube-ready:
 	@command -v minikube >/dev/null 2>&1 && (minikube status >/dev/null 2>&1 || (minikube start && kubectl wait --for=condition=Ready nodes --all --timeout=120s 2>/dev/null && (kubectl wait --for=condition=Ready pod -l k8s-app=kube-dns -n kube-system --timeout=120s 2>/dev/null || true))) || true
 
-## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed)
+## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed). Use OS_SANDBOX (default: unshare).
 container-tests: build-image
-#	tests/containers/test-podman.sh
-#	tests/containers/test-docker.sh
 	$(MAKE) minikube-ready
-	tests/containers/test-kubernetes.sh
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && OS_SANDBOX=$${OS_SANDBOX:-unshare} uv run pytest -v tests/containers/
 
 ## Make integration tests
 integration-tests:
@@ -51,7 +49,7 @@ integration-tests:
 
 ## Make integration tests
 sample-tests:
-	# (cd samples/mcp-client && make tests && true)
+	(cd samples/mcp-client && make tests && true)
 	# (cd samples/mcp-server && make tests && true)
 
 ## Make github tests locally
