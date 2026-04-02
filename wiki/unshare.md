@@ -18,7 +18,7 @@ sudo sysctl kernel.apparmor_restrict_unprivileged_userns # Must be 0
 sudo sysctl -w kernel.unprivileged_userns_clone=1
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-# Permamently configure permissions
+# Permanently configure permissions
 echo -e "kernel.unprivileged_userns_clone = 1
 kernel.apparmor_restrict_unprivileged_userns = 0" | sudo tee /etc/sysctl.d/99-userns.conf > /dev/null
 sudo sysctl -p /etc/sysctl.d/99-userns.conf
