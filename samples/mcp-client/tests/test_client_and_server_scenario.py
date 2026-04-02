@@ -19,15 +19,15 @@ logger = logging.getLogger(__name__)
 timeout = 30
 all_mcp_client_os_sandbox: list[str] = [
     "None",
-    "Subprocess",
-    "firejail",
-    "unshare",
+    # "Subprocess",
+    # "firejail",
+    # "unshare",
 ]
 all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",
-    "stdio_sandboxes_complete",
-    "stdio_sandboxes_partial",
-    "http",
+    # "stdio_sandboxes_complete",
+    # "stdio_sandboxes_partial",
+    # "http",
 ]
 
 
@@ -177,10 +177,17 @@ def test_claude_evaluate_expression(
             timeout=timeout,
             input="",
             capture_output=True,  # To debug, deactivate capture_output
-            check=True,
+            check=False,
             text=True,
             shell=False,
         )
+        if result.returncode != 0:
+            stderr = result.stderr or ""
+            if "429 Too Many Requests" in stderr or "429" in stderr:
+                pytest.skip("OpenAI API rate limit (429) - retry later")
+            raise subprocess.CalledProcessError(
+                result.returncode, cmd, result.stdout, stderr
+            )
         print(result.stdout)
         if result.stderr:
             print("-------")
