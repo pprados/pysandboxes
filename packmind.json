@@ -1,0 +1,11 @@
+{
+  "packages": {
+    "pysandboxes-standards": "*"
+  },
+  "agents": [
+    "claude",
+    "cursor",
+    "copilot",
+    "agents_md"
+  ]
+}
