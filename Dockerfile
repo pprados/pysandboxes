@@ -9,7 +9,8 @@ RUN apt-get update && \
     build-essential \
     libvirt-dev \
     pkg-config \
-    && pip install --upgrade pip && pip install --no-cache-dir ipython \
+    && pip install --upgrade pip && \
+    pip install --no-cache-dir ipython \
     && rm -rf /var/lib/apt/lists/*
 
 # For unshare sandbox

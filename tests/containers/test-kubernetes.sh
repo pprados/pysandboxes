@@ -27,10 +27,10 @@ trap cleanup EXIT
 
 # --- Execution ---
 
-# Ensure minikube is running (avoids "proto: cannot parse invalid wire-format data")
+# Ensure minikube is running (avoids "proto: cannot parse invalid wire-format data"); start if necessary
 if ! minikube status >/dev/null 2>&1; then
-    echo "ERROR: minikube is not running. Start it with: minikube start"
-    exit 1
+    echo "minikube is not running, starting minikube..."
+    minikube start
 fi
 
 # Build image in minikube's Docker daemon if missing (build-image-docker uses docker only, not podman)
@@ -58,6 +58,22 @@ if ! kubectl wait --for=condition=Ready pod/"$POD_NAME" --timeout="${WAIT_TIMEOU
     kubectl describe pod "$POD_NAME" 2>/dev/null | tail -30
     exit 1
 fi
+
+# Wait for DNS to work inside the pod (cluster DNS can lag after minikube start)
+echo "Waiting for DNS resolution inside pod..."
+DNS_WAIT="${DNS_WAIT:-60}"
+for i in $(seq 1 "$DNS_WAIT"); do
+    if kubectl exec "$POD_NAME" -- getent hosts pypi.org >/dev/null 2>&1; then
+        echo "DNS ready after ${i}s"
+        break
+    fi
+    if [ "$i" -eq "$DNS_WAIT" ]; then
+        echo "ERROR: DNS resolution failed after ${DNS_WAIT}s (pip would fail to reach PyPI)"
+        kubectl get pods -n kube-system -l k8s-app=kube-dns 2>/dev/null || true
+        exit 1
+    fi
+    sleep 1
+done
 
 TIMEOUT="${TIMEOUT:-120}"
 

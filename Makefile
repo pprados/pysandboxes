@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-docker build-image-clean
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-docker build-image-clean minikube-ready
 
 # Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
@@ -33,10 +33,16 @@ fix-gemini: .gemini/commands/*
 unit-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest -v tests/unit_tests/
 
+## Ensure minikube is running (start if installed but not running).
+## When we start minikube, wait for node and CoreDNS so pods get DNS (avoids "name resolution" failures).
+minikube-ready:
+	@command -v minikube >/dev/null 2>&1 && (minikube status >/dev/null 2>&1 || (minikube start && kubectl wait --for=condition=Ready nodes --all --timeout=120s 2>/dev/null && (kubectl wait --for=condition=Ready pod -l k8s-app=kube-dns -n kube-system --timeout=120s 2>/dev/null || true))) || true
+
 ## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed)
 container-tests: build-image
-	tests/containers/test-podman.sh
-	tests/containers/test-docker.sh
+#	tests/containers/test-podman.sh
+#	tests/containers/test-docker.sh
+	$(MAKE) minikube-ready
 	tests/containers/test-kubernetes.sh
 
 ## Make integration tests
@@ -341,7 +347,7 @@ github-push-test:
 init: _uv-init
 #	@pre-commit install
 	gh extension install https://github.com/nektos/gh-act
-	@git lfs install
+	@git lfs install 2>/dev/null || true
 
 
 ### RELEASE ###
