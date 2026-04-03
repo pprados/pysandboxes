@@ -21,12 +21,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from pysandboxes.config import DEBUG
 
 SLIRP_INTERFACE = "tap0"
+# slirp4netns -c uses 10.0.2.0/24; gateway 10.0.2.2, optional tap IP 10.0.2.15 if not set by -c
+SLIRP_GATEWAY = "10.0.2.2"
+SLIRP_TAP_CIDR = "10.0.2.15/24"
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +185,72 @@ def main() -> None:
         os.close(ready_fd)
     except OSError as e:
         logger.debug(f"slirp4netns readiness fd {ready_fd} error: {e}")
+
+    # --- A2. Ensure tap0 is up and default route via slirp gateway ---
+    # slirp4netns -c configures tap0 (10.0.2.100/24), but in some environments (e.g. nested
+    # container, CI) the default route is missing or tap0 is not ready immediately; add it
+    # explicitly and retry so outbound traffic reaches the host.
+    logger.debug("configure tap0 and default route:")
+    for attempt in range(5):
+        if attempt > 0:
+            time.sleep(0.3)
+        r = subprocess.run(
+            ["ip", "link", "set", SLIRP_INTERFACE, "up"],
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode != 0:
+            logger.debug(
+                "ip link set tap0 up (attempt %s): %s",
+                attempt + 1,
+                r.stderr or r.stdout,
+            )
+            continue
+        # Ensure tap0 has an IP (slirp4netns -c usually sets 10.0.2.100; if missing, set 10.0.2.15)
+        r = subprocess.run(
+            ["ip", "addr", "add", SLIRP_TAP_CIDR, "dev", SLIRP_INTERFACE],
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode != 0 and "File exists" not in (r.stderr or ""):
+            logger.debug("ip addr add tap0: %s", r.stderr or r.stdout)
+        r = subprocess.run(
+            [
+                "ip",
+                "route",
+                "add",
+                "default",
+                "via",
+                SLIRP_GATEWAY,
+                "dev",
+                SLIRP_INTERFACE,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode == 0:
+            break
+        # "File exists" means route already there; success
+        if r.stderr and "File exists" in r.stderr:
+            break
+        logger.debug(
+            "ip route add default (attempt %s): %s", attempt + 1, r.stderr or r.stdout
+        )
+    else:
+        logger.warning(
+            "Could not add default route via %s after 5 attempts", SLIRP_GATEWAY
+        )
+    # Brief delay so the kernel/slirp stack is ready before we apply iptables and exec
+    time.sleep(1.0)
+    # Log current state (print so it appears even when logging is not configured)
+    for cmd, label in [
+        (["ip", "addr", "show"], "ip addr"),
+        (["ip", "route", "show"], "ip route"),
+    ]:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout:
+            for line in r.stdout.strip().splitlines():
+                logger.info("  %s: %s", label, line)
 
     # --- B. Configure loopback ---
     logger.debug("configure loopback:")

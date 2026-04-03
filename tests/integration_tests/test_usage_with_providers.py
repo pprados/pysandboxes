@@ -30,7 +30,10 @@ all_os_sandbox: list[str] = [
     "unshare",
     "firejail",
     "landlock",
+    "bwrap",
 ]
+
+# TODO: test with split mode
 
 
 def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
@@ -67,6 +70,8 @@ def _skip_reason(os_sandbox: str) -> str | None:
         return "unshare/slirp4netns missing or user namespaces not permitted"
     if os_sandbox == "landlock" and not landlock_user_available():
         return "Landlock not available (kernel < 5.13 or not Linux)"
+    if os_sandbox == "bwrap" and not which_command("bwrap"):
+        return "bwrap not installed"
     return None
 
 

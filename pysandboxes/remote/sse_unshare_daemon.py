@@ -42,6 +42,8 @@ try:
 except ImportError:
     from typing_extensions import override
 
+from ipaddress import IPv4Network
+
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..guard_socket import Action, Direction, Kind, SocketRule
@@ -255,12 +257,49 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         except FileNotFoundError:
             pass
 
-        # DNS servers
+        # DNS servers: use slirp4netns built-in DNS (10.0.2.3) so resolution is routable
+        # inside the namespace via tap0; upstream DNS from the host may be unreachable
+        # when the daemon runs inside a container (e.g. podman).
+        _slirp_dns = IPv4Address("10.0.2.3")
         dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
-        # FIXME dns_servers=[IPv4Address('10.0.2.2'),IPv4Address('10.0.2.3'),]  # FIXME: force slirp4netns DNS
+        if (
+            not dns_servers
+            or os.path.exists("/.dockerenv")
+            or os.path.exists("/run/.containerenv")
+        ):
+            dns_servers = [_slirp_dns]
+        else:
+            dns_servers = [_slirp_dns] + [ip for ip in dns_servers if ip != _slirp_dns][
+                :1
+            ]
         net_filter4 = rule_to_netfilter(
             all_rules.socket_rules, dns_servers, is_ipv6=False
         )
+
+        # Build hosts from OUT ALLOW rules so the sandbox resolves hostnames to the
+        # same IPs that iptables allows (avoids mismatch when sandbox uses slirp DNS).
+        hosts_entries: set[tuple[str, str]] = set()
+        for socket_rule in all_rules.socket_rules:
+            if (
+                socket_rule.action != Action.ALLOW
+                or Direction.OUT not in socket_rule.directions
+            ):
+                continue
+            net = socket_rule.mask.network
+            if not isinstance(net, IPv4Network) or net.prefixlen != 32:
+                continue
+            try:
+                value = socket_rule.config.rule[len("net=") :]
+                parts = value.split("|", 4)
+                if len(parts) < 3:
+                    continue
+                network_str = parts[2].strip()
+                if "/" in network_str or network_str.replace(".", "").isdigit():
+                    continue
+                hosts_entries.add((str(net.network_address), network_str))
+            except (IndexError, AttributeError):
+                continue
+        hosts_list = [f"{ip} {hostname}" for (ip, hostname) in sorted(hosts_entries)]
 
         # Build mounts
         mounts: set[tuple[str, str, bool]] = set()
@@ -290,7 +329,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
         config = UnshareSetupConfig(
             dns_servers=[str(ip) for ip in dns_servers],
-            hosts=[],  # FIXME
+            hosts=hosts_list,
             mounts_ro=[(m[0], m[1]) for m in mounts if not m[2]],
             mounts_rw=[(m[0], m[1]) for m in mounts if m[2]],
             named_pipe=str(pipe_path),

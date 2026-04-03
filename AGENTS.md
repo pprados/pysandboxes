@@ -95,6 +95,7 @@ Standardize pysandboxes Python 3.10+ typing (pipe unions, built-in generics, Typ
 * Use explicit `TypeAlias` for complex type aliases and simple assignment for trivial ones
 * Use lazy %-formatting for all log messages to avoid unnecessary string interpolation
 * Use pipe union syntax (`X | Y`) instead of `Union[X, Y]` or `Optional[X]`
+* NEVER change a `.pysandboxes` configuration
 
 Full standard is available here for further request: [Python Coding Conventions](.packmind/standards/python-coding-conventions.md)
 
