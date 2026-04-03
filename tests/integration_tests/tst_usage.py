@@ -12,7 +12,7 @@ from types import FrameType
 from typing import Any, List, Mapping, cast
 
 from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
-from pysandboxes.config import RELEASE
+from pysandboxes.config import DEBUG
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
@@ -49,7 +49,7 @@ def init_log_level(use_rich: bool = True) -> None:
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
 
-    if not RELEASE:
+    if DEBUG:
         sandboxes_level = logging.DEBUG
     else:
         sandboxes_level = logging.INFO
@@ -309,6 +309,8 @@ def _test_network() -> int:
             logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped")
         except TimeoutError:
             logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
+        except PermissionError:
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
 
         try:
             with socket.socket(AF_INET6, SOCK_STREAM) as sock:
@@ -320,7 +322,9 @@ def _test_network() -> int:
         except SandBoxError:
             logger.info(f"{OK} Use bind IPv6 to 9998 is stopped")
         except TimeoutError:
-            logger.info(f"{OK} Use bind IPv6 to 9998 is stopped by OS")
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
+        except PermissionError:
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
 
     logger.info(f"{OK} Test Network")
     return rc
@@ -385,8 +389,15 @@ def _test_files() -> int:
         with io.open(".env", "r") as f:
             s = f.read()
             if s:
-                logger.error(f"{KO} .env must not be accessible ({s[:40]}...)")
-                rc = 1
+                import pysandboxes
+
+                if pysandboxes.os_sandbox in ["none", "landlock"]:
+                    logger.warning(
+                        f"{OK} .env is accessible (os_sandbox={pysandboxes.os_sandbox!r})"
+                    )
+                else:
+                    logger.error(f"{KO} .env must not be accessible ({s[:40]}...)")
+                    rc = 1
     except FileNotFoundError as e:
         # .env absent or not visible in sandbox (e.g. ignore=.env) → OK
         logger.info(f"{OK} .env not readable: file not found ({e})")

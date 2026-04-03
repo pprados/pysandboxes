@@ -72,7 +72,7 @@ class BaseSSESandbox(BaseDaemon):
         retry = self.max_connect_retry
         while retry > 0:
             try:
-                from pysandboxes.os_sandbox import get_token
+                from pysandboxes._os_sandbox import get_token
 
                 token = get_token()
                 params = _get_rpc_params(args, func, kwargs)

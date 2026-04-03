@@ -34,7 +34,7 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
-from ..config import RELEASE
+from ..config import DEBUG
 from ..guard_socket import SocketRule
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
@@ -57,7 +57,7 @@ from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
-DEBUG_LAUNCH = not RELEASE or False
+DEBUG_LAUNCH = DEBUG or False
 
 
 def get_log_formatter() -> str:
@@ -670,7 +670,6 @@ class SubProcessDaemon(BaseSubProcessDaemon):
         *,
         envs: Envs,
         all_rules: AllRules,
-        temp: Path,
     ) -> AllRules:
         """Update security rules (no-op for basic subprocess daemon).
 

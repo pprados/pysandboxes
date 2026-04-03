@@ -251,7 +251,7 @@ In your program, you must launch the sandbox before you can isolate certain part
 
 ```python
 # Synchronous version
-from pysandboxes import sandboxes_api
+from pysandboxes import sandboxes
 
 with sandboxes(init_fn=init_sandbox):
     ...
@@ -259,7 +259,7 @@ with sandboxes(init_fn=init_sandbox):
 
 ```python
 # Asynchronous version
-from pysandboxes import sandboxes_api
+from pysandboxes import sandboxes
 
 async with sandboxes(init_fn=init_sandbox):
     ...
@@ -429,33 +429,35 @@ Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is po
 
 We offer several implementations to encapsulate the Python sandbox:
 
-| Technology                                                   | Configuration         | Specifics                                                                            | Description                                                                                                                                    |
-| ------------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| subprocess                                                   |                       | - no complementary security                                                          |                                                                                                                                                |
-| [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md) | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                                     |
+| Technology | Configuration | Specifics | Description  |
+| --- | --- | --- | --- |
+| subprocess  |  | - no complementary security  |  |
+| [firejail](https://github.com/netblue30/firejail) | [here](wiki/firejail.md) | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels. |
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)  | - Disk mapping (without rename)<br/>- File filtering<br/>- Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
+| [landlock](https://landlock.io/) | [here](wiki/landlock.md)  | - Directory access<br/>- Network port filtering | This is a technology that allows an auto isolation inside a Linux process. |
 
 *Other implementations will be added soon*
 
 The features of each technology are proposed:
 
-| Guard                  | py-sandbox | firejail |  unshare  | none |
-| ---------------------- | :--------: | :-------: | :-------: | :--: |
-| Isolation              |  Process   | Container | Container |  ❌  |
-| Python code            |     ✅     |    ❌    |    ❌    |  ❌  |
-| Compiled code          |     ❌     |    ✅    |    ✅    |  ❌  |
-| env                    |     ✅     |    ✅    |    ✅    |  ❌  |
-| bind=a,a               |     ✅     |    ✅    |    ✅    |  ❌  |
-| bind=a,b               |     ✅     |    ❌    |    ✅    |  ❌  |
-| ignore=*               |     ✅     |    ✅    |    ❌    |  ❌  |
-| network                |     ✅     |    ✅    |    ✅    |  ❌  |
-| import                 |     ✅     |    ❌    |    ❌    |  ❌  |
-| Resource limits        |     ❌     |    ✅    |    ❌    |  ❌  |
-| OS-sandbox             |     ❌     |    ✅    |    ✅    |  ❌  |
-| Seccomp                |     ❌     |    ✅    |    ❌    |  ❌  |
-| Vm compatible          |     ✅     |    ✅    |    ✅    |  ❌  |
-| Container compatible   |     ✅     |    ❌    |    ✅    |  ✅  |
-| Kubernetes compatible  |     ✅     |    ❌    |    ✅    |  ✅  |
+| Guard                  | py-sandbox | firejail |  unshare  | landlock | none |
+| ---------------------- | :--------: | :-------: | :-------: | :-------: | :--: |
+| Isolation              |  Process   | Container | Container |  Linux ABI | ❌  |
+| Python code            |     ✅     |    ❌    |    ❌    |    ❌    |  ❌  |
+| Compiled code          |     ❌     |    ✅    |    ✅    |    ✅    |  ❌  |
+| env                    |     ✅     |    ✅    |    ✅    |    ✅    |  ❌  |
+| bind=a,a               |     ✅     |    ✅    |    ✅    |    ✅    |  ❌  |
+| bind=a,b               |     ✅     |    ❌    |    ✅    |    ❌    |  ❌  |
+| ignore=*               |     ✅     |    ✅    |    ❌    |    ❌    |  ❌  |
+| network port           |     ✅     |    ✅    |    ✅    |    ✅    |  ❌  |
+| network host           |     ✅     |    ✅    |    ✅    |    ❌    |  ❌  |
+| import                 |     ✅     |    ❌    |    ❌    |    ❌    |  ❌  |
+| Resource limits        |     ❌     |    ✅    |    ❌    |    ❌    |  ❌  |
+| OS-sandbox             |     ❌     |    ✅    |    ✅    |    ✅    |  ❌  |
+| Seccomp                |     ❌     |    ✅    |    ❌    |    ❌    |  ❌  |
+| Vm compatible          |     ✅     |    ✅    |    ✅    |    ✅    |  ❌  |
+| Container compatible   |     ✅     |    ❌    |    ✅    |    ✅    |  ✅  |
+| Kubernetes compatible  |     ✅     |    ❌    |    ✅    |    ✅    |  ✅  |
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
 

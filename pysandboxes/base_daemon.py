@@ -9,7 +9,6 @@ management, configuration handling, and inter-process communication.
 
 import logging
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from .immutable_dict import ImmutableDict
@@ -65,7 +64,6 @@ class BaseDaemon(ABC):
         *,
         envs: Envs,
         all_rules: "AllRules",
-        temp: Path,
     ) -> "AllRules":
         """Some os-sandbox can update the rules (remove some duplicate rules)
 
@@ -182,7 +180,6 @@ class FakeDaemon(BaseDaemon):
         *,
         envs: Envs,
         all_rules: "AllRules",
-        temp: Path,
     ) -> "AllRules":
         return all_rules
 

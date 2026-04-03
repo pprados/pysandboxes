@@ -12,7 +12,6 @@ import logging
 import os
 import re
 import sys
-import tempfile
 import types
 from importlib import resources
 from pathlib import Path
@@ -258,7 +257,7 @@ def parse_config(
         others,
     ) = guard_provider.parse_rules(config_path, others, errors)
 
-    from pysandboxes.os_sandbox import providers_factory
+    from pysandboxes._os_sandbox import providers_factory
 
     from .immutable_dict import ImmutableDict
 
@@ -325,7 +324,7 @@ def activate_sandboxes(
         envs = os.environ
     os_sandbox = all_rules.os_sandbox
     if os_sandbox:
-        from pysandboxes.os_sandbox import providers_factory
+        from pysandboxes._os_sandbox import providers_factory
 
         if os_sandbox not in providers_factory:
             raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
@@ -334,7 +333,6 @@ def activate_sandboxes(
         all_rules = os_provider.update_rules_and_activate(
             all_rules=all_rules,
             envs=Envs(envs),
-            temp=Path(tempfile.mkdtemp()),
         )
 
     # Apply the rules

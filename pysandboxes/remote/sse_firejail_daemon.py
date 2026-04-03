@@ -26,7 +26,7 @@ from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
-from ..config import RELEASE
+from ..config import DEBUG
 
 try:
     from typing import override  # type: ignore[attr-defined]
@@ -56,7 +56,8 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-DEBUG_NETFILTER = not RELEASE
+DEBUG_NETFILTER = DEBUG or False
+DEBUG_BASE = Path(".")
 
 # Replace rules to delegate the filter to firejail.
 # Exceptions differ from unshare backend
@@ -294,7 +295,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
-        temp: Path,
     ) -> AllRules:
         """Update rules by translating to firejail configuration.
 
@@ -306,7 +306,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             Updated security rules for firejail context.
         """
         if REPLACE:
-            _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp)
+            _, updated_all_rules = self._firejail_args(all_rules, envs, None)
         return all_rules
 
     @property
@@ -320,7 +320,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ | Envs,
         pipe_path: Path | None,
-        temp: Path,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -378,7 +377,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         # Add default parameters
         firejail_path: Path = (
-            cast(Path, importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])))  # type: ignore[attr-defined]
+            cast(
+                Path,
+                importlib.resources.files(  # type: ignore[attr-defined]
+                    ".".join(__name__.rsplit(".", maxsplit=1)[:-1])
+                ),
+            )  # type: ignore[attr-defined]
             / ".."
             / "templates"
             / "firejail.template"
@@ -415,6 +419,12 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
             args.append(f"--blacklist={rule.source}")
 
+        # Ensure temp dir is whitelisted so firejail can read netfilter fifos and config pipe
+        if pipe_path:
+            temp_str = str(pipe_path.parent)
+            if temp_str and temp_str not in whitelist:
+                whitelist.add(temp_str)
+
         for white in whitelist:
             args.extend(
                 [
@@ -422,6 +432,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     f"--read-only={white}",
                 ]
             )
+
+        # Paths that firejail rejects for --whitelist/--read-only (e.g. /etc in some versions)
+        def _firejail_skip_path(path: str) -> bool:
+            norm = path.rstrip("/") or "/"
+            return norm == "/etc"
 
         for rule in sorted(
             filter(
@@ -431,9 +446,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             key=lambda x: len(x.source),
         ):
             rule = cast(BindRule, rule)
+            skip_path = _firejail_skip_path(rule.source)
             if rule.source == rule.dest:
                 if rule.write or rule.source not in whitelist:
-                    if rule.source != "/tmp/":
+                    if rule.source != "/tmp/" and not skip_path:
                         args.append(f"--whitelist={rule.source}")
                     whitelist.add(rule.source)
             else:
@@ -441,11 +457,13 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 whitelist.add(rule.source)
                 keep_rules.append(rule)
                 need_root = False
-                args.append(f"--whitelist={rule.source}")
-            if not rule.write:
-                args.append(f"--read-only={rule.source}")
-            else:
-                args.append(f"--read-write={rule.source}")
+                if not skip_path:
+                    args.append(f"--whitelist={rule.source}")
+            if not skip_path:
+                if not rule.write:
+                    args.append(f"--read-only={rule.source}")
+                else:
+                    args.append(f"--read-write={rule.source}")
 
         if REPLACE:
             from ..guard_files import parse_rules as files_parse_rules
@@ -540,7 +558,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     if DEBUG_NETFILTER:
                         netfilter_file = Path("netfilter.net")
                     else:
-                        netfilter_file = temp / "netfilter.net"
+                        netfilter_file = DEBUG_BASE / "netfilter.net"
                         os.mkfifo(netfilter_file)
 
                     def publish_netfilter() -> None:
@@ -558,15 +576,15 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     if DEBUG_NETFILTER:
                         netfilter6_file = Path("netfilter6.net")
                     else:
-                        netfilter6_file = temp / "netfilter6.net"
+                        netfilter6_file = DEBUG_BASE / "netfilter6.net"
                         os.mkfifo(netfilter6_file)
 
-                    def publich_netfilter6() -> None:
+                    def publish_netfilter6() -> None:
                         _ = netfilter6_file.write_text("\n".join(net_filter6))
                         if not DEBUG_NETFILTER:
-                            netfilter_file.unlink(missing_ok=True)
+                            netfilter6_file.unlink(missing_ok=True)
 
-                    threading.Thread(target=publich_netfilter6, daemon=True).start()
+                    threading.Thread(target=publish_netfilter6, daemon=True).start()
                     args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove redondant sockets rules
@@ -615,7 +633,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         )
 
         cmd_parameters, _ = self._firejail_args(
-            all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp
+            all_rules=all_rules, envs=envs, pipe_path=pipe_path
         )
         cmd_parameters.extend(run_daemon_cmd)
         return cmd_parameters, {}

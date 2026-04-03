@@ -22,6 +22,7 @@ all_mcp_client_os_sandbox: list[str] = [
     # "Subprocess",
     # "firejail",
     # "unshare",
+    "landlock",
 ]
 all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",

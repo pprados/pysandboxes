@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import pytest
+from _pytest.mark import ParameterSet
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,13 @@ all_container_worker: list[str] = [
     "podman",
 ]
 
-all_os_sandbox: list[str] = [
+# os_sandbox,py_sandbox,privileged
+all_os_sandbox: list[ParameterSet] = [
     # firejail is incompatible with containers
-    "Subprocess",
-    "unshare",
+    pytest.param("none", True, False),
+    pytest.param("subprocess", True, False),
+    pytest.param("unshare", False, True),
+    pytest.param("landlock", False, False),
 ]
 
 
@@ -60,17 +64,14 @@ def _ensure_image(runtime: str) -> None:
 
 
 def _run_container_runtime(
-    runtime: str, os_sandbox: str
+    runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool
 ) -> subprocess.CompletedProcess:
     """Run container test with docker or podman; logic from test-podman.sh."""
     _ensure_image(runtime)
 
     # Normalize to provider name (lowercase) so config substitution matches providers_factory
     os_sandbox_env = os_sandbox.lower() if os_sandbox != "none" else os_sandbox
-    if os_sandbox in ["none", "Subprocess"]:
-        py_sandbox_args = "--py-sandbox=true"
-    else:
-        py_sandbox_args = "--py-sandbox=false"
+    py_sandbox_args = f"--py-sandbox={py_sandbox}"
 
     tty_flags = ["-it"] if sys.stdin.isatty() else []
     volume_mount = f"{ROOT_DIR}:/app"
@@ -82,21 +83,23 @@ def _run_container_runtime(
     else:
         prefix = ""
 
-    term = os.environ.get("TERM", "dumb")
+    term = os.environ.get("TERM", "xterm-256color")
+    # PYTHONPATH=/app so -m tests.integration_tests.tst_usage finds the tests package
     inner_cmd = (
         f"{prefix}"
-        f"TERM={term} OS_SANDBOX={os_sandbox_env} My_ENV=1 "
+        f"PYTHONPATH=/app TERM={term} OS_SANDBOX={os_sandbox_env} My_ENV=1 "
         f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
     )
 
+    privileged_flag = ["--privileged"] if privileged else []
     cmd = [
         runtime,
         "run",
         *tty_flags,
+        *privileged_flag,
         "--rm",
         "--network",
         "bridge",
-        "--privileged",
         "-v",
         volume_mount,
         "-w",
@@ -117,10 +120,13 @@ def _run_container_runtime(
     )
 
 
+@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
 @pytest.mark.parametrize("runtime", all_container_worker)
-@pytest.mark.parametrize("os_sandbox", all_os_sandbox)
-def test_container_runtime(runtime: str, os_sandbox: str) -> None:
+def test_container_runtime(
+    runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool
+) -> None:
     """Run container test with podman or docker; success = exit code 0."""
+
     try:
         subprocess.run(
             [runtime, "--version"],
@@ -130,7 +136,7 @@ def test_container_runtime(runtime: str, os_sandbox: str) -> None:
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip(f"{runtime} not available")
 
-    result = _run_container_runtime(runtime, os_sandbox)
+    result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     if result.stdout:
         print(result.stdout)
     if result.stderr:
@@ -255,8 +261,9 @@ def _ensure_minikube_image() -> None:
     )
 
 
-def _run_kubernetes_test(os_sandbox: str) -> int:
+def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) -> int:
     """Run Kubernetes pod test; returns exit code (0 = success)."""
+
     mount_proc: subprocess.Popen | None = None
     rc = 0
 
@@ -347,10 +354,7 @@ def _run_kubernetes_test(os_sandbox: str) -> int:
                 os_sandbox_env = (
                     os_sandbox.lower() if os_sandbox != "none" else os_sandbox
                 )
-                if os_sandbox in ["none", "Subprocess"]:
-                    py_sandbox_args = "--py-sandbox=true"
-                else:
-                    py_sandbox_args = "--py-sandbox=false"
+                py_sandbox_args = f"--py-sandbox={py_sandbox}"
                 exec_cmd = (
                     "pip install --no-cache-dir -e . && "
                     f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} "
@@ -408,9 +412,12 @@ def _run_kubernetes_test(os_sandbox: str) -> int:
     return rc
 
 
-@pytest.mark.parametrize("os_sandbox", all_os_sandbox)
-def test_container_kubernetes(os_sandbox: str) -> None:
+@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
+def test_container_kubernetes(
+    os_sandbox: str, py_sandbox: bool, privileged: bool
+) -> None:
     """Run Kubernetes pod test (minikube); success = exit code 0. Starts minikube if needed."""
+
     try:
         subprocess.run(
             ["minikube", "version"],
@@ -420,5 +427,5 @@ def test_container_kubernetes(os_sandbox: str) -> None:
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("minikube not available")
 
-    rc = _run_kubernetes_test(os_sandbox)
+    rc = _run_kubernetes_test(os_sandbox, py_sandbox, privileged)
     assert rc == 0, f"Kubernetes pod test exited with code {rc}"

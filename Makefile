@@ -357,7 +357,7 @@ init: _uv-init packmind-import
 
 
 
-### RELEASE ###
+### DEBUG ###
 
 .PHONY: get-new-version publish-patch publish-minor prepare-future-changelog
 

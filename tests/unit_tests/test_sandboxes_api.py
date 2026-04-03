@@ -78,7 +78,7 @@ class TestCheckMainCoroutine:
 class TestSandboxDecorator:
     """Test cases for sandbox decorator."""
 
-    @patch("pysandboxes.os_sandbox.call_in_sandbox")
+    @patch("pysandboxes._os_sandbox.call_in_sandbox")
     def test_sandbox_decorator_sync_function(self, mock_call_in_sandbox: Mock) -> None:
         """Test sandbox decorator on synchronous function."""
         mock_call_in_sandbox.return_value = 42
@@ -96,7 +96,7 @@ class TestSandboxDecorator:
         assert len(args) >= 1
         assert callable(args[0])
 
-    @patch("pysandboxes.os_sandbox.async_call_in_sandbox")
+    @patch("pysandboxes._os_sandbox.async_call_in_sandbox")
     @pytest.mark.asyncio
     async def test_sandbox_decorator_async_function(
         self, mock_async_call_in_sandbox: Mock
@@ -150,7 +150,7 @@ class TestRunFunction:
 class TestSandboxesContextManager:
     """Test cases for sandboxes context manager."""
 
-    @patch("pysandboxes.os_sandbox.start_daemon")
+    @patch("pysandboxes._os_sandbox.start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
     def test_sandboxes_sync_context_manager(
         self, mock_shutdown: Mock, mock_start: Mock
@@ -165,7 +165,7 @@ class TestSandboxesContextManager:
         mock_start.assert_called_once()
         mock_shutdown.assert_called_once()
 
-    @patch("pysandboxes.os_sandbox.async_start_daemon")
+    @patch("pysandboxes._os_sandbox.async_start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
     @pytest.mark.asyncio
     async def test_sandboxes_async_context_manager(
@@ -181,7 +181,7 @@ class TestSandboxesContextManager:
         mock_async_start.assert_called_once()
         mock_async_shutdown.assert_called_once()
 
-    @patch("pysandboxes.os_sandbox.start_daemon")
+    @patch("pysandboxes._os_sandbox.start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
     def test_sandboxes_context_manager_with_exception(
         self, mock_shutdown: Mock, mock_start: Mock
@@ -197,7 +197,7 @@ class TestSandboxesContextManager:
         mock_start.assert_called_once()
         mock_shutdown.assert_called_once()
 
-    @patch("pysandboxes.os_sandbox.async_start_daemon")
+    @patch("pysandboxes._os_sandbox.async_start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
     @pytest.mark.asyncio
     async def test_sandboxes_async_context_manager_with_exception(
@@ -214,7 +214,7 @@ class TestSandboxesContextManager:
         mock_async_start.assert_called_once()
         mock_async_shutdown.assert_called_once()
 
-    @patch("pysandboxes.os_sandbox.start_daemon")
+    @patch("pysandboxes._os_sandbox.start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
     def test_sandboxes_context_manager_parameters(
         self, mock_async_shutdown: Mock, mock_async_start: Mock

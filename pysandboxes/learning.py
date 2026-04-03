@@ -18,7 +18,7 @@ from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, Set
 
-from .config import RELEASE
+from .config import DEBUG
 from .main_logger import make_relative_path, pysandboxes_logger
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ def generate_config_from_learning() -> None:
 
         # Insert new rules in the file
         pattern: str
-        if RELEASE:
+        if not DEBUG:
             pattern = r"^# </([^\}]+)>"
         else:
             pattern = r"^<!IGNORE!>"

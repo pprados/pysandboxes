@@ -28,9 +28,9 @@ from typing import (
     Coroutine,
 )
 
+from ._os_sandbox import async_shutdown_daemon
 from .base_daemon import BaseDaemon, FakeDaemon
 from .e import ConfigSyntaxError
-from .os_sandbox import async_shutdown_daemon
 from .private_loop import get_sandbox_loop, sandbox_loop, set_sandbox_loop
 from .tools import (
     Environ,
@@ -95,7 +95,7 @@ def sandbox(
             return await some_operation()
         ```
     """
-    from pysandboxes.os_sandbox import async_call_in_sandbox, call_in_sandbox
+    from pysandboxes._os_sandbox import async_call_in_sandbox, call_in_sandbox
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 
@@ -265,8 +265,8 @@ class sandboxes:
         Raises:
             ConfigSyntaxError: If the configuration file has syntax errors.
         """
+        from ._os_sandbox import start_daemon
         from .e import ConfigSyntaxError
-        from .os_sandbox import start_daemon
         from .py_sandbox import load_and_parse_config
 
         self._register_signals_handlers()
@@ -326,7 +326,7 @@ class sandboxes:
         """
         self._register_signals_handlers()
         if not is_in_sandbox():
-            from pysandboxes.os_sandbox import async_start_daemon
+            from pysandboxes._os_sandbox import async_start_daemon
 
             from .py_sandbox import load_and_parse_config
 

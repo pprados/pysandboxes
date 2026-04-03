@@ -9,7 +9,8 @@ python-import=*
 
 bind=./tmp,./tmp
 ro-bind=.,.
-ro-bind=/etc,/etc
+# ro-bind=/etc,/etc
+# ro-bind=/run,/run
 
 net=ALLOW|TCP|0.0.0.0/32|50983|IN
 net=ALLOW|TCP|ip6-localhost|9999,0|IN
@@ -18,5 +19,6 @@ net=ALLOW|TCP|www.google.com|80|OUT
 net=ALLOW|UDP|ip6-localhost|12345|OUT
 net=ALLOW|UDP|localhost|12345|IN
 net=ALLOW|UDP|localhost|12346,12345|OUT
+net=ALLOW|*|*|53|*
 
 ignore=.env
