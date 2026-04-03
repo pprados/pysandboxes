@@ -331,31 +331,32 @@ def activate_sandboxes(
             raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
         os_provider: BaseDaemon = providers_factory[os_sandbox](token=None)
         # Offer the opportunity to update the rules (add, remove, etc)
-        all_rules = os_provider.update_rules(
+        all_rules = os_provider.update_rules_and_activate(
             all_rules=all_rules,
             envs=Envs(envs),
             temp=Path(tempfile.mkdtemp()),
         )
 
     # Apply the rules
-    env_patch_rules = guard_envs.patch_rules(all_rules.learn)
-    file_patch_rules = guard_files.patch_rules(all_rules.learn)
-    socket_patch_rules = guard_socket.patch_rules(all_rules.learn)
-    import_patch_rules = guard_import.patch_rules(all_rules.learn)
-    self_patch_rules = guard_self.patch_rules(all_rules.learn)
-    guard_import.activate_guard_import(
-        {
-            **file_patch_rules,
-            **socket_patch_rules,
-            **env_patch_rules,
-            **import_patch_rules,
-            **self_patch_rules,
-        },
-        all_rules.import_rules,
-    )
+    if all_rules.use_py_sandbox:
+        env_patch_rules = guard_envs.patch_rules(all_rules.learn)
+        file_patch_rules = guard_files.patch_rules(all_rules.learn)
+        socket_patch_rules = guard_socket.patch_rules(all_rules.learn)
+        import_patch_rules = guard_import.patch_rules(all_rules.learn)
+        self_patch_rules = guard_self.patch_rules(all_rules.learn)
+        guard_import.activate_guard_import(
+            {
+                **file_patch_rules,
+                **socket_patch_rules,
+                **env_patch_rules,
+                **import_patch_rules,
+                **self_patch_rules,
+            },
+            all_rules.import_rules,
+        )
 
-    guard_envs.activate_guard(all_rules.envs_rules)
-    guard_socket.activate_guard(all_rules.socket_rules)
-    guard_files.activate_guard(all_rules.file_rules)
-    set_learning_path(all_rules.learning_path)
-    guard_self.activate_guard()
+        guard_envs.activate_guard(all_rules.envs_rules)
+        guard_socket.activate_guard(all_rules.socket_rules)
+        guard_files.activate_guard(all_rules.file_rules)
+        set_learning_path(all_rules.learning_path)
+        guard_self.activate_guard()

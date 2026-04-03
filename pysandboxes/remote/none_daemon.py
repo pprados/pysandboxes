@@ -67,7 +67,7 @@ class NoneDaemon(BaseDaemon):
         set_is_in_sandbox(False)
         self._is_started = False
 
-    def update_rules(
+    def update_rules_and_activate(
         self,
         *,
         envs: Envs,

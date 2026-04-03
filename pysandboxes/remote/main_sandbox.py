@@ -100,7 +100,7 @@ async def run_server(process_config: DaemonParameters) -> int:
     # Else, _start the daemon
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
-    assert os_sandbox in ("subprocess", "firejail", "unshare")
+    assert os_sandbox in ("subprocess", "firejail", "unshare", "landlock")
     if all_rules.use_py_sandbox:
         pysandboxes_logger.info(
             f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}"
@@ -157,8 +157,8 @@ def main() -> int:
     # -------------
     # Read all configuration from named-pipe until EOF
     assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
-    pickle_data = Path(sandboxes_parsed._named_pipe).read_bytes()
-    process_config: DaemonParameters = pickle.loads(pickle_data)
+    pickle_data: bytes = Path(sandboxes_parsed._named_pipe).read_bytes()
+    process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
 
@@ -176,11 +176,10 @@ def main() -> int:
 
     # In this case, use the standard loop in place of the private sandbox loop
 
-    if all_rules.use_py_sandbox:
-        # Activate python sandbox
-        from pysandboxes.py_sandbox import activate_sandboxes
+    # Activate python sandbox
+    from pysandboxes.py_sandbox import activate_sandboxes
 
-        activate_sandboxes(all_rules, os.environ)
+    activate_sandboxes(all_rules, os.environ)
 
     # Use python-sb command?
     if sandboxes_parsed._python_sb:

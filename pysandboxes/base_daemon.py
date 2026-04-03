@@ -60,7 +60,7 @@ class BaseDaemon(ABC):
         return ImmutableDict({}), rules
 
     @abstractmethod
-    def update_rules(
+    def update_rules_and_activate(
         self,
         *,
         envs: Envs,
@@ -177,7 +177,7 @@ class BaseDaemon(ABC):
 
 
 class FakeDaemon(BaseDaemon):
-    def update_rules(
+    def update_rules_and_activate(
         self,
         *,
         envs: Envs,

@@ -21,6 +21,7 @@ from .private_loop import (
     get_sandbox_loop,
     sandbox_loop,
 )
+from .remote.landlock_daemon import LandlockSSEDaemon
 from .remote.none_daemon import NoneDaemon
 from .remote.parameters import TIMEOUT_FOR_START_DAEMON, TIMEOUT_FOR_STOP_DAEMON
 from .remote.sse_client_subprocess_daemon import SubProcessDaemon
@@ -41,6 +42,7 @@ providers_factory: dict[str, Type] = {
     # "bwrap": BWrapDaemon(),
     "firejail": FireJailSSEDaemon,
     "unshare": UnshareSSEDaemon,
+    "landlock": LandlockSSEDaemon,
     # TODO: podman, https://www.redhat.com/en/blog/podman-inside-container https://www.redhat.com/en/blog/podman-inside-kubernetes
     #  docker, lxc, ...
     # docker alternative
