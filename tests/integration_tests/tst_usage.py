@@ -157,7 +157,6 @@ def _test_network() -> int:
     import socket
 
     rc = 0
-
     timeout = 3
 
     # 1. Learn and accept
@@ -259,7 +258,7 @@ def _test_network() -> int:
     try:
         with socket.socket(AF_INET, SOCK_DGRAM) as sock:
             sock.settimeout(timeout)
-            sock.bind(("localhost", 12345))
+            sock.bind(("127.0.0.1", 12345))
             logger.info(f"{OK} bind IPV4 to 12345 is accepted")
     except SandBoxError:
         logger.error(f"{KO} bind IPV4 to 12345 is denied")

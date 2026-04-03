@@ -35,6 +35,8 @@
 
 # --private-dev
 # --private-tmp
+--private-etc=hosts,resolv.conf,nsswitch.conf
+
 
 # Remount /tmp as noexec
 --noexec=/tmp
