@@ -613,7 +613,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
-        temp: Path,
     ) -> tuple[Args, Environ]:
         """Build complete command line for firejail subprocess.
 
@@ -629,7 +628,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             all_rules,
             envs,
             pipe_path,
-            temp=temp,
         )
 
         cmd_parameters, _ = self._firejail_args(
