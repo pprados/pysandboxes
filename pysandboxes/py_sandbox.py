@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import sys
+import tempfile
 import types
 from importlib import resources
 from pathlib import Path
@@ -333,6 +334,7 @@ def activate_sandboxes(
         all_rules = os_provider.update_rules_and_activate(
             all_rules=all_rules,
             envs=Envs(envs),
+            temp=Path(tempfile.mkdtemp()),
         )
 
     # Apply the rules

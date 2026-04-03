@@ -457,6 +457,7 @@ class LandlockSSEDaemon(SubProcessDaemon):
         *,
         envs: Envs,
         all_rules: AllRules,
+        temp: Path,
     ) -> AllRules:
         """No rule transformation for Landlock."""
         if not _landlock_available():

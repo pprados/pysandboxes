@@ -9,8 +9,9 @@ python-import=*
 
 bind=./tmp,./tmp
 ro-bind=.,.
-# ro-bind=/etc,/etc
+ro-bind=/etc,/etc
 # ro-bind=/run,/run
+
 
 net=ALLOW|TCP|0.0.0.0/32|50983|IN
 net=ALLOW|TCP|ip6-localhost|9999,0|IN

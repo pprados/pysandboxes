@@ -57,7 +57,6 @@ from .tools import (
 logger = logging.getLogger(__name__)
 
 DEBUG_NETFILTER = DEBUG or False
-DEBUG_BASE = Path(".")
 
 # Replace rules to delegate the filter to firejail.
 # Exceptions differ from unshare backend
@@ -295,6 +294,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
+        temp: Path,
     ) -> AllRules:
         """Update rules by translating to firejail configuration.
 
@@ -306,7 +306,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             Updated security rules for firejail context.
         """
         if REPLACE:
-            _, updated_all_rules = self._firejail_args(all_rules, envs, None)
+            _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp)
         return all_rules
 
     @property
@@ -320,6 +320,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ | Envs,
         pipe_path: Path | None,
+        temp: Path,
     ) -> tuple[Args, AllRules]:
         """Generate firejail command arguments from PySandboxes rules.
 
@@ -558,7 +559,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     if DEBUG_NETFILTER:
                         netfilter_file = Path("netfilter.net")
                     else:
-                        netfilter_file = DEBUG_BASE / "netfilter.net"
+                        netfilter_file = temp / "netfilter.net"
                         os.mkfifo(netfilter_file)
 
                     def publish_netfilter() -> None:
@@ -576,7 +577,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     if DEBUG_NETFILTER:
                         netfilter6_file = Path("netfilter6.net")
                     else:
-                        netfilter6_file = DEBUG_BASE / "netfilter6.net"
+                        netfilter6_file = temp / "netfilter6.net"
                         os.mkfifo(netfilter6_file)
 
                     def publish_netfilter6() -> None:
@@ -613,6 +614,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
+        temp: Path,
     ) -> tuple[Args, Environ]:
         """Build complete command line for firejail subprocess.
 
@@ -628,10 +630,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             all_rules,
             envs,
             pipe_path,
+            temp=temp,
         )
 
         cmd_parameters, _ = self._firejail_args(
-            all_rules=all_rules, envs=envs, pipe_path=pipe_path
+            all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp
         )
         cmd_parameters.extend(run_daemon_cmd)
         return cmd_parameters, {}
