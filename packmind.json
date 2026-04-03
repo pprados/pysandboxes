@@ -1,6 +1,7 @@
 {
   "packages": {
-    "pysandboxes-standards": "*"
+    "pysandboxes-standards": "*",
+    "python": "*"
   },
   "agents": [
     "claude",
