@@ -9,10 +9,10 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping, cast
 
-from pysandboxes.config import RELEASE
+from pysandboxes._os_sandbox import providers_factory
+from pysandboxes.config import DEBUG
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.main_logger import config_log
-from pysandboxes.os_sandbox import providers_factory
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.none_daemon import NoneDaemon
 from pysandboxes.remote.python_in_sb import convert_extra_rules
@@ -54,7 +54,7 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
-    if not RELEASE:
+    if DEBUG:
         _debug_log()
 
     python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(

@@ -8,7 +8,7 @@ from typing import Iterator
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandbox
-from pysandboxes.os_sandbox import shutdown_daemon, start_daemon
+from pysandboxes._os_sandbox import shutdown_daemon, start_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.tools import unshare_user_namespace_available
 

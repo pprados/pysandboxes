@@ -8,7 +8,6 @@ Useful for debugging and testing sandbox functionality.
 """
 
 import logging
-from pathlib import Path
 from typing import Any, Callable
 
 from ..all_rules import AllRules
@@ -72,13 +71,13 @@ class NoneDaemon(BaseDaemon):
         *,
         envs: Envs,
         all_rules: "AllRules",
-        temp: Path,
     ) -> "AllRules":
         """Update security rules (no-op for none daemon).
 
         Args:
             envs: Environment variables.
             all_rules: Current security rules.
+            temp:
 
         Returns:
             The same rules unchanged.

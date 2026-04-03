@@ -213,7 +213,6 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         *,
         all_rules: AllRules,
         envs: Envs,
-        temp: Path,
     ) -> AllRules:
         # FIXME: consider adding /etc ? all_rules = all_rules._replace()
 

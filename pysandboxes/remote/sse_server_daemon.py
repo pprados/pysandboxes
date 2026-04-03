@@ -24,7 +24,6 @@ import traceback
 from asyncio import CancelledError, Task
 from dataclasses import dataclass
 from logging import getLogger
-from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from uvicorn import Server
@@ -207,7 +206,7 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
         SSE endpoint to process a given code string, authenticated by a token,
         and stream back structured results (stdout, stderr, result).
         """
-        from ..os_sandbox import is_accept_incoming_call
+        from .._os_sandbox import is_accept_incoming_call
 
         # logger.debug(request.headers["Authorization"])
         if (
@@ -342,7 +341,7 @@ class SSEServerDaemon(BaseSSESandbox):
         global _active_requests
         return _active_requests
 
-    def update_rules_and_activate(self, *, envs: Envs, all_rules: AllRules, temp: Path) -> AllRules:
+    def update_rules_and_activate(self, *, envs: Envs, all_rules: AllRules) -> AllRules:
         """Update security rules for server daemon.
 
         Args:

@@ -24,17 +24,16 @@ import sys
 from logging import StreamHandler
 from pathlib import Path
 
-from pysandboxes.config import RELEASE
-from pysandboxes.guard_socket import set_pin_dns
-from pysandboxes.learning import (
+from .._os_sandbox import providers_factory
+from ..config import DEBUG
+from ..guard_socket import set_pin_dns
+from ..learning import (
     generate_config_from_learning,
     set_learning_mode,
     set_learning_path,
 )
-from pysandboxes.main_logger import config_log
-from pysandboxes.os_sandbox import providers_factory
-from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
-
+from ..main_logger import config_log
+from ..remote.sse_server_daemon import SSEServerDaemon
 from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
 from .python_in_sb import python_in_sb
 from .sse_client_subprocess_daemon import DaemonParameters
@@ -108,7 +107,7 @@ async def run_server(process_config: DaemonParameters) -> int:
     else:
         pysandboxes_logger.info(f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
-    from pysandboxes.os_sandbox import _set_current_daemon
+    from pysandboxes._os_sandbox import _set_current_daemon
 
     server_daemon: SSEServerDaemon = providers_factory["_sse_server"](
         process_config.token,
@@ -138,7 +137,7 @@ def main() -> int:
         Exit code (0 for success, non-zero for errors).
     """
     logging.getLogger().addHandler(StreamHandler(None))  # Set default handler to stderr
-    if not RELEASE:
+    if DEBUG:
         _debug_log()
 
     parser = argparse.ArgumentParser(
@@ -177,8 +176,10 @@ def main() -> int:
     # In this case, use the standard loop in place of the private sandbox loop
 
     # Activate python sandbox
+    import pysandboxes
     from pysandboxes.py_sandbox import activate_sandboxes
 
+    pysandboxes.os_sandbox = all_rules.os_sandbox
     activate_sandboxes(all_rules, os.environ)
 
     # Use python-sb command?

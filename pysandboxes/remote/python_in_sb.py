@@ -97,7 +97,7 @@ def _python_interactive(
     elif all_rules.use_py_sandbox:
         sb_mode = (
             f"{BOLD}APIs are LIMITED according to the rules in "
-            f"{str(all_rules.learning_path.relative_to(Path().absolute()))!r} "
+            f"{str(all_rules.learning_path.absolute().relative_to(Path().absolute()))!r} "
         )
         if all_rules.os_sandbox != "subprocess":
             sb_mode += f"and by the os-sandbox={all_rules.os_sandbox!r}"

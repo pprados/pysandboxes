@@ -24,7 +24,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from pysandboxes.config import RELEASE
+from pysandboxes.config import DEBUG
 
 SLIRP_INTERFACE = "tap0"
 
@@ -345,7 +345,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    if not RELEASE:
+    if DEBUG:
         _debug_log()
 
     try:

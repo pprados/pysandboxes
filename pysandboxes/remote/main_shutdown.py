@@ -22,7 +22,7 @@ async def daemon_shutdown(graceful_shutdown: bool) -> None:
     Args:
         graceful_shutdown: Whether to perform graceful shutdown with learning cleanup.
     """
-    from pysandboxes.os_sandbox import async_shutdown_daemon, async_stop_daemon
+    from pysandboxes._os_sandbox import async_shutdown_daemon, async_stop_daemon
 
     global _current_daemon
     if is_learning_mode():

@@ -120,6 +120,8 @@ class LazySandboxesProxy:
 
 _sandboxes = LazySandboxesProxy()
 
+os_sandbox: str = "none"
+
 
 def __getattr__(name: str) -> Any:
     """Module-level attribute access proxy.
