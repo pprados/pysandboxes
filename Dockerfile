@@ -1,8 +1,10 @@
 # Ready image to run python-sb directly (no apt/pip at runtime).
 # Python version comes from build-arg (make build-image uses uv's Python version).
-# Build: make build-image   or   podman/docker build --build-arg PYTHON_VERSION=3.13 -t python-sb:latest .
+# Build: (podman/docker) build --build-arg PYTHON_VERSION=3.13 -t python-sb:latest .
 ARG PYTHON_VERSION=3.10
 FROM python:${PYTHON_VERSION}-slim
+ARG PYTHON_VERSION=3.10
+LABEL org.opencontainers.image.version="${PYTHON_VERSION}"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -11,6 +13,8 @@ RUN apt-get update && \
     pkg-config \
     && pip install --upgrade pip && \
     pip install --no-cache-dir ipython \
+    && apt-get remove -y --purge build-essential \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 # For unshare sandbox
