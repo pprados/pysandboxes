@@ -665,7 +665,7 @@ class SubProcessDaemon(BaseSubProcessDaemon):
     Simple subprocess daemon that delegates rule updates to the parent class.
     """
 
-    def update_rules(
+    def update_rules_and_activate(
         self,
         *,
         envs: Envs,

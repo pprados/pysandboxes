@@ -208,7 +208,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         return ImmutableDict(unshare_params), ignore_rules
 
     @override
-    def update_rules(
+    def update_rules_and_activate(
         self,
         *,
         all_rules: AllRules,
