@@ -7,33 +7,43 @@ It also verifies the relevance of the multiple sandbox encapsulation strategy, w
 
 We have a planned roadmap. Developments will arrive gradually, with no specific order:
 
-- [X] Control environment variables
-- [X] Control import list
-- [X] Control file and network access
-- [X] Control life cycle of the daemon (restart if necessary)
-- [ ] Guard some criticals methods in Python (spawn, shell, etc.)
+- [ ] Guards
+  - [X] Control environment variables
+  - [X] Control import list
+  - [X] Control file and network access
+  - [X] Control life cycle of the daemon (restart if necessary)
+  - [ ] Guard some critical methods in Python (spawn, shell, etc.)
+  - [ ] Management of *Denial of Service*
+  - [ ] Management of regular expressions
+  - [ ] Control of `exec()` and `eval()`
+    - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
 - [ ] OS Compatible
   - [X] Linux
   - [ ] Windows
   - [ ] Mac OS
-- [ ] New **OS-sandboxes**
-  - [X] None
-  - [X] sub process
-  - [ ] sub interpreter
-  - [X] firejail
-  - [X] unshare
-  - [ ] langlock
-  - [ ] bubblejail
-  - [ ] bwrap
-  - [X] Docker (--privileged with unshare)
-  - [X] podman (--privileged with unshare)
-  - [X] kubernetes
-  - [ ] libslirp
-  - [ ] [conainer2wasm](https://github.com/container2wasm/container2wasm)
+- [ ] OS-sandboxes
+  - [ ] Basic
+    - [X] None
+    - [X] sub process
+    - [ ] sub interpreter
+    - [X] langlock
+  - [ ] Sandbox utilities
+    - [X] firejail
+    - [X] unshare
+    - [X] bwrap
+  - [ ] Container
+    - [X] Docker (--privileged with unshare)
+    - [X] podman (--privileged with unshare)
+    - [X] kubernetes
+    - [ ] Flatpak
+    - [ ] rpm-ostree unprivileged
+    - [ ] bwrap-oci
   - [ ] micro-VM
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
+  - [ ] Others strategies
+    - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
     - [ ] [Cloud morph](https://cloud.morph.so/)
@@ -47,14 +57,11 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
   - [ ] Pydantic.ai
   - [ ] [Strandsagents](https://strandsagents.com)
-- [ ] Management of *Denial of Service*
-- [ ] Management of regular expressions
-- [ ] Control of `exec()` and `eval()`
-  - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
-- [ ] Compile a part of code
-- [ ] Propagate the tracability id
-- [ ] Use anyio
-- [ ] Use [Condon JIT](https://docs.exaloop.io/integrations/python/codon-from-python/#using-codonjit)
+- [ ] Features
+  - [ ] Compile a part of code
+  - [ ] Propagate the tracability id
+  - [ ] Use anyio
+  - [ ] Use [Condon JIT](https://docs.exaloop.io/integrations/python/codon-from-python/#using-codonjit)
 
 ## Guard some critical methods
 Certain methods must be rejected, even if the package is authorized (`spawn`, `system`, `sys.exit()`, ....)

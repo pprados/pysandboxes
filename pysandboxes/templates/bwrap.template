@@ -1,34 +1,235 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 # See man bwrap
-#--share-net
---die-with-parent
+
+# =============================================================================
+# General options
+# =============================================================================
+
+# Parse nul-separated arguments from the given file descriptor (can be repeated)
+#--args FD
+
+# Set argv[0] for the launched program
 --argv0 python
+
+# =============================================================================
+# Lifecycle and monitoring
+# =============================================================================
+
+# Kill the child process when bwrap's parent dies (PR_SET_PDEATHSIG)
+--die-with-parent
+
+# Take a lock on DEST while the sandbox is running (can be used multiple times)
+#--lock-file DEST
+
+# Keep this file descriptor open while the sandbox is running
+#--sync-fd FD
+
+# Create a new terminal session (setsid()); disconnects from controlling terminal
+#--new-session
+
+# Do not create a PID=1 process in the sandbox to reap child processes
+#--as-pid-1
+
+# =============================================================================
+# Environment
+# =============================================================================
+
+# Clear all environment variables (except PWD and those added by --setenv)
 --clearenv
+
+# Avoid loading user configuration at Python startup
 --setenv PYTHONSTARTUP ""
+
+# Executable search path
 --setenv PATH "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+# Temporary directories
 --setenv TEMP "/tmp"
 --setenv TMP "/tmp"
---dir /tmp
 
-## Extra
-#--unshare-all
-## or
+# Unset a specific environment variable
+#--unsetenv VAR
+
+# Change working directory at startup
+#--chdir DIR
+
+# =============================================================================
+# Namespaces
+# =============================================================================
+
+# Retain the network namespace (overrides --unshare-all or --unshare-net)
+#--share-net
+
+# New user namespace (required if bwrap is not setuid root)
 #--unshare-user
+
+# New user namespace if possible, else skip
+#--unshare-user-try
+
+# New IPC namespace
 #--unshare-ipc
+
+# New PID namespace (required for --die-with-parent to also kill children)
 #--unshare-pid
+
+# New network namespace (network isolation)
 #--unshare-net
+
+# New UTS namespace (hostname, etc.)
 #--unshare-uts
 
-# --chdir DIR
+# New cgroup namespace
+#--unshare-cgroup
 
+# New cgroup namespace if possible, else skip
+#--unshare-cgroup-try
 
+# Unshare all possible namespaces (user-try, ipc, pid, net, uts, cgroup-try)
+#--unshare-all
+
+# Use an existing user namespace from FD (incompatible with --unshare-user)
+#--userns FD
+
+# After setup, switch into the specified user namespace (use with --userns)
+#--userns2 FD
+
+# Prevent sandbox process from creating further user namespaces (requires --unshare-user)
+#--disable-userns
+
+# Assert that user namespaces are already disabled (e.g. with --userns)
+#--assert-userns-disabled
+
+# Use an existing PID namespace from FD
+#--pidns FD
+
+# Custom UID in the sandbox (requires --unshare-user)
+#--uid UID
+
+# Custom GID in the sandbox (requires --unshare-user)
+#--gid GID
+
+# Custom hostname in the sandbox (requires --unshare-uts)
+#--hostname HOSTNAME
+
+# =============================================================================
+# Capabilities (when running as privileged user)
+# =============================================================================
+
+# Add capability CAP (e.g. CAP_DAC_READ_SEARCH); special value ALL adds all
+#--cap-add CAP
+
+# Drop capability CAP; special value ALL drops all (default: no caps in sandbox)
+#--cap-drop CAP
+
+# =============================================================================
+# Lockdown and security (FD-based / advanced)
+# =============================================================================
+
+# Load seccomp rules (compiled cBPF) from FD
+#--seccomp FD
+
+# Add additional seccomp program from FD (can be repeated; cannot combine with --seccomp)
+#--add-seccomp-fd FD
+
+# SELinux exec label for the sandbox process
+#--exec-label LABEL
+
+# SELinux file label for temporary sandbox content
+#--file-label LABEL
+
+# Block sandbox until data is available on FD
+#--block-fd FD
+
+# Do not init user namespace; wait on FD until ready (e.g. for newuidmap/newgidmap)
+#--userns-block-fd FD
+
+# Write sandbox info in JSON to FD
+#--info-fd FD
+
+# Write JSON lines (child-pid, exit-code, etc.) to FD
+#--json-status-fd FD
+
+# =============================================================================
+# Filesystem: modifiers for next operation
+# =============================================================================
+
+# Set permissions for the next --tmpfs/--dir/--file operation (e.g. 0700)
+#--perms OCTAL
+
+# Set size in bytes for the next --tmpfs (e.g. 10485760 for 10MiB)
+#--size BYTES
+
+# =============================================================================
+# Filesystem: bind mounts
+# =============================================================================
+
+# Bind mount host path SRC on DEST (read-write)
+#--bind SRC DEST
+
+# Same as --bind but ignore if SRC does not exist
+#--bind-try SRC DEST
+
+# Bind mount SRC on DEST with device access
+#--dev-bind SRC DEST
+
+# Same as --dev-bind but ignore if SRC does not exist
+#--dev-bind-try SRC DEST
+
+# Bind mount host path SRC on DEST read-only
+#--ro-bind SRC DEST
+
+# Same as --ro-bind but ignore if SRC does not exist
+#--ro-bind-try SRC DEST
+
+# Remount DEST as read-only (only that mount point)
+#--remount-ro DEST
+
+# DNS resolution: read-only bind of /etc/resolv.conf
 --ro-bind /etc/resolv.conf /etc/resolv.conf
 
+# =============================================================================
+# Filesystem: virtual filesystems and dirs
+# =============================================================================
 
-#--dev /dev
+# Mount new tmpfs on DEST (mode from --perms, size from --size if given)
+#--tmpfs DEST
+
+# Create directory at DEST (mode from --perms if given, else 0755)
+--dir /tmp
+
+# Mount procfs on DEST
 #--proc /proc
-#--ro-bind /usr/lib/python3.12/encodings /usr/local/lib/python3.12/encodings
+
+# Mount new devtmpfs on DEST
+--dev /dev
+
+# Mount mqueue (POSIX message queue) on DEST
+#--mqueue DEST
+
+# =============================================================================
+# Filesystem: file and symlink
+# =============================================================================
+
+# Copy from file descriptor FD to DEST (mode from --perms else 0666)
+#--file FD DEST
+
+# Copy from FD to a file bind-mounted on DEST (mode from --perms else 0600)
+#--bind-data FD DEST
+
+# Copy from FD to a file bind-mounted read-only on DEST (mode from --perms else 0600)
+#--ro-bind-data FD DEST
+
+# Create symlink at DEST with target SRC
+#--symlink SRC DEST
+
+# Set permissions of existing PATH to OCTAL
+#--chmod OCTAL PATH
+
+# =============================================================================
+# Example: minimal read-only root (adjust paths for your Python installation)
+# =============================================================================
+
 #--dir /var
 #--ro-bind /usr /usr
 #--ro-bind /etc /etc

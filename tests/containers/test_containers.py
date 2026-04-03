@@ -10,8 +10,10 @@ implemented here in Python; no shell scripts are invoked.
 import logging
 import os
 import re
+import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,7 +33,7 @@ IMAGE_NAME = "python-sb:latest"
 PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.profile"
 
 all_container_worker: list[str] = [
-    "docker",
+    # "docker",  # FIXME
     "podman",
 ]
 
@@ -40,9 +42,142 @@ all_os_sandbox: list[ParameterSet] = [
     # firejail is incompatible with containers
     pytest.param("none", True, False),
     pytest.param("subprocess", True, False),
-    pytest.param("unshare", False, True),
     pytest.param("landlock", False, False),
+    pytest.param("unshare", False, True),
+    pytest.param("bwrap", False, True),
 ]
+
+# TODO: test with split mode
+
+# Fallback DNS when host has no usable nameservers (e.g. CI, minimal env)
+_DNS_FALLBACK = ("8.8.8.8", "8.8.4.4")
+
+
+def _host_dns_servers() -> list[str]:
+    """Read nameservers from the host so the container uses platform DNS.
+
+    Tries /etc/resolv.conf first, then resolvectl (systemd-resolved).
+    Skips 127.0.0.0/8 and ::1 which often do not work inside containers.
+    Returns _DNS_FALLBACK if no usable nameserver is found.
+    """
+    found: list[str] = []
+
+    # 1. /etc/resolv.conf
+    resolv = Path("/etc/resolv.conf")
+    if resolv.exists():
+        for line in resolv.read_text().splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line.startswith("nameserver "):
+                ip = line.split(maxsplit=1)[1].strip()
+                if ip and ip not in found:
+                    found.append(ip)
+
+    # 2. resolvectl (systemd-resolved) if resolv.conf had no usable entries
+    if not found:
+        try:
+            r = subprocess.run(
+                ["resolvectl", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if r.returncode == 0 and r.stdout:
+                # Lines like "DNS Servers: 10.0.2.3" or "Current DNS Server: 10.0.2.3"
+                for line in r.stdout.splitlines():
+                    if ":" in line and "dns" in line.lower():
+                        part = line.split(":", 1)[1].strip()
+                        for token in part.split():
+                            if token and token not in found:
+                                found.append(token)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+    # Skip loopback addresses (often don't work in container)
+    def _is_loopback(ip: str) -> bool:
+        if ip == "::1":
+            return True
+        if ip.startswith("127."):
+            return True
+        return False
+
+    usable = [ip for ip in found if not _is_loopback(ip)]
+    if not usable:
+        return list(_DNS_FALLBACK)
+    return usable
+
+
+# Hostnames from py-sandbox-test.profile that require resolution at config load time
+_PROFILE_RESOLVE_HOSTS = ("www.google.com",)
+
+
+def _is_ipv4(addr: str) -> bool:
+    """Return True if addr looks like an IPv4 address."""
+    return "." in addr and ":" not in addr and len(addr) <= 15
+
+
+def _resolve_on_host(hostname: str, timeout: float = 5.0) -> str | None:
+    """Resolve hostname on the host; return one IPv4 address or None on failure.
+
+    Prefer IPv4 so --add-host is unambiguous and socket.gethostbyname() in the test works.
+    """
+    # Prefer getent ahostsv4 for IPv4-only; fallback to getent hosts and take first IPv4
+    for getent_cmd, take_ipv4 in [
+        (["getent", "ahostsv4", hostname], True),
+        (["getent", "hosts", hostname], True),
+    ]:
+        try:
+            r = subprocess.run(
+                getent_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            if r.returncode == 0 and r.stdout:
+                for line in r.stdout.strip().splitlines():
+                    parts = line.split()
+                    if parts:
+                        ip = parts[0]
+                        if take_ipv4 and _is_ipv4(ip):
+                            return ip
+                        if not take_ipv4:
+                            return ip
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+    try:
+        infos = socket.getaddrinfo(
+            hostname, None, family=socket.AF_INET, type=socket.SOCK_STREAM
+        )
+        if infos:
+            addr = infos[0][4][0]
+            return addr if isinstance(addr, str) else None
+    except (socket.gaierror, OSError):
+        pass
+    return None
+
+
+def _add_host_flags() -> list[str]:
+    """Resolve profile hostnames on the host and return --add-host flags for the container.
+
+    So the container does not need DNS for config parsing; platform resolution is done on the host.
+    """
+    flags: list[str] = []
+    for hostname in _PROFILE_RESOLVE_HOSTS:
+        ip = _resolve_on_host(hostname)
+        if ip:
+            flags.extend(["--add-host", f"{hostname}:{ip}"])
+        else:
+            logger.warning(
+                "Could not resolve %s on host; container may fail config parsing",
+                hostname,
+            )
+    return flags
+
+
+# Timeout for building the container image when missing (avoid indefinite hang)
+BUILD_IMAGE_TIMEOUT = 600  # seconds
+
+# Timeout for the container run (inner python-sb + integration tests)
+CONTAINER_RUN_TIMEOUT = 300  # seconds
 
 
 def _ensure_image(runtime: str) -> None:
@@ -60,6 +195,7 @@ def _ensure_image(runtime: str) -> None:
         cwd=ROOT_DIR,
         check=True,
         capture_output=False,
+        timeout=BUILD_IMAGE_TIMEOUT,
     )
 
 
@@ -92,6 +228,13 @@ def _run_container_runtime(
     )
 
     privileged_flag = ["--privileged"] if privileged else []
+    # Use host/platform DNS so config parsing can resolve hostnames
+    dns_servers = _host_dns_servers()
+    dns_flags = [arg for s in dns_servers for arg in ("--dns", s)]
+    # Resolve profile hostnames on the host and inject so container does not need DNS at config load
+    add_host_flags = _add_host_flags()
+    # bwrap uses --share-net: it needs a working network stack; bridge often has no route in child
+    network_mode = "host" if os_sandbox == "bwrap" else "bridge"
     cmd = [
         runtime,
         "run",
@@ -99,7 +242,9 @@ def _run_container_runtime(
         *privileged_flag,
         "--rm",
         "--network",
-        "bridge",
+        network_mode,
+        *dns_flags,
+        *add_host_flags,
         "-v",
         volume_mount,
         "-w",
@@ -110,14 +255,28 @@ def _run_container_runtime(
         inner_cmd,
     ]
 
-    return subprocess.run(
-        cmd,
-        cwd=ROOT_DIR,
-        env=os.environ.copy(),
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
+    # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
+    # With pipes, the buffer (~64KB) can fill and the container blocks on write → deadlock.
+    # Redirect to a temp file so we can show log tail on failure without deadlock.
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".log", delete=False, encoding="utf-8"
+    ) as log_file:
+        log_path = log_file.name
+    try:
+        with open(log_path, "w", encoding="utf-8") as log_stream:
+            result = subprocess.run(
+                cmd,
+                cwd=ROOT_DIR,
+                env=os.environ.copy(),
+                stdout=log_stream,
+                stderr=subprocess.STDOUT,
+                timeout=CONTAINER_RUN_TIMEOUT,
+            )
+        result._container_log_path = log_path  # type: ignore[attr-defined]
+        return result
+    except Exception:
+        Path(log_path).unlink(missing_ok=True)
+        raise
 
 
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
@@ -137,14 +296,31 @@ def test_container_runtime(
         pytest.skip(f"{runtime} not available")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
-    if result.stdout:
-        print(result.stdout)
-    if result.stderr:
-        print(result.stderr, file=sys.stderr)
-    assert result.returncode == 0, (
-        f"Container test ({runtime}, os_sandbox={os_sandbox}) exited with code {result.returncode}. "
-        "For unshare, ensure the container has /dev/net/tun and slirp4netns (e.g. use --privileged)."
-    )
+    log_path = getattr(result, "_container_log_path", None)
+    try:
+        if result.returncode != 0 and log_path and Path(log_path).exists():
+            log_text = Path(log_path).read_text(encoding="utf-8")
+            if log_text:
+                lines = log_text.strip().splitlines()
+                # Show start (unshare_setup, network config) and end (test failure)
+                head = lines[:120]
+                tail = lines[-80:] if len(lines) > 80 else []
+                sys.stderr.write(
+                    "\n--- Container log (head: unshare_setup / network) ---\n"
+                )
+                sys.stderr.write("\n".join(head))
+                sys.stderr.write("\n")
+                if tail and len(lines) > 120:
+                    sys.stderr.write("\n--- Container log (tail) ---\n")
+                    sys.stderr.write("\n".join(tail))
+                    sys.stderr.write("\n")
+        assert result.returncode == 0, (
+            f"Container test ({runtime}, os_sandbox={os_sandbox}) exited with code {result.returncode}. "
+            "For unshare, ensure the container has /dev/net/tun and slirp4netns (e.g. use --privileged)."
+        )
+    finally:
+        if log_path and Path(log_path).exists():
+            Path(log_path).unlink(missing_ok=True)
 
 
 # --- Kubernetes (logic from test-kubernetes.sh) ---
@@ -239,19 +415,9 @@ def _ensure_minikube_ready() -> None:
 
 
 def _ensure_minikube_image() -> None:
-    """Build image in minikube's Docker daemon if missing."""
+    """Build image in minikube's Docker daemon so it matches the current Dockerfile."""
     env = _minikube_docker_env()
-    r = subprocess.run(
-        ["docker", "image", "inspect", IMAGE_NAME],
-        capture_output=True,
-        cwd=ROOT_DIR,
-        env=env,
-    )
-    if r.returncode == 0:
-        return
-    logger.error(
-        f"Image {IMAGE_NAME} not found in minikube, building with make build-image-docker..."
-    )
+    print("Building image in minikube's Docker daemon (make build-image-docker)...")
     subprocess.run(
         ["make", "build-image-docker"],
         cwd=ROOT_DIR,

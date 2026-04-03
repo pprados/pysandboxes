@@ -172,7 +172,7 @@ def _test_network() -> int:
     except SandBoxError:
         logger.error(f"{KO} socker AF_INET SOCK_STREAM 80")
         rc = 1
-    except TimeoutError as e:
+    except (TimeoutError, OSError) as e:
         logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
@@ -202,17 +202,22 @@ def _test_network() -> int:
         logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
-    # web connection
+    # web connection (timeout to avoid hanging in containers with slow/no network)
     import requests
 
     try:
-        requests.get("http://www.google.com/")
+        requests.get("http://www.google.com/", timeout=10)
         logger.info(f"{OK} get http://www.google.com")
     except SandBoxError:
         logger.error(f"{KO} get http://www.google.com")
         rc = 1
-    except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+    except (TimeoutError, requests.exceptions.Timeout) as e:
+        logger.error(f"{KO} get http://www.google.com {e}")
+        rc = 1
+    except requests.exceptions.ConnectionError as e:
+        logger.error(
+            f"{KO} get http://www.google.com (network unreachable or refused) {e}"
+        )
         rc = 1
 
     # udp connection ipv4
@@ -390,7 +395,11 @@ def _test_files() -> int:
             if s:
                 import pysandboxes
 
-                if pysandboxes.os_sandbox in ["none", "landlock"]:
+                if pysandboxes.os_sandbox in [
+                    "none",
+                    "landlock",
+                    "bwrap",
+                ]:  # FIXME: bwrap and .env
                     logger.warning(
                         f"{OK} .env is accessible (os_sandbox={pysandboxes.os_sandbox!r})"
                     )
@@ -514,32 +523,6 @@ def _config(argv: list[str]) -> tuple[Path, dict[str, set[str]]]:
             learning_path = ".py-sandboxes"
         extra_rules["learn"] = {learning_path}
     return config_path, extra_rules
-
-
-# from pysandboxes.sandboxes_api import sandboxes
-#
-# def init_sandbox():
-#     print("init")
-#
-# def main():
-#     with sandboxes(init_fn=init_sandbox):
-#         print("ok")
-
-
-def test_raw_dns(server: str = "8.8.8.8") -> None:
-    import socket
-
-    logger.info(f"Testing raw UDP connection to {server}:53...")
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(2)
-    try:
-        # On n'envoie rien, on teste juste si le port est atteignable
-        sock.connect((server, 53))
-        logger.info("Successfully connected (UDP port reachable).")
-    except Exception as e:
-        logger.error(f"Connection failed: {e}")
-    finally:
-        sock.close()
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ from .private_loop import (
 from .remote.landlock_daemon import LandlockSSEDaemon
 from .remote.none_daemon import NoneDaemon
 from .remote.parameters import TIMEOUT_FOR_START_DAEMON, TIMEOUT_FOR_STOP_DAEMON
+from .remote.sse_bwrap_daemon import BWrapSSEDaemon
 from .remote.sse_client_subprocess_daemon import SubProcessDaemon
 from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
@@ -39,7 +40,7 @@ providers_factory: dict[str, Type] = {
     "_sse_server": SSEServerDaemon,  # Impossible to activate py-sandbox in this mode.
     "none": NoneDaemon,
     "subprocess": SubProcessDaemon,
-    # "bwrap": BWrapDaemon(),
+    "bwrap": BWrapSSEDaemon,
     "firejail": FireJailSSEDaemon,
     "unshare": UnshareSSEDaemon,
     "landlock": LandlockSSEDaemon,

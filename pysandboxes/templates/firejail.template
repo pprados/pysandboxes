@@ -2,11 +2,25 @@
 # License: Apache V2
 # See man firejail
 
+# =============================================================================
+# Capabilities
+# =============================================================================
+
 # Drop all capabilities
 --caps.drop=all
+# Keep specific capabilities (alternative to drop=all)
+# --caps.keep=cap1,cap2
+
+# =============================================================================
+# Profile and includes
+# =============================================================================
 
 # Do not use any profile
 --noprofile
+# Use a profile
+# --profile=filename_or_profilename
+# Ignore a profile command
+# --ignore=command
 
 # Include standard profiles for restrictions
 --include=/etc/firejail/allow-python3.inc
@@ -16,35 +30,164 @@
 --include=/etc/firejail/disable-programs.inc
 --include=/etc/firejail/disable-xdg.inc
 
+# =============================================================================
+# Seccomp (syscall filtering)
+# =============================================================================
 # See /usr/share/doc/firejail/syscalls.txt
 # See https://linux-audit.com/systemd/systemd-syscall-filtering/
-#--seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
-# --seccomp.keep=  See scripts/extract_strace.sh
+# Filter syscalls by group
+# --seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
+# Keep specific syscalls
+# --seccomp.keep=syscall,@group,!syscall2
+# Drop specific syscalls
+# --seccomp.drop=syscall,@group
+# Block secondary arch syscalls
+# --seccomp.block-secondary
+# Action on seccomp violation (kill|ERRNO|log)
+# --seccomp-error-action=kill
+
+# =============================================================================
+# Hostname and lifecycle
+# =============================================================================
 
 # Set the hostname
 --hostname=firejail-sandbox
 
 # Kill all processes when the sandbox is closed
 --deterministic-shutdown
+# Use deterministic exit code
+# --deterministic-exit-code
+# Sandbox name (for join/list)
+# --name=name
+# Timeout
+# --timeout=hh:mm:ss
+
+# =============================================================================
+# Network and protocol
+# =============================================================================
 
 # Enable IPv4 and IPv6 only
 --protocol=inet,inet6
+# Disable network
+# --net=none
+# Network interface
+# --net=eth0
+# DNS server
+# --dns=address
+# IP address or dhcp
+# --ip=address
+# --ip=dhcp
+# --ip6=address
+# --ip6=dhcp
+# Default gateway
+# --defaultgw=address
+# Netmask
+# --netmask=address
+# Interface name
+# --interface=interface
+# MTU
+# --mtu=number
+# MAC address
+# --mac=address
+# IP range
+# --iprange=address,address
+# Netfilter script
+# --netfilter=filename
+# --netfilter=filename,arg1,arg2,arg3
+# Netfilter IPv6
+# --netfilter6=filename
+# Lock network
+# --netlock
+# Network namespace
+# --netns=name
+# Veth name
+# --veth-name=name
+
+# =============================================================================
+# Environment
+# =============================================================================
 
 # Clear PYTHONSTARTUP to avoid loading user configuration
 --env=PYTHONSTARTUP=
+# Remove env var
+# --rmenv=name
 
+# =============================================================================
+# Private filesystem and mounts
+# =============================================================================
+
+# Full private mode
+# --private
+# Private directory
+# --private=directory
+# Private /dev
 # --private-dev
+# Private /tmp
 # --private-tmp
+# Private current working directory
+# --private-cwd
+# --private-cwd=directory
+# Private cache
+# --private-cache
+# Private bin
+# --private-bin=file,file
+# Private home
+# --private-home=file,directory
+# Private opt
+# --private-opt=file,directory
+# Private srv
+# --private-srv=file,directory
+# Read-only path
+# --read-only=dirname_or_filename
+# Read-write path
+# --read-write=dirname_or_filename
+# Blacklist path
+# --blacklist=dirname_or_filename
+# Noblacklist path
+# --noblacklist=dirname_or_filename
+# Whitelist path
+# --whitelist=dirname_or_filename
+# Nowhitelist path
+# --nowhitelist=dirname_or_filename
+# Tmpfs
+# --tmpfs=dirname
+# Bind mount (root only)
+# --bind=filename1,filename2
+# Chroot
+# --chroot=dirname
+# Create dir in sandbox
+# --mkdir=dirname
+# Create file in sandbox
+# --mkfile=filename
+# Writable etc override
+# --writable-etc
+# Writable var override
+# --writable-var
+# Writable run-user override
+# --writable-run-user
+# Writable var-log override
+# --writable-var-log
+
+# Private /etc with only these files
 --private-etc=hosts,resolv.conf,nsswitch.conf
 
-
-# Remount /tmp as noexec
+# Remount path as noexec
 --noexec=/tmp
 
-# Disable extras
+# =============================================================================
+# Namespaces and restrictions
+# =============================================================================
 
 # Restrict namespaces
 --restrict-namespaces
+# Restrict specific namespaces
+# --restrict-namespaces=cgroup,ipc,net,mnt,pid,time,user,uts
+# IPC namespace
+# --ipc-namespace
+
+# =============================================================================
+# Disable extras
+# =============================================================================
 
 # Disable groups
 --nogroups
@@ -60,11 +203,19 @@
 
 # Disable X11
 --x11=none
+# X11 backends
+# --x11
+# --x11=xephyr
+# --x11=xorg
+# --x11=xvfb
+# --x11=xpra
+# Xephyr screen size
+# --xephyr-screen=WIDTHxHEIGHT
 
 # Disable sound
 --nosound
 
-# Disable TV
+# Disable TV (DVB)
 --notv
 
 # Disable U2F
@@ -79,16 +230,76 @@
 # Disable /mnt
 --disable-mnt
 
-# Disable 3D hardware acceleration.
+# Disable 3D hardware acceleration
 --no3d
 
-# *** Limits ***
+# Disable input devices
+# --noinput
+# Disable TPM
+# --notpm
+# Disable DBus (deprecated; use --dbus-system=none --dbus-user=none)
+# --nodbus
+# Disable Pulse auto (deprecated)
+# --noautopulse
+# DBus system policy (filter|none)
+# --dbus-system=filter
+# --dbus-system=none
+# DBus user policy (filter|none)
+# --dbus-user=filter
+# --dbus-user=none
+# DBus log file
+# --dbus-log=file
+# DBus system filter options
+# --dbus-system.talk=name
+# --dbus-system.own=name
+# --dbus-system.see=name
+# DBus user filter options
+# --dbus-user.talk=name
+# --dbus-user.own=name
+# --dbus-user.see=name
+# DBus broadcast/call
+# --dbus-system.broadcast=...
+# --dbus-system.call=...
+# --dbus-user.broadcast=...
+# --dbus-user.call=...
+
+# =============================================================================
+# Additional security (man)
+# =============================================================================
+
+# Deny write+execute memory (W^X)
+# --memory-deny-write-execute
+# Use empty machine-id
+# --machine-id
+# Custom hosts file
+# --hosts-file=file
+
+# Keep file descriptor (when using private)
+# --keep-fd=all
+# --keep-fd=file_descriptor
+# Keep shell rc
+# --keep-shell-rc
+# Keep var tmp
+# --keep-var-tmp
+# Keep Pulse config
+# --keep-config-pulse
+# Keep dev shm
+# --keep-dev-shm
+# Keep dev ntsync
+# --keep-dev-ntsync
+
+# =============================================================================
+# Limits (rlimit and related)
+# =============================================================================
 
 # Address space limit
 --rlimit-as=${FIREJAIL_RELIMIT:-300m}
 
 # File size limit
 --rlimit-fsize=${FIREJAIL_FSIZE:-102400}
+
+# CPU time limit (seconds)
+# --rlimit-cpu=number
 
 # Number of processes limit
 --rlimit-nproc=${FIREJAIL_NPROC:-20}
@@ -102,9 +313,128 @@
 # Nice value (CPU priority)
 --nice=${NICE:-5}
 
-# Debug
-#--allow-debuggers
-#--nettrace=firejail-sandbox
-#--dnstrace
+# OOM score adjustment
+# --oom=value
 
-#--protocol
+# CPU affinity
+# --cpu=cpu-number,cpu-number,cpu-number
+
+# =============================================================================
+# AppArmor (if available)
+# =============================================================================
+# Enable AppArmor with default profile
+# --apparmor
+# Enable AppArmor with custom profile
+# --apparmor=profile_name
+
+# =============================================================================
+# Landlock (experimental)
+# =============================================================================
+# Enforce Landlock
+# --landlock.enforce
+# Landlock read path
+# --landlock.fs.read=path
+# Landlock write path
+# --landlock.fs.write=path
+# Landlock makeipc path
+# --landlock.fs.makeipc=path
+# Landlock makedev path
+# --landlock.fs.makedev=path
+# Landlock execute path
+# --landlock.fs.execute=path
+
+# =============================================================================
+# Monitoring, join, file transfer, logging
+# =============================================================================
+# List sandboxes
+# --list
+# Join existing sandbox
+# --join=name|pid
+# Join filesystem only
+# --join-filesystem=name|pid
+# Join network only
+# --join-network=name|pid
+# Join or start
+# --join-or-start=name
+# Shutdown sandbox
+# --shutdown=name|pid
+# File transfer
+# --get=name|pid
+# --put=name|pid
+# --ls=name|pid
+# --cat=name|pid
+# Print status
+# --net.print=name|pid
+# --dns.print=name|pid
+# --protocol.print=name|pid
+# --caps.print=name|pid
+# --seccomp.print=name|pid
+# --profile.print=name|pid
+# --fs.print=name|pid
+# --cpu.print=name|pid
+# --apparmor.print=name|pid
+# --netfilter.print=name|pid
+# --netfilter6.print=name|pid
+# Bandwidth limit
+# --bandwidth=name|pid
+# Netstats
+# --netstats
+# Top
+# --top
+# Tree
+# --tree
+# Quiet
+# --quiet
+# Output log file
+# --output=logfile
+# Output stderr log file
+# --output-stderr=logfile
+# Trace
+# --trace
+# --trace=filename
+# Tracelog
+# --tracelog
+# Nettrace
+# --nettrace
+# --nettrace=name|pid
+# Dnstrace
+# --dnstrace
+# --dnstrace=name|pid
+# Icmptrace
+# --icmptrace
+# --icmptrace=name|pid
+# Snitrace
+# --snitrace
+# --snitrace=name|pid
+
+# =============================================================================
+# Debug and build
+# =============================================================================
+# Allow debuggers (strace, gdb)
+# --allow-debuggers
+# Debug
+# --debug
+# --debug-caps
+# --debug-errnos
+# --debug-protocols
+# --debug-syscalls
+# --debug-syscalls32
+# --debug-blacklists
+# --debug-whitelists
+# Build profile
+# --build
+# --build=profile-file
+# AppImage mode
+# --appimage
+# All users /home visible
+# --allusers
+# Tab completion in private shell
+# --tab
+# IDS check
+# --ids-check
+# IDS init
+# --ids-init
+# ARP scan
+# --scan
+# Version
+# --version
