@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-docker build-image-clean minikube-ready
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-docker build-image-clean minikube-ready init packmind-import
 
 # Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
@@ -342,10 +342,19 @@ inspector:
 github-push-test:
 	gh act push
 
-init: _uv-init
+## Import Packmind packages (if packmind-cli is available and packmind.json exists)
+packmind-import:
+	@if command -v packmind-cli >/dev/null 2>&1 && [ -f packmind.json ]; then \
+		packmind-cli install --recursive ; \
+	else \
+		true; \
+	fi
+
+init: _uv-init packmind-import
 #	@pre-commit install
 	gh extension install https://github.com/nektos/gh-act
 	@git lfs install 2>/dev/null || true
+
 
 
 ### RELEASE ###
