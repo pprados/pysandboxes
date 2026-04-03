@@ -37,6 +37,8 @@ from typing import Any, cast
 import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
+from .sse_firejail_daemon import DEBUG_BASE
+
 try:
     from typing import override  # type: ignore[attr-defined]
 except ImportError:
@@ -501,7 +503,6 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
-        temp: Path,
     ) -> tuple[Args, Environ]:
         """Build command line for python_sb.py one-shot execution.
 
@@ -515,7 +516,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # Write config via FIFO (or file in debug mode). Always pass a path under
         # temp so the unshare child can read it (e.g. under /tmp); with Docker the
         # child may not have access to /app when using unshare -r.
-        config_file = temp / "unshare_config.json"
+        config_file = DEBUG_BASE / "unshare_config.json"
         if config_file.exists():
             config_file.unlink()
         if not DEBUG_LAUNCH:

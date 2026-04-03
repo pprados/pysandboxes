@@ -326,7 +326,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         all_rules: AllRules,
         envs: Environ,
         pipe_path: Path,
-        temp: Path,
     ) -> tuple[Args, Environ]:
         """Build command line arguments for subprocess.
 
@@ -480,7 +479,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                 all_rules=all_rules,
                 envs=envs,
                 pipe_path=pipe_path,
-                temp=Path(tmpdir),
             )
 
             await self._re_start_cmd(
