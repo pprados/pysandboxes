@@ -23,3 +23,5 @@ net=ALLOW|UDP|localhost|12346,12345|OUT
 net=ALLOW|*|*|53|*
 
 ignore=.env
+
+qemu.use_kvm=true  # FIXME

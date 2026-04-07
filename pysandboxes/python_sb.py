@@ -120,6 +120,7 @@ def main() -> int:
         token = str(uuid.uuid4())
 
         port = os_provider.port if all_rules.os_sandbox == "qemu" else 0
+        python_main_args = tuple(python_cmd) if all_rules.os_sandbox == "qemu" else ()
         process_config = DaemonParameters(
             all_rules=all_rules,
             log_level=log_level,
@@ -128,6 +129,7 @@ def main() -> int:
             token=token,
             port=port,
             init_fn="",
+            python_main_args=python_main_args,
         )
         env: Environ
         if all_rules.learn:
@@ -142,6 +144,12 @@ def main() -> int:
 
         launch_args = cmd if all_rules.os_sandbox == "qemu" else cmd + python_cmd
 
+        config_writer = (
+            os_provider.get_config_writer()
+            if hasattr(os_provider, "get_config_writer")
+            else None
+        )
+
         async def launch_and_wait() -> int:
             process = await launch_sandbox(
                 launch_args,
@@ -151,6 +159,7 @@ def main() -> int:
                 extra_preexec_fn=extra_preexec_fn,
                 pass_fds=pass_fds,
                 on_launched=os_provider.on_process_launched,
+                config_writer=config_writer,
             )
             try:
                 return await process.wait()

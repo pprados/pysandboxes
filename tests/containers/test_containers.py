@@ -9,7 +9,6 @@ implemented here in Python; no shell scripts are invoked.
 
 import logging
 import os
-import platform
 import re
 import socket
 import subprocess
@@ -281,19 +280,6 @@ def _run_container_runtime(
         raise
 
 
-def _qemu_available() -> bool:
-    """True if QEMU binary and default image exist (for qemu provider)."""
-    from pysandboxes.remote.qemu_image import get_default_image_path
-    from pysandboxes.remote.tools import which_command
-
-    arch = platform.machine()
-    if not which_command(f"qemu-system-{arch}") and not which_command(
-        "qemu-system-x86_64"
-    ):
-        return False
-    return get_default_image_path().is_file()
-
-
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
 @pytest.mark.parametrize("runtime", all_container_worker)
 def test_container_runtime(
@@ -310,8 +296,9 @@ def test_container_runtime(
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip(f"{runtime} not available")
 
-    if os_sandbox == "qemu" and not _qemu_available():
-        pytest.skip("QEMU or default image not available")
+    # qemu provider requires QEMU binary and compatible guest image; container image has neither
+    if os_sandbox == "qemu":
+        pytest.skip("qemu provider not run in container (no QEMU in image)")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     log_path = getattr(result, "_container_log_path", None)

@@ -10,11 +10,14 @@ import asyncio
 import gc
 import logging
 import os
+import pickle
 import platform
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from ipaddress import IPv4Address
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 try:
     from typing import override
@@ -32,9 +35,11 @@ from .parameters import (
     LOOP_FOR_PING,
     TIMEOUT_FOR_PING,
 )
+from .qemu_guest_bootstrap import VENV_9P_TAG, prepare_guest_env
 from .qemu_image import ensure_image, get_default_image_path, is_kvm_available
 from .sse_client_subprocess_daemon import (
     DaemonParameters,
+    find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
@@ -45,10 +50,74 @@ from .vm_sse_daemon import VMSSEDaemon
 logger = logging.getLogger(__name__)
 
 # Fixed port inside the guest where the SSE server listens
-GUEST_SSE_PORT = 8765
+GUEST_SSE_PORT = 8765  # FIXME
 
-# 9p mount tag and guest path (guest mounts with: mount -t 9p -o trans=virtio TAG GUEST_PATH)
-QEMU_9P_MOUNT_TAG = "pysandbox_config"
+
+def _host_venv_site_packages() -> Path | None:
+    """Return host venv site-packages path if running in a venv, else None.
+
+    When not None, the guest can mount it via 9p and use it as PYTHONPATH
+    instead of reinstalling deps with pip.
+    """
+    prefix = Path(sys.prefix).resolve()
+    base = Path(sys.base_prefix).resolve()
+    if prefix == base:
+        return None
+    # e.g. prefix/lib/python3.12/site-packages
+    py_ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    site = prefix / "lib" / py_ver / "site-packages"
+    if not site.is_dir():
+        return None
+    return site
+
+
+# Field names that must be Path; serialized as str for cross-version pickle.
+_PATH_FIELDS = frozenset(("root_path", "learning_path"))
+
+
+def _config_paths_to_str(obj: Any) -> Any:
+    """Recursively replace Path with str so pickle stream has no pathlib (no pathlib._local)."""
+    if isinstance(obj, Path):
+        return str(obj)
+    if hasattr(obj, "_asdict") and hasattr(obj, "_fields"):
+        return type(obj)(
+            **{k: _config_paths_to_str(v) for k, v in obj._asdict().items()}
+        )
+    if isinstance(obj, dict):
+        return {k: _config_paths_to_str(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(_config_paths_to_str(x) for x in obj)
+    return obj
+
+
+def _start_config_server(port: int, process_config: DaemonParameters) -> None:  # FIXME
+    """Start a one-request HTTP server in a daemon thread to serve config to the guest."""
+    # Serialize with Path replaced by str so guest never needs pathlib._local.
+    safe_config = _config_paths_to_str(process_config)
+    payload = pickle.dumps(safe_config, protocol=pickle.HIGHEST_PROTOCOL)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path == "/config.pkl":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, format: str, *args: Any) -> None:
+            logger.debug("config server %s", format % args)
+
+    def run() -> None:
+        with HTTPServer(("0.0.0.0", port), Handler) as httpd:
+            httpd.serve_forever()
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    logger.debug("Config HTTP server listening on 0.0.0.0:%s for guest", port)
 
 
 def _qemu_binary() -> str:
@@ -66,14 +135,15 @@ def _qemu_binary() -> str:
 
 
 class QemuSSEDaemon(VMSSEDaemon):
-    """SSE daemon that runs the sandbox inside a QEMU VM."""
+    """SSE daemon that runs the sandbox inside a QEMU VM. Config via HTTP (no 9p)."""
 
-    __slots__ = ()
+    __slots__ = ("_config_port",)
 
     def __init__(
         self, token: str, *, python_args: list[str] | None = None, **kwargs: Any
     ) -> None:
         super().__init__(token, python_args=python_args or [], **kwargs)
+        self._config_port = 0  # set in subprocess_cmd before first launch
 
     @override
     def parse_rules(
@@ -114,15 +184,18 @@ class QemuSSEDaemon(VMSSEDaemon):
         pipe_path: Path,
         temp: Path,
     ) -> tuple[Args, Environ]:
-        """Build the QEMU command line (no Python args)."""
-        custom_image = all_rules.os_sandbox_params.get("qemu.image")
-        if custom_image:
-            image_path = Path(custom_image).expanduser().resolve()
-            if not image_path.is_file():
-                raise FileNotFoundError(f"qemu.image path is not a file: {image_path}")
-        else:
-            image_path = get_default_image_path()
-            ensure_image(image_path)
+        """Build the QEMU command line (no Python args). Config via HTTP.
+
+        If the host runs in a venv, its site-packages are shared via 9p so the
+        guest does not need to pip install.
+        """
+        image_path = get_default_image_path()
+        ensure_image(image_path)  # downloads with progress if missing
+        self._config_port = find_free_port()
+        venv_site = _host_venv_site_packages()
+        nocloud_iso = prepare_guest_env(
+            temp, self._config_port, venv_site_packages_path=venv_site
+        )
 
         use_kvm = all_rules.os_sandbox_params.get("qemu.use_kvm", "true").lower() in (
             "true",
@@ -138,17 +211,38 @@ class QemuSSEDaemon(VMSSEDaemon):
         memory = raw_memory if raw_memory.isdigit() else "256"
         host_port = self.port
 
-        # -virtfs: expose temp dir to guest so it can read the config pipe
-        virtfs = [
-            "-virtfs",
-            f"local,path={temp.resolve()!s},mount_tag={QEMU_9P_MOUNT_TAG},security_model=mapped",
+        # -nic user + virtio-net: QEMU provides DHCP; guest fetches config from 10.0.2.2:config_port
+        net = [
+            "-nic",
+            f"user,hostfwd=tcp::{host_port}-:{GUEST_SSE_PORT},model=virtio-net-pci",
         ]
 
-        # -net user,hostfwd: forward host port to guest GUEST_SSE_PORT
-        net = [
-            "-net",
-            f"user,hostfwd=tcp::{host_port}-:{GUEST_SSE_PORT}",
-        ]
+        # -virtfs: share host venv site-packages so guest reuses them (no pip install)
+        virtfs_venv: Args = []
+        if venv_site is not None:
+            path_str = str(venv_site)
+            if not venv_site.is_dir():
+                logger.warning(
+                    "qemu 9p: venv site-packages path does not exist or is not a dir: %s",
+                    path_str,
+                )
+            else:
+                try:
+                    entries = list(venv_site.iterdir())[:5]
+                    logger.info(
+                        "qemu 9p: sharing %s (mount_tag=%s) sample entries: %s",
+                        path_str,
+                        VENV_9P_TAG,
+                        [e.name for e in entries],
+                    )
+                except OSError as e:
+                    logger.warning(
+                        "qemu 9p: cannot list site-packages %s: %s", path_str, e
+                    )
+            virtfs_venv = [
+                "-virtfs",
+                f"local,path={path_str},id={VENV_9P_TAG},security_model=mapped,mount_tag={VENV_9P_TAG}",
+            ]
 
         # -device virtio-serial for QGA (guest can use qemu-guest-agent)
         qga = [
@@ -158,23 +252,33 @@ class QemuSSEDaemon(VMSSEDaemon):
             "virtserialport,name=org.qemu.guest_agent.0",
         ]
 
+        drive_image = (
+            f"file={image_path!s},format=qcow2,if=virtio"
+            if image_path.suffix == ".qcow2"
+            else f"file={image_path!s},format=raw,if=virtio"
+        )
+        drive_nocloud = f"file={nocloud_iso!s},format=raw,if=virtio"
         cmd: Args = [
             _qemu_binary(),
             *enable_kvm,
             "-m",
             memory,
+            "-snapshot",  # do not write to the base image (avoids lock conflict)
             "-drive",
-            (
-                f"file={image_path!s},format=qcow2,if=virtio"
-                if image_path.suffix == ".qcow2"
-                else f"file={image_path!s},format=raw,if=virtio"
-            ),
+            drive_image,
+            "-drive",
+            drive_nocloud,
             "-nographic",
-            *virtfs,
             *net,
+            *virtfs_venv,
             *qga,
         ]
         return cmd, {}
+
+    def get_config_writer(self) -> "Callable[[DaemonParameters], None]":
+        """Return a callable that starts the HTTP config server (used instead of FIFO)."""
+        port = self._config_port
+        return lambda cfg: _start_config_server(port, cfg)
 
     @override
     async def _re_start_cmd(
@@ -225,11 +329,13 @@ class QemuSSEDaemon(VMSSEDaemon):
         logger.debug(
             "Launch QEMU: %s", " ".join((repr(a) if " " in a else a for a in args))
         )
+        config_writer = lambda cfg: _start_config_server(self._config_port, cfg)
         self._process = await launch_sandbox(
             args,
             pipe_path=pipe_path,
             envs=Envs(env),
             process_config=process_config,
+            config_writer=config_writer,
         )
 
         await self._on_process_started()

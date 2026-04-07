@@ -39,14 +39,17 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
   - [ ] micro-VM
-    - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
+    - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
     - [ ] [Cloud morph](https://cloud.morph.so/)
+  - [ ] Apple
+    - [ ] App Sandbox
+    - [ ] sandbox-exec
 - [ ] New samples
   - [X] MCP server
   - [X] MCP client
@@ -62,6 +65,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] Propagate the tracability id
   - [ ] Use anyio
   - [ ] Use [Condon JIT](https://docs.exaloop.io/integrations/python/codon-from-python/#using-codonjit)
+  - [ ] DevContainer
 
 ## Guard some critical methods
 Certain methods must be rejected, even if the package is authorized (`spawn`, `system`, `sys.exit()`, ....)

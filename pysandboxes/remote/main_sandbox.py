@@ -68,6 +68,36 @@ def _debug_log() -> None:
 # %%
 
 
+def run_guest(process_config: DaemonParameters) -> int:
+    """Run inside VM guest: same init as main_sandbox then python_in_sb or run_server.
+
+    Used by QEMU guest bootstrap when config is already loaded from the pipe.
+    """
+    log_format = " " + process_config.log_format
+    config_log(process_config.log_level, log_format, process_config.use_rich_handler)
+    all_rules = process_config.all_rules
+    set_learning_path(all_rules.learning_path)
+    set_pin_dns(all_rules.pin_dns)
+    # Apply profile env to process so guards see them (e.g. My_ENV for tests)
+    for k, v in dict(all_rules.envs).items():
+        os.environ[k] = str(v) if v is not None else ""
+    # In QEMU guest, root_path from host is wrong; use cwd so bind=./tmp works
+    all_rules = all_rules._replace(root_path=Path.cwd())
+    import pysandboxes
+    from pysandboxes.py_sandbox import activate_sandboxes
+
+    pysandboxes.os_sandbox = all_rules.os_sandbox
+    activate_sandboxes(all_rules, os.environ)
+    python_main_args = getattr(process_config, "python_main_args", ()) or ()
+    if python_main_args:
+        set_learning_mode(all_rules.learn)
+        # In guest VM, use subprocess so start_daemon() launches a local Python server
+        # instead of trying to start another QEMU.
+        os.environ["OS_SANDBOX"] = "subprocess"
+        return python_in_sb(all_rules, list(python_main_args))
+    return asyncio.run(run_server(process_config))
+
+
 async def run_server(process_config: DaemonParameters) -> int:
     """Run the sandbox server with the provided configuration.
 

@@ -187,3 +187,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # <learning_guard_import>
 
 # </learning_guard_import>
+
+qemu.use_kvm=true  # FIXME
+qemu.memory=256
