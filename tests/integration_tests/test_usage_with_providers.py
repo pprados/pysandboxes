@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.remote.landlock_daemon import landlock_user_available
-from pysandboxes.remote.qemu_image import get_default_image_path
 from pysandboxes.remote.tools import unshare_user_namespace_available, which_command
 
 logger = logging.getLogger(__name__)
@@ -54,6 +53,8 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
         "-m",
         "tests.integration_tests.tst_usage",
     ]
+    # qemu needs time for VM boot + cloud-init + bootstrap
+    timeout = 600 if os_sandbox == "qemu" else 120
 
     return subprocess.run(
         cmd,
@@ -61,7 +62,7 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
         env=env,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=timeout,
     )
 
 
@@ -76,11 +77,11 @@ def _skip_reason(os_sandbox: str) -> str | None:
     if os_sandbox == "bwrap" and not which_command("bwrap"):
         return "bwrap not installed"
     if os_sandbox == "qemu":
-        qemu_name = f"qemu-system-{platform.machine()}"
-        if not which_command(qemu_name) and not which_command("qemu-system-x86_64"):
+        arch = platform.machine()
+        if not which_command(f"qemu-system-{arch}") and not which_command(
+            "qemu-system-x86_64"
+        ):
             return "QEMU not installed"
-        if not get_default_image_path().is_file():
-            return "QEMU default image not found (run python -m pysandboxes.fetch_qemu_image)"
     return None
 
 

@@ -142,6 +142,7 @@ class DaemonParameters(NamedTuple):
         port: Network port for communication.
         init_fn: Initialization function reference.
     netfilter_rules: Optional iptables rules for the guest (e.g. VM); default empty.
+    python_main_args: For VM guest: argv to run as main (e.g. ["-m", "module"]); default empty.
     """
 
     all_rules: AllRules
@@ -152,6 +153,7 @@ class DaemonParameters(NamedTuple):
     port: int
     init_fn: str
     netfilter_rules: tuple[str, ...] = ()
+    python_main_args: tuple[str, ...] = ()
 
 
 @sandbox_loop
@@ -163,23 +165,29 @@ async def launch_sandbox(
     extra_preexec_fn: Callable[[], None] | None = None,
     pass_fds: tuple[int, ...] = (),
     on_launched: Callable[[int], None] | None = None,
+    config_writer: Callable[["DaemonParameters"], None] | None = None,
 ) -> Process:
     """Launch a sandbox subprocess with the given configuration.
 
     Args:
         cmd: Command line arguments for the subprocess.
-        pipe_path: Path to named pipe for configuration transfer.
+        pipe_path: Path to named pipe for configuration transfer (ignored if config_writer set).
         envs: Environment variables for the subprocess.
         process_config: Configuration parameters to send to subprocess.
         extra_preexec_fn: Optional additional preexec function to run in child.
         pass_fds: File descriptors to keep open in the child process.
         on_launched: Optional callback invoked with the process PID after
             subprocess creation but before writing config to the FIFO.
+        config_writer: If set, use instead of FIFO (e.g. HTTP server); called before starting process.
 
     Returns:
         The launched subprocess.
     """
-    os.mkfifo(pipe_path)
+    use_fifo = config_writer is None
+    if use_fifo:
+        os.mkfifo(pipe_path)
+    else:
+        config_writer(process_config)
     if DEBUG_LAUNCH:
         try:
             Path("run.sh").write_text(
@@ -221,11 +229,12 @@ async def launch_sandbox(
 
         # It's a good time for that
         gc.collect()
-        with open(pipe_path, "wb") as fifo:
-            fifo.write(pickle.dumps(process_config))
-            fifo.flush()
-            fifo.close()
-        pipe_path.unlink()
+        if use_fifo:
+            with open(pipe_path, "wb") as fifo:
+                fifo.write(pickle.dumps(process_config))
+                fifo.flush()
+                fifo.close()
+            pipe_path.unlink()
         return process
     finally:
         pass

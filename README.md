@@ -431,42 +431,43 @@ We offer several implementations to encapsulate the Python sandbox:
 | Technology                                                      | Configuration            | Specifics                                                                    | Description                                                                                                                              |
 |-----------------------------------------------------------------|--------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
 | subprocess                                                      |                          | • no complementary security                                                  |                                                                                                                                          |
-| [bwrap](https://github.com/containers/bubblewrap)                  | [here](wiki/bwrap.md)    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
+| [bwrap](https://github.com/containers/bubblewrap)               | [here](wiki/bwrap.md)    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
 | [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md) | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)  | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 | [landlock](https://landlock.io/)                                | [here](wiki/landlock.md) | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
+| [qemu](https://www.qemu.org/)                            | [here](wiki/qemu.md)     | • Total emularion of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else une the emulation.                                                                  |
 
 *Other implementations will be added soon*
 
 The features of each technology are proposed:
 
-| Guard                    | py-sandbox |   bwrap   | firejail  |  unshare  | landlock  | none |
-|--------------------------|:----------:|:---------:|:---------:|:---------:|:---------:|:----:|
-| Isolation                |  Process   | Namespace | Namespace | Namespace | Linux ABI |  ❌   |
-| Python code              |     ✅      |     ❌     |     ❌     |     ❌     |     ❌     |  ❌   |
-| Compiled code            |     ❌      |     ✅     |     ✅     |     ✅     |     ✅     |  ❌   |
-| env                      |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |  ❌   |
-| import                   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌     |  ❌   |
-| bind=a,a                 |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |  ❌   |
-| bind=a,b                 |     ✅      |     ✅     |     ❌     |     ✅     |     ❌     |  ❌   |
-| ignore=*                 |     ✅      |     ?     |     ✅     |     ❌     |     ❌     |  ❌   |
-| **Network**              |            |           |           |           |           |      |
-| • TCP                    |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |  ❌   |
-| • UDP                    |     ✅      |     ✅     |     ✅     |     ✅     |     ❌     |  ❌   |
-| • host                   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌     |  ❌   |
-| • port                   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |  ❌   |
-| OS-sandbox               |     ❌      |     ✅     |     ✅     |     ✅     |     ✅     |  ❌   |
-| Vm compatible            |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |  ❌   |
-| **Container compatible** |            |           |           |           |           |      |
-| • Docker / Podman        |     ✅      |     ❌     |     ❌     |     ❌     |     ✅     |  ✅   |
-| • --privileged           |     ✅      |     ✅     |     ❌     |     ✅     |     ✅     |  ✅   |
-| **Kubernetes**           |            |           |           |           |           |      |
-| • kube                   |     ✅      |     ❌     |     ❌     |     ❌     |     ?     |  ✅   |
-| • SYS_ADMIN              |     ✅      |     ✅     |     ❌     |     ✅     |     ?     |  ✅   |
-| • NET_ADMIN              |     ✅      |     ✅     |     ❌     |     ✅     |     ?     |  ✅   |
-| **Extra**                |            |           |           |           |           |      |
-| • Resource limits        |     ❌      |     ?     |     ✅     |     ❌     |     ❌     |  ❌   |
-| • Seccomp                |     ❌      |     ?     |     ✅     |     ❌     |     ❌     |  ❌   |
+| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail  |       qemu       |
+|--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:---------:|:----------------:|
+| Isolation                |  ❌   |  Process   | Linux ABI | Namespace | Namespace | Namespace | VM+<br/>emulator |
+| Python code              |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌     |        ❌         |
+| Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
+| env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
+| import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌     |        ❌         |
+| bind=a,a                 |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
+| bind=a,b                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ❌     |        ❌         |
+| ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ?     |     ✅     |        ❌         |
+| **Network**              |      |            |           |           |           |           |        ❌         |
+| • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
+| • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅     |        ✅         |
+| • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅     |        ✅         |
+| • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
+| OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
+| Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
+| **Container compatible** |      |            |           |           |           |           |                  |
+| • Docker / Podman        |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌     |        ✅         |
+| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌     |        ✅         |
+| **Kubernetes**           |      |            |           |           |           |           |                  |
+| • kube                   |  ✅   |     ✅      |     ?     |     ❌     |     ❌     |     ❌     |        ✅         |
+| • SYS_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌     |        ❌         |
+| • NET_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌     |        ❌         |
+| **Extra**                |      |            |           |           |           |           |                  |
+| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅     |        ?         |
+| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅     |        ✅         |
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
 
@@ -478,7 +479,33 @@ To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the con
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
+> Need help: can you propose a PR to integrate some solution for Apple OS ?
+
 ---
+
+# Paranoia level
+Depending on your level of paranoia, you can choose a suitable approach.
+
+| Paranoia | Py-sandbox       | os-sandbox     | docker/pod | --privileged |
+|:--------:|------------------|----------------|:----------:|:------------:|
+|    0     | python           | None           |     No     |              |
+|    3     | python-sb        | landlock       |     No     |              |
+|    4     | with sandboxes() | landlock       |     No     |              |
+|    5     | python-sb        | unshare        |     No     |              |
+|    6     | with sandboxes() | unshare        |     No     |              |
+|    7     | python-sb        | bwrap/firejail |     No     |              |
+|    8     | with sandboxes() | bwrap/firejail |     No     |              |
+|    9     | python-sb        | qemu + kvm     |     No     |              |
+|    10    | with sandboxes() | qemu + kvm     |     No     |              |
+|    11    | python-sb        | landlock       |    Yes     |      No      |
+|    12    | with sandboxes() | landlock       |    Yes     |      No      |
+|    13    | python-sb        | unshare        |    Yes     |     Yes      |
+|    14    | with sandboxes() | unshare        |    Yes     |     Yes      |
+|    15    | python-sb        | bwrap/firejail |    Yes     |     yes      |
+|    16    | with sandboxes() | bwrap/firejail |    Yes     |     yes      |
+|    17    | python-sb        | qemu           |    Yes     |      no      |
+|    18    | with sandboxes() | qemu           |    Yes     |      no      |       
+
 
 # Integration in a module
 

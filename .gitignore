@@ -201,3 +201,5 @@ tst_wasm/
 # OpenMemory - IDE/Assistant specific rules
 #.cursor/rules/openmemory.mdc
 #AGENTS.md
+.cursor/rules/openmemory.mdc
+AGENTS.md

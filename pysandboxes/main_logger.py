@@ -18,7 +18,7 @@ ErrorMsg = tuple[str, Path, int]
 """Type alias for error message tuples containing message, path, and line number."""
 
 
-def make_relative_path(path: Path | None) -> str:
+def make_relative_path(path: Path | str | None) -> str:
     """Convert an absolute path to a relative path for display.
 
     Tries to make the path relative to current working directory, then home
@@ -32,6 +32,8 @@ def make_relative_path(path: Path | None) -> str:
     """
     if path is None:
         return "None"
+    if isinstance(path, str):
+        path = Path(path)
     try:
         rel_path = str(path.absolute().relative_to(Path.cwd()))
     except ValueError:
@@ -54,7 +56,10 @@ def format_ruleref(rule: ConfigLine) -> str:
     Returns:
         A formatted string showing file path and line number.
     """
-    if rule.path == Path():
+    empty_path = rule.path == Path() or (
+        isinstance(rule.path, str) and rule.path.strip() in ("", ".")
+    )
+    if empty_path:
         path = "<arg>"
     else:
         path = make_relative_path(rule.path)
