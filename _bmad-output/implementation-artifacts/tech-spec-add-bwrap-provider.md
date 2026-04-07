@@ -2,8 +2,8 @@
 title: 'Add bwrap (bubblewrap) OS sandbox provider'
 slug: add-bwrap-provider
 created: '2026-03-12'
-status: 'ready-for-dev'
-stepsCompleted: [1, 2, 3, 4]
+status: 'Completed'
+stepsCompleted: [1, 2, 3, 4, 5, 6]
 tech_stack: ['Python 3.10+', 'pysandboxes daemon pattern', 'bubblewrap (bwrap)', 'pytest']
 files_to_modify: ['pysandboxes/_os_sandbox.py', 'pysandboxes/guard_provider.py', 'pyproject.toml', 'tests/unit_tests/test_guard_provider.py', 'tests/integration_tests/remote/test_bwrap.py', 'tests/integration_tests/test_usage_with_providers.py', 'tests/containers/test_containers.py']
 code_patterns: ['Daemon Lifecycle Pattern', 'BaseSubProcessDaemon', 'template + rule translation']
@@ -85,26 +85,26 @@ Implement a new daemon class `BWrapSSEDaemon` extending `BaseSubProcessDaemon`, 
 
 ### Tasks
 
-- [ ] **Task 1: Implement BWrapSSEDaemon**
+- [x] **Task 1: Implement BWrapSSEDaemon**
   - File: `pysandboxes/remote/sse_bwrap_daemon.py` (new)
   - Action: Create module with `BWrapSSEDaemon(BaseSubProcessDaemon)`. Implement `parse_rules`: lines starting with `bwrap.` → dict key/value, rest passed through; return `(ImmutableDict(params), other_rules)`. Implement `update_rules_and_activate`: return `all_rules` (no replacement). Implement `subprocess_cmd`: (1) resolve `bwrap` with `which_command("bwrap")`; exit with suggest_package_installation if missing. (2) Load template from `pysandboxes/templates/bwrap.template` (importlib.resources + Path), remove_comments, substitute_env_vars. (3) Build bwrap args from template lines (shlex.split or split). (4) Add args from `all_rules.os_sandbox_params` (e.g. `--unshare-net` if present). (5) Add file rules: for each BindRule, add `--ro-bind` or `--bind` source dest; ensure pipe_path parent is writable (e.g. `--bind` temp dir). (6) Add `--` then inner command from `super().subprocess_cmd(...)`. Return `(args, {})`. Set `base_url` to `http://localhost:{PORT}`. Use `__slots__` and typing override; follow project logging (logger, no f-strings in log messages).
   - Notes: Reuse helpers from firejail where useful (e.g. follow_links_executable for Python path); keep first iteration minimal (no netfilter, no AllowList). IgnoreRule can be omitted for bwrap first pass or mapped to a bind that hides paths if bwrap supports it.
 
-- [ ] **Task 2: Register bwrap in _os_sandbox and optional deps**
+- [x] **Task 2: Register bwrap in _os_sandbox and optional deps**
   - File: `pysandboxes/_os_sandbox.py`
   - Action: Import `BWrapSSEDaemon` from `.remote.sse_bwrap_daemon`; add `"bwrap": BWrapSSEDaemon` to `providers_factory` (remove or replace the commented `# "bwrap": BWrapDaemon()`).
   - File: `pyproject.toml`
   - Action: Under `[project.optional-dependencies]` add `bwrap = []`. In the `all` list, add `bwrap` so the line reads `"pysandboxes[firejail,unshare,landlock,bubblejail,bwrap,subprocess,none]"`.
 
-- [ ] **Task 3: Unit test for os-sandbox=bwrap**
+- [x] **Task 3: Unit test for os-sandbox=bwrap**
   - File: `tests/unit_tests/test_guard_provider.py`
   - Action: Add a test (e.g. `test_os_sandbox_bwrap_valid`) that calls `parse_rules` with `ConfigLine("os-sandbox=bwrap", ...)` and asserts provider is `"bwrap"` and errors are empty. Use same mocker pattern as `test_os_sandbox_valid` (mock Path, config_path_mock, cli_path_mock).
 
-- [ ] **Task 4: Integration test module for bwrap**
+- [x] **Task 4: Integration test module for bwrap**
   - File: `tests/integration_tests/remote/test_bwrap.py` (new)
   - Action: Copy structure from `test_bubblejail.py`: module-scoped `event_loop`, `start_daemon_for_tests` that loads config from `Path(__file__).parent / "py-sandbox-test.profile"`, replaces `os_sandbox` with `"bwrap"` → use `"bwrap"`, starts daemon only if `which_command("bwrap")`; yield then `async_shutdown_daemon(graceful_shutdown=False)`. Two tests: `test_sync_function` and `test_async_function` (with `@sandbox()` sync/async functions), both decorated with `@pytest.mark.skipif(not which_command("bwrap"), reason="bwrap not installed")`.
 
-- [ ] **Task 5: Add bwrap to test_usage_with_providers and container tests**
+- [x] **Task 5: Add bwrap to test_usage_with_providers and container tests**
   - File: `tests/integration_tests/test_usage_with_providers.py`
   - Action: Append `"bwrap"` to `all_os_sandbox`. In `_skip_reason`, add: if `os_sandbox == "bwrap"` and not `which_command("bwrap")`, return `"bwrap not installed"`.
   - File: `tests/containers/test_containers.py`
@@ -114,12 +114,20 @@ Implement a new daemon class `BWrapSSEDaemon` extending `BaseSubProcessDaemon`, 
 
 ## Acceptance Criteria
 
-- [ ] **AC 1**: Given a config with `os-sandbox=bwrap`, when the config is parsed by `guard_provider.parse_rules`, then the provider is `"bwrap"` and no error is added.
-- [ ] **AC 2**: Given bwrap is installed and the bwrap daemon is started, when a sync function decorated with `@sandbox()` is invoked, then it runs inside the bwrap sandbox and returns the expected result.
-- [ ] **AC 3**: Given bwrap is installed and the bwrap daemon is started, when an async function decorated with `@sandbox()` is invoked, then it runs inside the bwrap sandbox and returns the expected result.
-- [ ] **AC 4**: Given `make unit-tests` is run, then all unit tests pass (including the new guard_provider test for bwrap).
-- [ ] **AC 5**: Given `make integration-tests` is run (with bwrap installed), then integration tests pass including `test_bwrap` and `test_usage_with_provider` for `os_sandbox="bwrap"`.
-- [ ] **AC 6**: Given `make container-tests` is run (with Docker or Podman and bwrap in image), then container tests pass for the bwrap parameter set (with privileged when required).
+- [x] **AC 1**: Given a config with `os-sandbox=bwrap`, when the config is parsed by `guard_provider.parse_rules`, then the provider is `"bwrap"` and no error is added.
+- [x] **AC 2**: Given bwrap is installed and the bwrap daemon is started, when a sync function decorated with `@sandbox()` is invoked, then it runs inside the bwrap sandbox and returns the expected result.
+- [x] **AC 3**: Given bwrap is installed and the bwrap daemon is started, when an async function decorated with `@sandbox()` is invoked, then it runs inside the bwrap sandbox and returns the expected result.
+- [x] **AC 4**: Given `make unit-tests` is run, then all unit tests pass (including the new guard_provider test for bwrap).
+- [x] **AC 5**: Given `make integration-tests` is run (with bwrap installed), then integration tests pass including `test_bwrap` and `test_usage_with_provider` for `os_sandbox="bwrap"`.
+- [x] **AC 6**: Given `make container-tests` is run (with Docker or Podman and bwrap in image), then container tests pass for the bwrap parameter set (with privileged when required).
+
+---
+
+## Review Notes
+
+- Adversarial review completed (step-05).
+- Findings: 12 total, 0 fixed, 12 skipped.
+- Resolution approach: Skip (user chose to proceed without applying fixes).
 
 ---
 
