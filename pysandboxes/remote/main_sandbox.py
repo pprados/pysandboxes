@@ -99,7 +99,14 @@ async def run_server(process_config: DaemonParameters) -> int:
     # Else, _start the daemon
     all_rules = process_config.all_rules
     os_sandbox = all_rules.os_sandbox
-    assert os_sandbox in ("subprocess", "firejail", "unshare", "landlock", "bwrap")
+    assert os_sandbox in (
+        "subprocess",
+        "firejail",
+        "unshare",
+        "landlock",
+        "bwrap",
+        "qemu",
+    )
     if all_rules.use_py_sandbox:
         pysandboxes_logger.info(
             f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}"

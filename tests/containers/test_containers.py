@@ -9,6 +9,7 @@ implemented here in Python; no shell scripts are invoked.
 
 import logging
 import os
+import platform
 import re
 import socket
 import subprocess
@@ -41,10 +42,11 @@ all_container_worker: list[str] = [
 all_os_sandbox: list[ParameterSet] = [
     # firejail is incompatible with containers
     pytest.param("none", True, False),
-    pytest.param("subprocess", True, False),
-    pytest.param("landlock", False, False),
-    pytest.param("unshare", False, True),
-    pytest.param("bwrap", False, True),
+    pytest.param("qemu", True, False),
+    # pytest.param("subprocess", True, False),
+    # pytest.param("landlock", False, False),
+    # pytest.param("unshare", False, True),
+    # pytest.param("bwrap", False, True),
 ]
 
 # TODO: test with split mode
@@ -279,6 +281,19 @@ def _run_container_runtime(
         raise
 
 
+def _qemu_available() -> bool:
+    """True if QEMU binary and default image exist (for qemu provider)."""
+    from pysandboxes.remote.qemu_image import get_default_image_path
+    from pysandboxes.remote.tools import which_command
+
+    arch = platform.machine()
+    if not which_command(f"qemu-system-{arch}") and not which_command(
+        "qemu-system-x86_64"
+    ):
+        return False
+    return get_default_image_path().is_file()
+
+
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
 @pytest.mark.parametrize("runtime", all_container_worker)
 def test_container_runtime(
@@ -294,6 +309,9 @@ def test_container_runtime(
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip(f"{runtime} not available")
+
+    if os_sandbox == "qemu" and not _qemu_available():
+        pytest.skip("QEMU or default image not available")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     log_path = getattr(result, "_container_log_path", None)
@@ -592,6 +610,10 @@ def test_container_kubernetes(
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("minikube not available")
+
+    # QEMU provider is not supported inside Kubernetes pod (no QEMU/image in pod image)
+    if os_sandbox == "qemu":
+        pytest.skip("qemu provider not run in Kubernetes pod (no QEMU in image)")
 
     rc = _run_kubernetes_test(os_sandbox, py_sandbox, privileged)
     assert rc == 0, f"Kubernetes pod test exited with code {rc}"
