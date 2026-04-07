@@ -19,6 +19,7 @@ from pysandboxes.remote.python_in_sb import convert_extra_rules
 from pysandboxes.remote.sse_client_subprocess_daemon import (
     BaseSubProcessDaemon,
     DaemonParameters,
+    find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
@@ -107,19 +108,25 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
+        if all_rules.os_sandbox == "qemu":
+            os_provider.port = (
+                find_free_port() if all_rules.port == -1 else all_rules.port
+            )
         cmd, extra_envs = os_provider.subprocess_cmd(
             all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
         )
-        python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
+        if all_rules.os_sandbox != "qemu":
+            python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
         token = str(uuid.uuid4())
 
+        port = os_provider.port if all_rules.os_sandbox == "qemu" else 0
         process_config = DaemonParameters(
             all_rules=all_rules,
             log_level=log_level,
             log_format=get_log_formatter(),
             use_rich_handler=use_rich_handler(),
             token=token,
-            port=0,
+            port=port,
             init_fn="",
         )
         env: Environ
@@ -133,10 +140,11 @@ def main() -> int:
         # that need custom child setup (e.g., unshare with slirp4netns fd)
         extra_preexec_fn, pass_fds = os_provider.get_launch_extras()
 
+        launch_args = cmd if all_rules.os_sandbox == "qemu" else cmd + python_cmd
+
         async def launch_and_wait() -> int:
             process = await launch_sandbox(
-                cmd + python_cmd,  # FIXME
-                # cmd,
+                launch_args,
                 pipe_path,
                 envs=Envs(env),
                 process_config=process_config,

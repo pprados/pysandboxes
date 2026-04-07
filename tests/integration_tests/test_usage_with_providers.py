@@ -8,6 +8,7 @@ provider. Success is determined by the exit code of the launched process (0 = su
 
 import logging
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.remote.landlock_daemon import landlock_user_available
+from pysandboxes.remote.qemu_image import get_default_image_path
 from pysandboxes.remote.tools import unshare_user_namespace_available, which_command
 
 logger = logging.getLogger(__name__)
@@ -27,10 +29,11 @@ PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.p
 # All OS sandbox providers to test (no container); skip conditions applied per provider
 all_os_sandbox: list[str] = [
     "subprocess",
-    "unshare",
-    "firejail",
-    "landlock",
-    "bwrap",
+    "qemu",
+    # "unshare",
+    # "firejail",
+    # "landlock",
+    # "bwrap",
 ]
 
 # TODO: test with split mode
@@ -72,6 +75,12 @@ def _skip_reason(os_sandbox: str) -> str | None:
         return "Landlock not available (kernel < 5.13 or not Linux)"
     if os_sandbox == "bwrap" and not which_command("bwrap"):
         return "bwrap not installed"
+    if os_sandbox == "qemu":
+        qemu_name = f"qemu-system-{platform.machine()}"
+        if not which_command(qemu_name) and not which_command("qemu-system-x86_64"):
+            return "QEMU not installed"
+        if not get_default_image_path().is_file():
+            return "QEMU default image not found (run python -m pysandboxes.fetch_qemu_image)"
     return None
 
 

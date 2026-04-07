@@ -141,6 +141,7 @@ class DaemonParameters(NamedTuple):
         token: Authentication token for communication.
         port: Network port for communication.
         init_fn: Initialization function reference.
+    netfilter_rules: Optional iptables rules for the guest (e.g. VM); default empty.
     """
 
     all_rules: AllRules
@@ -150,6 +151,7 @@ class DaemonParameters(NamedTuple):
     token: str
     port: int
     init_fn: str
+    netfilter_rules: tuple[str, ...] = ()
 
 
 @sandbox_loop
