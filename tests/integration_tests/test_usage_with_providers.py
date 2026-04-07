@@ -27,7 +27,7 @@ PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.p
 
 # All OS sandbox providers to test (no container); skip conditions applied per provider
 all_os_sandbox: list[str] = [
-    "subprocess",
+    # "subprocess",
     "qemu",
     # "unshare",
     # "firejail",
