@@ -20,7 +20,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [ ] OS Compatible
   - [X] Linux
   - [ ] Windows
-  - [ ] Mac OS
+  - [ ] Mac OS (see https://cursor.com/fr/blog/agent-sandboxing)
 - [ ] OS-sandboxes
   - [ ] Basic
     - [X] None

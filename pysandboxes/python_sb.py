@@ -109,28 +109,46 @@ def main() -> int:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
         if all_rules.os_sandbox == "qemu":
+            # For QEMU: build process_config before subprocess_cmd so the ISO
+            # can be created with the config embedded (no HTTP server needed).
             os_provider.port = (
                 find_free_port() if all_rules.port == -1 else all_rules.port
             )
-        cmd, extra_envs = os_provider.subprocess_cmd(
-            all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
-        )
-        if all_rules.os_sandbox != "qemu":
+            token = str(uuid.uuid4())
+            process_config = DaemonParameters(
+                all_rules=all_rules,
+                log_level=log_level,
+                log_format=get_log_formatter(),
+                use_rich_handler=use_rich_handler(),
+                token=token,
+                port=os_provider.port,
+                init_fn="",
+                python_main_args=tuple(python_cmd),
+            )
+            # Store config so subprocess_cmd can embed it in the ISO
+            os_provider._iso_config = process_config  # type: ignore[attr-defined]
+            cmd, extra_envs = os_provider.subprocess_cmd(
+                all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
+            )
+            config_writer = lambda _: None  # config already embedded in ISO
+        else:
+            cmd, extra_envs = os_provider.subprocess_cmd(
+                all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
+            )
             python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
-        token = str(uuid.uuid4())
+            token = str(uuid.uuid4())
+            process_config = DaemonParameters(
+                all_rules=all_rules,
+                log_level=log_level,
+                log_format=get_log_formatter(),
+                use_rich_handler=use_rich_handler(),
+                token=token,
+                port=0,
+                init_fn="",
+                python_main_args=(),
+            )
+            config_writer = None
 
-        port = os_provider.port if all_rules.os_sandbox == "qemu" else 0
-        python_main_args = tuple(python_cmd) if all_rules.os_sandbox == "qemu" else ()
-        process_config = DaemonParameters(
-            all_rules=all_rules,
-            log_level=log_level,
-            log_format=get_log_formatter(),
-            use_rich_handler=use_rich_handler(),
-            token=token,
-            port=port,
-            init_fn="",
-            python_main_args=python_main_args,
-        )
         env: Environ
         if all_rules.learn:
             env = {**os.environ, **all_rules.envs}
@@ -143,12 +161,6 @@ def main() -> int:
         extra_preexec_fn, pass_fds = os_provider.get_launch_extras()
 
         launch_args = cmd if all_rules.os_sandbox == "qemu" else cmd + python_cmd
-
-        config_writer = (
-            os_provider.get_config_writer()
-            if hasattr(os_provider, "get_config_writer")
-            else None
-        )
 
         async def launch_and_wait() -> int:
             process = await launch_sandbox(

@@ -20,7 +20,7 @@ To see the resolved path or trigger a download: `python -m pysandboxes.fetch_qem
 The guest VM image must:
 
 1. **Python:** Provide Python with the same major.minor version as the host (e.g. 3.12).
-2. **SSE server:** Run the pysandboxes SSE server (same as `main_sandbox`) listening on a fixed port (default **8765**).
+2. **SSE server:** Run the pysandboxes SSE server (same as `main_sandbox`) listening on the port provided in the embedded config (same port number as on the host, chosen from available host ports).
 3. **Config pipe:** On boot, mount the 9p share (tag `pysandbox_config`) at a known path (e.g. `/mnt/pysandbox_config`), then read the single config file (FIFO) from that directory. The host writes serialized `DaemonParameters` (including optional `netfilter_rules`) to that pipe.
 4. **Network policy:** Before starting the SSE server, apply the injected iptables rules (e.g. `iptables-restore` with the `netfilter_rules` list from the config).
 5. **QEMU Guest Agent (optional):** If present, the host may send `guest-shutdown` via QMP for clean shutdown; otherwise the host uses SIGTERM then SIGKILL on the QEMU process.
