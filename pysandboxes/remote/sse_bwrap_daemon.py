@@ -19,15 +19,11 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-try:
-    from typing import override  # type: ignore[attr-defined]
-except ImportError:
-    from typing_extensions import override
-
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
+from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
 from ..tools import (
     Environ,

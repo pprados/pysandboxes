@@ -218,7 +218,7 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
             raise HTTPException(status_code=401, detail="Invalid token")
         if not is_accept_incoming_call():
             raise HTTPException(
-                status_code=503, detail="The sandbox demon is being stopped."
+                status_code=503, detail="The sandbox daemon is being stopped."
             )
         # Pass the code and authenticated user_id to the event generator
         return StreamingResponse(

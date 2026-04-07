@@ -38,14 +38,19 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] Flatpak
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
+  - [ ] VM
+    - [ ] Qemu
+    - [ ] multipass
+    - [ ] lxc
+    - [ ] vagrant
   - [ ] micro-VM
+    - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
-    - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
     - [ ] [Cloud morph](https://cloud.morph.so/)
   - [ ] Apple
     - [ ] App Sandbox

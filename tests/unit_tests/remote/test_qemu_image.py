@@ -11,10 +11,15 @@ from pysandboxes.remote.qemu_image import (
     ENV_VM_IMAGE_BASE_URL,
     ENV_VM_IMAGE_URL,
     ENV_VM_IMAGES_DIR,
+    PYTHON_VERSION_TO_UBUNTU_IMAGE,
+    UBUNTU_CLOUD_RELEASES_BASE,
     ensure_image,
+    get_default_image_filename,
     get_default_image_path,
     get_download_url,
+    get_standard_download_url,
     get_standard_image_url,
+    get_ubuntu_image_url_for_python_version,
     get_vm_images_dir,
     is_kvm_available,
 )
@@ -46,14 +51,50 @@ class TestGetVmImagesDir:
 class TestGetDefaultImagePath:
     """Tests for get_default_image_path."""
 
-    def test_default_filename_format(self) -> None:
+    def test_filename_matches_download_url_for_ubuntu_versions(self) -> None:
+        """Default filename is the same as the remote (URL last segment) for reuse."""
         path = get_default_image_path(python_version=(3, 12), arch="x86_64")
-        assert path.name == "pysandboxes-python-3.12-x86_64.qcow2"
+        assert path.name == "ubuntu-24.04-server-cloudimg-amd64.img"
+        url = get_standard_download_url(python_version=(3, 12), arch="x86_64")
+        assert url is not None
+        assert path.name == url.rstrip("/").split("/")[-1]
 
     def test_uses_sys_version_when_no_args(self) -> None:
         path = get_default_image_path()
-        assert "pysandboxes-python" in path.name
-        assert path.suffix == ".qcow2"
+        assert path.name == get_default_image_filename()
+        # Filename is either URL segment (e.g. ubuntu-*.img) or python-3.x-arch.qcow2
+        assert "ubuntu" in path.name or (
+            path.suffix == ".qcow2" and "python" in path.name
+        )
+
+
+class TestGetStandardDownloadUrl:
+    """Tests for get_standard_download_url."""
+
+    def test_returns_ubuntu_url_for_mapped_version(self) -> None:
+        url = get_standard_download_url(python_version=(3, 12), arch="x86_64")
+        assert url is not None
+        assert "ubuntu" in url
+        assert "24.04" in url
+        assert url.endswith("ubuntu-24.04-server-cloudimg-amd64.img")
+
+    def test_returns_debian_url_for_unmapped_version(self) -> None:
+        url = get_standard_download_url(python_version=(3, 9), arch="x86_64")
+        assert url is not None
+        assert "debian" in url
+        assert "debian-12-generic-amd64.qcow2" in url
+
+
+class TestGetDefaultImageFilename:
+    """Tests for get_default_image_filename."""
+
+    def test_matches_url_filename_for_ubuntu(self) -> None:
+        name = get_default_image_filename(python_version=(3, 12), arch="x86_64")
+        assert name == "ubuntu-24.04-server-cloudimg-amd64.img"
+
+    def test_fallback_for_unsupported_arch(self) -> None:
+        name = get_default_image_filename(python_version=(3, 12), arch="mips64")
+        assert name == "python-3.12-mips64.qcow2"
 
 
 class TestGetStandardImageUrl:
@@ -75,6 +116,37 @@ class TestGetStandardImageUrl:
         assert get_standard_image_url("mips64") is None
 
 
+class TestGetUbuntuImageUrlForPythonVersion:
+    """Tests for get_ubuntu_image_url_for_python_version (mapping 3.10–3.13)."""
+
+    def test_mapping_3_10_amd64(self) -> None:
+        url = get_ubuntu_image_url_for_python_version(3, 10, "x86_64")
+        assert url is not None
+        assert UBUNTU_CLOUD_RELEASES_BASE in url
+        assert "22.04" in url
+        assert "ubuntu-22.04-server-cloudimg-amd64.img" in url
+
+    def test_mapping_3_13_amd64(self) -> None:
+        url = get_ubuntu_image_url_for_python_version(3, 13, "x86_64")
+        assert url is not None
+        assert "25.04" in url
+        assert "ubuntu-25.04-server-cloudimg-amd64.img" in url
+
+    def test_unsupported_version_returns_none(self) -> None:
+        assert get_ubuntu_image_url_for_python_version(3, 9, "x86_64") is None
+        assert get_ubuntu_image_url_for_python_version(3, 14, "x86_64") is None
+
+    def test_unsupported_arch_returns_none(self) -> None:
+        assert get_ubuntu_image_url_for_python_version(3, 12, "mips64") is None
+
+    def test_dict_has_four_entries(self) -> None:
+        assert len(PYTHON_VERSION_TO_UBUNTU_IMAGE) == 4
+        assert (3, 10) in PYTHON_VERSION_TO_UBUNTU_IMAGE
+        assert (3, 11) in PYTHON_VERSION_TO_UBUNTU_IMAGE
+        assert (3, 12) in PYTHON_VERSION_TO_UBUNTU_IMAGE
+        assert (3, 13) in PYTHON_VERSION_TO_UBUNTU_IMAGE
+
+
 class TestGetDownloadUrl:
     """Tests for get_download_url."""
 
@@ -86,27 +158,24 @@ class TestGetDownloadUrl:
         path = get_default_image_path()
         assert get_download_url(path) == "https://example.com/image.qcow2"
 
-    def test_base_url_env_appends_filename(
+    def test_base_url_env_appends_path_name(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv(ENV_VM_IMAGE_URL, raising=False)
         monkeypatch.setenv(ENV_VM_IMAGE_BASE_URL, "https://example.com/base/")
         path = get_default_image_path(python_version=(3, 12), arch="x86_64")
-        assert (
-            get_download_url(path)
-            == "https://example.com/base/pysandboxes-python-3.12-x86_64.qcow2"
-        )
+        assert get_download_url(path) == f"https://example.com/base/{path.name}"
 
-    def test_falls_back_to_debian_when_no_env(
+    def test_falls_back_to_standard_url_when_no_env(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv(ENV_VM_IMAGE_URL, raising=False)
         monkeypatch.delenv(ENV_VM_IMAGE_BASE_URL, raising=False)
-        path = get_default_image_path(python_version=(3, 12), arch="x86_64")
+        path = get_default_image_path()
         url = get_download_url(path)
         assert url is not None
-        assert "cloud.debian.org" in url
-        assert "debian-12-generic-amd64.qcow2" in url
+        # Filename in path must match URL so download and use share the same file
+        assert path.name == url.rstrip("/").split("/")[-1]
 
 
 class TestEnsureImage:
@@ -124,8 +193,8 @@ class TestEnsureImage:
         monkeypatch.delenv(ENV_VM_IMAGE_URL, raising=False)
         monkeypatch.delenv(ENV_VM_IMAGE_BASE_URL, raising=False)
         monkeypatch.setattr(
-            "pysandboxes.remote.qemu_image.get_standard_image_url",
-            lambda arch=None: None,
+            "pysandboxes.remote.qemu_image.get_standard_download_url",
+            lambda python_version=None, arch=None: None,
         )
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "missing.qcow2"

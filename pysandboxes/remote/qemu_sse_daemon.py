@@ -2,38 +2,42 @@
 # License: Apache V2
 """QEMU-based VM SSE daemon for PySandboxes.
 
-Runs the sandbox inside a QEMU VM. Uses -net user + hostfwd for SSE,
-virtio-9p to expose pysandboxes source and venv to the guest.
-Config is embedded in the NoCloud ISO (no separate HTTP server needed).
+Runs the sandbox inside a QEMU VM. Uses -net user + hostfwd for SSE.
+Virtio-9p exposes file_rules root at /app (same strategy as bwrap) and
+the run dir (named pipe for config) at /mnt/pysandbox_run. Guest runs
+main_sandbox --_named-pipe to read config from the pipe.
 """
 
 import asyncio
 import gc
 import logging
 import os
+import pickle
 import platform
+import site
 import sys
 from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any
 
-try:
-    from typing import override
-except ImportError:
-    from typing_extensions import override
-
 from ..all_rules import AllRules
+from ..guard_files import BindRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
+from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
-from ..tools import Environ
+from ..tools import Environ, follow_links_executable
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
     TIMEOUT_FOR_PING,
 )
-from .qemu_guest_bootstrap import PYSANDBOXES_9P_TAG, VENV_9P_TAG, prepare_guest_env
+from .qemu_guest_bootstrap import (
+    GUEST_CONFIG_MOUNT,
+    GUEST_RUN_MOUNT,
+    prepare_guest_env,
+)
 from .qemu_image import ensure_image, get_default_image_path, is_kvm_available
 from .sse_client_subprocess_daemon import (
     DaemonParameters,
@@ -48,22 +52,99 @@ from .vm_sse_daemon import VMSSEDaemon
 logger = logging.getLogger(__name__)
 
 
-def _host_venv_site_packages() -> Path | None:
-    """Return host venv site-packages path if running in a venv, else None.
+def _add_dir_follow_links(path: Path, out: set[Path]) -> None:
+    """Add resolved directory to set (follow symlinks, firejail-style). Skip /usr/lib."""
+    try:
+        resolved = path.resolve(strict=True)
+    except (FileNotFoundError, OSError):
+        return
+    if str(resolved).startswith("/usr/lib"):
+        return
+    dir_path = resolved if resolved.is_dir() else resolved.parent
+    out.add(dir_path)
 
-    When not None, the guest can mount it via 9p and use it as PYTHONPATH
-    instead of reinstalling deps with pip.
+
+def _execution_dirs_mounts() -> list[tuple[str, Path, str]]:
+    """Build 9p mounts for Python execution: sys.executable (follow symlinks), sys.path, site.getsitepackages().
+
+    Same strategy as sse_firejail: follow links so venv/conda symlinks work. Guest path = host path
+    so the guest Python finds the same libraries.
     """
-    prefix = Path(sys.prefix).resolve()
-    base = Path(sys.base_prefix).resolve()
-    if prefix == base:
-        return None
-    # e.g. prefix/lib/python3.12/site-packages
-    py_ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
-    site = prefix / "lib" / py_ver / "site-packages"
-    if not site.is_dir():
-        return None
-    return site
+    dirs: set[Path] = set()
+    # sys.executable and its symlink chain (e.g. .venv/bin/python3 -> python -> /opt/conda/bin/python3.13)
+    bin_paths: set[Path] = set()
+    follow_links_executable(Path(sys.executable), bin_paths)
+    for p in bin_paths:
+        if p.is_file():
+            dirs.add(p.parent.resolve(strict=True))
+        else:
+            _add_dir_follow_links(p, dirs)
+    # sys.path and site.getsitepackages()
+    for sp in sys.path:
+        if sp and os.path.isdir(sp):
+            _add_dir_follow_links(Path(sp), dirs)
+    for sp in site.getsitepackages():
+        if sp and os.path.isdir(sp):
+            _add_dir_follow_links(Path(sp), dirs)
+    # Deduplicate and build (tag, host_path, guest_path) with guest_path = host_path
+    seen: set[Path] = set()
+    mount_specs: list[tuple[str, Path, str]] = []
+    for i, d in enumerate(sorted(dirs, key=lambda p: str(p))):
+        d_res = d.resolve(strict=True)
+        if not d_res.is_dir() or d_res in seen:
+            continue
+        seen.add(d_res)
+        tag = f"pysb_exec_{i}"
+        guest_path = str(d_res)
+        mount_specs.append((tag, d_res, guest_path))
+    return mount_specs
+
+
+def _file_rules_mounts(
+    all_rules: AllRules,
+    temp: Path,
+    pipe_path: Path,
+    config_dir: Path | None = None,
+) -> tuple[list[tuple[str, Path, str]], list[tuple[str, str]]]:
+    """Build one 9p (tag, host_path, guest_path) per BindRule, run dir, optional config dir, and execution dirs.
+
+    Returns (mount_specs, mount_list_for_iso) where mount_specs is used for -virtfs
+    and mount_list_for_iso is [(tag, guest_path), ...] for the bootstrap script.
+    When config_dir is set, it is mounted at GUEST_CONFIG_MOUNT so the guest reads config from a regular file via 9p.
+    """
+    mount_specs: list[tuple[str, Path, str]] = []
+    mount_list: list[tuple[str, str]] = []
+    for i, rule in enumerate(all_rules.file_rules):
+        if not isinstance(rule, BindRule):
+            continue
+        host_path = Path(rule.source).resolve()
+        if host_path.is_file():
+            host_path = host_path.parent
+        if not host_path.exists():
+            continue
+        tag = f"pysb_{i}"
+        guest_path = rule.dest if rule.dest is not None else f"/app/bind_{i}"
+        mount_specs.append((tag, host_path, guest_path))
+        mount_list.append((tag, guest_path))
+    # Run dir (temp) for exitcode etc.
+    if temp.is_dir():
+        tag_run = "pysb_run"
+        mount_specs.append((tag_run, temp, GUEST_RUN_MOUNT))
+        mount_list.append((tag_run, GUEST_RUN_MOUNT))
+    # Config dir: dedicated 9p mount so guest sees config.pkl as a regular file (avoids FIFO/9p issues)
+    if config_dir is not None and config_dir.is_dir():
+        tag_config = "pysb_config"
+        mount_specs.append((tag_config, config_dir, GUEST_CONFIG_MOUNT))
+        mount_list.append((tag_config, GUEST_CONFIG_MOUNT))
+    # Execution dirs: sys.executable, getsitepackages(), sys.path (follow symlinks)
+    existing_guest_paths = {guest_path for (_, guest_path) in mount_list}
+    for tag, host_path, guest_path in _execution_dirs_mounts():
+        if guest_path in existing_guest_paths:
+            continue
+        existing_guest_paths.add(guest_path)
+        mount_specs.append((tag, host_path, guest_path))
+        mount_list.append((tag, guest_path))
+    return mount_specs, mount_list
 
 
 def _qemu_binary() -> str:
@@ -132,21 +213,26 @@ class QemuSSEDaemon(VMSSEDaemon):
         temp: Path,
         process_config: "DaemonParameters",
         port: int,
+        pipe_path: Path,
+        config_dir: Path | None = None,
     ) -> tuple[Args, Environ]:
-        """Build QEMU command after creating the NoCloud ISO with embedded config."""
+        """Build QEMU command: one virtio-9p tag per file_rule BindRule + run dir + optional config dir, ISO with 9p_mounts + pipe_name."""
         image_path = get_default_image_path()
         ensure_image(image_path)
-        venv_site = _host_venv_site_packages()
-
-        from .. import __path__ as _pkg_paths
-
-        pkg_parent = Path(_pkg_paths[0]).resolve().parent
-
+        mount_specs, mount_list = _file_rules_mounts(
+            all_rules, temp, pipe_path, config_dir=config_dir
+        )
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
         nocloud_iso = prepare_guest_env(
             temp,
             process_config,
-            venv_site_packages_path=venv_site,
-            use_pysandboxes_9p=True,
+            pipe_path=pipe_path,
+            mounts=mount_list,
+            pipe_run_guest_path=GUEST_RUN_MOUNT,
+            python_version=python_version,
+            python_exe=sys.executable,
+            config_guest_path=config_guest_path,
         )
 
         use_kvm = all_rules.os_sandbox_params.get("qemu.use_kvm", "true").lower() in (
@@ -156,51 +242,36 @@ class QemuSSEDaemon(VMSSEDaemon):
         )
         enable_kvm = ["-enable-kvm"] if use_kvm and is_kvm_available() else []
 
-        raw_memory = all_rules.os_sandbox_params.get("qemu.memory", "256")
-        memory = raw_memory if raw_memory.isdigit() else "256"
+        # Default 2 GiB: Ubuntu cloud images + Python need ~2G to avoid OOM (see Ubuntu QEMU docs)
+        raw_memory = all_rules.os_sandbox_params.get("qemu.memory", "2048").strip()
+        if raw_memory and (
+            raw_memory.isdigit()
+            or (
+                len(raw_memory) > 1
+                and raw_memory[:-1].isdigit()
+                and raw_memory[-1] in "gGmM"
+            )
+        ):
+            memory = raw_memory
+        else:
+            memory = "2048"
 
-        # Same port on host and guest: host finds a free port, guest listens on it
         net = [
             "-nic",
             f"user,hostfwd=tcp::{port}-:{port},model=virtio-net-pci",
         ]
 
-        virtfs_pysandboxes: Args = []
-        pkg_parent_str = str(pkg_parent)
-        if pkg_parent.is_dir():
-            virtfs_pysandboxes = [
-                "-virtfs",
-                f"local,path={pkg_parent_str},id={PYSANDBOXES_9P_TAG},security_model=mapped-xattr,mount_tag={PYSANDBOXES_9P_TAG}",
-            ]
-        else:
-            logger.warning(
-                "qemu 9p: pysandboxes parent dir not found: %s", pkg_parent_str
-            )
-
-        virtfs_venv: Args = []
-        if venv_site is not None:
-            path_str = str(venv_site)
-            if venv_site.is_dir():
-                try:
-                    entries = list(venv_site.iterdir())[:5]
-                    logger.info(
-                        "qemu 9p: sharing %s (mount_tag=%s) sample entries: %s",
-                        path_str,
-                        VENV_9P_TAG,
-                        [e.name for e in entries],
-                    )
-                except OSError as e:
-                    logger.warning(
-                        "qemu 9p: cannot list site-packages %s: %s", path_str, e
-                    )
-                virtfs_venv = [
+        virtfs_args: Args = []
+        for tag, host_path, guest_path in mount_specs:
+            # Use mapped-xattr for all mounts so guest sees regular files correctly (e.g. config file).
+            security = "mapped-xattr"
+            virtfs_args.extend(
+                [
                     "-virtfs",
-                    f"local,path={path_str},id={VENV_9P_TAG},security_model=mapped,mount_tag={VENV_9P_TAG}",
+                    f"local,path={host_path!s},id={tag},security_model={security},mount_tag={tag}",
                 ]
-            else:
-                logger.warning(
-                    "qemu 9p: venv site-packages path does not exist: %s", path_str
-                )
+            )
+            logger.debug("qemu 9p: %s -> %s", tag, guest_path)
 
         qga = [
             "-device",
@@ -209,9 +280,13 @@ class QemuSSEDaemon(VMSSEDaemon):
             "virtserialport,name=org.qemu.guest_agent.0",
         ]
 
+        # Ubuntu cloud images use .img extension but are QCOW2 format (see Ubuntu docs)
+        use_qcow2 = image_path.suffix == ".qcow2" or (
+            image_path.suffix == ".img" and "cloudimg" in image_path.name
+        )
         drive_image = (
             f"file={image_path!s},format=qcow2,if=virtio"
-            if image_path.suffix == ".qcow2"
+            if use_qcow2
             else f"file={image_path!s},format=raw,if=virtio"
         )
         drive_nocloud = f"file={nocloud_iso!s},format=raw,if=virtio"
@@ -227,8 +302,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             drive_nocloud,
             "-nographic",
             *net,
-            *virtfs_pysandboxes,
-            *virtfs_venv,
+            *virtfs_args,
             *qga,
         ]
         return cmd, {}
@@ -251,8 +325,18 @@ class QemuSSEDaemon(VMSSEDaemon):
         if process_config is None:
             # Daemon path: _re_start_cmd handles ISO creation and launch
             return [], {}
-        # python_sb path: build ISO with embedded config, return full QEMU command
-        return self._build_qemu_cmd(all_rules, temp, process_config, self.port)
+        # python_sb path: config in dedicated 9p dir (same as _re_start_cmd)
+        config_dir = temp / "pysb_config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
+        return self._build_qemu_cmd(
+            all_rules,
+            temp,
+            process_config,
+            self.port,
+            pipe_path,
+            config_dir=config_dir,
+        )
 
     @override
     async def _re_start_cmd(
@@ -266,11 +350,11 @@ class QemuSSEDaemon(VMSSEDaemon):
         log_level: int,
         init_fn: Any,
     ) -> None:
-        """Build NoCloud ISO with embedded config, then launch QEMU.
+        """Build NoCloud ISO (bootstrap + pipe_name), then launch QEMU.
 
-        The ISO is created in the shared tmpdir (pipe_path.parent) and includes
-        config.pkl so the guest needs no HTTP server to receive its configuration.
-        Pysandboxes source is exposed to the guest via virtio-9p.
+        Guest mounts /app (file_rules root) and /mnt/pysandbox_run (temp with FIFO)
+        via 9p, runs main_sandbox --_named-pipe; host writes config to the pipe
+        when the guest opens it (same flow as bwrap/unshare).
         """
         from .sse_client_subprocess_daemon import get_callable_info
 
@@ -281,7 +365,6 @@ class QemuSSEDaemon(VMSSEDaemon):
             module, func_ref = get_callable_info(init_fn)
             init_fn_ref = f"{module}:{func_ref}"
 
-        # Build netfilter rules for the guest (QEMU user net often uses 10.0.2.3 as DNS)
         dns_guest = [IPv4Address("10.0.2.3")]
         netfilter_rules = rule_to_netfilter(
             all_rules.socket_rules, dns_guest, is_ipv6=False
@@ -296,6 +379,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             port=port,
             init_fn=init_fn_ref,
             netfilter_rules=tuple(netfilter_rules),
+            guest_run_dir=GUEST_RUN_MOUNT,
         )
 
         env: dict[str, str]
@@ -305,20 +389,30 @@ class QemuSSEDaemon(VMSSEDaemon):
             env = dict(all_rules.envs)
         env = {**env, **extra_envs}
 
-        # pipe_path.parent is the tmpdir created by _re_start (alive until we return)
-        cmd, _ = self._build_qemu_cmd(all_rules, pipe_path.parent, process_config, port)
+        temp = pipe_path.parent
+        # Config in a dedicated 9p-mounted dir so the guest sees a regular file (avoids FIFO/9p blocking issues)
+        config_dir = temp / "pysb_config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
+
+        cmd, _ = self._build_qemu_cmd(
+            all_rules, temp, process_config, port, pipe_path, config_dir=config_dir
+        )
 
         logger.debug(
             "Launch QEMU: %s", " ".join((repr(a) if " " in a else a for a in cmd))
         )
-        # Config is embedded in the ISO; pass a no-op config_writer to skip FIFO creation.
-        # Config is embedded in the ISO; pass a no-op config_writer to skip FIFO creation.
+
+        # Config is in config_dir (9p); no FIFO needed
+        def _noop_config_writer(_: DaemonParameters) -> None:
+            pass
+
         self._process = await launch_sandbox(
             cmd,
             pipe_path=pipe_path,
             envs=Envs(env),
             process_config=process_config,
-            config_writer=lambda _: None,
+            config_writer=_noop_config_writer,
         )
 
         await self._on_process_started()

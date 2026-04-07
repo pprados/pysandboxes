@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-docker build-image-clean minikube-ready init packmind-import
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-base build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready init packmind-import
 
 # Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
@@ -41,7 +41,7 @@ minikube-ready:
 ## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed). Use OS_SANDBOX (default: unshare).
 container-tests: build-image
 	$(MAKE) minikube-ready
-	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && OS_SANDBOX=$${OS_SANDBOX:-unshare} uv run pytest -v tests/containers/
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && OS_SANDBOX=$${OS_SANDBOX:-unshare} uv run pytest -v tests/containers_tests/
 
 ## Make integration tests
 integration-tests:
@@ -186,54 +186,118 @@ BUILD_SOURCES = pyproject.toml README.md $(shell find pysandboxes -type f \( -na
 dist: .make-dist
 
 # ---------------------------------------------------------------------------------------
-# Image python-sb:$(PYTHON_VERSION), with tag python-sb:latest added (wheel from dist/).
-# Rebuild only if image missing or Dockerfile/wheel newer than image.
-# Builds one image in Podman and one in Docker. PYTHON_VERSION is taken from uv's current Python.
+# One image per OS provider, all FROM base. Image names: python-sb-base, python-sb-unshare, python-sb-bwrap, python-sb-qemu. Each tagged with version and latest.
+# PYTHON_VERSION from uv. VARIANT = base | unshare | bwrap | qemu. (firejail not supported in Docker.)
 PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
-IMAGE_TAG_VERSION := python-sb:$(PYTHON_VERSION)
-IMAGE_NAME := python-sb:latest
+VARIANT ?= qemu
+IMAGE_BASE    := python-sb
+IMAGE_LANDLOCK := python-sb-landlock
+IMAGE_UNSHARE := python-sb-unshare
+IMAGE_BWRAP   := python-sb-bwrap
+IMAGE_QEMU    := python-sb-qemu
+# QEMU package per host arch (for build-image-qemu, no script in image)
+UNAME_M       := $(shell uname -m)
+QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qemu-system-x86)
 
-.make-build-image: Dockerfile .make-dist
+.make-build-image-base: Dockerfile .make-dist
 	@WHEEL="$$(find dist -maxdepth 1 -name '*.whl' -print -quit)"; \
 	if [ -z "$$WHEEL" ]; then echo "No wheel in dist/"; exit 1; fi; \
-	DOCKERFILE_TS=$$(stat -c %Y Dockerfile 2>/dev/null); \
-	WHEEL_TS=$$(stat -c %Y "$$WHEEL" 2>/dev/null); \
 	for CONTAINER_CMD in podman docker; do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
-	  NEED_REBUILD=0; \
-	  if ! $$CONTAINER_CMD image inspect $(IMAGE_NAME) >/dev/null 2>&1; then \
-	    echo "Image $(IMAGE_NAME) missing for $$CONTAINER_CMD, building..."; \
-	    NEED_REBUILD=1; \
-	  else \
-	    echo "Checking if image $(IMAGE_NAME) needs rebuild ($$CONTAINER_CMD)..."; \
-	    IMAGE_TS=$$($$CONTAINER_CMD image inspect -f '{{.Created}}' $(IMAGE_NAME) 2>/dev/null | xargs -I {} date -d "{}" +%s 2>/dev/null || echo "0"); \
-	    [ -n "$$DOCKERFILE_TS" ] && [ "$$DOCKERFILE_TS" -gt "$$IMAGE_TS" ] 2>/dev/null && NEED_REBUILD=1; \
-	    [ -n "$$WHEEL_TS" ] && [ "$$WHEEL_TS" -gt "$$IMAGE_TS" ] 2>/dev/null && NEED_REBUILD=1; \
-	  fi; \
-	  if [ "$$NEED_REBUILD" = "1" ]; then \
-	    echo "Building $(IMAGE_TAG_VERSION) (and $(IMAGE_NAME)) with $$CONTAINER_CMD (Python $(PYTHON_VERSION))..."; \
-	    $$CONTAINER_CMD build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) -t $(IMAGE_TAG_VERSION) -t $(IMAGE_NAME) -f Dockerfile .; \
-	  fi; \
+	  echo "Building $(IMAGE_BASE):$(PYTHON_VERSION), $(IMAGE_BASE):latest with $$CONTAINER_CMD (base)..."; \
+	  $$CONTAINER_CMD build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	-t $(IMAGE_BASE):$(PYTHON_VERSION) \
+	  	-t $(IMAGE_BASE):subprocess \
+	  	-t $(IMAGE_BASE):landlock \
+	  	-t $(IMAGE_BASE):latest \
+	  	-f Dockerfile .; \
 	done; \
-	touch .make-build-image
+	touch .make-build-image-base
 
-## Build image python-sb:$(PYTHON_VERSION) and tag python-sb:latest (only if wheel or Dockerfile newer than each image)
-build-image: .make-build-image
+.make-build-image-landlock: .make-build-image-base Dockerfile-landlock
+	@for CONTAINER_CMD in podman docker; do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  echo "Building $(IMAGE_LANDLOCK):$(PYTHON_VERSION), $(IMAGE_LANDLOCK):latest with $$CONTAINER_CMD..."; \
+	  $$CONTAINER_CMD build \
+		--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	-t $(IMAGE_LANDLOCK):$(PYTHON_VERSION) \
+	  	-t $(IMAGE_LANDLOCK):latest \
+	  	-t $(IMAGE_LANDLOCK):landlock \
+	  	-f Dockerfile-landlock .; \
+	done; \
+	touch .make-build-image-landlock
 
-## Build image with docker only (for minikube: eval $(minikube docker-env) && make build-image-docker)
-build-image-docker: Dockerfile .make-dist
-	@WHEEL="$$(find dist -maxdepth 1 -name '*.whl' -print -quit)"; \
-	if [ -z "$$WHEEL" ]; then echo "No wheel in dist/"; exit 1; fi; \
-	echo "Building $(IMAGE_TAG_VERSION) (and $(IMAGE_NAME)) with docker (Python $(PYTHON_VERSION))..."; \
-	docker build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) -t $(IMAGE_TAG_VERSION) -t $(IMAGE_NAME) -f Dockerfile .
 
-## Prune container build caches and force full rebuild
+.make-build-image-unshare: .make-build-image-base Dockerfile-unshare
+	for CONTAINER_CMD in podman docker; do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  echo "Building $(IMAGE_UNSHARE):$(PYTHON_VERSION), $(IMAGE_UNSHARE):latest with $$CONTAINER_CMD..."; \
+	  $$CONTAINER_CMD build \
+	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	-t $(IMAGE_UNSHARE):$(PYTHON_VERSION) \
+	  	-t $(IMAGE_UNSHARE):latest \
+	  	-t $(IMAGE_UNSHARE):unshare \
+	  	-f Dockerfile-unshare .; \
+	done; \
+	touch .make-build-image-unshare
+
+.make-build-image-bwrap: .make-build-image-base Dockerfile-bwrap
+	@for CONTAINER_CMD in podman docker; do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  echo "Building $(IMAGE_BWRAP):$(PYTHON_VERSION), $(IMAGE_BWRAP):latest with $$CONTAINER_CMD..."; \
+	  $$CONTAINER_CMD build \
+	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	-t $(IMAGE_BWRAP):$(PYTHON_VERSION) \
+	  	-t $(IMAGE_BWRAP):latest \
+	  	-t $(IMAGE_BWRAP):bwrap \
+	  	-f Dockerfile-bwrap .; \
+	done; \
+	touch .make-build-image-bwrap
+
+.make-build-image-qemu: .make-build-image-base Dockerfile-qemu
+	@for CONTAINER_CMD in podman docker; do \
+	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
+	  echo "Building $(IMAGE_QEMU):$(PYTHON_VERSION), $(IMAGE_QEMU):latest with $$CONTAINER_CMD..."; \
+	  $$CONTAINER_CMD build \
+	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	--build-arg QEMU_PKG=$(QEMU_PKG) \
+	  	-t $(IMAGE_QEMU):$(PYTHON_VERSION) \
+	  	-t $(IMAGE_QEMU):latest \
+	  	-t $(IMAGE_QEMU):qemu \
+	  	-f Dockerfile-qemu .; \
+	done; \
+	touch .make-build-image-qemu
+
+## Build base image (Python + wheel): python-sb-base:$(PYTHON_VERSION), python-sb-base:latest
+build-image-base: .make-build-image-base
+
+## Build landlock image (Python + wheel): python-sb-base:$(PYTHON_VERSION), python-sb-base:latest
+build-image-landlock: .make-build-image-landlock
+
+## Build unshare image: python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest
+build-image-unshare: .make-build-image-unshare
+
+## Build bwrap image: python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest
+build-image-bwrap: .make-build-image-bwrap
+
+## Build qemu image: python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
+build-image-qemu: .make-build-image-qemu
+
+## Build all provider images with docker only (e.g. minikube: eval $(minikube docker-env) && make build-image-docker)
+build-images: Dockerfile .make-dist \
+	.make-build-image-base \
+	.make-build-image-landlock \
+	.make-build-image-unshare \
+	.make-build-image-bwrap \
+	.make-build-image-qemu
+
+## Prune build caches and force full rebuild of all variants
 build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."
 	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true
 	@command -v podman >/dev/null 2>&1 && (podman builder prune -f 2>/dev/null || podman system prune -f 2>/dev/null) || true
-	@rm -f .make-build-image
-	@$(MAKE) build-image
+	@rm -f .make-build-image-base .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
+	@$(MAKE) build-images
 
 # ---------------------------------------------------------------------------------------
 # Snippet to test publishing a distribution to test.pypi.org.

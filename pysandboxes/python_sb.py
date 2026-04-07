@@ -111,6 +111,8 @@ def main() -> int:
         if all_rules.os_sandbox == "qemu":
             # For QEMU: build process_config before subprocess_cmd so the ISO
             # can be created with the config embedded (no HTTP server needed).
+            from pysandboxes.remote.qemu_guest_bootstrap import GUEST_RUN_MOUNT
+
             os_provider.port = (
                 find_free_port() if all_rules.port == -1 else all_rules.port
             )
@@ -124,13 +126,15 @@ def main() -> int:
                 port=os_provider.port,
                 init_fn="",
                 python_main_args=tuple(python_cmd),
+                guest_run_dir=GUEST_RUN_MOUNT,
             )
-            # Store config so subprocess_cmd can embed it in the ISO
+            # Store config so subprocess_cmd can build ISO and 9p config dir; guest reads config from 9p
             os_provider._iso_config = process_config  # type: ignore[attr-defined]
             cmd, extra_envs = os_provider.subprocess_cmd(
                 all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
             )
-            config_writer = lambda _: None  # config already embedded in ISO
+            # Config is in 9p-mounted config dir, no FIFO
+            config_writer = lambda _: None
         else:
             cmd, extra_envs = os_provider.subprocess_cmd(
                 all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
@@ -181,6 +185,15 @@ def main() -> int:
                     kill_slirp()
 
         return_code = asyncio.run(launch_and_wait())
+        # For QEMU, guest writes exit code to shared run dir; use it if present
+        if all_rules.os_sandbox == "qemu":
+            exitcode_file = Path(tmpdir) / "exitcode"
+            if exitcode_file.exists():
+                try:
+                    raw = exitcode_file.read_text().strip()
+                    return_code = int(raw)
+                except (ValueError, OSError):
+                    pass
         return return_code
 
 
