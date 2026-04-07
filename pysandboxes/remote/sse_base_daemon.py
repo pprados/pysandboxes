@@ -135,7 +135,7 @@ class BaseSSESandbox(BaseDaemon):
         if is_in_sandbox():
             return func(*args, **kwargs)
         if not _force_incomming and not self._accept_incoming:
-            raise RuntimeError("The sandbox demon is being stopped.")
+            raise RuntimeError("The sandbox daemon is being stopped.")
 
         # Use sandbox loop so the coroutine runs on the loop that is actually
         # running (e.g. in a background thread), avoiding deadlock when the

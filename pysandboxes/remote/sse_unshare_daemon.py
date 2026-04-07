@@ -30,19 +30,12 @@ import time
 import uuid
 from asyncio import CancelledError, Task
 from asyncio.subprocess import Process
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 from typing import Any, cast
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
-
-try:
-    from typing import override  # type: ignore[attr-defined]
-except ImportError:
-    from typing_extensions import override
-
-from ipaddress import IPv4Network
 
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
@@ -50,6 +43,7 @@ from ..guard_socket import Action, Direction, Kind, SocketRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg, pysandboxes_logger
 from ..netfilter import rule_to_netfilter
+from ..override_compat import override
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, ConfigLine, ConfigLines, Envs
 from ..tools import (
@@ -555,10 +549,15 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # Write config via FIFO (or file in debug mode). Always pass a path under
         # temp so the unshare child can read it (e.g. under /tmp); with Docker the
         # child may not have access to /app when using unshare -r.
-        config_file = temp / "unshare_config.json"
-        if config_file.exists():
-            config_file.unlink()
-        if not DEBUG_LAUNCH:
+        if DEBUG_LAUNCH:
+            debug_tmp = Path("tmp")
+            debug_tmp.mkdir(parents=True, exist_ok=True)
+            config_file = debug_tmp / "unshare_config.json"
+            logger.debug("DEBUG_LAUNCH: config file %s", config_file.resolve())
+        else:
+            config_file = temp / "unshare_config.json"
+            if config_file.exists():
+                config_file.unlink()
             os.mkfifo(config_file)
 
         def publish_config() -> None:
@@ -812,7 +811,10 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
             # Write UnshareSetupConfig via FIFO (or file in debug mode)
             if DEBUG_LAUNCH:
-                config_file = Path("unshare_config.json")
+                debug_tmp = Path("tmp")
+                debug_tmp.mkdir(parents=True, exist_ok=True)
+                config_file = debug_tmp / "unshare_config.json"
+                logger.debug("DEBUG_LAUNCH: config file %s", config_file.resolve())
             else:
                 config_file = temp / "unshare_config.json"
                 if config_file.exists():
@@ -900,13 +902,17 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
             if DEBUG_LAUNCH:
                 try:
-                    Path("run.sh").write_text(
+                    debug_tmp = Path("tmp")
+                    debug_tmp.mkdir(parents=True, exist_ok=True)
+                    run_sh = debug_tmp / "run.sh"
+                    run_sh.write_text(
                         "#!/bin/bash\n"
                         + cmd[0]
                         + " "
                         + " \\\n  ".join(repr(c) if " " in c else c for c in cmd[1:])
                         + "\n"
                     )
+                    logger.debug("DEBUG_LAUNCH: wrote %s", run_sh.resolve())
                 except Exception:
                     logger.debug("Cannot write run.sh")
 

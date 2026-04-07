@@ -20,6 +20,7 @@ import importlib
 import logging
 import os
 import pickle
+import subprocess
 import sys
 from logging import StreamHandler
 from pathlib import Path
@@ -88,14 +89,34 @@ def run_guest(process_config: DaemonParameters) -> int:
 
     pysandboxes.os_sandbox = all_rules.os_sandbox
     activate_sandboxes(all_rules, os.environ)
-    python_main_args = getattr(process_config, "python_main_args", ()) or ()
-    if python_main_args:
-        set_learning_mode(all_rules.learn)
-        # In guest VM, use subprocess so start_daemon() launches a local Python server
-        # instead of trying to start another QEMU.
-        os.environ["OS_SANDBOX"] = "subprocess"
-        return python_in_sb(all_rules, list(python_main_args))
-    return asyncio.run(run_server(process_config))
+    guest_run_dir = getattr(process_config, "guest_run_dir", None)
+
+    def _write_exitcode(code: int) -> None:
+        if guest_run_dir:
+            try:
+                Path(guest_run_dir).joinpath("exitcode").write_text(str(code))
+            except OSError:
+                pass
+
+    try:
+        python_main_args = getattr(process_config, "python_main_args", ()) or ()
+        if python_main_args:
+            set_learning_mode(all_rules.learn)
+            # In guest VM, use subprocess so start_daemon() launches a local Python server
+            # instead of trying to start another QEMU.
+            os.environ["OS_SANDBOX"] = "subprocess"
+            rc = python_in_sb(all_rules, list(python_main_args))
+        else:
+            rc = asyncio.run(run_server(process_config))
+        _write_exitcode(rc)
+        return rc
+    except SystemExit as e:
+        rc = int(e.code) if e.code is not None else 0
+        _write_exitcode(rc)
+        raise
+    except Exception:
+        _write_exitcode(1)
+        raise
 
 
 async def run_server(process_config: DaemonParameters) -> int:
@@ -191,12 +212,24 @@ def main() -> int:
     sandboxes_parsed, sandboxes_args = parser.parse_known_args()
 
     # -------------
-    # Read all configuration from named-pipe until EOF
+    # Read all configuration from named-pipe (or config file for QEMU) until EOF
     assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
-    pickle_data: bytes = Path(sandboxes_parsed._named_pipe).read_bytes()
+    config_path = Path(sandboxes_parsed._named_pipe.strip())
+    pickle_data: bytes = config_path.read_bytes()
+    # Only the parent process feeds the named_pipe; no risk of malicious pickle
+    # injection.
     process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
+
+    # Apply iptables rules in VM guest (QEMU) when provided
+    netfilter_rules = getattr(process_config, "netfilter_rules", ()) or ()
+    if netfilter_rules:
+        subprocess.run(
+            ["iptables-restore", "--noflush"],
+            input="\n".join(netfilter_rules).encode(),
+            check=False,
+        )
 
     # Add ident inside the sandbox
     log_format = " " + process_config.log_format

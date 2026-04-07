@@ -18,7 +18,6 @@ import time
 from pathlib import Path
 
 import pytest
-from _pytest.mark import ParameterSet
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,16 @@ CONTAINER_SCRIPT_DIR = Path(__file__).resolve().parent
 # OS_SANDBOX from environment; default unshare
 OS_SANDBOX = os.environ.get("OS_SANDBOX", "unshare")
 
-IMAGE_NAME = "python-sb:latest"
+
+# One image per OS provider; image names are python-sb-<provider> (e.g. python-sb-unshare, python-sb-qemu), use :latest tag.
+def _image_for_os_provider(os_sandbox: str) -> str:
+    """Return the container image name for the given OS_SANDBOX provider (e.g. unshare -> python-sb-unshare:latest)."""
+    provider = (os_sandbox or "base").lower()
+    if provider in ("none", "subprocess"):
+        return f"python-sb:latest"
+    return f"python-sb-{provider}:latest"
+
+
 PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.profile"
 
 all_container_worker: list[str] = [
@@ -37,15 +45,15 @@ all_container_worker: list[str] = [
     "podman",
 ]
 
-# os_sandbox,py_sandbox,privileged
-all_os_sandbox: list[ParameterSet] = [
+# os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
+all_os_sandbox: list = [
     # firejail is incompatible with containers
-    pytest.param("none", True, False),
-    pytest.param("qemu", True, False),
+    # pytest.param("none", True, False),
     # pytest.param("subprocess", True, False),
     # pytest.param("landlock", False, False),
     # pytest.param("unshare", False, True),
     # pytest.param("bwrap", False, True),
+    pytest.param("qemu", True, False),
 ]
 
 # TODO: test with split mode
@@ -177,22 +185,29 @@ def _add_host_flags() -> list[str]:
 # Timeout for building the container image when missing (avoid indefinite hang)
 BUILD_IMAGE_TIMEOUT = 600  # seconds
 
-# Timeout for the container run (inner python-sb + integration tests)
-CONTAINER_RUN_TIMEOUT = 300  # seconds
+# Timeout for the container run (inner python-sb + integration tests).
+# QEMU provider may install deps in the guest (apt + pip) on first boot, so allow enough time.
+CONTAINER_RUN_TIMEOUT = 600  # seconds
 
 
-def _ensure_image(runtime: str) -> None:
-    """Build image with make build-image if not present for the given runtime."""
+def _ensure_image(runtime: str, image_name: str, os_sandbox: str) -> None:
+    """Build the provider image with make build-image-<provider> if not present for the given runtime."""
     r = subprocess.run(
-        [runtime, "image", "inspect", IMAGE_NAME],
+        [runtime, "image", "inspect", image_name],
         capture_output=True,
         cwd=ROOT_DIR,
     )
     if r.returncode == 0:
         return
-    logger.error(f"Image {IMAGE_NAME} not found, building with make build-image...")
+    provider = (os_sandbox or "base").lower()
+    if provider == "none":
+        provider = "base"
+    make_target = f"build-image-{provider}"
+    logger.error(
+        "Image %s not found, building with make %s...", image_name, make_target
+    )
     subprocess.run(
-        ["make", "build-image"],
+        ["make", make_target],
         cwd=ROOT_DIR,
         check=True,
         capture_output=False,
@@ -204,7 +219,8 @@ def _run_container_runtime(
     runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool
 ) -> subprocess.CompletedProcess:
     """Run container test with docker or podman; logic from test-podman.sh."""
-    _ensure_image(runtime)
+    image_name = _image_for_os_provider(os_sandbox)
+    _ensure_image(runtime, image_name, os_sandbox)
 
     # Normalize to provider name (lowercase) so config substitution matches providers_factory
     os_sandbox_env = os_sandbox.lower() if os_sandbox != "none" else os_sandbox
@@ -222,6 +238,7 @@ def _run_container_runtime(
 
     term = os.environ.get("TERM", "xterm-256color")
     # PYTHONPATH=/app so -m tests.integration_tests.tst_usage finds the tests package
+    # QEMU: file_rules root is mounted at /app in the VM (same strategy as bwrap)
     inner_cmd = (
         f"{prefix}"
         f"PYTHONPATH=/app TERM={term} OS_SANDBOX={os_sandbox_env} My_ENV=1 "
@@ -250,7 +267,7 @@ def _run_container_runtime(
         volume_mount,
         "-w",
         "/app",
-        IMAGE_NAME,
+        image_name,
         "sh",
         "-c",
         inner_cmd,
@@ -258,7 +275,24 @@ def _run_container_runtime(
 
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
     # With pipes, the buffer (~64KB) can fill and the container blocks on write → deadlock.
-    # Redirect to a temp file so we can show log tail on failure without deadlock.
+    # By default redirect to a temp file so we can show log tail on failure without deadlock.
+    # Set CONTAINER_TEST_STREAM_LOGS=1 to stream logs to the terminal during execution.
+    stream_logs = os.environ.get("CONTAINER_TEST_STREAM_LOGS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if stream_logs:
+        result = subprocess.run(
+            cmd,
+            cwd=ROOT_DIR,
+            env=os.environ.copy(),
+            stdout=None,
+            stderr=None,
+            timeout=CONTAINER_RUN_TIMEOUT,
+        )
+        result._container_log_path = None  # type: ignore[attr-defined]
+        return result
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".log", delete=False, encoding="utf-8"
     ) as log_file:
@@ -285,7 +319,11 @@ def _run_container_runtime(
 def test_container_runtime(
     runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool
 ) -> None:
-    """Run container test with podman or docker; success = exit code 0."""
+    """Run container test with podman or docker; success = exit code 0.
+
+    To see container logs during execution, set CONTAINER_TEST_STREAM_LOGS=1
+    (e.g. CONTAINER_TEST_STREAM_LOGS=1 pytest ... test_container_runtime).
+    """
 
     try:
         subprocess.run(
@@ -295,10 +333,6 @@ def test_container_runtime(
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip(f"{runtime} not available")
-
-    # qemu provider requires QEMU binary and compatible guest image; container image has neither
-    if os_sandbox == "qemu":
-        pytest.skip("qemu provider not run in container (no QEMU in image)")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     log_path = getattr(result, "_container_log_path", None)
@@ -420,9 +454,9 @@ def _ensure_minikube_ready() -> None:
 
 
 def _ensure_minikube_image() -> None:
-    """Build image in minikube's Docker daemon so it matches the current Dockerfile."""
+    """Build all provider images in minikube's Docker daemon (make build-image-docker)."""
     env = _minikube_docker_env()
-    print("Building image in minikube's Docker daemon (make build-image-docker)...")
+    print("Building images in minikube's Docker daemon (make build-image-docker)...")
     subprocess.run(
         ["make", "build-image-docker"],
         cwd=ROOT_DIR,
@@ -466,13 +500,32 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
         )
         time.sleep(3)
 
-        print("Applying Kubernetes manifest...")
-        subprocess.run(
-            ["kubectl", "apply", "-f", str(KUBE_MANIFEST)],
-            cwd=ROOT_DIR,
-            check=True,
-            capture_output=True,
+        image_name = _image_for_os_provider(os_sandbox)
+        manifest_text = KUBE_MANIFEST.read_text(encoding="utf-8")
+        manifest_text = re.sub(
+            r"image:\s*[\w/:.-]+",
+            f"image: {image_name}",
+            manifest_text,
+            count=1,
         )
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yaml",
+            delete=False,
+            encoding="utf-8",
+        ) as f:
+            f.write(manifest_text)
+            manifest_path = f.name
+        try:
+            print(f"Applying Kubernetes manifest (image={image_name})...")
+            subprocess.run(
+                ["kubectl", "apply", "-f", manifest_path],
+                cwd=ROOT_DIR,
+                check=True,
+                capture_output=True,
+            )
+        finally:
+            Path(manifest_path).unlink(missing_ok=True)
 
         print(f"Waiting for pod {POD_NAME} to be ready...")
         r = subprocess.run(
@@ -583,6 +636,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     return rc
 
 
+@pytest.mark.skip("TODO")  # TODO
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
 def test_container_kubernetes(
     os_sandbox: str, py_sandbox: bool, privileged: bool

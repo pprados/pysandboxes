@@ -11,8 +11,8 @@ spec:
       - "8.8.4.4"
   containers:
     - name: pysandboxes-test
-      image: python-sb:latest
-      imagePullPolicy: Never   # Image built locally in minikube (eval $(minikube docker-env) + docker build)
+      image: python-sb-unshare:latest   # Overridden at test time to python-sb-<provider>:latest (unshare, bwrap, etc.)
+      imagePullPolicy: Never   # Image built locally in minikube (eval $(minikube docker-env) + make build-image-docker)
       workingDir: /app
       command: [ "/bin/sh", "-c","sleep infinity" ] # Keep the pod alive
       env:

@@ -2,14 +2,13 @@
 # License: Apache V2
 """Prepare guest bootstrap and cloud-init data for QEMU provider.
 
-Puts bootstrap and config on a NoCloud ISO; guest accesses pysandboxes
-via virtio-9p mount from the host. Config is embedded directly in the ISO
-as config.pkl, avoiding a separate HTTP server.
+NoCloud ISO contains the bootstrap script, pipe_name, and 9p_mounts (one line
+per "tag guest_path"). The guest mounts each tag at its path, then runs
+main_sandbox --_named-pipe (same flow as bwrap/unshare).
 """
 
 import logging
 import os
-import pickle
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -17,189 +16,110 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 GUEST_CIDATA_MOUNT = "/mnt/cidata"
-GUEST_VENV_MOUNT = "/mnt/venv-packages"  # 9p mount for host venv site-packages
-GUEST_PYSANDBOXES_MOUNT = (
-    "/mnt/pysandboxes-src"  # 9p mount for pysandboxes package parent
-)
-VENV_9P_TAG = "venv"
-PYSANDBOXES_9P_TAG = "pysandboxes_src"
-BOOTSTRAP_HTTP_NAME = "bootstrap_http.py"
-CONFIG_PKL_NAME = "config.pkl"
+GUEST_RUN_MOUNT = "/mnt/pysandbox_run"
+GUEST_CONFIG_MOUNT = "/mnt/pysandbox_config"
+PIPE_NAME_FILE = "pipe_name"
 NOCLOUD_ISO = "nocloud.iso"
 CIDATA_LABEL = "cidata"
-
-
-def _config_paths_to_str(obj: Any) -> Any:
-    """Recursively replace Path with str for cross-version pickle compatibility."""
-    if isinstance(obj, Path):
-        return str(obj)
-    if hasattr(obj, "_asdict") and hasattr(obj, "_fields"):
-        return type(obj)(
-            **{k: _config_paths_to_str(v) for k, v in obj._asdict().items()}
-        )
-    if isinstance(obj, dict):
-        return {k: _config_paths_to_str(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return type(obj)(_config_paths_to_str(x) for x in obj)
-    return obj
-
-
-def _write_config_pkl(temp: Path, process_config: Any) -> None:
-    """Serialize process_config to temp/config.pkl with Path->str conversion."""
-    safe_config = _config_paths_to_str(process_config)
-    (temp / CONFIG_PKL_NAME).write_bytes(
-        pickle.dumps(safe_config, protocol=pickle.HIGHEST_PROTOCOL)
-    )
-
-
-def _write_bootstrap_http(dest: Path) -> None:
-    """Write bootstrap_http.py: read config from cidata ISO mount."""
-    script = (
-        "#!/usr/bin/env python3\n"
-        '"""Run inside guest: read config from cidata ISO, apply iptables, run SSE server."""\n'
-        "import os\n"
-        "import subprocess\n"
-        "import sys\n"
-        "import traceback\n"
-        "from pathlib import Path\n"
-        "\n"
-        "def _trace(msg: str) -> None:\n"
-        '    print("[pysandbox-bootstrap] " + msg, file=sys.stderr, flush=True)\n'
-        "\n"
-        '_trace("starting bootstrap_http.py")\n'
-        '_trace("sys.path=%s" % sys.path)\n'
-        "\n"
-        "# Config is embedded in the cidata ISO at a known path\n"
-        'config_path = Path("/mnt/cidata/config.pkl")\n'
-        "if not config_path.is_file():\n"
-        '    _trace("ERROR: config.pkl not found at %s" % config_path)\n'
-        "    sys.exit(1)\n"
-        '_trace("config_path=%s size=%s" % (config_path, config_path.stat().st_size))\n'
-        "\n"
-        '_trace("importing pysandboxes.remote.sse_client_subprocess_daemon ...")\n'
-        "try:\n"
-        "    import pysandboxes.remote.sse_client_subprocess_daemon  # noqa: F401\n"
-        '    _trace("import pysandboxes.remote.sse_client_subprocess_daemon OK")\n'
-        "except Exception as e:\n"
-        '    _trace("import FAILED: %s" % e)\n'
-        "    traceback.print_exc(file=sys.stderr)\n"
-        '    _trace("sys.path at failure=%s" % sys.path)\n'
-        "    raise\n"
-        "\n"
-        "import pickle as _pkl\n"
-        "\n"
-        "def _restore_config_paths(obj):\n"
-        '    """Restore Path fields (host sent str to avoid pathlib._local across Python versions)."""\n'
-        '    _path_fields = frozenset(("root_path", "learning_path"))\n'
-        '    if hasattr(obj, "_asdict") and hasattr(obj, "_replace"):\n'
-        "        d = obj._asdict()\n"
-        "        restored = {k: Path(d[k]) if k in _path_fields and isinstance(d.get(k), str) else _restore_config_paths(v) for k, v in d.items()}\n"
-        "        return type(obj)(**restored)\n"
-        "    if isinstance(obj, dict):\n"
-        "        return {k: _restore_config_paths(v) for k, v in obj.items()}\n"
-        "    if isinstance(obj, (list, tuple)):\n"
-        "        return type(obj)(_restore_config_paths(x) for x in obj)\n"
-        "    return obj\n"
-        "\n"
-        '_trace("loading pickle from %s ..." % config_path)\n'
-        "try:\n"
-        '    with open(config_path, "rb") as f:\n'
-        "        process_config = _pkl.load(f)\n"
-        "    process_config = _restore_config_paths(process_config)\n"
-        '    _trace("pickle load OK, process_config type=%s" % type(process_config).__name__)\n'
-        "except Exception as e:\n"
-        '    _trace("pickle load FAILED: %s" % e)\n'
-        "    traceback.print_exc(file=sys.stderr)\n"
-        "    raise\n"
-        "\n"
-        'rules = getattr(process_config, "netfilter_rules", ()) or ()\n'
-        "if rules:\n"
-        "    subprocess.run(\n"
-        '        ["iptables-restore", "--noflush"],\n'
-        '        input="\\n".join(rules).encode(),\n'
-        "        check=False,\n"
-        "    )\n"
-        "# Use writable work dir so tests can write to ./tmp (e.g. tmp/test.remove)\n"
-        '_work_dir = "/tmp/pysandbox_work"\n'
-        "os.makedirs(_work_dir, exist_ok=True)\n"
-        'os.makedirs(os.path.join(_work_dir, "tmp"), exist_ok=True)\n'
-        "os.chdir(_work_dir)\n"
-        '_trace("importing run_guest ...")\n'
-        "from pysandboxes.remote.main_sandbox import run_guest\n"
-        '_trace("calling run_guest()")\n'
-        "sys.exit(run_guest(process_config))\n"
-    )
-    (dest / BOOTSTRAP_HTTP_NAME).write_text(script, encoding="utf-8")
-
-
 GUEST_BOOTSTRAP_SCRIPT = "/tmp/run_pysandbox_bootstrap.sh"
+NINEP_MOUNTS_FILE = "9p_mounts"
+PYTHON_EXE_FILE = "python_exe"
+PYTHON_VERSION_FILE = "python_version"
 
 
-def _bootstrap_script_content(use_venv_9p: bool, use_pysandboxes_9p: bool) -> str:
-    """Build the guest bootstrap script (avoids YAML quoting issues in runcmd)."""
+def _bootstrap_script_content(
+    mounts: list[tuple[str, str]],
+    pipe_run_guest_path: str,
+    python_version: str,
+    python_exe: str | None = None,
+    config_guest_path: str | None = None,
+) -> str:
+    """Build the guest bootstrap script: mount cidata, verify Python version (no install), then run main_sandbox --_named-pipe (config from 9p or pipe)."""
     lines = [
         "#!/bin/bash",
         "set -e",
-        "echo '[pysandbox-bootstrap] starting script' >&2",
+        "echo '[pysandbox-bootstrap] starting' >&2",
+        "",
+        "# Mount NoCloud cidata first so 9p_mounts, pipe_name and python_version are available",
+        f"mkdir -p {GUEST_CIDATA_MOUNT}",
+        f"mount /dev/vdb {GUEST_CIDATA_MOUNT} 2>/dev/null || mount LABEL={CIDATA_LABEL} {GUEST_CIDATA_MOUNT} || true",
+        "",
+        "echo '[pysandbox-9p] loading 9p modules' >&2",
+        "modprobe 9pnet_virtio 2>/dev/null || true",
+        "modprobe 9p 2>/dev/null || true",
         "",
     ]
-
-    # Load 9p kernel modules if any 9p share is needed
-    if use_venv_9p or use_pysandboxes_9p:
+    if mounts:
+        lines.append("echo '[pysandbox-9p] mounting file_rules shares' >&2")
+        lines.append("while read -r tag path; do")
+        lines.append('  [ -z "$tag" ] && continue')
+        lines.append('  mkdir -p "$path"')
+        lines.append('  echo "[pysandbox-9p] $tag -> $path" >&2')
+        lines.append(
+            '  mount -t 9p -o trans=virtio,version=9p2000.L "$tag" "$path" 2>&1 | sed \'s/^/[pysandbox-9p] /\' >&2 || true'
+        )
+        lines.append("done < " + f"{GUEST_CIDATA_MOUNT}/{NINEP_MOUNTS_FILE}")
+        lines.append("")
+    # Required Python version from host; image must already provide it (no install)
+    lines.extend(
+        [
+            "PYTHON_VERSION=$(cat "
+            + f"{GUEST_CIDATA_MOUNT}/{PYTHON_VERSION_FILE}"
+            + " 2>/dev/null | tr -d '\\n' || echo '')",
+            'echo "[pysandbox-bootstrap] required Python version: ${PYTHON_VERSION:-none}" >&2',
+            "PYTHON_EXE=''",
+            # Prefer host binary path (9p-mounted) if present
+            "HOST_EXE=$(cat "
+            + f"{GUEST_CIDATA_MOUNT}/{PYTHON_EXE_FILE}"
+            + " 2>/dev/null | tr -d '\\n' || true)",
+            '[ -n "$HOST_EXE" ] && [ -f "$HOST_EXE" ] && PYTHON_EXE=$HOST_EXE',
+            # Else use guest python (same major.minor as required)
+            'if [ -z "$PYTHON_EXE" ] && [ -n "$PYTHON_VERSION" ]; then',
+            "  for py in python${PYTHON_VERSION} python3.${PYTHON_VERSION#*.}; do",
+            '    if command -v "$py" >/dev/null 2>&1; then PYTHON_EXE=$py; break; fi',
+            "  done",
+            "fi",
+            '[ -z "$PYTHON_EXE" ] && PYTHON_EXE=python3',
+            'echo "[pysandbox-bootstrap] PYTHON_EXE=$PYTHON_EXE" >&2',
+            # Verify version: image must have expected Python (no install)
+            'ACTUAL_VERSION="$("$PYTHON_EXE" -c \'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")\' 2>/dev/null)"',
+            'if [ -z "$ACTUAL_VERSION" ]; then',
+            "  echo '[pysandbox-bootstrap] ERROR: could not get Python version from' \"$PYTHON_EXE\" >&2",
+            "  poweroff -f",
+            "fi",
+            'if [ "$ACTUAL_VERSION" != "$PYTHON_VERSION" ]; then',
+            "  echo '[pysandbox-bootstrap] ERROR: expected Python $PYTHON_VERSION, image has Python $ACTUAL_VERSION' >&2",
+            "  poweroff -f",
+            "fi",
+            'echo "[pysandbox-bootstrap] Python version OK: $ACTUAL_VERSION" >&2',
+            "",
+        ]
+    )
+    pypath = ":".join(m[1] for m in mounts) if mounts else ""
+    guest_cwd = mounts[0][1] if mounts else "/"
+    if config_guest_path:
         lines.extend(
             [
-                "echo '[pysandbox-9p] loading 9p modules' >&2",
-                "modprobe 9pnet_virtio 2>/dev/null || true",
-                "modprobe 9p 2>/dev/null || true",
-                "",
+                f'CONFIG_PATH="{config_guest_path}"',
+                "echo '[pysandbox-bootstrap] exec main_sandbox --_named-pipe '\"'\"'$CONFIG_PATH'\"'\"'' >&2",
             ]
         )
     else:
         lines.extend(
             [
-                "echo '[pysandbox-bootstrap] installing Python deps' >&2",
-                "apt-get update -qq && apt-get install -y -qq python3-pip",
-                "pip3 install --break-system-packages 'aiohttp>=3.12' 'aiohttp-sse-client>=0.2.1' 'fastapi>=0.115' 'uvicorn>=0.34' 'netifaces>=0.11' 'tblib>=3.1'",
-                "",
+                "PIPE_NAME=$(cat "
+                + f"{GUEST_CIDATA_MOUNT}/{PIPE_NAME_FILE}"
+                + " 2>/dev/null | tr -d '\\n' || echo '')",
+                'if [ -z "$PIPE_NAME" ]; then echo "[pysandbox-bootstrap] ERROR: pipe_name not found on cidata" >&2; poweroff -f; fi',
+                f'CONFIG_PATH={pipe_run_guest_path}/"$PIPE_NAME"',
+                "echo '[pysandbox-bootstrap] exec main_sandbox --_named-pipe '\"'\"'$CONFIG_PATH'\"'\"'' >&2",
             ]
         )
-
-    if use_pysandboxes_9p:
-        lines.extend(
-            [
-                f"mkdir -p {GUEST_PYSANDBOXES_MOUNT}",
-                f"echo '[pysandbox-9p] mounting tag={PYSANDBOXES_9P_TAG} to {GUEST_PYSANDBOXES_MOUNT}' >&2",
-                f"mount -t 9p -o trans=virtio,version=9p2000.L {PYSANDBOXES_9P_TAG} {GUEST_PYSANDBOXES_MOUNT} 2>&1 | sed 's/^/[pysandbox-9p] /' >&2 || echo '[pysandbox-9p] pysandboxes mount failed' >&2",
-                f"(mountpoint -q {GUEST_PYSANDBOXES_MOUNT} && echo '[pysandbox-9p] pysandboxes mountpoint OK' >&2) || echo '[pysandbox-9p] pysandboxes mountpoint FAILED' >&2",
-                "",
-            ]
-        )
-
-    if use_venv_9p:
-        lines.extend(
-            [
-                f"mkdir -p {GUEST_VENV_MOUNT}",
-                f"echo '[pysandbox-9p] mounting tag={VENV_9P_TAG} to {GUEST_VENV_MOUNT}' >&2",
-                f"mount -t 9p -o trans=virtio,version=9p2000.L {VENV_9P_TAG} {GUEST_VENV_MOUNT} 2>&1 | sed 's/^/[pysandbox-9p] /' >&2 || echo '[pysandbox-9p] venv mount failed' >&2",
-                f"(mountpoint -q {GUEST_VENV_MOUNT} && echo '[pysandbox-9p] venv mountpoint OK' >&2) || echo '[pysandbox-9p] venv mountpoint FAILED' >&2",
-                "dmesg | tail -20 | grep -iE '9p|virtio_9p' 2>/dev/null | sed 's/^/[pysandbox-9p] dmesg: /' >&2 || true",
-                "",
-            ]
-        )
-
-    pypath_parts = []
-    if use_pysandboxes_9p:
-        pypath_parts.append(GUEST_PYSANDBOXES_MOUNT)
-    if use_venv_9p:
-        pypath_parts.append(GUEST_VENV_MOUNT)
-    pypath = ":".join(pypath_parts) if pypath_parts else ""
-
     lines.extend(
         [
-            f"mkdir -p {GUEST_CIDATA_MOUNT}",
-            f"mount /dev/vdb {GUEST_CIDATA_MOUNT} || mount LABEL={CIDATA_LABEL} {GUEST_CIDATA_MOUNT} || true",
-            f"echo '[pysandbox-bootstrap] exec python PYTHONPATH={pypath}' >&2",
-            f"env PYTHONPATH={pypath} python3 {GUEST_CIDATA_MOUNT}/{BOOTSTRAP_HTTP_NAME} || true",
+            f'cd "{guest_cwd}" || true',
+            ("env PYTHONPATH=" + pypath + " " if pypath else "env ")
+            + '"$PYTHON_EXE" -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH" || true',
             "poweroff -f",
         ]
     )
@@ -208,28 +128,32 @@ def _bootstrap_script_content(use_venv_9p: bool, use_pysandboxes_9p: bool) -> st
 
 def _create_nocloud_iso(
     temp: Path,
-    venv_site_packages_path: Path | None = None,
-    use_pysandboxes_9p: bool = False,
+    mounts: list[tuple[str, str]],
+    pipe_basename: str,
+    pipe_run_guest_path: str,
+    python_version: str,
+    python_exe: str | None = None,
+    config_guest_path: str | None = None,
 ) -> Path:
-    """Create NoCloud iso with user-data, meta-data, bootstrap and embedded config.pkl.
-
-    If venv_site_packages_path is set, cloud-init will mount the host venv via 9p.
-    If use_pysandboxes_9p is True, cloud-init will mount pysandboxes source via 9p.
-    Config is embedded as config.pkl in the ISO (no HTTP server needed).
-    Returns the path to the NoCloud iso.
-    """
-    use_venv_9p = venv_site_packages_path is not None
-    script_content = _bootstrap_script_content(use_venv_9p, use_pysandboxes_9p)
-    # Indent script for YAML literal block (each line prefixed with 6 spaces)
+    """Create NoCloud ISO with user-data, meta-data, bootstrap script, 9p_mounts, pipe_name, python_version, python_exe (version is verified in guest, not installed)."""
+    script_content = _bootstrap_script_content(
+        mounts, pipe_run_guest_path, python_version, python_exe, config_guest_path
+    )
     script_yaml = "\n".join("      " + line for line in script_content.splitlines())
+    (temp / PIPE_NAME_FILE).write_text(pipe_basename.strip(), encoding="utf-8")
+    (temp / PYTHON_VERSION_FILE).write_text(python_version + "\n", encoding="utf-8")
+    if python_exe:
+        (temp / PYTHON_EXE_FILE).write_text(python_exe + "\n", encoding="utf-8")
+    (temp / NINEP_MOUNTS_FILE).write_text(
+        "\n".join(f"{tag} {path}" for tag, path in mounts) + ("\n" if mounts else ""),
+        encoding="utf-8",
+    )
     user_data = f"""#cloud-config
-# Use only NoCloud (no wait for EC2/OpenStack metadata).
 datasource_list: [NoCloud]
 datasource:
   NoCloud:
     max_wait: 0
 
-# Fallback: if guest has no NIC or DHCP is slow, wait-online times out in 5s.
 bootcmd:
   - mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
   - printf '[Service]\\nTimeoutStartSec=5\\n' > /etc/systemd/system/systemd-networkd-wait-online.service.d/timeout.conf
@@ -245,7 +169,6 @@ write_files:
 {script_yaml}
     permissions: '0755'
 
-# QEMU -nic user provides DHCP; match en* (e.g. enp0s2 from virtio-net-pci).
 network:
   version: 2
   ethernets:
@@ -255,7 +178,6 @@ network:
       optional: true
       dhcp4: true
 
-# Stop gettys then run bootstrap script (script does mount, exec python).
 runcmd:
   - systemctl stop serial-getty@ttyS0.service getty@ttyS0.service getty@tty1.service || true
   - systemctl mask serial-getty@ttyS0.service getty@ttyS0.service getty@tty1.service || true
@@ -264,20 +186,30 @@ runcmd:
     meta_data = "instance-id: pysandboxes-qemu\nlocal-hostname: pysandbox\n"
     (temp / "user-data").write_text(user_data, encoding="utf-8")
     (temp / "meta-data").write_text(meta_data, encoding="utf-8")
-    _root = sorted(os.listdir(temp))
-    logger.info("qemu bootstrap: temp before ISO root=%s", _root)
     iso_path = temp / NOCLOUD_ISO
     graft_args = [
         "-graft-points",
         "user-data=user-data",
         "meta-data=meta-data",
-        f"{BOOTSTRAP_HTTP_NAME}={BOOTSTRAP_HTTP_NAME}",
-        f"{CONFIG_PKL_NAME}={CONFIG_PKL_NAME}",
+        f"{PIPE_NAME_FILE}={PIPE_NAME_FILE}",
+        f"{PYTHON_VERSION_FILE}={PYTHON_VERSION_FILE}",
+        f"{NINEP_MOUNTS_FILE}={NINEP_MOUNTS_FILE}",
     ]
+    if python_exe:
+        graft_args.append(f"{PYTHON_EXE_FILE}={PYTHON_EXE_FILE}")
     for cmd in ("genisoimage", "mkisofs"):
         try:
             subprocess.run(
-                [cmd, "-o", NOCLOUD_ISO, "-V", CIDATA_LABEL, "-J", "-r"] + graft_args,
+                [
+                    cmd,
+                    "-o",
+                    NOCLOUD_ISO,
+                    "-V",
+                    CIDATA_LABEL,
+                    "-J",
+                    "-r",
+                ]
+                + graft_args,
                 check=True,
                 capture_output=True,
                 timeout=60,
@@ -292,25 +224,35 @@ runcmd:
 def prepare_guest_env(
     temp: Path,
     process_config: Any,
-    venv_site_packages_path: Path | None = None,
-    use_pysandboxes_9p: bool = False,
+    pipe_path: Path,
+    mounts: list[tuple[str, str]],
+    pipe_run_guest_path: str = GUEST_RUN_MOUNT,
+    python_version: str = "3.11",
+    python_exe: str | None = None,
+    config_guest_path: str | None = None,
 ) -> Path:
-    """Prepare NoCloud ISO for the guest (bootstrap + config embedded in ISO).
+    """Prepare NoCloud ISO: bootstrap script, 9p_mounts, pipe_name, python_version, optional python_exe.
 
-    Serializes process_config to config.pkl and includes it in the cloud-init ISO.
-    The guest accesses pysandboxes via virtio-9p (no copy into ISO).
-    Returns the path to the NoCloud iso.
+    mounts: list of (9p_tag, guest_path) so the guest mounts each tag at that path.
+    pipe_run_guest_path: guest path where the run dir (with FIFO) is mounted.
+    python_version: host Python major.minor (e.g. 3.13); guest must already have this version (verified, not installed).
+    python_exe: host sys.executable path (9p-mounted in guest); used when available, else guest python is checked.
+    config_guest_path: when set, guest reads config from this 9p path (e.g. /mnt/pysandbox_config/config.pkl) instead of pipe.
+    Returns the path to the NoCloud ISO.
     """
     logger.debug(
-        "qemu bootstrap: prepare_guest_env temp=%s venv_9p=%s pysandboxes_9p=%s",
+        "qemu bootstrap: prepare_guest_env temp=%s mounts=%s pipe=%s python=%s",
         temp,
-        venv_site_packages_path,
-        use_pysandboxes_9p,
+        len(mounts),
+        pipe_path.name,
+        python_version,
     )
-    _write_config_pkl(temp, process_config)
-    _write_bootstrap_http(temp)
-    iso_path = _create_nocloud_iso(temp, venv_site_packages_path, use_pysandboxes_9p)
-    logger.debug(
-        "qemu bootstrap: ISO created %s size=%s", iso_path, iso_path.stat().st_size
+    return _create_nocloud_iso(
+        temp,
+        mounts,
+        pipe_path.name,
+        pipe_run_guest_path,
+        python_version,
+        python_exe,
+        config_guest_path,
     )
-    return iso_path

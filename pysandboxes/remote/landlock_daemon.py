@@ -31,14 +31,10 @@ import tempfile
 from ctypes import Structure, c_int, c_size_t, c_uint32
 from pathlib import Path
 
-try:
-    from typing import override  # type: ignore[attr-defined]
-except ImportError:
-    from typing_extensions import override
-
 from ..all_rules import AllRules
 from ..guard_files import BindRule
 from ..guard_socket import Action, Direction, Kind, SocketRules
+from ..override_compat import override
 from ..sb_types import Envs
 from .sse_client_subprocess_daemon import SubProcessDaemon
 

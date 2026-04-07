@@ -154,6 +154,8 @@ class DaemonParameters(NamedTuple):
     init_fn: str
     netfilter_rules: tuple[str, ...] = ()
     python_main_args: tuple[str, ...] = ()
+    # For QEMU python_sb: guest path where host run dir is mounted; guest writes exit code there
+    guest_run_dir: str | None = None
 
 
 @sandbox_loop
@@ -190,7 +192,10 @@ async def launch_sandbox(
         config_writer(process_config)
     if DEBUG_LAUNCH:
         try:
-            Path("run.sh").write_text(
+            debug_tmp = Path("tmp")
+            debug_tmp.mkdir(parents=True, exist_ok=True)
+            run_sh = debug_tmp / "run.sh"
+            run_sh.write_text(
                 "#!/bin/bash\n"
                 + cmd[0]
                 + " "
@@ -199,6 +204,7 @@ async def launch_sandbox(
                 )
                 + "\n"
             )
+            logger.debug("DEBUG_LAUNCH: wrote %s", run_sh.resolve())
         except:  # noqa: E722
             logger.debug("Can not write run.sh")
     try:
@@ -432,7 +438,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                     if self._attempts > self._max_attempts:
                         import os
 
-                        logger.error("Too many demon shutdowns")
+                        logger.error("Too many daemon shutdowns")
                         os._exit(-2)
                     # Calculate the base delay for this attempt
                     current_base_backoff: float = min(

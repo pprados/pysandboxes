@@ -26,18 +26,13 @@ from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Iterator, MutableSet, cast
 
-from ..config import DEBUG
-
-try:
-    from typing import override  # type: ignore[attr-defined]
-except ImportError:
-    from typing_extensions import override
-
 from ..all_rules import AllRules
+from ..config import DEBUG
 from ..guard_files import BindRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
+from ..override_compat import override
 from ..sb_types import Args, ConfigLine, ConfigLines, Envs
 from ..tools import (
     Environ,
