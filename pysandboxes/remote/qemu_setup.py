@@ -43,6 +43,9 @@ def _bootstrap_script_content(
         "set -e",
         "echo '[pysandbox-bootstrap] starting' >&2",
         "",
+        "# Ensure guest DNS uses QEMU user net DNS (10.0.2.3) so name resolution works",
+        "rm -f /etc/resolv.conf && printf 'nameserver 10.0.2.3\\n' > /etc/resolv.conf",
+        "",
         "# Mount NoCloud cidata first so 9p_mounts, pipe_name and python_version are available",
         f"mkdir -p {GUEST_CIDATA_MOUNT}",
         f"mount /dev/vdb {GUEST_CIDATA_MOUNT} 2>/dev/null || mount LABEL={CIDATA_LABEL} {GUEST_CIDATA_MOUNT} || true",
@@ -198,6 +201,7 @@ network:
 runcmd:
   - systemctl stop serial-getty@ttyS0.service getty@ttyS0.service getty@tty1.service || true
   - systemctl mask serial-getty@ttyS0.service getty@ttyS0.service getty@tty1.service || true
+  - rm -f /etc/resolv.conf && printf 'nameserver 10.0.2.3\\n' > /etc/resolv.conf
   - {GUEST_BOOTSTRAP_SCRIPT}
 """
     meta_data = "instance-id: pysandboxes-qemu\nlocal-hostname: pysandbox\n"
