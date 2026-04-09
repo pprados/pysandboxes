@@ -15,6 +15,7 @@ import os
 import pickle
 import platform
 import site
+import subprocess
 import sys
 from ipaddress import IPv4Address
 from pathlib import Path
@@ -33,18 +34,23 @@ from .parameters import (
     LOOP_FOR_PING,
     TIMEOUT_FOR_PING,
 )
-from .qemu_guest_bootstrap import (
-    GUEST_CONFIG_MOUNT,
-    GUEST_RUN_MOUNT,
-    prepare_guest_env,
-)
-from .qemu_image import ensure_image, get_default_image_path, is_kvm_available
-from .sse_client_subprocess_daemon import (
+
+# VM boot + cloud-init can take 20–40s before main_sandbox listens; wait before pinging.
+QEMU_BOOT_DELAY = 20.0
+# Allow more ping attempts after boot (VM is slower than a subprocess).
+QEMU_LOOP_FOR_PING = 200
+from .client_subprocess_sse_daemon import (
     DaemonParameters,
     find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
+)
+from .qemu_image import ensure_image, get_default_image_path, is_kvm_available
+from .qemu_setup import (
+    GUEST_CONFIG_MOUNT,
+    GUEST_RUN_MOUNT,
+    prepare_guest_env,
 )
 from .tools import which_command
 from .vm_sse_daemon import VMSSEDaemon
@@ -173,7 +179,13 @@ class QemuSSEDaemon(VMSSEDaemon):
     def __init__(
         self, token: str, *, python_args: list[str] | None = None, **kwargs: Any
     ) -> None:
-        super().__init__(token, python_args=python_args or [], **kwargs)
+        # Force IPv4 so hostfwd (TCP only on 0.0.0.0) is used; "localhost" can resolve to ::1.
+        super().__init__(
+            token,
+            python_args=python_args or [],
+            host="127.0.0.1",
+            **kwargs,
+        )
         self._iso_config: DaemonParameters | None = None
 
     @override
@@ -196,16 +208,6 @@ class QemuSSEDaemon(VMSSEDaemon):
             else:
                 rest.append(rule)
         return ImmutableDict(params), rest
-
-    @override
-    def update_rules_and_activate(
-        self,
-        *,
-        envs: Envs,
-        all_rules: AllRules,
-        temp: Path,
-    ) -> AllRules:
-        return all_rules
 
     def _build_qemu_cmd(
         self,
@@ -356,7 +358,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         via 9p, runs main_sandbox --_named-pipe; host writes config to the pipe
         when the guest opens it (same flow as bwrap/unshare).
         """
-        from .sse_client_subprocess_daemon import get_callable_info
+        from .client_subprocess_sse_daemon import get_callable_info
 
         self._is_started = False
         self._accept_incoming = False
@@ -369,6 +371,17 @@ class QemuSSEDaemon(VMSSEDaemon):
         netfilter_rules = rule_to_netfilter(
             all_rules.socket_rules, dns_guest, is_ipv6=False
         )
+        # Allow host (10.0.2.2 in QEMU user mode) to reach the SSE server port.
+        if "COMMIT" in netfilter_rules:
+            idx = netfilter_rules.index("COMMIT")
+            sse_allow = (
+                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} "
+                "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+            )
+            netfilter_rules = (
+                list(netfilter_rules[:idx]) + [sse_allow] + list(netfilter_rules[idx:])
+            )
+        netfilter_rules = tuple(netfilter_rules)
 
         process_config = DaemonParameters(
             all_rules=all_rules,
@@ -407,44 +420,91 @@ class QemuSSEDaemon(VMSSEDaemon):
         def _noop_config_writer(_: DaemonParameters) -> None:
             pass
 
-        self._process = await launch_sandbox(
-            cmd,
+        show_boot = all_rules.os_sandbox_params.get(
+            "qemu.show_boot_console", "false"
+        ).lower() in ("true", "1", "yes")
+        # When show_boot_console is false (default), redirect QEMU stdout/stderr so
+        # boot/kernel/cloud-init traces are hidden; Python output is streamed via SSE.
+        launch_kwargs: dict[str, Any] = dict(
+            cmd=cmd,
             pipe_path=pipe_path,
             envs=Envs(env),
             process_config=process_config,
             config_writer=_noop_config_writer,
         )
+        if not show_boot:
+            launch_kwargs["stdout"] = subprocess.DEVNULL
+            launch_kwargs["stderr"] = subprocess.DEVNULL
+        self._process = await launch_sandbox(**launch_kwargs)
 
         await self._on_process_started()
 
         gc.collect()
         ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
-        logger.debug("Try to call %s", ping_url)
+        logger.info(
+            "Waiting %.0fs for QEMU guest to boot, then pinging %s (max %d attempts)",
+            QEMU_BOOT_DELAY,
+            ping_url,
+            QEMU_LOOP_FOR_PING,
+        )
+        await asyncio.sleep(QEMU_BOOT_DELAY)
+        import socket
+
         import aiohttp
         from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
-        async with aiohttp.ClientSession() as session:
+        # Force IPv4 so QEMU hostfwd is used (hostfwd is TCP on 0.0.0.0, not IPv6).
+        connector = aiohttp.TCPConnector(family=socket.AF_INET)
+        async with aiohttp.ClientSession(connector=connector) as session:
             count_loop = 0
             while True:
                 try:
                     count_loop += 1
-                    if count_loop > LOOP_FOR_PING:
-                        logger.error("Cannot connect to sandbox daemon (%s)", ping_url)
+                    if count_loop > QEMU_LOOP_FOR_PING:
+                        logger.error(
+                            "Cannot connect to sandbox daemon after %d attempts (%s)",
+                            count_loop - 1,
+                            ping_url,
+                        )
                         raise SystemExit(-1)
                     async with session.get(
                         ping_url,
                         timeout=ClientTimeout(total=TIMEOUT_FOR_PING),
                     ) as response:
                         if response.status == 200:
+                            logger.debug(
+                                "Ping succeeded on attempt %d to %s",
+                                count_loop,
+                                ping_url,
+                            )
                             break
+                        logger.warning(
+                            "Ping attempt %d: unexpected status %s from %s",
+                            count_loop,
+                            response.status,
+                            ping_url,
+                        )
                         raise RuntimeError(
                             f"Unexpected status {response.status} from {ping_url}"
                         )
-                except (TimeoutError, ClientConnectorError, ServerDisconnectedError):
-                    pass
+                except (
+                    TimeoutError,
+                    ClientConnectorError,
+                    ServerDisconnectedError,
+                ) as e:
+                    if count_loop % 25 == 0 or count_loop <= 3:
+                        logger.debug(
+                            "Ping attempt %d/%d failed: %s",
+                            count_loop,
+                            QEMU_LOOP_FOR_PING,
+                            type(e).__name__,
+                        )
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
-        logger.debug("Sandbox daemon is up and running")
+        logger.info(
+            "QEMU sandbox daemon is up and running at %s (host will now accept RPCs)",
+            ping_url,
+        )
         self._is_started = True
         self._accept_incoming = True

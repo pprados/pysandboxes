@@ -31,7 +31,7 @@ from ..tools import (
     remove_comments,
     substitute_env_vars,
 )
-from .sse_client_subprocess_daemon import BaseSubProcessDaemon
+from .client_subprocess_sse_daemon import BaseSubProcessDaemon
 from .tools import suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)

@@ -330,7 +330,7 @@ def activate_sandboxes(
         if os_sandbox not in providers_factory:
             raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
         os_provider: BaseDaemon = providers_factory[os_sandbox](token=None)
-        # Offer the opportunity to update the rules (add, remove, etc)
+        # Offer the opportunity to update the rules (add, remove, etc.)
         all_rules = os_provider.update_rules_and_activate(
             all_rules=all_rules,
             envs=Envs(envs),

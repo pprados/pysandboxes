@@ -3,17 +3,23 @@
 import asyncio
 import json
 import logging
+import socket
 import sys
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
+from pathlib import Path
 from typing import Any, Callable, Dict
 
+import aiohttp
 from aiohttp import ClientConnectorError, ClientPayloadError
 from aiohttp_sse_client import client as sse_client
 
+from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
 from ..private_loop import get_sandbox_loop, sandbox_loop
+from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
-from .parameters import INTERVAL_FOR_RETRY_CONNECTION
+from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL
 from .tools import from_b85, to_b85
 
 logger = logging.getLogger(__name__)
@@ -80,18 +86,30 @@ class BaseSSESandbox(BaseDaemon):
                 sandbox_server_url = (
                     self.base_url.replace("{PORT}", str(self.port)) + "/rpc"
                 )
+                logger.info("Calling sandbox at %s", sandbox_server_url)
                 logger.debug("Try to call %s", sandbox_server_url)
-                async with sse_client.EventSource(
-                    sandbox_server_url,
-                    # session=session,  # TODO: Use a correlationid?
-                    option={"method": "POST"},
-                    json=params,
-                    headers={
+                # Force IPv4 for localhost/127.0.0.1 so QEMU hostfwd is used.
+                session = None
+                if self.host in ("127.0.0.1", "localhost"):
+                    connector = aiohttp.TCPConnector(family=socket.AF_INET)
+                    session = aiohttp.ClientSession(connector=connector)
+                event_source_kw: dict[str, Any] = {
+                    "option": {"method": "POST"},
+                    "json": params,
+                    "headers": {
                         "Accept": "text/event-stream",
                         "Authorization": f"Bearer {token}",
                     },
-                    reconnection_time=timedelta(seconds=INTERVAL_FOR_RETRY_CONNECTION),
-                    max_connect_retry=self.max_connect_retry,
+                    "reconnection_time": timedelta(
+                        seconds=INTERVAL_FOR_RETRY_CONNECTION
+                    ),
+                    "max_connect_retry": self.max_connect_retry,
+                }
+                if session is not None:
+                    event_source_kw["session"] = session
+                async with sse_client.EventSource(
+                    sandbox_server_url,
+                    **event_source_kw,
                 ) as event_source:
                     async for event in event_source:
                         msg = json.loads(event.data)
@@ -142,6 +160,22 @@ class BaseSSESandbox(BaseDaemon):
         # daemon was started from another loop (e.g. pytest async fixture).
         loop = get_sandbox_loop()
 
-        return asyncio.run_coroutine_threadsafe(
+        future = asyncio.run_coroutine_threadsafe(
             self.async_call_in_sandbox(func, _force_incomming, *args, **kwargs), loop
-        ).result()
+        )
+        try:
+            return future.result(timeout=TIMEOUT_FOR_RPC_CALL)
+        except FutureTimeoutError:
+            raise RuntimeError(
+                f"Sandbox RPC did not respond within {TIMEOUT_FOR_RPC_CALL}s. "
+                "Check that the guest is reachable (e.g. QEMU hostfwd, firewall)."
+            ) from None
+
+    def update_rules_and_activate(
+        self,
+        *,
+        all_rules: AllRules,
+        envs: Envs,
+        temp: Path,
+    ) -> AllRules:
+        return all_rules

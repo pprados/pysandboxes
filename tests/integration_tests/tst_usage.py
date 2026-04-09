@@ -7,7 +7,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
-from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
+from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM, gaierror
 from types import FrameType
 from typing import Any, List, Mapping, cast
 
@@ -300,6 +300,8 @@ def _test_network() -> int:
         except SandBoxError:
             logger.info(f"{OK} Use socket to connect to github is stopped")
         except TimeoutError:
+            logger.info(f"{OK} Use socket to connect to github is stopped by OS")
+        except gaierror:
             logger.info(f"{OK} Use socket to connect to github is stopped by OS")
 
         try:

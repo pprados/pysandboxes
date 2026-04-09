@@ -36,7 +36,7 @@ from ..guard_files import BindRule
 from ..guard_socket import Action, Direction, Kind, SocketRules
 from ..override_compat import override
 from ..sb_types import Envs
-from .sse_client_subprocess_daemon import SubProcessDaemon
+from .client_subprocess_sse_daemon import SubProcessDaemon
 
 logger = logging.getLogger(__name__)
 

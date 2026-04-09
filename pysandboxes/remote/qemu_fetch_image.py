@@ -10,7 +10,7 @@ is set, the image is downloaded. Otherwise prints the expected path and env var 
 
 import sys
 
-from .remote.qemu_image import (
+from .qemu_image import (
     ENV_VM_IMAGE_BASE_URL,
     ENV_VM_IMAGE_URL,
     ensure_image,

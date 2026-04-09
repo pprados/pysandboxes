@@ -3,6 +3,8 @@
 import asyncio
 import logging
 import os
+import re
+import subprocess
 import sys
 import tempfile
 import uuid
@@ -14,9 +16,7 @@ from pysandboxes.config import DEBUG
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.main_logger import config_log
 from pysandboxes.py_sandbox import load_and_parse_config
-from pysandboxes.remote.none_daemon import NoneDaemon
-from pysandboxes.remote.python_in_sb import convert_extra_rules
-from pysandboxes.remote.sse_client_subprocess_daemon import (
+from pysandboxes.remote.client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
     DaemonParameters,
     find_free_port,
@@ -24,12 +24,76 @@ from pysandboxes.remote.sse_client_subprocess_daemon import (
     launch_sandbox,
     use_rich_handler,
 )
+from pysandboxes.remote.none_daemon import NoneDaemon
+from pysandboxes.remote.python_in_sb import convert_extra_rules
 from pysandboxes.sb_types import Envs
 from pysandboxes.tools import Environ
 
 from .remote.parse_cpython_args import parse_python_cmd_line
+from .remote.qemu_console_sentinels import (
+    PYTHON_OUTPUT_END,
+    PYTHON_OUTPUT_START,
+)
 
 logger = logging.getLogger(__name__)
+
+# QEMU console filter state: 0=waiting for start sentinel, 1=forwarding, 2=stopped
+_FORWARD_STATE_WAITING = 0
+_FORWARD_STATE_FORWARDING = 1
+_FORWARD_STATE_STOPPED = 2
+
+# Strip kernel/cloud-init style prefix e.g. "[   12.525772] cloud-init[672]: "
+_QEMU_CONSOLE_PREFIX = re.compile(r"^\s*\[\s*\d+\.\d+\]\s*\w+\[\d+\]:\s*")
+
+
+def _qemu_forward_state_for_line(line: str, state: list[int]) -> bool:
+    """Update state from line (start/end sentinels) and return True if line should be printed."""
+    s = state[0]
+    if s == _FORWARD_STATE_WAITING:
+        if PYTHON_OUTPUT_START in line:
+            state[0] = _FORWARD_STATE_FORWARDING
+        return False
+    if s == _FORWARD_STATE_FORWARDING:
+        if PYTHON_OUTPUT_END in line:
+            state[0] = _FORWARD_STATE_STOPPED
+            return False
+        return True
+    return False  # _FORWARD_STATE_STOPPED
+
+
+async def _qemu_read_and_forward(
+    stream: asyncio.StreamReader | None,
+    is_stderr: bool,
+    state: list[int],
+) -> None:
+    """Read QEMU console stream and forward only lines between start and end sentinels."""
+    if stream is None:
+        return
+    out = sys.stderr if is_stderr else sys.stdout
+    while True:
+        try:
+            line = await stream.readline()
+        except (ConnectionResetError, BrokenPipeError):
+            break
+        if not line:
+            break
+        try:
+            text = line.decode("utf-8", errors="replace")
+        except Exception:
+            text = str(line)
+        if _qemu_forward_state_for_line(text, state):
+            print(text, end="", file=out, flush=True)
+
+
+async def _qemu_wait_and_filter_console(process: asyncio.subprocess.Process) -> int:
+    """Wait for QEMU process and forward only guest Python output (between start/end sentinels)."""
+    state: list[int] = [_FORWARD_STATE_WAITING]
+    t_stdout = asyncio.create_task(_qemu_read_and_forward(process.stdout, False, state))
+    t_stderr = asyncio.create_task(_qemu_read_and_forward(process.stderr, True, state))
+    exit_code = await process.wait()
+    await t_stdout
+    await t_stderr
+    return exit_code if exit_code is not None else -1
 
 
 def _debug_log() -> None:
@@ -110,8 +174,8 @@ def main() -> int:
         pipe_path.unlink(missing_ok=True)
         if all_rules.os_sandbox == "qemu":
             # For QEMU: build process_config before subprocess_cmd so the ISO
-            # can be created with the config embedded (no HTTP server needed).
-            from pysandboxes.remote.qemu_guest_bootstrap import GUEST_RUN_MOUNT
+            # can be created with the config embedded.
+            from pysandboxes.remote.qemu_setup import GUEST_RUN_MOUNT  # FIXME
 
             os_provider.port = (
                 find_free_port() if all_rules.port == -1 else all_rules.port
@@ -167,24 +231,97 @@ def main() -> int:
         launch_args = cmd if all_rules.os_sandbox == "qemu" else cmd + python_cmd
 
         async def launch_and_wait() -> int:
-            process = await launch_sandbox(
-                launch_args,
-                pipe_path,
-                envs=Envs(env),
-                process_config=process_config,
-                extra_preexec_fn=extra_preexec_fn,
-                pass_fds=pass_fds,
-                on_launched=os_provider.on_process_launched,
-                config_writer=config_writer,
-            )
-            try:
-                return await process.wait()
-            finally:
-                kill_slirp = getattr(os_provider, "_kill_slirp", None)
-                if callable(kill_slirp):
-                    kill_slirp()
+            if all_rules.os_sandbox == "qemu":
+                show_boot = all_rules.os_sandbox_params.get(
+                    "qemu.show_boot_console", "false"
+                ).lower() in ("true", "1", "yes")
+                qemu_console_file = None
+                launch_kwargs: dict[str, Any] = dict(
+                    cmd=launch_args,
+                    pipe_path=pipe_path,
+                    envs=Envs(env),
+                    process_config=process_config,
+                    extra_preexec_fn=extra_preexec_fn,
+                    pass_fds=pass_fds,
+                    on_launched=os_provider.on_process_launched,
+                    config_writer=config_writer,
+                )
+                if not show_boot:
+                    launch_kwargs["stdout"] = subprocess.PIPE
+                    launch_kwargs["stderr"] = subprocess.PIPE
+                else:
+                    qemu_console_path = Path(
+                        os.environ.get(
+                            "PYSANDBOXES_QEMU_CONSOLE_LOG",
+                            ".pysandbox-qemu-console.log",
+                        )
+                    )
+                    qemu_console_file = open(qemu_console_path, "w")
+                    try:
+                        print(
+                            "[HOST] QEMU guest console →",
+                            qemu_console_path.resolve(),
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        print(
+                            "[HOST] Run in another terminal: tail -f",
+                            qemu_console_path.resolve(),
+                            "(to see guest output including 'Calling sandbox at...')",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        launch_kwargs["stdout"] = qemu_console_file.fileno()
+                        launch_kwargs["stderr"] = qemu_console_file.fileno()
+                    except Exception:
+                        qemu_console_file.close()
+                        raise
+                process = await launch_sandbox(**launch_kwargs)
+                try:
+                    if (
+                        not show_boot
+                        and process.stdout is not None
+                        and process.stderr is not None
+                    ):
+                        return await _qemu_wait_and_filter_console(process)
+                    return await process.wait()
+                finally:
+                    if qemu_console_file is not None:
+                        qemu_console_file.close()
+                    kill_slirp = getattr(os_provider, "_kill_slirp", None)
+                    if callable(kill_slirp):
+                        kill_slirp()
+            else:
+                process = await launch_sandbox(
+                    launch_args,
+                    pipe_path,
+                    envs=Envs(env),
+                    process_config=process_config,
+                    extra_preexec_fn=extra_preexec_fn,
+                    pass_fds=pass_fds,
+                    on_launched=os_provider.on_process_launched,
+                    config_writer=config_writer,
+                )
+                try:
+                    return await process.wait()
+                finally:
+                    kill_slirp = getattr(os_provider, "_kill_slirp", None)
+                    if callable(kill_slirp):
+                        kill_slirp()
 
+        print(
+            "[HOST] Launching sandbox (waiting for guest to finish)...",
+            file=sys.stderr,
+            flush=True,
+        )
         return_code = asyncio.run(launch_and_wait())
+        print(
+            "[HOST] Guest process finished (exit code",
+            return_code,
+            ")",
+            file=sys.stderr,
+            flush=True,
+        )
         # For QEMU, guest writes exit code to shared run dir; use it if present
         if all_rules.os_sandbox == "qemu":
             exitcode_file = Path(tmpdir) / "exitcode"

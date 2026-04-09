@@ -34,7 +34,9 @@ def _bootstrap_script_content(
     python_exe: str | None = None,
     config_guest_path: str | None = None,
 ) -> str:
-    """Build the guest bootstrap script: mount cidata, verify Python version (no install), then run main_sandbox --_named-pipe (config from 9p or pipe)."""
+    """Build the guest bootstrap script: mount cidata,
+    verify Python version (no install), then run main_sandbox
+    --_named-pipe (config from 9p or pipe)."""
     lines = [
         "#!/bin/bash",
         "set -e",
@@ -56,7 +58,8 @@ def _bootstrap_script_content(
         lines.append('  mkdir -p "$path"')
         lines.append('  echo "[pysandbox-9p] $tag -> $path" >&2')
         lines.append(
-            '  mount -t 9p -o trans=virtio,version=9p2000.L "$tag" "$path" 2>&1 | sed \'s/^/[pysandbox-9p] /\' >&2 || true'
+            "  mount -t 9p -o trans=virtio,version=9p2000.L "
+            '"$tag" "$path" 2>&1 | sed \'s/^/[pysandbox-9p] /\' >&2 || true'
         )
         lines.append("done < " + f"{GUEST_CIDATA_MOUNT}/{NINEP_MOUNTS_FILE}")
         lines.append("")

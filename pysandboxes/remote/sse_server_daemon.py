@@ -38,13 +38,13 @@ from ..tools import (
     SyncOrAsyncFunc,
     set_is_in_sandbox,
 )
+from .base_sse_daemon import BaseSSESandbox
 from .parameters import (
     MAX_CONNECT_RETRY,
     POLLING_DELAY,
     TIMEOUT_FOR_STOP_DAEMON,
     TIMEOUT_GRACEFUL_SHUTDOWN,
 )
-from .sse_base_daemon import BaseSSESandbox
 from .tools import from_b85, to_b85
 
 logger = logging.getLogger(__name__)
