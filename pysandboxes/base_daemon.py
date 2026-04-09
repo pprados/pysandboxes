@@ -116,7 +116,7 @@ class BaseDaemon(ABC):
         """Must be called via async_shutdown_daemon().
 
         Args:
-            graceful_shutdown: Whether to shutdown gracefully.
+            graceful_shutdown: Whether too shutdown gracefully.
         """
         self._accept_incoming = False
 

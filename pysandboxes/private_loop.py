@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Weak reference to the background event loop to allow for garbage collection.
 _background_loop_ref: AbstractEventLoop | None = None
-_new_event_loop: bool = False  # True if use a private loop
+_new_event_loop: bool = False  # True, if used a private loop
 
 # Thread-safe lock for creating and managing the background loop.
 _lock = threading.Lock()

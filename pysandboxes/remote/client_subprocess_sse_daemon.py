@@ -41,6 +41,7 @@ from ..private_loop import sandbox_loop
 from ..sb_types import Args, ConfigLine, Envs
 from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
+from .base_sse_daemon import BaseSSESandbox
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
@@ -53,7 +54,6 @@ from .parameters import (
     TIMEOUT_FOR_PING,
     TIMEOUT_FOR_STOP_DAEMON,
 )
-from .sse_base_daemon import BaseSSESandbox
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +168,8 @@ async def launch_sandbox(
     pass_fds: tuple[int, ...] = (),
     on_launched: Callable[[int], None] | None = None,
     config_writer: Callable[["DaemonParameters"], None] | None = None,
+    stdout: int | None = None,
+    stderr: int | None = None,
 ) -> Process:
     """Launch a sandbox subprocess with the given configuration.
 
@@ -181,6 +183,8 @@ async def launch_sandbox(
         on_launched: Optional callback invoked with the process PID after
             subprocess creation but before writing config to the FIFO.
         config_writer: If set, use instead of FIFO (e.g. HTTP server); called before starting process.
+        stdout: Optional file descriptor for child stdout (e.g. to avoid mixing with host console).
+        stderr: Optional file descriptor for child stderr.
 
     Returns:
         The launched subprocess.
@@ -223,6 +227,10 @@ async def launch_sandbox(
         )
         if pass_fds:
             subprocess_kwargs["pass_fds"] = pass_fds
+        if stdout is not None:
+            subprocess_kwargs["stdout"] = stdout
+        if stderr is not None:
+            subprocess_kwargs["stderr"] = stderr
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -294,7 +302,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
     async def _on_process_started(self) -> None:
         """Hook called after the subprocess is started but before the ping loop."""
-        pass
 
     def __init__(
         self,
@@ -569,14 +576,21 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             envs=Envs(env),
             process_config=process_config,
         )
-
-        await self._on_process_started()
-
+        ping_url = f"http://127.0.0.1:{port}/ping"
+        logger.info(
+            "Subprocess launched (pid=%s), pinging %s",
+            self._process.pid,
+            ping_url,
+        )
+        try:
+            await self._on_process_started()
+        except Exception as e:  # noqa: BLE001
+            raise
+        logger.info("Pinging subprocess daemon at %s", ping_url)
         # Wait the server
         gc.collect()
-        ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
-        logger.debug("Try to call %s", ping_url)
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(family=socket.AF_INET)
+        async with aiohttp.ClientSession(connector=connector) as session:
             count_loop = 0
             while True:
                 try:
@@ -600,15 +614,26 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                                 f"Unexpected status {response.status} from {ping_url}"
                             )
                 except TimeoutError:
-                    pass  # Ignore and continue
-                except (ClientConnectorError, ServerDisconnectedError):
-                    pass  # Ignore and continue
+                    if count_loop % 15 == 0:
+                        logger.info(
+                            "Ping attempt %d/%d: timeout (subprocess not ready yet?)",
+                            count_loop,
+                            LOOP_FOR_PING,
+                        )
+                except (ClientConnectorError, ServerDisconnectedError) as e:
+                    if count_loop % 15 == 0:
+                        logger.info(
+                            "Ping attempt %d/%d: %s",
+                            count_loop,
+                            LOOP_FOR_PING,
+                            type(e).__name__,
+                        )
 
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
         # One more time
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
-        logger.debug("Sandbox daemon is up and running")
+        logger.info("Subprocess daemon is up and running at %s", ping_url)
         self._is_started = True
         self._accept_incoming = True
 

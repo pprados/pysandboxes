@@ -134,7 +134,7 @@ class sandboxes:
         extra_rules: Additional security rules to apply.
         learning_path: Path for learning mode rule generation.
         python_args: Additional Python interpreter arguments.
-        graceful_shutdown: Whether to shutdown gracefully on exit.
+        graceful_shutdown: Whether to shut down gracefully on exit.
 
     Examples:
         Basic usage:
@@ -208,7 +208,7 @@ class sandboxes:
 
     def _unregister_signals_handlers(self) -> None:
         with self._lock:
-            # If use private a private loop, the signal will be removed if it's handle
+            # If used private a private loop, the signal will be removed if it's handle
             if threading.current_thread() is threading.main_thread():
                 for s, h in self._signals.items():
                     signal.signal(s, h)
@@ -235,7 +235,7 @@ class sandboxes:
             sandboxes_config: Path to configuration file or directory.
             envs: Environment variables to make available in sandbox.
             python_args: Additional arguments for Python interpreter.
-            graceful_shutdown: Whether to shutdown gracefully on exit.
+            graceful_shutdown: Whether to shut down gracefully on exit.
             **extra_rules: Additional security rules as keyword arguments.
         """
         self.init_fn = init_fn
@@ -397,6 +397,7 @@ def run(
         ):
             result = (await asyncio.create_task(main), "_start sandbox in run")
             return result
+        return None
 
     if not inspect.iscoroutine(main):
         raise ValueError("a coroutine was expected, got {!r}".format(main))

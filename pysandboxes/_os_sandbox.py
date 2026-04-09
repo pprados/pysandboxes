@@ -21,16 +21,20 @@ from .private_loop import (
     get_sandbox_loop,
     sandbox_loop,
 )
+from .remote.bwrap_sse_daemon import BWrapSSEDaemon
+from .remote.client_subprocess_sse_daemon import SubProcessDaemon
+from .remote.firejail_sse_daemon import FireJailSSEDaemon
 from .remote.landlock_daemon import LandlockSSEDaemon
 from .remote.none_daemon import NoneDaemon
-from .remote.parameters import TIMEOUT_FOR_START_DAEMON, TIMEOUT_FOR_STOP_DAEMON
+from .remote.parameters import (
+    TIMEOUT_FOR_START_DAEMON,
+    TIMEOUT_FOR_START_DAEMON_QEMU,
+    TIMEOUT_FOR_STOP_DAEMON,
+)
 from .remote.qemu_sse_daemon import QemuSSEDaemon
-from .remote.sse_bwrap_daemon import BWrapSSEDaemon
-from .remote.sse_client_subprocess_daemon import SubProcessDaemon
-from .remote.sse_firejail_daemon import FireJailSSEDaemon
 from .remote.sse_server_daemon import SSEServerDaemon
-from .remote.sse_unshare_daemon import UnshareSSEDaemon
 from .remote.task_daemon import TaskDaemon
+from .remote.unshare_sse_daemon import UnshareSSEDaemon
 from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox
 
 logger = logging.getLogger(__name__)
@@ -240,6 +244,13 @@ def start_daemon(
 
         async def _start_daemon_and_signal() -> None:
             """Helper to run async start and signal completion."""
+            import sys
+
+            print(
+                "[pysandbox] TRACE: _start_daemon_and_signal task started", flush=True
+            )
+            sys.stdout.flush()
+            sys.stderr.flush()
             await async_start_daemon(
                 all_rules,
                 envs=envs,
@@ -250,12 +261,26 @@ def start_daemon(
             start_event.set()
             logger.debug("Start event set")
 
+        logger.info(
+            "Starting %s daemon (waiting up to %ss for ready)",
+            all_rules.os_sandbox,
+            (
+                TIMEOUT_FOR_START_DAEMON_QEMU
+                if all_rules.os_sandbox == "qemu"
+                else TIMEOUT_FOR_START_DAEMON
+            ),
+        )
         loop.call_soon_threadsafe(
             lambda: loop.create_task(_start_daemon_and_signal(), name="Start daemon")
         )
-        if not start_event.wait(timeout=TIMEOUT_FOR_START_DAEMON):
+        start_timeout = (
+            TIMEOUT_FOR_START_DAEMON_QEMU
+            if all_rules.os_sandbox == "qemu"
+            else TIMEOUT_FOR_START_DAEMON
+        )
+        if not start_event.wait(timeout=start_timeout):
             raise RuntimeError(
-                f"Daemon failed to start within {TIMEOUT_FOR_START_DAEMON}s. "
+                f"Daemon failed to start within {start_timeout}s. "
                 "Check that unshare/slirp4netns are installed and the environment allows namespaces."
             )
         assert _current_daemon

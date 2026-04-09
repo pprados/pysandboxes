@@ -9,7 +9,7 @@ args only — do not append ["--_named-pipe", str(pipe_path)] to args; the guest
 receives config by provider-specific means (e.g. HTTP from host).
 """
 
-from .sse_client_subprocess_daemon import BaseSubProcessDaemon
+from .client_subprocess_sse_daemon import BaseSubProcessDaemon
 
 __all__ = ["VMSSEDaemon"]
 

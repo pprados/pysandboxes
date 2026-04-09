@@ -60,7 +60,7 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
 
         if default_value is None:
             default_value = ""
-        value = cast(str, envs.get(var_name, default_value))
+        value = envs.get(var_name, default_value)
         return value
 
     while re.search(r"\${.*}", s):

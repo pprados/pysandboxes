@@ -190,3 +190,4 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 qemu.use_kvm=true  # FIXME
 qemu.memory=2048
+# qemu.show_boot_console=false  # default: hide boot/kernel/cloud-init; set true to see or log to file

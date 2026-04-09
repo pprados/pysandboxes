@@ -52,6 +52,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [Cloud morph](https://cloud.morph.so/)
+    - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
   - [ ] Apple
     - [ ] App Sandbox
     - [ ] sandbox-exec

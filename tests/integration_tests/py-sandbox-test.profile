@@ -25,3 +25,4 @@ net=ALLOW|*|*|53|*
 ignore=.env
 
 qemu.use_kvm=true  # FIXME
+qemu.show_boot_console=false

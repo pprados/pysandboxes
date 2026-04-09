@@ -261,7 +261,7 @@ def ensure_image(path: Path) -> Path:
     """Return path if the image file exists; otherwise try to download it.
 
     If the file is missing, get_download_url(path) is used; when a URL is
-    available the image is downloaded to path. Otherwise raises FileNotFoundError.
+    available the image is downloaded to path. Otherwise, raises FileNotFoundError.
 
     Args:
         path: Path to the image file (typically from get_default_image_path()).

@@ -45,13 +45,21 @@ from ..main_logger import ErrorMsg, pysandboxes_logger
 from ..netfilter import rule_to_netfilter
 from ..override_compat import override
 from ..private_loop import sandbox_loop
-from ..sb_types import Args, ConfigLine, ConfigLines, Envs
+from ..sb_types import Args, ConfigLine, ConfigLines
 from ..tools import (
     Environ,
     SyncOrAsyncFunc,
     get_callable_info,
     remove_comments,
     substitute_env_vars,
+)
+from .client_subprocess_sse_daemon import (
+    DEBUG_LAUNCH,
+    BaseSubProcessDaemon,
+    DaemonParameters,
+    find_free_port,
+    get_log_formatter,
+    use_rich_handler,
 )
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
@@ -63,14 +71,6 @@ from .parameters import (
     RETRY_MAX_DELAY,
     RETRY_RESET_DELAY,
     TIMEOUT_FOR_PING,
-)
-from .sse_client_subprocess_daemon import (
-    DEBUG_LAUNCH,
-    BaseSubProcessDaemon,
-    DaemonParameters,
-    find_free_port,
-    get_log_formatter,
-    use_rich_handler,
 )
 from .tools import get_upstream_dns, which_command
 from .unshare_setup import UnshareSetupConfig
@@ -202,18 +202,6 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             else:
                 ignore_rules.append(rule)
         return ImmutableDict(unshare_params), ignore_rules
-
-    @override
-    def update_rules_and_activate(
-        self,
-        *,
-        all_rules: AllRules,
-        envs: Envs,
-        temp: Path,
-    ) -> AllRules:
-        # FIXME: consider adding /etc ? all_rules = all_rules._replace()
-
-        return all_rules
 
     # -- Private helpers for building the unshare command --
 

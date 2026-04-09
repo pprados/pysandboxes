@@ -36,8 +36,8 @@ from ..learning import (
 from ..main_logger import config_log
 from ..remote.sse_server_daemon import SSEServerDaemon
 from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
+from .client_subprocess_sse_daemon import DaemonParameters
 from .python_in_sb import python_in_sb
-from .sse_client_subprocess_daemon import DaemonParameters
 from .tools import set_pdeathsig
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
@@ -78,7 +78,7 @@ def run_guest(process_config: DaemonParameters) -> int:
     config_log(process_config.log_level, log_format, process_config.use_rich_handler)
     all_rules = process_config.all_rules
     set_learning_path(all_rules.learning_path)
-    set_pin_dns(all_rules.pin_dns)
+    # set_pin_dns already called in main() before run_guest(); do not call again (assert in guard_socket)
     # Apply profile env to process so guards see them (e.g. My_ENV for tests)
     for k, v in dict(all_rules.envs).items():
         os.environ[k] = str(v) if v is not None else ""
@@ -105,7 +105,16 @@ def run_guest(process_config: DaemonParameters) -> int:
             # In guest VM, use subprocess so start_daemon() launches a local Python server
             # instead of trying to start another QEMU.
             os.environ["OS_SANDBOX"] = "subprocess"
-            rc = python_in_sb(all_rules, list(python_main_args))
+            from .qemu_console_sentinels import (
+                PYTHON_OUTPUT_END,
+                PYTHON_OUTPUT_START,
+            )
+
+            print(PYTHON_OUTPUT_START, flush=True, file=sys.stderr)
+            try:
+                rc = python_in_sb(all_rules, list(python_main_args))
+            finally:
+                print(PYTHON_OUTPUT_END, flush=True, file=sys.stderr)
         else:
             rc = asyncio.run(run_server(process_config))
         _write_exitcode(rc)
@@ -180,7 +189,10 @@ async def run_server(process_config: DaemonParameters) -> int:
         init_fn=init_fn,
     )
     set_learning_mode(all_rules.learn)
-    logger.debug("join server_daemon...")
+    logger.info(
+        "SSE server listening on 0.0.0.0:%s; joining server_daemon (blocking until shutdown)",
+        process_config.port,
+    )
     await server_daemon.join()
     return 0
 
@@ -194,6 +206,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
+    print("[pysandbox] TRACE: main_sandbox main() started", flush=True)
     logging.getLogger().addHandler(StreamHandler(None))  # Set default handler to stderr
     if DEBUG:
         _debug_log()
@@ -215,7 +228,12 @@ def main() -> int:
     # Read all configuration from named-pipe (or config file for QEMU) until EOF
     assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
     config_path = Path(sandboxes_parsed._named_pipe.strip())
+    print(
+        f"[pysandbox] TRACE: main_sandbox opening pipe for read: {config_path!s}",
+        flush=True,
+    )
     pickle_data: bytes = config_path.read_bytes()
+    print("[pysandbox] TRACE: main_sandbox pipe read done, got config", flush=True)
     # Only the parent process feeds the named_pipe; no risk of malicious pickle
     # injection.
     process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
@@ -225,11 +243,19 @@ def main() -> int:
     # Apply iptables rules in VM guest (QEMU) when provided
     netfilter_rules = getattr(process_config, "netfilter_rules", ()) or ()
     if netfilter_rules:
-        subprocess.run(
-            ["iptables-restore", "--noflush"],
-            input="\n".join(netfilter_rules).encode(),
-            check=False,
-        )
+        # Use absolute path to avoid PATH symlink issues in guest (e.g. 9p mounts)
+        for candidate in ("/usr/sbin/iptables-restore", "/sbin/iptables-restore"):
+            if Path(candidate).is_file():
+                subprocess.run(
+                    [candidate, "--noflush"],
+                    input="\n".join(netfilter_rules).encode(),
+                    check=False,
+                )
+                break
+        else:
+            logger.warning(
+                "iptables-restore not found at /usr/sbin or /sbin; skipping netfilter rules"
+            )
 
     # Add ident inside the sandbox
     log_format = " " + process_config.log_format
@@ -252,7 +278,12 @@ def main() -> int:
     pysandboxes.os_sandbox = all_rules.os_sandbox
     activate_sandboxes(all_rules, os.environ)
 
-    # Use python-sb command?
+    # QEMU/python_sb: config was written by host with python_main_args → run user module in guest
+    python_main_args = getattr(process_config, "python_main_args", ()) or ()
+    if python_main_args:
+        return run_guest(process_config)
+
+    # Use python-sb command? (subprocess/firejail path: args from CLI)
     if sandboxes_parsed._python_sb:
         set_learning_mode(all_rules.learn)
         return python_in_sb(all_rules, sandboxes_args)

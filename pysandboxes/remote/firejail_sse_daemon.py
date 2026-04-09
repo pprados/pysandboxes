@@ -40,7 +40,7 @@ from ..tools import (
     remove_comments,
     substitute_env_vars,
 )
-from .sse_client_subprocess_daemon import BaseSubProcessDaemon
+from .client_subprocess_sse_daemon import BaseSubProcessDaemon
 from .tools import (
     get_bridge_interfaces,
     get_default_interface,

@@ -8,7 +8,7 @@ case "$arch" in
     arm64) qemu_pkg=qemu-system-aarch64 ;;
     *) echo "Unsupported arch for QEMU: $arch"; exit 1 ;;
 esac
-apt-get update && apt-get install -y --no-install-recommends "$qemu_pkg" qemu-utils
+apt-get update && apt-get install -y --no-install-recommends "$qemu_pkg" qemu-utils genisoimage
 mkdir -p "${PYSANDBOXES_VM_IMAGES_DIR:?}"
 python -m pysandboxes.fetch_qemu_image
 apt-get autoremove -y

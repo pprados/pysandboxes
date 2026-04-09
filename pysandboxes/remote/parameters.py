@@ -21,6 +21,11 @@ LOOP_FOR_PING = 100  # Try to ping how many times?
 
 # Start daemon timeout (sync start_daemon() wait for async start to complete)
 TIMEOUT_FOR_START_DAEMON = 30  # seconds
+# QEMU needs VM boot (QEMU_BOOT_DELAY) + ping loop; allow up to 90s
+TIMEOUT_FOR_START_DAEMON_QEMU = 90  # seconds
+
+# RPC call timeout (prevents infinite block if guest never responds)
+TIMEOUT_FOR_RPC_CALL = 120  # seconds
 
 # Shutdown and lifecycle timing
 TIMEOUT_GRACEFUL_SHUTDOWN = 2  # Graceful shutdown timeout
