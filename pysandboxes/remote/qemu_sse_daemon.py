@@ -150,6 +150,26 @@ def _file_rules_mounts(
         existing_guest_paths.add(guest_path)
         mount_specs.append((tag, host_path, guest_path))
         mount_list.append((tag, guest_path))
+
+    # Keep deterministic mount order while preserving semantics:
+    # - File rules first (pysb_<idx>) so project paths can override import resolution.
+    # - Within file rules, parent paths first, so writable child mounts (e.g. .../tmp)
+    #   can override read-only parent mounts.
+    # - Runtime/config mounts next, execution dirs last.
+    def _mount_order(tag: str, guest_path: str) -> tuple[int, int, int, str]:
+        if tag.startswith("pysb_") and tag[5:].isdigit():
+            depth = len(Path(guest_path).parts)
+            return (0, depth, int(tag[5:]), guest_path)
+        if tag == "pysb_config":
+            return (1, 0, 0, guest_path)
+        if tag == "pysb_run":
+            return (1, 1, 0, guest_path)
+        if tag.startswith("pysb_exec_") and tag[9:].isdigit():
+            return (2, 0, int(tag[9:]), guest_path)
+        return (3, 0, 0, guest_path)
+
+    mount_list.sort(key=lambda m: _mount_order(m[0], m[1]))
+    mount_specs.sort(key=lambda m: _mount_order(m[0], m[2]))
     return mount_specs, mount_list
 
 

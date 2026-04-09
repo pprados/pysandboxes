@@ -33,6 +33,7 @@ def _bootstrap_script_content(
     python_version: str,
     python_exe: str | None = None,
     config_guest_path: str | None = None,
+    guest_cwd: str | None = None,
 ) -> str:
     """Build the guest bootstrap script: mount cidata,
     verify Python version (no install), then run main_sandbox
@@ -99,7 +100,7 @@ def _bootstrap_script_content(
         ]
     )
     pypath = ":".join(m[1] for m in mounts) if mounts else ""
-    guest_cwd = mounts[0][1] if mounts else "/"
+    guest_cwd = guest_cwd or (mounts[0][1] if mounts else "/")
     if config_guest_path:
         lines.extend(
             [
@@ -131,6 +132,7 @@ def _bootstrap_script_content(
 
 def _create_nocloud_iso(
     temp: Path,
+    process_config: Any,
     mounts: list[tuple[str, str]],
     pipe_basename: str,
     pipe_run_guest_path: str,
@@ -139,8 +141,16 @@ def _create_nocloud_iso(
     config_guest_path: str | None = None,
 ) -> Path:
     """Create NoCloud ISO with user-data, meta-data, bootstrap script, 9p_mounts, pipe_name, python_version, python_exe (version is verified in guest, not installed)."""
+    all_rules = getattr(process_config, "all_rules", None)
+    root_path = getattr(all_rules, "root_path", None)
+    guest_cwd = str(root_path.resolve()) if isinstance(root_path, Path) else None
     script_content = _bootstrap_script_content(
-        mounts, pipe_run_guest_path, python_version, python_exe, config_guest_path
+        mounts,
+        pipe_run_guest_path,
+        python_version,
+        python_exe,
+        config_guest_path,
+        guest_cwd=guest_cwd,
     )
     script_yaml = "\n".join("      " + line for line in script_content.splitlines())
     (temp / PIPE_NAME_FILE).write_text(pipe_basename.strip(), encoding="utf-8")
@@ -166,6 +176,10 @@ write_files:
     content: |
       [Service]
       TimeoutStartSec=5
+    permissions: '0644'
+  - path: /etc/resolv.conf
+    content: |
+      nameserver 10.0.2.3
     permissions: '0644'
   - path: {GUEST_BOOTSTRAP_SCRIPT}
     content: |
@@ -252,6 +266,7 @@ def prepare_guest_env(
     )
     return _create_nocloud_iso(
         temp,
+        process_config,
         mounts,
         pipe_path.name,
         pipe_run_guest_path,

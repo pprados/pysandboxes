@@ -25,11 +25,30 @@ from .remote.client_subprocess_sse_daemon import (
     use_rich_handler,
 )
 from .remote.none_daemon import NoneDaemon
+from .remote.parse_cpython_args import parse_python_cmd_line
 from .remote.python_in_sb import convert_extra_rules
 from .sb_types import Envs
 from .tools import Environ
 
-from .remote.parse_cpython_args import parse_python_cmd_line
+# Default console size when not a TTY (e.g. CI, pipes)
+_DEFAULT_COLUMNS = 80
+_DEFAULT_LINES = 24
+
+
+def _get_terminal_size() -> tuple[int, int]:
+    """Return (columns, lines) from the current terminal, or defaults when not a TTY."""
+    try:
+        size = os.get_terminal_size()
+        return (size.columns, size.lines)
+    except OSError:
+        pass
+    try:
+        cols = int(os.environ.get("COLUMNS", str(_DEFAULT_COLUMNS)))
+        lines = int(os.environ.get("LINES", str(_DEFAULT_LINES)))
+        return (max(1, cols), max(1, lines))
+    except (ValueError, TypeError):
+        return (_DEFAULT_COLUMNS, _DEFAULT_LINES)
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +84,10 @@ async def _qemu_read_and_forward(
     stream: asyncio.StreamReader | None,
     is_stderr: bool,
     state: list[int],
+    *,
+    forward_all: bool = False,
 ) -> None:
-    """Read QEMU console stream and forward only lines between start and end sentinels."""
+    """Read QEMU console stream and forward lines (all if forward_all, else between sentinels)."""
     if stream is None:
         return
     out = sys.stderr if is_stderr else sys.stdout
@@ -82,15 +103,23 @@ async def _qemu_read_and_forward(
         except Exception:
             text = str(line)
         text_stripped = _QEMU_CONSOLE_PREFIX.sub("", text)
-        if _qemu_forward_state_for_line(text_stripped, state):
+        if forward_all or _qemu_forward_state_for_line(text_stripped, state):
             print(text_stripped, end="", file=out, flush=True)
 
 
-async def _qemu_wait_and_filter_console(process: asyncio.subprocess.Process) -> int:
-    """Wait for QEMU process and forward only guest Python output (between start/end sentinels)."""
+async def _qemu_wait_and_filter_console(
+    process: asyncio.subprocess.Process,
+    *,
+    forward_all: bool = False,
+) -> int:
+    """Wait for QEMU process and forward console output (all if forward_all, else between sentinels)."""
     state: list[int] = [_FORWARD_STATE_WAITING]
-    t_stdout = asyncio.create_task(_qemu_read_and_forward(process.stdout, False, state))
-    t_stderr = asyncio.create_task(_qemu_read_and_forward(process.stderr, True, state))
+    t_stdout = asyncio.create_task(
+        _qemu_read_and_forward(process.stdout, False, state, forward_all=forward_all)
+    )
+    t_stderr = asyncio.create_task(
+        _qemu_read_and_forward(process.stderr, True, state, forward_all=forward_all)
+    )
     exit_code = await process.wait()
     await t_stdout
     await t_stderr
@@ -182,8 +211,18 @@ def main() -> int:
                 find_free_port() if all_rules.port == -1 else all_rules.port
             )
             token = str(uuid.uuid4())
+            # Propagate host terminal size to guest so console width/height match
+            columns, lines = _get_terminal_size()
+            guest_envs = Envs(
+                {
+                    **dict(all_rules.envs),
+                    "COLUMNS": str(columns),
+                    "LINES": str(lines),
+                }
+            )
+            guest_all_rules = all_rules._replace(envs=guest_envs)
             process_config = DaemonParameters(
-                all_rules=all_rules,
+                all_rules=guest_all_rules,
                 log_level=log_level,
                 log_format=get_log_formatter(),
                 use_rich_handler=use_rich_handler(),
@@ -279,7 +318,9 @@ def main() -> int:
                         and process.stdout is not None
                         and process.stderr is not None
                     ):
-                        return await _qemu_wait_and_filter_console(process)
+                        return await _qemu_wait_and_filter_console(
+                            process, forward_all=DEBUG
+                        )
                     return await process.wait()
                 finally:
                     if qemu_console_file is not None:
