@@ -11,12 +11,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping, cast
 
-from pysandboxes._os_sandbox import providers_factory
-from pysandboxes.config import DEBUG
-from pysandboxes.e import ConfigSyntaxError
-from pysandboxes.main_logger import config_log
-from pysandboxes.py_sandbox import load_and_parse_config
-from pysandboxes.remote.client_subprocess_sse_daemon import (
+from ._os_sandbox import providers_factory
+from .config import DEBUG
+from .e import ConfigSyntaxError
+from .main_logger import config_log
+from .py_sandbox import load_and_parse_config
+from .remote.client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
     DaemonParameters,
     find_free_port,
@@ -24,18 +24,18 @@ from pysandboxes.remote.client_subprocess_sse_daemon import (
     launch_sandbox,
     use_rich_handler,
 )
-from pysandboxes.remote.none_daemon import NoneDaemon
-from pysandboxes.remote.python_in_sb import convert_extra_rules
-from pysandboxes.sb_types import Envs
-from pysandboxes.tools import Environ
+from .remote.none_daemon import NoneDaemon
+from .remote.python_in_sb import convert_extra_rules
+from .sb_types import Envs
+from .tools import Environ
 
 from .remote.parse_cpython_args import parse_python_cmd_line
-from .remote.qemu_console_sentinels import (
-    PYTHON_OUTPUT_END,
-    PYTHON_OUTPUT_START,
-)
 
 logger = logging.getLogger(__name__)
+
+# QEMU console sentinels: guest prints these to stderr; host forwards only lines between them
+PYTHON_OUTPUT_START = "[PYSANDBOXES]PYTHON_OUTPUT_START"
+PYTHON_OUTPUT_END = "[PYSANDBOXES]PYTHON_OUTPUT_END"
 
 # QEMU console filter state: 0=waiting for start sentinel, 1=forwarding, 2=stopped
 _FORWARD_STATE_WAITING = 0
@@ -43,7 +43,7 @@ _FORWARD_STATE_FORWARDING = 1
 _FORWARD_STATE_STOPPED = 2
 
 # Strip kernel/cloud-init style prefix e.g. "[   12.525772] cloud-init[672]: "
-_QEMU_CONSOLE_PREFIX = re.compile(r"^\s*\[\s*\d+\.\d+\]\s*\w+\[\d+\]:\s*")
+_QEMU_CONSOLE_PREFIX = re.compile(r"^\s*\[\s*\d+\.\d+\]\s*[\w-]+\[\d+\]:")
 
 
 def _qemu_forward_state_for_line(line: str, state: list[int]) -> bool:
@@ -81,8 +81,9 @@ async def _qemu_read_and_forward(
             text = line.decode("utf-8", errors="replace")
         except Exception:
             text = str(line)
-        if _qemu_forward_state_for_line(text, state):
-            print(text, end="", file=out, flush=True)
+        text_stripped = _QEMU_CONSOLE_PREFIX.sub("", text)
+        if _qemu_forward_state_for_line(text_stripped, state):
+            print(text_stripped, end="", file=out, flush=True)
 
 
 async def _qemu_wait_and_filter_console(process: asyncio.subprocess.Process) -> int:
@@ -258,18 +259,13 @@ def main() -> int:
                     )
                     qemu_console_file = open(qemu_console_path, "w")
                     try:
-                        print(
-                            "[HOST] QEMU guest console →",
+                        logger.debug(
+                            "QEMU guest console → %s",
                             qemu_console_path.resolve(),
-                            file=sys.stderr,
-                            flush=True,
                         )
-                        print(
-                            "[HOST] Run in another terminal: tail -f",
+                        logger.debug(
+                            "Run in another terminal: tail -f %s (to see guest output including 'Calling sandbox at...')",
                             qemu_console_path.resolve(),
-                            "(to see guest output including 'Calling sandbox at...')",
-                            file=sys.stderr,
-                            flush=True,
                         )
                         launch_kwargs["stdout"] = qemu_console_file.fileno()
                         launch_kwargs["stderr"] = qemu_console_file.fileno()
@@ -309,19 +305,9 @@ def main() -> int:
                     if callable(kill_slirp):
                         kill_slirp()
 
-        print(
-            "[HOST] Launching sandbox (waiting for guest to finish)...",
-            file=sys.stderr,
-            flush=True,
-        )
+        logger.debug("Launching sandbox (waiting for guest to finish)...")
         return_code = asyncio.run(launch_and_wait())
-        print(
-            "[HOST] Guest process finished (exit code",
-            return_code,
-            ")",
-            file=sys.stderr,
-            flush=True,
-        )
+        logger.debug("Guest process finished (exit code %s)", return_code)
         # For QEMU, guest writes exit code to shared run dir; use it if present
         if all_rules.os_sandbox == "qemu":
             exitcode_file = Path(tmpdir) / "exitcode"
