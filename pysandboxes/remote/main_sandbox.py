@@ -79,7 +79,11 @@ def run_guest(process_config: DaemonParameters) -> int:
     all_rules = process_config.all_rules
     set_learning_path(all_rules.learning_path)
     # set_pin_dns already called in main() before run_guest(); do not call again (assert in guard_socket)
-    # Apply profile env to process so guards see them (e.g. My_ENV for tests)
+    # Restrict process env to only profile-allowed vars (VM may have USER, HOME, etc.)
+    allowed_env_keys = set(all_rules.envs.keys())
+    for key in list(os.environ.keys()):
+        if key not in allowed_env_keys:
+            del os.environ[key]
     for k, v in dict(all_rules.envs).items():
         os.environ[k] = str(v) if v is not None else ""
     # In QEMU guest, root_path from host is wrong; use cwd so bind=./tmp works
