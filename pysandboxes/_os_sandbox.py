@@ -244,13 +244,6 @@ def start_daemon(
 
         async def _start_daemon_and_signal() -> None:
             """Helper to run async start and signal completion."""
-            import sys
-
-            print(
-                "[pysandbox] TRACE: _start_daemon_and_signal task started", flush=True
-            )
-            sys.stdout.flush()
-            sys.stderr.flush()
             await async_start_daemon(
                 all_rules,
                 envs=envs,

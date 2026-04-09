@@ -210,7 +210,6 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
-    print("[pysandbox] TRACE: main_sandbox main() started", flush=True)
     logging.getLogger().addHandler(StreamHandler(None))  # Set default handler to stderr
     if DEBUG:
         _debug_log()
@@ -232,12 +231,7 @@ def main() -> int:
     # Read all configuration from named-pipe (or config file for QEMU) until EOF
     assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
     config_path = Path(sandboxes_parsed._named_pipe.strip())
-    print(
-        f"[pysandbox] TRACE: main_sandbox opening pipe for read: {config_path!s}",
-        flush=True,
-    )
     pickle_data: bytes = config_path.read_bytes()
-    print("[pysandbox] TRACE: main_sandbox pipe read done, got config", flush=True)
     # Only the parent process feeds the named_pipe; no risk of malicious pickle
     # injection.
     process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
@@ -272,6 +266,13 @@ def main() -> int:
     # Initialize learn
     set_learning_path(all_rules.learning_path)
     set_pin_dns(all_rules.pin_dns)
+    # When pin_dns is set but use_py_sandbox is False, patch resolution so guest uses pinned IPs
+    if all_rules.pin_dns:
+        import socket as _socket_mod
+
+        from ..guard_socket import apply_pin_dns_resolution
+
+        apply_pin_dns_resolution(_socket_mod)
 
     # In this case, use the standard loop in place of the private sandbox loop
 

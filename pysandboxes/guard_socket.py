@@ -800,6 +800,13 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
             for addr_info in _pin_dns[name]:
                 if addr_info[0] == socket.AF_INET:
                     return addr_info[4][0]
+            for addr_info in _pin_dns[name]:
+                if len(addr_info) > 4 and addr_info[4]:
+                    try:
+                        if ip_address(addr_info[4][0]).version == 4:
+                            return addr_info[4][0]
+                    except (ValueError, TypeError):
+                        continue
             err = socket.gaierror()
             err.errno = 3
             err.strerror = "Temporary failure in name resolution"
@@ -824,10 +831,9 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
 def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: dict[str, Any]) -> Any:
-        result = func(name, *args, **kwargs)
         if isinstance(name, str) and name in _pin_dns:
             addr_info = _pin_dns[name]
-            can_name = addr_info[0][3] or name
+            can_name = addr_info[0][3] or name if addr_info else name
             return (
                 can_name,
                 [],
@@ -837,6 +843,7 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
                     if dns_conf[0] == socket.AF_INET
                 ],
             )
+        result = func(name, *args, **kwargs)
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -1133,6 +1140,23 @@ def activate_guard(rules: SocketRules) -> None:
     if _rules:
         raise RuntimeError("Guard_socket already activated.")
     _rules = rules
+
+
+def apply_pin_dns_resolution(socket_module: Any) -> None:
+    """Patch resolution functions on the socket module to use _pin_dns when set.
+
+    Use when pin_dns is non-empty but full Python sandbox (use_py_sandbox) is
+    disabled, so that guest/subprocess still resolve hostnames via pinned IPs.
+    """
+    if not _pin_dns:
+        return
+    socket_module.gethostbyname = _wrap_socket_gethostbyname(
+        socket_module.gethostbyname
+    )
+    socket_module.gethostbyname_ex = _wrap_socket_gethostbyname_ex(
+        socket_module.gethostbyname_ex
+    )
+    socket_module.getaddrinfo = _wrap_socket_getaddrinfo(socket_module.getaddrinfo)
 
 
 def _read_host_file() -> tuple[

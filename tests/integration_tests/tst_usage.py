@@ -168,12 +168,12 @@ def _test_network() -> int:
             socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
             sock.settimeout(timeout)
             sock.connect((remote_ip, 80))
-            logger.info(f"{OK} socker AF_INET SOCK_STREAM 80")
+            logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
     except SandBoxError:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80")
         rc = 1
     except (TimeoutError, OSError) as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     # learn tcp bind ipv4
@@ -181,12 +181,12 @@ def _test_network() -> int:
         with socket.socket(AF_INET, SOCK_STREAM) as sock:
             sock.settimeout(timeout)
             sock.bind(("127.0.0.1", 9999))
-            logger.info(f"{OK} socker AF_INET SOCK_STREAM 9999")
+            logger.info(f"{OK} socket AF_INET SOCK_STREAM 9999")
     except SandBoxError:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 9999")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 9999")
         rc = 1
     except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     # learn tcp bind ipv6
@@ -194,12 +194,12 @@ def _test_network() -> int:
         with socket.socket(AF_INET6, SOCK_STREAM) as sock:
             sock.settimeout(timeout)
             sock.bind(("::1", 9999))
-            logger.info(f"{OK} socker AF_INET6 SOCK_STREAM 9999")
+            logger.info(f"{OK} socket AF_INET6 SOCK_STREAM 9999")
     except SandBoxError:
-        logger.error(f"{KO} socker AF_INET6 SOCK_STREAM 9999")
+        logger.error(f"{KO} socket AF_INET6 SOCK_STREAM 9999")
         rc = 1
     except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     # web connection (timeout to avoid hanging in containers with slow/no network)
@@ -231,7 +231,7 @@ def _test_network() -> int:
         logger.error(f"{KO} send DGRAM IPV4 to 12345 is denied")
         rc = 1
     except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     try:
@@ -243,7 +243,7 @@ def _test_network() -> int:
         logger.error(f"{KO} send DGRAM IPV4 to 12346 is denied")
         rc = 1
     except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     # udp connection ipv6
@@ -256,7 +256,7 @@ def _test_network() -> int:
         logger.error(f"{KO} send DGRAM IPV6 to 12345 is denied")
         rc = 1
     except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     # udp bind ipv4
@@ -268,7 +268,7 @@ def _test_network() -> int:
     except SandBoxError:
         logger.error(f"{KO} bind IPV4 to 12345 is denied")
     except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     # udp bind ipv6
@@ -281,7 +281,7 @@ def _test_network() -> int:
         logger.error(f"{KO} bind IPV6 to 12345 is denied")
         rc = 1
     except TimeoutError as e:
-        logger.error(f"{KO} socker AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
     # 2. Test denied access
