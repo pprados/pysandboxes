@@ -105,7 +105,7 @@ def run_guest(process_config: DaemonParameters) -> int:
             # In guest VM, use subprocess so start_daemon() launches a local Python server
             # instead of trying to start another QEMU.
             os.environ["OS_SANDBOX"] = "subprocess"
-            from .qemu_console_sentinels import (
+            from pysandboxes.python_sb import (
                 PYTHON_OUTPUT_END,
                 PYTHON_OUTPUT_START,
             )
