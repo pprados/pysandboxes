@@ -27,6 +27,5 @@ ignore=.env
 
 # qemu.use_kvm=true
 # qemu.memory=2G
-qemu.show_boot_console=true
-# qemu.guest_diag=false
 # qemu.virtfs=auto
+# qemu.show_boot_console=true

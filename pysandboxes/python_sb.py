@@ -3,11 +3,9 @@
 import asyncio
 import logging
 import os
-import re
 import subprocess
 import sys
 import tempfile
-import time
 import uuid
 from pathlib import Path
 from typing import Any, Mapping, TextIO, cast
@@ -17,6 +15,7 @@ from .config import DEBUG
 from .e import ConfigSyntaxError
 from .main_logger import config_log
 from .py_sandbox import load_and_parse_config
+from .remote import qemu_guest_console_io as _qemu_guest_console_io
 from .remote.client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
     find_free_port,
@@ -31,6 +30,12 @@ from .remote.python_in_sb import convert_extra_rules
 from .remote.qemu_setup import QEMU_HOST_RUN_PREFIX
 from .sb_types import Envs
 from .tools import Environ
+
+# Re-export for ``main_sandbox`` / external use
+PYTHON_OUTPUT_END = _qemu_guest_console_io.PYTHON_OUTPUT_END
+PYTHON_OUTPUT_START = _qemu_guest_console_io.PYTHON_OUTPUT_START
+qemu_wait_and_filter_console = _qemu_guest_console_io.qemu_wait_and_filter_console
+read_qemu_guest_exitcode = _qemu_guest_console_io.read_qemu_guest_exitcode
 
 # Default console size when not a TTY (e.g. CI, pipes)
 _DEFAULT_COLUMNS = 80
@@ -53,194 +58,6 @@ def _get_terminal_size() -> tuple[int, int]:
 
 
 logger = logging.getLogger(__name__)
-
-# QEMU console sentinels: guest prints these to stderr; host forwards only lines between them
-PYTHON_OUTPUT_START = "[PYSANDBOXES]PYTHON_OUTPUT_START"
-PYTHON_OUTPUT_END = "[PYSANDBOXES]PYTHON_OUTPUT_END"
-
-# QEMU console filter state: 0=waiting for start sentinel, 1=forwarding, 2=stopped
-_FORWARD_STATE_WAITING = 0
-_FORWARD_STATE_FORWARDING = 1
-_FORWARD_STATE_STOPPED = 2
-
-# Strip kernel/cloud-init style prefix e.g. "[   12.525772] cloud-init[672]: "
-_QEMU_CONSOLE_PREFIX = re.compile(r"^\s*\[\s*\d+\.\d+\]\s*[\w-]+\[\d+\]:")
-
-# readline() can block forever on QEMU -nographic if a line never ends with \n;
-# read(max_chunk) returns as soon as any data or EOF arrives (no newline required).
-_QEMU_CONSOLE_READ_CHUNK = 65536
-_QEMU_CONSOLE_BUF_MAX = 1024 * 1024
-
-
-def _qemu_forward_state_for_line(line: str, state: list[int]) -> bool:
-    """Update state from line (start/end sentinels) and return True if line should be printed."""
-    s = state[0]
-    if s == _FORWARD_STATE_WAITING:
-        if PYTHON_OUTPUT_START in line:
-            state[0] = _FORWARD_STATE_FORWARDING
-        return False
-    if s == _FORWARD_STATE_FORWARDING:
-        if PYTHON_OUTPUT_END in line:
-            state[0] = _FORWARD_STATE_STOPPED
-            return False
-        return True
-    return False  # _FORWARD_STATE_STOPPED
-
-
-async def _qemu_emit_qemu_console_line(
-    raw: bytes,
-    out: TextIO,
-    state: list[int],
-    *,
-    forward_all: bool,
-    tee_file: TextIO | None,
-    tee_lock: asyncio.Lock | None,
-) -> None:
-    """Decode one newline-terminated (or forced) chunk and apply sentinel filtering."""
-    if not raw:
-        return
-    try:
-        text = raw.decode("utf-8", errors="replace")
-    except Exception:
-        text = str(raw)
-    text_stripped = _QEMU_CONSOLE_PREFIX.sub("", text)
-    if forward_all or _qemu_forward_state_for_line(text_stripped, state):
-        print(text_stripped, end="", file=out, flush=True)
-    if tee_file is not None:
-        assert tee_lock is not None
-        async with tee_lock:
-            tee_file.write(text)
-            tee_file.flush()
-
-
-async def _qemu_read_and_forward(
-    stream: asyncio.StreamReader | None,
-    is_stderr: bool,
-    state: list[int],
-    *,
-    forward_all: bool = False,
-    tee_file: TextIO | None = None,
-    tee_lock: asyncio.Lock | None = None,
-) -> None:
-    """Read QEMU console stream and forward lines (all if forward_all, else between sentinels).
-
-    Uses chunked ``read()`` instead of ``readline()`` so a missing ``\\n`` on the serial
-    backend cannot block the host forever (see nested QEMU / Podman).
-
-    When ``tee_file`` is set (e.g. ``qemu.show_boot_console=true``), each line is also
-    appended to that file; ``tee_lock`` must serialize writes from stdout/stderr tasks.
-    """
-    if stream is None:
-        return
-    out = sys.stderr if is_stderr else sys.stdout
-    buf = bytearray()
-    while True:
-        try:
-            chunk = await stream.read(_QEMU_CONSOLE_READ_CHUNK)
-        except (ConnectionResetError, BrokenPipeError):
-            break
-        if not chunk:
-            break
-        buf.extend(chunk)
-        while True:
-            nl = buf.find(b"\n")
-            if nl < 0:
-                if len(buf) >= _QEMU_CONSOLE_BUF_MAX:
-                    line = bytes(buf)
-                    buf.clear()
-                    await _qemu_emit_qemu_console_line(
-                        line,
-                        out,
-                        state,
-                        forward_all=forward_all,
-                        tee_file=tee_file,
-                        tee_lock=tee_lock,
-                    )
-                break
-            raw_line = bytes(buf[: nl + 1])
-            del buf[: nl + 1]
-            await _qemu_emit_qemu_console_line(
-                raw_line,
-                out,
-                state,
-                forward_all=forward_all,
-                tee_file=tee_file,
-                tee_lock=tee_lock,
-            )
-    if buf:
-        await _qemu_emit_qemu_console_line(
-            bytes(buf),
-            out,
-            state,
-            forward_all=forward_all,
-            tee_file=tee_file,
-            tee_lock=tee_lock,
-        )
-
-
-def _read_qemu_guest_exitcode(
-    exitcode_file: Path,
-    *,
-    max_wait_s: float = 3.0,
-    interval_s: float = 0.05,
-) -> int | None:
-    """Read guest-written exit code from the shared run dir, with short polling.
-
-    virtio-9p may expose ``exitcode`` on the host slightly after QEMU exits; the
-    QEMU process can also return non-zero due to disk I/O noise during poweroff
-    even when the guest succeeded.
-    """
-    deadline = time.monotonic() + max_wait_s
-    while time.monotonic() < deadline:
-        if exitcode_file.exists():
-            try:
-                raw = exitcode_file.read_text().strip()
-                return int(raw)
-            except (ValueError, OSError):
-                pass
-        time.sleep(interval_s)
-    return None
-
-
-async def _qemu_wait_and_filter_console(
-    process: asyncio.subprocess.Process,
-    *,
-    forward_all: bool = False,
-    tee_file: TextIO | None = None,
-    tee_lock: asyncio.Lock | None = None,
-) -> int:
-    """Wait for QEMU process and forward console output (all if forward_all, else between sentinels)."""
-    if tee_file is not None and tee_lock is None:
-        tee_lock = asyncio.Lock()
-    state: list[int] = [_FORWARD_STATE_WAITING]
-    t_stdout = asyncio.create_task(
-        _qemu_read_and_forward(
-            process.stdout,
-            False,
-            state,
-            forward_all=forward_all,
-            tee_file=tee_file,
-            tee_lock=tee_lock,
-        )
-    )
-    t_stderr = asyncio.create_task(
-        _qemu_read_and_forward(
-            process.stderr,
-            True,
-            state,
-            forward_all=forward_all,
-            tee_file=tee_file,
-            tee_lock=tee_lock,
-        )
-    )
-    # Drain pipes concurrently with process.wait() to avoid a full PIPE buffer
-    # stalling QEMU's serial write path (classic subprocess deadlock).
-    _, _, exit_code = await asyncio.gather(
-        t_stdout,
-        t_stderr,
-        process.wait(),
-    )
-    return exit_code if exit_code is not None else -1
 
 
 def _debug_log() -> None:
@@ -328,8 +145,8 @@ def main() -> int:
             # can be created with the config embedded.
             from .remote.qemu_setup import (
                 GUEST_RUN_MOUNT,
+                _qemu_show_boot_console_truthy,
                 augment_all_rules_for_qemu_run_mount,
-                merge_qemu_guest_diag_env,
             )
 
             os_provider.port = (
@@ -346,7 +163,7 @@ def main() -> int:
                 }
             )
             guest_all_rules = augment_all_rules_for_qemu_run_mount(
-                merge_qemu_guest_diag_env(all_rules._replace(envs=guest_envs))
+                all_rules._replace(envs=guest_envs)
             )
             process_config = DaemonParameters(
                 all_rules=guest_all_rules,
@@ -409,10 +226,7 @@ def main() -> int:
 
         async def launch_and_wait() -> int:
             if all_rules.os_sandbox == "qemu":
-                # Same keys as QemuSSEDaemon.parse_rules ("qemu.foo=bar" → params["foo"])
-                show_boot = all_rules.os_sandbox_params.get(
-                    "show_boot_console", "false"
-                ).lower() in ("true", "1", "yes")
+                show_boot = _qemu_show_boot_console_truthy(all_rules)
                 qemu_console_file: TextIO | None = None
                 launch_kwargs: dict[str, Any] = dict(
                     cmd=launch_args,
@@ -441,7 +255,7 @@ def main() -> int:
                             return await process.wait()
                         # Full VM console only when qemu.show_boot_console=true (profile).
                         forward_all = show_boot
-                        return await _qemu_wait_and_filter_console(
+                        return await qemu_wait_and_filter_console(
                             process,
                             forward_all=forward_all,
                             tee_file=qemu_console_file,
@@ -481,7 +295,7 @@ def main() -> int:
         # process status (9p latency; QEMU may return non-zero on shutdown I/O).
         if all_rules.os_sandbox == "qemu":
             exitcode_file = Path(tmpdir) / "exitcode"
-            guest_rc = _read_qemu_guest_exitcode(exitcode_file)
+            guest_rc = read_qemu_guest_exitcode(exitcode_file)
             logger.debug(
                 "QEMU exitcode: guest_rc=%s qemu_wait=%s file=%s",
                 guest_rc,

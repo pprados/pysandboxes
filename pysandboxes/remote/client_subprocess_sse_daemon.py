@@ -141,6 +141,7 @@ async def launch_sandbox(
     config_writer: Callable[["DaemonParameters"], None] | None = None,
     stdout: int | None = None,
     stderr: int | None = None,
+    stdin: int | None = None,
 ) -> Process:
     """Launch a sandbox subprocess with the given configuration.
 
@@ -156,6 +157,8 @@ async def launch_sandbox(
         config_writer: If set, use instead of FIFO (e.g. HTTP server); called before starting process.
         stdout: Optional file descriptor for child stdout (e.g. to avoid mixing with host console).
         stderr: Optional file descriptor for child stderr.
+        stdin: Optional stdin for the child (e.g. ``subprocess.DEVNULL`` so QEMU ``-nographic``
+            never blocks reading the parent TTY under ``podman run -it``).
 
     Returns:
         The launched subprocess.
@@ -202,6 +205,8 @@ async def launch_sandbox(
             subprocess_kwargs["stdout"] = stdout
         if stderr is not None:
             subprocess_kwargs["stderr"] = stderr
+        if stdin is not None:
+            subprocess_kwargs["stdin"] = stdin
 
         process = await asyncio.create_subprocess_exec(
             *cmd,

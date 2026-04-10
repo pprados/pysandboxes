@@ -6,11 +6,7 @@ from pathlib import Path
 
 from pysandboxes.all_rules import AllRules
 from pysandboxes.immutable_dict import ImmutableDict
-from pysandboxes.remote.qemu_setup import (
-    PYSANDBOXES_GUEST_DIAG,
-    PYSANDBOXES_GUEST_DIAG_FROM_PROFILE,
-    merge_qemu_guest_diag_env,
-)
+from pysandboxes.remote.qemu_setup import _qemu_show_boot_console_truthy
 from pysandboxes.sb_types import Envs
 
 
@@ -37,17 +33,15 @@ def _minimal_rules(
     )
 
 
-def test_merge_qemu_guest_diag_env_off_by_default() -> None:
-    rules = _minimal_rules()
-    out = merge_qemu_guest_diag_env(rules)
-    assert out is rules
-    assert PYSANDBOXES_GUEST_DIAG not in dict(out.envs)
+def test_qemu_show_boot_console_truthy_from_profile() -> None:
+    rules = _minimal_rules(os_sandbox_params={"show_boot_console": "true"})
+    assert _qemu_show_boot_console_truthy(rules) is True
 
 
-def test_merge_qemu_guest_diag_env_injects_when_true() -> None:
-    rules = _minimal_rules(
-        os_sandbox_params={"guest_diag": "true"}, envs={"FOO": "bar"}
-    )
-    out = merge_qemu_guest_diag_env(rules)
-    assert dict(out.envs)[PYSANDBOXES_GUEST_DIAG] == PYSANDBOXES_GUEST_DIAG_FROM_PROFILE
-    assert dict(out.envs)["FOO"] == "bar"
+def test_qemu_show_boot_console_truthy_false_when_unset() -> None:
+    assert _qemu_show_boot_console_truthy(_minimal_rules()) is False
+
+
+def test_qemu_show_boot_console_truthy_false_explicit() -> None:
+    rules = _minimal_rules(os_sandbox_params={"show_boot_console": "false"})
+    assert _qemu_show_boot_console_truthy(rules) is False

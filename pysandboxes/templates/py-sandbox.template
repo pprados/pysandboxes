@@ -209,17 +209,13 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 #   k/M/G/T/P/E (e.g. 512M, 2G). Forms like 2GB are invalid for QEMU and fall back to default.
 #   Raise for heavier workloads.
 #
-# qemu.show_boot_console — VM serial console on the host
-#   false (default): host output is filtered to Python between guest sentinels (boot hidden).
-#   true: full QEMU console (boot, cloud-init, bootstrap) on the host; also tee to
-#   .pysandbox-qemu-console.log in the current working directory. Use when debugging
-#   failures before Python starts.
-#
-# qemu.guest_diag — Verbose guest traces in main_sandbox
-#   false (default): no extra stderr breadcrumbs or faulthandler in the VM.
-#   true: inject PYSANDBOXES_GUEST_DIAG=2 for [PYSANDBOX_DIAG] lines and faulthandler after
-#   main() starts (complements qemu.show_boot_console for boot-time issues). Equivalent to
-#   listing env PYSANDBOXES_GUEST_DIAG=1 manually, except the profile-driven value is 2.
+# qemu.show_boot_console — VM serial on the host + NoCloud verbosity + guest main_sandbox traces
+#   false (default): host output is filtered to Python between guest sentinels (boot hidden);
+#   NoCloud user-data stays minimal (no cloud-init debug block, no bash -x on bootstrap);
+#   no [PYSANDBOX_DIAG] breadcrumbs or faulthandler in the guest main_sandbox.
+#   true: full QEMU console (boot, cloud-init, bootstrap) on the host; tee to
+#   .pysandbox-qemu-console.log; verbose cloud-init and set -x on the guest bootstrap script;
+#   in the VM, stderr [PYSANDBOX_DIAG] lines and faulthandler after main() starts.
 #
 # qemu.virtfs — Staging exec trees before virtio-9p (nested containers)
 #   auto (default): enable staging only when the host looks like a container (/.dockerenv,
@@ -232,7 +228,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # qemu.use_kvm=true
 # qemu.memory=2G
 # qemu.show_boot_console=false
-# qemu.guest_diag=false
 # qemu.virtfs=auto
 
 #######################################################################################

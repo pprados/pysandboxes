@@ -15,12 +15,29 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
+from typing import TextIO
 
 import pytest
 
 logger = logging.getLogger(__name__)
+
+
+def _terminal_newline_before_log() -> None:
+    """Finish any in-progress QEMU serial line (often ends with \\r only) before host logs.
+
+    Mixing pytest logging with ``-nographic`` serial output leaves the cursor mid-line;
+    the next ``INFO`` line then appears shifted or stacked, as if nothing advanced.
+    Use stderr only so a merged ``2>&1`` pipe does not get two blank lines.
+    """
+    try:
+        sys.stderr.write("\r\n")
+        sys.stderr.flush()
+    except OSError:
+        pass
+
 
 # Project root (parent of tests/)
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -41,6 +58,20 @@ def _image_for_os_provider(os_sandbox: str) -> str:
 
 PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.profile"
 
+
+def _python_sb_config_arg(os_sandbox: str) -> str:
+    """Profile path for container/k8s runs; nested QEMU can force ``qemu.show_boot_console=false``."""
+    if os_sandbox.lower() != "qemu":
+        return PYTHON_SB_ARGS
+    qemu_verbose_env = os.environ.get("CONTAINER_TEST_QEMU_VERBOSE", "1")
+    if qemu_verbose_env.lower() in ("0", "false", "no"):
+        return (
+            "--pysandboxes-config=tests/integration_tests/"
+            "py-sandbox-test-qemu-container-quiet.profile"
+        )
+    return PYTHON_SB_ARGS
+
+
 all_container_worker: list[str] = [
     # "docker",  # FIXME
     "podman",
@@ -48,17 +79,16 @@ all_container_worker: list[str] = [
 
 
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
-# QEMU in Podman is opt-in: nested VM + tst_usage often exceeds practical timeouts (see wiki/qemu.md).
+# QEMU in Podman: nested VM + tst_usage may need the longer CONTAINER_RUN_TIMEOUT_QEMU (see wiki/qemu.md).
 # Run on host: pytest tests/integration_tests/test_usage_with_providers.py -k qemu
+# Currently only qemu is enabled; re-enable others when needed:
 def _all_os_sandbox_params() -> list:
     rows = [
         # firejail is incompatible with containers
-        pytest.param("none", True, False),
-        pytest.param("qemu", True, False),
-        # pytest.param("subprocess", True, False),
-        # pytest.param("landlock", False, False),
+        # pytest.param("none", True, False),
         # pytest.param("unshare", False, True),
         # pytest.param("bwrap", False, True),
+        pytest.param("qemu", True, False),
     ]
     return rows
 
@@ -191,14 +221,34 @@ def _add_host_flags() -> list[str]:
     return flags
 
 
+def _container_run_stdio() -> tuple[TextIO | None, TextIO | None, TextIO | None]:
+    """Return (stdout, stderr, fd_to_close) for ``podman run`` / ``docker run``.
+
+    When pytest captures stdout/stderr, inheriting the default fds sends nested QEMU
+    serial into the capture buffer (often invisible until failure). Writing to the
+    controlling TTY (``os.ctermid()``) shows VM console live. Set
+    ``CONTAINER_TEST_NO_CTTY=1`` to keep inherited fds (e.g. CI without a TTY).
+    """
+    if os.environ.get("CONTAINER_TEST_NO_CTTY", "").lower() in ("1", "true", "yes"):
+        return None, None, None
+    try:
+        tty = open(os.ctermid(), "w", encoding="utf-8", errors="replace", buffering=1)
+        return tty, tty, tty
+    except OSError:
+        return None, None, None
+
+
 # Timeout for building the container image when missing (avoid indefinite hang)
 BUILD_IMAGE_TIMEOUT = 600  # seconds
 
 # Timeout for the container run (inner python-sb + integration tests).
-# QEMU provider may install deps in the guest (apt + pip) on first boot, so allow enough time.
-CONTAINER_RUN_TIMEOUT = 600  # seconds
+CONTAINER_RUN_TIMEOUT = 600  # seconds (10 minutes)
 
-# When CONTAINER_TEST_QEMU=1, nested QEMU may need a higher limit than the default.
+# Nested QEMU (Podman): default 10m ceiling (typical with KVM is often a few minutes). Override with
+# CONTAINER_TEST_QEMU_TIMEOUT. Slowness is usually real work: VM boot, guest bootstrap, then
+# tests.integration_tests.tst_usage (sync + async sandbox, DNS/HTTP to www.google.com with multi-second
+# timeouts per call—not a tight unit test). Heartbeat logs only prove podman is still alive; use
+# DEBUG logging and qemu.show_boot_console in the profile to see the guest.
 CONTAINER_RUN_TIMEOUT_QEMU = int(os.environ.get("CONTAINER_TEST_QEMU_TIMEOUT", "600"))
 
 
@@ -277,11 +327,14 @@ def _run_container_runtime(
     term = os.environ.get("TERM", "xterm-256color")
     # PYTHONPATH=/app so -m tests.integration_tests.tst_usage finds the tests package
     # QEMU: file_rules root is mounted at /app in the VM (same strategy as bwrap)
-    # Full VM console on host: set qemu.show_boot_console=true in the profile (not an env var).
+    # py-sandbox-test.profile uses qemu.show_boot_console=true (VM serial + verbose NoCloud seed).
+    # CONTAINER_TEST_QEMU_VERBOSE=0 selects py-sandbox-test-qemu-container-quiet.profile
+    # (show_boot_console=false, less log noise).
+    config_arg = _python_sb_config_arg(os_sandbox)
     inner_cmd = (
         f"{prefix}"
         f"PYTHONPATH=/app TERM={term} OS_SANDBOX={os_sandbox_env} My_ENV=1 "
-        f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
+        f"python-sb {py_sandbox_args} {config_arg} -m tests.integration_tests.tst_usage"
     )
 
     privileged_flag = ["--privileged"] if privileged else []
@@ -325,17 +378,73 @@ def _run_container_runtime(
     if os.environ.get("CONTAINER_TEST_TRACE_CMD") == "1":
         logger.warning("container-tests podman/docker cmd: %s", shlex.join(cmd))
 
+    logger.info(
+        "container-tests: starting %s run image=%s os_sandbox=%s timeout=%ss",
+        runtime,
+        image_name,
+        os_sandbox,
+        run_timeout,
+    )
+
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
     # With pipes, the buffer (~64KB) can fill and the container blocks on write → deadlock.
-    # Stream stdout/stderr to the terminal so you see nested pytest output as it runs.
-    return subprocess.run(
-        cmd,
-        cwd=ROOT_DIR,
-        env=os.environ.copy(),
-        stdout=None,
-        stderr=None,
-        timeout=run_timeout,
+    # Prefer the controlling TTY so nested QEMU serial is visible even when pytest captures.
+    stop_heartbeat = threading.Event()
+    ctty: TextIO | None = None
+
+    def _heartbeat() -> None:
+        interval = int(os.environ.get("CONTAINER_TEST_HEARTBEAT_SEC", "60"))
+        if interval <= 0:
+            return
+        start = time.monotonic()
+        while not stop_heartbeat.wait(interval):
+            _terminal_newline_before_log()
+            logger.info(
+                "container-tests: %s still running (os_sandbox=%s, elapsed=%.0fs, timeout=%ss; nested QEMU may need CONTAINER_TEST_QEMU_TIMEOUT if TCG is slow)",
+                runtime,
+                os_sandbox,
+                time.monotonic() - start,
+                run_timeout,
+            )
+
+    hb = threading.Thread(
+        target=_heartbeat, name="container-test-heartbeat", daemon=True
     )
+    hb.start()
+    try:
+        out_io, err_io, ctty = _container_run_stdio()
+        completed = subprocess.run(
+            cmd,
+            cwd=ROOT_DIR,
+            env=os.environ.copy(),
+            stdout=out_io,
+            stderr=err_io,
+            timeout=run_timeout,
+        )
+        _terminal_newline_before_log()
+        logger.info(
+            "container-tests: %s finished os_sandbox=%s returncode=%s",
+            runtime,
+            os_sandbox,
+            completed.returncode,
+        )
+        return completed
+    except subprocess.TimeoutExpired as e:
+        _terminal_newline_before_log()
+        logger.error(
+            "container-tests: %s timed out after %ss (os_sandbox=%s)",
+            runtime,
+            run_timeout,
+            os_sandbox,
+        )
+        raise e
+    finally:
+        stop_heartbeat.set()
+        if ctty is not None:
+            try:
+                ctty.close()
+            except OSError:
+                pass
 
 
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
@@ -345,15 +454,24 @@ def test_container_runtime(
 ) -> None:
     """Run container test with podman or docker; success = exit code 0.
 
-    Container stdout/stderr are streamed to the terminal so you see nested pytest
-    output as it runs. QEMU: with ``qemu.show_boot_console=false``, the host only
+    Nested output goes to the **controlling TTY** when available (not pytest's captured
+    fds), so QEMU serial with ``qemu.show_boot_console=true`` is visible; use
+    ``CONTAINER_TEST_NO_CTTY=1`` to inherit fds instead. QEMU: with
+    ``qemu.show_boot_console=false``, the host only
     forwards lines between ``[PYSANDBOXES]PYTHON_OUTPUT_START`` and ``END``;
     for full VM boot trace, set ``qemu.show_boot_console=true`` (see wiki/qemu.md).
 
-    Nested QEMU under Podman is opt-in: set ``CONTAINER_TEST_QEMU=1`` to add the
-    qemu parametrization (may time out; prefer host
-    ``tests/integration_tests/test_usage_with_providers.py -k qemu``).
-    Optional: ``CONTAINER_TEST_TRACE_CMD=1`` logs the full ``podman run`` argv.
+    Parametrization is currently limited to ``qemu`` only (see ``_all_os_sandbox_params``).
+    For faster runs, re-enable ``none`` / ``unshare`` / ``bwrap`` there. On the host,
+    ``tests/integration_tests/test_usage_with_providers.py -k qemu`` avoids nested Podman.
+    Optional: ``CONTAINER_TEST_TRACE_CMD=1`` logs the full ``podman run`` argv;
+    ``CONTAINER_TEST_HEARTBEAT_SEC=N`` logs on the **host** every N seconds while ``podman run``
+    is still running (default 60; set 0 to disable)—that confirms the outer process is not stuck
+    in pytest, not that the nested guest is making progress. Nested QEMU: ``QemuSSEDaemon`` drains
+    the VM serial to stderr and logs each line at DEBUG (``[qemu-serial]``) when
+    ``qemu.show_boot_console=true``. ``py-sandbox-test.profile`` sets it; use
+    ``CONTAINER_TEST_QEMU_VERBOSE=0`` for ``py-sandbox-test-qemu-container-quiet.profile``
+    (``show_boot_console=false``, quieter NoCloud/bootstrap).
     """
 
     try:
@@ -591,10 +709,11 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                     os_sandbox.lower() if os_sandbox != "none" else os_sandbox
                 )
                 py_sandbox_args = f"--py-sandbox={py_sandbox}"
+                k8s_config_arg = _python_sb_config_arg(os_sandbox)
                 exec_cmd = (
                     "pip install --no-cache-dir -e . && "
                     f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} "
-                    f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
+                    f"python-sb {py_sandbox_args} {k8s_config_arg} -m tests.integration_tests.tst_usage"
                 )
 
                 print(f"Executing tests inside the pod (timeout: {EXEC_TIMEOUT}s)...")

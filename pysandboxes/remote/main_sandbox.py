@@ -36,18 +36,33 @@ from .daemon_parameters import DaemonParameters
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
-# Truthy guest values: ``1`` manual env; ``2`` from profile ``qemu.guest_diag=true``.
-_QEMU_GUEST_DIAG_TRUTHY = frozenset({"1", "2", "true", "yes"})
+
+def _qemu_show_boot_console_truthy_from_rules(all_rules: Any) -> bool:
+    """Same truthy rule as ``qemu_setup._qemu_show_boot_console_truthy`` (avoid importing that module)."""
+    if all_rules is None:
+        return False
+    params = getattr(all_rules, "os_sandbox_params", None)
+    if not params:
+        return False
+    raw = str(params.get("show_boot_console", "false")).strip().lower()
+    return raw in ("true", "1", "yes")
 
 
-def _qemu_guest_diag(process_config: DaemonParameters, msg: str) -> None:
-    """Optional stderr breadcrumbs in QEMU guest (``PYSANDBOXES_GUEST_DIAG``)."""
-    if (
-        os.environ.get("PYSANDBOXES_GUEST_DIAG", "").lower()
-        not in _QEMU_GUEST_DIAG_TRUTHY
-    ):
-        return
-    if not getattr(process_config, "guest_run_dir", None):
+def _qemu_show_boot_console_guest_trace_enabled(
+    process_config: DaemonParameters,
+) -> bool:
+    """QEMU guest diagnostics: same profile knob as host VM serial / verbose bootstrap."""
+    return bool(
+        getattr(process_config, "guest_run_dir", None)
+        and _qemu_show_boot_console_truthy_from_rules(process_config.all_rules)
+    )
+
+
+def _qemu_show_boot_console_guest_trace(
+    process_config: DaemonParameters, msg: str
+) -> None:
+    """Stderr breadcrumbs in QEMU guest when ``qemu.show_boot_console`` is truthy."""
+    if not _qemu_show_boot_console_guest_trace_enabled(process_config):
         return
     print(f"[PYSANDBOX_DIAG] {msg}", file=sys.stderr, flush=True)
 
@@ -122,7 +137,7 @@ def run_guest(process_config: DaemonParameters) -> int:
     from ..learning import set_learning_mode, set_learning_path
     from ..main_logger import config_log
 
-    _qemu_guest_diag(process_config, "run_guest: start")
+    _qemu_show_boot_console_guest_trace(process_config, "run_guest: start")
     log_format = " " + process_config.log_format
     config_log(process_config.log_level, log_format, process_config.use_rich_handler)
     all_rules = process_config.all_rules
@@ -156,7 +171,9 @@ def run_guest(process_config: DaemonParameters) -> int:
             # In guest VM, use subprocess so start_daemon() launches a local Python server
             # instead of trying to start another QEMU.
             os.environ["OS_SANDBOX"] = "subprocess"
-            _qemu_guest_diag(process_config, "run_guest: before python_in_sb")
+            _qemu_show_boot_console_guest_trace(
+                process_config, "run_guest: before python_in_sb"
+            )
             from pysandboxes.python_sb import (
                 PYTHON_OUTPUT_END,
                 PYTHON_OUTPUT_START,
@@ -196,7 +213,7 @@ async def run_server(process_config: DaemonParameters) -> int:
     from ..learning import set_learning_mode
     from ..tools import set_is_in_sandbox
 
-    _qemu_guest_diag(process_config, "run_server: start")
+    _qemu_show_boot_console_guest_trace(process_config, "run_server: start")
     from pysandboxes.main_logger import pysandboxes_logger
 
     # Call init function
@@ -295,15 +312,11 @@ def main() -> int:
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
 
-    if (
-        getattr(process_config, "guest_run_dir", None)
-        and os.environ.get("PYSANDBOXES_GUEST_DIAG", "").lower()
-        in _QEMU_GUEST_DIAG_TRUTHY
-    ):
+    if _qemu_show_boot_console_guest_trace_enabled(process_config):
         import faulthandler
 
         faulthandler.enable(file=sys.stderr, all_threads=True)
-    _qemu_guest_diag(
+    _qemu_show_boot_console_guest_trace(
         process_config,
         "main: config loaded, python_main_args="
         + repr(getattr(process_config, "python_main_args", ())),
@@ -357,7 +370,9 @@ def main() -> int:
     if netfilter_rules or getattr(process_config, "wait_network", False):
         _wait_network_ready()
 
-    _qemu_guest_diag(process_config, "main: after netfilter / wait_network")
+    _qemu_show_boot_console_guest_trace(
+        process_config, "main: after netfilter / wait_network"
+    )
 
     from ..learning import set_learning_path
     from ..main_logger import config_log
@@ -386,7 +401,7 @@ def main() -> int:
     # In this case, use the standard loop in place of the private sandbox loop
 
     # Activate python sandbox
-    _qemu_guest_diag(
+    _qemu_show_boot_console_guest_trace(
         process_config, "main: before import pysandboxes / activate_sandboxes"
     )
     import pysandboxes
@@ -413,11 +428,13 @@ def main() -> int:
         os.environ,
         rules_provider="none" if python_main_args else None,
     )
-    _qemu_guest_diag(process_config, "main: after activate_sandboxes")
+    _qemu_show_boot_console_guest_trace(
+        process_config, "main: after activate_sandboxes"
+    )
 
     # QEMU/python_sb: config was written by host with python_main_args → run user module in guest
     if python_main_args:
-        _qemu_guest_diag(process_config, "main: entering run_guest")
+        _qemu_show_boot_console_guest_trace(process_config, "main: entering run_guest")
         return run_guest(process_config)
 
     # Use python-sb command? (subprocess/firejail path: args from CLI)
@@ -430,7 +447,9 @@ def main() -> int:
         return python_in_sb(all_rules, sandboxes_args)
 
     # Else _start the server
-    _qemu_guest_diag(process_config, "main: entering asyncio.run(run_server)")
+    _qemu_show_boot_console_guest_trace(
+        process_config, "main: entering asyncio.run(run_server)"
+    )
     return asyncio.run(run_server(process_config))
 
 

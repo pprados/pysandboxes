@@ -32,23 +32,17 @@ from ..netfilter import rule_to_netfilter
 from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
 from ..tools import Environ, follow_links_executable
-from .parameters import (
-    INTERVAL_FOR_PING_DAEMON,
-    LOOP_FOR_PING,
-    TIMEOUT_FOR_PING,
-)
-
-# VM boot + cloud-init can take 20–40s before main_sandbox listens; wait before pinging.
-QEMU_BOOT_DELAY = 20.0
-# Allow more ping attempts after boot (VM is slower than a subprocess).
-QEMU_LOOP_FOR_PING = 200
 from .client_subprocess_sse_daemon import (
-    find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
 )
 from .daemon_parameters import DaemonParameters
+from .parameters import (
+    INTERVAL_FOR_PING_DAEMON,
+    TIMEOUT_FOR_PING,
+)
+from .qemu_guest_console_io import start_qemu_serial_drain_tasks
 from .qemu_image import (
     ensure_image,
     get_default_image_path,
@@ -58,10 +52,16 @@ from .qemu_image import (
 from .qemu_setup import (
     GUEST_CONFIG_MOUNT,
     GUEST_RUN_MOUNT,
+    _qemu_show_boot_console_truthy,
     prepare_guest_env,
 )
 from .tools import which_command
 from .vm_sse_daemon import VMSSEDaemon
+
+# VM boot + cloud-init can take 20–40s before main_sandbox listens; wait before pinging.
+QEMU_BOOT_DELAY = 20.0
+# Allow more ping attempts after boot (VM is slower than a subprocess).
+QEMU_LOOP_FOR_PING = 200
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,7 @@ def _guest_python_exe_path() -> str:
     exe = Path(sys.executable)
     bin_path: set[Path] = set()
     follow_links_executable(exe, bin_path)
+    _bin_paths_include_resolved_interpreter(exe, bin_path)
     try:
         for p in bin_path:
             if p.is_file():
@@ -91,6 +92,24 @@ def _guest_python_exe_path() -> str:
         raise RuntimeError(
             "Impossible to resolve the sys.executable `%s`", sys.executable
         ) from e
+
+
+def _bin_paths_include_resolved_interpreter(
+    executable: Path, bin_paths: set[Path]
+) -> None:
+    """Register the resolved interpreter file when ``follow_links_executable`` no-ops.
+
+    That helper returns immediately for ``/usr/bin`` and ``/usr/local/bin`` to avoid
+    treating ``<prefix>/bin/python`` as a venv-style layout (which would add ``/usr`` or
+    ``/usr/local`` as a single mount). Without a concrete file in ``bin_paths``, QEMU
+    never stages ``<prefix>/lib`` (``libpython*.so*``) next to Docker's ``python3.X``.
+    """
+    try:
+        exr = executable.resolve(strict=True)
+        if exr.is_file():
+            bin_paths.add(exr)
+    except OSError:
+        pass
 
 
 def _add_dir_follow_links(path: Path, out: set[Path]) -> None:
@@ -219,7 +238,7 @@ def _merge_staged_virtfs_into_bind_mounts(
             staged_by_guest[_norm_guest_path(guest_path)] = host_path
     if not staged_by_guest:
         return
-    for i, (tag, host_path, guest_path) in enumerate(mount_specs):
+    for i, (tag, _host_path, guest_path) in enumerate(mount_specs):
         if not tag.startswith("pysb_") or not tag[5:].isdigit():
             continue
         key = _norm_guest_path(guest_path)
@@ -319,10 +338,177 @@ def _ldd_resolved_paths(elf: Path) -> set[Path]:
     return out
 
 
+_ELF_MAGIC = b"\x7fELF"
+
+
+def _debian_multiarch_triplet(machine: str | None = None) -> str | None:
+    """Map ``platform.machine()`` to Debian ``/lib/<triplet>`` (e.g. ``x86_64-linux-gnu``)."""
+    m = (machine or platform.machine() or "").strip().lower()
+    table = {
+        "x86_64": "x86_64-linux-gnu",
+        "x86-64": "x86_64-linux-gnu",
+        "amd64": "x86_64-linux-gnu",
+        "aarch64": "aarch64-linux-gnu",
+        "arm64": "aarch64-linux-gnu",
+        "armv8l": "aarch64-linux-gnu",
+        "armv7l": "arm-linux-gnueabihf",
+    }
+    return table.get(m)
+
+
+def _normalize_ld_closure_libs_param(raw: str | None) -> str:
+    """Return ``full`` or ``sparse`` (default ``full`` for nested lib overlay safety)."""
+    v = (raw or "full").strip().lower()
+    if v in ("sparse", "minimal", "ldd"):
+        return "sparse"
+    if v in ("full", "wide", "multiarch", "yes", "true", "1"):
+        return "full"
+    logger.warning("Unknown qemu.ld_closure_libs value %r; using full", raw)
+    return "full"
+
+
+def _merge_full_multiarch_lib_dirs(ld_root: Path, triplet: str) -> None:
+    """Copy entire host ``/lib/<triplet>`` and ``/usr/lib/<triplet>`` into staged tree.
+
+    Safer than an ``ldd``-only file list + .so whitelist: any DSO shipped under those
+    dirs on the container image (zlib, NSS, ICU, etc.) is available to the guest Python.
+    """
+    pairs = [
+        (Path(f"/lib/{triplet}"), ld_root / "lib" / triplet),
+        (Path(f"/usr/lib/{triplet}"), ld_root / "usr" / "lib" / triplet),
+    ]
+    for src, dst in pairs:
+        if not src.is_dir():
+            logger.debug("ld closure: full merge skip missing %s", src)
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
+        except OSError as e:
+            logger.warning("ld closure: full merge %s -> %s failed: %s", src, dst, e)
+    logger.info(
+        "QEMU virtio-9p: merged full host multiarch lib dirs for %s under %s",
+        triplet,
+        ld_root,
+    )
+
+
+def _qemu_bootstrap_ldd_seed_executables() -> list[Path]:
+    """ELF paths merged into the staged /lib* closure when nested virtio-9p is used.
+
+    Staging mounts host ``/lib/x86_64-linux-gnu`` (and friends) over the guest tree so
+    the container Python matches its libc.  That replaces the guest Ubuntu libs with a
+    **subset** built from Python's ``ldd`` closure only.  The cloud-init bootstrap then
+    runs host-linked ``mkdir``, ``mount``, ``sh``, etc.; they need extra deps (e.g.
+    ``libselinux.so.1``, ``libsystemd.so.0``) that Python does not pull in — without
+    them, ``mkdir`` fails and the guest appears to hang while the host waits on QEMU.
+    """
+    names = (
+        "mkdir",
+        "mount",
+        "umount",
+        "sh",
+        "bash",
+        "dash",
+        "sed",
+        "grep",
+        "readlink",
+        "chmod",
+        "dirname",
+        "basename",
+        "true",
+        "poweroff",
+        "logger",
+        "ssh-keygen",
+    )
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for name in names:
+        w = shutil.which(name)
+        if not w:
+            continue
+        try:
+            p = Path(w).resolve(strict=True)
+        except OSError:
+            continue
+        if not p.is_file() or p in seen:
+            continue
+        try:
+            with p.open("rb") as f:
+                if f.read(4) != _ELF_MAGIC:
+                    continue
+        except OSError:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
+def _qemu_guest_overlay_compat_so_seeds() -> list[Path]:
+    """DSOs an Ubuntu cloud guest's /bin/mkdir and /bin/mount need after /lib is overlaid.
+
+    Seeds from :func:`_qemu_bootstrap_ldd_seed_executables` use the **host** (container)
+    ``mkdir``.  On Debian-slim that binary often **does not** link ``libselinux``; the
+    **guest** ``mkdir`` still does, so after 9p replaces ``/lib/x86_64-linux-gnu`` the
+    guest ELF loads our staged tree and fails on missing ``libselinux`` or
+    ``libpcre2-8`` (dependency of libselinux).  Seeding these .so paths pulls their
+    ``ldd`` transitive closure into the staged copy.
+    """
+    basenames = (
+        "libselinux.so.1",
+        "libpcre2-8.so.0",
+        "libmount.so.1",
+        "libblkid.so.1",
+        "libuuid.so.1",
+        "libsmartcols.so.1",
+        "libsystemd.so.0",
+        "liblzma.so.5",
+        "libgcrypt.so.20",
+        # stdlib ``binascii`` / ``zlib`` C extension loads libz; not always in interpreter ldd
+        "libz.so.1",
+    )
+    triplet = _debian_multiarch_triplet() or "x86_64-linux-gnu"
+    dirs = (Path(f"/lib/{triplet}"), Path(f"/usr/lib/{triplet}"))
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for base in basenames:
+            p = d / base
+            if not p.is_file():
+                continue
+            try:
+                r = p.resolve(strict=True)
+            except OSError:
+                continue
+            if r in seen:
+                continue
+            seen.add(r)
+            out.append(r)
+        # poweroff/systemctl pull a versioned libsystemd-shared-NNN.so not always named by ldd seeds
+        try:
+            for p in sorted(d.glob("libsystemd-shared*.so*")):
+                if not p.is_file():
+                    continue
+                try:
+                    r = p.resolve(strict=True)
+                except OSError:
+                    continue
+                if r not in seen:
+                    seen.add(r)
+                    out.append(r)
+        except OSError:
+            pass
+    return out
+
+
 def _dynamic_linker_closure_paths() -> set[Path]:
     """Paths so guest uses the host (container) dynamic linker + libc for sys.executable."""
+    exe_launcher = Path(sys.executable)
     bin_paths: set[Path] = set()
-    follow_links_executable(Path(sys.executable), bin_paths)
+    follow_links_executable(exe_launcher, bin_paths)
+    _bin_paths_include_resolved_interpreter(exe_launcher, bin_paths)
     exe: Path | None = None
     for p in bin_paths:
         if p.is_file():
@@ -330,7 +516,7 @@ def _dynamic_linker_closure_paths() -> set[Path]:
             break
     if exe is None:
         try:
-            exe = Path(sys.executable).resolve(strict=True)
+            exe = exe_launcher.resolve(strict=True)
         except OSError:
             return set()
     interp = Path("/lib64/ld-linux-x86-64.so.2")
@@ -343,6 +529,22 @@ def _dynamic_linker_closure_paths() -> set[Path]:
             seeds.add(interp.resolve(strict=True))
         except OSError:
             pass
+    bootstrap_utils = _qemu_bootstrap_ldd_seed_executables()
+    for util in bootstrap_utils:
+        seeds.add(util)
+    if bootstrap_utils:
+        logger.debug(
+            "QEMU ld closure: added bootstrap utility seeds for nested /lib overlay: %s",
+            [str(p) for p in bootstrap_utils],
+        )
+    overlay_so = _qemu_guest_overlay_compat_so_seeds()
+    for so in overlay_so:
+        seeds.add(so)
+    if overlay_so:
+        logger.debug(
+            "QEMU ld closure: added guest-compat .so seeds for nested /lib overlay: %s",
+            [p.name for p in overlay_so],
+        )
     closure: set[Path] = set()
     stack = list(seeds)
     while stack:
@@ -356,15 +558,51 @@ def _dynamic_linker_closure_paths() -> set[Path]:
     return closure
 
 
-def _stage_dynamic_linker_closure(temp: Path) -> list[tuple[str, Path, str]]:
+def _ensure_ld_closure_soname_symlink(dest: Path) -> None:
+    """Create ``libfoo.so.N`` -> ``libfoo.so.N.x.y`` if the linker expects the SONAME.
+
+    ``ldd`` resolves to the versioned file (e.g. ``libpcre2-8.so.0.14.0``); the dynamic
+    loader still opens ``libpcre2-8.so.0``.  Copying only the realpath leaves that name
+    missing on virtio-9p and bootstrap ``mkdir`` fails.
+    """
+    name = dest.name
+    if ".so." not in name:
+        return
+    prefix, rest = name.split(".so.", 1)
+    abi = rest.split(".")[0]
+    if not abi.isdigit():
+        return
+    soname = f"{prefix}.so.{abi}"
+    if soname == name:
+        return
+    link = dest.parent / soname
+    if link.exists() or link.is_symlink():
+        return
+    try:
+        link.symlink_to(name)
+    except OSError as e:
+        logger.debug(
+            "ld closure: could not soname-symlink %s -> %s: %s", soname, name, e
+        )
+
+
+def _stage_dynamic_linker_closure(
+    temp: Path, *, ld_closure_libs: str = "full"
+) -> list[tuple[str, Path, str]]:
     """Copy ldd closure of the host interpreter; mount loader + glibc paths on the guest.
 
     PT_INTERP must resolve to the host loader on 9p, not the guest disk, or libc
     mismatches the Python ELF from the container (SIGSEGV in the guest).
+
+    ``ld_closure_libs`` (profile ``qemu.ld_closure_libs``): ``full`` (default) merges
+    entire host ``/lib/<triplet>`` and ``/usr/lib/<triplet>`` after the sparse ``ldd``
+    copy so extension modules rarely miss a DSO; ``sparse`` keeps only the transitive
+    ``ldd`` closure plus :func:`_qemu_guest_overlay_compat_so_seeds` (faster, smaller).
     """
     closure = _dynamic_linker_closure_paths()
     if not closure:
         return []
+    triplet = _debian_multiarch_triplet() or "x86_64-linux-gnu"
     root = (temp / "ld_closure_fs").resolve()
     root.mkdir(parents=True, exist_ok=True)
     for p in sorted(closure, key=lambda x: str(x)):
@@ -376,35 +614,48 @@ def _stage_dynamic_linker_closure(temp: Path) -> list[tuple[str, Path, str]]:
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
             shutil.copy2(p, dest, follow_symlinks=True)
+            _ensure_ld_closure_soname_symlink(dest)
         except OSError as e:
             logger.warning("ld closure: skip %s: %s", p, e)
+    if ld_closure_libs == "full":
+        _merge_full_multiarch_lib_dirs(root, triplet)
     # PT_INTERP is /lib64/ld-linux-x86-64.so.2; on Debian bookworm it may live under usr/lib only.
     interp_guest = Path("/lib64/ld-linux-x86-64.so.2")
     if interp_guest.is_file():
         ld64 = root / "lib64"
         ld64.mkdir(parents=True, exist_ok=True)
         try:
-            shutil.copy2(
-                interp_guest, ld64 / "ld-linux-x86-64.so.2", follow_symlinks=True
-            )
+            ld_dest = ld64 / "ld-linux-x86-64.so.2"
+            shutil.copy2(interp_guest, ld_dest, follow_symlinks=True)
+            _ensure_ld_closure_soname_symlink(ld_dest)
         except OSError as e:
             logger.warning("ld closure: could not stage PT_INTERP: %s", e)
-    ulx = root / "usr" / "lib" / "x86_64-linux-gnu"
-    libgnu = root / "lib" / "x86_64-linux-gnu"
+    ulx = root / "usr" / "lib" / triplet
+    libgnu = root / "lib" / triplet
+    guest_usr = f"/usr/lib/{triplet}"
+    guest_lib = f"/lib/{triplet}"
     out: list[tuple[str, Path, str]] = []
     if (root / "lib64").is_dir():
         out.append(("pysb_lib64", root / "lib64", "/lib64"))
+    # Guest ld.so searches /lib/<triplet> before /usr/lib/...; ldd closure often
+    # lands only under usr/lib. Mounting a sparse lib/ tree breaks the Python probe and
+    # coreutils. Prefer one full tree at both guest paths (same host dir, two 9p tags).
     if ulx.is_dir():
-        out.append(("pysb_usr_lib_gnu", ulx, "/usr/lib/x86_64-linux-gnu"))
-    if libgnu.is_dir():
-        out.append(("pysb_lib_gnu", libgnu, "/lib/x86_64-linux-gnu"))
-    elif ulx.is_dir():
-        # Debian: same DSOs under /usr/lib/...; ldd may only populate that tree.
-        out.append(("pysb_lib_gnu", ulx, "/lib/x86_64-linux-gnu"))
+        out.append(("pysb_usr_lib_gnu", ulx, guest_usr))
+        out.append(("pysb_lib_gnu", ulx, guest_lib))
+    elif libgnu.is_dir():
+        out.append(("pysb_lib_gnu", libgnu, guest_lib))
     if out:
+        mode = (
+            "full multiarch merge + ldd seeds"
+            if ld_closure_libs == "full"
+            else "sparse ldd + compat seeds"
+        )
         logger.info(
-            "QEMU virtio-9p: staged dynamic linker closure (%d objects) for container interpreter",
+            "QEMU virtio-9p: staged dynamic linker closure (%d ldd objects, %s) for "
+            "container interpreter + shell/bootstrap utils (nested /lib overlay)",
             len(closure),
+            mode,
         )
     return out
 
@@ -434,6 +685,52 @@ def _stage_overlay_etc_bind_mount(
         return
 
 
+def _add_peer_lib_dir_for_executables(dirs: set[Path], bin_paths: set[Path]) -> None:
+    """Add ``<prefix>/lib`` when the interpreter lives in ``<prefix>/bin`` (Docker Python layout).
+
+    Official images place ``libpythonX.Y.so.*`` under ``/usr/local/lib`` while ``sys.executable``
+    is ``/usr/local/bin/pythonX.Y``; without a 9p mount of that ``lib``, the guest binary loads
+    only ``../lib/pythonX.Y/...`` mounts and fails with ``libpython*.so: cannot open``.
+    """
+    for p in bin_paths:
+        if not p.is_file():
+            continue
+        try:
+            er = p.resolve(strict=True)
+        except OSError:
+            continue
+        peer = er.parent.parent / "lib"
+        if not peer.is_dir():
+            continue
+        try:
+            pr = peer.resolve(strict=True)
+        except OSError:
+            continue
+        if any(pr.glob("libpython*.so*")):
+            dirs.add(pr)
+
+
+def _add_libpython_dirs_from_ldd(dirs: set[Path], bin_paths: set[Path]) -> None:
+    """Add directories containing ``libpython*.so*`` reported by ``ldd`` on the real interpreter.
+
+    Peer ``../lib`` misses layouts where ``bin`` is not ``<prefix>/bin`` (symlinks, distros).
+    """
+    for p in bin_paths:
+        if not p.is_file():
+            continue
+        try:
+            er = p.resolve(strict=True)
+        except OSError:
+            continue
+        for dep in _ldd_resolved_paths(er):
+            if "libpython" not in dep.name:
+                continue
+            try:
+                dirs.add(dep.parent.resolve(strict=True))
+            except OSError:
+                pass
+
+
 def _execution_dirs_mounts() -> list[tuple[str, Path, str]]:
     """Build 9p mounts for Python execution: sys.executable (follow symlinks), sys.path, site.getsitepackages().
 
@@ -443,12 +740,16 @@ def _execution_dirs_mounts() -> list[tuple[str, Path, str]]:
     dirs: set[Path] = set()
     # sys.executable and its symlink chain (e.g. .venv/bin/python3 -> python -> /opt/conda/bin/python3.13)
     bin_paths: set[Path] = set()
-    follow_links_executable(Path(sys.executable), bin_paths)
+    exe_launcher = Path(sys.executable)
+    follow_links_executable(exe_launcher, bin_paths)
+    _bin_paths_include_resolved_interpreter(exe_launcher, bin_paths)
     for p in bin_paths:
         if p.is_file():
             dirs.add(p.parent.resolve(strict=True))
         else:
             _add_dir_follow_links(p, dirs)
+    _add_peer_lib_dir_for_executables(dirs, bin_paths)
+    _add_libpython_dirs_from_ldd(dirs, bin_paths)
     # sys.path and site.getsitepackages()
     for sp in sys.path:
         if sp and os.path.isdir(sp):
@@ -526,7 +827,12 @@ def _file_rules_mounts(
         _rebase_file_bind_hosts_under_staged_app(mount_specs)
         _stage_overlay_etc_bind_mount(temp, mount_specs)
         # Prepend so sort places these before project binds; guest must see host ld.so/libc.
-        mount_specs[:] = _stage_dynamic_linker_closure(temp) + mount_specs
+        ld_mode = _normalize_ld_closure_libs_param(
+            str(all_rules.os_sandbox_params.get("ld_closure_libs", "full"))
+        )
+        mount_specs[:] = (
+            _stage_dynamic_linker_closure(temp, ld_closure_libs=ld_mode) + mount_specs
+        )
 
     mount_list = [(tag, gp) for tag, _hp, gp in mount_specs]
 
@@ -575,7 +881,7 @@ class QemuSSEDaemon(VMSSEDaemon):
     virtio-9p so no file copies or HTTP server are needed.
     """
 
-    __slots__ = ("_iso_config",)
+    __slots__ = ("_iso_config", "_qemu_console_tasks")
 
     def __init__(
         self, token: str, *, python_args: list[str] | None = None, **kwargs: Any
@@ -588,6 +894,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             **kwargs,
         )
         self._iso_config: DaemonParameters | None = None
+        self._qemu_console_tasks: list[asyncio.Task[None]] = []
 
     @override
     def parse_rules(
@@ -664,7 +971,10 @@ class QemuSSEDaemon(VMSSEDaemon):
                 "virtfs_stage_exec" in host_s
                 or "virtfs_stage_misc" in host_s
                 or "/virtfs_stage/" in host_s
+                or "ld_closure_fs" in host_s
             ):
+                # Staged/copied trees: "none" avoids 9p symlink issues (ELOOP loading .so)
+                # with mapped-xattr; see nested QEMU ld_closure + SONAME symlinks.
                 security = "none"
             else:
                 configured = (
@@ -773,7 +1083,6 @@ class QemuSSEDaemon(VMSSEDaemon):
         when the guest opens it (same flow as bwrap/unshare).
         """
         from .client_subprocess_sse_daemon import get_callable_info
-        from .qemu_setup import merge_qemu_guest_diag_env
 
         self._is_started = False
         self._accept_incoming = False
@@ -798,7 +1107,6 @@ class QemuSSEDaemon(VMSSEDaemon):
             )
         netfilter_rules = tuple(netfilter_rules)
 
-        all_rules = merge_qemu_guest_diag_env(all_rules)
         process_config = DaemonParameters(
             all_rules=all_rules,
             log_level=log_level,
@@ -841,9 +1149,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             pass
 
         config_writer = _noop_config_writer if config_dir is not None else None
-        show_boot = all_rules.os_sandbox_params.get(
-            "show_boot_console", "false"
-        ).lower() in ("true", "1", "yes")
+        show_boot = _qemu_show_boot_console_truthy(all_rules)
         # When show_boot_console is false (default), redirect QEMU stdout/stderr so
         # boot/kernel/cloud-init traces are hidden; Python output is streamed via SSE.
         launch_kwargs: dict[str, Any] = dict(
@@ -852,11 +1158,24 @@ class QemuSSEDaemon(VMSSEDaemon):
             envs=Envs(env),
             process_config=process_config,
             config_writer=config_writer,
+            # -nographic multiplexes serial on stdio; inheriting a TTY (e.g. podman -it)
+            # can block forever waiting for console input while the guest is unattended.
+            stdin=subprocess.DEVNULL,
         )
         if not show_boot:
             launch_kwargs["stdout"] = subprocess.DEVNULL
             launch_kwargs["stderr"] = subprocess.DEVNULL
+        else:
+            launch_kwargs["stdout"] = subprocess.PIPE
+            launch_kwargs["stderr"] = subprocess.PIPE
+        self._qemu_console_tasks = []
         self._process = await launch_sandbox(**launch_kwargs)
+        if show_boot and self._process.stdout is not None:
+            self._qemu_console_tasks = start_qemu_serial_drain_tasks(
+                self._process,
+                forward_all=True,
+                mirror_logger=logger,
+            )
 
         await self._on_process_started()
 
