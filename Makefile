@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-image-base build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready init packmind-import
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready init packmind-import
 
 # Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
@@ -186,15 +186,21 @@ BUILD_SOURCES = pyproject.toml README.md $(shell find pysandboxes -type f \( -na
 dist: .make-dist
 
 # ---------------------------------------------------------------------------------------
-# One image per OS provider, all FROM base. Image names: python-sb-base, python-sb-unshare, python-sb-bwrap, python-sb-qemu. Each tagged with version and latest.
-# PYTHON_VERSION from uv. VARIANT = base | unshare | bwrap | qemu. (firejail not supported in Docker.)
+# Docker image dependency graph (each provider Dockerfile uses FROM python-sb:${PYTHON_VERSION}):
+#
+#   docker.io/library/python:${PYTHON_VERSION}-slim   (upstream; Dockerfile)
+#        |
+#        +-- python-sb                    Dockerfile ............... build-image-base
+#                |
+#                +-- python-sb-landlock  Dockerfile-landlock ..... build-image-landlock
+#                +-- python-sb-unshare   Dockerfile-unshare ...... build-image-unshare
+#                +-- python-sb-bwrap     Dockerfile-bwrap ........ build-image-bwrap
+#                +-- python-sb-qemu      Dockerfile-qemu ......... build-image-qemu
+#
+# Make encodes this: .make-build-image-{landlock,unshare,bwrap,qemu} all prereq .make-build-image-base.
+# PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu. (firejail not supported in Docker.)
 PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
 VARIANT ?= qemu
-IMAGE_BASE    := python-sb
-IMAGE_LANDLOCK := python-sb-landlock
-IMAGE_UNSHARE := python-sb-unshare
-IMAGE_BWRAP   := python-sb-bwrap
-IMAGE_QEMU    := python-sb-qemu
 # QEMU package per host arch (for build-image-qemu, no script in image)
 UNAME_M       := $(shell uname -m)
 QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qemu-system-x86)
@@ -204,12 +210,12 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	if [ -z "$$WHEEL" ]; then echo "No wheel in dist/"; exit 1; fi; \
 	for CONTAINER_CMD in podman docker; do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
-	  echo "Building $(IMAGE_BASE):$(PYTHON_VERSION), $(IMAGE_BASE):latest with $$CONTAINER_CMD (base)..."; \
+	  echo "Building python-sb:$(PYTHON_VERSION), python-sb:latest with $$CONTAINER_CMD (base)..."; \
 	  $$CONTAINER_CMD build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
-	  	-t $(IMAGE_BASE):$(PYTHON_VERSION) \
-	  	-t $(IMAGE_BASE):subprocess \
-	  	-t $(IMAGE_BASE):landlock \
-	  	-t $(IMAGE_BASE):latest \
+	  	-t python-sb:$(PYTHON_VERSION) \
+	  	-t python-sb:subprocess \
+	  	-t python-sb:landlock \
+	  	-t python-sb:latest \
 	  	-f Dockerfile .; \
 	done; \
 	touch .make-build-image-base
@@ -217,12 +223,12 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 .make-build-image-landlock: .make-build-image-base Dockerfile-landlock
 	@for CONTAINER_CMD in podman docker; do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
-	  echo "Building $(IMAGE_LANDLOCK):$(PYTHON_VERSION), $(IMAGE_LANDLOCK):latest with $$CONTAINER_CMD..."; \
+	  echo "Building python-sb-landlock:$(PYTHON_VERSION), python-sb-landlock:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
 		--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
-	  	-t $(IMAGE_LANDLOCK):$(PYTHON_VERSION) \
-	  	-t $(IMAGE_LANDLOCK):latest \
-	  	-t $(IMAGE_LANDLOCK):landlock \
+	  	-t python-sb-landlock:$(PYTHON_VERSION) \
+	  	-t python-sb-landlock:latest \
+	  	-t python-sb-landlock:landlock \
 	  	-f Dockerfile-landlock .; \
 	done; \
 	touch .make-build-image-landlock
@@ -231,12 +237,12 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 .make-build-image-unshare: .make-build-image-base Dockerfile-unshare
 	for CONTAINER_CMD in podman docker; do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
-	  echo "Building $(IMAGE_UNSHARE):$(PYTHON_VERSION), $(IMAGE_UNSHARE):latest with $$CONTAINER_CMD..."; \
+	  echo "Building python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
 	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
-	  	-t $(IMAGE_UNSHARE):$(PYTHON_VERSION) \
-	  	-t $(IMAGE_UNSHARE):latest \
-	  	-t $(IMAGE_UNSHARE):unshare \
+	  	-t python-sb-unshare:$(PYTHON_VERSION) \
+	  	-t python-sb-unshare:latest \
+	  	-t python-sb-unshare:unshare \
 	  	-f Dockerfile-unshare .; \
 	done; \
 	touch .make-build-image-unshare
@@ -244,12 +250,12 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 .make-build-image-bwrap: .make-build-image-base Dockerfile-bwrap
 	@for CONTAINER_CMD in podman docker; do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
-	  echo "Building $(IMAGE_BWRAP):$(PYTHON_VERSION), $(IMAGE_BWRAP):latest with $$CONTAINER_CMD..."; \
+	  echo "Building python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
 	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
-	  	-t $(IMAGE_BWRAP):$(PYTHON_VERSION) \
-	  	-t $(IMAGE_BWRAP):latest \
-	  	-t $(IMAGE_BWRAP):bwrap \
+	  	-t python-sb-bwrap:$(PYTHON_VERSION) \
+	  	-t python-sb-bwrap:latest \
+	  	-t python-sb-bwrap:bwrap \
 	  	-f Dockerfile-bwrap .; \
 	done; \
 	touch .make-build-image-bwrap
@@ -257,33 +263,36 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 .make-build-image-qemu: .make-build-image-base Dockerfile-qemu
 	@for CONTAINER_CMD in podman docker; do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
-	  echo "Building $(IMAGE_QEMU):$(PYTHON_VERSION), $(IMAGE_QEMU):latest with $$CONTAINER_CMD..."; \
+	  echo "Building python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
 	  	--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
 	  	--build-arg QEMU_PKG=$(QEMU_PKG) \
-	  	-t $(IMAGE_QEMU):$(PYTHON_VERSION) \
-	  	-t $(IMAGE_QEMU):latest \
-	  	-t $(IMAGE_QEMU):qemu \
+	  	-t python-sb-qemu:$(PYTHON_VERSION) \
+	  	-t python-sb-qemu:latest \
+	  	-t python-sb-qemu:qemu \
 	  	-f Dockerfile-qemu .; \
 	done; \
 	touch .make-build-image-qemu
 
-## Build base image (Python + wheel): python-sb-base:$(PYTHON_VERSION), python-sb-base:latest
+## Build base image python-sb (Python + wheel); required by all provider images below
 build-image-base: .make-build-image-base
 
-## Build landlock image (Python + wheel): python-sb-base:$(PYTHON_VERSION), python-sb-base:latest
+## Build landlock image (FROM python-sb): python-sb-landlock:$(PYTHON_VERSION), python-sb-landlock:latest
 build-image-landlock: .make-build-image-landlock
 
-## Build unshare image: python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest
+## Build unshare image (FROM python-sb): python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest
 build-image-unshare: .make-build-image-unshare
 
-## Build bwrap image: python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest
+## Build bwrap image (FROM python-sb): python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest
 build-image-bwrap: .make-build-image-bwrap
 
-## Build qemu image: python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
+## Build qemu image (FROM python-sb): python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
 build-image-qemu: .make-build-image-qemu
 
-## Build all provider images with docker only (e.g. minikube: eval $(minikube docker-env) && make build-image-docker)
+## Build all sandbox images (base + every provider); same as build-images
+build-image: build-images
+
+## Build all provider images (and base first); see dependency graph above (e.g. minikube: eval $(minikube docker-env) && make build-image-docker)
 build-images: Dockerfile .make-dist \
 	.make-build-image-base \
 	.make-build-image-landlock \
@@ -296,7 +305,7 @@ build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."
 	@command -v docker >/dev/null 2>&1 && docker builder prune -f || true
 	@command -v podman >/dev/null 2>&1 && (podman builder prune -f 2>/dev/null || podman system prune -f 2>/dev/null) || true
-	@rm -f .make-build-image-base .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
+	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
 	@$(MAKE) build-images
 
 # ---------------------------------------------------------------------------------------

@@ -10,6 +10,6 @@ case "$arch" in
 esac
 apt-get update && apt-get install -y --no-install-recommends "$qemu_pkg" qemu-utils genisoimage
 mkdir -p "${PYSANDBOXES_VM_IMAGES_DIR:?}"
-python -m pysandboxes.fetch_qemu_image
+python -m pysandboxes.remote.qemu_fetch_image
 apt-get autoremove -y
 rm -rf /var/lib/apt/lists/*

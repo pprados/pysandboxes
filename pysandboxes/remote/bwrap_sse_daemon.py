@@ -19,7 +19,6 @@ import os
 import shlex
 import site
 import socket as socket_mod
-import stat
 import subprocess
 import sys
 import tempfile
@@ -59,23 +58,26 @@ from .parameters import (
     LOOP_FOR_PING,
     TIMEOUT_FOR_PING,
 )
+from .slirp4netns_common import (
+    SLIRP_DNS,
+    SLIRP_GW,
+    SLIRP_WATCHER_TIMEOUT,
+)
+from .slirp4netns_common import (
+    extract_port_forwards as slirp_extract_port_forwards,
+)
+from .slirp4netns_common import (
+    is_socket as slirp_is_socket,
+)
+from .slirp4netns_common import (
+    run_slirp_watcher as slirp_run_watcher,
+)
+from .slirp4netns_common import (
+    setup_port_forwarding as slirp_setup_port_forwarding,
+)
 from .tools import suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)
-
-# slirp4netns guest addressing (same as unshare)
-SLIRP_GW = "10.0.2.2"
-SLIRP_DNS = "10.0.2.3"
-SLIRP_INTERFACE = "tap0"
-SLIRP_WATCHER_TIMEOUT = 30
-
-
-def _is_socket(path: str) -> bool:
-    """Return True if path is a Unix socket."""
-    try:
-        return stat.S_ISSOCK(os.stat(path).st_mode)
-    except (OSError, ValueError):
-        return False
 
 
 def _resolve_ignore_paths(
@@ -113,14 +115,14 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
     """
 
     __slots__ = (
-        "_slirp_process",
+        "_slirp_process_holder",
         "_slirp_shutdown_event",
         "_slirp_api_socket",
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._slirp_process: subprocess.Popen[bytes] | None = None
+        self._slirp_process_holder: list[subprocess.Popen[bytes] | None] = [None]
         self._slirp_shutdown_event: threading.Event = threading.Event()
         self._slirp_api_socket: str = ""
 
@@ -152,127 +154,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             )
             netfilter = list(netfilter[:idx]) + [sse_allow] + list(netfilter[idx:])
         return tuple(netfilter)
-
-    def _extract_port_forwards(self, all_rules: AllRules) -> str:
-        """Port forwarding spec for slirp4netns (e.g. 'tcp:PORT tcp:80')."""
-        tcp_ports: set[int] = {self.port}
-        udp_ports: set[int] = set()
-        for rule in all_rules.socket_rules:
-            if rule.action != Action.ALLOW or Direction.IN not in rule.directions:
-                continue
-            ports = rule.mask.ports
-            if isinstance(ports, range) and len(ports) > 1000:
-                continue
-            for p in list(ports):
-                for kind in rule.mask.kinds:
-                    if kind == Kind.TCP:
-                        tcp_ports.add(p)
-                    elif kind == Kind.UDP:
-                        udp_ports.add(p)
-        parts = [f"tcp:{p}" for p in sorted(tcp_ports)]
-        parts += [f"udp:{p}" for p in sorted(udp_ports)]
-        return " ".join(parts)
-
-    def _slirp_watcher(self, pipe_w: int, api_socket: str, child_pid: int) -> None:
-        """Background: run slirp4netns for child_pid, signal readiness on pipe_w."""
-        deadline = time.monotonic() + SLIRP_WATCHER_TIMEOUT
-        while not self._slirp_shutdown_event.is_set():
-            if time.monotonic() > deadline:
-                logger.error(
-                    "slirp_watcher: timed out waiting after %ds",
-                    SLIRP_WATCHER_TIMEOUT,
-                )
-                try:
-                    os.close(pipe_w)
-                except OSError:
-                    pass
-                return
-            try:
-                slirp_arg = [
-                    "slirp4netns",
-                    "-c",
-                    "-m",
-                    "1500",
-                    "-r",
-                    str(pipe_w),
-                    "--api-socket",
-                    api_socket,
-                    str(child_pid),
-                    SLIRP_INTERFACE,
-                ]
-                logger.debug("slirp_watcher: launching: %s", " ".join(slirp_arg))
-                proc = subprocess.Popen(
-                    slirp_arg,
-                    stdout=subprocess.DEVNULL,
-                    stderr=(
-                        subprocess.PIPE
-                        if logger.isEnabledFor(logging.DEBUG)
-                        else subprocess.DEVNULL
-                    ),
-                    pass_fds=(pipe_w,),
-                )
-                self._slirp_process = proc
-                logger.debug("slirp_watcher: slirp4netns launched (pid=%s)", proc.pid)
-                while True:
-                    try:
-                        proc.wait(timeout=1.0)
-                        break
-                    except subprocess.TimeoutExpired:
-                        if self._slirp_shutdown_event.is_set():
-                            return
-                if proc.returncode and proc.returncode != -9:
-                    logger.warning(
-                        "slirp_watcher: slirp4netns exited with code %s",
-                        proc.returncode,
-                    )
-            except Exception:
-                logger.exception("slirp_watcher: exception launching slirp4netns")
-            finally:
-                self._slirp_process = None
-                try:
-                    os.close(pipe_w)
-                except OSError:
-                    pass
-            return
-
-    @staticmethod
-    def _setup_port_forwarding(api_socket: str, ports_spec: str) -> None:
-        """Forward host ports to sandbox via slirp4netns API."""
-        if not ports_spec:
-            return
-        for _ in range(50):
-            if os.path.exists(api_socket) and _is_socket(api_socket):
-                break
-            time.sleep(0.1)
-        else:
-            logger.error("Port forwarding: API socket not ready")
-            return
-        for spec in ports_spec.split():
-            try:
-                proto, port_str = spec.split(":", 1)
-                port = int(port_str)
-            except ValueError:
-                continue
-            try:
-                s = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
-                s.connect(api_socket)
-                cmd = json.dumps(
-                    {
-                        "execute": "add_hostfwd",
-                        "arguments": {
-                            "proto": proto,
-                            "host_addr": "127.0.0.1",
-                            "host_port": port,
-                            "guest_addr": "10.0.2.100",
-                            "guest_port": port,
-                        },
-                    }
-                )
-                s.sendall(cmd.encode() + b"\0")
-                s.recv(4096)
-                s.close()
-            except Exception:
-                pass
 
     def get_launch_params_for_python_sb(
         self,
@@ -326,14 +207,21 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
 
             def on_launched(pid: int) -> None:
                 threading.Thread(
-                    target=self._slirp_watcher,
-                    args=(slirp_pipe_w, api_socket, pid),
+                    target=slirp_run_watcher,
+                    args=(self._slirp_shutdown_event, slirp_pipe_w, api_socket),
+                    kwargs={
+                        "child_pid": pid,
+                        "process_holder": self._slirp_process_holder,
+                        "timeout": SLIRP_WATCHER_TIMEOUT,
+                    },
                     daemon=True,
                 ).start()
-                ports_spec = self._extract_port_forwards(all_rules)
+                ports_spec = slirp_extract_port_forwards(
+                    all_rules, self.port, log_wildcard=False
+                )
                 if ports_spec:
                     threading.Thread(
-                        target=self._setup_port_forwarding,
+                        target=slirp_setup_port_forwarding,
                         args=(api_socket, ports_spec),
                         daemon=True,
                     ).start()
@@ -576,14 +464,21 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
 
             def on_launched(pid: int) -> None:
                 threading.Thread(
-                    target=self._slirp_watcher,
-                    args=(slirp_pipe_w, api_socket, pid),
+                    target=slirp_run_watcher,
+                    args=(self._slirp_shutdown_event, slirp_pipe_w, api_socket),
+                    kwargs={
+                        "child_pid": pid,
+                        "process_holder": self._slirp_process_holder,
+                        "timeout": SLIRP_WATCHER_TIMEOUT,
+                    },
                     daemon=True,
                 ).start()
-                ports_spec = self._extract_port_forwards(all_rules)
+                ports_spec = slirp_extract_port_forwards(
+                    all_rules, self.port, log_wildcard=False
+                )
                 if ports_spec:
                     threading.Thread(
-                        target=self._setup_port_forwarding,
+                        target=slirp_setup_port_forwarding,
                         args=(api_socket, ports_spec),
                         daemon=True,
                     ).start()
@@ -652,7 +547,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
     async def _stop(self, max_pending: int) -> None:
         """Stop daemon and slirp4netns when network filtering was used."""
         self._slirp_shutdown_event.set()
-        proc = self._slirp_process
+        proc = self._slirp_process_holder[0] if self._slirp_process_holder else None
         if proc is not None:
             try:
                 proc.terminate()
@@ -662,5 +557,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                     proc.kill()
                 except OSError:
                     pass
-            self._slirp_process = None
+            if self._slirp_process_holder:
+                self._slirp_process_holder[0] = None
         await super()._stop(max_pending)

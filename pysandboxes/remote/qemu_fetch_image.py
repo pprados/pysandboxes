@@ -2,7 +2,7 @@
 # License: Apache V2
 """CLI to prepare or fetch the default QEMU VM image for the qemu provider.
 
-Run as: python -m pysandboxes.fetch_qemu_image
+Run as: python -m pysandboxes.remote.qemu_fetch_image
 
 If the image is missing and PYSANDBOXES_QEMU_IMAGE_URL or PYSANDBOXES_QEMU_IMAGE_BASE_URL
 is set, the image is downloaded. Otherwise prints the expected path and env var hints.
