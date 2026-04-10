@@ -217,7 +217,7 @@ def _stage_exec_virtfs_mounts(
         did_any = True
         logger.debug("virtfs staging: %s -> %s (guest %s)", host_path, dest, guest_path)
     if did_any:
-        logger.info(
+        logger.debug(
             "QEMU virtio-9p: staged exec mounts under %s (container/overlay workaround)",
             stage_root,
         )
@@ -367,11 +367,32 @@ def _normalize_ld_closure_libs_param(raw: str | None) -> str:
     return "full"
 
 
+def _path_under_host_multiarch_lib(p: Path, triplet: str) -> bool:
+    """True if ``p`` lies under ``/lib/<triplet>`` or ``/usr/lib/<triplet>`` by path prefix.
+
+    Uses :func:`os.path.normpath` only (no symlink resolution): ``/lib64/ld-linux-…``
+    can resolve into the triplet tree on disk, but staging still copies it under
+    ``ld_closure_fs/lib64``; skipping it would drop the loader from the sparse loop.
+    """
+    ap = Path(os.path.normpath(p))
+    for base in (Path(f"/lib/{triplet}"), Path(f"/usr/lib/{triplet}")):
+        try:
+            ap.relative_to(base)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
 def _merge_full_multiarch_lib_dirs(ld_root: Path, triplet: str) -> None:
     """Copy entire host ``/lib/<triplet>`` and ``/usr/lib/<triplet>`` into staged tree.
 
     Safer than an ``ldd``-only file list + .so whitelist: any DSO shipped under those
     dirs on the container image (zlib, NSS, ICU, etc.) is available to the guest Python.
+
+    In ``full`` mode this must run **before** per-path ``ldd`` copies: those use
+    ``copy2(..., follow_symlinks=True)``, which materializes real files where the host
+    has SONAME symlinks; a later ``copytree`` then hits EEXIST trying to recreate links.
     """
     pairs = [
         (Path(f"/lib/{triplet}"), ld_root / "lib" / triplet),
@@ -386,7 +407,7 @@ def _merge_full_multiarch_lib_dirs(ld_root: Path, triplet: str) -> None:
             shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
         except OSError as e:
             logger.warning("ld closure: full merge %s -> %s failed: %s", src, dst, e)
-    logger.info(
+    logger.debug(
         "QEMU virtio-9p: merged full host multiarch lib dirs for %s under %s",
         triplet,
         ld_root,
@@ -594,10 +615,11 @@ def _stage_dynamic_linker_closure(
     PT_INTERP must resolve to the host loader on 9p, not the guest disk, or libc
     mismatches the Python ELF from the container (SIGSEGV in the guest).
 
-    ``ld_closure_libs`` (profile ``qemu.ld_closure_libs``): ``full`` (default) merges
-    entire host ``/lib/<triplet>`` and ``/usr/lib/<triplet>`` after the sparse ``ldd``
-    copy so extension modules rarely miss a DSO; ``sparse`` keeps only the transitive
-    ``ldd`` closure plus :func:`_qemu_guest_overlay_compat_so_seeds` (faster, smaller).
+    ``ld_closure_libs`` (profile ``qemu.ld_closure_libs``): ``full`` (default) copies
+    host ``/lib/<triplet>`` and ``/usr/lib/<triplet>`` first, then copies any remaining
+    ``ldd`` paths (outside those trees) so extension modules rarely miss a DSO without
+    EEXIST from mixing followed copies and host symlinks; ``sparse`` keeps only the
+    transitive ``ldd`` closure plus :func:`_qemu_guest_overlay_compat_so_seeds` (faster, smaller).
     """
     closure = _dynamic_linker_closure_paths()
     if not closure:
@@ -605,7 +627,11 @@ def _stage_dynamic_linker_closure(
     triplet = _debian_multiarch_triplet() or "x86_64-linux-gnu"
     root = (temp / "ld_closure_fs").resolve()
     root.mkdir(parents=True, exist_ok=True)
+    if ld_closure_libs == "full":
+        _merge_full_multiarch_lib_dirs(root, triplet)
     for p in sorted(closure, key=lambda x: str(x)):
+        if ld_closure_libs == "full" and _path_under_host_multiarch_lib(p, triplet):
+            continue
         try:
             rel = p.relative_to("/")
         except ValueError:
@@ -617,8 +643,6 @@ def _stage_dynamic_linker_closure(
             _ensure_ld_closure_soname_symlink(dest)
         except OSError as e:
             logger.warning("ld closure: skip %s: %s", p, e)
-    if ld_closure_libs == "full":
-        _merge_full_multiarch_lib_dirs(root, triplet)
     # PT_INTERP is /lib64/ld-linux-x86-64.so.2; on Debian bookworm it may live under usr/lib only.
     interp_guest = Path("/lib64/ld-linux-x86-64.so.2")
     if interp_guest.is_file():
@@ -651,7 +675,7 @@ def _stage_dynamic_linker_closure(
             if ld_closure_libs == "full"
             else "sparse ldd + compat seeds"
         )
-        logger.info(
+        logger.debug(
             "QEMU virtio-9p: staged dynamic linker closure (%d ldd objects, %s) for "
             "container interpreter + shell/bootstrap utils (nested /lib overlay)",
             len(closure),
@@ -681,7 +705,7 @@ def _stage_overlay_etc_bind_mount(
             logger.error("virtfs staging: copy /etc bind failed: %s", e)
             raise
         mount_specs[i] = (tag, dest, guest_path)
-        logger.info("virtfs staging: /etc bind copied to %s", dest)
+        logger.debug("virtfs staging: /etc bind copied to %s", dest)
         return
 
 
@@ -1181,7 +1205,7 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         gc.collect()
         ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
-        logger.info(
+        logger.debug(
             "Waiting %.0fs for QEMU guest to boot, then pinging %s (max %d attempts)",
             QEMU_BOOT_DELAY,
             ping_url,
@@ -1242,7 +1266,7 @@ class QemuSSEDaemon(VMSSEDaemon):
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
-        logger.info(
+        logger.debug(
             "QEMU sandbox daemon is up and running at %s (host will now accept RPCs)",
             ping_url,
         )
