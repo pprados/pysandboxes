@@ -156,6 +156,10 @@ class DaemonParameters(NamedTuple):
     python_main_args: tuple[str, ...] = ()
     # For QEMU python_sb: guest path where host run dir is mounted; guest writes exit code there
     guest_run_dir: str | None = None
+    # For bwrap/unshare: fd number to read until slirp4netns is ready (child has fd via pass_fds)
+    slirp_ready_fd: int | None = None
+    # When True, child must loop until slirp network is reachable (bwrap --unshare-net)
+    wait_network: bool = False
 
 
 @sandbox_loop

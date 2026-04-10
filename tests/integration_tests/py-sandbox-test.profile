@@ -2,6 +2,7 @@ include "./.local.py-sandboxes"  # May be add to .gitignore
 
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
+bwrap.share-net=yes  # Use host network so bwrap works without root (iptables/slirp need cap_net_admin)
 env=TERM=${TERM}
 env=My_ENV=${My_ENV}
 

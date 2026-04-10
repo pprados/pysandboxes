@@ -32,9 +32,17 @@ The host launches a Firejail sandbox with a generated profile: whitelist/read-on
 
 For more details, see the [Firejail documentation](https://firejail.wordpress.com/).
 
-## Using with Docker / Podman
+## Using with Docker
 
-Firejail is **not** compatible with Docker and Podman. Use **unshare**, **bwrap**, or **qemu** for container-based workflows.
+Firejail is **not** compatible with Docker. The project uses **one image per OS provider** (see [unshare](unshare.md), [bwrap](bwrap.md), [qemu](qemu.md)); there is **no container image for firejail**. Use **unshare**, **bwrap**, or **qemu** for container-based workflows.
+
+## Using with Podman
+
+Firejail is **not** compatible with Podman. Use **unshare**, **bwrap**, or **qemu** with their respective provider images for container-based workflows.
+
+## Using with Kubernetes
+
+Firejail is **not** supported in Kubernetes (no `python-sb-firejail` image). Use **unshare** (`python-sb-unshare`), **bwrap** (`python-sb-bwrap`), or **qemu** (`python-sb-qemu`) and their documentation for Kubernetes.
 
 ## Configuration parameters
 

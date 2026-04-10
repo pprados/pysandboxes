@@ -95,11 +95,51 @@ In short: the host does not run an HTTP server or copy files; the VM receives ev
 
 For more details, see the [QEMU documentation](https://www.qemu.org/).
 
-## Using with Docker / Podman
+## Using with Docker
 
-The QEMU provider is compatible with Docker, Podman, and Kubernetes.
+The QEMU provider is compatible with Docker. The project uses **one image per OS provider**: the image for QEMU is `python-sb-qemu` (tagged e.g. `:latest` or `:3.12`). Build it from the project root with:
 
-> Starting a virtual machine is much longer than a simple process.
+```bash
+make build-image-qemu
+```
+
+Then run with the code mounted and the provider image. Starting a virtual machine is much longer than a simple process.
+
+```bash
+docker \
+  run -it --rm \
+    -v "$(pwd)":/app \
+    -w /app \
+    --device /dev/kvm \
+    python-sb-qemu:latest \
+    sh -c 'pip install -e . && OS_SANDBOX=qemu python-sb -m tests.integration_tests.tst_usage'
+```
+
+Use `--device /dev/kvm` when available for acceleration; otherwise QEMU falls back to TCG emulation.
+
+## Using with Podman
+
+Use the same provider image as for Docker:
+
+```bash
+make build-image-qemu
+```
+
+```bash
+podman \
+  run -it --rm \
+    -v "$(pwd)":/app \
+    -w /app \
+    --device /dev/kvm \
+    python-sb-qemu:latest \
+    sh -c 'pip install -e . && OS_SANDBOX=qemu python-sb -m tests.integration_tests.tst_usage'
+```
+
+## Using with Kubernetes
+
+Use the **provider image** `python-sb-qemu:latest` (built with `make build-image-qemu`). For minikube, build images in the cluster's Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-qemu` for this provider only).
+
+Running QEMU inside a Kubernetes pod typically requires access to KVM (`/dev/kvm`) and sufficient resources; not all clusters support nested virtualization. Example Pod: same structure as for unshare (see [unshare.md](unshare.md#using-with-kubernetes)), with `image: python-sb-qemu:latest`, and add a `device` mount for `/dev/kvm` if the node provides it. The container test suite skips the QEMU provider on Kubernetes by default (no QEMU/KVM in the test pod).
 
 ## Image and Python version
 

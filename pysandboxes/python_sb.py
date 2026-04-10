@@ -240,21 +240,30 @@ def main() -> int:
             # Config is in 9p-mounted config dir, no FIFO
             config_writer = lambda _: None
         else:
+            os_provider.port = (
+                find_free_port() if all_rules.port == -1 else all_rules.port
+            )
             cmd, extra_envs = os_provider.subprocess_cmd(
                 all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
             )
             python_cmd.extend(["--_named-pipe", str(pipe_path), "--_python-sb"])
             token = str(uuid.uuid4())
-            process_config = DaemonParameters(
+            default_process_config = DaemonParameters(
                 all_rules=all_rules,
                 log_level=log_level,
                 log_format=get_log_formatter(),
                 use_rich_handler=use_rich_handler(),
                 token=token,
-                port=0,
+                port=os_provider.port,
                 init_fn="",
                 python_main_args=(),
             )
+            launch_params = getattr(
+                os_provider,
+                "get_launch_params_for_python_sb",
+                lambda *a, **k: {},
+            )(all_rules, log_level, token, "", pipe_path, Path(tmpdir))
+            process_config = launch_params.get("process_config", default_process_config)
             config_writer = None
 
         env: Environ
@@ -335,8 +344,10 @@ def main() -> int:
                     envs=Envs(env),
                     process_config=process_config,
                     extra_preexec_fn=extra_preexec_fn,
-                    pass_fds=pass_fds,
-                    on_launched=os_provider.on_process_launched,
+                    pass_fds=launch_params.get("pass_fds", pass_fds),
+                    on_launched=launch_params.get(
+                        "on_launched", os_provider.on_process_launched
+                    ),
                     config_writer=config_writer,
                 )
                 try:
