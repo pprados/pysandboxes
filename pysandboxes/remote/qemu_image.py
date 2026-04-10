@@ -53,15 +53,20 @@ DEBIAN_CLOUD_BASE = "https://cloud.debian.org/images/cloud/bookworm/latest"
 DEBIAN_TRIXIE_CLOUD_BASE = "https://cloud.debian.org/images/cloud/trixie/latest"
 DOWNLOAD_TIMEOUT = 300
 
-# Complete mapping Python 3.10–3.13 → Ubuntu Cloud Image (one image per version).
-# See wiki/qemu.md. Format: (ubuntu_release, filename_pattern) e.g. "22.04", "ubuntu-22.04-server-cloudimg-{arch}.img"
+# Complete mapping Python 3.10–3.14 → Ubuntu Cloud Image (one image per version).
+# See wiki/qemu.md. Format: (release_or_codename, filename_pattern).
+# Numeric keys (22.04, …) use releases/{ver}/release/; codenames (resolute) use {codename}/current/.
 PYTHON_VERSION_TO_UBUNTU_IMAGE: dict[tuple[int, int], tuple[str, str]] = {
     (3, 10): ("22.04", "ubuntu-22.04-server-cloudimg-{arch}.img"),
     (3, 11): ("23.04", "ubuntu-23.04-server-cloudimg-{arch}.img"),
     (3, 12): ("24.04", "ubuntu-24.04-server-cloudimg-{arch}.img"),
     (3, 13): ("25.04", "ubuntu-25.04-server-cloudimg-{arch}.img"),
+    (3, 14): ("resolute", "resolute-server-cloudimg-{arch}.img"),
 }
 UBUNTU_CLOUD_RELEASES_BASE = "https://cloud-images.ubuntu.com/releases"
+UBUNTU_CLOUD_IMAGES_ROOT = "https://cloud-images.ubuntu.com"
+# Matches Ubuntu LTS/interim version directories under releases/ (e.g. 25.04), not codenames.
+_UBUNTU_NUMERIC_RELEASE_DIR = re.compile(r"^\d+\.\d+$")
 
 # Map platform.machine() to Debian/Ubuntu cloud image arch suffix
 _ARCH_TO_DEBIAN: dict[str, str] = {
@@ -95,7 +100,7 @@ def get_standard_download_url(
 ) -> str | None:
     """Return the standard download URL for the given Python version and architecture.
 
-    Uses Ubuntu Cloud Image for 3.10–3.13 (see PYTHON_VERSION_TO_UBUNTU_IMAGE),
+    Uses Ubuntu Cloud Image for 3.10–3.14 (see PYTHON_VERSION_TO_UBUNTU_IMAGE),
     otherwise Debian Bookworm generic image. Returns None if the architecture
     is not supported.
     """
@@ -174,7 +179,7 @@ def get_ubuntu_image_url_for_python_version(
     minor: int,
     arch: str | None = None,
 ) -> str | None:
-    """Return the Ubuntu Cloud Image URL for the given Python version (3.10–3.13).
+    """Return the Ubuntu Cloud Image URL for the given Python version (3.10–3.14).
 
     Provides a single image per version; see PYTHON_VERSION_TO_UBUNTU_IMAGE and wiki/qemu.md.
     Returns None if the version is not in the mapping or the architecture is not supported.
@@ -188,7 +193,9 @@ def get_ubuntu_image_url_for_python_version(
         return None
     release, pattern = PYTHON_VERSION_TO_UBUNTU_IMAGE[key]
     filename = pattern.format(arch=debian_arch)
-    return f"{UBUNTU_CLOUD_RELEASES_BASE}/{release}/release/{filename}"
+    if _UBUNTU_NUMERIC_RELEASE_DIR.fullmatch(release):
+        return f"{UBUNTU_CLOUD_RELEASES_BASE}/{release}/release/{filename}"
+    return f"{UBUNTU_CLOUD_IMAGES_ROOT}/{release}/current/{filename}"
 
 
 def get_download_url(path: Path) -> str | None:

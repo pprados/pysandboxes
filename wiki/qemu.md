@@ -32,7 +32,7 @@ The host starts a QEMU virtual machine with a cloud image (Debian/Ubuntu) and a 
 ## How it works
 
 1. **Host**: On first use (or when the daemon starts), the VM image is checked or downloaded and the NoCloud ISO is built (bootstrap script, 9p mount list, Python version, config path).
-2. **QEMU launch**: The host runs QEMU with the system image, the NoCloud ISO as a second disk, and one **virtio-9p** option per directory to expose (file rules → `/app`, execution dir, run dir, optional config dir). Network: `-nic user,hostfwd=tcp::PORT:PORT` to forward the SSE port from host to VM.
+2. **QEMU launch**: The host runs QEMU with the system image, the NoCloud ISO as a second disk, and one **virtio-9p** (`-virtfs local,…`) option per directory to expose (file rules → `/app`, execution dir, run dir, optional config dir). Network: `-nic user,hostfwd=tcp::PORT-:PORT,model=virtio-net-pci` to forward the SSE port from host to VM. A **virtio-serial** + **guest-agent** port is also attached for tooling compatibility.
 3. **Inside the VM**: cloud-init runs the bootstrap script, which mounts the cidata (ISO), loads 9p modules, mounts each 9p tag at the given path, checks the Python version (no install), then runs `python -m pysandboxes.remote.main_sandbox --_named-pipe <config>` (or 9p config file path).
 4. **In the guest**: `main_sandbox` loads the config (from the pipe or 9p file), applies Python guards, starts the SSE server on the expected port and waits for requests.
 5. **Communication**: The host sends calls over SSE to `http://127.0.0.1:PORT/...`; traffic goes through QEMU hostfwd to the server inside the VM.
@@ -103,7 +103,7 @@ In short: the host does not run an HTTP server or copy files; the VM receives ev
 
 For more details, see the [QEMU documentation](https://www.qemu.org/).
 
-> Set `qemu.show_boot_console=true` in the profile to show the full VM console on the host (boot, cloud-init, bootstrap) and tee it to `PYSANDBOXES_QEMU_CONSOLE_LOG` (default: `.pysandbox-qemu-console.log`). With `qemu.show_boot_console=false` (default), the host only prints Python output between the guest sentinels. Use `PYSANDBOXES_GUEST_DIAG=1` in the guest environment for `[PYSANDBOX_DIAG]` breadcrumbs and faulthandler in `main_sandbox` (narrow where a crash happens after `main()` starts).
+> Set `qemu.show_boot_console=true` in the profile to show the full VM console on the host (boot, cloud-init, bootstrap) and tee it to `.pysandbox-qemu-console.log` in the process working directory. With `qemu.show_boot_console=false` (default), the host only prints Python output between the guest sentinels. For `[PYSANDBOX_DIAG]` breadcrumbs and faulthandler in `main_sandbox` (narrow where a crash happens after `main()` starts), set **`qemu.guest_diag=true`** in the profile: the runtime injects `PYSANDBOXES_GUEST_DIAG=2` into the guest env. You can still set `PYSANDBOXES_GUEST_DIAG=1` manually in the profile `env` rules if you prefer.
 
 ### Guest Python exits with segmentation fault
 
@@ -151,6 +151,20 @@ podman \
     sh -c 'pip install -e . && OS_SANDBOX=qemu python-sb -m tests.integration_tests.tst_usage'
 ```
 
+### QEMU inside Docker/Podman (nested): overlay + virtio-9p
+
+If **`python-sb`** runs **inside** a container (e.g. `python-sb-qemu`) and the **QEMU** guest maps the **same** interpreter and `site-packages` via **virtio-9p**, paths that live on the **container overlay** can cause **SIGSEGV** in the guest when **ELF** / **`.so`** files are **mmap**-ed (exit code **139**).
+
+**Mitigation (default):** when the process detects a container (`/.dockerenv`, `/.containerenv`, or `container` in the environment), **pysandboxes** copies the **Python execution directories** (`pysb_exec_*` mounts only) into the run directory under **`/tmp`** (typically **tmpfs**, not overlay) before starting QEMU, then points **`-virtfs`** at those copies. **Guest paths** (`/usr/local/bin`, etc.) are unchanged. Staging can also copy **`/etc`** and the **dynamic linker closure** when needed so nested runs stay consistent.
+
+Profile knobs **`qemu.virtfs`** and **`qemu.virtfs_security_model`** are documented in [Configuration parameters](#configuration-parameters) above.
+
+**iptables / unprivileged Podman:** the outer Podman can stay **unprivileged**; **iptables** inside the **guest VM** (see profile rules) applies in the VM’s network namespace, not on the host. You still need **no extra capability** on the host for QEMU beyond what a normal user can use (e.g. `qemu-system-*` with `kvm` or TCG). **Nested KVM** (`--device /dev/kvm` in the container) is optional and accelerates the guest; without it, TCG is slower but staging should still avoid the segfault.
+
+**Host-side pipe handling:** `python-sb` no longer uses `readline()` on QEMU’s serial streams (a line without `\n` could block the host forever). It reads in chunks, splits on `\n`, and runs **`asyncio.gather`** on stdout drain, stderr drain, and **`process.wait()`** so a full **PIPE** buffer cannot deadlock QEMU’s writer.
+
+For diagnosis, set **`qemu.show_boot_console=true`** and inspect bootstrap lines before any crash.
+
 ## Using with Kubernetes
 
 Use the **provider image** `python-sb-qemu:latest` (built with `make build-image-qemu`). For minikube, build images in the cluster's Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-qemu` for this provider only).
@@ -161,23 +175,30 @@ Running QEMU inside a Kubernetes pod typically requires access to KVM (`/dev/kvm
 
 The default image is **Debian 12 (bookworm)** and provides Python 3.11. For **one image per Python version from 3.10 onward**, use **Ubuntu Cloud Images** (table below).
 
-Set the URL of the chosen image:
+Image resolution uses environment variables (see `pysandboxes.remote.qemu_image`):
+
+- **`PYSANDBOXES_QEMU_IMAGE_URL`** — full URL to a single image file (highest priority when set).
+- **`PYSANDBOXES_QEMU_IMAGE_BASE_URL`** — base URL; the client completes the filename from Python version and architecture when no full URL is set.
+- **`PYSANDBOXES_VM_IMAGES_DIR`** — directory where downloaded images are stored (default: `$XDG_DATA_HOME/vm-images` or `~/.local/share/vm-images`).
+
+Example:
 
 ```bash
 export PYSANDBOXES_QEMU_IMAGE_URL="<full image URL>"
 ```
 
-### Mapping: Python version → image (Ubuntu, 3.10 to 3.13)
+### Mapping: Python version → image (Ubuntu, 3.10 to 3.14)
 
-A single source covers 3.10, 3.11, 3.12 and 3.13 with one image per version: **Ubuntu Cloud Images**.
+A single source covers 3.10–3.14 with one image per version: **Ubuntu Cloud Images**. Releases **22.04–25.04** use `releases/<version>/release/`; **Python 3.14** uses the **resolute** development series under `{codename}/current/` (default `python3` is 3.14).
 
 
-| Python | Ubuntu            | File (.img)                               | Base URL (release)                                        |
-| ------ | ----------------- | ----------------------------------------- | --------------------------------------------------------- |
+| Python | Ubuntu            | File (.img)                               | Base URL |
+| ------ | ----------------- | ----------------------------------------- | -------- |
 | 3.10   | 22.04 LTS (Jammy) | `ubuntu-22.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/22.04/release/` |
 | 3.11   | 23.04 (Lunar)     | `ubuntu-23.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/23.04/release/` |
 | 3.12   | 24.04 LTS (Noble) | `ubuntu-24.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/24.04/release/` |
 | 3.13   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
+| 3.14   | resolute          | `resolute-server-cloudimg-<arch>.img`     | `https://cloud-images.ubuntu.com/resolute/current/`       |
 
 
 Replace `<arch>` with `amd64`, `arm64`, `ppc64el`, `riscv64` or `s390x` for your platform.
@@ -188,6 +209,7 @@ Replace `<arch>` with `amd64`, `arm64`, `ppc64el`, `riscv64` or `s390x` for your
 - Python 3.11: `https://cloud-images.ubuntu.com/releases/23.04/release/ubuntu-23.04-server-cloudimg-amd64.img`
 - Python 3.12: `https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img`
 - Python 3.13: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
+- Python 3.14: `https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img`
 
 **Alternative: Debian** (project default image, 3.11 only without extra config):
 
@@ -196,15 +218,25 @@ Replace `<arch>` with `amd64`, `arm64`, `ppc64el`, `riscv64` or `s390x` for your
 
 ## Configuration parameters
 
-You can add QEMU-specific options in `.py-sandboxes`. Any line of the form `qemu.<option>=<value>` is passed to the QEMU process as `--<option>=<value>` when the VM is started.
+In `.py-sandboxes`, lines use the form `qemu.<key>=<value>`. The runtime stores keys **without** the `qemu.` prefix in `os_sandbox_params`. Unlike **bwrap** or **firejail**, the QEMU provider **does not** forward arbitrary keys as extra `qemu-system-*` CLI flags: only the keys below are interpreted. Any other `qemu.*` line is parsed but currently unused for launching the VM.
 
-### Memory (qemu.memory)
-
-The VM needs enough RAM to boot the cloud image and run Python. **Default: 2048** (2 GiB). Lower values (e.g. 512) can cause out-of-memory during boot or when starting Python.
+| Key | Role |
+| --- | --- |
+| **`qemu.use_kvm`** | **`true`** (default): add `-enable-kvm` when `/dev/kvm` is available; otherwise QEMU uses TCG. **`false`**: never request KVM (useful when you must avoid the KVM device). |
+| **`qemu.memory`** | Guest RAM for **`-m`**. **Default: `2048`** (mebibytes if no suffix). Use a non-negative integer with an optional **single** suffix letter **`k` / `M` / `G` / `T` / `P` / `E`** (e.g. `512M`, `2G`). Forms like **`2GB`** or **`2GiB`** are **invalid** for QEMU’s `-m` parser and fall back to the default. Lower values (e.g. 512) can OOM during boot. |
+| **`qemu.show_boot_console`** | **`false`** (default): on the **daemon** path, QEMU stdout/stderr are discarded so boot noise is hidden; user output still flows over SSE. On the **`python-sb`** path, the host filters serial output to lines between guest sentinels unless set to **`true`**. **`true`**: full VM console on the host and tee to **`.pysandbox-qemu-console.log`** in the process working directory. Truthy values: `true`, `1`, `yes`. |
+| **`qemu.virtfs`** | **Staging** of execution trees (and related workarounds) before **virtio-9p** to avoid **SIGSEGV** with overlay + mmap in nested containers. **`auto`** (default): stage only when the host looks like a container (`/.dockerenv`, `/.containerenv`, or `container` in the environment). **`on`** / **`off`**: force. Legacy alias: **`qemu.virtfs_stage`** (same values). Unknown values log a warning and behave like **`auto`**. |
+| **`qemu.virtfs_security_model`** | **`security_model`** for **`-virtfs`** on **non-staged** mounts. **Default: `mapped-xattr`**. **`auto`** (or empty) is accepted and mapped to **`mapped-xattr`** (QEMU has no literal `auto`). Staged trees under the temp copy use **`none`** regardless of this setting. |
 
 Examples in `.py-sandboxes`:
 
-- `qemu.memory=2048` — 2 GiB (default, recommended)
-- `qemu.memory=2G`  — same, QEMU accepts `G`/`M` suffix
-- `qemu.memory=4096` — 4 GiB for heavier workloads
+```text
+qemu.use_kvm=true
+qemu.memory=2G
+qemu.show_boot_console=false
+qemu.virtfs=auto
+qemu.virtfs_security_model=mapped-xattr
+```
+
+See also the commented block **QEMU (os-sandbox=qemu)** in `pysandboxes/templates/py-sandbox.template`.
 

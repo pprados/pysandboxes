@@ -12,6 +12,7 @@ from pysandboxes.remote.qemu_image import (
     ENV_VM_IMAGE_URL,
     ENV_VM_IMAGES_DIR,
     PYTHON_VERSION_TO_UBUNTU_IMAGE,
+    UBUNTU_CLOUD_IMAGES_ROOT,
     UBUNTU_CLOUD_RELEASES_BASE,
     ensure_image,
     get_default_image_filename,
@@ -57,6 +58,13 @@ class TestGetDefaultImagePath:
         path = get_default_image_path(python_version=(3, 12), arch="x86_64")
         assert path.name == "ubuntu-24.04-server-cloudimg-amd64.img"
         url = get_standard_download_url(python_version=(3, 12), arch="x86_64")
+        assert url is not None
+        assert path.name == url.rstrip("/").split("/")[-1]
+
+    def test_filename_matches_download_url_for_python_3_14(self) -> None:
+        path = get_default_image_path(python_version=(3, 14), arch="x86_64")
+        assert path.name == "resolute-server-cloudimg-amd64.img"
+        url = get_standard_download_url(python_version=(3, 14), arch="x86_64")
         assert url is not None
         assert path.name == url.rstrip("/").split("/")[-1]
 
@@ -118,7 +126,7 @@ class TestGetStandardImageUrl:
 
 
 class TestGetUbuntuImageUrlForPythonVersion:
-    """Tests for get_ubuntu_image_url_for_python_version (mapping 3.10–3.13)."""
+    """Tests for get_ubuntu_image_url_for_python_version (mapping 3.10–3.14)."""
 
     def test_mapping_3_10_amd64(self) -> None:
         url = get_ubuntu_image_url_for_python_version(3, 10, "x86_64")
@@ -133,19 +141,26 @@ class TestGetUbuntuImageUrlForPythonVersion:
         assert "25.04" in url
         assert "ubuntu-25.04-server-cloudimg-amd64.img" in url
 
+    def test_mapping_3_14_amd64(self) -> None:
+        url = get_ubuntu_image_url_for_python_version(3, 14, "x86_64")
+        assert url is not None
+        assert UBUNTU_CLOUD_IMAGES_ROOT in url
+        assert "/resolute/current/" in url
+        assert url.endswith("resolute-server-cloudimg-amd64.img")
+
     def test_unsupported_version_returns_none(self) -> None:
         assert get_ubuntu_image_url_for_python_version(3, 9, "x86_64") is None
-        assert get_ubuntu_image_url_for_python_version(3, 14, "x86_64") is None
 
     def test_unsupported_arch_returns_none(self) -> None:
         assert get_ubuntu_image_url_for_python_version(3, 12, "mips64") is None
 
-    def test_dict_has_four_entries(self) -> None:
-        assert len(PYTHON_VERSION_TO_UBUNTU_IMAGE) == 4
+    def test_dict_has_five_entries(self) -> None:
+        assert len(PYTHON_VERSION_TO_UBUNTU_IMAGE) == 5
         assert (3, 10) in PYTHON_VERSION_TO_UBUNTU_IMAGE
         assert (3, 11) in PYTHON_VERSION_TO_UBUNTU_IMAGE
         assert (3, 12) in PYTHON_VERSION_TO_UBUNTU_IMAGE
         assert (3, 13) in PYTHON_VERSION_TO_UBUNTU_IMAGE
+        assert (3, 14) in PYTHON_VERSION_TO_UBUNTU_IMAGE
 
 
 class TestGetDownloadUrl:

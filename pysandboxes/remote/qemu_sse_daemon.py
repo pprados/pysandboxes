@@ -14,12 +14,14 @@ import logging
 import os
 import pickle
 import platform
+import re
+import shutil
 import site
 import subprocess
 import sys
 from ipaddress import IPv4Address
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from ..all_rules import AllRules
 from ..config import DEBUG
@@ -103,6 +105,335 @@ def _add_dir_follow_links(path: Path, out: set[Path]) -> None:
     out.add(dir_path)
 
 
+def _norm_guest_path(guest_path: str) -> str:
+    """Canonical guest mount key so ``/app`` and ``/app/`` dedupe."""
+    return os.path.normpath(guest_path)
+
+
+def _running_in_container() -> bool:
+    """True if likely inside Docker/Podman/OCI (used for virtio-9p staging default)."""
+    if Path("/.dockerenv").is_file():
+        return True
+    if Path("/.containerenv").is_file():
+        return True
+    return bool(os.environ.get("container"))
+
+
+def _virtfs_staging_mode(os_sandbox_params: Mapping[str, Any]) -> str:
+    """Return normalized ``qemu.virtfs`` mode: ``auto`` | ``on`` | ``off``.
+
+    Default ``auto``. Empty / whitespace-only values are treated as ``auto``.
+    ``qemu.virtfs_stage`` is a legacy alias when ``qemu.virtfs`` is unset.
+    """
+    if "virtfs" in os_sandbox_params:
+        v = os_sandbox_params["virtfs"]
+        s = "" if v is None else str(v).strip().lower()
+        return "auto" if not s else s
+    if "virtfs_stage" in os_sandbox_params:
+        v = os_sandbox_params["virtfs_stage"]
+        s = "" if v is None else str(v).strip().lower()
+        return "auto" if not s else s
+    return "auto"
+
+
+def _virtfs_stage_exec_needed(os_sandbox_params: Mapping[str, Any]) -> bool:
+    """Whether to copy Python exec dirs to temp before -virtfs (overlay + 9p mmap SIGSEGV workaround).
+
+    Controlled by ``qemu.virtfs=auto|on|off`` (default auto). Legacy: ``qemu.virtfs_stage``.
+    """
+    raw = _virtfs_staging_mode(os_sandbox_params)
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("auto",):
+        return _running_in_container()
+    logger.warning(
+        "Unknown qemu.virtfs value %r; using auto (container-detected staging)",
+        raw,
+    )
+    return _running_in_container()
+
+
+def _stage_exec_virtfs_mounts(
+    temp: Path,
+    mount_specs: list[tuple[str, Path, str]],
+) -> None:
+    """Copy pysb_exec_* host trees under temp/virtfs_stage_exec/... and point virtfs there.
+
+    Keeps guest_path unchanged so RPATH and imports still match. Source must be a
+    directory tree (as produced by _execution_dirs_mounts).
+    """
+    stage_root = (temp / "virtfs_stage_exec").resolve()
+    stage_root.mkdir(parents=True, exist_ok=True)
+    did_any = False
+    for i, (tag, host_path, guest_path) in enumerate(mount_specs):
+        if not tag.startswith("pysb_exec_"):
+            continue
+        gp = Path(guest_path)
+        if not gp.is_absolute():
+            continue
+        rel = Path(*gp.parts[1:])  # usr/local/bin under stage_root
+        dest = (stage_root / rel).resolve()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if host_path.is_dir():
+                shutil.copytree(
+                    host_path,
+                    dest,
+                    symlinks=True,
+                    dirs_exist_ok=True,
+                )
+            elif host_path.is_file():
+                shutil.copy2(host_path, dest)
+            else:
+                logger.warning(
+                    "virtfs staging: skip missing path %s (tag %s)", host_path, tag
+                )
+                continue
+        except OSError as e:
+            logger.error("virtfs staging: copy %s -> %s failed: %s", host_path, dest, e)
+            raise
+        mount_specs[i] = (tag, dest, guest_path)
+        did_any = True
+        logger.debug("virtfs staging: %s -> %s (guest %s)", host_path, dest, guest_path)
+    if did_any:
+        logger.info(
+            "QEMU virtio-9p: staged exec mounts under %s (container/overlay workaround)",
+            stage_root,
+        )
+
+
+def _merge_staged_virtfs_into_bind_mounts(
+    mount_specs: list[tuple[str, Path, str]],
+) -> None:
+    """Point file-rule 9p binds at staged trees and drop redundant pysb_exec_* mounts.
+
+    After staging, ``pysb_exec_*`` and ``pysb_<n>`` can refer to the same guest path
+    (e.g. ``/app`` vs ``/app/``); the bind must use the staged host path and the
+    duplicate exec virtfs entry must be removed so the guest does not mount overlay twice.
+    """
+    staged_by_guest: dict[str, Path] = {}
+    for tag, host_path, guest_path in mount_specs:
+        if tag.startswith("pysb_exec_"):
+            staged_by_guest[_norm_guest_path(guest_path)] = host_path
+    if not staged_by_guest:
+        return
+    for i, (tag, host_path, guest_path) in enumerate(mount_specs):
+        if not tag.startswith("pysb_") or not tag[5:].isdigit():
+            continue
+        key = _norm_guest_path(guest_path)
+        if key in staged_by_guest:
+            mount_specs[i] = (tag, staged_by_guest[key], guest_path)
+    file_norm_guests = {
+        _norm_guest_path(guest_path)
+        for tag, _h, guest_path in mount_specs
+        if tag.startswith("pysb_") and tag[5:].isdigit()
+    }
+    mount_specs[:] = [
+        m
+        for m in mount_specs
+        if not (
+            m[0].startswith("pysb_exec_") and _norm_guest_path(m[2]) in file_norm_guests
+        )
+    ]
+
+
+def _rebase_file_bind_hosts_under_staged_app(
+    mount_specs: list[tuple[str, Path, str]],
+) -> None:
+    """Point ro-bind children of /app (e.g. ./tmp -> /app/tmp) at the staged /app tree.
+
+    Otherwise a second -virtfs for /app/tmp still uses the container overlay and breaks
+    mmap in the guest for paths under /app.
+    """
+    staged_app: Path | None = None
+    for tag, hp, gp in mount_specs:
+        if (
+            tag.startswith("pysb_")
+            and tag[5:].isdigit()
+            and _norm_guest_path(gp) == "/app"
+        ):
+            staged_app = hp
+            break
+    if staged_app is None:
+        return
+    app_root = Path("/app").resolve()
+    for i, (tag, host_path, guest_path) in enumerate(mount_specs):
+        if not tag.startswith("pysb_") or not tag[5:].isdigit():
+            continue
+        hr = host_path.resolve()
+        if _norm_guest_path(guest_path) == "/app":
+            continue
+        try:
+            rel = hr.relative_to(app_root)
+        except ValueError:
+            continue
+        new_host = (staged_app / rel).resolve()
+        mount_specs[i] = (tag, new_host, guest_path)
+        logger.debug(
+            "virtfs staging: rebase bind %s -> %s (guest %s)",
+            hr,
+            new_host,
+            guest_path,
+        )
+
+
+_LDD_ARROW = re.compile(r"^\s*\S+\s*=>\s+(\S+)\s")
+_LDD_STATIC = re.compile(r"^\s+(/lib64/ld-linux-x86-64\.so\.2)\s")
+
+
+def _ldd_resolved_paths(elf: Path) -> set[Path]:
+    """Return resolved paths from ``ldd`` for a shared library or PIE executable."""
+    try:
+        r = subprocess.run(
+            ["ldd", str(elf)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+    if r.returncode != 0:
+        return set()
+    out: set[Path] = set()
+    for line in r.stdout.splitlines():
+        m = _LDD_ARROW.match(line)
+        if m:
+            p = Path(m.group(1))
+            if p.is_file():
+                try:
+                    out.add(p.resolve(strict=True))
+                except OSError:
+                    pass
+            continue
+        m2 = _LDD_STATIC.match(line)
+        if m2:
+            p = Path(m2.group(1))
+            if p.is_file():
+                try:
+                    out.add(p.resolve(strict=True))
+                except OSError:
+                    pass
+    return out
+
+
+def _dynamic_linker_closure_paths() -> set[Path]:
+    """Paths so guest uses the host (container) dynamic linker + libc for sys.executable."""
+    bin_paths: set[Path] = set()
+    follow_links_executable(Path(sys.executable), bin_paths)
+    exe: Path | None = None
+    for p in bin_paths:
+        if p.is_file():
+            exe = p.resolve(strict=True)
+            break
+    if exe is None:
+        try:
+            exe = Path(sys.executable).resolve(strict=True)
+        except OSError:
+            return set()
+    interp = Path("/lib64/ld-linux-x86-64.so.2")
+    if not interp.is_file():
+        alt = Path("/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")
+        interp = alt if alt.is_file() else interp
+    seeds: set[Path] = {exe}
+    if interp.is_file():
+        try:
+            seeds.add(interp.resolve(strict=True))
+        except OSError:
+            pass
+    closure: set[Path] = set()
+    stack = list(seeds)
+    while stack:
+        p = stack.pop()
+        if p in closure or not p.is_file():
+            continue
+        closure.add(p)
+        for dep in _ldd_resolved_paths(p):
+            if dep not in closure:
+                stack.append(dep)
+    return closure
+
+
+def _stage_dynamic_linker_closure(temp: Path) -> list[tuple[str, Path, str]]:
+    """Copy ldd closure of the host interpreter; mount loader + glibc paths on the guest.
+
+    PT_INTERP must resolve to the host loader on 9p, not the guest disk, or libc
+    mismatches the Python ELF from the container (SIGSEGV in the guest).
+    """
+    closure = _dynamic_linker_closure_paths()
+    if not closure:
+        return []
+    root = (temp / "ld_closure_fs").resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    for p in sorted(closure, key=lambda x: str(x)):
+        try:
+            rel = p.relative_to("/")
+        except ValueError:
+            continue
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(p, dest, follow_symlinks=True)
+        except OSError as e:
+            logger.warning("ld closure: skip %s: %s", p, e)
+    # PT_INTERP is /lib64/ld-linux-x86-64.so.2; on Debian bookworm it may live under usr/lib only.
+    interp_guest = Path("/lib64/ld-linux-x86-64.so.2")
+    if interp_guest.is_file():
+        ld64 = root / "lib64"
+        ld64.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(
+                interp_guest, ld64 / "ld-linux-x86-64.so.2", follow_symlinks=True
+            )
+        except OSError as e:
+            logger.warning("ld closure: could not stage PT_INTERP: %s", e)
+    ulx = root / "usr" / "lib" / "x86_64-linux-gnu"
+    libgnu = root / "lib" / "x86_64-linux-gnu"
+    out: list[tuple[str, Path, str]] = []
+    if (root / "lib64").is_dir():
+        out.append(("pysb_lib64", root / "lib64", "/lib64"))
+    if ulx.is_dir():
+        out.append(("pysb_usr_lib_gnu", ulx, "/usr/lib/x86_64-linux-gnu"))
+    if libgnu.is_dir():
+        out.append(("pysb_lib_gnu", libgnu, "/lib/x86_64-linux-gnu"))
+    elif ulx.is_dir():
+        # Debian: same DSOs under /usr/lib/...; ldd may only populate that tree.
+        out.append(("pysb_lib_gnu", ulx, "/lib/x86_64-linux-gnu"))
+    if out:
+        logger.info(
+            "QEMU virtio-9p: staged dynamic linker closure (%d objects) for container interpreter",
+            len(closure),
+        )
+    return out
+
+
+def _stage_overlay_etc_bind_mount(
+    temp: Path,
+    mount_specs: list[tuple[str, Path, str]],
+) -> None:
+    """Copy ro-bind /etc from container overlay into temp so 9p mmap is safe in the guest."""
+    misc = (temp / "virtfs_stage_misc").resolve()
+    for i, (tag, host_path, guest_path) in enumerate(mount_specs):
+        if not tag.startswith("pysb_") or not tag[5:].isdigit():
+            continue
+        if _norm_guest_path(guest_path) != "/etc":
+            continue
+        if not host_path.is_dir():
+            continue
+        dest = misc / "etc"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copytree(host_path, dest, symlinks=True, dirs_exist_ok=True)
+        except OSError as e:
+            logger.error("virtfs staging: copy /etc bind failed: %s", e)
+            raise
+        mount_specs[i] = (tag, dest, guest_path)
+        logger.info("virtfs staging: /etc bind copied to %s", dest)
+        return
+
+
 def _execution_dirs_mounts() -> list[tuple[str, Path, str]]:
     """Build 9p mounts for Python execution: sys.executable (follow symlinks), sys.path, site.getsitepackages().
 
@@ -176,13 +507,28 @@ def _file_rules_mounts(
         mount_specs.append((tag_config, config_dir, GUEST_CONFIG_MOUNT))
         mount_list.append((tag_config, GUEST_CONFIG_MOUNT))
     # Execution dirs: sys.executable, getsitepackages(), sys.path (follow symlinks)
-    existing_guest_paths = {guest_path for (_, guest_path) in mount_list}
+    stage_exec = _virtfs_stage_exec_needed(all_rules.os_sandbox_params)
+    existing_guest_paths = {_norm_guest_path(gp) for (_, gp) in mount_list}
     for tag, host_path, guest_path in _execution_dirs_mounts():
-        if guest_path in existing_guest_paths:
+        gkey = _norm_guest_path(guest_path)
+        # When staging for container/overlay, we still add exec dirs that duplicate a bind
+        # (e.g. /app vs ro-bind .,.) so /app is copied to tmpfs; merge step then drops the
+        # redundant pysb_exec_* and retargets the bind mount at the staged tree.
+        if gkey in existing_guest_paths and not stage_exec:
             continue
-        existing_guest_paths.add(guest_path)
+        existing_guest_paths.add(gkey)
         mount_specs.append((tag, host_path, guest_path))
         mount_list.append((tag, guest_path))
+
+    if stage_exec:
+        _stage_exec_virtfs_mounts(temp, mount_specs)
+        _merge_staged_virtfs_into_bind_mounts(mount_specs)
+        _rebase_file_bind_hosts_under_staged_app(mount_specs)
+        _stage_overlay_etc_bind_mount(temp, mount_specs)
+        # Prepend so sort places these before project binds; guest must see host ld.so/libc.
+        mount_specs[:] = _stage_dynamic_linker_closure(temp) + mount_specs
+
+    mount_list = [(tag, gp) for tag, _hp, gp in mount_specs]
 
     # Keep deterministic mount order while preserving semantics:
     # - File rules first (pysb_<idx>) so project paths can override import resolution.
@@ -190,6 +536,8 @@ def _file_rules_mounts(
     #   can override read-only parent mounts.
     # - Runtime/config mounts next, execution dirs last.
     def _mount_order(tag: str, guest_path: str) -> tuple[int, int, int, str]:
+        if tag in ("pysb_lib64", "pysb_lib", "pysb_usr_lib_gnu", "pysb_lib_gnu"):
+            return (-1, 0, 0, guest_path)
         if tag.startswith("pysb_") and tag[5:].isdigit():
             depth = len(Path(guest_path).parts)
             return (0, depth, int(tag[5:]), guest_path)
@@ -309,8 +657,27 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         virtfs_args: Args = []
         for tag, host_path, guest_path in mount_specs:
-            # Use mapped-xattr for all mounts so guest sees regular files correctly (e.g. config file).
-            security = "mapped-xattr"
+            # mapped-xattr: guest sees normal files (e.g. config). Staged trees (tmpfs copies)
+            # from container overlay: use "none" so ELF/DSO mmap is reliable in the guest.
+            host_s = str(host_path.resolve())
+            if (
+                "virtfs_stage_exec" in host_s
+                or "virtfs_stage_misc" in host_s
+                or "/virtfs_stage/" in host_s
+            ):
+                security = "none"
+            else:
+                configured = (
+                    str(
+                        all_rules.os_sandbox_params.get(
+                            "virtfs_security_model", "mapped-xattr"
+                        )
+                    )
+                    .strip()
+                    .lower()
+                )
+                # QEMU has no security_model=auto; treat as mapped-xattr (guest-friendly default).
+                security = "mapped-xattr" if configured in ("auto", "") else configured
             virtfs_args.extend(
                 [
                     "-virtfs",
@@ -406,6 +773,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         when the guest opens it (same flow as bwrap/unshare).
         """
         from .client_subprocess_sse_daemon import get_callable_info
+        from .qemu_setup import merge_qemu_guest_diag_env
 
         self._is_started = False
         self._accept_incoming = False
@@ -430,6 +798,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             )
         netfilter_rules = tuple(netfilter_rules)
 
+        all_rules = merge_qemu_guest_diag_env(all_rules)
         process_config = DaemonParameters(
             all_rules=all_rules,
             log_level=log_level,
