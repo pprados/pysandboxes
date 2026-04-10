@@ -15,8 +15,13 @@ from pathlib import Path
 from typing import Any
 
 from ..all_rules import AllRules
+from ..sb_types import Envs
 
 logger = logging.getLogger(__name__)
+
+# Profile ``qemu.guest_diag=true`` injects this env in the guest (see ``merge_qemu_guest_diag_env``).
+PYSANDBOXES_GUEST_DIAG = "PYSANDBOXES_GUEST_DIAG"
+PYSANDBOXES_GUEST_DIAG_FROM_PROFILE = "2"
 
 GUEST_CIDATA_MOUNT = "/mnt/cidata"
 GUEST_RUN_MOUNT = "/mnt/pysandbox_run"
@@ -31,6 +36,23 @@ NINEP_MOUNTS_FILE = "9p_mounts"
 PYTHON_EXE_FILE = "python_exe"
 PYTHON_VERSION_FILE = "python_version"
 IGNORE_OVERLAYS_FILE = "ignore_overlays"
+
+
+def merge_qemu_guest_diag_env(all_rules: AllRules) -> AllRules:
+    """When ``qemu.guest_diag`` is true, set ``PYSANDBOXES_GUEST_DIAG=2`` in ``all_rules.envs``.
+
+    The QEMU guest's ``main_sandbox`` enables stderr breadcrumbs and faulthandler when this
+    variable is truthy (``1``, ``2``, or boolean-like strings). The profile knob avoids listing
+    the env var manually; ``2`` distinguishes the profile-driven case from a hand-set ``1``.
+    """
+    raw = str(all_rules.os_sandbox_params.get("guest_diag", "false")).strip().lower()
+    if raw not in ("true", "1", "yes"):
+        return all_rules
+    envs = {
+        **dict(all_rules.envs),
+        PYSANDBOXES_GUEST_DIAG: PYSANDBOXES_GUEST_DIAG_FROM_PROFILE,
+    }
+    return all_rules._replace(envs=Envs(envs))
 
 
 def augment_all_rules_for_qemu_run_mount(all_rules: AllRules) -> AllRules:

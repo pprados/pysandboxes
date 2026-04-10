@@ -66,6 +66,11 @@ _FORWARD_STATE_STOPPED = 2
 # Strip kernel/cloud-init style prefix e.g. "[   12.525772] cloud-init[672]: "
 _QEMU_CONSOLE_PREFIX = re.compile(r"^\s*\[\s*\d+\.\d+\]\s*[\w-]+\[\d+\]:")
 
+# readline() can block forever on QEMU -nographic if a line never ends with \n;
+# read(max_chunk) returns as soon as any data or EOF arrives (no newline required).
+_QEMU_CONSOLE_READ_CHUNK = 65536
+_QEMU_CONSOLE_BUF_MAX = 1024 * 1024
+
 
 def _qemu_forward_state_for_line(line: str, state: list[int]) -> bool:
     """Update state from line (start/end sentinels) and return True if line should be printed."""
@@ -82,6 +87,32 @@ def _qemu_forward_state_for_line(line: str, state: list[int]) -> bool:
     return False  # _FORWARD_STATE_STOPPED
 
 
+async def _qemu_emit_qemu_console_line(
+    raw: bytes,
+    out: TextIO,
+    state: list[int],
+    *,
+    forward_all: bool,
+    tee_file: TextIO | None,
+    tee_lock: asyncio.Lock | None,
+) -> None:
+    """Decode one newline-terminated (or forced) chunk and apply sentinel filtering."""
+    if not raw:
+        return
+    try:
+        text = raw.decode("utf-8", errors="replace")
+    except Exception:
+        text = str(raw)
+    text_stripped = _QEMU_CONSOLE_PREFIX.sub("", text)
+    if forward_all or _qemu_forward_state_for_line(text_stripped, state):
+        print(text_stripped, end="", file=out, flush=True)
+    if tee_file is not None:
+        assert tee_lock is not None
+        async with tee_lock:
+            tee_file.write(text)
+            tee_file.flush()
+
+
 async def _qemu_read_and_forward(
     stream: asyncio.StreamReader | None,
     is_stderr: bool,
@@ -93,31 +124,58 @@ async def _qemu_read_and_forward(
 ) -> None:
     """Read QEMU console stream and forward lines (all if forward_all, else between sentinels).
 
+    Uses chunked ``read()`` instead of ``readline()`` so a missing ``\\n`` on the serial
+    backend cannot block the host forever (see nested QEMU / Podman).
+
     When ``tee_file`` is set (e.g. ``qemu.show_boot_console=true``), each line is also
     appended to that file; ``tee_lock`` must serialize writes from stdout/stderr tasks.
     """
     if stream is None:
         return
     out = sys.stderr if is_stderr else sys.stdout
+    buf = bytearray()
     while True:
         try:
-            line = await stream.readline()
+            chunk = await stream.read(_QEMU_CONSOLE_READ_CHUNK)
         except (ConnectionResetError, BrokenPipeError):
             break
-        if not line:
+        if not chunk:
             break
-        try:
-            text = line.decode("utf-8", errors="replace")
-        except Exception:
-            text = str(line)
-        text_stripped = _QEMU_CONSOLE_PREFIX.sub("", text)
-        if forward_all or _qemu_forward_state_for_line(text_stripped, state):
-            print(text_stripped, end="", file=out, flush=True)
-        if tee_file is not None:
-            assert tee_lock is not None
-            async with tee_lock:
-                tee_file.write(text)
-                tee_file.flush()
+        buf.extend(chunk)
+        while True:
+            nl = buf.find(b"\n")
+            if nl < 0:
+                if len(buf) >= _QEMU_CONSOLE_BUF_MAX:
+                    line = bytes(buf)
+                    buf.clear()
+                    await _qemu_emit_qemu_console_line(
+                        line,
+                        out,
+                        state,
+                        forward_all=forward_all,
+                        tee_file=tee_file,
+                        tee_lock=tee_lock,
+                    )
+                break
+            raw_line = bytes(buf[: nl + 1])
+            del buf[: nl + 1]
+            await _qemu_emit_qemu_console_line(
+                raw_line,
+                out,
+                state,
+                forward_all=forward_all,
+                tee_file=tee_file,
+                tee_lock=tee_lock,
+            )
+    if buf:
+        await _qemu_emit_qemu_console_line(
+            bytes(buf),
+            out,
+            state,
+            forward_all=forward_all,
+            tee_file=tee_file,
+            tee_lock=tee_lock,
+        )
 
 
 def _read_qemu_guest_exitcode(
@@ -175,9 +233,13 @@ async def _qemu_wait_and_filter_console(
             tee_lock=tee_lock,
         )
     )
-    exit_code = await process.wait()
-    await t_stdout
-    await t_stderr
+    # Drain pipes concurrently with process.wait() to avoid a full PIPE buffer
+    # stalling QEMU's serial write path (classic subprocess deadlock).
+    _, _, exit_code = await asyncio.gather(
+        t_stdout,
+        t_stderr,
+        process.wait(),
+    )
     return exit_code if exit_code is not None else -1
 
 
@@ -267,6 +329,7 @@ def main() -> int:
             from .remote.qemu_setup import (
                 GUEST_RUN_MOUNT,
                 augment_all_rules_for_qemu_run_mount,
+                merge_qemu_guest_diag_env,
             )
 
             os_provider.port = (
@@ -283,7 +346,7 @@ def main() -> int:
                 }
             )
             guest_all_rules = augment_all_rules_for_qemu_run_mount(
-                all_rules._replace(envs=guest_envs)
+                merge_qemu_guest_diag_env(all_rules._replace(envs=guest_envs))
             )
             process_config = DaemonParameters(
                 all_rules=guest_all_rules,
@@ -365,12 +428,7 @@ def main() -> int:
                 launch_kwargs["stdout"] = subprocess.PIPE
                 launch_kwargs["stderr"] = subprocess.PIPE
                 if show_boot:
-                    qemu_console_path = Path(
-                        os.environ.get(
-                            "PYSANDBOXES_QEMU_CONSOLE_LOG",
-                            ".pysandbox-qemu-console.log",
-                        )
-                    )
+                    qemu_console_path = Path(".pysandbox-qemu-console.log")
                     qemu_console_file = open(qemu_console_path, "w")
                     logger.debug(
                         "QEMU guest console (terminal + tee) → %s",

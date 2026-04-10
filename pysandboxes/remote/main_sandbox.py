@@ -36,13 +36,15 @@ from .daemon_parameters import DaemonParameters
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
+# Truthy guest values: ``1`` manual env; ``2`` from profile ``qemu.guest_diag=true``.
+_QEMU_GUEST_DIAG_TRUTHY = frozenset({"1", "2", "true", "yes"})
+
 
 def _qemu_guest_diag(process_config: DaemonParameters, msg: str) -> None:
-    """Optional stderr breadcrumbs in QEMU guest (``PYSANDBOXES_GUEST_DIAG=1``)."""
-    if os.environ.get("PYSANDBOXES_GUEST_DIAG", "").lower() not in (
-        "1",
-        "true",
-        "yes",
+    """Optional stderr breadcrumbs in QEMU guest (``PYSANDBOXES_GUEST_DIAG``)."""
+    if (
+        os.environ.get("PYSANDBOXES_GUEST_DIAG", "").lower()
+        not in _QEMU_GUEST_DIAG_TRUTHY
     ):
         return
     if not getattr(process_config, "guest_run_dir", None):
@@ -293,9 +295,11 @@ def main() -> int:
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
 
-    if getattr(process_config, "guest_run_dir", None) and os.environ.get(
-        "PYSANDBOXES_GUEST_DIAG", ""
-    ).lower() in ("1", "true", "yes"):
+    if (
+        getattr(process_config, "guest_run_dir", None)
+        and os.environ.get("PYSANDBOXES_GUEST_DIAG", "").lower()
+        in _QEMU_GUEST_DIAG_TRUTHY
+    ):
         import faulthandler
 
         faulthandler.enable(file=sys.stderr, all_threads=True)

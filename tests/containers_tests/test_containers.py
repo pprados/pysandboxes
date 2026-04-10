@@ -10,6 +10,7 @@ implemented here in Python; no shell scripts are invoked.
 import logging
 import os
 import re
+import shlex
 import socket
 import subprocess
 import sys
@@ -45,16 +46,24 @@ all_container_worker: list[str] = [
     "podman",
 ]
 
+
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
-all_os_sandbox: list = [
-    # firejail is incompatible with containers
-    pytest.param("none", True, False),
-    # pytest.param("subprocess", True, False),
-    # pytest.param("landlock", False, False),
-    # pytest.param("unshare", False, True),
-    # pytest.param("bwrap", False, True),
-    pytest.param("qemu", True, False),
-]
+# QEMU in Podman is opt-in: nested VM + tst_usage often exceeds practical timeouts (see wiki/qemu.md).
+# Run on host: pytest tests/integration_tests/test_usage_with_providers.py -k qemu
+def _all_os_sandbox_params() -> list:
+    rows = [
+        # firejail is incompatible with containers
+        pytest.param("none", True, False),
+        pytest.param("qemu", True, False),
+        # pytest.param("subprocess", True, False),
+        # pytest.param("landlock", False, False),
+        # pytest.param("unshare", False, True),
+        # pytest.param("bwrap", False, True),
+    ]
+    return rows
+
+
+all_os_sandbox: list = _all_os_sandbox_params()
 
 # TODO: test with split mode
 
@@ -189,6 +198,35 @@ BUILD_IMAGE_TIMEOUT = 600  # seconds
 # QEMU provider may install deps in the guest (apt + pip) on first boot, so allow enough time.
 CONTAINER_RUN_TIMEOUT = 600  # seconds
 
+# When CONTAINER_TEST_QEMU=1, nested QEMU may need a higher limit than the default.
+CONTAINER_RUN_TIMEOUT_QEMU = int(os.environ.get("CONTAINER_TEST_QEMU_TIMEOUT", "600"))
+
+
+def _qemu_kvm_run_extra_flags() -> list[str]:
+    """Pass host KVM into the container so nested qemu-system can use -enable-kvm (not TCG)."""
+    extra: list[str] = []
+    kvm = Path("/dev/kvm")
+    if not kvm.exists():
+        logger.warning(
+            "container-tests (qemu): host has no /dev/kvm; nested QEMU will use TCG "
+            "(often exceeds %ss). Pass KVM or set CONTAINER_TEST_QEMU_TIMEOUT.",
+            CONTAINER_RUN_TIMEOUT_QEMU,
+        )
+        return extra
+    extra.extend(["--device", "/dev/kvm"])
+    try:
+        gid = kvm.stat().st_gid
+        extra.extend(["--group-add", str(gid)])
+        logger.info(
+            "container-tests (qemu): --device /dev/kvm --group-add %s (nested KVM)",
+            gid,
+        )
+    except OSError as e:
+        logger.warning(
+            "container-tests (qemu): could not stat /dev/kvm for --group-add: %s", e
+        )
+    return extra
+
 
 def _ensure_image(runtime: str, image_name: str, os_sandbox: str) -> None:
     """Build the provider image with make build-image-<provider> if not present for the given runtime."""
@@ -247,18 +285,22 @@ def _run_container_runtime(
     )
 
     privileged_flag = ["--privileged"] if privileged else []
+    # Nested QEMU needs host KVM in the container; otherwise TCG exceeds typical timeouts.
+    kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() == "qemu" else []
     # Use host/platform DNS so config parsing can resolve hostname
     dns_servers = _host_dns_servers()
     dns_flags = [arg for s in dns_servers for arg in ("--dns", s)]
     # Resolve profile hostname on the host and inject so container does not need DNS at config load
     add_host_flags = _add_host_flags()
-    # bwrap uses --share-net: it needs a working network stack; bridge often has no route in child
-    network_mode = "host" if os_sandbox == "bwrap" else "bridge"
+    # bwrap: host net for slirp/iptables. qemu: host net avoids double-NAT (Podman bridge + QEMU user)
+    # which can stall nested tst_usage for a long time.
+    network_mode = "host" if os_sandbox in ("bwrap", "qemu") else "bridge"
     cmd = [
         runtime,
         "run",
         *tty_flags,
         *privileged_flag,
+        *kvm_flags,
         "--rm",
         "--network",
         network_mode,
@@ -274,6 +316,15 @@ def _run_container_runtime(
         inner_cmd,
     ]
 
+    run_timeout = (
+        CONTAINER_RUN_TIMEOUT_QEMU
+        if os_sandbox.lower() == "qemu"
+        else CONTAINER_RUN_TIMEOUT
+    )
+
+    if os.environ.get("CONTAINER_TEST_TRACE_CMD") == "1":
+        logger.warning("container-tests podman/docker cmd: %s", shlex.join(cmd))
+
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
     # With pipes, the buffer (~64KB) can fill and the container blocks on write → deadlock.
     # Stream stdout/stderr to the terminal so you see nested pytest output as it runs.
@@ -283,7 +334,7 @@ def _run_container_runtime(
         env=os.environ.copy(),
         stdout=None,
         stderr=None,
-        timeout=CONTAINER_RUN_TIMEOUT,
+        timeout=run_timeout,
     )
 
 
@@ -298,6 +349,11 @@ def test_container_runtime(
     output as it runs. QEMU: with ``qemu.show_boot_console=false``, the host only
     forwards lines between ``[PYSANDBOXES]PYTHON_OUTPUT_START`` and ``END``;
     for full VM boot trace, set ``qemu.show_boot_console=true`` (see wiki/qemu.md).
+
+    Nested QEMU under Podman is opt-in: set ``CONTAINER_TEST_QEMU=1`` to add the
+    qemu parametrization (may time out; prefer host
+    ``tests/integration_tests/test_usage_with_providers.py -k qemu``).
+    Optional: ``CONTAINER_TEST_TRACE_CMD=1`` logs the full ``podman run`` argv.
     """
 
     try:
@@ -312,7 +368,9 @@ def test_container_runtime(
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     assert result.returncode == 0, (
         f"Container test ({runtime}, os_sandbox={os_sandbox}) exited with code {result.returncode}. "
-        "For unshare, ensure the container has /dev/net/tun and slirp4netns (e.g. use --privileged)."
+        "For unshare, ensure the container has /dev/net/tun and slirp4netns (e.g. use --privileged). "
+        "For QEMU in a container, if the guest segfaults, see wiki/qemu.md (nested QEMU) and "
+        "enable qemu.show_boot_console=true in the profile."
     )
 
 
