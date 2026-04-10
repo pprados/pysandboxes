@@ -8,22 +8,26 @@ The host starts a QEMU virtual machine with a cloud image (Debian/Ubuntu) and a 
 
 ## Advantages
 
-| Aspect | Detail |
-|--------|--------|
-| **Isolation** | Full VM: separate kernel, disk and network; usable in constrained environments (e.g. unprivileged containers). |
-| **Compatibility** | Works with or without KVM (CPU emulation when KVM is unavailable). |
-| **No privileges** | No root required on the host to run QEMU (user-mode). |
-| **Disk/network rules** | Fine-grained control via Py-sandboxes rules; disk/network access can be restricted (e.g. iptables) even inside a container. |
-| **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe or 9p file) as bwrap/unshare. |
+
+| Aspect                             | Detail                                                                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Isolation**                      | Full VM: separate kernel, disk and network; usable in constrained environments (e.g. unprivileged containers).              |
+| **Compatibility**                  | Works with or without KVM (CPU emulation when KVM is unavailable).                                                          |
+| **No privileges**                  | No root required on the host to run QEMU (user-mode).                                                                       |
+| **Disk/network rules**             | Fine-grained control via Py-sandboxes rules; disk/network access can be restricted (e.g. iptables) even inside a container. |
+| **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe or 9p file) as bwrap/unshare.                                 |
+
 
 ## Disadvantages
 
-| Aspect | Detail |
-|--------|--------|
-| **Startup latency** | VM boot + cloud-init + bootstrap: typically **20–40 s** before the sandbox responds (vs. about a second for a subprocess). |
-| **Resources** | Dedicated RAM for the VM (default 2 GiB), shared CPU; heavier than a namespace. |
-| **Dependencies** | Cloud image to download (Debian/Ubuntu), `genisoimage` or `mkisofs` for the NoCloud ISO, QEMU binary. |
-| **Debug** | Kernel/cloud-init output is hidden by default; set `qemu.show_boot_console=true` and inspect the console log to troubleshoot. |
+
+| Aspect              | Detail                                                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Startup latency** | VM boot + cloud-init + bootstrap: typically **20–40 s** before the sandbox responds (vs. about a second for a subprocess).    |
+| **Resources**       | Dedicated RAM for the VM (default 2 GiB), shared CPU; heavier than a namespace.                                               |
+| **Dependencies**    | Cloud image to download (Debian/Ubuntu), `genisoimage` or `mkisofs` for the NoCloud ISO, QEMU binary.                         |
+| **Debug**           | Kernel/cloud-init output is hidden by default; set `qemu.show_boot_console=true` and inspect the console log to troubleshoot. |
+
 
 ## How it works
 
@@ -58,6 +62,8 @@ flowchart LR
     style VM fill:#ebe0d0,stroke:#2f2617
 ```
 
+
+
 Detailed diagram (mounts and config flow):
 
 ```mermaid
@@ -91,9 +97,19 @@ flowchart TD
     style VM fill:#ebe0d0,stroke:#2f2617
 ```
 
+
+
 In short: the host does not run an HTTP server or copy files; the VM receives everything via 9p and config via named pipe or 9p file, and the host talks to the sandbox only over SSE on the forwarded port.
 
 For more details, see the [QEMU documentation](https://www.qemu.org/).
+
+> Set `qemu.show_boot_console=true` in the profile to show the full VM console on the host (boot, cloud-init, bootstrap) and tee it to `PYSANDBOXES_QEMU_CONSOLE_LOG` (default: `.pysandbox-qemu-console.log`). With `qemu.show_boot_console=false` (default), the host only prints Python output between the guest sentinels. Use `PYSANDBOXES_GUEST_DIAG=1` in the guest environment for `[PYSANDBOX_DIAG]` breadcrumbs and faulthandler in `main_sandbox` (narrow where a crash happens after `main()` starts).
+
+### Guest Python exits with segmentation fault
+
+The guest is supposed to run the **same** interpreter as the host (path written to `python_exe` on the NoCloud image), with `PYTHONPATH` listing 9p-mounted host trees. If a 9p mount fails (see `[pysandbox-9p]` in the console) but the script fell back to the **image’s** `/usr/local/bin/python3.13`, native extensions under host `site-packages` can load with the wrong libc and **SIGSEGV**. The bootstrap script now stops with an explicit error if the recorded host `python_exe` path is missing after mounts. Fix: ensure execution-directory mounts succeed, or rebuild the QEMU image / nocloud ISO after changing mounts.
+
+A **segfault during `import pysandboxes.remote.main_sandbox`** (before `main()` runs) was also traced to pulling the whole guard stack at import time (`daemon_parameters` importing `all_rules`, plus heavy module-level imports in `main_sandbox`). Those imports are now deferred so the guest can start the module with minimal dependencies.
 
 ## Using with Docker
 
@@ -155,12 +171,14 @@ export PYSANDBOXES_QEMU_IMAGE_URL="<full image URL>"
 
 A single source covers 3.10, 3.11, 3.12 and 3.13 with one image per version: **Ubuntu Cloud Images**.
 
-| Python | Ubuntu        | File (.img) | Base URL (release) |
-|--------|---------------|-------------|---------------------|
-| 3.10   | 22.04 LTS (Jammy)  | `ubuntu-22.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/22.04/release/` |
-| 3.11   | 23.04 (Lunar)      | `ubuntu-23.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/23.04/release/` |
-| 3.12   | 24.04 LTS (Noble)  | `ubuntu-24.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/24.04/release/` |
-| 3.13   | 25.04 (Plucky)     | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
+
+| Python | Ubuntu            | File (.img)                               | Base URL (release)                                        |
+| ------ | ----------------- | ----------------------------------------- | --------------------------------------------------------- |
+| 3.10   | 22.04 LTS (Jammy) | `ubuntu-22.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/22.04/release/` |
+| 3.11   | 23.04 (Lunar)     | `ubuntu-23.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/23.04/release/` |
+| 3.12   | 24.04 LTS (Noble) | `ubuntu-24.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/24.04/release/` |
+| 3.13   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
+
 
 Replace `<arch>` with `amd64`, `arm64`, `ppc64el`, `riscv64` or `s390x` for your platform.
 
@@ -189,3 +207,4 @@ Examples in `.py-sandboxes`:
 - `qemu.memory=2048` — 2 GiB (default, recommended)
 - `qemu.memory=2G`  — same, QEMU accepts `G`/`M` suffix
 - `qemu.memory=4096` — 4 GiB for heavier workloads
+

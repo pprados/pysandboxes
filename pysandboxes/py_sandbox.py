@@ -320,16 +320,30 @@ def parse_config(
 def activate_sandboxes(
     all_rules: AllRules,
     envs: Environ | None = None,
+    *,
+    rules_provider: str | None = None,
 ) -> None:
+    """Apply OS-provider rule tweaks then Python-level guards.
+
+    Args:
+        all_rules: Parsed profile (``os_sandbox`` names the real host provider).
+        envs: Environment mapping.
+        rules_provider: If set, use this factory key for ``update_rules_and_activate``
+            only (e.g. ``"none"`` in the QEMU guest so we do not import aiohttp via
+            qemu/subprocess daemons). The ``all_rules`` passed into the provider still
+            describe the real configuration including ``os_sandbox``.
+    """
     if envs is None:
         envs = os.environ
-    os_sandbox = all_rules.os_sandbox
-    if os_sandbox:
+    provider_key = (
+        rules_provider if rules_provider is not None else all_rules.os_sandbox
+    )
+    if provider_key:
         from pysandboxes._os_sandbox import providers_factory
 
-        if os_sandbox not in providers_factory:
-            raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
-        os_provider: BaseDaemon = providers_factory[os_sandbox](token=None)
+        if provider_key not in providers_factory:
+            raise ValueError(f"Unknown os-sandbox name: {provider_key}")
+        os_provider: BaseDaemon = providers_factory[provider_key](token=None)
         # Offer the opportunity to update the rules (add, remove, etc.)
         all_rules = os_provider.update_rules_and_activate(
             all_rules=all_rules,

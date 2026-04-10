@@ -7,17 +7,22 @@ per "tag guest_path"). The guest mounts each tag at its path, then runs
 main_sandbox --_named-pipe (same flow as bwrap/unshare).
 """
 
+import fnmatch
 import logging
 import os
 import subprocess
 from pathlib import Path
 from typing import Any
 
+from ..all_rules import AllRules
+
 logger = logging.getLogger(__name__)
 
 GUEST_CIDATA_MOUNT = "/mnt/cidata"
 GUEST_RUN_MOUNT = "/mnt/pysandbox_run"
 GUEST_CONFIG_MOUNT = "/mnt/pysandbox_config"
+# Host directory for this QEMU run (9p → ``GUEST_RUN_MOUNT``). Created under ``/tmp``.
+QEMU_HOST_RUN_PREFIX = "pysandboxes-qemu-"
 PIPE_NAME_FILE = "pipe_name"
 NOCLOUD_ISO = "nocloud.iso"
 CIDATA_LABEL = "cidata"
@@ -25,6 +30,66 @@ GUEST_BOOTSTRAP_SCRIPT = "/tmp/run_pysandbox_bootstrap.sh"
 NINEP_MOUNTS_FILE = "9p_mounts"
 PYTHON_EXE_FILE = "python_exe"
 PYTHON_VERSION_FILE = "python_version"
+IGNORE_OVERLAYS_FILE = "ignore_overlays"
+
+
+def augment_all_rules_for_qemu_run_mount(all_rules: AllRules) -> AllRules:
+    """Prepend implicit bind for the guest 9p run mount (host ``/tmp/...``, exitcode).
+
+    The dedicated run directory is mounted at `GUEST_RUN_MOUNT`; it is not described
+    in the user profile, so guard_files would otherwise deny writes there.
+    """
+    from ..guard_files import BindRule
+    from ..sb_types import ConfigLine
+
+    run_dir = str(GUEST_RUN_MOUNT)
+    if not run_dir.endswith("/"):
+        run_dir = run_dir + "/"
+    bind = BindRule(
+        source=run_dir,
+        dest=run_dir,
+        write=True,
+        config=ConfigLine(
+            "<implicit qemu run mount>",
+            Path(__file__),
+            0,
+        ),
+    )
+    return all_rules._replace(file_rules=(bind,) + all_rules.file_rules)
+
+
+def _resolve_ignore_paths(current_dir: str, ignore_rules: list[Any]) -> list[str]:
+    """Resolve ignore rules to paths relative to current_dir (same semantics as bwrap/unshare)."""
+    if not ignore_rules:
+        return []
+    patterns = [r.source for r in ignore_rules]
+    result: list[str] = []
+    try:
+        cur = Path(current_dir).resolve()
+        for root, _dirs, files in os.walk(cur):
+            root_path = Path(root)
+            for name in list(_dirs) + files:
+                if any(fnmatch.fnmatch(name, p) for p in patterns):
+                    rel = root_path / name
+                    try:
+                        rel = rel.relative_to(cur)
+                    except ValueError:
+                        continue
+                    result.append(str(rel))
+    except OSError:
+        pass
+    return result
+
+
+def qemu_ignore_overlay_abs_paths(all_rules: Any, cwd: str) -> list[str]:
+    """Absolute host paths to mask with chmod-0 + bind mount in the guest (parity with bwrap/unshare)."""
+    from pysandboxes.guard_files import IgnoreRule
+
+    ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
+    rel = _resolve_ignore_paths(cwd, ignore_rules)
+    base = Path(cwd).resolve()
+    abs_paths = [str((base / p).resolve()) for p in rel]
+    return list(dict.fromkeys(abs_paths))
 
 
 def _bootstrap_script_content(
@@ -67,6 +132,25 @@ def _bootstrap_script_content(
         )
         lines.append("done < " + f"{GUEST_CIDATA_MOUNT}/{NINEP_MOUNTS_FILE}")
         lines.append("")
+    # Mask ignore= paths (e.g. .env) when Python guards are off (parity with bwrap/unshare overlays)
+    ign_file = f"{GUEST_CIDATA_MOUNT}/{IGNORE_OVERLAYS_FILE}"
+    lines.append("echo '[pysandbox-bootstrap] ignore overlays' >&2")
+    lines.append(f"if [ -f {ign_file} ]; then")
+    lines.append(f'  while IFS= read -r ign_path || [ -n "$ign_path" ]; do')
+    lines.append('    [ -z "$ign_path" ] && continue')
+    lines.append('    [ -e "$ign_path" ] || continue')
+    lines.append('    if [ -d "$ign_path" ]; then')
+    lines.append("      ph=$(mktemp -d)")
+    lines.append("    else")
+    lines.append("      ph=$(mktemp)")
+    lines.append("    fi")
+    lines.append('    chmod 000 "$ph" 2>/dev/null || true')
+    lines.append(
+        '    mount --bind "$ph" "$ign_path" 2>&1 | sed \'s/^/[pysandbox-ignore] /\' >&2 || true'
+    )
+    lines.append(f"  done < {ign_file}")
+    lines.append("fi")
+    lines.append("")
     # Required Python version from host; image must already provide it (no install)
     lines.extend(
         [
@@ -79,6 +163,19 @@ def _bootstrap_script_content(
             "HOST_EXE=$(cat "
             + f"{GUEST_CIDATA_MOUNT}/{PYTHON_EXE_FILE}"
             + " 2>/dev/null | tr -d '\\n' || true)",
+            # If the host recorded a Python path but 9p did not expose it, do not fall back to
+            # the VM image interpreter: PYTHONPATH still points at host site-packages and native
+            # extensions (.so) would be the wrong libc → immediate segfault.
+            # Conda/venv often use bin/python -> python3.x; virtio-9p may not treat the symlink as
+            # -f; resolve to the real binary when possible.
+            'if [ -n "$HOST_EXE" ] && [ ! -f "$HOST_EXE" ]; then',
+            '  RL=$(readlink -f "$HOST_EXE" 2>/dev/null || true)',
+            '  if [ -n "$RL" ] && [ -f "$RL" ]; then HOST_EXE=$RL; fi',
+            "fi",
+            'if [ -n "$HOST_EXE" ] && [ ! -f "$HOST_EXE" ]; then',
+            '  echo "[pysandbox-bootstrap] ERROR: host Python not found at ${HOST_EXE} after 9p mounts (check mount failures above)." >&2',
+            "  poweroff -f",
+            "fi",
             '[ -n "$HOST_EXE" ] && [ -f "$HOST_EXE" ] && PYTHON_EXE=$HOST_EXE',
             # Else use guest python (same major.minor as required)
             'if [ -z "$PYTHON_EXE" ] && [ -n "$PYTHON_VERSION" ]; then',
@@ -104,6 +201,7 @@ def _bootstrap_script_content(
     )
     pypath = ":".join(m[1] for m in mounts) if mounts else ""
     guest_cwd = guest_cwd or (mounts[0][1] if mounts else "/")
+    env_py = "env PYTHONPATH=" + pypath + " " if pypath else "env "
     if config_guest_path:
         lines.extend(
             [
@@ -122,11 +220,18 @@ def _bootstrap_script_content(
                 "echo '[pysandbox-bootstrap] exec main_sandbox --_named-pipe '\"'\"'$CONFIG_PATH'\"'\"'' >&2",
             ]
         )
+    # Do not use "|| true" on main_sandbox: it masked segfault exit codes (e.g. 139).
     lines.extend(
         [
             f'cd "{guest_cwd}" || true',
-            ("env PYTHONPATH=" + pypath + " " if pypath else "env ")
-            + '"$PYTHON_EXE" -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH" || true',
+            "set +e",
+            env_py
+            + '"$PYTHON_EXE" -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH"',
+            "GUEST_RC=$?",
+            "set -e",
+            'echo "[pysandbox-bootstrap] main_sandbox finished with exit code $GUEST_RC" >&2',
+            # Flush 9p-backed guest_run_dir (exitcode) before poweroff so the host sees it.
+            "sync",
             "poweroff -f",
         ]
     )
@@ -145,8 +250,25 @@ def _create_nocloud_iso(
 ) -> Path:
     """Create NoCloud ISO with user-data, meta-data, bootstrap script, 9p_mounts, pipe_name, python_version, python_exe (version is verified in guest, not installed)."""
     all_rules = getattr(process_config, "all_rules", None)
-    root_path = getattr(all_rules, "root_path", None)
-    guest_cwd = str(root_path.resolve()) if isinstance(root_path, Path) else None
+    guest_working_dir = getattr(process_config, "guest_working_dir", None)
+    if isinstance(guest_working_dir, str) and guest_working_dir.strip():
+        # Match host cwd (e.g. repo root) so relative paths like tmp/file align with bind=./tmp,./tmp
+        guest_cwd = guest_working_dir.strip()
+    else:
+        root_path = getattr(all_rules, "root_path", None)
+        if isinstance(root_path, Path):
+            # Fallback: config file directory (differs from host cwd when config is under a subdir)
+            guest_cwd = (
+                str(root_path.parent.resolve())
+                if root_path.is_file()
+                else str(root_path.resolve())
+            )
+        else:
+            guest_cwd = None
+    cwd_for_ignore = guest_cwd if guest_cwd else str(Path.cwd().resolve())
+    ignore_overlay_paths: list[str] = []
+    if all_rules is not None:
+        ignore_overlay_paths = qemu_ignore_overlay_abs_paths(all_rules, cwd_for_ignore)
     script_content = _bootstrap_script_content(
         mounts,
         pipe_run_guest_path,
@@ -162,6 +284,10 @@ def _create_nocloud_iso(
         (temp / PYTHON_EXE_FILE).write_text(python_exe + "\n", encoding="utf-8")
     (temp / NINEP_MOUNTS_FILE).write_text(
         "\n".join(f"{tag} {path}" for tag, path in mounts) + ("\n" if mounts else ""),
+        encoding="utf-8",
+    )
+    (temp / IGNORE_OVERLAYS_FILE).write_text(
+        "\n".join(ignore_overlay_paths) + ("\n" if ignore_overlay_paths else ""),
         encoding="utf-8",
     )
     user_data = f"""#cloud-config
@@ -215,6 +341,7 @@ runcmd:
         f"{PIPE_NAME_FILE}={PIPE_NAME_FILE}",
         f"{PYTHON_VERSION_FILE}={PYTHON_VERSION_FILE}",
         f"{NINEP_MOUNTS_FILE}={NINEP_MOUNTS_FILE}",
+        f"{IGNORE_OVERLAYS_FILE}={IGNORE_OVERLAYS_FILE}",
     ]
     if python_exe:
         graft_args.append(f"{PYTHON_EXE_FILE}={PYTHON_EXE_FILE}")

@@ -10,12 +10,34 @@ and optional download of the image when missing.
 import logging
 import os
 import platform
+import re
 import sys
 import urllib.request
 from pathlib import Path
 from typing import Callable
 
 logger = logging.getLogger(__name__)
+
+# ``qemu -m``: non-negative integer, optional single suffix k/M/G/T/P/E (see ``qemu-system -help``).
+_QEMU_M_MEMORY_ARG = re.compile(r"^\d+([kKmMgGtTpPeE])?$")
+
+
+def normalize_qemu_m_memory_arg(raw: str, default: str = "2048") -> str:
+    """Return a value safe to pass to ``qemu-system-* -m`` (RAM size).
+
+    QEMU accepts a non-negative integer, optionally with a single suffix letter
+    ``k``, ``M``, ``G``, ``T``, ``P``, or ``E`` (e.g. ``512M``, ``2G``, ``512K``).
+    Forms like ``2GB`` or ``2GiB`` are not valid for QEMU's ``-m`` parser and are
+    rejected; the default (MiB) is used instead.
+    """
+    s = raw.strip()
+    if not s:
+        return default
+    if _QEMU_M_MEMORY_ARG.fullmatch(s):
+        return s
+    logger.warning("Invalid qemu.memory %r; using default %r", raw, default)
+    return default
+
 
 ENV_VM_IMAGES_DIR = "PYSANDBOXES_VM_IMAGES_DIR"
 ENV_VM_IMAGE_URL = "PYSANDBOXES_QEMU_IMAGE_URL"

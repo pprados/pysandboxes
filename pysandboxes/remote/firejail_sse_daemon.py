@@ -585,7 +585,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     threading.Thread(target=publish_netfilter6, daemon=True).start()
                     args.append(f"--netfilter6={netfilter6_file}")
 
-            # Remove redondant sockets rules
+            # Remove duplicate sockets rules
             if REPLACE:
                 from ..guard_socket import parse_rules as socket_parse_rules
 

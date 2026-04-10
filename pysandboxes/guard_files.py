@@ -578,7 +578,7 @@ def _raise_access(file: str) -> NoReturn:
         f = str(path.absolute())
     except ValueError:
         f = str(path)
-    ex = RuleFileNotFoundError(f"Access to {f}' must be accepted by a rule.")
+    ex = RuleFileNotFoundError(f"Access to {f!r} must be accepted by a rule.")
     ex.errno = ENOENT
     raise ex
 

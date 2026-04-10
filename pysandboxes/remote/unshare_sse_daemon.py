@@ -54,11 +54,11 @@ from ..tools import (
 from .client_subprocess_sse_daemon import (
     DEBUG_LAUNCH,
     BaseSubProcessDaemon,
-    DaemonParameters,
     find_free_port,
     get_log_formatter,
     use_rich_handler,
 )
+from .daemon_parameters import DaemonParameters
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,

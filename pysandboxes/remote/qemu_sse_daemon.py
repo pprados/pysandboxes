@@ -41,13 +41,18 @@ QEMU_BOOT_DELAY = 20.0
 # Allow more ping attempts after boot (VM is slower than a subprocess).
 QEMU_LOOP_FOR_PING = 200
 from .client_subprocess_sse_daemon import (
-    DaemonParameters,
     find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
 )
-from .qemu_image import ensure_image, get_default_image_path, is_kvm_available
+from .daemon_parameters import DaemonParameters
+from .qemu_image import (
+    ensure_image,
+    get_default_image_path,
+    is_kvm_available,
+    normalize_qemu_m_memory_arg,
+)
 from .qemu_setup import (
     GUEST_CONFIG_MOUNT,
     GUEST_RUN_MOUNT,
@@ -60,6 +65,30 @@ logger = logging.getLogger(__name__)
 
 # When True, config is written under ./tmp/pysb_config for inspection; else use named pipe to avoid race.
 DEBUG_CONFIG = DEBUG or False
+
+
+def _guest_python_exe_path() -> str:
+    """Resolved host interpreter for NoCloud ``python_exe`` (Firejail-aligned).
+
+    ``firejail_sse_daemon.subprocess_cmd`` uses ``follow_links_executable(Path(sys.executable), …)``
+    then ``_follow_links``, which records ``Path(filename).resolve(strict=True)`` when the launcher
+    is a symlink. We walk the same chain, then return the resolved path so the QEMU guest sees a
+    real ELF via virtio-9p (conda ``bin/python`` → ``python3.13`` is a common case).
+    """
+    exe = Path(sys.executable)
+    bin_path: set[Path] = set()
+    follow_links_executable(exe, bin_path)
+    try:
+        for p in bin_path:
+            if p.is_file():
+                return str(p.resolve(strict=True))
+        if exe.is_symlink():
+            return str(exe.resolve(strict=True))
+        return str(exe.resolve(strict=True))
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "Impossible to resolve the sys.executable `%s`", sys.executable
+        ) from e
 
 
 def _add_dir_follow_links(path: Path, out: set[Path]) -> None:
@@ -257,11 +286,12 @@ class QemuSSEDaemon(VMSSEDaemon):
             mounts=mount_list,
             pipe_run_guest_path=GUEST_RUN_MOUNT,
             python_version=python_version,
-            python_exe=sys.executable,
+            python_exe=_guest_python_exe_path(),
             config_guest_path=config_guest_path,
         )
 
-        use_kvm = all_rules.os_sandbox_params.get("qemu.use_kvm", "true").lower() in (
+        # Keys match parse_rules: "qemu.foo=bar" → os_sandbox_params["foo"] (no "qemu." prefix)
+        use_kvm = all_rules.os_sandbox_params.get("use_kvm", "true").lower() in (
             "true",
             "1",
             "yes",
@@ -269,18 +299,8 @@ class QemuSSEDaemon(VMSSEDaemon):
         enable_kvm = ["-enable-kvm"] if use_kvm and is_kvm_available() else []
 
         # Default 2 GiB: Ubuntu cloud images + Python need ~2G to avoid OOM (see Ubuntu QEMU docs)
-        raw_memory = all_rules.os_sandbox_params.get("qemu.memory", "2048").strip()
-        if raw_memory and (
-            raw_memory.isdigit()
-            or (
-                len(raw_memory) > 1
-                and raw_memory[:-1].isdigit()
-                and raw_memory[-1] in "gGmM"
-            )
-        ):
-            memory = raw_memory
-        else:
-            memory = "2048"
+        raw_memory = all_rules.os_sandbox_params.get("memory", "2048").strip()
+        memory = normalize_qemu_m_memory_arg(raw_memory)
 
         net = [
             "-nic",
@@ -420,6 +440,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             init_fn=init_fn_ref,
             netfilter_rules=tuple(netfilter_rules),
             guest_run_dir=GUEST_RUN_MOUNT,
+            guest_working_dir=str(Path.cwd().resolve()),
         )
 
         env: dict[str, str]
@@ -452,7 +473,7 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         config_writer = _noop_config_writer if config_dir is not None else None
         show_boot = all_rules.os_sandbox_params.get(
-            "qemu.show_boot_console", "false"
+            "show_boot_console", "false"
         ).lower() in ("true", "1", "yes")
         # When show_boot_console is false (default), redirect QEMU stdout/stderr so
         # boot/kernel/cloud-init traces are hidden; Python output is streamed via SSE.
