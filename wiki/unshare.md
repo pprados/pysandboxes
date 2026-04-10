@@ -1,13 +1,63 @@
 # Unshare
 
-Unshare is a user-space containerization technology that allows programs to run in isolation from the rest of the system, featuring a **user-mode network stack**. It enables restrictions on disk access, network usage and more. For further details, consult the [documentation](https://man7.org/linux/man-pages/man2/unshare.2.html).
+**Unshare** is an **OS-sandbox** provider that runs code in Linux namespaces with a **user-mode network stack** (slirp4netns) and iptables-based socket rules. It enables isolation of filesystem, network, and other resources without requiring root for the application. See the [unshare(2) documentation](https://man7.org/linux/man-pages/man2/unshare.2.html) for details.
 
-Root privileges are not required to configure firewall rules within the namespace.
+## Solution in brief
+
+The host runs `unshare` with flags from a template (user, mount, net, etc.), then executes `unshare_setup` which starts slirp4netns for the network, applies bind mounts and overlay for ignore rules, configures iptables from socket rules, and launches `main_sandbox` with config from a named pipe. The host talks to the sandbox via SSE on a forwarded port. Root is not required to configure firewall rules inside the namespace.
+
+## Advantages
+
+| Aspect | Detail |
+|--------|--------|
+| **Isolation** | Full namespace stack (user, mount, network, etc.) with user-mode networking (slirp4netns) and iptables. |
+| **No root** | Unprivileged user namespaces; no root required for firewall rules inside the sandbox. |
+| **Containers** | Works in Docker, Podman, and Kubernetes with appropriate capabilities (SYS_ADMIN, NET_ADMIN) and securityContext. |
+| **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe) as bwrap/firejail. |
+
+## Disadvantages
+
+| Aspect | Detail |
+|--------|--------|
+| **Prerequisites** | Requires `kernel.unprivileged_userns_clone=1`, slirp4netns, iptables; AppArmor may restrict unprivileged user namespaces. |
+| **Privileges in containers** | Docker/Podman/Kubernetes need `--privileged` or added capabilities (SYS_ADMIN, NET_ADMIN) and often `seccompProfile: Unconfined` or equivalent. |
+| **Execution model** | Code runs as local `root` inside the sandbox; some applications may behave differently. |
+
+## How it works
+
+1. **Host**: The daemon builds an `UnshareSetupConfig` (DNS, mounts, netfilter rules, named pipe path, ignore paths) and the unshare flags from the template plus `unshare.*` params. It starts `unshare [flags] -- unshare_setup` (or equivalent) which receives the config.
+2. **unshare_setup**: Starts slirp4netns for the network namespace, applies bind mounts (read-only and read-write from file rules), overlay for ignore paths, writes hosts entries for ALLOW rules, configures iptables from socket rules, then execs `main_sandbox --_named-pipe <path>`.
+3. **main_sandbox**: Loads the config from the pipe, applies Python guards, starts the SSE server on the expected port and waits for requests.
+4. **Communication**: The host connects to the sandbox via SSE (port forwarding through slirp4netns or published port in containers).
+
+```mermaid
+flowchart LR
+    subgraph Host ["Host"]
+        A[python_sb / Daemon]
+        B[unshare]
+    end
+
+    subgraph Namespace ["Namespace (guest)"]
+        C[unshare_setup\nslirp4netns, mounts, iptables]
+        D[main_sandbox]
+        E[SSE server]
+    end
+
+    A -->|"Launch unshare"| B
+    B -->|"Setup network + mounts"| C
+    C -->|"Exec"| D
+    D --> E
+    A <-->|"SSE (port forward)"| E
+
+    style Host fill:#e8eef4,stroke:#2f2617
+    style Namespace fill:#ebe0d0,stroke:#2f2617
+```
 
 ## Prerequisites
 
-### userns clone
-To utilize unshare, you must install [slirp4netns](https://manpages.debian.org/experimental/slirp4netns/slirp4netns.1.en.html) and [iptables](https://man7.org/linux/man-pages/man8/iptables.8.html), and ensure `kernel.unprivileged_userns_clone` is set to `1` (this is typically enabled by default).
+### User namespaces (userns clone)
+
+To use unshare, install [slirp4netns](https://manpages.debian.org/experimental/slirp4netns/slirp4netns.1.en.html) and [iptables](https://man7.org/linux/man-pages/man8/iptables.8.html), and ensure `kernel.unprivileged_userns_clone` is set to `1` (typically enabled by default).
 
 ```bash
 # Verify permissions
@@ -32,20 +82,23 @@ sudo apt install slirp4netns iptables
 
 ### AppArmor
 
-Check the privileged
-```
+If AppArmor restricts unprivileged user namespaces:
+
+```bash
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 ```
-```
+
+```bash
 echo "kernel.apparmor_restrict_unprivileged_userns = 0" | sudo tee /etc/sysctl.d/60-apparmor-unprivileged.conf
 ```
-## Execution Model
 
-When launched, code execution occurs as a local `root` user within the sandbox. This user retains no elevated privileges on the host system once directory mounts and iptables rules are active.
+## Execution model
+
+When launched, code runs as local `root` inside the sandbox. This user has no elevated privileges on the host once directory mounts and iptables rules are active.
 
 > **Note:** Some applications may behave differently when running as the 'root' user.
 
-## Usage inside Docker
+## Using with Docker
 
 Unshare is compatible with Docker, though it requires elevated privileges.
 
@@ -62,9 +115,10 @@ docker \
       pip install -e . && \
       OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
+
 The `scripts/test-kubernetes.sh` script provides a usage example.
 
-## Usage inside Podman
+## Using with Podman
 
 Unshare is compatible with Podman, though it requires elevated privileges.
 
@@ -82,7 +136,7 @@ podman \
       OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
 
-## Kubernetes
+## Using with Kubernetes
 
 Example YAML configuration:
 
@@ -126,7 +180,8 @@ spec:
         type: CharDevice
 ```
 
-Note the restrictions lifted to enable unshare usage within a pod:
+Note the restrictions lifted to enable unshare inside a pod:
+
 ```yaml
       securityContext:
         capabilities:
@@ -144,3 +199,7 @@ minikube mount .:/mnt/pysandboxes &
 kubectl apply -f kube-pysandboxes.yaml
 kubectl delete pod pysandboxes-test
 ```
+
+## Configuration parameters
+
+You can add unshare-specific options in `.py-sandboxes`. Any line of the form `unshare.<option>=<value>` is passed through to the unshare setup (e.g. as unshare flags or config). See the daemon and template for supported options.

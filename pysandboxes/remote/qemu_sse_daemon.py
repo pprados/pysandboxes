@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from ..all_rules import AllRules
+from ..config import DEBUG
 from ..guard_files import BindRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
@@ -56,6 +57,9 @@ from .tools import which_command
 from .vm_sse_daemon import VMSSEDaemon
 
 logger = logging.getLogger(__name__)
+
+# When True, config is written under ./tmp/pysb_config for inspection; else use named pipe to avoid race.
+DEBUG_CONFIG = DEBUG or False
 
 
 def _add_dir_follow_links(path: Path, out: set[Path]) -> None:
@@ -347,8 +351,11 @@ class QemuSSEDaemon(VMSSEDaemon):
         if process_config is None:
             # Daemon path: _re_start_cmd handles ISO creation and launch
             return [], {}
-        # python_sb path: config in dedicated 9p dir (same as _re_start_cmd)
-        config_dir = temp / "pysb_config"
+        # python_sb path: config in 9p dir; use ./tmp/ when DEBUG_CONFIG for inspection
+        if DEBUG_CONFIG:
+            config_dir = Path("tmp") / "pysb_config"
+        else:
+            config_dir = temp / "pysb_config"
         config_dir.mkdir(parents=True, exist_ok=True)
         (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
         return self._build_qemu_cmd(
@@ -423,10 +430,13 @@ class QemuSSEDaemon(VMSSEDaemon):
         env = {**env, **extra_envs}
 
         temp = pipe_path.parent
-        # Config in a dedicated 9p-mounted dir so the guest sees a regular file (avoids FIFO/9p blocking issues)
-        config_dir = temp / "pysb_config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
+        # Avoid race on param files: DEBUG_CONFIG → file under ./tmp/ for inspection; else named pipe.
+        if DEBUG_CONFIG:
+            config_dir = Path("tmp") / "pysb_config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
+        else:
+            config_dir = None
 
         cmd, _ = self._build_qemu_cmd(
             all_rules, temp, process_config, port, pipe_path, config_dir=config_dir
@@ -436,10 +446,11 @@ class QemuSSEDaemon(VMSSEDaemon):
             "Launch QEMU: %s", " ".join((repr(a) if " " in a else a for a in cmd))
         )
 
-        # Config is in config_dir (9p); no FIFO needed
+        # When DEBUG_CONFIG, config is in 9p-mounted dir; else launch_sandbox writes to FIFO
         def _noop_config_writer(_: DaemonParameters) -> None:
             pass
 
+        config_writer = _noop_config_writer if config_dir is not None else None
         show_boot = all_rules.os_sandbox_params.get(
             "qemu.show_boot_console", "false"
         ).lower() in ("true", "1", "yes")
@@ -450,7 +461,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             pipe_path=pipe_path,
             envs=Envs(env),
             process_config=process_config,
-            config_writer=_noop_config_writer,
+            config_writer=config_writer,
         )
         if not show_boot:
             launch_kwargs["stdout"] = subprocess.DEVNULL
