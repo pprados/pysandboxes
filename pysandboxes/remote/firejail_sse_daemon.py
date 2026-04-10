@@ -552,7 +552,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     )
 
                     if DEBUG_NETFILTER:
-                        netfilter_file = Path("netfilter.net")
+                        Path("tmp").mkdir(parents=True, exist_ok=True)
+                        netfilter_file = Path("tmp/netfilter.net")
                     else:
                         netfilter_file = temp / "netfilter.net"
                         os.mkfifo(netfilter_file)
@@ -570,7 +571,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                         all_rules.socket_rules, [], is_ipv6=True
                     )
                     if DEBUG_NETFILTER:
-                        netfilter6_file = Path("netfilter6.net")
+                        # tmp already created above for netfilter.net
+                        netfilter6_file = Path("tmp/netfilter6.net")
                     else:
                         netfilter6_file = temp / "netfilter6.net"
                         os.mkfifo(netfilter6_file)

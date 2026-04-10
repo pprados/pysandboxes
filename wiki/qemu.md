@@ -2,9 +2,96 @@
 
 **QEMU** is an **OS-sandbox** provider that runs code inside a virtual machine, using KVM when available or full CPU emulation otherwise. It works in constrained environments (e.g. unprivileged containers) and does not require host privileges.
 
-A pre-built VM image with Python is downloaded and started. QEMU is launched with configured directories and network access. The VM boots, installs required components, starts the sandbox, and waits for commands.
+## Solution in brief
 
-This setup lets you restrict disk and network access (e.g. via iptables) even when the host is restricted, such as in an unprivileged container.
+The host starts a QEMU virtual machine with a cloud image (Debian/Ubuntu) and a NoCloud ISO containing the bootstrap script. Allowed directories (file rules, Python execution environment) are exposed to the VM via **Virtio-9p**. The VM boots, mounts these shares, runs `main_sandbox` which reads the configuration (file or named pipe) and starts the SSE server. The host talks to the VM via **hostfwd** (TCP redirection) on `127.0.0.1:port`. No HTTP server or file copies on the host: everything goes through 9p and the SSE channel.
+
+## Advantages
+
+| Aspect | Detail |
+|--------|--------|
+| **Isolation** | Full VM: separate kernel, disk and network; usable in constrained environments (e.g. unprivileged containers). |
+| **Compatibility** | Works with or without KVM (CPU emulation when KVM is unavailable). |
+| **No privileges** | No root required on the host to run QEMU (user-mode). |
+| **Disk/network rules** | Fine-grained control via Py-sandboxes rules; disk/network access can be restricted (e.g. iptables) even inside a container. |
+| **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe or 9p file) as bwrap/unshare. |
+
+## Disadvantages
+
+| Aspect | Detail |
+|--------|--------|
+| **Startup latency** | VM boot + cloud-init + bootstrap: typically **20–40 s** before the sandbox responds (vs. about a second for a subprocess). |
+| **Resources** | Dedicated RAM for the VM (default 2 GiB), shared CPU; heavier than a namespace. |
+| **Dependencies** | Cloud image to download (Debian/Ubuntu), `genisoimage` or `mkisofs` for the NoCloud ISO, QEMU binary. |
+| **Debug** | Kernel/cloud-init output is hidden by default; set `qemu.show_boot_console=true` and inspect the console log to troubleshoot. |
+
+## How it works
+
+1. **Host**: On first use (or when the daemon starts), the VM image is checked or downloaded and the NoCloud ISO is built (bootstrap script, 9p mount list, Python version, config path).
+2. **QEMU launch**: The host runs QEMU with the system image, the NoCloud ISO as a second disk, and one **virtio-9p** option per directory to expose (file rules → `/app`, execution dir, run dir, optional config dir). Network: `-nic user,hostfwd=tcp::PORT:PORT` to forward the SSE port from host to VM.
+3. **Inside the VM**: cloud-init runs the bootstrap script, which mounts the cidata (ISO), loads 9p modules, mounts each 9p tag at the given path, checks the Python version (no install), then runs `python -m pysandboxes.remote.main_sandbox --_named-pipe <config>` (or 9p config file path).
+4. **In the guest**: `main_sandbox` loads the config (from the pipe or 9p file), applies Python guards, starts the SSE server on the expected port and waits for requests.
+5. **Communication**: The host sends calls over SSE to `http://127.0.0.1:PORT/...`; traffic goes through QEMU hostfwd to the server inside the VM.
+
+Simplified diagram (overall flow):
+
+```mermaid
+flowchart LR
+    subgraph Host ["Host"]
+        A[python_sb / Daemon]
+        B[QEMU]
+    end
+
+    subgraph VM ["VM (guest)"]
+        C[cloud-init + bootstrap]
+        D[main_sandbox]
+        E[SSE server]
+    end
+
+    A -->|"Launch QEMU\n(virtio-9p, hostfwd)"| B
+    B -->|"Boot + ISO NoCloud"| C
+    C -->|"Mount 9p, start"| D
+    D --> E
+    A <-->|"SSE (hostfwd\n127.0.0.1:port)"| E
+
+    style Host fill:#e8eef4,stroke:#2f2617
+    style VM fill:#ebe0d0,stroke:#2f2617
+```
+
+Detailed diagram (mounts and config flow):
+
+```mermaid
+flowchart TD
+    subgraph Host ["Host"]
+        A[Host process]
+        Q[QEMU]
+        F1["Directories\nfile_rules"]
+        F2["Run dir\n(pipe/config)"]
+        F3["Config 9p\n(config.pkl)"]
+    end
+
+    subgraph VM ["VM"]
+        ISO[NoCloud ISO\nbootstrap, 9p_mounts]
+        G["/app, /mnt/...\n(virtio-9p)"]
+        MS[main_sandbox]
+        SSE[SSE server]
+    end
+
+    A --> Q
+    Q -->|"Disk 1: image"| VM
+    Q -->|"Disk 2: ISO"| ISO
+    F1 & F2 & F3 -->|"virtio-9p"| G
+    ISO -->|"runcmd: script"| G
+    G --> MS
+    MS -->|"read config"| G
+    MS --> SSE
+    A <-->|"hostfwd TCP"| SSE
+
+    style Host fill:#e8eef4,stroke:#2f2617
+    style VM fill:#ebe0d0,stroke:#2f2617
+```
+
+In short: the host does not run an HTTP server or copy files; the VM receives everything via 9p and config via named pipe or 9p file, and the host talks to the sandbox only over SSE on the forwarded port.
 
 For more details, see the [QEMU documentation](https://www.qemu.org/).
 
@@ -14,40 +101,40 @@ The QEMU provider is compatible with Docker, Podman, and Kubernetes.
 
 > Starting a virtual machine is much longer than a simple process.
 
-## Image et version de Python
+## Image and Python version
 
-L’image par défaut est **Debian 12 (bookworm)** et fournit Python 3.11. Pour une **correspondance complète une image / une version Python à partir de 3.10**, utiliser les **images Ubuntu** (tableau ci‑dessous).
+The default image is **Debian 12 (bookworm)** and provides Python 3.11. For **one image per Python version from 3.10 onward**, use **Ubuntu Cloud Images** (table below).
 
-Définir l’URL de l’image choisie :
+Set the URL of the chosen image:
 
 ```bash
-export PYSANDBOXES_QEMU_IMAGE_URL="<url complète de l'image>"
+export PYSANDBOXES_QEMU_IMAGE_URL="<full image URL>"
 ```
 
-### Mapping : version Python → image (Ubuntu, 3.10 à 3.13)
+### Mapping: Python version → image (Ubuntu, 3.10 to 3.13)
 
-Une seule source permet de couvrir 3.10, 3.11, 3.12 et 3.13 avec une image par version : **Ubuntu Cloud Images**.
+A single source covers 3.10, 3.11, 3.12 and 3.13 with one image per version: **Ubuntu Cloud Images**.
 
-| Python | Ubuntu        | Fichier (.img) | URL de base (release) |
-|--------|---------------|----------------|------------------------|
+| Python | Ubuntu        | File (.img) | Base URL (release) |
+|--------|---------------|-------------|---------------------|
 | 3.10   | 22.04 LTS (Jammy)  | `ubuntu-22.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/22.04/release/` |
 | 3.11   | 23.04 (Lunar)      | `ubuntu-23.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/23.04/release/` |
 | 3.12   | 24.04 LTS (Noble)  | `ubuntu-24.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/24.04/release/` |
 | 3.13   | 25.04 (Plucky)     | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
 
-Remplacer `<arch>` par `amd64`, `arm64`, `ppc64el`, `riscv64` ou `s390x` selon la plateforme.
+Replace `<arch>` with `amd64`, `arm64`, `ppc64el`, `riscv64` or `s390x` for your platform.
 
-**Exemples d’URL complètes (amd64) :**
+**Full URL examples (amd64):**
 
-- Python 3.10 : `https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img`
-- Python 3.11 : `https://cloud-images.ubuntu.com/releases/23.04/release/ubuntu-23.04-server-cloudimg-amd64.img`
-- Python 3.12 : `https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img`
-- Python 3.13 : `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
+- Python 3.10: `https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img`
+- Python 3.11: `https://cloud-images.ubuntu.com/releases/23.04/release/ubuntu-23.04-server-cloudimg-amd64.img`
+- Python 3.12: `https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img`
+- Python 3.13: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
 
-**Alternative : Debian** (image par défaut du projet, 3.11 uniquement sans autre config) :
+**Alternative: Debian** (project default image, 3.11 only without extra config):
 
-- Bookworm : `https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2`
-- Pour 3.9 ou 3.13 avec Debian : Bullseye ou Trixie (voir [cloud.debian.org](https://cloud.debian.org/images/cloud/)).
+- Bookworm: `https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2`
+- For 3.9 or 3.13 with Debian: Bullseye or Trixie (see [cloud.debian.org](https://cloud.debian.org/images/cloud/)).
 
 ## Configuration parameters
 
