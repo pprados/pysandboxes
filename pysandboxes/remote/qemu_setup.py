@@ -19,9 +19,17 @@ from ..sb_types import Envs
 
 logger = logging.getLogger(__name__)
 
-# Profile ``qemu.guest_diag=true`` injects this env in the guest (see ``merge_qemu_guest_diag_env``).
-PYSANDBOXES_GUEST_DIAG = "PYSANDBOXES_GUEST_DIAG"
-PYSANDBOXES_GUEST_DIAG_FROM_PROFILE = "2"
+
+def _qemu_show_boot_console_truthy(all_rules: Any | None) -> bool:
+    """Same truthy rule as ``qemu_sse_daemon`` / ``python_sb`` for ``qemu.show_boot_console``."""
+    if all_rules is None:
+        return False
+    params = getattr(all_rules, "os_sandbox_params", None)
+    if not params:
+        return False
+    raw = str(params.get("show_boot_console", "false")).strip().lower()
+    return raw in ("true", "1", "yes")
+
 
 GUEST_CIDATA_MOUNT = "/mnt/cidata"
 GUEST_RUN_MOUNT = "/mnt/pysandbox_run"
@@ -36,23 +44,6 @@ NINEP_MOUNTS_FILE = "9p_mounts"
 PYTHON_EXE_FILE = "python_exe"
 PYTHON_VERSION_FILE = "python_version"
 IGNORE_OVERLAYS_FILE = "ignore_overlays"
-
-
-def merge_qemu_guest_diag_env(all_rules: AllRules) -> AllRules:
-    """When ``qemu.guest_diag`` is true, set ``PYSANDBOXES_GUEST_DIAG=2`` in ``all_rules.envs``.
-
-    The QEMU guest's ``main_sandbox`` enables stderr breadcrumbs and faulthandler when this
-    variable is truthy (``1``, ``2``, or boolean-like strings). The profile knob avoids listing
-    the env var manually; ``2`` distinguishes the profile-driven case from a hand-set ``1``.
-    """
-    raw = str(all_rules.os_sandbox_params.get("guest_diag", "false")).strip().lower()
-    if raw not in ("true", "1", "yes"):
-        return all_rules
-    envs = {
-        **dict(all_rules.envs),
-        PYSANDBOXES_GUEST_DIAG: PYSANDBOXES_GUEST_DIAG_FROM_PROFILE,
-    }
-    return all_rules._replace(envs=Envs(envs))
 
 
 def augment_all_rules_for_qemu_run_mount(all_rules: AllRules) -> AllRules:
@@ -121,13 +112,25 @@ def _bootstrap_script_content(
     python_exe: str | None = None,
     config_guest_path: str | None = None,
     guest_cwd: str | None = None,
+    *,
+    bootstrap_verbose: bool = False,
 ) -> str:
     """Build the guest bootstrap script: mount cidata,
     verify Python version (no install), then run main_sandbox
     --_named-pipe (config from 9p or pipe)."""
+    set_shell = "set -ex" if bootstrap_verbose else "set -e"
     lines = [
         "#!/bin/bash",
-        "set -e",
+        set_shell,
+        "# Stop the VM without relying on guest /usr/sbin/poweroff + overlaid /lib (SONAME mismatch",
+        "# in nested QEMU): sysrq-o powers off from the kernel; utilities are fallbacks only.",
+        "_pysb_halt_guest() {",
+        "  sync 2>/dev/null || true",
+        "  { echo o > /proc/sysrq-trigger; } 2>/dev/null || true",
+        "  poweroff -f 2>/dev/null || true",
+        "  halt -fp 2>/dev/null || true",
+        "}",
+        "",
         "echo '[pysandbox-bootstrap] starting' >&2",
         "",
         "# Ensure guest DNS uses QEMU user net DNS (10.0.2.3) so name resolution works",
@@ -196,7 +199,8 @@ def _bootstrap_script_content(
             "fi",
             'if [ -n "$HOST_EXE" ] && [ ! -f "$HOST_EXE" ]; then',
             '  echo "[pysandbox-bootstrap] ERROR: host Python not found at ${HOST_EXE} after 9p mounts (check mount failures above)." >&2',
-            "  poweroff -f",
+            "  _pysb_halt_guest",
+            "  exit 1",
             "fi",
             '[ -n "$HOST_EXE" ] && [ -f "$HOST_EXE" ] && PYTHON_EXE=$HOST_EXE',
             # Else use guest python (same major.minor as required)
@@ -207,15 +211,23 @@ def _bootstrap_script_content(
             "fi",
             '[ -z "$PYTHON_EXE" ] && PYTHON_EXE=python3',
             'echo "[pysandbox-bootstrap] PYTHON_EXE=$PYTHON_EXE" >&2',
-            # Verify version: image must have expected Python (no install)
-            'ACTUAL_VERSION="$("$PYTHON_EXE" -c \'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")\' 2>/dev/null)"',
-            'if [ -z "$ACTUAL_VERSION" ]; then',
-            "  echo '[pysandbox-bootstrap] ERROR: could not get Python version from' \"$PYTHON_EXE\" >&2",
-            "  poweroff -f",
+            # Verify version: image must have expected Python (no install).
+            # Do not use set -e for the probe: a failing python (missing .so, segfault)
+            # would exit the whole script before the error line, leaving cloud-init opaque.
+            "set +e",
+            'ACTUAL_VERSION="$("$PYTHON_EXE" -c \'import sys; print("%d.%d" % (sys.version_info.major, sys.version_info.minor))\' 2>/dev/null)"',
+            "PY_PROBE_RC=$?",
+            "set -e",
+            'if [ "$PY_PROBE_RC" != 0 ] || [ -z "$ACTUAL_VERSION" ]; then',
+            "  echo '[pysandbox-bootstrap] ERROR: Python probe rc='\"$PY_PROBE_RC\"' from '\"$PYTHON_EXE\"'; stderr:' >&2",
+            '  "$PYTHON_EXE" -c \'import sys; print("%d.%d" % (sys.version_info.major, sys.version_info.minor))\' 2>&2 || true',
+            "  _pysb_halt_guest",
+            "  exit 1",
             "fi",
             'if [ "$ACTUAL_VERSION" != "$PYTHON_VERSION" ]; then',
             "  echo '[pysandbox-bootstrap] ERROR: expected Python $PYTHON_VERSION, image has Python $ACTUAL_VERSION' >&2",
-            "  poweroff -f",
+            "  _pysb_halt_guest",
+            "  exit 1",
             "fi",
             'echo "[pysandbox-bootstrap] Python version OK: $ACTUAL_VERSION" >&2',
             "",
@@ -237,7 +249,7 @@ def _bootstrap_script_content(
                 "PIPE_NAME=$(cat "
                 + f"{GUEST_CIDATA_MOUNT}/{PIPE_NAME_FILE}"
                 + " 2>/dev/null | tr -d '\\n' || echo '')",
-                'if [ -z "$PIPE_NAME" ]; then echo "[pysandbox-bootstrap] ERROR: pipe_name not found on cidata" >&2; poweroff -f; fi',
+                'if [ -z "$PIPE_NAME" ]; then echo "[pysandbox-bootstrap] ERROR: pipe_name not found on cidata" >&2; _pysb_halt_guest; exit 1; fi',
                 f'CONFIG_PATH={pipe_run_guest_path}/"$PIPE_NAME"',
                 "echo '[pysandbox-bootstrap] exec main_sandbox --_named-pipe '\"'\"'$CONFIG_PATH'\"'\"'' >&2",
             ]
@@ -252,9 +264,8 @@ def _bootstrap_script_content(
             "GUEST_RC=$?",
             "set -e",
             'echo "[pysandbox-bootstrap] main_sandbox finished with exit code $GUEST_RC" >&2',
-            # Flush 9p-backed guest_run_dir (exitcode) before poweroff so the host sees it.
-            "sync",
-            "poweroff -f",
+            # Flush 9p-backed guest_run_dir (exitcode) before halt so the host sees it.
+            "_pysb_halt_guest",
         ]
     )
     return "\n".join(lines)
@@ -291,6 +302,7 @@ def _create_nocloud_iso(
     ignore_overlay_paths: list[str] = []
     if all_rules is not None:
         ignore_overlay_paths = qemu_ignore_overlay_abs_paths(all_rules, cwd_for_ignore)
+    bootstrap_verbose = _qemu_show_boot_console_truthy(all_rules)
     script_content = _bootstrap_script_content(
         mounts,
         pipe_run_guest_path,
@@ -298,6 +310,7 @@ def _create_nocloud_iso(
         python_exe,
         config_guest_path,
         guest_cwd=guest_cwd,
+        bootstrap_verbose=bootstrap_verbose,
     )
     script_yaml = "\n".join("      " + line for line in script_content.splitlines())
     (temp / PIPE_NAME_FILE).write_text(pipe_basename.strip(), encoding="utf-8")
@@ -312,13 +325,31 @@ def _create_nocloud_iso(
         "\n".join(ignore_overlay_paths) + ("\n" if ignore_overlay_paths else ""),
         encoding="utf-8",
     )
+    debug_block = "debug:\n  verbosity: 2\n\n" if bootstrap_verbose else ""
+    bootcmd_banner = (
+        (
+            "  - echo '[pysandbox] cloud-init bootcmd (early)' "
+            "| tee /dev/ttyS0 /dev/console >/dev/null 2>&1 || true\n"
+        )
+        if bootstrap_verbose
+        else ""
+    )
+    runcmd_banner = (
+        (
+            "  - echo '[pysandbox] cloud-init runcmd (before bootstrap)' "
+            "| tee /dev/ttyS0 /dev/console >/dev/null 2>&1 || true\n"
+        )
+        if bootstrap_verbose
+        else ""
+    )
     user_data = f"""#cloud-config
-datasource_list: [NoCloud]
+{debug_block}datasource_list: [NoCloud]
 datasource:
   NoCloud:
     max_wait: 0
 
 bootcmd:
+{bootcmd_banner}  - sh -c 'echo 1 > /proc/sys/kernel/sysrq 2>/dev/null || true'
   - mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
   - printf '[Service]\\nTimeoutStartSec=5\\n' > /etc/systemd/system/systemd-networkd-wait-online.service.d/timeout.conf
 
@@ -347,7 +378,7 @@ network:
       dhcp4: true
 
 runcmd:
-  - systemctl stop serial-getty@ttyS0.service getty@ttyS0.service getty@tty1.service || true
+{runcmd_banner}  - systemctl stop serial-getty@ttyS0.service getty@ttyS0.service getty@tty1.service || true
   - systemctl mask serial-getty@ttyS0.service getty@ttyS0.service getty@tty1.service || true
   - rm -f /etc/resolv.conf && printf 'nameserver 10.0.2.3\\n' > /etc/resolv.conf
   - {GUEST_BOOTSTRAP_SCRIPT}
