@@ -406,7 +406,7 @@ def _test_files() -> int:
                         f"{OK} .env is accessible (os_sandbox={pysandboxes.os_sandbox!r})"
                     )
                 else:
-                    logger.error(f"{KO} .env must not be accessible ({s[:40]}...)")
+                    logger.error(f"{KO} .env must not be accessible")
                     rc = 1
     except FileNotFoundError as e:
         # .env absent or not visible in sandbox (e.g. ignore=.env) → OK

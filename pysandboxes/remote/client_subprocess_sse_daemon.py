@@ -9,7 +9,6 @@ watchdog functionality, and IPC communication via Server-Sent Events (SSE).
 Key components:
 - BaseSubProcessDaemon: Base class for subprocess-based sandboxes
 - SubProcessDaemon: Standard subprocess implementation
-- DaemonParameters: Configuration data structure
 - Process lifecycle management with automatic restart on failure
 """
 
@@ -28,7 +27,7 @@ from asyncio import CancelledError, Task
 from asyncio.subprocess import Process
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Callable, NamedTuple
+from typing import Any, Callable
 
 import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
@@ -42,6 +41,7 @@ from ..sb_types import Args, ConfigLine, Envs
 from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
 from . import main_shutdown
 from .base_sse_daemon import BaseSSESandbox
+from .daemon_parameters import DaemonParameters
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
@@ -127,39 +127,6 @@ async def _read_stream(
             callback(line.decode("utf-8").strip())
         else:
             break
-
-
-class DaemonParameters(NamedTuple):
-    """Configuration parameters for daemon processes.
-    To assist in scenarios where there is no sandbox initialization function, we propagate the main log
-    parameters as default behavior.
-    Attributes:
-        all_rules: Security rules configuration.
-        log_level: Logging level for the daemon.
-        log_format: Format string for log messages.
-        use_rich_handler: Use Rich Handler
-        token: Authentication token for communication.
-        port: Network port for communication.
-        init_fn: Initialization function reference.
-    netfilter_rules: Optional iptables rules for the guest (e.g. VM); default empty.
-    python_main_args: For VM guest: argv to run as main (e.g. ["-m", "module"]); default empty.
-    """
-
-    all_rules: AllRules
-    log_level: int
-    log_format: str
-    use_rich_handler: bool
-    token: str
-    port: int
-    init_fn: str
-    netfilter_rules: tuple[str, ...] = ()
-    python_main_args: tuple[str, ...] = ()
-    # For QEMU python_sb: guest path where host run dir is mounted; guest writes exit code there
-    guest_run_dir: str | None = None
-    # For bwrap/unshare: fd number to read until slirp4netns is ready (child has fd via pass_fds)
-    slirp_ready_fd: int | None = None
-    # When True, child must loop until slirp network is reachable (bwrap --unshare-net)
-    wait_network: bool = False
 
 
 @sandbox_loop

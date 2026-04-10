@@ -188,6 +188,15 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 # </learning_guard_import>
 
-qemu.use_kvm=true  # FIXME
-qemu.memory=2048
-# qemu.show_boot_console=false  # default: hide boot/kernel/cloud-init; set true to see or log to file
+#######################################################################################
+
+#### Qemu custom parameters
+# qemu.use_kvm=true  # FIXME
+# qemu.memory=2G   # digits, or digits + one of k/M/G/T/P/E (not 2GB — QEMU rejects -m 2GB)
+# qemu.show_boot_console=false
+
+# bwrap.<param>=<value>
+
+# firejail.<param>=<value>
+
+# unshare.<param>=<value>

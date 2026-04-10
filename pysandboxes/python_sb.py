@@ -7,9 +7,10 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, TextIO, cast
 
 from ._os_sandbox import providers_factory
 from .config import DEBUG
@@ -18,15 +19,16 @@ from .main_logger import config_log
 from .py_sandbox import load_and_parse_config
 from .remote.client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
-    DaemonParameters,
     find_free_port,
     get_log_formatter,
     launch_sandbox,
     use_rich_handler,
 )
+from .remote.daemon_parameters import DaemonParameters
 from .remote.none_daemon import NoneDaemon
 from .remote.parse_cpython_args import parse_python_cmd_line
 from .remote.python_in_sb import convert_extra_rules
+from .remote.qemu_setup import QEMU_HOST_RUN_PREFIX
 from .sb_types import Envs
 from .tools import Environ
 
@@ -86,8 +88,14 @@ async def _qemu_read_and_forward(
     state: list[int],
     *,
     forward_all: bool = False,
+    tee_file: TextIO | None = None,
+    tee_lock: asyncio.Lock | None = None,
 ) -> None:
-    """Read QEMU console stream and forward lines (all if forward_all, else between sentinels)."""
+    """Read QEMU console stream and forward lines (all if forward_all, else between sentinels).
+
+    When ``tee_file`` is set (e.g. ``qemu.show_boot_console=true``), each line is also
+    appended to that file; ``tee_lock`` must serialize writes from stdout/stderr tasks.
+    """
     if stream is None:
         return
     out = sys.stderr if is_stderr else sys.stdout
@@ -105,20 +113,67 @@ async def _qemu_read_and_forward(
         text_stripped = _QEMU_CONSOLE_PREFIX.sub("", text)
         if forward_all or _qemu_forward_state_for_line(text_stripped, state):
             print(text_stripped, end="", file=out, flush=True)
+        if tee_file is not None:
+            assert tee_lock is not None
+            async with tee_lock:
+                tee_file.write(text)
+                tee_file.flush()
+
+
+def _read_qemu_guest_exitcode(
+    exitcode_file: Path,
+    *,
+    max_wait_s: float = 3.0,
+    interval_s: float = 0.05,
+) -> int | None:
+    """Read guest-written exit code from the shared run dir, with short polling.
+
+    virtio-9p may expose ``exitcode`` on the host slightly after QEMU exits; the
+    QEMU process can also return non-zero due to disk I/O noise during poweroff
+    even when the guest succeeded.
+    """
+    deadline = time.monotonic() + max_wait_s
+    while time.monotonic() < deadline:
+        if exitcode_file.exists():
+            try:
+                raw = exitcode_file.read_text().strip()
+                return int(raw)
+            except (ValueError, OSError):
+                pass
+        time.sleep(interval_s)
+    return None
 
 
 async def _qemu_wait_and_filter_console(
     process: asyncio.subprocess.Process,
     *,
     forward_all: bool = False,
+    tee_file: TextIO | None = None,
+    tee_lock: asyncio.Lock | None = None,
 ) -> int:
     """Wait for QEMU process and forward console output (all if forward_all, else between sentinels)."""
+    if tee_file is not None and tee_lock is None:
+        tee_lock = asyncio.Lock()
     state: list[int] = [_FORWARD_STATE_WAITING]
     t_stdout = asyncio.create_task(
-        _qemu_read_and_forward(process.stdout, False, state, forward_all=forward_all)
+        _qemu_read_and_forward(
+            process.stdout,
+            False,
+            state,
+            forward_all=forward_all,
+            tee_file=tee_file,
+            tee_lock=tee_lock,
+        )
     )
     t_stderr = asyncio.create_task(
-        _qemu_read_and_forward(process.stderr, True, state, forward_all=forward_all)
+        _qemu_read_and_forward(
+            process.stderr,
+            True,
+            state,
+            forward_all=forward_all,
+            tee_file=tee_file,
+            tee_lock=tee_lock,
+        )
     )
     exit_code = await process.wait()
     await t_stdout
@@ -199,13 +254,20 @@ def main() -> int:
         from .remote.python_in_sb import python_in_sb
 
         return python_in_sb(all_rules, python_cmd)
-    with tempfile.TemporaryDirectory() as tmpdir:
+    _host_tmp = "/tmp" if os.path.isdir("/tmp") else None
+    _run_prefix = (
+        QEMU_HOST_RUN_PREFIX if all_rules.os_sandbox == "qemu" else "pysandboxes-sb-"
+    )
+    with tempfile.TemporaryDirectory(prefix=_run_prefix, dir=_host_tmp) as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
         if all_rules.os_sandbox == "qemu":
             # For QEMU: build process_config before subprocess_cmd so the ISO
             # can be created with the config embedded.
-            from pysandboxes.remote.qemu_setup import GUEST_RUN_MOUNT  # FIXME
+            from .remote.qemu_setup import (
+                GUEST_RUN_MOUNT,
+                augment_all_rules_for_qemu_run_mount,
+            )
 
             os_provider.port = (
                 find_free_port() if all_rules.port == -1 else all_rules.port
@@ -220,7 +282,9 @@ def main() -> int:
                     "LINES": str(lines),
                 }
             )
-            guest_all_rules = all_rules._replace(envs=guest_envs)
+            guest_all_rules = augment_all_rules_for_qemu_run_mount(
+                all_rules._replace(envs=guest_envs)
+            )
             process_config = DaemonParameters(
                 all_rules=guest_all_rules,
                 log_level=log_level,
@@ -231,6 +295,7 @@ def main() -> int:
                 init_fn="",
                 python_main_args=tuple(python_cmd),
                 guest_run_dir=GUEST_RUN_MOUNT,
+                guest_working_dir=str(Path.cwd().resolve()),
             )
             # Store config so subprocess_cmd can build ISO and 9p config dir; guest reads config from 9p
             os_provider._iso_config = process_config  # type: ignore[attr-defined]
@@ -281,10 +346,11 @@ def main() -> int:
 
         async def launch_and_wait() -> int:
             if all_rules.os_sandbox == "qemu":
+                # Same keys as QemuSSEDaemon.parse_rules ("qemu.foo=bar" → params["foo"])
                 show_boot = all_rules.os_sandbox_params.get(
-                    "qemu.show_boot_console", "false"
+                    "show_boot_console", "false"
                 ).lower() in ("true", "1", "yes")
-                qemu_console_file = None
+                qemu_console_file: TextIO | None = None
                 launch_kwargs: dict[str, Any] = dict(
                     cmd=launch_args,
                     pipe_path=pipe_path,
@@ -295,10 +361,10 @@ def main() -> int:
                     on_launched=os_provider.on_process_launched,
                     config_writer=config_writer,
                 )
-                if not show_boot:
-                    launch_kwargs["stdout"] = subprocess.PIPE
-                    launch_kwargs["stderr"] = subprocess.PIPE
-                else:
+                # Always use pipes so we can filter (sentinels) or tee to terminal + log file.
+                launch_kwargs["stdout"] = subprocess.PIPE
+                launch_kwargs["stderr"] = subprocess.PIPE
+                if show_boot:
                     qemu_console_path = Path(
                         os.environ.get(
                             "PYSANDBOXES_QEMU_CONSOLE_LOG",
@@ -306,37 +372,29 @@ def main() -> int:
                         )
                     )
                     qemu_console_file = open(qemu_console_path, "w")
-                    try:
-                        logger.debug(
-                            "QEMU guest console → %s",
-                            qemu_console_path.resolve(),
-                        )
-                        logger.debug(
-                            "Run in another terminal: tail -f %s (to see guest output including 'Calling sandbox at...')",
-                            qemu_console_path.resolve(),
-                        )
-                        launch_kwargs["stdout"] = qemu_console_file.fileno()
-                        launch_kwargs["stderr"] = qemu_console_file.fileno()
-                    except Exception:
-                        qemu_console_file.close()
-                        raise
-                process = await launch_sandbox(**launch_kwargs)
+                    logger.debug(
+                        "QEMU guest console (terminal + tee) → %s",
+                        qemu_console_path.resolve(),
+                    )
                 try:
-                    if (
-                        not show_boot
-                        and process.stdout is not None
-                        and process.stderr is not None
-                    ):
+                    process = await launch_sandbox(**launch_kwargs)
+                    try:
+                        if process.stdout is None or process.stderr is None:
+                            return await process.wait()
+                        # Full VM console only when qemu.show_boot_console=true (profile).
+                        forward_all = show_boot
                         return await _qemu_wait_and_filter_console(
-                            process, forward_all=DEBUG
+                            process,
+                            forward_all=forward_all,
+                            tee_file=qemu_console_file,
                         )
-                    return await process.wait()
+                    finally:
+                        kill_slirp = getattr(os_provider, "_kill_slirp", None)
+                        if callable(kill_slirp):
+                            kill_slirp()
                 finally:
                     if qemu_console_file is not None:
                         qemu_console_file.close()
-                    kill_slirp = getattr(os_provider, "_kill_slirp", None)
-                    if callable(kill_slirp):
-                        kill_slirp()
             else:
                 process = await launch_sandbox(
                     launch_args,
@@ -358,17 +416,30 @@ def main() -> int:
                         kill_slirp()
 
         logger.debug("Launching sandbox (waiting for guest to finish)...")
-        return_code = asyncio.run(launch_and_wait())
-        logger.debug("Guest process finished (exit code %s)", return_code)
-        # For QEMU, guest writes exit code to shared run dir; use it if present
+        qemu_wait_rc = asyncio.run(launch_and_wait())
+        return_code = qemu_wait_rc
+        logger.debug("Guest process finished (QEMU wait exit code %s)", return_code)
+        # For QEMU, guest writes exit code to shared run dir; prefer it over QEMU's
+        # process status (9p latency; QEMU may return non-zero on shutdown I/O).
         if all_rules.os_sandbox == "qemu":
             exitcode_file = Path(tmpdir) / "exitcode"
-            if exitcode_file.exists():
-                try:
-                    raw = exitcode_file.read_text().strip()
-                    return_code = int(raw)
-                except (ValueError, OSError):
-                    pass
+            guest_rc = _read_qemu_guest_exitcode(exitcode_file)
+            logger.debug(
+                "QEMU exitcode: guest_rc=%s qemu_wait=%s file=%s",
+                guest_rc,
+                qemu_wait_rc,
+                exitcode_file,
+            )
+            if guest_rc is not None:
+                return_code = guest_rc
+            elif qemu_wait_rc == 0:
+                logger.debug(
+                    "No guest exitcode at %s after wait; treating as failure",
+                    exitcode_file,
+                )
+                return_code = 1
+            else:
+                return_code = qemu_wait_rc
         return return_code
 
 

@@ -48,7 +48,7 @@ all_container_worker: list[str] = [
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
 all_os_sandbox: list = [
     # firejail is incompatible with containers
-    # pytest.param("none", True, False),
+    pytest.param("none", True, False),
     # pytest.param("subprocess", True, False),
     # pytest.param("landlock", False, False),
     # pytest.param("unshare", False, True),
@@ -115,7 +115,7 @@ def _host_dns_servers() -> list[str]:
     return usable
 
 
-# Hostnames from py-sandbox-test.profile that require resolution at config load time
+# Hostname from py-sandbox-test.profile that require resolution at config load time
 _PROFILE_RESOLVE_HOSTS = ("www.google.com",)
 
 
@@ -165,7 +165,7 @@ def _resolve_on_host(hostname: str, timeout: float = 5.0) -> str | None:
 
 
 def _add_host_flags() -> list[str]:
-    """Resolve profile hostnames on the host and return --add-host flags for the container.
+    """Resolve profile hostname on the host and return --add-host flags for the container.
 
     So the container does not need DNS for config parsing; platform resolution is done on the host.
     """
@@ -239,6 +239,7 @@ def _run_container_runtime(
     term = os.environ.get("TERM", "xterm-256color")
     # PYTHONPATH=/app so -m tests.integration_tests.tst_usage finds the tests package
     # QEMU: file_rules root is mounted at /app in the VM (same strategy as bwrap)
+    # Full VM console on host: set qemu.show_boot_console=true in the profile (not an env var).
     inner_cmd = (
         f"{prefix}"
         f"PYTHONPATH=/app TERM={term} OS_SANDBOX={os_sandbox_env} My_ENV=1 "
@@ -246,10 +247,10 @@ def _run_container_runtime(
     )
 
     privileged_flag = ["--privileged"] if privileged else []
-    # Use host/platform DNS so config parsing can resolve hostnames
+    # Use host/platform DNS so config parsing can resolve hostname
     dns_servers = _host_dns_servers()
     dns_flags = [arg for s in dns_servers for arg in ("--dns", s)]
-    # Resolve profile hostnames on the host and inject so container does not need DNS at config load
+    # Resolve profile hostname on the host and inject so container does not need DNS at config load
     add_host_flags = _add_host_flags()
     # bwrap uses --share-net: it needs a working network stack; bridge often has no route in child
     network_mode = "host" if os_sandbox == "bwrap" else "bridge"
@@ -275,43 +276,15 @@ def _run_container_runtime(
 
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
     # With pipes, the buffer (~64KB) can fill and the container blocks on write → deadlock.
-    # By default redirect to a temp file so we can show log tail on failure without deadlock.
-    # Set CONTAINER_TEST_STREAM_LOGS=1 to stream logs to the terminal during execution.
-    stream_logs = os.environ.get("CONTAINER_TEST_STREAM_LOGS", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
+    # Stream stdout/stderr to the terminal so you see nested pytest output as it runs.
+    return subprocess.run(
+        cmd,
+        cwd=ROOT_DIR,
+        env=os.environ.copy(),
+        stdout=None,
+        stderr=None,
+        timeout=CONTAINER_RUN_TIMEOUT,
     )
-    if stream_logs:
-        result = subprocess.run(
-            cmd,
-            cwd=ROOT_DIR,
-            env=os.environ.copy(),
-            stdout=None,
-            stderr=None,
-            timeout=CONTAINER_RUN_TIMEOUT,
-        )
-        result._container_log_path = None  # type: ignore[attr-defined]
-        return result
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".log", delete=False, encoding="utf-8"
-    ) as log_file:
-        log_path = log_file.name
-    try:
-        with open(log_path, "w", encoding="utf-8") as log_stream:
-            result = subprocess.run(
-                cmd,
-                cwd=ROOT_DIR,
-                env=os.environ.copy(),
-                stdout=log_stream,
-                stderr=subprocess.STDOUT,
-                timeout=CONTAINER_RUN_TIMEOUT,
-            )
-        result._container_log_path = log_path  # type: ignore[attr-defined]
-        return result
-    except Exception:
-        Path(log_path).unlink(missing_ok=True)
-        raise
 
 
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
@@ -321,8 +294,10 @@ def test_container_runtime(
 ) -> None:
     """Run container test with podman or docker; success = exit code 0.
 
-    To see container logs during execution, set CONTAINER_TEST_STREAM_LOGS=1
-    (e.g. CONTAINER_TEST_STREAM_LOGS=1 pytest ... test_container_runtime).
+    Container stdout/stderr are streamed to the terminal so you see nested pytest
+    output as it runs. QEMU: with ``qemu.show_boot_console=false``, the host only
+    forwards lines between ``[PYSANDBOXES]PYTHON_OUTPUT_START`` and ``END``;
+    for full VM boot trace, set ``qemu.show_boot_console=true`` (see wiki/qemu.md).
     """
 
     try:
@@ -335,31 +310,10 @@ def test_container_runtime(
         pytest.skip(f"{runtime} not available")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
-    log_path = getattr(result, "_container_log_path", None)
-    try:
-        if result.returncode != 0 and log_path and Path(log_path).exists():
-            log_text = Path(log_path).read_text(encoding="utf-8")
-            if log_text:
-                lines = log_text.strip().splitlines()
-                # Show start (unshare_setup, network config) and end (test failure)
-                head = lines[:120]
-                tail = lines[-80:] if len(lines) > 80 else []
-                sys.stderr.write(
-                    "\n--- Container log (head: unshare_setup / network) ---\n"
-                )
-                sys.stderr.write("\n".join(head))
-                sys.stderr.write("\n")
-                if tail and len(lines) > 120:
-                    sys.stderr.write("\n--- Container log (tail) ---\n")
-                    sys.stderr.write("\n".join(tail))
-                    sys.stderr.write("\n")
-        assert result.returncode == 0, (
-            f"Container test ({runtime}, os_sandbox={os_sandbox}) exited with code {result.returncode}. "
-            "For unshare, ensure the container has /dev/net/tun and slirp4netns (e.g. use --privileged)."
-        )
-    finally:
-        if log_path and Path(log_path).exists():
-            Path(log_path).unlink(missing_ok=True)
+    assert result.returncode == 0, (
+        f"Container test ({runtime}, os_sandbox={os_sandbox}) exited with code {result.returncode}. "
+        "For unshare, ensure the container has /dev/net/tun and slirp4netns (e.g. use --privileged)."
+    )
 
 
 # --- Kubernetes (logic from test-kubernetes.sh) ---

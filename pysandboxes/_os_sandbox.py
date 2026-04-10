@@ -9,10 +9,12 @@ of the currently active daemon.
 """
 
 import asyncio
+import importlib
 import logging
 import threading
 import uuid
-from typing import Any, Callable, Type, cast
+from collections.abc import Iterator, Mapping
+from typing import Any, Callable, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
@@ -21,42 +23,61 @@ from .private_loop import (
     get_sandbox_loop,
     sandbox_loop,
 )
-from .remote.bwrap_sse_daemon import BWrapSSEDaemon
-from .remote.client_subprocess_sse_daemon import SubProcessDaemon
-from .remote.firejail_sse_daemon import FireJailSSEDaemon
-from .remote.landlock_daemon import LandlockSSEDaemon
-from .remote.none_daemon import NoneDaemon
 from .remote.parameters import (
     TIMEOUT_FOR_START_DAEMON,
     TIMEOUT_FOR_START_DAEMON_QEMU,
     TIMEOUT_FOR_STOP_DAEMON,
 )
-from .remote.qemu_sse_daemon import QemuSSEDaemon
-from .remote.sse_server_daemon import SSEServerDaemon
-from .remote.task_daemon import TaskDaemon
-from .remote.unshare_sse_daemon import UnshareSSEDaemon
 from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox
 
 logger = logging.getLogger(__name__)
 
-# A factory to create daemon instances from their names.
-providers_factory: dict[str, Type] = {
-    "_task": TaskDaemon,  # Impossible to activate py-sandbox in this mode.
-    "_sse_server": SSEServerDaemon,  # Impossible to activate py-sandbox in this mode.
-    "none": NoneDaemon,
-    "subprocess": SubProcessDaemon,
-    "bwrap": BWrapSSEDaemon,
-    "firejail": FireJailSSEDaemon,
-    "unshare": UnshareSSEDaemon,
-    "landlock": LandlockSSEDaemon,
-    "qemu": QemuSSEDaemon,
-    # TODO: podman, https://www.redhat.com/en/blog/podman-inside-container https://www.redhat.com/en/blog/podman-inside-kubernetes
-    #  docker, lxc, ...
-    # docker alternative
-    # TODO: external started daemon
-    # TODO https://github.com/igo95862/bubblejail
-    # TODO: paraméter apparmor https://mail.google.com/mail/u/0/#inbox/FMfcgzQbfxdJgGfjGcjPBxXNKmWqgPdK
+# (subpackage.module_name, class_name) relative to package ``pysandboxes``.
+# Loaded on first use so ``main_sandbox`` / QEMU guest do not import aiohttp, bwrap, etc. at startup.
+_PROVIDER_SPECS: dict[str, tuple[str, str]] = {
+    "_task": ("remote.task_daemon", "TaskDaemon"),
+    "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon"),
+    "none": ("remote.none_daemon", "NoneDaemon"),
+    "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon"),
+    "bwrap": ("remote.bwrap_sse_daemon", "BWrapSSEDaemon"),
+    "firejail": ("remote.firejail_sse_daemon", "FireJailSSEDaemon"),
+    "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon"),
+    "landlock": ("remote.landlock_daemon", "LandlockSSEDaemon"),
+    "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon"),
 }
+
+_provider_class_cache: dict[str, type[BaseDaemon]] = {}
+
+
+def _load_provider_class(key: str) -> type[BaseDaemon]:
+    if key not in _PROVIDER_SPECS:
+        raise KeyError(key)
+    if key not in _provider_class_cache:
+        mod_path, cls_name = _PROVIDER_SPECS[key]
+        mod = importlib.import_module(f".{mod_path}", package="pysandboxes")
+        _provider_class_cache[key] = getattr(mod, cls_name)
+    return _provider_class_cache[key]
+
+
+class _LazyProvidersFactory(Mapping[str, type[BaseDaemon]]):
+    """Lazily import daemon classes so minimal guests only load what they use."""
+
+    __slots__ = ()
+
+    def __getitem__(self, key: str) -> type[BaseDaemon]:
+        return _load_provider_class(key)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(_PROVIDER_SPECS)
+
+    def __len__(self) -> int:
+        return len(_PROVIDER_SPECS)
+
+    def __contains__(self, key: object) -> bool:
+        return isinstance(key, str) and key in _PROVIDER_SPECS
+
+
+providers_factory: Mapping[str, type[BaseDaemon]] = _LazyProvidersFactory()
 
 DEFAULT_OS_SANDBOX = "subprocess"
 

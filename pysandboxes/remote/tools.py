@@ -30,8 +30,6 @@ from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
 from typing import Any, cast
 
-import netifaces
-
 logger = logging.getLogger(__name__)
 
 known_paths = [
@@ -125,9 +123,14 @@ def configure_logging_level(verbose_count: int) -> int:
 def get_default_gateway_info() -> tuple[str, str] | None:
     """Get default network gateway information.
 
+    netifaces is imported lazily: its C extension can segfault on some minimal
+    VM/guest stacks; nothing in the daemon import path needs gateways at module load.
+
     Returns:
         Tuple of (gateway_ip, interface_name) or None if no gateway found.
     """
+    import netifaces
+
     gws: dict[Any, Any] = netifaces.gateways()
 
     # Retrieve default IPv4 gateway
@@ -260,7 +263,6 @@ def set_pdeathsig() -> None:
         logger.warning("set_pdeathsig() not supported on non-POSIX systems.")
         return
     try:
-        # Load libc and call prctl
         libc = cdll.LoadLibrary("libc.so.6")
         result = libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
         if result != 0:

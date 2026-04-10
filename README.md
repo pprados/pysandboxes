@@ -428,46 +428,49 @@ Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is po
 
 We offer several implementations to encapsulate the Python sandbox:
 
-| Technology                                                      | Configuration            | Specifics                                                                    | Description                                                                                                                              |
-|-----------------------------------------------------------------|--------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| subprocess                                                      |                          | • no complementary security                                                  |                                                                                                                                          |
-| [bwrap](https://github.com/containers/bubblewrap)               | [here](wiki/bwrap.md)    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md) | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)  | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
-| [landlock](https://landlock.io/)                                | [here](wiki/landlock.md) | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
-| [qemu](https://www.qemu.org/)                            | [here](wiki/qemu.md)     | • Total emularion of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else une the emulation.                                                                  |
+| Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
+|-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| subprocess                                                      |                                            | • no complementary security                                                  |                                                                                                                                          |
+| [bwrap](https://github.com/containers/bubblewrap)               | [here](wiki/bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
+| [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
+| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
+| [landlock](https://landlock.io/)                                | [here](wiki/landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
+| [qemu](https://www.qemu.org/)                            | [here](wiki/qemu.md)                       | • Total emularion of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else une the emulation.                                                                  |
 
 *Other implementations will be added soon*
 
 The features of each technology are proposed:
 
-| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail  |       qemu       |
-|--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:---------:|:----------------:|
+| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       |
+|--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|
 | Isolation                |  ❌   |  Process   | Linux ABI | Namespace | Namespace | Namespace | VM+<br/>emulator |
-| Python code              |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌     |        ❌         |
-| Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
-| env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
-| import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌     |        ❌         |
-| bind=a,a                 |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
-| bind=a,b                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ❌     |        ❌         |
-| ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ?     |     ✅     |        ❌         |
-| **Network**              |      |            |           |           |           |           |        ❌         |
-| • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
-| • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅     |        ✅         |
-| • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅     |        ✅         |
-| • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
-| OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
-| Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅     |        ✅         |
-| **Container compatible** |      |            |           |           |           |           |                  |
-| • Docker / Podman        |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌     |        ✅         |
-| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌     |        ✅         |
-| **Kubernetes**           |      |            |           |           |           |           |                  |
-| • kube                   |  ✅   |     ✅      |     ?     |     ❌     |     ❌     |     ❌     |        ✅         |
-| • SYS_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌     |        ❌         |
-| • NET_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌     |        ❌         |
-| **Extra**                |      |            |           |           |           |           |                  |
-| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅     |        ?         |
-| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅     |        ✅         |
+| Python code              |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
+| Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
+| bind=a,a                 |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| bind=a,b                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ❌  |        ❌         |
+| ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ?     |     ✅  |        ❌         |
+| **Network**              |      |            |           |           |           |        |        ❌         |
+| • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
+| • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
+| • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| **Container compatible** |      |            |           |           |           |        |                  |
+| • Docker / Podman        |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
+| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         |
+| **Kubernetes**           |      |            |           |           |           |        |                  |
+| • kube                   |  ✅   |     ✅      |     ?     |     ❌     |     ❌     |     ❌  |        ✅         |
+| • SYS_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌  |        ❌         |
+| • NET_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌  |        ❌         |
+| **Extra**                |      |            |           |           |           |        |                  |
+| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅  |        ?         |
+| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |   ✅    |        ✅         |
+| • Delais                 | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |       >20        |
+
+
 
 >> During the learning phase, `os-sandbox` is forced to `subprocess`.
 

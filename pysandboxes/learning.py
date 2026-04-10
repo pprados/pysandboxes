@@ -12,9 +12,9 @@ application through typical usage scenarios and capturing required permissions.
 
 import logging
 import re
+import threading
 from datetime import datetime
 from importlib import resources
-from multiprocessing import Lock
 from pathlib import Path
 from typing import Any, Set
 
@@ -23,14 +23,14 @@ from .main_logger import make_relative_path, pysandboxes_logger
 
 logger = logging.getLogger(__name__)
 
-_lock = Lock()
+_lock = threading.Lock()
 _learning: Set[Any] = set()
 
 _learning_path: Path | None = None
 _learning_mode: bool = False
 
 # Check double usage
-_lock_generate = Lock()
+_lock_generate = threading.Lock()
 _save_learning_done: bool = False
 
 

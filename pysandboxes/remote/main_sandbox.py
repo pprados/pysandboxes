@@ -16,7 +16,6 @@ The main process:
 
 import argparse
 import asyncio
-import importlib
 import logging
 import os
 import pickle
@@ -26,26 +25,34 @@ import sys
 import time
 from logging import StreamHandler
 from pathlib import Path
+from typing import Any
 
-from .._os_sandbox import providers_factory
 from ..config import DEBUG
-from ..guard_socket import set_pin_dns
-from ..learning import (
-    generate_config_from_learning,
-    set_learning_mode,
-    set_learning_path,
-)
-from ..main_logger import config_log
-from ..remote.sse_server_daemon import SSEServerDaemon
-from ..tools import SyncOrAsyncFunc, set_is_in_sandbox
-from .client_subprocess_sse_daemon import DaemonParameters
-from .python_in_sb import python_in_sb
-from .tools import set_pdeathsig
+from .daemon_parameters import DaemonParameters
+
+# Intentionally minimal module-level imports: the QEMU guest runs ``python -m
+# ...main_sandbox`` with a long PYTHONPATH; pulling learning/guards/remote.tools
+# (ctypes) at import time has caused SIGSEGV before ``main()`` runs.
 
 logger = logging.getLogger("pysandboxes.remote.main_sandbox")
 
 
+def _qemu_guest_diag(process_config: DaemonParameters, msg: str) -> None:
+    """Optional stderr breadcrumbs in QEMU guest (``PYSANDBOXES_GUEST_DIAG=1``)."""
+    if os.environ.get("PYSANDBOXES_GUEST_DIAG", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    if not getattr(process_config, "guest_run_dir", None):
+        return
+    print(f"[PYSANDBOX_DIAG] {msg}", file=sys.stderr, flush=True)
+
+
 def _debug_log() -> None:
+    from ..main_logger import config_log
+
     logging.basicConfig(
         force=True,
         level=logging.DEBUG,
@@ -110,33 +117,35 @@ def run_guest(process_config: DaemonParameters) -> int:
 
     Used by QEMU guest bootstrap when config is already loaded from the pipe.
     """
+    from ..learning import set_learning_mode, set_learning_path
+    from ..main_logger import config_log
+
+    _qemu_guest_diag(process_config, "run_guest: start")
     log_format = " " + process_config.log_format
     config_log(process_config.log_level, log_format, process_config.use_rich_handler)
     all_rules = process_config.all_rules
     set_learning_path(all_rules.learning_path)
     # set_pin_dns already called in main() before run_guest(); do not call again (assert in guard_socket)
-    # Restrict process env to only profile-allowed vars (VM may have USER, HOME, etc.)
-    allowed_env_keys = set(all_rules.envs.keys())
-    for key in list(os.environ.keys()):
-        if key not in allowed_env_keys:
-            del os.environ[key]
-    for k, v in dict(all_rules.envs).items():
-        os.environ[k] = str(v) if v is not None else ""
-    # In QEMU guest, root_path from host is wrong; use cwd so bind=./tmp works
-    all_rules = all_rules._replace(root_path=Path.cwd())
-    import pysandboxes
-    from pysandboxes.py_sandbox import activate_sandboxes
-
-    pysandboxes.os_sandbox = all_rules.os_sandbox
-    activate_sandboxes(all_rules, os.environ)
+    # Env + root_path for QEMU guest were applied in main() before activate_sandboxes.
     guest_run_dir = getattr(process_config, "guest_run_dir", None)
 
     def _write_exitcode(code: int) -> None:
-        if guest_run_dir:
-            try:
-                Path(guest_run_dir).joinpath("exitcode").write_text(str(code))
-            except OSError:
-                pass
+        if not guest_run_dir:
+            logger.warning(
+                "QEMU guest: guest_run_dir missing; cannot write exitcode %s", code
+            )
+            return
+        try:
+            path = Path(guest_run_dir).joinpath("exitcode")
+            with path.open("w", encoding="utf-8") as f:
+                f.write(str(code))
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+        except OSError as e:
+            logger.warning("QEMU guest: failed to write exitcode: %s", e)
 
     try:
         python_main_args = getattr(process_config, "python_main_args", ()) or ()
@@ -145,10 +154,13 @@ def run_guest(process_config: DaemonParameters) -> int:
             # In guest VM, use subprocess so start_daemon() launches a local Python server
             # instead of trying to start another QEMU.
             os.environ["OS_SANDBOX"] = "subprocess"
+            _qemu_guest_diag(process_config, "run_guest: before python_in_sb")
             from pysandboxes.python_sb import (
                 PYTHON_OUTPUT_END,
                 PYTHON_OUTPUT_START,
             )
+
+            from .python_in_sb import python_in_sb
 
             print(PYTHON_OUTPUT_START, flush=True, file=sys.stderr)
             try:
@@ -177,11 +189,17 @@ async def run_server(process_config: DaemonParameters) -> int:
     Returns:
         Exit code (0 for success).
     """
+    import importlib
+
+    from ..learning import set_learning_mode
+    from ..tools import set_is_in_sandbox
+
+    _qemu_guest_diag(process_config, "run_server: start")
     from pysandboxes.main_logger import pysandboxes_logger
 
     # Call init function
     # Note: the init_function is called AFTER the activation of the python sandbox
-    init_fn: SyncOrAsyncFunc | None = None
+    init_fn: Any = None
     if process_config.init_fn:
         module_name, function_name = str(process_config.init_fn).split(":", 1)
         set_is_in_sandbox(True)
@@ -214,7 +232,9 @@ async def run_server(process_config: DaemonParameters) -> int:
     else:
         pysandboxes_logger.info(f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
-    from pysandboxes._os_sandbox import _set_current_daemon
+    from pysandboxes._os_sandbox import _set_current_daemon, providers_factory
+
+    from ..remote.sse_server_daemon import SSEServerDaemon
 
     server_daemon: SSEServerDaemon = providers_factory["_sse_server"](
         process_config.token,
@@ -262,7 +282,6 @@ def main() -> int:
 
     # Parse the arguments provided by the user
     sandboxes_parsed, sandboxes_args = parser.parse_known_args()
-
     # -------------
     # Read all configuration from named-pipe (or config file for QEMU) until EOF
     assert sandboxes_parsed._named_pipe, "Set parameter --_named-pipe <path>"
@@ -273,6 +292,18 @@ def main() -> int:
     process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
+
+    if getattr(process_config, "guest_run_dir", None) and os.environ.get(
+        "PYSANDBOXES_GUEST_DIAG", ""
+    ).lower() in ("1", "true", "yes"):
+        import faulthandler
+
+        faulthandler.enable(file=sys.stderr, all_threads=True)
+    _qemu_guest_diag(
+        process_config,
+        "main: config loaded, python_main_args="
+        + repr(getattr(process_config, "python_main_args", ())),
+    )
 
     netfilter_rules = getattr(process_config, "netfilter_rules", ()) or ()
     # Wait for slirp4netns readiness when in isolated network namespace (e.g. bwrap --unshare-net)
@@ -322,6 +353,11 @@ def main() -> int:
     if netfilter_rules or getattr(process_config, "wait_network", False):
         _wait_network_ready()
 
+    _qemu_guest_diag(process_config, "main: after netfilter / wait_network")
+
+    from ..learning import set_learning_path
+    from ..main_logger import config_log
+
     # Add ident inside the sandbox
     log_format = " " + process_config.log_format
     # Adjuste the root log level and format
@@ -332,6 +368,8 @@ def main() -> int:
 
     # Initialize learn
     set_learning_path(all_rules.learning_path)
+    from ..guard_socket import set_pin_dns
+
     set_pin_dns(all_rules.pin_dns)
     # When pin_dns is set but use_py_sandbox is False, patch resolution so guest uses pinned IPs
     if all_rules.pin_dns:
@@ -344,28 +382,58 @@ def main() -> int:
     # In this case, use the standard loop in place of the private sandbox loop
 
     # Activate python sandbox
+    _qemu_guest_diag(
+        process_config, "main: before import pysandboxes / activate_sandboxes"
+    )
     import pysandboxes
     from pysandboxes.py_sandbox import activate_sandboxes
 
     pysandboxes.os_sandbox = all_rules.os_sandbox
-    activate_sandboxes(all_rules, os.environ)
-
-    # QEMU/python_sb: config was written by host with python_main_args → run user module in guest
     python_main_args = getattr(process_config, "python_main_args", ()) or ()
     if python_main_args:
+        # QEMU guest: cwd-based root_path for rules; env restricted to profile.
+        # Must run before activate_sandboxes once (second activate would call
+        # tempfile.mkdtemp() under /tmp while guards are already active → RuleFileNotFoundError).
+        allowed_env_keys = set(all_rules.envs.keys())
+        for key in list(os.environ.keys()):
+            if key not in allowed_env_keys:
+                del os.environ[key]
+        for k, v in dict(all_rules.envs).items():
+            os.environ[k] = str(v) if v is not None else ""
+        all_rules = all_rules._replace(root_path=Path.cwd())
+        process_config = process_config._replace(all_rules=all_rules)
+    # Guest runs user code inside the VM: do not load qemu/subprocess daemons here
+    # (they pull aiohttp/native stack and can segfault in the minimal guest).
+    activate_sandboxes(
+        all_rules,
+        os.environ,
+        rules_provider="none" if python_main_args else None,
+    )
+    _qemu_guest_diag(process_config, "main: after activate_sandboxes")
+
+    # QEMU/python_sb: config was written by host with python_main_args → run user module in guest
+    if python_main_args:
+        _qemu_guest_diag(process_config, "main: entering run_guest")
         return run_guest(process_config)
 
     # Use python-sb command? (subprocess/firejail path: args from CLI)
     if sandboxes_parsed._python_sb:
+        from ..learning import set_learning_mode
+
         set_learning_mode(all_rules.learn)
+        from .python_in_sb import python_in_sb
+
         return python_in_sb(all_rules, sandboxes_args)
 
     # Else _start the server
+    _qemu_guest_diag(process_config, "main: entering asyncio.run(run_server)")
     return asyncio.run(run_server(process_config))
 
 
 if __name__ == "__main__":
     # Kill this process when the parent is killed
+    from .tools import set_pdeathsig
+
     set_pdeathsig()
     rc = 0
     try:
@@ -377,6 +445,8 @@ if __name__ == "__main__":
             rc = 0
     except KeyboardInterrupt:
         logger.debug("Except KeyboardInterrupt")
+        from ..learning import generate_config_from_learning
+
         generate_config_from_learning()
         rc = 0
     except RuntimeError as e:

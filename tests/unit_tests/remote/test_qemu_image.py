@@ -22,6 +22,7 @@ from pysandboxes.remote.qemu_image import (
     get_ubuntu_image_url_for_python_version,
     get_vm_images_dir,
     is_kvm_available,
+    normalize_qemu_m_memory_arg,
 )
 
 
@@ -209,3 +210,32 @@ class TestIsKvmAvailable:
 
     def test_returns_bool(self) -> None:
         assert isinstance(is_kvm_available(), bool)
+
+
+class TestNormalizeQemuMMemoryArg:
+    """Tests for normalize_qemu_m_memory_arg (``qemu -m`` size strings)."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("2048", "2048"),
+            ("  512M ", "512M"),
+            ("2G", "2G"),
+            ("2g", "2g"),
+            ("10G", "10G"),
+            ("512K", "512K"),
+            ("1T", "1T"),
+        ],
+    )
+    def test_accepts_qemu_style_sizes(self, raw: str, expected: str) -> None:
+        assert normalize_qemu_m_memory_arg(raw) == expected
+
+    @pytest.mark.parametrize(
+        "raw",
+        ["", "2GB", "2GiB", "foo", "2 G", "-1", "1.5G"],
+    )
+    def test_invalid_falls_back_to_default(self, raw: str) -> None:
+        assert normalize_qemu_m_memory_arg(raw, default="2048") == "2048"
+
+    def test_custom_default(self) -> None:
+        assert normalize_qemu_m_memory_arg("nope", default="1024") == "1024"
