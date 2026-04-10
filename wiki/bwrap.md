@@ -32,9 +32,49 @@ The host runs `bwrap` with options from a template (e.g. `--clearenv`, `--share-
 
 For more details, see the [bubblewrap documentation](https://github.com/containers/bubblewrap).
 
-## Using with Docker / Podman
+## Using with Docker
 
-The bwrap provider can run inside Docker or Podman. Because it uses `--share-net`, the sandbox uses the container’s network; if the container uses bridge networking, ensure the host can reach the SSE port (e.g. publish the port or use `network_mode: host` where appropriate).
+The bwrap provider can run inside Docker. The project uses **one image per OS provider**: the image for bwrap is `python-sb-bwrap` (tagged e.g. `:latest` or `:3.12`). Build it from the project root with:
+
+```bash
+make build-image-bwrap
+```
+
+Then run with the code mounted and the provider image. Because it uses `--share-net`, the sandbox uses the container’s network; ensure the host can reach the SSE port (e.g. publish the port or use `network_mode: host` where appropriate).
+
+```bash
+docker \
+  run -it --rm \
+    --privileged \
+    -v "$(pwd)":/app \
+    -w /app \
+    python-sb-bwrap:latest \
+    sh -c 'pip install -e . && OS_SANDBOX=bwrap python-sb -m tests.integration_tests.tst_usage'
+```
+
+## Using with Podman
+
+Use the same provider image as for Docker:
+
+```bash
+make build-image-bwrap
+```
+
+```bash
+podman \
+  run -it --rm \
+    --privileged \
+    -v "$(pwd)":/app \
+    -w /app \
+    python-sb-bwrap:latest \
+    sh -c 'pip install -e . && OS_SANDBOX=bwrap python-sb -m tests.integration_tests.tst_usage'
+```
+
+## Using with Kubernetes
+
+Use the **provider image** `python-sb-bwrap:latest` (built with `make build-image-bwrap`). For minikube, build images in the cluster's Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-bwrap` for this provider only).
+
+Example Pod: same structure as for unshare (see [unshare.md](unshare.md#using-with-kubernetes)), with `image: python-sb-bwrap:latest` and the same volume mount for `/app`. bwrap uses the container network; adjust `securityContext` (e.g. `privileged: true` or capabilities `SYS_ADMIN`) as required by your cluster.
 
 ## Configuration parameters
 

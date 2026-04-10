@@ -100,7 +100,13 @@ When launched, code runs as local `root` inside the sandbox. This user has no el
 
 ## Using with Docker
 
-Unshare is compatible with Docker, though it requires elevated privileges.
+Unshare is compatible with Docker, though it requires elevated privileges. The project uses **one image per OS provider**: the image for unshare is `python-sb-unshare` (tagged e.g. `:latest` or `:3.12`). Build it from the project root with:
+
+```bash
+make build-image-unshare
+```
+
+Then run with the code mounted and the provider image:
 
 ```bash
 docker \
@@ -109,18 +115,17 @@ docker \
     --network bridge \
     -v "$(pwd)":/app \
     -w /app \
-    python:3.11 \
-    sh -c 'apt update && \
-      apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns &&
-      pip install -e . && \
-      OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
+    python-sb-unshare:latest \
+    sh -c 'pip install -e . && OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
-
-The `scripts/test-kubernetes.sh` script provides a usage example.
 
 ## Using with Podman
 
-Unshare is compatible with Podman, though it requires elevated privileges.
+Unshare is compatible with Podman, though it requires elevated privileges. Use the same provider image as for Docker:
+
+```bash
+make build-image-unshare
+```
 
 ```bash
 podman \
@@ -129,14 +134,13 @@ podman \
     --network bridge \
     -v "$(pwd)":/app \
     -w /app \
-    python:3.11 \
-    sh -c 'apt update && \
-      apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns &&
-      pip install -e . && \
-      OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
+    python-sb-unshare:latest \
+    sh -c 'pip install -e . && OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
 
 ## Using with Kubernetes
+
+Use the **provider image** `python-sb-unshare:latest` (built with `make build-image-unshare`). For minikube, build images in the cluster’s Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-unshare` for this provider only).
 
 Example YAML configuration:
 
@@ -148,27 +152,23 @@ metadata:
 spec:
   containers:
     - name: pysandboxes-test
-      image: python:latest
+      image: python-sb-unshare:latest
+      imagePullPolicy: Never   # Image built locally (e.g. in minikube)
       workingDir: /app
       securityContext:
+        privileged: true      # Or add SYS_ADMIN + NET_ADMIN + seccompProfile: Unconfined
         capabilities:
           add:
             - SYS_ADMIN    # Allows unshare (namespace creation)
             - NET_ADMIN    # Allows network configuration (ip link, etc.)
         seccompProfile:
-          type: Unconfined # Disables the filter blocking unshare
-      command: [ "/bin/sh", "-c" ] # Keeps the pod alive
-      args:
-        - |
-          apt update && \
-          apt install -y libvirt-dev pkg-config iptables iproute2 slirp4netns && \
-          pip install -e . && \
-          OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage
+          type: Unconfined   # Disables the filter blocking unshare
+      command: [ "/bin/sh", "-c", "sleep infinity" ]
       volumeMounts:
         - name: code-local
-          mountPath: /app          # Path inside the Pod
+          mountPath: /app
         - name: dev-net-tun
-          mountPath: /dev/net/tun  # Required by slirp4netns
+          mountPath: /dev/net/tun   # Required by slirp4netns
   volumes:
     - name: code-local
       hostPath:
@@ -180,23 +180,13 @@ spec:
         type: CharDevice
 ```
 
-Note the restrictions lifted to enable unshare inside a pod:
-
-```yaml
-      securityContext:
-        capabilities:
-          add:
-            - SYS_ADMIN    # Allows unshare (namespace creation)
-            - NET_ADMIN    # Allows network configuration (ip link, etc.)
-        seccompProfile:
-          type: Unconfined # Disables the filter blocking unshare
-```
-
-The `scripts/test-kubernetes.sh` script demonstrates this usage.
+Run the tests from the host (pod stays alive; tests run via `kubectl exec`). Example with minikube:
 
 ```bash
-minikube mount .:/mnt/pysandboxes &
-kubectl apply -f kube-pysandboxes.yaml
+minikube mount "$(pwd):/mnt/pysandboxes" &
+eval $(minikube docker-env) && make build-images
+kubectl apply -f tests/containers_tests/kube-pysandboxes.yaml
+# Then run the container test suite: make container-tests (or pytest tests/containers_tests/)
 kubectl delete pod pysandboxes-test
 ```
 
