@@ -7,13 +7,13 @@
 - **Default image name:** `pysandboxes-python-<major>.<minor>-<arch>.qcow2` (e.g. `pysandboxes-python-3.12-x86_64.qcow2`).
 - Images in this directory can be shared with other tools; if a file already exists at the resolved path, the provider uses it without re-downloading.
 
-**Auto-download:** If the image is missing, the provider (and `python -m pysandboxes.fetch_qemu_image`) downloads it by default from a **standard QEMU/VM repository**: **Debian Cloud Images** (Bookworm generic qcow2 from cloud.debian.org). The image is saved under the default path above. Override with:
+**Auto-download:** If the image is missing, the provider (and `python -m pysandboxes.remote.qemu_fetch_image`) downloads it by default from a **standard QEMU/VM repository**: **Debian Cloud Images** (Bookworm generic qcow2 from cloud.debian.org). The image is saved under the default path above. Override with:
 - `PYSANDBOXES_QEMU_IMAGE_URL` — full URL of the image (replaces default source).
 - `PYSANDBOXES_QEMU_IMAGE_BASE_URL` — base URL; the default image filename is appended.
 
 Supported architectures for the default source: amd64 (x86_64), arm64 (aarch64), ppc64el.
 
-To see the resolved path or trigger a download: `python -m pysandboxes.fetch_qemu_image`.
+To see the resolved path or trigger a download: `python -m pysandboxes.remote.qemu_fetch_image`.
 
 ## Guest image contract
 

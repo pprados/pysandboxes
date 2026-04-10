@@ -4,7 +4,11 @@
 
 ## Solution in brief
 
-The host runs `unshare` with flags from a template (user, mount, net, etc.), then executes `unshare_setup` which starts slirp4netns for the network, applies bind mounts and overlay for ignore rules, configures iptables from socket rules, and launches `main_sandbox` with config from a named pipe. The host talks to the sandbox via SSE on a forwarded port. Root is not required to configure firewall rules inside the namespace.
+The **host daemon** builds an `UnshareSetupConfig` (DNS, mounts, netfilter rules, named pipe path, ignore paths) and launches **`unshare`** with flags from the template plus `unshare.*` parameters. The command line is:
+
+`unshare <flags> -- python -m pysandboxes.remote.unshare_setup <config_path> -- python -m pysandboxes.remote.main_sandbox ...`
+
+There is **no intermediate `unshare_launcher` process**; the daemon owns **slirp4netns** lifecycle: after the `unshare` process starts, a **background thread** on the host runs slirp4netns (see `slirp4netns_common.py`) using a PID file, signals readiness on a pipe read inside **`unshare_setup`**, then optional **port forwarding** via the slirp API. **`unshare_setup`** brings up the namespace (tap, routes), applies bind mounts and overlay for ignore rules, writes **/etc/hosts** entries for relevant OUT ALLOW hostnames, configures **iptables** from socket rules, and **execs** into `main_sandbox` with config delivered through a **named FIFO** (same mechanism as other subprocess daemons: `DaemonParameters` written by the host for the child to read). The host talks to the sandbox via SSE on `http://localhost:PORT` (forwarded through slirp). Root is not required on the host to configure firewall rules **inside** the namespace.
 
 ## Advantages
 
@@ -13,7 +17,7 @@ The host runs `unshare` with flags from a template (user, mount, net, etc.), the
 | **Isolation** | Full namespace stack (user, mount, network, etc.) with user-mode networking (slirp4netns) and iptables. |
 | **No root** | Unprivileged user namespaces; no root required for firewall rules inside the sandbox. |
 | **Containers** | Works in Docker, Podman, and Kubernetes with appropriate capabilities (SYS_ADMIN, NET_ADMIN) and securityContext. |
-| **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe) as bwrap/firejail. |
+| **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) as bwrap/firejail; slirp watcher and host port forwards are shared with the bwrap “network filtering” path. |
 
 ## Disadvantages
 
@@ -25,29 +29,35 @@ The host runs `unshare` with flags from a template (user, mount, net, etc.), the
 
 ## How it works
 
-1. **Host**: The daemon builds an `UnshareSetupConfig` (DNS, mounts, netfilter rules, named pipe path, ignore paths) and the unshare flags from the template plus `unshare.*` params. It starts `unshare [flags] -- unshare_setup` (or equivalent) which receives the config.
-2. **unshare_setup**: Starts slirp4netns for the network namespace, applies bind mounts (read-only and read-write from file rules), overlay for ignore paths, writes hosts entries for ALLOW rules, configures iptables from socket rules, then execs `main_sandbox --_named-pipe <path>`.
-3. **main_sandbox**: Loads the config from the pipe, applies Python guards, starts the SSE server on the expected port and waits for requests.
-4. **Communication**: The host connects to the sandbox via SSE (port forwarding through slirp4netns or published port in containers).
+1. **Host daemon**: Builds `UnshareSetupConfig` (DNS list—slirp’s resolver **10.0.2.3** is primary so resolution works through **tap0**; upstream host DNS may be merged when not in a simple container), **hosts** lines for OUT ALLOW hostnames, **mounts** (system paths, Python, file rules), **netfilter** from socket rules, **ignore_paths** for overlay, and the **named pipe** path for the sandbox runtime config.
+2. **Config hand-off**: The JSON config is written to a path under the daemon’s temp directory (FIFO in normal mode, or a plain file when debug launch is enabled) so the child can read it even when the project tree is not visible after namespace setup (e.g. some Docker layouts).
+3. **Launch**: `unshare [template flags + unshare.*] -- python -m pysandboxes.remote.unshare_setup <config> -- <main_sandbox argv>`. Environment includes **`PYTHONPATH`** pointing at the project root so the child can import `pysandboxes` after mount namespaces change, plus **`SLIRP_READY_FD`** / **`PID_FILE`** for coordination with slirp4netns.
+4. **slirp4netns (host)**: The daemon writes the **unshare** PID to a pidfile and starts the **slirp watcher thread**; slirp attaches to that PID’s network namespace, creates **tap0**, and signals readiness on the pipe. **`unshare_setup`** blocks until readiness, then ensures the interface and default route (slirp uses **10.0.2.2** as gateway, guest address **10.0.2.100** in the shared helper constants).
+5. **unshare_setup**: Applies mounts (including chroot-style layout as configured), **iptables**, **hosts**, then the daemon writes **`DaemonParameters`** to the FIFO for **`main_sandbox`**.
+6. **Port forwarding**: From socket rules, **inbound ALLOW** TCP/UDP ports (plus the SSE port) are registered with slirp’s **`add_hostfwd`** API so host **127.0.0.1** reaches the guest on the same port (same mechanism as bwrap’s filtering mode).
+7. **main_sandbox**: Loads the config from the pipe, applies Python guards, starts the SSE server and serves RPC.
 
 ```mermaid
 flowchart LR
     subgraph Host ["Host"]
         A[python_sb / Daemon]
         B[unshare]
+        S[slirp4netns thread]
     end
 
     subgraph Namespace ["Namespace (guest)"]
-        C[unshare_setup\nslirp4netns, mounts, iptables]
+        C[unshare_setup\nmounts, iptables, wait slirp]
         D[main_sandbox]
         E[SSE server]
     end
 
     A -->|"Launch unshare"| B
-    B -->|"Setup network + mounts"| C
+    A -->|"PID + watcher"| S
+    S -->|"tap0 / readiness pipe"| C
+    B -->|"Child"| C
     C -->|"Exec"| D
     D --> E
-    A <-->|"SSE (port forward)"| E
+    A <-->|"SSE localhost + hostfwd"| E
 
     style Host fill:#e8eef4,stroke:#2f2617
     style Namespace fill:#ebe0d0,stroke:#2f2617
@@ -111,12 +121,12 @@ Then run with the code mounted and the provider image:
 ```bash
 docker \
   run -it --rm \
-    --privileged \
-    --network bridge \
-    -v "$(pwd)":/app \
-    -w /app \
-    python-sb-unshare:latest \
-    sh -c 'pip install -e . && OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
+  --privileged \
+  --network bridge \
+  -v "$(pwd)":/app \
+  -w /app \
+  python-sb-unshare:latest \
+  sh -c 'pip install -e . && OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
 
 ## Using with Podman
@@ -130,12 +140,12 @@ make build-image-unshare
 ```bash
 podman \
   run -it --rm \
-    --privileged \
-    --network bridge \
-    -v "$(pwd)":/app \
-    -w /app \
-    python-sb-unshare:latest \
-    sh -c 'pip install -e . && OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
+  --privileged \
+  --network bridge \
+  -v "$(pwd)":/app \
+  -w /app \
+  python-sb-unshare:latest \
+  sh -c 'pip install -e . && OS_SANDBOX=unshare python-sb -m tests.integration_tests.tst_usage'
 ```
 
 ## Using with Kubernetes
@@ -192,4 +202,4 @@ kubectl delete pod pysandboxes-test
 
 ## Configuration parameters
 
-You can add unshare-specific options in `.py-sandboxes`. Any line of the form `unshare.<option>=<value>` is passed through to the unshare setup (e.g. as unshare flags or config). See the daemon and template for supported options.
+You can add unshare-specific options in `.py-sandboxes`. Any line of the form `unshare.<option>=<value>` is appended to the **`unshare`** invocation after the template flags: non-empty values become `--<option>=<value>`, empty values become `--<option>`. See `pysandboxes/templates/unshare.template` and `unshare_sse_daemon.py` for the default flag set and how they combine with overrides.

@@ -5,7 +5,8 @@ FROM python-sb:${PYTHON_VERSION}
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    bubblewrap && \
+    bubblewrap \
+    slirp4netns && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 

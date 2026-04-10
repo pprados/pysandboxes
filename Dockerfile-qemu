@@ -9,8 +9,8 @@ ARG QEMU_PKG=qemu-system-x86
 RUN set -eux \
     && apt-get update \
     && apt-get install -y --no-install-recommends "$QEMU_PKG" qemu-utils genisoimage \
-    && mkdir -p "$${PYSANDBOXES_VM_IMAGES_DIR}" \
-    && python -m pysandboxes.fetch_qemu_image \
+    && mkdir -p "${PYSANDBOXES_VM_IMAGES_DIR}" \
+    && python -m pysandboxes.remote.qemu_fetch_image \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
