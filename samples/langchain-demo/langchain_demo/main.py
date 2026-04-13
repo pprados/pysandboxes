@@ -36,9 +36,25 @@ def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
 
 
+def _normalize_chat_model_spec(spec: str) -> str:
+    """Normalize to ``provider:model`` for LangChain ``init_chat_model``.
+
+    - Already contains ``:``: returned unchanged (model id may include ``/`` after it).
+    - Slash-only form ``provider/model``: first ``/`` becomes ``:`` (not treated as URL).
+    """
+    if ":" in spec:
+        return spec
+    if "/" not in spec:
+        return spec
+    left, right = spec.split("/", 1)
+    if left and right and not left.lower().startswith("http"):
+        return f"{left}:{right}"
+    return spec
+
+
 def build_chat_model() -> BaseChatModel:
-    """Instantiate a chat model from ``CHAT_MODEL`` (``provider:model_id``)."""
-    spec = os.environ.get("CHAT_MODEL", "openai:gpt-4o-mini")
+    """Instantiate a chat model from ``CHAT_MODEL`` (``provider:model`` or ``provider/model``)."""
+    spec = _normalize_chat_model_spec(os.environ.get("CHAT_MODEL", "openai:gpt-4o-mini"))
     return init_chat_model(spec)
 
 

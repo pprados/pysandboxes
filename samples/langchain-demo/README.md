@@ -24,11 +24,9 @@ make init
 
 ## Model selection (`CHAT_MODEL`)
 
-The chat model is created with LangChain’s **`init_chat_model`** using a single specifier string:
+The chat model is created with LangChain’s **`init_chat_model`** using a single specifier string. You can write **`provider:model_id`** or **`provider/model_id`** (first `/` splits provider from model).
 
-`provider:model_id`
-
-Examples:
+Examples (colon form; slash is equivalent, e.g. `openai/gpt-4o-mini`):
 
 | `CHAT_MODEL` value | Typical API key env |
 |--------------------|---------------------|
@@ -63,8 +61,12 @@ No network or real API keys required in CI.
 
 From `samples/langchain-demo`, use **`make tests`** or **`uv run pytest`** so dependencies resolve from this project’s environment. Running plain **`pytest`** with whatever Python is first on your `PATH` often fails with `ModuleNotFoundError: No module named 'langchain_core'`.
 
+Minimal validation (same as the create-sample skill): from the repo root, **`./samples/test.sh langchain-demo`** runs `make init` and **`make validate`** (lint + tests) in that directory.
+
 ```bash
-make tests
+make init
+make validate
+# or: make tests
 # or: uv run pytest -v tests
 ```
 
