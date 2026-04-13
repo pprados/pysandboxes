@@ -6,7 +6,10 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-from pysandboxes.remote.qemu_sse_daemon import _execution_dirs_mounts
+from pysandboxes.remote.qemu_sse_daemon import (
+    _execution_dirs_mounts,
+    _virtfs_stage_copytree_ignore,
+)
 
 
 def test_execution_dirs_mounts_include_peer_usr_local_lib(tmp_path: Path) -> None:
@@ -37,3 +40,18 @@ def test_execution_dirs_mounts_include_peer_usr_local_lib(tmp_path: Path) -> Non
     assert (
         str(resolved_lib) in host_paths
     ), "peer /usr/local/lib with libpython must be mounted"
+
+
+def test_virtfs_stage_copytree_ignore_skips_venv_and_samples() -> None:
+    names = [
+        "pysandboxes",
+        ".venv",
+        ".claude",
+        "samples",
+        "foo.egg-info",
+        "README.md",
+    ]
+    skipped = set(_virtfs_stage_copytree_ignore("/fake", names))
+    assert skipped == {".venv", ".claude", "samples", "foo.egg-info"}
+    assert "pysandboxes" not in skipped
+    assert "README.md" not in skipped

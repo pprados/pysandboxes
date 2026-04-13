@@ -300,6 +300,12 @@ build-images: Dockerfile .make-dist \
 	.make-build-image-bwrap \
 	.make-build-image-qemu
 
+## Build all provider images into the current Docker daemon (use after: eval $(minikube docker-env))
+build-image-docker: build-images
+
+## Same as build-images (podman then docker in each recipe); named for symmetry with build-image-docker
+build-image-podman: build-images
+
 ## Prune build caches and force full rebuild of all variants
 build-image-clean:
 	@echo "Pruning build caches and forcing rebuild..."

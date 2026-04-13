@@ -421,6 +421,10 @@ def main() -> int:
             os.environ[k] = str(v) if v is not None else ""
         all_rules = all_rules._replace(root_path=Path.cwd())
         process_config = process_config._replace(all_rules=all_rules)
+        # Profile allowlist drops bootstrap exports; Rich still needs FORCE_COLOR on serial.
+        if getattr(process_config, "guest_run_dir", None):
+            os.environ.setdefault("TERM", "xterm-256color")
+            os.environ.setdefault("FORCE_COLOR", "1")
     # Guest runs user code inside the VM: do not load qemu/subprocess daemons here
     # (they pull aiohttp/native stack and can segfault in the minimal guest).
     activate_sandboxes(
