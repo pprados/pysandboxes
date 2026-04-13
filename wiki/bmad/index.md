@@ -48,7 +48,7 @@ Single-part Python project: sandbox runtime with Python guards and OS-level daem
 - [README.md](../README.md) – Usage, security model, roadmap
 - [AGENTS.md](../AGENTS.md) – Agent rules, Make, standards
 - [wiki/](../wiki/) – beta_test, implementation, roadmap, faq, samples, etc.
-- Samples: [samples/mcp-client/README.md](../samples/mcp-client/README.md), [samples/mcp-server/README.md](../samples/mcp-server/README.md)
+- Samples: [samples/mcp-client-demo/README.md](../samples/mcp-client-demo/README.md), [samples/mcp-server-demo/README.md](../samples/mcp-server-demo/README.md)
 
 ## Getting started
 

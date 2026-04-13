@@ -62,7 +62,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] A2A protocol
   - [/] langchain / langgraph
   - [/] [Crewai](https://www.crewai.com/)
-  - [ ] [Google ADK](https://google.github.io/adk-docs/)
+  - [/] [Google ADK](https://google.github.io/adk-docs/)
   - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
   - [ ] [Pydantic.ai](https://ai.pydantic.dev/)
   - [ ] [Strandsagents](https://strandsagents.com)

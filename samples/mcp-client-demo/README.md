@@ -1,6 +1,6 @@
 # MCP Simple Chatbot
 
-This example demonstrates how to integrate the Model Context Protocol (MCP) into a simple CLI chatbot. It is configured to use the tools from [`../mcp-server`](../mcp-server/README.md) via **Py-sandboxes**.
+This example demonstrates how to integrate the Model Context Protocol (MCP) into a simple CLI chatbot. It is configured to use the tools from [`../mcp-server-demo`](../mcp-server-demo/README.md) via **Py-sandboxes**.
 
 ## Installation
 
@@ -12,7 +12,7 @@ You must:
 ### Install the dependencies:
 Use uv
 ```bash
-cd path/to/mcp-client
+cd path/to/mcp-client-demo
 uv sync
 ```
 ### Set up environment variables:
@@ -188,7 +188,7 @@ uv run -m pysandboxes.python_sb -m mcp_sample_chatbot.main ${CONFIG}
 
 ### Isolated MCP client use MCP Server with `http` protocol
 
-This version allows isolating the client with **PY-sandboxes** and invoking the MCP via the `http` protocol. The latter is isolated according to the launch parameters (see [here](../mcp-server/README.md))
+This version allows isolating the client with **PY-sandboxes** and invoking the MCP via the `http` protocol. The latter is isolated according to the launch parameters (see [here](../mcp-server-demo/README.md))
 
 ```mermaid
 flowchart TD

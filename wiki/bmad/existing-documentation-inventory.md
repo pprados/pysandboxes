@@ -19,8 +19,8 @@
 | wiki/samples.md | wiki | main |
 | wiki/unshare.md | wiki | main |
 | wiki/weaknesses.md | wiki | main |
-| samples/mcp-client/README.md | readme (sample) | sample |
-| samples/mcp-server/README.md | readme (sample) | sample |
+| samples/mcp-client-demo/README.md | readme (sample) | sample |
+| samples/mcp-server-demo/README.md | readme (sample) | sample |
 | python-sb/README.md | readme | main |
 | .github/instructions/*.md | instructions | main |
 | .github/prompts/*.md | prompts | main |

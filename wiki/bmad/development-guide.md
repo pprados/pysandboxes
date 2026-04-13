@@ -37,4 +37,4 @@
 
 ## Samples
 
-Each sample has its own directory and uv environment. To develop or test a sample, `cd` into it (e.g. `samples/mcp-client`) and use its `make` or activate its `.venv` (see README and AGENTS.md).
+Each sample has its own directory and uv environment. To develop or test a sample, `cd` into it (e.g. `samples/mcp-client-demo`) and use its `make` or activate its `.venv` (see README and AGENTS.md).
