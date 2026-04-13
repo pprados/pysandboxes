@@ -157,7 +157,7 @@ podman \
 
 If **`python-sb`** runs **inside** a container (e.g. `python-sb-qemu`) and the **QEMU** guest maps the **same** interpreter and `site-packages` via **virtio-9p**, paths that live on the **container overlay** can cause **SIGSEGV** in the guest when **ELF** / **`.so`** files are **mmap**-ed (exit code **139**).
 
-**Mitigation (default):** when the process detects a container (`/.dockerenv`, `/.containerenv`, or `container` in the environment), **pysandboxes** copies the **Python execution directories** (`pysb_exec_*` mounts only) into the run directory under **`/tmp`** (typically **tmpfs**, not overlay) before starting QEMU, then points **`-virtfs`** at those copies. **Guest paths** (`/usr/local/bin`, etc.) are unchanged. Staging can also copy **`/etc`** and the **dynamic linker closure** when needed so nested runs stay consistent.
+**Mitigation (default):** when the process detects a container (`/.dockerenv`, `/.containerenv`, or `container` in the environment), **pysandboxes** copies the **Python execution directories** (`pysb_exec_*` mounts only) into the run directory under **`/tmp`** (typically **tmpfs**, not overlay) before starting QEMU, then points **`-virtfs`** at those copies. **Guest paths** (`/usr/local/bin`, etc.) are unchanged. Staging can also copy **`/etc`** and the **dynamic linker closure** when needed so nested runs stay consistent. The exec-tree **copytree** skips bulky or fragile names (e.g. **`.venv`**, **`.git`**, **`samples`**, **`.cursor`**, **`.claude`**, other tool dirs) so **minikube mount** / overlay paths do not exhaust memory or hit **OSError** 526 on individual files; the guest still gets **`pysandboxes/`**, **`tests/`**, and other sources needed for typical runs.
 
 Profile knobs **`qemu.virtfs`** and **`qemu.virtfs_security_model`** are documented in [Configuration parameters](#configuration-parameters) above.
 
@@ -175,7 +175,11 @@ For diagnosis, set **`qemu.show_boot_console=true`** and inspect bootstrap lines
 
 Use the **provider image** `python-sb-qemu:latest` (built with `make build-image-qemu`). For minikube, build images in the cluster's Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-qemu` for this provider only).
 
-Running QEMU inside a Kubernetes pod typically requires access to KVM (`/dev/kvm`) and sufficient resources; not all clusters support nested virtualization. Example Pod: same structure as for unshare (see [unshare.md](unshare.md#using-with-kubernetes)), with `image: python-sb-qemu:latest`, and add a `device` mount for `/dev/kvm` if the node provides it. The container test suite skips the QEMU provider on Kubernetes by default (no QEMU/KVM in the test pod).
+**KVM vs TCG:** with the default **`qemu.use_kvm=true`**, the daemon adds **`-enable-kvm`** only when **`/dev/kvm`** exists and is readable; otherwise it omits that flag and QEMU runs in **TCG**. Use **`qemu.use_kvm=false`** only when you must never attempt KVM (e.g. policy), even if the device appears.
+
+**KVM in the pod (optional):** same pod shape as for unshare (see [unshare.md](unshare.md#using-with-kubernetes)) with **`image: python-sb-qemu:latest`**; add a device mount for **`/dev/kvm`** if the node provides nested virtualization and policy allows it.
+
+**`test_container_kubernetes`:** parametrized with **unshare** and **qemu** (same integration profile). Without **`/dev/kvm`**, QEMU uses TCG automatically. Exec timeout for the **qemu** case defaults to **`K8S_QEMU_EXEC_TIMEOUT=900`** (seconds); **unshare** uses **`TIMEOUT`** (default 120s). **`kubectl exec`** streams to the terminal (no captured pipes — avoids buffer deadlock and long silences during TCG). Use **`pytest -s`** for live output if pytest captures stdout; **`CONTAINER_TEST_HEARTBEAT_SEC`** (default 60) emits DEBUG heartbeats while exec runs.
 
 ## Image and Python version
 

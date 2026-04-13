@@ -174,6 +174,55 @@ def _virtfs_stage_exec_needed(os_sandbox_params: Mapping[str, Any]) -> bool:
     return _running_in_container()
 
 
+_VIRTFS_STAGE_SKIP_DIR_NAMES = frozenset(
+    {
+        ".venv",
+        "venv",
+        "node_modules",
+        ".git",
+        ".cursor",
+        ".claude",
+        ".codex",
+        ".vscode",
+        ".vs",
+        ".github",
+        ".packmind",
+        "_bmad",
+        ".ia_backup",
+        ".idea",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        "htmlcov",
+        ".tox",
+        ".nox",
+        "dist",
+        "build",
+        # Nested sample venvs + odd files break overlay/minikube 9p (errno 526); not needed for package imports.
+        "samples",
+        "docs",
+        ".svn",
+        ".hg",
+    }
+)
+
+
+def _virtfs_stage_copytree_ignore(_src: str, names: list[str]) -> list[str]:
+    """Names to skip when staging exec trees into tmpfs (nested container / K8s).
+
+    A full ``copytree`` of a dev checkout (many ``.venv``, IDE dirs, ``samples``)
+    often hits **ENOMEM** or **OSError** 526 on virtio-9p / overlay mounts.
+    """
+    ignored: list[str] = []
+    for name in names:
+        if name in _VIRTFS_STAGE_SKIP_DIR_NAMES:
+            ignored.append(name)
+        elif name.endswith(".egg-info"):
+            ignored.append(name)
+    return ignored
+
+
 def _stage_exec_virtfs_mounts(
     temp: Path,
     mount_specs: list[tuple[str, Path, str]],
@@ -202,6 +251,7 @@ def _stage_exec_virtfs_mounts(
                     dest,
                     symlinks=True,
                     dirs_exist_ok=True,
+                    ignore=_virtfs_stage_copytree_ignore,
                 )
             elif host_path.is_file():
                 shutil.copy2(host_path, dest)

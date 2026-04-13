@@ -221,6 +221,14 @@ def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> i
     return 0
 
 
+def _inject_pytest_color_yes(pytest_argv: List[str]) -> None:
+    """Force pytest ANSI when stdout is not a TTY (same effect as PY_COLORS=1, no env var)."""
+    for arg in pytest_argv:
+        if arg.startswith("--color="):
+            return
+    pytest_argv.insert(0, "--color=yes")
+
+
 def convert_extra_rules(args: List[str]) -> Dict[str, Set[str]]:
     result: Dict[str, Set[str]] = {}
     for rule in args:
@@ -256,6 +264,8 @@ def python_in_sb(
                 mod_name = python_cmd[1]
                 python_cmd.pop(0)  # Remove -m
                 python_cmd.pop(0)  # Remove module name
+                if mod_name == "pytest":
+                    _inject_pytest_color_yes(python_cmd)
                 spec = importlib.util.find_spec(mod_name)
                 if spec and spec.origin is not None:
                     sys.argv = [spec.origin] + python_cmd

@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import shlex
+import signal
 import socket
 import subprocess
 import sys
@@ -58,9 +59,8 @@ def _image_for_os_provider(os_sandbox: str) -> str:
 
 PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.profile"
 
-
 all_container_worker: list[str] = [
-    "docker",  # FIXME
+    "docker",
     "podman",
 ]
 
@@ -81,6 +81,12 @@ def _all_os_sandbox_params() -> list:
 
 
 all_os_sandbox: list = _all_os_sandbox_params()
+
+def _k8s_exec_timeout_seconds(os_sandbox: str) -> int:
+    if os_sandbox.lower() == "qemu":
+        return int(os.environ.get("K8S_QEMU_EXEC_TIMEOUT", "900"))
+    return int(os.environ.get("TIMEOUT", "120"))
+
 
 # TODO: test with split mode
 
@@ -371,12 +377,20 @@ def _run_container_runtime(
         start = time.monotonic()
         while not stop_heartbeat.wait(interval):
             _terminal_newline_before_log()
+            elapsed = time.monotonic() - start
             logger.debug(
                 "container-tests: %s still running (os_sandbox=%s, elapsed=%.0fs, timeout=%ss; nested QEMU may need a higher CONTAINER_RUN_TIMEOUT if TCG is slow)",
                 runtime,
                 os_sandbox,
-                time.monotonic() - start,
+                elapsed,
                 CONTAINER_RUN_TIMEOUT,
+            )
+            print(
+                f"[container-test] {runtime} still running: os_sandbox={os_sandbox}, "
+                f"elapsed={elapsed:.0f}s, timeout={CONTAINER_RUN_TIMEOUT}s "
+                f"(CONTAINER_TEST_HEARTBEAT_SEC={interval}; nested TCG can be very slow)",
+                file=sys.stderr,
+                flush=True,
             )
 
     hb = threading.Thread(
@@ -437,8 +451,9 @@ def test_container_runtime(
     For faster runs, re-enable ``none`` / ``unshare`` / ``bwrap`` there. On the host,
     ``tests/integration_tests/test_usage_with_providers.py -k qemu`` avoids nested Podman.
     Optional: ``CONTAINER_TEST_TRACE_CMD=1`` logs the full ``podman run`` argv;
-    ``CONTAINER_TEST_HEARTBEAT_SEC=N`` logs on the **host** every N seconds while ``podman run``
-    is still running (default 60; set 0 to disable)—that confirms the outer process is not stuck
+    ``CONTAINER_TEST_HEARTBEAT_SEC=N`` prints a line to **stderr** on the host every N seconds
+    while ``podman run`` is still running (default 60; set 0 to disable)—confirms the outer
+    process is not stuck
     in pytest, not that the nested guest is making progress. Nested QEMU: ``QemuSSEDaemon`` drains
     the VM serial to stderr and logs each line at DEBUG (``[qemu-serial]``) when
     ``qemu.show_boot_console=true``. ``py-sandbox-test.profile`` sets it.
@@ -468,7 +483,6 @@ POD_NAME = "pysandboxes-test"
 KUBE_MANIFEST = CONTAINER_SCRIPT_DIR / "kube-pysandboxes.yaml"
 WAIT_TIMEOUT = int(os.environ.get("WAIT_TIMEOUT", "120"))
 DNS_WAIT = int(os.environ.get("DNS_WAIT", "60"))
-EXEC_TIMEOUT = int(os.environ.get("TIMEOUT", "120"))
 MINIKUBE_NODE_READY_TIMEOUT = int(os.environ.get("MINIKUBE_NODE_READY_TIMEOUT", "120"))
 MINIKUBE_DNS_READY_TIMEOUT = int(os.environ.get("MINIKUBE_DNS_READY_TIMEOUT", "120"))
 
@@ -553,9 +567,18 @@ def _ensure_minikube_ready() -> None:
     # Non-fatal: cluster may still work; DNS can lag slightly after node ready
 
 
-def _ensure_minikube_image() -> None:
-    """Build all provider images in minikube's Docker daemon (make build-image-docker)."""
+def _make_stamp_for_os_sandbox(os_sandbox: str) -> str:
+    """Makefile stamp that produces the image for this OS_SANDBOX provider (for forced rebuild)."""
+    provider = (os_sandbox or "base").lower()
+    if provider in ("none", "subprocess"):
+        return ".make-build-image-base"
+    return f".make-build-image-{provider}"
+
+
+def _ensure_minikube_image(os_sandbox: str) -> None:
+    """Build provider images in minikube's Docker daemon; force rebuild if stamps skip but image is missing."""
     env = _minikube_docker_env()
+    image_ref = _image_for_os_provider(os_sandbox)
     print("Building images in minikube's Docker daemon (make build-image-docker)...")
     subprocess.run(
         ["make", "build-image-docker"],
@@ -564,6 +587,77 @@ def _ensure_minikube_image() -> None:
         check=True,
         capture_output=False,
     )
+    inspect = subprocess.run(
+        ["docker", "image", "inspect", image_ref],
+        cwd=ROOT_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if inspect.returncode != 0:
+        stamp = _make_stamp_for_os_sandbox(os_sandbox)
+        print(
+            f"Image {image_ref!r} not present in minikube Docker "
+            f"(host stamps can skip builds); forcing make -B {stamp}..."
+        )
+        subprocess.run(
+            ["make", "-B", stamp],
+            cwd=ROOT_DIR,
+            env=env,
+            check=True,
+            capture_output=False,
+        )
+        verify = subprocess.run(
+            ["docker", "image", "inspect", image_ref],
+            cwd=ROOT_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if verify.returncode != 0:
+            raise RuntimeError(
+                f"After forced rebuild, image {image_ref!r} is still missing in minikube Docker. "
+                f"docker stderr: {verify.stderr or verify.stdout}"
+            )
+
+
+def _stop_minikube_mount(mount_proc: subprocess.Popen) -> None:
+    """Stop ``minikube mount`` and any child processes (FUSE/SSH helpers).
+
+    A plain ``terminate()`` on the parent often leaves descendants running, which can
+    block pytest or the shell from exiting after the test completes.
+    """
+    if mount_proc.poll() is not None:
+        return
+    print(f"Stopping minikube mount (PID: {mount_proc.pid})...")
+    if os.name == "posix":
+        try:
+            os.killpg(mount_proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            mount_proc.terminate()
+        try:
+            mount_proc.wait(timeout=12)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(mount_proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            mount_proc.kill()
+        try:
+            mount_proc.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            pass
+    else:
+        mount_proc.terminate()
+        try:
+            mount_proc.wait(timeout=12)
+        except subprocess.TimeoutExpired:
+            mount_proc.kill()
+            try:
+                mount_proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                pass
 
 
 def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) -> int:
@@ -574,22 +668,18 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
 
     def cleanup() -> None:
         print("\n--- Cleaning up resources ---")
-        if mount_proc is not None and mount_proc.poll() is None:
-            print(f"Stopping minikube mount (PID: {mount_proc.pid})...")
-            mount_proc.terminate()
-            try:
-                mount_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                mount_proc.kill()
+        if mount_proc is not None:
+            _stop_minikube_mount(mount_proc)
         subprocess.run(
             ["kubectl", "delete", "pod", POD_NAME, "--ignore-not-found", "--now"],
             capture_output=True,
             cwd=ROOT_DIR,
+            timeout=120,
         )
 
     try:
         _ensure_minikube_ready()
-        _ensure_minikube_image()
+        _ensure_minikube_image(os_sandbox)
 
         print("Starting minikube mount in background...")
         mount_proc = subprocess.Popen(
@@ -597,6 +687,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             cwd=ROOT_DIR,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
         time.sleep(3)
 
@@ -679,19 +770,60 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                     os_sandbox.lower() if os_sandbox != "none" else os_sandbox
                 )
                 py_sandbox_args = f"--py-sandbox={py_sandbox}"
+                exec_timeout = _k8s_exec_timeout_seconds(os_sandbox)
                 exec_cmd = (
                     "pip install --no-cache-dir -e . && "
                     f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} "
                     f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
                 )
 
-                print(f"Executing tests inside the pod (timeout: {EXEC_TIMEOUT}s)...")
+                print(
+                    f"Executing tests inside the pod (timeout: {exec_timeout}s, "
+                    f"os_sandbox={os_sandbox})..."
+                )
+                print(
+                    "kubectl exec output streams below (no pipe capture — avoids deadlock "
+                    "and long QEMU/TCG silence). Nested qemu can take many minutes.",
+                    flush=True,
+                )
+                stop_k8s_hb = threading.Event()
+
+                def _k8s_exec_heartbeat() -> None:
+                    interval = int(os.environ.get("CONTAINER_TEST_HEARTBEAT_SEC", "60"))
+                    if interval <= 0:
+                        return
+                    start = time.monotonic()
+                    while not stop_k8s_hb.wait(interval):
+                        _terminal_newline_before_log()
+                        elapsed = time.monotonic() - start
+                        logger.debug(
+                            "k8s-test: kubectl exec still running "
+                            "(os_sandbox=%s, elapsed=%.0fs, timeout=%ss)",
+                            os_sandbox,
+                            elapsed,
+                            exec_timeout,
+                        )
+                        print(
+                            f"[k8s-test] kubectl exec still running: os_sandbox={os_sandbox}, "
+                            f"elapsed={elapsed:.0f}s, timeout={exec_timeout}s "
+                            f"(CONTAINER_TEST_HEARTBEAT_SEC={interval}; QEMU/TCG boot can take many minutes)",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+
+                hb_k8s = threading.Thread(
+                    target=_k8s_exec_heartbeat,
+                    name="k8s-exec-heartbeat",
+                    daemon=True,
+                )
+                hb_k8s.start()
                 try:
+                    # Inherit stdout/stderr: do not use capture_output or PIPE — nested QEMU
+                    # can fill ~64KiB quickly and block the guest; user sees live progress.
                     r = subprocess.run(
                         [
                             "kubectl",
                             "exec",
-                            "-it",
                             POD_NAME,
                             "--",
                             "/bin/bash",
@@ -700,16 +832,26 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                         ],
                         cwd=ROOT_DIR,
                         env={**os.environ, "PYTHONUNBUFFERED": "1"},
-                        capture_output=True,
-                        text=True,
-                        timeout=EXEC_TIMEOUT,
+                        timeout=exec_timeout,
                     )
                     rc = r.returncode
+                    if rc != 0:
+                        print(
+                            f"ERROR: kubectl exec exited {rc} (os_sandbox={os_sandbox})",
+                            file=sys.stderr,
+                            flush=True,
+                        )
                 except subprocess.TimeoutExpired:
-                    print(f"ERROR: Test execution timed out after {EXEC_TIMEOUT}s")
+                    print(
+                        f"ERROR: Test execution timed out after {exec_timeout}s "
+                        f"(os_sandbox={os_sandbox})",
+                        flush=True,
+                    )
                     rc = 1
+                finally:
+                    stop_k8s_hb.set()
     except subprocess.TimeoutExpired:
-        print(f"ERROR: Test execution timed out after {EXEC_TIMEOUT}s")
+        print("ERROR: A subprocess timed out during the Kubernetes pod test")
         rc = 1
     finally:
         # Fetch pod logs before deleting the pod (kubectl logs fails with NotFound after delete)
@@ -718,6 +860,8 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             ["kubectl", "logs", POD_NAME],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=ROOT_DIR,
         )
         if log_result.returncode == 0 and (log_result.stdout or log_result.stderr):
@@ -736,8 +880,8 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     return rc
 
 
-@pytest.mark.skip("TODO")  # TODO
-@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
+@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged",
+                         [x[0] for x in _all_os_sandbox_params()])
 def test_container_kubernetes(
     os_sandbox: str, py_sandbox: bool, privileged: bool
 ) -> None:
@@ -751,10 +895,6 @@ def test_container_kubernetes(
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("minikube not available")
-
-    # QEMU provider is not supported inside Kubernetes pod (no QEMU/image in pod image)
-    if os_sandbox == "qemu":
-        pytest.skip("qemu provider not run in Kubernetes pod (no QEMU in image)")
 
     rc = _run_kubernetes_test(os_sandbox, py_sandbox, privileged)
     assert rc == 0, f"Kubernetes pod test exited with code {rc}"
