@@ -40,7 +40,7 @@ class BaseDaemon(ABC):
     def __init__(
         self,
         token: str,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> None:
         """Initialize the daemon with a unique token.
 

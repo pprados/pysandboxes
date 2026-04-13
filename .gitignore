@@ -203,3 +203,6 @@ tst_wasm/
 #AGENTS.md
 .cursor/rules/openmemory.mdc
 AGENTS.md
+_bmad/
+.ia/skills/bmad-*
+.ia/skills/packmind-*

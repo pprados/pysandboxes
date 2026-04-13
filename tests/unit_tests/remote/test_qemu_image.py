@@ -1,6 +1,5 @@
 """Unit tests for pysandboxes.remote.qemu_image module."""
 
-import os
 import tempfile
 from pathlib import Path
 

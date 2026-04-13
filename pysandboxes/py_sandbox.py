@@ -14,6 +14,7 @@ import re
 import sys
 import tempfile
 import types
+import uuid
 from importlib import resources
 from pathlib import Path
 from typing import Any, cast
@@ -343,7 +344,9 @@ def activate_sandboxes(
 
         if provider_key not in providers_factory:
             raise ValueError(f"Unknown os-sandbox name: {provider_key}")
-        os_provider: BaseDaemon = providers_factory[provider_key](token=None)
+        os_provider: BaseDaemon = providers_factory[provider_key](
+            str(uuid.uuid4()),
+        )
         # Offer the opportunity to update the rules (add, remove, etc.)
         all_rules = os_provider.update_rules_and_activate(
             all_rules=all_rules,

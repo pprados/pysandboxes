@@ -11,11 +11,11 @@ from pathlib import Path
 from typing import Any, Mapping, TextIO, cast
 
 from ._os_sandbox import providers_factory
+from .base_daemon import BaseDaemon
 from .config import DEBUG
 from .e import ConfigSyntaxError
 from .main_logger import config_log
 from .py_sandbox import load_and_parse_config
-from .remote import qemu_guest_console_io as _qemu_guest_console_io
 from .remote.client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
     find_free_port,
@@ -27,15 +27,9 @@ from .remote.daemon_parameters import DaemonParameters
 from .remote.none_daemon import NoneDaemon
 from .remote.parse_cpython_args import parse_python_cmd_line
 from .remote.python_in_sb import convert_extra_rules
-from .remote.qemu_setup import QEMU_HOST_RUN_PREFIX
+from .remote.vm_sse_daemon import VMSSEDaemon
 from .sb_types import Envs
 from .tools import Environ
-
-# Re-export for ``main_sandbox`` / external use
-PYTHON_OUTPUT_END = _qemu_guest_console_io.PYTHON_OUTPUT_END
-PYTHON_OUTPUT_START = _qemu_guest_console_io.PYTHON_OUTPUT_START
-qemu_wait_and_filter_console = _qemu_guest_console_io.qemu_wait_and_filter_console
-read_qemu_guest_exitcode = _qemu_guest_console_io.read_qemu_guest_exitcode
 
 # Default console size when not a TTY (e.g. CI, pipes)
 _DEFAULT_COLUMNS = 80
@@ -122,36 +116,33 @@ def main() -> int:
     token = str(uuid.uuid4())
     log_level = logging.getLogger().getEffectiveLevel()
 
-    os_provider: BaseSubProcessDaemon = providers_factory[all_rules.os_sandbox](
+    _daemon: BaseDaemon = providers_factory[all_rules.os_sandbox](
         token, python_args=python_parsed_args
     )
-    logger.debug(f"{os_provider=} {all_rules.learn=}")
+    logger.debug(f"{_daemon=} {all_rules.learn=}")
     if "--version" in python_parsed_args:
         print("Python", ".".join(map(str, sys.version_info[0:3])))
         sys.exit(0)
-    if isinstance(os_provider, NoneDaemon):
+    if isinstance(_daemon, NoneDaemon):
         from .remote.python_in_sb import python_in_sb
 
         return python_in_sb(all_rules, python_cmd)
+    os_provider = cast(BaseSubProcessDaemon, _daemon)
     _host_tmp = "/tmp" if os.path.isdir("/tmp") else None
     _run_prefix = (
-        QEMU_HOST_RUN_PREFIX if all_rules.os_sandbox == "qemu" else "pysandboxes-sb-"
+        cast(VMSSEDaemon, os_provider).host_run_temp_prefix
+        if isinstance(os_provider, VMSSEDaemon)
+        else "pysandboxes-sb-"
     )
     with tempfile.TemporaryDirectory(prefix=_run_prefix, dir=_host_tmp) as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
-        if all_rules.os_sandbox == "qemu":
-            # For QEMU: build process_config before subprocess_cmd so the ISO
-            # can be created with the config embedded.
-            from .remote.qemu_setup import (
-                GUEST_RUN_MOUNT,
-                _qemu_show_boot_console_truthy,
-                augment_all_rules_for_qemu_run_mount,
-            )
-
-            os_provider.port = (
-                find_free_port() if all_rules.port == -1 else all_rules.port
-            )
+        launch_params: dict[str, Any] = {}
+        if isinstance(os_provider, VMSSEDaemon):
+            vm = cast(VMSSEDaemon, os_provider)
+            # VM-based providers: build process_config before subprocess_cmd so the guest
+            # image / boot media can embed config (provider-specific).
+            vm.port = find_free_port() if all_rules.port == -1 else all_rules.port
             token = str(uuid.uuid4())
             # Propagate host terminal size to guest so console width/height match
             columns, lines = _get_terminal_size()
@@ -162,7 +153,7 @@ def main() -> int:
                     "LINES": str(lines),
                 }
             )
-            guest_all_rules = augment_all_rules_for_qemu_run_mount(
+            guest_all_rules = vm.augment_rules_for_guest_run_mount(
                 all_rules._replace(envs=guest_envs)
             )
             process_config = DaemonParameters(
@@ -171,19 +162,23 @@ def main() -> int:
                 log_format=get_log_formatter(),
                 use_rich_handler=use_rich_handler(),
                 token=token,
-                port=os_provider.port,
+                port=vm.port,
                 init_fn="",
                 python_main_args=tuple(python_cmd),
-                guest_run_dir=GUEST_RUN_MOUNT,
+                guest_run_dir=vm.guest_run_dir_mount(),
                 guest_working_dir=str(Path.cwd().resolve()),
             )
-            # Store config so subprocess_cmd can build ISO and 9p config dir; guest reads config from 9p
-            os_provider._iso_config = process_config  # type: ignore[attr-defined]
-            cmd, extra_envs = os_provider.subprocess_cmd(
+            # Store config so subprocess_cmd can build boot media; guest reads config from mount
+            vm._iso_config = process_config  # type: ignore[attr-defined]
+            cmd, extra_envs = vm.subprocess_cmd(
                 all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
             )
+
             # Config is in 9p-mounted config dir, no FIFO
-            config_writer = lambda _: None
+            def _noop_config_writer(_: DaemonParameters) -> None:
+                return None
+
+            config_writer = _noop_config_writer
         else:
             os_provider.port = (
                 find_free_port() if all_rules.port == -1 else all_rules.port
@@ -203,11 +198,13 @@ def main() -> int:
                 init_fn="",
                 python_main_args=(),
             )
-            launch_params = getattr(
-                os_provider,
-                "get_launch_params_for_python_sb",
-                lambda *a, **k: {},
-            )(all_rules, log_level, token, "", pipe_path, Path(tmpdir))
+            launch_params.update(
+                getattr(
+                    os_provider,
+                    "get_launch_params_for_python_sb",
+                    lambda *a, **k: {},
+                )(all_rules, log_level, token, "", pipe_path, Path(tmpdir))
+            )
             process_config = launch_params.get("process_config", default_process_config)
             config_writer = None
 
@@ -222,11 +219,12 @@ def main() -> int:
         # that need custom child setup (e.g., unshare with slirp4netns fd)
         extra_preexec_fn, pass_fds = os_provider.get_launch_extras()
 
-        launch_args = cmd if all_rules.os_sandbox == "qemu" else cmd + python_cmd
+        launch_args = cmd if isinstance(os_provider, VMSSEDaemon) else cmd + python_cmd
 
         async def launch_and_wait() -> int:
-            if all_rules.os_sandbox == "qemu":
-                show_boot = _qemu_show_boot_console_truthy(all_rules)
+            if isinstance(os_provider, VMSSEDaemon):
+                vm = cast(VMSSEDaemon, os_provider)
+                show_boot = vm.show_boot_console_truthy(all_rules)
                 qemu_console_file: TextIO | None = None
                 launch_kwargs: dict[str, Any] = dict(
                     cmd=launch_args,
@@ -235,7 +233,7 @@ def main() -> int:
                     process_config=process_config,
                     extra_preexec_fn=extra_preexec_fn,
                     pass_fds=pass_fds,
-                    on_launched=os_provider.on_process_launched,
+                    on_launched=vm.on_process_launched,
                     config_writer=config_writer,
                 )
                 # Always use pipes so we can filter (sentinels) or tee to terminal + log file.
@@ -255,13 +253,13 @@ def main() -> int:
                             return await process.wait()
                         # Full VM console only when qemu.show_boot_console=true (profile).
                         forward_all = show_boot
-                        return await qemu_wait_and_filter_console(
+                        return await vm.wait_process_and_filter_console(
                             process,
                             forward_all=forward_all,
                             tee_file=qemu_console_file,
                         )
                     finally:
-                        kill_slirp = getattr(os_provider, "_kill_slirp", None)
+                        kill_slirp = getattr(vm, "_kill_slirp", None)
                         if callable(kill_slirp):
                             kill_slirp()
                 finally:
@@ -291,11 +289,12 @@ def main() -> int:
         qemu_wait_rc = asyncio.run(launch_and_wait())
         return_code = qemu_wait_rc
         logger.debug("Guest process finished (QEMU wait exit code %s)", return_code)
-        # For QEMU, guest writes exit code to shared run dir; prefer it over QEMU's
-        # process status (9p latency; QEMU may return non-zero on shutdown I/O).
-        if all_rules.os_sandbox == "qemu":
+        # VM guest writes exit code to shared run dir; prefer it over the hypervisor
+        # process status (e.g. 9p latency; QEMU may return non-zero on shutdown I/O).
+        if isinstance(os_provider, VMSSEDaemon):
+            vm = cast(VMSSEDaemon, os_provider)
             exitcode_file = Path(tmpdir) / "exitcode"
-            guest_rc = read_qemu_guest_exitcode(exitcode_file)
+            guest_rc = vm.read_guest_exitcode(exitcode_file)
             logger.debug(
                 "QEMU exitcode: guest_rc=%s qemu_wait=%s file=%s",
                 guest_rc,

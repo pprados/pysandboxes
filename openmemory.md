@@ -8,12 +8,19 @@
 
 Layered sandbox framework with Python guards and OS-level providers (unshare/bwrap, QEMU).
 
+- **`python_sb` VM path:** Host launch (temp prefix, `launch_args` without `--_named-pipe` append, guest `exitcode` read) uses **`isinstance(os_provider, VMSSEDaemon)`** — not `os_sandbox == "qemu"` — so additional VM hypervisors can share the same branch. **`VMSSEDaemon`** (`vm_sse_daemon.py`) holds shared hooks: `host_run_temp_prefix`, `guest_run_dir_mount`, `augment_rules_for_guest_run_mount`, `show_boot_console_truthy`, `wait_process_and_filter_console`, `read_guest_exitcode`; **`QemuSSEDaemon`** implements them (QEMU-specific bits stay in `qemu_setup` / `qemu_sse_daemon`). **`main_sandbox`** imports `PYTHON_OUTPUT_*` sentinels from **`vm_sse_daemon`**, not `python_sb`.
+
 - **Security audit skill (Cursor):** `.cursor/skills/pysandboxes-os-provider-security-audit/` — structured review of OS providers with `py-sandbox=false` (standalone, container, K8s); env, FS, secrets, network/DNS, TOCTOU on config handoff.
+- **Samples framework tool demo (Cursor):** `.cursor/skills/samples-framework-tool-demo/` — scaffold new `samples/<name>/` with dedicated uv, Makefile, `pyproject.toml` (`[tool.uv.sources]` pysandboxes editable), README, root package, `tests/`; implement two tools (web fetch + Python exec) via the chosen agent framework’s native tool APIs; no runtime `pysandboxes` dependency until sandbox integration.
+- **Typing:** `BaseDaemon.__init__(**kwargs: Any)` — PEP 484 types each keyword value separately; annotating `**kwargs` as `dict[str, Any]` incorrectly required values like `python_args` / `port` to be dicts and broke mypy.
+- **Guard `os.scandir`:** `_ScanDirContextManager` must lazy-open the underlying scanner in `__next__` (not only in `__enter__`) so `for x in os.scandir(path)` works like CPython/pytest (`tmp_path` / `make_numbered_dir`).
 
 ## Bwrap / Unshare networking (2025)
 
 - **`slirp4netns_common.py`**: Shared slirp4netns watcher, API socket port forwards (`add_hostfwd`), and constants (`SLIRP_GW` 10.0.2.2, `SLIRP_DNS` 10.0.2.3, guest 10.0.2.100, `tap0`).
 - **bwrap**: `--share-net` by default; with socket rules (unless `bwrap.share-net=yes` or `bwrap.unshare-net=no`) uses `--unshare-net`, host-side slirp thread keyed by **child PID**, `main_sandbox` uses `wait_network` + netfilter rules including SSE from 10.0.2.2.
+- **`tests/integration_tests/remote/test_bwrap.py`:** sets `os_sandbox_params` to `share-net=yes` so the integration test runs without `CAP_NET_ADMIN`/iptables (the default `net=` profile would otherwise require the unshare-net + slirp path).
+- **firejail:** With `net=` socket rules, `_firejail_args` adds `--net=<bridge>`; the SSE daemon listens on the jail's **eth0** address, not `127.0.0.1` on the host. `BaseSubProcessDaemon._ping_url` defaults to loopback; `FireJailSSEDaemon` overrides it using `parse_firejail_net_print` (same addressing as `base_url` / `get_firejail_daemon_ip`).
 - **unshare**: Daemon launches `unshare` → `unshare_setup` → `main_sandbox`; **no** `unshare_launcher`. Slirp runs on host via pidfile + watcher; JSON setup via FIFO under temp; `PYTHONPATH` set to project root for Docker.
 
 ## Docker image variants

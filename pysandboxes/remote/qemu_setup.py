@@ -15,20 +15,14 @@ from pathlib import Path
 from typing import Any
 
 from ..all_rules import AllRules
-from ..sb_types import Envs
+from .vm_sse_daemon import VMSSEDaemon
 
 logger = logging.getLogger(__name__)
 
 
 def _qemu_show_boot_console_truthy(all_rules: Any | None) -> bool:
-    """Same truthy rule as ``qemu_sse_daemon`` / ``python_sb`` for ``qemu.show_boot_console``."""
-    if all_rules is None:
-        return False
-    params = getattr(all_rules, "os_sandbox_params", None)
-    if not params:
-        return False
-    raw = str(params.get("show_boot_console", "false")).strip().lower()
-    return raw in ("true", "1", "yes")
+    """Backward-compatible name; logic lives on :class:`VMSSEDaemon`."""
+    return VMSSEDaemon.show_boot_console_truthy(all_rules)
 
 
 GUEST_CIDATA_MOUNT = "/mnt/cidata"
@@ -165,7 +159,7 @@ def _bootstrap_script_content(
     ign_file = f"{GUEST_CIDATA_MOUNT}/{IGNORE_OVERLAYS_FILE}"
     lines.append("echo '[pysandbox-bootstrap] ignore overlays' >&2")
     lines.append(f"if [ -f {ign_file} ]; then")
-    lines.append(f'  while IFS= read -r ign_path || [ -n "$ign_path" ]; do')
+    lines.append('  while IFS= read -r ign_path || [ -n "$ign_path" ]; do')
     lines.append('    [ -z "$ign_path" ] && continue')
     lines.append('    [ -e "$ign_path" ] || continue')
     lines.append('    if [ -d "$ign_path" ]; then')
@@ -202,7 +196,10 @@ def _bootstrap_script_content(
             '  if [ -n "$RL" ] && [ -f "$RL" ]; then HOST_EXE=$RL; fi',
             "fi",
             'if [ -n "$HOST_EXE" ] && [ ! -f "$HOST_EXE" ]; then',
-            '  echo "[pysandbox-bootstrap] ERROR: host Python not found at ${HOST_EXE} after 9p mounts (check mount failures above)." >&2',
+            (
+                '  echo "[pysandbox-bootstrap] ERROR: host Python not found at ${HOST_EXE} '
+                'after 9p mounts (check mount failures above)." >&2'
+            ),
             "  _pysb_halt_guest",
             "  exit 1",
             "fi",
@@ -219,17 +216,34 @@ def _bootstrap_script_content(
             # Do not use set -e for the probe: a failing python (missing .so, segfault)
             # would exit the whole script before the error line, leaving cloud-init opaque.
             "set +e",
-            'ACTUAL_VERSION="$("$PYTHON_EXE" -c \'import sys; print("%d.%d" % (sys.version_info.major, sys.version_info.minor))\' 2>/dev/null)"',
+            (
+                'ACTUAL_VERSION="$("$PYTHON_EXE" -c '
+                "'import sys; print(\"%d.%d\" % (sys.version_info.major, sys.version_info.minor))' "
+                '2>/dev/null)"'
+            ),
             "PY_PROBE_RC=$?",
             "set -e",
             'if [ "$PY_PROBE_RC" != 0 ] || [ -z "$ACTUAL_VERSION" ]; then',
-            "  echo '[pysandbox-bootstrap] ERROR: Python probe rc='\"$PY_PROBE_RC\"' from '\"$PYTHON_EXE\"'; stderr:' >&2",
-            '  "$PYTHON_EXE" -c \'import sys; print("%d.%d" % (sys.version_info.major, sys.version_info.minor))\' 2>&2 || true',
+            (
+                "  echo '[pysandbox-bootstrap] ERROR: Python probe rc='"
+                '"$PY_PROBE_RC"'
+                "' from '"
+                '"$PYTHON_EXE"'
+                "'; stderr:' >&2"
+            ),
+            (
+                '  "$PYTHON_EXE" -c '
+                "'import sys; print(\"%d.%d\" % (sys.version_info.major, sys.version_info.minor))' "
+                "2>&2 || true"
+            ),
             "  _pysb_halt_guest",
             "  exit 1",
             "fi",
             'if [ "$ACTUAL_VERSION" != "$PYTHON_VERSION" ]; then',
-            "  echo '[pysandbox-bootstrap] ERROR: expected Python $PYTHON_VERSION, image has Python $ACTUAL_VERSION' >&2",
+            (
+                "  echo '[pysandbox-bootstrap] ERROR: expected Python $PYTHON_VERSION, "
+                "image has Python $ACTUAL_VERSION' >&2"
+            ),
             "  _pysb_halt_guest",
             "  exit 1",
             "fi",
@@ -253,7 +267,11 @@ def _bootstrap_script_content(
                 "PIPE_NAME=$(cat "
                 + f"{GUEST_CIDATA_MOUNT}/{PIPE_NAME_FILE}"
                 + " 2>/dev/null | tr -d '\\n' || echo '')",
-                'if [ -z "$PIPE_NAME" ]; then echo "[pysandbox-bootstrap] ERROR: pipe_name not found on cidata" >&2; _pysb_halt_guest; exit 1; fi',
+                (
+                    'if [ -z "$PIPE_NAME" ]; then '
+                    'echo "[pysandbox-bootstrap] ERROR: pipe_name not found on cidata" >&2; '
+                    "_pysb_halt_guest; exit 1; fi"
+                ),
                 f'CONFIG_PATH={pipe_run_guest_path}/"$PIPE_NAME"',
                 "echo '[pysandbox-bootstrap] exec main_sandbox --_named-pipe '\"'\"'$CONFIG_PATH'\"'\"'' >&2",
             ]
@@ -285,7 +303,11 @@ def _create_nocloud_iso(
     python_exe: str | None = None,
     config_guest_path: str | None = None,
 ) -> Path:
-    """Create NoCloud ISO with user-data, meta-data, bootstrap script, 9p_mounts, pipe_name, python_version, python_exe (version is verified in guest, not installed)."""
+    """Create NoCloud ISO with user-data, meta-data, bootstrap script, 9p_mounts.
+
+    Includes pipe_name, python_version, python_exe (version is verified in guest,
+    not installed).
+    """
     all_rules = getattr(process_config, "all_rules", None)
     guest_working_dir = getattr(process_config, "guest_working_dir", None)
     if isinstance(guest_working_dir, str) and guest_working_dir.strip():
@@ -440,9 +462,12 @@ def prepare_guest_env(
 
     mounts: list of (9p_tag, guest_path) so the guest mounts each tag at that path.
     pipe_run_guest_path: guest path where the run dir (with FIFO) is mounted.
-    python_version: host Python major.minor (e.g. 3.13); guest must already have this version (verified, not installed).
-    python_exe: host sys.executable path (9p-mounted in guest); used when available, else guest python is checked.
-    config_guest_path: when set, guest reads config from this 9p path (e.g. /mnt/pysandbox_config/config.pkl) instead of pipe.
+    python_version: host Python major.minor (e.g. 3.13); guest must already have
+        this version (verified, not installed).
+    python_exe: host sys.executable path (9p-mounted in guest); used when
+        available, else guest python is checked.
+    config_guest_path: when set, guest reads config from this 9p path
+        (e.g. /mnt/pysandbox_config/config.pkl) instead of pipe.
     Returns the path to the NoCloud ISO.
     """
     logger.debug(

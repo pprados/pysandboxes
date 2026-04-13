@@ -39,7 +39,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
   - [ ] VM
-    - [ ] Qemu
+    - [X] Qemu
     - [ ] multipass
     - [ ] lxc
     - [ ] vagrant

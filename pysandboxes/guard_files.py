@@ -1262,7 +1262,7 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
     A context manager that wraps os.scandir and implements the context manager kind.
     """
 
-    __slot__ = ("directory", "real_directory", "scanner")
+    __slots__ = ("directory", "real_directory", "scanner")
 
     def __init__(self, directory: str):
         super().__init__()
@@ -1293,6 +1293,8 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
         """
         Enter the context manager, opening the scandir iterator.
         """
+        if self.scanner is not None:
+            return self
         self.scanner = _scandir(self.real_directory)
         _ = self.scanner.__enter__()
         return self
@@ -1307,7 +1309,10 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
         Exit the context manager, closing the scandir iterator.
         """
         if self.scanner is not None:
-            return self.scanner.__exit__(exc_type, exc_val, exc_tb)
+            try:
+                return self.scanner.__exit__(exc_type, exc_val, exc_tb)
+            finally:
+                self.scanner = None
         return False  # Don't suppress exceptions
 
     def __iter__(self) -> Iterator[os.DirEntry[str]]:
@@ -1315,6 +1320,8 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
         Make the context manager iterable.
         """
         if is_learning_mode() and OPTIMIZE:
+            if self.scanner is None:
+                self.__enter__()
             return cast(Any, self.scanner).__iter__()  # type: ignore[union-attr]
         return self
 
@@ -1322,8 +1329,10 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
         """
         Get the next file entry from the directory.
         """
+        # Support ``for x in os.scandir(path)`` without ``with`` (pytest tmp_path,
+        # CPython PEP 471 behaviour): iteration must open the underlying scanner.
         if self.scanner is None:
-            raise StopIteration
+            self.__enter__()
 
         if not self.real_directory:
             raise StopIteration

@@ -13,7 +13,6 @@ import asyncio
 import fnmatch
 import gc
 import importlib.resources
-import json
 import logging
 import os
 import shlex
@@ -23,7 +22,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -32,9 +30,8 @@ from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
-from ..guard_socket import Action, Direction, Kind
 from ..immutable_dict import ImmutableDict
-from ..main_logger import ErrorMsg, pysandboxes_logger
+from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
 from ..override_compat import override
 from ..sb_types import Args, ConfigLines, Envs
@@ -46,7 +43,6 @@ from ..tools import (
 )
 from .client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
-    find_free_port,
     get_callable_info,
     get_log_formatter,
     launch_sandbox,
@@ -65,9 +61,6 @@ from .slirp4netns_common import (
 )
 from .slirp4netns_common import (
     extract_port_forwards as slirp_extract_port_forwards,
-)
-from .slirp4netns_common import (
-    is_socket as slirp_is_socket,
 )
 from .slirp4netns_common import (
     run_slirp_watcher as slirp_run_watcher,

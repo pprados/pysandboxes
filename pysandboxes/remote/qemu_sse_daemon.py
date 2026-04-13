@@ -52,7 +52,8 @@ from .qemu_image import (
 from .qemu_setup import (
     GUEST_CONFIG_MOUNT,
     GUEST_RUN_MOUNT,
-    _qemu_show_boot_console_truthy,
+    QEMU_HOST_RUN_PREFIX,
+    augment_all_rules_for_qemu_run_mount,
     prepare_guest_env,
 )
 from .tools import which_command
@@ -955,7 +956,15 @@ class QemuSSEDaemon(VMSSEDaemon):
     virtio-9p so no file copies or HTTP server are needed.
     """
 
+    host_run_temp_prefix = QEMU_HOST_RUN_PREFIX
+
     __slots__ = ("_iso_config", "_qemu_console_tasks")
+
+    def guest_run_dir_mount(self) -> str:
+        return GUEST_RUN_MOUNT
+
+    def augment_rules_for_guest_run_mount(self, all_rules: AllRules) -> AllRules:
+        return augment_all_rules_for_qemu_run_mount(all_rules)
 
     def __init__(
         self, token: str, *, python_args: list[str] | None = None, **kwargs: Any
@@ -1000,7 +1009,10 @@ class QemuSSEDaemon(VMSSEDaemon):
         pipe_path: Path,
         config_dir: Path | None = None,
     ) -> tuple[Args, Environ]:
-        """Build QEMU command: one virtio-9p tag per file_rule BindRule + run dir + optional config dir, ISO with 9p_mounts + pipe_name."""
+        """Build QEMU command: one virtio-9p tag per file_rule BindRule + run dir.
+
+        Optional config dir; ISO with 9p_mounts + pipe_name.
+        """
         image_path = get_default_image_path()
         ensure_image(image_path)
         mount_specs, mount_list = _file_rules_mounts(
@@ -1108,7 +1120,7 @@ class QemuSSEDaemon(VMSSEDaemon):
     def subprocess_cmd(
         self,
         all_rules: AllRules,
-        envs: dict[str, str],
+        envs: Environ,
         pipe_path: Path,
         temp: Path,
     ) -> tuple[Args, Environ]:
@@ -1143,7 +1155,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         self,
         all_rules: AllRules,
         args: Args,
-        extra_envs: dict[str, str],
+        extra_envs: Environ,
         pipe_path: Path,
         port: int,
         *,
@@ -1166,20 +1178,18 @@ class QemuSSEDaemon(VMSSEDaemon):
             init_fn_ref = f"{module}:{func_ref}"
 
         dns_guest = [IPv4Address("10.0.2.3")]
-        netfilter_rules = rule_to_netfilter(
-            all_rules.socket_rules, dns_guest, is_ipv6=False
+        netfilter_list = list(
+            rule_to_netfilter(all_rules.socket_rules, dns_guest, is_ipv6=False)
         )
         # Allow host (10.0.2.2 in QEMU user mode) to reach the SSE server port.
-        if "COMMIT" in netfilter_rules:
-            idx = netfilter_rules.index("COMMIT")
+        if "COMMIT" in netfilter_list:
+            idx = netfilter_list.index("COMMIT")
             sse_allow = (
                 f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} "
                 "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
             )
-            netfilter_rules = (
-                list(netfilter_rules[:idx]) + [sse_allow] + list(netfilter_rules[idx:])
-            )
-        netfilter_rules = tuple(netfilter_rules)
+            netfilter_list = netfilter_list[:idx] + [sse_allow] + netfilter_list[idx:]
+        netfilter_rules: tuple[str, ...] = tuple(netfilter_list)
 
         process_config = DaemonParameters(
             all_rules=all_rules,
@@ -1189,7 +1199,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             token=self._token,
             port=port,
             init_fn=init_fn_ref,
-            netfilter_rules=tuple(netfilter_rules),
+            netfilter_rules=netfilter_rules,
             guest_run_dir=GUEST_RUN_MOUNT,
             guest_working_dir=str(Path.cwd().resolve()),
         )
@@ -1223,7 +1233,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             pass
 
         config_writer = _noop_config_writer if config_dir is not None else None
-        show_boot = _qemu_show_boot_console_truthy(all_rules)
+        show_boot = self.show_boot_console_truthy(all_rules)
         # When show_boot_console is false (default), redirect QEMU stdout/stderr so
         # boot/kernel/cloud-init traces are hidden; Python output is streamed via SSE.
         launch_kwargs: dict[str, Any] = dict(

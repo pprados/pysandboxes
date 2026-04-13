@@ -178,7 +178,40 @@ def _follow_links(filename: Path, whitelist: AllowList) -> None:
         ) from e
 
 
-# Use firejail --ip.print to return the ip of the daemon with a specific pid
+def parse_firejail_net_print(pid: int) -> ipaddress.IPv4Address | None:
+    """Return eth0 IPv4 inside the jail for ``pid``, or None if not available yet.
+
+    With ``--net=…``, the sandboxed daemon is reached at this address from the
+    host; ``127.0.0.1`` is wrong. Does not log or exit on failure (for ping retry).
+    """
+    if not isinstance(pid, int) or pid <= 0:
+        return None
+
+    try:
+        firejail_cmd = which_command("firejail")
+        if firejail_cmd is None:
+            return None
+        command: list[str] = [str(firejail_cmd), f"--net.print={pid}"]
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return None
+        output: str = result.stderr.strip()
+        for line in output.split("\n"):
+            parts: list[str] = line.split()
+            if len(parts) > 2 and parts[0] == "eth0":
+                return ipaddress.IPv4Address(parts[2])
+        return None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError, ValueError):
+        return None
+
+
+# Use firejail --net.print to return the ip of the daemon with a specific pid
 def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address:
     """
     Retrieves the IP address of a Firejail-isolated daemon using the 'firejail --net.print' command.
@@ -187,61 +220,40 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address:
         pid: The Process ID (PID) of the Firejail parent process to query.
 
     Returns:
-        The IP address (str) of the daemon's isolated network interface,
-        or None if the command fails or the IP is not found.
+        The IPv4 address of the daemon's isolated network interface.
+
+    Raises:
+        SystemExit: If firejail fails or the IP cannot be determined.
+        RuntimeError: On unexpected errors.
     """
     if not isinstance(pid, int) or pid <= 0:
         raise ValueError(f"Invalid PID provided: {pid}")
 
     try:
-        # 1. Execute the firejail command.
-        # --ip.print <pid> queries the network namespace for the specified PID.
         firejail_cmd = which_command("firejail")
         if firejail_cmd is None:
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
             raise SystemExit(1)
-        command: list[str] = [str(firejail_cmd), f"--net.print={pid}"]
 
-        # Capture stdout and stderr, timeout if it takes too long.
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,  # We handle the error manually
-            timeout=2,
-        )
+        ip = parse_firejail_net_print(pid)
+        if ip is not None:
+            return ip
 
-        # 2. Check for command execution errors.
-        if result.returncode != 0:
-            logger.error("firejail error: %s", result.stderr.strip())
-            raise SystemExit(1)
-
-        # 3. Parse the output to find the IP address.
-        output: str = result.stderr.strip()
-
-        # The output format is typically: "IP address: <IP>" or just the IP.
-        # We use a regex to reliably find an IPv4 address.
-        # Regex explanation: (\d{1,3}\.){3}\d{1,3} matches four groups of 1-3 digits separated by dots.
-        for line in output.split("\n"):
-            parts: list[str] = line.split()
-            if len(parts) > 2 and parts[0] == "eth0":
-                return ipaddress.IPv4Address(parts[2])
-        logger.error("firejail error: %s", result.stderr.strip())
+        logger.error("firejail error: could not parse eth0 IP from --net.print=%s", pid)
         raise SystemExit(1)
 
     except FileNotFoundError as e:
-        # firejail command is not in the system PATH.
         logger.error("firejail not found. Install it with:")
         logger.error(suggest_package_installation("firejail"))
         raise SystemExit(1) from e
     except subprocess.TimeoutExpired as e:
-        # Command took longer than the timeout.
-        logger.error(f"firejail command timed out for PID {pid}.")
+        logger.error("firejail command timed out for PID %s.", pid)
         raise RuntimeError(f"firejail command timed out for PID {pid}.") from e
+    except SystemExit:
+        raise
     except Exception as e:
-        # Catch any other unexpected error.
-        logger.error(f"with firejail command, an unexpected error occurred: {e}.")
+        logger.error("with firejail command, an unexpected error occurred: %s.", e)
         raise RuntimeError(
             f"with firejail command, an unexpected error occurred: {e}."
         ) from e
@@ -309,6 +321,14 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     def base_url(self) -> str:
         assert self._process
         return f"http://{get_firejail_daemon_ip(self._process.pid)}:{{PORT}}"
+
+    @override
+    def _ping_url(self, port: int) -> str:
+        assert self._process is not None
+        ip = parse_firejail_net_print(self._process.pid)
+        # No isolated net / IP not ready yet: fall back to loopback (same as plain subprocess).
+        host = "127.0.0.1" if ip is None else str(ip)
+        return f"http://{host}:{port}/ping"
 
     def _firejail_args(
         self,
