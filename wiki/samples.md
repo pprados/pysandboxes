@@ -12,7 +12,7 @@ In this scenario, we will expose an MCP server to be used by generative AI appli
 Depending on the launch command, the MCP server will be more or less isolated from the OS or the client.
 
 #### MCP Client
-The [MCP client](../samples/mcp-client/README.md) sub-project offers different launch scenarios to add sandboxes in an architecture combining an MCP client and an MCP server.
+The [MCP client](../samples/mcp-client-demo/README.md) sub-project offers different launch scenarios to add sandboxes in an architecture combining an MCP client and an MCP server.
 
 #### MCP Server
-The [MCP server](../samples/mcp-server/README.md) sub-project offers different launch scenarios to isolate the MCP server to a greater or lesser extent.
+The [MCP server](../samples/mcp-server-demo/README.md) sub-project offers different launch scenarios to isolate the MCP server to a greater or lesser extent.

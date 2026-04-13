@@ -30,14 +30,14 @@ Each sample uses a dedicated directory and uv environment.
 You must navigate to it before running the sample's tests.
 
 ```bash
-cd samples/mcp-client
+cd samples/mcp-client-demo   # or samples/mcp-server-demo, langchain-demo, …
 deactivate
 # Activate the specific environment
 source .venv/bin/activate
 make help
 make tests
 ```
-The same applies to other samples.
+The same applies to other samples. From the repo root, `make sample-tests` runs tests in `mcp-client-demo` and `mcp-server-demo`.
 <!-- start: Packmind standards -->
 # Packmind Standards
 

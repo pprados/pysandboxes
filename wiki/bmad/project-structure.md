@@ -8,7 +8,7 @@
 
 - pysandboxes/ – Main package (sandbox runtime, guards, daemons, API)
 - tests/ – Unit, integration, container tests
-- samples/ – Sample consumers (mcp-client, mcp-server)
+- samples/ – Sample consumers (mcp-client-demo, mcp-server-demo)
 - _bmad/ – BMAD method config and workflows
 - pyproject.toml, Makefile, README.md
 

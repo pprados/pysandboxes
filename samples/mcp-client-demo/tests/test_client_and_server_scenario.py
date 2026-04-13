@@ -122,7 +122,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
         logger.debug("Run " + " ".join(cmd))
         process = Popen(
             cmd,
-            cwd="../mcp-server",
+            cwd="../mcp-server-demo",
             env=os.environ.copy() | {"OS_SANDBOX": "None", "PY_SANDBOX": "None"},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

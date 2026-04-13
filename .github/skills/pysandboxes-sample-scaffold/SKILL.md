@@ -1,6 +1,6 @@
 ---
 name: 'pysandboxes-sample-scaffold'
-description: 'This skill should be used when creating a new sample (sous-repertoire) under samples/ in the pysandboxes repository, with the same structure as mcp-client and mcp-server (Makefile, uv, README, AGENTS.md, tests, optional doc/config).'
+description: 'This skill should be used when creating a new sample (sous-repertoire) under samples/ in the pysandboxes repository, with the same structure as mcp-client-demo and mcp-server-demo (Makefile, uv, README, AGENTS.md, tests, optional doc/config).'
 ---
 
 # Pysandboxes Sample Scaffold
@@ -12,7 +12,7 @@ To add a new sample to the pysandboxes repo, create a dedicated subdirectory und
 ## When to use this skill
 
 - The user asks to create a new sample, example, or demo under `samples/`.
-- The user wants a new subproject with the same structure as `samples/mcp-client` or `samples/mcp-server`.
+- The user wants a new subproject with the same structure as `samples/mcp-client-demo` or `samples/mcp-server-demo`.
 - The user wants a Makefile + uv + README + doc layout for a new sample in this repo.
 
 ## Workflow

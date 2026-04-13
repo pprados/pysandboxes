@@ -1,7 +1,7 @@
 [project]
 name = "mcp-simple-chatbot"
 version = "0.1.0"
-description = "A simple CLI chatbot using the Model Context Protocol (MCP)"
+description = "Sample mcp-client-demo: CLI chatbot using the Model Context Protocol (MCP)"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Philippe PRADOS" }]
@@ -29,7 +29,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipython",
-    "mcp-server",
+    "mcp-server-demo",
     "pydevd>=3.4.1",
     "pyright>=1.1.379",
     "ruff>=0.6.9",
@@ -87,7 +87,7 @@ target-version = "py310"
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository
 pysandboxes = { path = "../..", editable = true }
-mcp-server = { path = "../mcp-server", editable = true }
+mcp-server-demo = { path = "../mcp-server-demo", editable = true }
 
 [tool.pytest.ini_options]
 # --strict-markers will raise errors on unknown marks.

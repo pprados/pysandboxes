@@ -15,7 +15,7 @@ This demonstrates the added value of **Py-sandboxes**. Security rules will limit
 ## Installation
 
 ```bash
-cd path/to/mcp-server
+cd path/to/mcp-server-demo
 uv sync --reinstall
 ```
 
@@ -56,11 +56,11 @@ uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio
 ```
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
-cd path/to/mcp-server
+cd path/to/mcp-server-demo
 claude mcp remove mcp_demo
 claude mcp add mcp_demo -- uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio
 ```
-and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client-demo/README.md).
 
 ### Partial Mode with stdio
 In this scenario, part of the MCP server is under the control of **py-sandboxes**. The client invokes the MCP server, part of which runs in a sandbox (`@sandbox` annotation).
@@ -96,11 +96,11 @@ uv run -m mcp_server.main -t stdio
 
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
-cd path/to/mcp-server
+cd path/to/mcp-server-demo
 claude mcp remove mcp_demo
 claude mcp add mcp_demo -- uv run -m mcp_server.main -t stdio
 ```
-and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client-demo/README.md).
 
 ### Complete mode with http
 In this scenario, the server must be started before the client. It exposes an HTTP endpoint to allow the client to connect to it.
@@ -138,7 +138,7 @@ flowchart TD
 
 To start the MCP server:
 ```bash
-cd path/to/mcp-server
+cd path/to/mcp-server-demo
 uv run -m pysandboxes.python_sb -m mcp_server.main -t http
 ```
 and add the parameter in the client.
@@ -147,7 +147,7 @@ For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 claude mcp remove mcp_demo
 claude mcp add --transport http mcp_demo http://localhost:8000/mcp
 ```
-and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client-demo/README.md).
 
 ### Partial mode with http
 In this scenario, the server must be started before the client. It exposes an HTTP endpoint to allow the client to connect to it. It is itself divided into two parts (`@sandbox` annotation).
@@ -186,7 +186,7 @@ flowchart TD
 ```
 To start the MCP server:
 ```bash
-cd path/to/mcp-server
+cd path/to/mcp-server-demo
 uv run -m pysandboxes.python_sb -m mcp_server.main -t http
 ```
 and add the parameter in the client.
@@ -195,7 +195,7 @@ For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 claude mcp remove mcp_demo
 claude mcp add --transport http mcp_demo http://localhost:8000/mcp
 ```
-and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client/README.md).
+and use the the samples [here](#with-claude-code) or [MCP client](../mcp-client-demo/README.md).
 
 ---
 
@@ -235,7 +235,7 @@ Access to @myresource://readme.md and summarize there
 
 ---
 ## Client
-For the client, consult the specific documentation. For example, [here](../mcp-client/README.md) or use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
+For the client, consult the specific documentation. For example, [here](../mcp-client-demo/README.md) or use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
 
 
 ---
