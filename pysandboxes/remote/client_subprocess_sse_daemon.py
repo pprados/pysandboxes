@@ -167,6 +167,7 @@ async def launch_sandbox(
     if use_fifo:
         os.mkfifo(pipe_path)
     else:
+        assert config_writer is not None
         config_writer(process_config)
     if DEBUG_LAUNCH:
         try:
@@ -278,6 +279,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
     async def _on_process_started(self) -> None:
         """Hook called after the subprocess is started but before the ping loop."""
+
+    def _ping_url(self, port: int) -> str:
+        """HTTP URL used to wait until the sandbox daemon accepts connections."""
+        return f"http://127.0.0.1:{port}/ping"
 
     def __init__(
         self,
@@ -552,17 +557,14 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             envs=Envs(env),
             process_config=process_config,
         )
-        ping_url = f"http://127.0.0.1:{port}/ping"
         logger.info(
-            "Subprocess launched (pid=%s), pinging %s",
+            "Subprocess launched (pid=%s), waiting for daemon (ping URL resolved each attempt)",
             self._process.pid,
-            ping_url,
         )
         try:
             await self._on_process_started()
-        except Exception as e:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             raise
-        logger.info("Pinging subprocess daemon at %s", ping_url)
         # Wait the server
         gc.collect()
         connector = aiohttp.TCPConnector(family=socket.AF_INET)
@@ -571,6 +573,9 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             while True:
                 try:
                     count_loop += 1
+                    ping_url = self._ping_url(port)
+                    if count_loop == 1:
+                        logger.info("Pinging subprocess daemon at %s", ping_url)
                     if count_loop > LOOP_FOR_PING:
                         logger.error(
                             "Is not possible to connect " "to the sandbox daemon (%s)",

@@ -7,10 +7,11 @@ import signal
 import sys
 import tempfile
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM, gaierror
 from types import FrameType
-from typing import Any, List, Mapping, cast
+from typing import Any, List, Mapping, TypeVar, cast
 
 from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
 from pysandboxes.config import DEBUG
@@ -27,8 +28,14 @@ RANGETEST = 1
 # Cap blocking gethostbyname/getaddrinfo (NSS can hang minutes in nested QEMU / bad DNS).
 _DNS_THREAD_TIMEOUT_S = 12.0
 
+_R = TypeVar("_R")
 
-def _network_dns_result(fn, *, timeout_s: float = _DNS_THREAD_TIMEOUT_S):
+
+def _network_dns_result(
+    fn: Callable[[], _R],
+    *,
+    timeout_s: float = _DNS_THREAD_TIMEOUT_S,
+) -> _R:
     """Run a blocking DNS resolution call with a wall-clock timeout."""
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         fut = ex.submit(fn)

@@ -48,12 +48,13 @@ CONTAINER_SCRIPT_DIR = Path(__file__).resolve().parent
 OS_SANDBOX = os.environ.get("OS_SANDBOX", "unshare")
 
 
-# One image per OS provider; image names are python-sb-<provider> (e.g. python-sb-unshare, python-sb-qemu), use :latest tag.
+# One image per OS provider; names are python-sb-<provider>
+# (e.g. python-sb-unshare, python-sb-qemu), :latest tag.
 def _image_for_os_provider(os_sandbox: str) -> str:
     """Return the container image name for the given OS_SANDBOX provider (e.g. unshare -> python-sb-unshare:latest)."""
     provider = (os_sandbox or "base").lower()
     if provider in ("none", "subprocess"):
-        return f"python-sb:latest"
+        return "python-sb:latest"
     return f"python-sb-{provider}:latest"
 
 
@@ -81,6 +82,7 @@ def _all_os_sandbox_params() -> list:
 
 
 all_os_sandbox: list = _all_os_sandbox_params()
+
 
 def _k8s_exec_timeout_seconds(os_sandbox: str) -> int:
     if os_sandbox.lower() == "qemu":
@@ -379,7 +381,9 @@ def _run_container_runtime(
             _terminal_newline_before_log()
             elapsed = time.monotonic() - start
             logger.debug(
-                "container-tests: %s still running (os_sandbox=%s, elapsed=%.0fs, timeout=%ss; nested QEMU may need a higher CONTAINER_RUN_TIMEOUT if TCG is slow)",
+                "container-tests: %s still running (os_sandbox=%s, elapsed=%.0fs, "
+                "timeout=%ss; nested QEMU may need a higher CONTAINER_RUN_TIMEOUT "
+                "if TCG is slow)",
                 runtime,
                 os_sandbox,
                 elapsed,
@@ -820,7 +824,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                 try:
                     # Inherit stdout/stderr: do not use capture_output or PIPE — nested QEMU
                     # can fill ~64KiB quickly and block the guest; user sees live progress.
-                    r = subprocess.run(
+                    exec_result = subprocess.run(
                         [
                             "kubectl",
                             "exec",
@@ -834,7 +838,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                         env={**os.environ, "PYTHONUNBUFFERED": "1"},
                         timeout=exec_timeout,
                     )
-                    rc = r.returncode
+                    rc = exec_result.returncode
                     if rc != 0:
                         print(
                             f"ERROR: kubectl exec exited {rc} (os_sandbox={os_sandbox})",
@@ -880,8 +884,9 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     return rc
 
 
-@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged",
-                         [x[0] for x in _all_os_sandbox_params()])
+@pytest.mark.parametrize(
+    "os_sandbox,py_sandbox,privileged", [x[0] for x in _all_os_sandbox_params()]
+)
 def test_container_kubernetes(
     os_sandbox: str, py_sandbox: bool, privileged: bool
 ) -> None:

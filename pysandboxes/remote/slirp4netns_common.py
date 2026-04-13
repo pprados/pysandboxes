@@ -170,13 +170,14 @@ def run_slirp_watcher(
     if child_pid is not None:
         pid = child_pid
     elif pid_file is not None:
-        pid = _wait_for_pid_file(pid_file, timeout, shutdown_event)
-        if pid is None:
+        pid_maybe = _wait_for_pid_file(pid_file, timeout, shutdown_event)
+        if pid_maybe is None:
             try:
                 os.close(pipe_w)
             except OSError:
                 pass
             return
+        pid = pid_maybe
         logger.debug("slirp_watcher: got pid=%s", pid)
     else:
         logger.error("slirp_watcher: need child_pid or pid_file")

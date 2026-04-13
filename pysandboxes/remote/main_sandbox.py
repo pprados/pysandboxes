@@ -25,7 +25,7 @@ import sys
 import time
 from logging import StreamHandler
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ..config import DEBUG
 from .daemon_parameters import DaemonParameters
@@ -124,7 +124,8 @@ def _wait_network_ready() -> None:
             continue
     logger.warning(
         "Network not reachable after %.0fs; continuing anyway. "
-        "If using bwrap --unshare-net, ensure slirp4netns runs and iptables has cap_net_admin (or use bwrap.share-net=yes).",
+        "If using bwrap --unshare-net, ensure slirp4netns runs and iptables has "
+        "cap_net_admin (or use bwrap.share-net=yes).",
         _NETWORK_READY_TIMEOUT,
     )
 
@@ -174,12 +175,11 @@ def run_guest(process_config: DaemonParameters) -> int:
             _qemu_show_boot_console_guest_trace(
                 process_config, "run_guest: before python_in_sb"
             )
-            from pysandboxes.python_sb import (
+            from .python_in_sb import python_in_sb
+            from .vm_sse_daemon import (
                 PYTHON_OUTPUT_END,
                 PYTHON_OUTPUT_START,
             )
-
-            from .python_in_sb import python_in_sb
 
             print(PYTHON_OUTPUT_START, flush=True, file=sys.stderr)
             try:
@@ -255,9 +255,12 @@ async def run_server(process_config: DaemonParameters) -> int:
 
     from ..remote.sse_server_daemon import SSEServerDaemon
 
-    server_daemon: SSEServerDaemon = providers_factory["_sse_server"](
-        process_config.token,
-        port=process_config.port,
+    server_daemon = cast(
+        SSEServerDaemon,
+        providers_factory["_sse_server"](
+            process_config.token,
+            port=process_config.port,
+        ),
     )
     assert isinstance(server_daemon, SSEServerDaemon)
     _set_current_daemon(server_daemon)

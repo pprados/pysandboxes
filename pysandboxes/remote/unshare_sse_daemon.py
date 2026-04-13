@@ -19,7 +19,6 @@ import os
 import pickle
 import random
 import site
-import socket as socket_mod
 import subprocess
 import sys
 import tempfile
@@ -37,7 +36,7 @@ from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..guard_files import BindRule, IgnoreRule
-from ..guard_socket import Action, Direction, Kind, SocketRule
+from ..guard_socket import Action, Direction, SocketRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg, pysandboxes_logger
 from ..netfilter import rule_to_netfilter
