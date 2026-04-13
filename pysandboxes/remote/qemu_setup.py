@@ -19,12 +19,6 @@ from .vm_sse_daemon import VMSSEDaemon
 
 logger = logging.getLogger(__name__)
 
-
-def _qemu_show_boot_console_truthy(all_rules: Any | None) -> bool:
-    """Backward-compatible name; logic lives on :class:`VMSSEDaemon`."""
-    return VMSSEDaemon.show_boot_console_truthy(all_rules)
-
-
 GUEST_CIDATA_MOUNT = "/mnt/cidata"
 GUEST_RUN_MOUNT = "/mnt/pysandbox_run"
 GUEST_CONFIG_MOUNT = "/mnt/pysandbox_config"
@@ -38,6 +32,11 @@ NINEP_MOUNTS_FILE = "9p_mounts"
 PYTHON_EXE_FILE = "python_exe"
 PYTHON_VERSION_FILE = "python_version"
 IGNORE_OVERLAYS_FILE = "ignore_overlays"
+
+
+def _qemu_show_boot_console_truthy(all_rules: Any | None) -> bool:
+    """Backward-compatible name; logic lives on :class:`VMSSEDaemon`."""
+    return VMSSEDaemon.show_boot_console_truthy(all_rules)
 
 
 def augment_all_rules_for_qemu_run_mount(all_rules: AllRules) -> AllRules:

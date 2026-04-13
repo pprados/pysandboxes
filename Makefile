@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready init packmind-import
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready minikube-build-images init packmind-import
 
 # Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
@@ -38,9 +38,16 @@ unit-tests:
 minikube-ready:
 	@command -v minikube >/dev/null 2>&1 && (minikube status >/dev/null 2>&1 || (minikube start && kubectl wait --for=condition=Ready nodes --all --timeout=120s 2>/dev/null && (kubectl wait --for=condition=Ready pod -l k8s-app=kube-dns -n kube-system --timeout=120s 2>/dev/null || true))) || true
 
+## Build all provider images into minikube's Docker (no-op if minikube is missing or not running).
+minikube-build-images:
+	@if command -v minikube >/dev/null 2>&1 && minikube status >/dev/null 2>&1; then \
+	  eval $$(minikube docker-env) && $(MAKE) build-image-docker; \
+	fi
+
 ## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed). Use OS_SANDBOX (default: unshare).
 container-tests: build-image
 	$(MAKE) minikube-ready
+	$(MAKE) minikube-build-images
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && OS_SANDBOX=$${OS_SANDBOX:-unshare} uv run pytest -v tests/containers_tests/
 
 ## Make integration tests

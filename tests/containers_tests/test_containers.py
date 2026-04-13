@@ -389,13 +389,6 @@ def _run_container_runtime(
                 elapsed,
                 CONTAINER_RUN_TIMEOUT,
             )
-            print(
-                f"[container-test] {runtime} still running: os_sandbox={os_sandbox}, "
-                f"elapsed={elapsed:.0f}s, timeout={CONTAINER_RUN_TIMEOUT}s "
-                f"(CONTAINER_TEST_HEARTBEAT_SEC={interval}; nested TCG can be very slow)",
-                file=sys.stderr,
-                flush=True,
-            )
 
     hb = threading.Thread(
         target=_heartbeat, name="container-test-heartbeat", daemon=True
@@ -525,7 +518,7 @@ def _ensure_minikube_ready() -> None:
             "minikube not found in PATH; install minikube to run Kubernetes tests"
         ) from None
     except subprocess.CalledProcessError:
-        print("minikube is not running, starting minikube...")
+        logger.info("minikube is not running, starting minikube...")
         subprocess.run(
             ["minikube", "start"],
             cwd=ROOT_DIR,
@@ -533,7 +526,7 @@ def _ensure_minikube_ready() -> None:
             capture_output=False,
         )
 
-    print("Waiting for minikube node(s) to be Ready...")
+    logger.info("Waiting for minikube node(s) to be Ready...")
     r = subprocess.run(
         [
             "kubectl",
@@ -552,7 +545,7 @@ def _ensure_minikube_ready() -> None:
             f"minikube nodes did not become Ready in {MINIKUBE_NODE_READY_TIMEOUT}s: {r.stderr or r.stdout}"
         )
 
-    print("Waiting for CoreDNS (kube-dns) to be Ready...")
+    logger.info("Waiting for CoreDNS (kube-dns) to be Ready...")
     subprocess.run(
         [
             "kubectl",
@@ -571,26 +564,10 @@ def _ensure_minikube_ready() -> None:
     # Non-fatal: cluster may still work; DNS can lag slightly after node ready
 
 
-def _make_stamp_for_os_sandbox(os_sandbox: str) -> str:
-    """Makefile stamp that produces the image for this OS_SANDBOX provider (for forced rebuild)."""
-    provider = (os_sandbox or "base").lower()
-    if provider in ("none", "subprocess"):
-        return ".make-build-image-base"
-    return f".make-build-image-{provider}"
-
-
-def _ensure_minikube_image(os_sandbox: str) -> None:
-    """Build provider images in minikube's Docker daemon; force rebuild if stamps skip but image is missing."""
+def _assert_minikube_image(os_sandbox: str) -> None:
+    """Require the provider image in minikube's Docker daemon (built by Makefile, not by tests)."""
     env = _minikube_docker_env()
     image_ref = _image_for_os_provider(os_sandbox)
-    print("Building images in minikube's Docker daemon (make build-image-docker)...")
-    subprocess.run(
-        ["make", "build-image-docker"],
-        cwd=ROOT_DIR,
-        env=env,
-        check=True,
-        capture_output=False,
-    )
     inspect = subprocess.run(
         ["docker", "image", "inspect", image_ref],
         cwd=ROOT_DIR,
@@ -599,30 +576,11 @@ def _ensure_minikube_image(os_sandbox: str) -> None:
         text=True,
     )
     if inspect.returncode != 0:
-        stamp = _make_stamp_for_os_sandbox(os_sandbox)
-        print(
-            f"Image {image_ref!r} not present in minikube Docker "
-            f"(host stamps can skip builds); forcing make -B {stamp}..."
+        raise RuntimeError(
+            f"Image {image_ref!r} not found in minikube's Docker daemon. "
+            "Build with: eval $(minikube docker-env) && make build-image-docker "
+            "(or run make container-tests, which runs minikube-build-images)."
         )
-        subprocess.run(
-            ["make", "-B", stamp],
-            cwd=ROOT_DIR,
-            env=env,
-            check=True,
-            capture_output=False,
-        )
-        verify = subprocess.run(
-            ["docker", "image", "inspect", image_ref],
-            cwd=ROOT_DIR,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-        if verify.returncode != 0:
-            raise RuntimeError(
-                f"After forced rebuild, image {image_ref!r} is still missing in minikube Docker. "
-                f"docker stderr: {verify.stderr or verify.stdout}"
-            )
 
 
 def _stop_minikube_mount(mount_proc: subprocess.Popen) -> None:
@@ -633,7 +591,7 @@ def _stop_minikube_mount(mount_proc: subprocess.Popen) -> None:
     """
     if mount_proc.poll() is not None:
         return
-    print(f"Stopping minikube mount (PID: {mount_proc.pid})...")
+    logger.info(f"Stopping minikube mount (PID: {mount_proc.pid})...")
     if os.name == "posix":
         try:
             os.killpg(mount_proc.pid, signal.SIGTERM)
@@ -671,7 +629,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     rc = 0
 
     def cleanup() -> None:
-        print("\n--- Cleaning up resources ---")
+        logger.info("\n--- Cleaning up resources ---")
         if mount_proc is not None:
             _stop_minikube_mount(mount_proc)
         subprocess.run(
@@ -683,9 +641,9 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
 
     try:
         _ensure_minikube_ready()
-        _ensure_minikube_image(os_sandbox)
+        _assert_minikube_image(os_sandbox)
 
-        print("Starting minikube mount in background...")
+        logger.info("Starting minikube mount in background...")
         mount_proc = subprocess.Popen(
             ["minikube", "mount", f"{ROOT_DIR}:/mnt/pysandboxes"],
             cwd=ROOT_DIR,
@@ -712,7 +670,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             f.write(manifest_text)
             manifest_path = f.name
         try:
-            print(f"Applying Kubernetes manifest (image={image_name})...")
+            logger.info(f"Applying Kubernetes manifest (image={image_name})...")
             subprocess.run(
                 ["kubectl", "apply", "-f", manifest_path],
                 cwd=ROOT_DIR,
@@ -722,7 +680,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
         finally:
             Path(manifest_path).unlink(missing_ok=True)
 
-        print(f"Waiting for pod {POD_NAME} to be ready...")
+        logger.info(f"Waiting for pod {POD_NAME} to be ready...")
         r = subprocess.run(
             [
                 "kubectl",
@@ -736,7 +694,9 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             cwd=ROOT_DIR,
         )
         if r.returncode != 0:
-            print(f"ERROR: Pod did not become Ready in {WAIT_TIMEOUT}s. Pod status:")
+            logger.error(
+                f"ERROR: Pod did not become Ready in {WAIT_TIMEOUT}s. Pod status:"
+            )
             subprocess.run(
                 ["kubectl", "get", "pod", POD_NAME, "-o", "wide"],
                 capture_output=False,
@@ -749,7 +709,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             )
             rc = 1
         else:
-            print("Waiting for DNS resolution inside pod...")
+            logger.info("Waiting for DNS resolution inside pod...")
             dns_ok = False
             for i in range(1, DNS_WAIT + 1):
                 r = subprocess.run(
@@ -759,11 +719,11 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                     cwd=ROOT_DIR,
                 )
                 if r.returncode == 0:
-                    print(f"DNS ready after {i}s")
+                    logger.debug(f"DNS ready after {i}s")
                     dns_ok = True
                     break
                 if i == DNS_WAIT:
-                    print(f"ERROR: DNS resolution failed after {DNS_WAIT}s")
+                    logger.error(f"ERROR: DNS resolution failed after {DNS_WAIT}s")
                     rc = 1
                     break
                 time.sleep(1)
@@ -781,14 +741,13 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                     f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
                 )
 
-                print(
+                logger.info(
                     f"Executing tests inside the pod (timeout: {exec_timeout}s, "
                     f"os_sandbox={os_sandbox})..."
                 )
-                print(
+                logger.info(
                     "kubectl exec output streams below (no pipe capture — avoids deadlock "
                     "and long QEMU/TCG silence). Nested qemu can take many minutes.",
-                    flush=True,
                 )
                 stop_k8s_hb = threading.Event()
 
@@ -806,13 +765,6 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                             os_sandbox,
                             elapsed,
                             exec_timeout,
-                        )
-                        print(
-                            f"[k8s-test] kubectl exec still running: os_sandbox={os_sandbox}, "
-                            f"elapsed={elapsed:.0f}s, timeout={exec_timeout}s "
-                            f"(CONTAINER_TEST_HEARTBEAT_SEC={interval}; QEMU/TCG boot can take many minutes)",
-                            file=sys.stderr,
-                            flush=True,
                         )
 
                 hb_k8s = threading.Thread(
@@ -840,26 +792,23 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                     )
                     rc = exec_result.returncode
                     if rc != 0:
-                        print(
+                        logger.debug(
                             f"ERROR: kubectl exec exited {rc} (os_sandbox={os_sandbox})",
-                            file=sys.stderr,
-                            flush=True,
                         )
                 except subprocess.TimeoutExpired:
-                    print(
+                    logger.debug(
                         f"ERROR: Test execution timed out after {exec_timeout}s "
                         f"(os_sandbox={os_sandbox})",
-                        flush=True,
                     )
                     rc = 1
                 finally:
                     stop_k8s_hb.set()
     except subprocess.TimeoutExpired:
-        print("ERROR: A subprocess timed out during the Kubernetes pod test")
+        logger.debug("ERROR: A subprocess timed out during the Kubernetes pod test")
         rc = 1
     finally:
         # Fetch pod logs before deleting the pod (kubectl logs fails with NotFound after delete)
-        print("--- Pod logs (container stdout/stderr) ---")
+        logger.info("--- Pod logs (container stdout/stderr) ---")
         log_result = subprocess.run(
             ["kubectl", "logs", POD_NAME],
             capture_output=True,
@@ -880,7 +829,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             print(log_result.stderr, file=sys.stderr)
         cleanup()
 
-    print("********* Kubernetes pod test complete *********")
+    logger.info("********* Kubernetes pod test complete *********")
     return rc
 
 
