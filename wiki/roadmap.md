@@ -60,11 +60,11 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [X] MCP server
   - [X] MCP client
   - [ ] A2A protocol
-  - [ ] langchain / langgraph
-  - [ ] [Crewai](https://www.crewai.com/)
-  - [ ] Google ADK
+  - [/] langchain / langgraph
+  - [/] [Crewai](https://www.crewai.com/)
+  - [ ] [Google ADK](https://google.github.io/adk-docs/)
   - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
-  - [ ] Pydantic.ai
+  - [ ] [Pydantic.ai](https://ai.pydantic.dev/)
   - [ ] [Strandsagents](https://strandsagents.com)
 - [ ] Features
   - [ ] Compile a part of code
