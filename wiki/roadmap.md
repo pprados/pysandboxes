@@ -63,9 +63,12 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [/] langchain / langgraph
   - [/] [Crewai](https://www.crewai.com/)
   - [/] [Google ADK](https://google.github.io/adk-docs/)
-  - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
+  - [/] [Smolagent](https://huggingface.co/docs/smolagents/index)
   - [ ] [Pydantic.ai](https://ai.pydantic.dev/)
   - [ ] [Strandsagents](https://strandsagents.com)
+  - [ ] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
+  - [ ] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
+  - [ ] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
 - [ ] Features
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id
