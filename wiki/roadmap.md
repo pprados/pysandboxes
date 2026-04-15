@@ -61,7 +61,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] A2A protocol
   - [/] [Crewai](https://www.crewai.com/)
   - [/] [Google ADK](https://google.github.io/adk-docs/)
-  - [ ] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
+  - [X] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
   - [X] MCP client
   - [X] MCP server
   - [ ] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
