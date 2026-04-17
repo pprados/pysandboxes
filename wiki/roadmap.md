@@ -64,7 +64,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [/] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
   - [X] MCP client
   - [X] MCP server
-  - [ ] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
+  - [/] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
   - [/] [Pydantic.ai](https://ai.pydantic.dev/)
   - [/] [Smolagent](https://huggingface.co/docs/smolagents/index)
   - [ ] [Strandsagents](https://strandsagents.com)
