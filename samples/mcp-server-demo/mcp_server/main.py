@@ -11,6 +11,8 @@ from typing import Any
 import httpx
 from fastmcp import FastMCP
 from httpx_file import FileTransport
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from markdownify import markdownify as md
 from pysandboxes import is_in_sandbox, sandbox, sandboxes
 from pysandboxes.remote.tools import set_pdeathsig
@@ -37,7 +39,7 @@ mcp = FastMCP(
 RESOURCES_DIR = Path(__file__).parent.parent / "resources"
 
 
-@mcp.resource("config://version")
+@mcp.resource("mcp-server-demo://version")
 def get_version() -> str:
     return "1.0.0"
 
@@ -135,6 +137,50 @@ def summarize_webpage(url: str) -> str:
     return f"""Please fetch and summarize the webpage at {url}.
 Use the fetch_webpage tool to get the content, then provide a concise summary."""
 
+_streamable_http_stale_session_patch_applied = False
+
+
+def _apply_streamable_http_stale_session_patch() -> None:
+    """Let browsers (MCP Inspector) recover after server restart.
+
+    The Python MCP SDK returns 400 when ``mcp-session-id`` is set but unknown.
+    The Inspector often keeps the old id across reconnects while the server map
+    was cleared, so we drop the header and start a new session (demo / local use).
+    """
+    global _streamable_http_stale_session_patch_applied
+    if _streamable_http_stale_session_patch_applied:
+        return
+    from mcp.server.streamable_http import MCP_SESSION_ID_HEADER
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    from starlette.requests import Request
+    from starlette.types import Receive, Scope, Send
+
+    _hdr = MCP_SESSION_ID_HEADER.lower().encode("latin-1")
+    _orig = StreamableHTTPSessionManager._handle_stateful_request
+
+    async def _handle_stateful_request(
+        self: StreamableHTTPSessionManager,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        if scope["type"] == "http":
+            req = Request(scope, receive)
+            sid = req.headers.get(MCP_SESSION_ID_HEADER)
+            if sid is not None and sid not in self._server_instances:
+                logger.info(
+                    "Ignoring unknown mcp-session-id (stale client session): %s",
+                    sid[:16] + "..." if len(sid) > 16 else sid,
+                )
+                filtered = [
+                    (k, v) for k, v in scope["headers"] if k.lower() != _hdr
+                ]
+                scope = {**scope, "headers": filtered}
+        await _orig(self, scope, receive, send)
+
+    StreamableHTTPSessionManager._handle_stateful_request = _handle_stateful_request
+    _streamable_http_stale_session_patch_applied = True
+
 
 def run_mcp_server(
     py_sandbox: str,
@@ -154,7 +200,26 @@ def run_mcp_server(
     ):
         add_parameters: dict[str, Any] = {}
         if transport == "http":
-            add_parameters = {"host": "0.0.0.0", "port": port}
+            _apply_streamable_http_stale_session_patch()
+            # MCP Streamable HTTP does not implement OPTIONS; browsers (MCP Inspector)
+            # send a CORS preflight that must be answered before POST/GET succeed.
+            add_parameters = {
+                "host": "0.0.0.0",
+                "port": port,
+                "middleware": [
+                    Middleware(
+                        CORSMiddleware,
+                        allow_origins=["*"],
+                        allow_methods=["*"],
+                        allow_headers=["*"],
+                        expose_headers=[
+                            "mcp-session-id",
+                            "mcp-protocol-version",
+                            "last-event-id",
+                        ],
+                    )
+                ],
+            }
         mcp.run(
             transport=transport,
             show_banner=False,

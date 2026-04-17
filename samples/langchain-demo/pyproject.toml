@@ -15,6 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
+    "pysandboxes",
     "langchain>=1.0",
     "langchain-core>=0.3",
     "langchain-openai",

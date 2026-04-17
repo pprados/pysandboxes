@@ -1,0 +1,10 @@
+{
+  "execution": {
+    "headless": false,
+    "no_tests": false,
+    "scope_pattern": null,
+    "blocked_at": null
+  },
+  "last_completed_stage": null,
+  "command_gates": []
+}

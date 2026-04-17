@@ -134,7 +134,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
 
 
 # @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
-@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
+@pytest.mark.skipif(not os.environ.get("CHAT_MODEL"), reason="Set CHAT_MODEL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
@@ -201,7 +201,7 @@ def test_claude_evaluate_expression(
 
 
 @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
-@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
+@pytest.mark.skipif(not os.environ.get("CHAT_MODEL"), reason="Set CHAT_MODEL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)

@@ -12,6 +12,8 @@ It offers the following services:
 
 This demonstrates the added value of **Py-sandboxes**. Security rules will limit the capabilities of the MCP server, using only a parameter file.
 
+This sample **does not** call an LLM: there is no `CHAT_MODEL` or provider URL configuration here. The CLI chat model and SQLite provider registry live in [`../mcp-client-demo`](../mcp-client-demo/README.md).
+
 ## Installation
 
 ```bash

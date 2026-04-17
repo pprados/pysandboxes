@@ -17,13 +17,16 @@ uv sync
 ```
 ### Set up environment variables:
 
-Create a `.env` file in the root directory and add your API key:
+Create a `.env` file in the sample root (see `.env.example`). The chatbot uses an **OpenAI-compatible** HTTP API. You choose the remote model with `CHAT_MODEL` in the form `provider/model`; the base URL for each `provider` is stored in a small **SQLite** registry shipped with the client (`mcp_simple_chatbot/provider_registry.py`, file `provider_urls.sqlite` created on first run).
 
 ```plaintext
-OPENAI_API_KEY=your_api_key_here
+export CHAT_MODEL=openai/gpt-4o-mini
+API_KEY=your_api_key_here
 ```
 
-> **Note:** The current implementation is configured to use the [Groq API endpoint](`https://api.groq.com/openai/v1/chat/completions`) with the `llama-3.2-90b-vision-preview` model or OpenAI. If you plan to use a different LLM provider, you\'ll need to modify the `LLMClient` class in `main.py` to use the appropriate endpoint URL and model parameters and the `.env` file.
+Built-in providers (see `_DEFAULT_SEED` in `provider_registry.py`) include among others `cerebras`, `deepseek`, `fireworks`, `groq`, `mistral`, `ollama` (local), `openai`, `openrouter`, `together`, and `xai`. To add a provider, insert a row into the SQLite table `providers` (or set `CHAT_PROVIDER_URLS_DB` to your own database file).
+
+> **Note:** `API_KEY` is the bearer token for the provider you use (OpenAI, xAI, Groq, etc.). It replaces the older separate `API_URL` and `MODEL` variables.
 
 ### Configure servers
 
