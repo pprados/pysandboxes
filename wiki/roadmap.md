@@ -31,6 +31,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [X] firejail
     - [X] unshare
     - [X] bwrap
+    - [ ] Proxy (voir proxy.md)
   - [ ] Container
     - [X] Docker (--privileged with unshare)
     - [X] podman (--privileged with unshare)
@@ -50,6 +51,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
+    - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html) 
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
