@@ -57,11 +57,11 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] App Sandbox
     - [ ] sandbox-exec
 - [ ] New samples
-  - [ ] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
+  - [/] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
   - [ ] A2A protocol
   - [/] [Crewai](https://www.crewai.com/)
   - [/] [Google ADK](https://google.github.io/adk-docs/)
-  - [X] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
+  - [/] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
   - [X] MCP client
   - [X] MCP server
   - [ ] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)

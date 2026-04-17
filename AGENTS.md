@@ -30,7 +30,7 @@ Each sample uses a dedicated directory and uv environment.
 You must navigate to it before running the sample's tests.
 
 ```bash
-cd samples/mcp-client-demo   # or samples/mcp-server-demo, langchain-demo, …
+cd samples/mcp-client-demo   # or samples/mcp-server-demo, langchain-demo, agno-demo, …
 deactivate
 # Activate the specific environment
 source .venv/bin/activate
