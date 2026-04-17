@@ -58,7 +58,6 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] sandbox-exec
 - [ ] New samples
   - [/] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
-  - [ ] A2A protocol
   - [/] [Crewai](https://www.crewai.com/)
   - [/] [Google ADK](https://google.github.io/adk-docs/)
   - [/] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
@@ -67,7 +66,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [/] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
   - [/] [Pydantic.ai](https://ai.pydantic.dev/)
   - [/] [Smolagent](https://huggingface.co/docs/smolagents/index)
-  - [ ] [Strandsagents](https://strandsagents.com)
+  - [/] [Strandsagents](https://strandsagents.com)
   - [/] [langchain](https://www.langchain.com/)
 - [ ] Features
   - [ ] Compile a part of code
