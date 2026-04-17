@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 from fastmcp import Client
 from pysandboxes.tools import resolve_env_variables
 
+from .provider_registry import ResolvedChatModel, resolve_chat_model
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -29,6 +31,7 @@ class Configuration:
         """Initialize configuration with environment variables."""
         self.load_env()
         self.api_key = self._get_api_key()
+        self.chat: ResolvedChatModel = resolve_chat_model()
 
     @staticmethod
     def load_env() -> None:
@@ -57,6 +60,16 @@ class Configuration:
         """Get the LLM API key."""
         return self.api_key
 
+    @property
+    def chat_completions_url(self) -> str:
+        """OpenAI-compatible chat completions URL for the selected provider."""
+        return self.chat.chat_completions_url
+
+    @property
+    def llm_model(self) -> str:
+        """Remote model name passed to the provider API."""
+        return self.chat.model
+
 
 def _extract_first_json(text: str) -> Dict[str, Any] | List[Any] | None:
     decoder: json.JSONDecoder = json.JSONDecoder()
@@ -81,12 +94,14 @@ def _extract_first_json(text: str) -> Dict[str, Any] | List[Any] | None:
 class LLMClient:
     """Manages communication with the LLM provider."""
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, chat_completions_url: str, model: str) -> None:
         self.api_key = api_key
+        self.chat_completions_url = chat_completions_url
+        self.model = model
 
     def get_response(self, messages: List[Dict[str, str]]) -> str:
         """Get a response from the LLM."""
-        url = os.environ["API_URL"]
+        url = self.chat_completions_url
 
         headers = {
             "Content-Type": "application/json",
@@ -94,7 +109,7 @@ class LLMClient:
         }
         payload = {
             "messages": messages,
-            "model": os.environ["MODEL"],
+            "model": self.model,
             "temperature": 0.7,
             "max_tokens": 4096,
             "top_p": 1,
@@ -300,7 +315,11 @@ async def run(args: argparse.Namespace) -> None:
     client = Client(server_config, roots=[str(Path("./resources").resolve().as_uri())])
     async with client:
 
-        llm_client = LLMClient(config.llm_api_key)
+        llm_client = LLMClient(
+            config.llm_api_key,
+            config.chat_completions_url,
+            config.llm_model,
+        )
         chat_session = ChatSession(client, llm_client)
         if args.print:
             logger.info("Invoke ")

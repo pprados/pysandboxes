@@ -1,3 +1,5 @@
 .local.py-sandboxes
 .env
 .venv
+# Generated on first run (seeded providers); optional override via CHAT_PROVIDER_URLS_DB
+mcp_simple_chatbot/provider_urls.sqlite

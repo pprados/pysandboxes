@@ -3,7 +3,7 @@
 import io
 import logging
 import re
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 from langchain_core.tools import tool
@@ -12,12 +12,6 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 15.0
 _MAX_BODY_CHARS = 8000
-
-# Stdlib modules execute_python may load via `import` (restricted __import__).
-_ALLOWED_IMPORTS: frozenset[str] = frozenset(
-    {"re", "math", "json", "itertools", "functools", "collections", "operator", "string"}
-)
-
 
 def _safe_import(
     name: str,
@@ -56,6 +50,59 @@ def fetch_webpage(url: str) -> str:
     if len(text) > _MAX_BODY_CHARS:
         return text[:_MAX_BODY_CHARS] + "\n... [truncated]"
     return text
+
+
+
+#%% ---------------------
+@tool
+def calculator(
+    expression: Annotated[str, "Mathematical expression to evaluate"]
+) -> str:
+    """
+    Evaluate a mathematical expression and return the result.
+
+    Args:
+        expression: A valid Python mathematical expression (e.g., "2+2",
+                   "sqrt(16)", "10**2")
+
+    Returns:
+        The result of the evaluation as a string
+
+    Examples:
+        >>> calculator("2 + 2")
+        '4'
+        >>> calculator("10 * 5")
+        '50'
+    """
+    try:
+        allowed_names = {
+            "abs": abs,
+            "round": round,
+            "min": min,
+            "max": max,
+            "sum": sum,
+            "pow": pow,
+        }
+
+        import math
+        allowed_names.update({
+            name: getattr(math, name)
+            for name in dir(math)
+            if not name.startswith("_")
+        })
+
+        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        return str(result)
+    except Exception as e:
+        return f"Error evaluating expression: {str(e)}"
+
+
+#%% ---------------------
+# Stdlib modules execute_python may load via `import` (restricted __import__).
+_ALLOWED_IMPORTS: frozenset[str] = frozenset(
+    {"re", "math", "json", "itertools", "functools", "collections", "operator", "string"}
+)
+
 
 
 def _safe_builtins() -> dict[str, Any]:

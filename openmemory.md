@@ -8,7 +8,7 @@
 
 Layered sandbox framework with Python guards and OS-level providers (unshare/bwrap, QEMU).
 
-- **MCP demos (samples):** `samples/mcp-client-demo` and `samples/mcp-server-demo` (renamed from `mcp-client` / `mcp-server`); server package/pyproject name `mcp-server-demo`, console script `mcp-server-demo`.
+- **MCP demos (samples):** `samples/mcp-client-demo` and `samples/mcp-server-demo` (renamed from `mcp-client` / `mcp-server`); server package/pyproject name `mcp-server-demo`, console script `mcp-server-demo`. **HTTP + MCP Inspector (browser):** `mcp_server.main` enables Starlette `CORSMiddleware` on `transport="http"` so OPTIONS preflight succeeds (SDK transport only allows GET/POST/DELETE); expose `mcp-session-id` / `mcp-protocol-version` / `last-event-id`. **Stale `mcp-session-id`:** monkeypatch on `StreamableHTTPSessionManager._handle_stateful_request` drops unknown session ids so Inspector reconnect after server restart does not get 400 "No valid session ID provided".
 
 - **`python_sb` VM path:** Host launch (temp prefix, `launch_args` without `--_named-pipe` append, guest `exitcode` read) uses **`isinstance(os_provider, VMSSEDaemon)`** — not `os_sandbox == "qemu"` — so additional VM hypervisors can share the same branch. **`VMSSEDaemon`** (`vm_sse_daemon.py`) holds shared hooks: `host_run_temp_prefix`, `guest_run_dir_mount`, `augment_rules_for_guest_run_mount`, `show_boot_console_truthy`, `wait_process_and_filter_console`, `read_guest_exitcode`; **`QemuSSEDaemon`** implements them (QEMU-specific bits stay in `qemu_setup` / `qemu_sse_daemon`). **`main_sandbox`** imports `PYTHON_OUTPUT_*` sentinels from **`vm_sse_daemon`**, not `python_sb`.
 

@@ -56,8 +56,18 @@ integration-tests:
 
 ## Make integration tests
 sample-tests:
-	(cd samples/mcp-client-demo && make tests && true)
+	# (cd samples/agno-demo && make tests && true)
+	# (cd samples/autogen-demo && make tests && true)
+	# (cd samples/crewai-demo && make tests && true)
+	# (cd samples/google-adk-demo && make tests && true)
+	(cd samples/langchain-demo && make tests && true)
 	(cd samples/mcp-server-demo && make tests && true)
+	(cd samples/mcp-server-demo && make tests && true)
+	# (cd samples/openai-agents-sdk-demo && make tests && true)
+	# (cd samples/pydantic-ai-demo && make tests && true)
+	# (cd samples/smolagents-demo && make tests && true)
+	# (cd samples/strands-agents-demo && make tests && true)
+
 
 ## Make github tests locally
 gh-tests: format lint

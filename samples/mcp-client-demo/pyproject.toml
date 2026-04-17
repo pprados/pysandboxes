@@ -1,5 +1,5 @@
 [project]
-name = "mcp-simple-chatbot"
+name = "mcp-client-demo"
 version = "0.1.0"
 description = "Sample mcp-client-demo: CLI chatbot using the Model Context Protocol (MCP)"
 readme = "README.md"

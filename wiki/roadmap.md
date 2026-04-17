@@ -38,6 +38,8 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] Flatpak
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
+    - [ ] gVisor (user space kernel simulation, without docker)
+    - [ ] Firecracker
   - [ ] VM
     - [X] Qemu
     - [ ] multipass
