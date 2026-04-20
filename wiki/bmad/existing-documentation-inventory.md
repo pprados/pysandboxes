@@ -24,6 +24,5 @@
 | python-sb/README.md | readme | main |
 | .github/instructions/*.md | instructions | main |
 | .github/prompts/*.md | prompts | main |
-| .packmind/standards/*.md | standards | main |
 
-**Total:** 14+ project docs (readme, wiki, AGENTS) + sample READMEs + .github/.packmind.
+**Total:** 14+ project docs (readme, wiki, AGENTS) + sample READMEs.

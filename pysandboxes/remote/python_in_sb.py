@@ -122,7 +122,7 @@ def _python_interactive(
         sys.modules["__main__"] = ModuleType(name="__main__")
 
         import IPython
-        from traitlets.config import get_config
+        from traitlets.config import get_config  # type: ignore
 
         c = get_config()
 

@@ -57,7 +57,6 @@ Add a new provider **`qemu`** that:
 
 ### Codebase Patterns
 
-- **Daemon lifecycle**: Extend `BaseSubProcessDaemon`; implement `_start`, `_stop`, `_shutdown`; define `__slots__` for all instance attributes (see `.packmind/standards/daemon-lifecycle-pattern.md`).
 - **Provider registration**: Add to `providers_factory` in `_os_sandbox.py`; guard_provider validates `os-sandbox=qemu`; provider-specific params via `parse_rules` (e.g. `qemu.*` → `os_sandbox_params`).
 - **Subprocess vs QEMU**: For `qemu`, the “subprocess” is the QEMU binary; the host does not run `python -m main_sandbox`. The guest runs the equivalent of main_sandbox (SSE server) after reading config from the pipe. Launch path in `python_sb.py` must support a provider that returns a QEMU command (and optionally different handling for pipe/process).
 - **Config injection**: Unshare uses `UnshareSetupConfig` (JSON) and a named pipe; firejail uses FIFOs for netfilter. For QEMU, same conceptual flow: host writes structured config (params + netfilter rules) to a pipe; guest reads and applies. Pipe is exposed to guest via 9p mount of the host temp dir.
