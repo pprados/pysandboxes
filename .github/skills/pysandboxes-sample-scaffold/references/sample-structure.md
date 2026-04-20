@@ -68,7 +68,6 @@ Contenu minimal recommandé :
 
 - **Package Python** : un répertoire (snake_case) avec `__init__.py` et modules du sample (ex. `mcp_server/`, `mcp_simple_chatbot/`).
 - **tests/** : `tests/` à la racine du sample avec `__init__.py` et modules `test_*.py` ; `TEST_FILE ?= tests` dans le Makefile.
-- Optionnel : `resources/`, `.vscode/`, `.packmind/`, fichiers de config (`.env.example`, `packmind.json`, configs MCP, etc.).
 
 ## Conventions
 

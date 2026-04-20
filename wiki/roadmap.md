@@ -108,3 +108,56 @@ To strengthen security, we are considering compiling a part of the project to ma
 
 ## Propagate the tracability id
 The protocol break prevents tracking with OpenTelemetry. We want to propagate the necessary information to get a complete trace.
+
+
+## Dangerous patterns
+```
+DANGEROUS_PATTERNS = [
+
+    # Dynamic code execution
+    r"\b__import__\b",
+    r"\bimportlib\b",
+    r"\beval\s*\(",
+    r"\bexec\s*\(",
+    r"\bcompile\s*\(",
+    r"\btype\s*\(",
+    r"\bcallable\s*\(",
+
+    # Builtins/attribute access
+    r"\b__builtins__\b",
+    r"\b__dict__\b",
+    r"\b__class__\b",
+    r"\b__globals__\b",
+    r"\b__setattr__\b",
+    r"\b__getattribute__\b",
+
+    # Introspection
+    r"\bglobals\s*\(",
+    r"\blocals\s*\(",
+    r"\bvars\s*\(",
+    r"\bdir\s*\(",
+    r"\bgetattr\s*\(",
+    r"\bsetattr\s*\(",
+    r"\bdelattr\s*\(",
+    r"\bhasattr\s*\(",
+
+    # Deserialization
+    r"\bpickle\b",
+    r"\bmarshal\b",
+    r"\bloads\s*\(",
+
+    # File access
+    r"\bopen\s*\(",
+    r"\binput\s*\(",
+    r"\braw_input\s*\(",
+
+    # Shell patterns
+    r"\bbash\b",
+    r"\bsh\b",
+    r"\bcmd\b",
+    r"/bin/",
+    r"\bsubprocess\b",
+    r"\bos\.system\b",
+    r"\bpopen\s*\(",
+]
+```

@@ -1340,7 +1340,7 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
         while True:
             try:
                 while True:
-                    entry: os.DirEntry[str] = self.scanner.__next__()
+                    entry: os.DirEntry[str] = self.scanner.__next__()  # type: ignore
                     if _check_alias.get():
                         dest_path, rule = _apply_src_to_dest_rules(
                             entry.path, accept_src=False, accept_dest=True

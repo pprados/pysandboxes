@@ -11,7 +11,6 @@
 ## Setup
 
 1. Clone the repository.
-2. From project root: `make init` (runs `uv sync` with dev/test/lint groups and packmind-import).
 3. Optional: copy or create `.env` if needed (see README); tests load `.env` via Makefile.
 
 ## Key commands (Makefile)
@@ -19,7 +18,6 @@
 | Target | Description |
 |--------|-------------|
 | `make help` | List all targets |
-| `make init` | Install deps (uv sync), packmind-import |
 | `make format` | Black + ruff import sort |
 | `make lint` | mypy, pyright, black --check, ruff (after format) |
 | `make spell_check` | codespell (config in pyproject.toml) |

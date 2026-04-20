@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready minikube-build-images init packmind-import
+.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready minikube-build-images init sync-rules
 
 # Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
@@ -27,7 +27,29 @@ fix-vs-code: .vscode/launch.json
 
 fix-gemini: .gemini/commands/*
 
-.env:
+
+###############
+# TEMPLATE COMPRESSION
+###############
+
+# Generic rule: convert *.template.md/.mdc to *.md with caveman ultra compression via API
+%.md: %.template.md
+	@uv run python3 scripts/compress_template.py $< $@
+
+%.md: %.template.mdc
+	@uv run python3 scripts/compress_template.py $< $@
+
+## Compress AGENTS.md from template
+AGENTS.md: AGENTS.template.md
+
+## Compress all .ai/rules/*.md from templates (.template.md and .template.mdc)
+.ai/rules/%.md: .ai/rules/%.template.md
+.ai/rules/%.md: .ai/rules/%.template.mdc
+
+# Compress all templates (AGENTS + rules)
+.NOTPARALLEL: compress-templates
+.PHONY: compress-templates
+compress-templates: AGENTS.md $(patsubst .ai/rules/%.template.md,.ai/rules/%.md,$(wildcard .ai/rules/*.template.md)) $(patsubst .ai/rules/%.template.mdc,.ai/rules/%.md,$(wildcard .ai/rules/*.template.mdc))
 
 ## Make unit test
 unit-tests:
@@ -188,8 +210,8 @@ BUILD_SOURCES = pyproject.toml README.md $(shell find pysandboxes -type f \( -na
 	uv build
 	@touch .make-dist
 
-## Build distribution (wheel/sdist); only runs when pyproject.toml, README.md or pysandboxes sources changed.
 .PHONY: dist
+## Build distribution (wheel/sdist); only runs when pyproject.toml, README.md or pysandboxes sources changed.
 dist: .make-dist
 
 # ---------------------------------------------------------------------------------------
@@ -393,7 +415,7 @@ DEVPI_PASS := 123
 	@$(MAKE) devpi-stop
 	@echo "✅ devpi initialized."
 
-## Start Devpi server
+## Start Devpi server (local python repo)
 devpi-start: .devpi
 	@if [ ! -f ".devpi/devpi.pid" ]; then \
 		devpi-server --serverdir .devpi > /dev/null 2>&1 & echo $$!>.devpi/devpi.pid ; \
@@ -436,7 +458,7 @@ packmind-import:
 		true; \
 	fi
 
-init: _uv-init packmind-import
+init: _uv-init
 #	@pre-commit install
 	gh extension install https://github.com/nektos/gh-act
 	@git lfs install 2>/dev/null || true
@@ -598,3 +620,7 @@ publish-minor:
 	git add CHANGELOG.md; \
 	git commit -m "Preparing future changelog" ; \
 	echo "=== MINOR draft release $$RELEASE_TITLE workflow completed successfully ==="
+
+## Synchronize rules from .ai/rules to editor directories
+sync-rules:
+	@python3 scripts/sync_rules.py

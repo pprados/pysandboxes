@@ -187,7 +187,6 @@ _VIRTFS_STAGE_SKIP_DIR_NAMES = frozenset(
         ".vscode",
         ".vs",
         ".github",
-        ".packmind",
         "_bmad",
         ".ia_backup",
         ".idea",

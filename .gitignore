@@ -204,5 +204,11 @@ tst_wasm/
 .cursor/rules/openmemory.mdc
 AGENTS.md
 _bmad/
-.ia/skills/bmad-*
-.ia/skills/packmind-*
+.ia/skills.new/bmad-*
+.ia/skills.new/packmind-*
+# CocoIndex Code (ccc)
+/.cocoindex_code/
+
+graphify-out/manifest.json    # mtime-based, breaks after git clone
+graphify-out/cost.json        # local only
+# graphify-out/cache/         # optional: commit for speed, skip to keep repo small
