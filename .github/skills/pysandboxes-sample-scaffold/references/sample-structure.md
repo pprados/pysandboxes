@@ -1,11 +1,11 @@
 # Structure d’un sample pysandboxes
 
-Ce document décrit la structure commune des samples du dépôt pysandboxes (ex. `samples/mcp-client`, `samples/mcp-server`), à reproduire pour tout nouveau sample.
+Ce document décrit la structure commune des samples du dépôt pysandboxes (ex. `samples/mcp-client-demo`, `samples/mcp-server-demo`), à reproduire pour tout nouveau sample.
 
 ## Emplacement
 
 - Chaque sample est un **sous-répertoire** de `samples/` à la racine du dépôt.
-- Nom du répertoire : kebab-case, ex. `mcp-client`, `mcp-server`, `my-new-sample`.
+- Nom du répertoire : kebab-case, ex. `mcp-client-demo`, `mcp-server-demo`, `my-new-sample`.
 
 ## Fichiers obligatoires à la racine du sample
 
@@ -47,7 +47,7 @@ Le nom du package Python (répertoire) est en snake_case, ex. `mcp_simple_chatbo
 - Titre et courte description du sample.
 - **Installation** : `cd path/to/sample` puis `uv sync` (ou `uv sync --reinstall`).
 - **Usage** : comment lancer l’appli ou les tests, variables d’environnement (`.env`), exemples de commandes.
-- Liens vers d’autres samples ou doc du dépôt si pertinent (ex. mcp-client → mcp-server).
+- Liens vers d’autres samples ou doc du dépôt si pertinent (ex. mcp-client-demo → mcp-server-demo).
 
 ## AGENTS.md
 

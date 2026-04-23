@@ -1,0 +1,94 @@
+[project]
+name = "langchain-demo"
+version = "0.1.0"
+description = "LangChain 1.x console agent demo with web fetch and Python execution tools"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Philippe PRADOS" }]
+keywords = ["sandboxes", "langchain", "llm", "tools", "agent"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "pysandboxes",
+    "langchain>=1.0",
+    "langchain-core>=0.3",
+    "langchain-openai",
+    "langchain-anthropic",
+    "langchain-google-genai",
+    "langchain-google-vertexai",
+    "langchain-aws",
+    "langchain-cohere",
+    "langchain-mistralai",
+    "langchain-huggingface",
+    "langchain-fireworks",
+    "langchain-groq",
+    "langchain-ollama",
+    "langchain-deepseek",
+    "langchain-together",
+    "langchain-xai",
+    "langchain-nvidia-ai-endpoints",
+    "langchain-perplexity",
+    "langchain-litellm",
+    "httpx>=0.28",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipython",
+    "pyright>=1.1.379",
+    "ruff>=0.6.9",
+]
+test = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
+]
+codespell = [
+    "codespell>=2.2.5",
+]
+
+[project.scripts]
+langchain-demo = "langchain_demo.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["langchain_demo"]
+
+[tool.pyright]
+include = ["langchain_demo", "tests"]
+venvPath = "."
+venv = ".venv"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.codespell]
+skip = ".git,*.pdf,*.svg,*.yaml,*.ipynb,uv.lock,./.venv"
+
+[tool.uv]
+
+[tool.uv.sources]
+# Use only inside the pysandboxes git repository
+pysandboxes = { path = "../..", editable = true }
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config -vv"

@@ -1,0 +1,71 @@
+[project]
+name = "pydantic-ai-demo"
+version = "0.1.0"
+description = "Pydantic AI console agent demo with web fetch and Python execution tools"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Philippe PRADOS" }]
+keywords = ["sandboxes", "pydantic-ai", "llm", "tools", "agent"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+# pydantic-ai-slim optional groups: see https://ai.pydantic.dev/install/
+# (openai, anthropic, google, groq, mistral, cohere, bedrock, huggingface, vertexai, …)
+dependencies = [
+    "pydantic-ai-slim[anthropic,bedrock,cohere,google,groq,huggingface,mistral,openai,vertexai]>=1.70.0",
+    "httpx>=0.28",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipython",
+    "pyright>=1.1.379",
+    "ruff>=0.6.9",
+]
+test = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
+]
+
+[project.scripts]
+pydantic-ai-demo = "pydantic_ai_demo.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pydantic_ai_demo"]
+
+[tool.pyright]
+include = ["pydantic_ai_demo", "tests"]
+venvPath = "."
+venv = ".venv"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.uv]
+
+[tool.uv.sources]
+# Use only inside the pysandboxes git repository
+pysandboxes = { path = "../..", editable = true }
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config -vv"
