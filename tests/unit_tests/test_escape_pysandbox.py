@@ -1,10 +1,12 @@
 import inspect
+import pickle
+import sys
 from types import ModuleType
 from typing import Dict, Set, Tuple
 
 import pytest
 
-from pysandboxes import RuleAttributeError
+from pysandboxes import RuleAttributeError, RuleModuleNotFoundError
 
 
 def test_escape_with_closure() -> None:
@@ -54,6 +56,48 @@ def test_escape_with_meta_path() -> None:
     with pytest.raises(RuleAttributeError):
         new_list = list(sys.meta_path)[1:]
         sys.meta_path = new_list
+
+
+def test_escape_with_pickle_allowed() -> None:
+    # VULNERABLE (default): Pickle is ALLOWED by default (_activate_guard_import_for_tests)
+    # This test demonstrates pickle.loads() bypasses ALL import guards
+    malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_ALLOWED'\ntRp1\n."
+
+    result = pickle.loads(malicious_pickle)  # type: ignore[arg-type]
+    # os.system() returns 0 on success
+    if result == 0:
+        pytest.fail("VULNERABLE: pickle.loads() bypassed guards (allowed by default)")
+
+
+def test_escape_with_pickle_blocked() -> None:
+    # FAILED PROTECTION ATTEMPT: Removing pickle from sys.modules does NOT block the attack!
+    # pickle.loads() uses cached C extension code that doesn't re-import pickle module
+    # So even if sys.modules['pickle'] is deleted, pickle.loads() still works!
+    # This test documents why naive removal-based blocking FAILS.
+    from tests.unit_tests.guard.test_guard_io import (
+        _deactivate_all_rules,
+        _activate_guard_import_blocking_pickle,
+    )
+
+    # Deactivate the default guard from conftest
+    _deactivate_all_rules()
+
+    # Attempt to block pickle by removing from sys.modules
+    _activate_guard_import_blocking_pickle()
+
+    malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_STILL_WORKS'\ntRp1\n."
+
+    # PROBLEM: Removing pickle from sys.modules is NOT sufficient!
+    # The pickle C extension (_pickle) is already loaded and caches module references
+    # This is WHY we need guard_import to BLOCK the import at import time, not remove it after
+    result = pickle.loads(malicious_pickle)  # type: ignore[arg-type]
+
+    # If os.system() executed (result == 0), blocking failed!
+    if result == 0:
+        pytest.fail(
+            "EXPECTED FAILURE: Removing pickle from sys.modules does NOT block attack. "
+            "Need real import guard that blocks pickle BEFORE it's loaded."
+        )
 
 
 # See https://rushter.com/blog/python-code-exec/
