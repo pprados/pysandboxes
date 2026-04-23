@@ -31,6 +31,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [X] firejail
     - [X] unshare
     - [X] bwrap
+    - [ ] Proxy (voir proxy.md)
   - [ ] Container
     - [X] Docker (--privileged with unshare)
     - [X] podman (--privileged with unshare)
@@ -38,6 +39,8 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] Flatpak
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
+    - [ ] gVisor (user space kernel simulation, without docker)
+    - [ ] Firecracker
   - [ ] VM
     - [X] Qemu
     - [ ] multipass
@@ -48,6 +51,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] [Firecracker](https://firecracker-microvm.github.io/)
     - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
     - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
+    - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html) 
   - [ ] Others strategies
     - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
     - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
@@ -57,15 +61,17 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] App Sandbox
     - [ ] sandbox-exec
 - [ ] New samples
-  - [X] MCP server
+  - [/] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
+  - [/] [Crewai](https://www.crewai.com/)
+  - [/] [Google ADK](https://google.github.io/adk-docs/)
+  - [/] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
   - [X] MCP client
-  - [ ] A2A protocol
-  - [ ] langchain / langgraph
-  - [ ] [Crewai](https://www.crewai.com/)
-  - [ ] Google ADK
-  - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
-  - [ ] Pydantic.ai
-  - [ ] [Strandsagents](https://strandsagents.com)
+  - [X] MCP server
+  - [/] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
+  - [/] [Pydantic.ai](https://ai.pydantic.dev/)
+  - [/] [Smolagent](https://huggingface.co/docs/smolagents/index)
+  - [/] [Strandsagents](https://strandsagents.com)
+  - [/] [langchain](https://www.langchain.com/)
 - [ ] Features
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id

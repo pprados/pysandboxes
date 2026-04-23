@@ -25,8 +25,8 @@ project-root/
 │   ├── integration_tests/  # Integration
 │   └── containers/         # Container/OS sandbox tests
 ├── samples/
-│   ├── mcp-client/         # MCP client sample (own uv env)
-│   └── mcp-server/         # MCP server sample (own uv env)
+│   ├── mcp-client-demo/    # MCP client sample (own uv env)
+│   └── mcp-server-demo/    # MCP server sample (own uv env)
 ├── wiki/                    # Project wiki
 ├── pyproject.toml, Makefile, README.md, AGENTS.md
 └── Dockerfile               # Container image for python-sb

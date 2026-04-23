@@ -7,22 +7,22 @@ Each sample in this repo uses its own directory and uv environment. To run a sam
 
 ## When to Use
 
-- Verifying that a sample (e.g. mcp-client, mcp-server) still works after changes
+- Verifying that a sample (e.g. mcp-client-demo, mcp-server-demo) still works after changes
 - Debugging sample-specific behavior
 - Before running make sample-tests or make all-tests from the repo root, to run one sample in isolation
 
 ## Context Validation Checkpoints
 
-* [ ] Are you in the correct sample directory? (e.g. samples/mcp-client)
+* [ ] Are you in the correct sample directory? (e.g. samples/mcp-client-demo)
 * [ ] Is the sample's virtual environment created and activated? (uv venv and source .venv/bin/activate)
 
 ## Command Steps
 
 ### Step 1: Navigate to the sample directory
 
-From the repository root, cd to the sample (e.g. samples/mcp-client or samples/mcp-server).
+From the repository root, cd to the sample (e.g. samples/mcp-client-demo or samples/mcp-server-demo).
 
-cd samples/mcp-client
+cd samples/mcp-client-demo
 
 ### Step 2: Ensure a virtual environment exists
 
