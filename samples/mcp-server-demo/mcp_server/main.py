@@ -44,6 +44,11 @@ def get_version() -> str:
     return "1.0.0"
 
 
+@mcp.resource("config://version")
+def get_config_version() -> str:
+    return "1.0.0"
+
+
 @mcp.resource("greeting://{name}")
 def greet(name: str) -> str:
     return f"Hello {name} from MCPServer!"
