@@ -49,7 +49,6 @@ timeout = 30
 all_pysandboxes_mode = ["complete", "partial"]
 all_protocol = ["stdio", "http"]
 all_os_sandbox = [
-
     "None",
     "Subprocess",
     "firejail",
