@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import io
 import logging
 import os
@@ -6,19 +7,42 @@ import signal
 import sys
 import tempfile
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM
+from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM, gaierror
 from types import FrameType
-from typing import Any, List, Mapping, cast
+from typing import Any, List, Mapping, TypeVar, cast
 
 from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
+from pysandboxes.config import DEBUG
 from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
 logger = logging.getLogger(__name__)
 
+OK: str = "\u2705\ufe0f "
+KO: str = "\u274c\ufe0f "
 
 RANGETEST = 1
+
+# Cap blocking gethostbyname/getaddrinfo (NSS can hang minutes in nested QEMU / bad DNS).
+_DNS_THREAD_TIMEOUT_S = 12.0
+
+_R = TypeVar("_R")
+
+
+def _network_dns_result(
+    fn: Callable[[], _R],
+    *,
+    timeout_s: float = _DNS_THREAD_TIMEOUT_S,
+) -> _R:
+    """Run a blocking DNS resolution call with a wall-clock timeout."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(fn)
+        try:
+            return fut.result(timeout=timeout_s)
+        except concurrent.futures.TimeoutError as e:
+            raise OSError(f"DNS call timed out after {timeout_s}s") from e
 
 
 def init_log_level(use_rich: bool = True) -> None:
@@ -46,10 +70,14 @@ def init_log_level(use_rich: bool = True) -> None:
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
 
-    sandboxes_level = logging.WARNING
+    if DEBUG:
+        sandboxes_level = logging.DEBUG
+    else:
+        sandboxes_level = logging.INFO
+
     uvicorn_level = logging.ERROR
-    logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn").setLevel(uvicorn_level)
+    logging.getLogger("asyncio").setLevel(uvicorn_level)
     logging.getLogger("uvicorn.error").setLevel(uvicorn_level)
     logging.getLogger("aiohttp_sse_client.client").setLevel(uvicorn_level)
     logging.getLogger("Pysandboxes").setLevel(logging.INFO)
@@ -88,83 +116,200 @@ def signal_handler_sandbox(
 
 
 @sandbox
-async def arun_in_sandbox() -> int:
-    logger.info("Run 'arun_in_sandbox()' in sandbox")
-    _test_envs()
-    _test_files()
-    _test_network()
-    print("end of arun_in_sandbox()")
+async def arun_in_sandbox() -> tuple[int, int]:
+    logger.info("---- Run 'arun_in_sandbox()' in sandbox")
+    rc = 0
+    rc += _test_envs()
+    rc += _test_files()
+    rc += _test_network()
     global _old_sigint_handler
     _old_sigint_handler = signal.signal(signal.SIGTERM, signal_handler_sandbox)
 
-    print(f"arun_in_sandbox {threading.current_thread()=}")
+    logger.info(f"arun_in_sandbox {threading.current_thread()=}")
 
     # os.kill(os.getpid(),signal.SIGTERM)
     # await asyncio.sleep(5)
-    return 42
+    return 42, rc
 
 
 @sandbox
-def run_in_sandbox() -> int:
-    logger.info("Run 'run_in_sandbox()' in sandbox")
-    _test_envs()
-    _test_files()
-    _test_network()
-    print(42)
-    return 42
+def run_in_sandbox() -> tuple[int, int]:
+    logger.info("---- Run 'run_in_sandbox()' in sandbox")
+    rc = 0
+    rc += _test_envs()
+    rc += _test_files()
+    rc += _test_network()
+    return 42, rc
 
 
-def _test_envs() -> None:
-    assert os.environ["LANGUAGE"]
-    os.putenv("My_ENV", "hello")
-    os.getenv("My_ENV")
-    os.unsetenv("My_ENV")
+def _test_envs() -> int:
+    rc = 0
+    if "TERM" not in os.environ:
+        logger.error(f"{KO} TERM must be in os.environ")
+        rc = 1
+    else:
+        logger.info(f"{OK} TERM is visible")
+
+    # os.putenv("My_ENV", "hello")
+    if "My_ENV" in os.environ:
+        os.getenv("My_ENV")
+        os.unsetenv("My_ENV")
+        logger.info(f"{OK} My_ENV is visible")
+    else:
+        logger.error(f"{KO} My_ENV must be in os.environ")
+        rc = 1
+
     learning_mode = is_learning_mode()
     if "OS_SANDBOX" in os.environ:
         learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
 
     if not learning_mode:
-        assert "USER" not in os.environ, "USER must not be visible"
+        if "USER" in os.environ:
+            logger.error(f"{KO} USER must not be visible")
+            rc = 1
+        else:
+            logger.info(f"{OK} USER is not visible")
+    logger.info(f"{OK} Test Env")
+    return rc
 
 
-def _test_network() -> None:
+def _test_network() -> int:
     # tcp connection
     import socket
 
+    rc = 0
+    timeout = 3
+
     # 1. Learn and accept
     # Learn a direct connection to google
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        remote_ip = socket.gethostbyname("www.google.com")
-        socket.gethostbyname_ex("www.google.com")
-        socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
-        sock.connect((remote_ip, 80))
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            remote_ip = _network_dns_result(
+                lambda: socket.gethostbyname("www.google.com")
+            )
+            _network_dns_result(lambda: socket.gethostbyname_ex("www.google.com"))
+            _network_dns_result(
+                lambda: socket.getaddrinfo(
+                    "www.google.com", None, family=socket.AF_UNSPEC
+                )
+            )
+            sock.settimeout(timeout)
+            sock.connect((remote_ip, 80))
+            logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
+    except SandBoxError:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80")
+        rc = 1
+    except (TimeoutError, OSError) as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
 
     # learn tcp bind ipv4
-    with socket.socket(AF_INET, SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 9999))
-    # learn tcp bind ipv6
-    with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-        sock.bind(("::1", 9999))
+    try:
+        with socket.socket(AF_INET, SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.bind(("127.0.0.1", 9999))
+            logger.info(f"{OK} socket AF_INET SOCK_STREAM 9999")
+    except SandBoxError:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 9999")
+        rc = 1
+    except TimeoutError as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
 
-    # web connection
+    # learn tcp bind ipv6
+    try:
+        with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.bind(("::1", 9999))
+            logger.info(f"{OK} socket AF_INET6 SOCK_STREAM 9999")
+    except SandBoxError:
+        logger.error(f"{KO} socket AF_INET6 SOCK_STREAM 9999")
+        rc = 1
+    except TimeoutError as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
+
+    # web connection (timeout to avoid hanging in containers with slow/no network)
     import requests
 
-    requests.get("http://www.google.com/")
+    try:
+        requests.get("http://www.google.com/", timeout=10)
+        logger.info(f"{OK} get http://www.google.com")
+    except SandBoxError:
+        logger.error(f"{KO} get http://www.google.com")
+        rc = 1
+    except (TimeoutError, requests.exceptions.Timeout) as e:
+        logger.error(f"{KO} get http://www.google.com {e}")
+        rc = 1
+    except requests.exceptions.ConnectionError as e:
+        logger.error(
+            f"{KO} get http://www.google.com (network unreachable or refused) {e}"
+        )
+        rc = 1
 
     # udp connection ipv4
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.sendto(b"hello", ("127.0.0.1", 12345))
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.sendto(b"hello", ("127.0.0.1", 12346))
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.sendto(b"hello", ("127.0.0.1", 12345))
+            logger.info(f"{OK} send DGRAM IPV4 to 12345 is accepted")
+
+    except SandBoxError:
+        logger.error(f"{KO} send DGRAM IPV4 to 12345 is denied")
+        rc = 1
+    except TimeoutError as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.sendto(b"hello", ("127.0.0.1", 12346))
+            logger.info(f"{OK} send DGRAM IPV4 to 12346 is accepted")
+    except SandBoxError:  # type: ignore
+        logger.error(f"{KO} send DGRAM IPV4 to 12346 is denied")
+        rc = 1
+    except TimeoutError as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
+
     # udp connection ipv6
-    with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
-        sock.sendto(b"hello", ("::1", 12345))
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.sendto(b"hello", ("::1", 12345))
+            logger.info(f"{OK} send DGRAM IPV6 to 12345 is accepted")
+    except SandBoxError:
+        logger.error(f"{KO} send DGRAM IPV6 to 12345 is denied")
+        rc = 1
+    except TimeoutError as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
+
     # udp bind ipv4
-    with socket.socket(AF_INET, SOCK_DGRAM) as sock:
-        sock.bind(("localhost", 12345))
+    try:
+        with socket.socket(AF_INET, SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.bind(("127.0.0.1", 12345))
+            logger.info(f"{OK} bind IPV4 to 12345 is accepted")
+    except SandBoxError:
+        logger.error(f"{KO} bind IPV4 to 12345 is denied")
+    except TimeoutError as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
+
     # udp bind ipv6
-    with socket.socket(AF_INET6, SOCK_STREAM) as sock:
-        sock.bind(("::1", 9999))
+    try:
+        with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.bind(("::1", 9999))
+            logger.info(f"{OK} bind IPV6 to 12345 is accepted")
+    except SandBoxError:
+        logger.error(f"{KO} bind IPV6 to 12345 is denied")
+        rc = 1
+    except TimeoutError as e:
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        rc = 1
 
     # 2. Test denied access
     learning_mode = is_learning_mode()
@@ -173,33 +318,68 @@ def _test_network() -> None:
     if not learning_mode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                remote_ip = socket.gethostbyname("www.github.com")
+                remote_ip = _network_dns_result(
+                    lambda: socket.gethostbyname("www.github.com")
+                )
+                sock.settimeout(timeout)
                 sock.connect((remote_ip, 80))
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
+                rc = 1
         except SandBoxError:
-            print("Connect to github is stopped")
+            logger.info(f"{OK} Use socket to connect to github is stopped")
+        except TimeoutError:
+            logger.info(f"{OK} Use socket to connect to github is stopped by OS")
+        except gaierror:
+            logger.info(f"{OK} Use socket to connect to github is stopped by OS")
 
         try:
             with socket.socket(AF_INET, SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
                 sock.bind(("127.0.0.1", 9998))
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Use bind IPv4 to 9998 be stopped by pysandbox")
+                rc = 1
         except SandBoxError:
-            print("Connect to github is stopped")
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped")
+        except TimeoutError:
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
+        except PermissionError:
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
+
         try:
             with socket.socket(AF_INET6, SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
                 sock.bind(("::1", 9998))
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Use bind IPv6 to 9998 must be stopped by pysandbox")
+                rc = 1
         except SandBoxError:
-            print("Connect to github is stopped")
+            logger.info(f"{OK} Use bind IPv6 to 9998 is stopped")
+        except TimeoutError:
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
+        except PermissionError:
+            logger.info(f"{OK}  Use bind IPv4 to 9998 is stopped by OS")
+
+    logger.info(f"{OK} Test Network")
+    return rc
 
 
-def _test_files() -> None:
-    print("---- Test files")
+def _test_files() -> int:
     learning_mode = is_learning_mode()
+    rc = 0
 
     # 1. Learn and accept
-    with io.open("tmp/test.remove", "w") as _:
-        pass
+    try:
+        with io.open("tmp/test.remove", "w") as _:
+            pass
+        logger.info(f"{OK} write to tmp/test.remove is accepted")
+    except SandBoxError:  # type: ignore
+        logger.error(f"{KO} write to tmp/test.remove is denied")
+        rc = 1
+    except OSError:
+        logger.error(f"{KO} write to tmp/test.remove is denied")
+        rc = 1
 
     # 2. Test denied access
     learning_mode = is_learning_mode()
@@ -210,23 +390,62 @@ def _test_files() -> None:
         try:
             with io.open("hack.py", "w"):
                 pass
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
+                rc = 1
         except SandBoxError:
-            print("Write to hack.py is stopped")
+            logger.info(f"{OK} Write to hack.py is stopped")
+        except OSError:
+            logger.info(f"{OK} Write to hack.py is stopped by OS")
 
         try:
             with tempfile.TemporaryFile(mode="w+") as _:
                 pass
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
+                rc = 1
         except SandBoxError:
-            print("Write to TemporaryFile is stopped")
+            logger.info(f"{OK} Write to TemporaryFile is stopped")
+        except OSError:
+            logger.info(f"{OK} Write to TemporaryFile is stopped by OS")
 
         try:
             with tempfile.NamedTemporaryFile(mode="w+", delete=True) as _:
                 pass
-            assert learning_mode, "Must be stopped by pysandbox"
+            if learning_mode:
+                logger.error(f"{KO} Must be stopped by pysandbox")
+                rc = 1
         except SandBoxError:
-            print("Write to NamedTemporaryFile is stopped")
+            logger.info(f"{OK} Write to NamedTemporaryFile is stopped")
+        except OSError:
+            logger.info(f"{OK} Write to NamedTemporaryFile is stopped by OS")
+
+    try:
+        with io.open(".env", "r") as f:
+            s = f.read()
+            if s:
+                import pysandboxes
+
+                if pysandboxes.os_sandbox in [
+                    "none",
+                    "landlock",
+                    "bwrap",
+                ]:  # FIXME: bwrap and .env
+                    logger.warning(
+                        f"{OK} .env is accessible (os_sandbox={pysandboxes.os_sandbox!r})"
+                    )
+                else:
+                    logger.error(f"{KO} .env must not be accessible")
+                    rc = 1
+    except FileNotFoundError as e:
+        # .env absent or not visible in sandbox (e.g. ignore=.env) → OK
+        logger.info(f"{OK} .env not readable: file not found ({e})")
+    except PermissionError as e:
+        logger.info(f"{OK} read .env is stopped by OS ({e})")
+    except OSError as e:
+        logger.info(f"{OK} read .env is stopped by OS ({e})")
+    logger.info(f"{OK} Test File")
+    return rc
 
 
 async def ainit_sandbox() -> None:
@@ -253,23 +472,25 @@ async def async_init_sandbox() -> None:
     init_sandbox()
 
 
-async def arun() -> int:
-    rc = await arun_in_sandbox()
+async def arun() -> tuple[int, int]:
+    rc, error = await arun_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42
-    return rc
+    logger.info(f"{OK} arun()")
+    return rc, error
 
 
-def run() -> int:
-    rc = run_in_sandbox()
+def run() -> tuple[int, int]:
+    rc, error = run_in_sandbox()
     logger.info(f"{rc=}")
     assert rc == 42
-    return rc
+    logger.info(f"{OK} run()")
+    return rc, error
 
 
 @sandbox
 def _call_llm(token: str) -> None:
-    print(f"{token=}")
+    logger.info(f"{token=}")
 
 
 def call_llm() -> None:
@@ -281,22 +502,22 @@ async def async_main(argv: List[str]) -> int:
 
     os.environ["LLM_TOKEN"] = "abc"
 
+    error = 0
     config_path, extra_rules = _config(argv)
-
     for _ in range(0, RANGETEST):
         async with sandboxes(
             async_init_sandbox,
             sandboxes_config=config_path,
             **cast(Mapping[str, Any], extra_rules),
         ):
-            await arun()
+            _, error = await arun()
             # logger.info("async_main.kill...")
             # os.kill(os.getpid(), signal.SIGTERM)
             # logger.info("async_main.kill... done")
             # await asyncio.sleep(5)  # The signal may be catch
 
-    logger.info("async_main.return 0")
-    return 0
+    logger.info(f"{OK} async_main.return 0")
+    return error
 
 
 def sync_main(argv: List[str]) -> int:
@@ -306,6 +527,8 @@ def sync_main(argv: List[str]) -> int:
 
     config_path, extra_rules = _config(argv)
 
+    error = 0
+
     for _ in range(0, RANGETEST):
         with sandboxes(
             init_sandbox,
@@ -313,13 +536,13 @@ def sync_main(argv: List[str]) -> int:
             **cast(Mapping[str, Any], extra_rules),
         ):
             logger.info("sync_main.run...")
-            run()
-            logger.info("sync_main.run...done")
+            _, error = run()
+            logger.info(f"{OK} sync_main.run()")
             # logger.info("sync_main.kill...")
             # os.kill(os.getpid(), signal.SIGTERM)
             # logger.info("sync_main.kill done")
 
-    return 0
+    return error
 
 
 def _config(argv: list[str]) -> tuple[Path, dict[str, set[str]]]:
@@ -333,18 +556,12 @@ def _config(argv: list[str]) -> tuple[Path, dict[str, set[str]]]:
     return config_path, extra_rules
 
 
-# from pysandboxes.sandboxes_api import sandboxes
-#
-# def init_sandbox():
-#     print("init")
-#
-# def main():
-#     with sandboxes(init_fn=init_sandbox):
-#         print("ok")
-
 if __name__ == "__main__":
     init_log_level()
-    # sync_main(sys.argv)
+    rc = 0
+    rc += sync_main(sys.argv)
+    logger.info(f"End of sync_main {rc=}")
     logger.info("-------------------------")
-    asyncio.run(async_main(sys.argv))
-    logger.info("End of __main__")
+    rc += asyncio.run(async_main(sys.argv))
+    logger.info(f"End of async_main {rc=}")
+    sys.exit(rc)

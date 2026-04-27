@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import importlib
+import importlib.util
 import logging
 import os
 import signal
@@ -96,7 +97,7 @@ def _python_interactive(
     elif all_rules.use_py_sandbox:
         sb_mode = (
             f"{BOLD}APIs are LIMITED according to the rules in "
-            f"{str(all_rules.learning_path)!r} "
+            f"{str(all_rules.learning_path.absolute().relative_to(Path().absolute()))!r} "
         )
         if all_rules.os_sandbox != "subprocess":
             sb_mode += f"and by the os-sandbox={all_rules.os_sandbox!r}"
@@ -121,7 +122,7 @@ def _python_interactive(
         sys.modules["__main__"] = ModuleType(name="__main__")
 
         import IPython
-        from traitlets.config import get_config
+        from traitlets.config import get_config  # type: ignore
 
         c = get_config()
 
@@ -143,10 +144,10 @@ def _python_interactive(
         if ban:
             print(banner)
         print(
-            f"IPython {IPython.__version__} -- An enhanced Interactive Python. "
+            f"IPython {getattr(IPython, '__version__', 'unknown')} -- An enhanced Interactive Python. "
             f"Type '?' for help."
         )
-        IPython.start_ipython(
+        IPython.start_ipython(  # type: ignore[attr-defined]
             argv=[],
             user_ns=None,
             config=c,
@@ -220,6 +221,14 @@ def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> i
     return 0
 
 
+def _inject_pytest_color_yes(pytest_argv: List[str]) -> None:
+    """Force pytest ANSI when stdout is not a TTY (same effect as PY_COLORS=1, no env var)."""
+    for arg in pytest_argv:
+        if arg.startswith("--color="):
+            return
+    pytest_argv.insert(0, "--color=yes")
+
+
 def convert_extra_rules(args: List[str]) -> Dict[str, Set[str]]:
     result: Dict[str, Set[str]] = {}
     for rule in args:
@@ -245,7 +254,7 @@ def python_in_sb(
 
         set_learning_path(
             all_rules.learning_path
-        )  # TODO: semble doublon dans main_sandbox
+        )  # TODO: may be duplicate of main_sandbox
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
             _python_interactive(all_rules, True)
@@ -255,6 +264,8 @@ def python_in_sb(
                 mod_name = python_cmd[1]
                 python_cmd.pop(0)  # Remove -m
                 python_cmd.pop(0)  # Remove module name
+                if mod_name == "pytest":
+                    _inject_pytest_color_yes(python_cmd)
                 spec = importlib.util.find_spec(mod_name)
                 if spec and spec.origin is not None:
                     sys.argv = [spec.origin] + python_cmd

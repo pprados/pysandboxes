@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.guard_files import BindRule, activate_guard, parse_rules
@@ -22,7 +22,14 @@ def _deactivate_all_rules() -> None:
     _deactivate_guard_import()
 
 
+_guard_import_for_tests_activated: bool = False
+
+
 def _activate_guard_import_for_tests() -> None:
+    global _guard_import_for_tests_activated
+    if _guard_import_for_tests_activated:
+        return
+    _guard_import_for_tests_activated = True
     from pysandboxes.guard_files import patch_rules as file_patch_rules
     from pysandboxes.guard_import import (
         activate_guard_import,
@@ -59,7 +66,7 @@ tmp_path = Path(tempfile.TemporaryDirectory(prefix="pysandboxes_test_").name)
 @pytest.fixture
 def files() -> Dict[str, Path]:
     # Create test files and symlinks
-    # It's executer without patch.
+    # Runs without patch.
     global tmp_path
     if tmp_path.exists():
         # Remove, without sandboxes

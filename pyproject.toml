@@ -6,37 +6,51 @@ build-backend = "hatchling.build"
 name = "pysandboxes"
 version = "0.0.0"  # Set with git tag
 description = "Lite sandbox for python code execution"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
 license = "Apache-2.0"
 readme = "README.md"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-#    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
+    "anthropic>=0.96.0",
     "httpcore (>=1.0.9)",
     "fastapi (>=0.115.0)",
     "uvicorn (>=0.34.0)",
     "tblib (>=3.1.0)",
     "aiohttp (>=3.12.0)",
     "aiohttp-sse-client (>=0.2.1)",
+    "typing_extensions (>=4.0.0)",
     "netifaces (>=0.11.0)",
     # For CLI
     "python-dotenv (>=0.9.0)",
-    "email-validator>=2.3.0",
-    "dnspython>=2.8.0",
-    "scipy-stubs>=1.15.3.0",
-    "requests>=2.32.5",
+    "email-validator>=2.3.0",  # Why ?
+    "dnspython>=2.8.0",  # Why ?
+    "scipy-stubs>=1.15.3.0",  # Why here ?
+    "requests>=2.32.5"
 ]
 
+[project.optional-dependencies]
+# Optional extras per OS sandbox provider (pip install pysandboxes[firejail], etc.)
+bwrap = []
+firejail = []
+landlock = []
+subprocess = []
+unshare = []
+# Install all provider extras: pip install pysandboxes[all]
+# Self-referential: no duplication; pip resolves all provider extras.
+all = [
+    "pysandboxes[bwrap,firejail,landlock,subprocess,unshare]",
+]
 
 [project.urls]
 repository = "https://www.github.com/pprados/pysandboxes"
@@ -74,6 +88,9 @@ dev = [
     "devpi-server>=6.17.0",
     "devpi-web>=5.0.1",
     "devpi-client>=7.2.0",
+    "mempalace>=3.0.0",
+    "onnxruntime-gpu>=1.24.3",
+    "pyright>=1.1.407",
 ]
 test = [
     "pytest>=7.3.0",
@@ -83,14 +100,18 @@ test = [
     "pytest-asyncio>=0.20.3",
     "pytest-mock>=3.10.0",
     "types-requests>=2.28.11.5",
+    "toml>=0.10.2",
+    "speckit>=1.0.1",
 ]
 lint = [
     "mypy>=1.8",
+    "pyright>=1.1",
+    "ruff>=0.14.8",
     "types-requests>=2.28.11.5",
 ]
 
 [tool.codespell]
-skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,./PPR/*'
+skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,./PPR/*,./_bmad,./wiki/bmad'
 # Ignore latin etc
 ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
 #ignore-words-list = ''
@@ -111,6 +132,23 @@ select = [
 ignore_missing_imports = "True"
 disallow_untyped_defs = "True"
 exclude = []
+
+[tool.pyright]
+include = ["pysandboxes", "tests", "samples", "python-sb"]
+extraPaths = ["pysandboxes", "python-sb"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportImplicitStringConcatenation = false
+reportMissingImports = "warning"
+reportAttributeAccessIssue = "warning"
+reportAssignmentType = "warning"
+reportIncompatibleMethodOverride = "warning"
+reportArgumentType = "warning"
+reportPossiblyUnboundVariable = "warning"
+reportRedeclaration = "warning"
+reportInvalidTypeForm = "warning"
 
 [tool.pytest.ini_options]
 # --strict-markers will raise errors on unknown marks.

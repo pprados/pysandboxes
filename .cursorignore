@@ -1,0 +1,17 @@
+.agent/
+.auto-claude/
+.claude/
+.devpi/
+.entire/
+.gemini/
+#.ia/
+.opencode/
+.planning/
+.serena/
+.specify/
+.vscode/
+
+tmp/
+PPR/
+dist/
+docs/

@@ -38,13 +38,13 @@ from ..tools import (
     SyncOrAsyncFunc,
     set_is_in_sandbox,
 )
+from .base_sse_daemon import BaseSSESandbox
 from .parameters import (
     MAX_CONNECT_RETRY,
     POLLING_DELAY,
     TIMEOUT_FOR_STOP_DAEMON,
     TIMEOUT_GRACEFUL_SHUTDOWN,
 )
-from .sse_base_daemon import BaseSSESandbox
 from .tools import from_b85, to_b85
 
 logger = logging.getLogger(__name__)
@@ -207,7 +207,7 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
         SSE endpoint to process a given code string, authenticated by a token,
         and stream back structured results (stdout, stderr, result).
         """
-        from ..os_sandbox import is_accept_incoming_call
+        from .._os_sandbox import is_accept_incoming_call
 
         # logger.debug(request.headers["Authorization"])
         if (
@@ -218,7 +218,7 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
             raise HTTPException(status_code=401, detail="Invalid token")
         if not is_accept_incoming_call():
             raise HTTPException(
-                status_code=503, detail="The sandbox demon is being stopped."
+                status_code=503, detail="The sandbox daemon is being stopped."
             )
         # Pass the code and authenticated user_id to the event generator
         return StreamingResponse(
@@ -342,7 +342,13 @@ class SSEServerDaemon(BaseSSESandbox):
         global _active_requests
         return _active_requests
 
-    def update_rules(self, *, envs: Envs, all_rules: AllRules, temp: Path) -> AllRules:
+    def update_rules_and_activate(
+        self,
+        *,
+        envs: Envs,
+        all_rules: AllRules,
+        temp: Path,
+    ) -> AllRules:
         """Update security rules for server daemon.
 
         Args:
@@ -432,7 +438,7 @@ class SSEServerDaemon(BaseSSESandbox):
             self.task = loop.create_task(_run_daemon(), name="ServerTask")
 
             await start_event.wait()
-            while not self.uvicorn.started:
+            while self.uvicorn and not self.uvicorn.started:
                 await asyncio.sleep(POLLING_DELAY)
             self._accept_incoming = True
             self.stopped = False

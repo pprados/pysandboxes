@@ -17,7 +17,7 @@ def parse_rules(
     rules: ConfigLines,
     errors: List[ErrorMsg],
 ) -> Tuple[int, str, bool, Path, bool, ConfigLines]:
-    from .os_sandbox import providers_factory
+    from ._os_sandbox import providers_factory
 
     port = -1
     other_rules: ConfigLines = []

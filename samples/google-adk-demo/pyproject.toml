@@ -1,0 +1,77 @@
+[project]
+name = "google-adk-demo"
+version = "0.1.0"
+description = "Google ADK console agent demo with web fetch and Python execution tools"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Philippe PRADOS" }]
+keywords = ["sandboxes", "google-adk", "llm", "tools", "agent"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "google-adk>=1.0",
+    # Required for ``google.adk.models.lite_llm.LiteLlm`` (multi-provider ``CHAT_MODEL``).
+    "litellm>=1.0",
+    "httpx>=0.28",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipython",
+    "pyright>=1.1.379",
+    "ruff>=0.6.9",
+]
+test = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
+]
+codespell = [
+    "codespell>=2.2.5",
+]
+
+[project.scripts]
+google-adk-demo = "google_adk_demo.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["google_adk_demo"]
+
+[tool.pyright]
+include = ["google_adk_demo", "tests"]
+venvPath = "."
+venv = ".venv"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.codespell]
+skip = ".git,*.pdf,*.svg,*.yaml,*.ipynb,uv.lock,./.venv"
+
+[tool.uv]
+
+[tool.uv.sources]
+# Use only inside the pysandboxes git repository
+pysandboxes = { path = "../..", editable = true }
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config -vv"

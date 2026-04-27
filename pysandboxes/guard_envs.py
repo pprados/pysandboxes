@@ -9,6 +9,7 @@ where only explicitly allowed environment variables are accessible.
 The guard supports pattern matching, variable substitution, and learning mode
 for automatic rule generation based on observed environment variable usage.
 """
+
 import functools
 import inspect
 import logging
@@ -101,8 +102,8 @@ def parse_rules(
             # Case: Simple rule like key=value or key=${VAR}
             else:
                 v = substitute_value(value_pattern)
-                if v:  # Ignore empty value
-                    new_vars[key_pattern] = v
+                # Always add key so "key in os.environ" is True (e.g. My_ENV for tests)
+                new_vars[key_pattern] = v
                 envs_rules.add(
                     EnvRule(re.compile(re.escape(key_pattern)), False, orule)
                 )

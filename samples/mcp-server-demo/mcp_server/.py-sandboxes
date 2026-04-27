@@ -1,0 +1,80 @@
+py-sandbox=true
+os-sandbox=${OS_SANDBOX:-subprocess}
+env=HOME=${HOME}
+env=OS_SANDBOX=${OS_SANDBOX}
+
+# ⚠ Dangerous!
+python-import=subprocess
+
+# Standard Python
+python-import=__future__, _cffi_backend, _decimal, _hashlib, _io, _markupbase
+python-import=_multibytecodec, _socket, _sysconfigdata__linux_x86_64-linux-gnu
+python-import=_zoneinfo, abc, argparse, array, ast, asyncio, atexit, base64
+python-import=binascii, calendar, codecs, collections, colorsys, concurrent
+python-import=configparser, contextlib, contextvars, copy, copyreg, dataclasses
+python-import=datetime, decimal, email, encodings, enum, errno, fnmatch, fractions
+python-import=functools, getpass, hashlib, heapq, hmac, html, http, importlib
+python-import=inspect, io, ipaddress, itertools, json, keyword, linecache, logging
+python-import=math, mimetypes, mmap, numbers, operator, os, pathlib, pickle, pprint
+python-import=queue, random, re, reprlib, secrets, select, shlex, shutil, signal
+python-import=socket, ssl, stat, string, stringprep, struct, sysconfig, tempfile
+python-import=termios, textwrap, threading, time, traceback, types, typing
+python-import=unicodedata, urllib, uuid, weakref, webbrowser, zipfile, zlib
+python-import=zoneinfo
+
+# External modules (Are you sure about the origin?)
+python-import=aiofiles
+python-import=annotated_doc
+python-import=annotated_types
+python-import=anyio
+python-import=attr
+python-import=attrs
+python-import=authlib
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=cryptography
+python-import=dotenv
+python-import=email_validator
+python-import=exceptiongroup
+python-import=fastapi
+python-import=fastmcp
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=httpx_file
+python-import=httpx_sse
+python-import=idna
+python-import=jsonschema
+python-import=jsonschema_specifications
+python-import=markdownify
+python-import=mcp
+python-import=mcp_server
+python-import=pydantic
+python-import=pydantic_core
+python-import=pydantic_settings
+python-import=pygments
+python-import=python_multipart
+python-import=referencing
+python-import=rfc3339_validator
+python-import=rich
+python-import=rpds
+python-import=six
+python-import=sniffio
+python-import=soupsieve
+python-import=sse_starlette
+python-import=starlette
+python-import=typing_extensions
+python-import=typing_inspection
+python-import=uvicorn
+python-import=locale, runpy
+python-import=*
+
+net=ALLOW|TCP|0.0.0.0/32|48000|IN  # For sandbox port
+net=ALLOW|TCP|0.0.0.0/32|8000|IN  # For MCP Server
+net=ALLOW|TCP|www.google.com|80|OUT
+
+ro-bind=.,.
+
+include ".py-sandboxes.pycharm"

@@ -169,8 +169,46 @@ netfilter*.net
 run.sh
 .local.py-sandboxes*
 .devpi/
-.claude/
 etudes/
 samples/langgraph-demo/
 tmp/
 tst_wasm/
+#reports/
+
+#.container-use/
+# https://oraios.github.io/serena
+#.serena/
+
+
+# IA
+#.auto-claude/
+#.gemini/
+#.ia/
+#.opencode/
+#.claude/
+
+# https://docs.entire.io/introduction
+# Capture IA session in git
+#.entire/
+
+# https://github.com/oraios/serena
+# Serena provides essential semantic code retrieval and editing tools
+#.serena/
+
+#.planning/
+#.ia_backup/
+
+# OpenMemory - IDE/Assistant specific rules
+#.cursor/rules/openmemory.mdc
+#AGENTS.md
+.cursor/rules/openmemory.mdc
+AGENTS.md
+_bmad/
+.ia/skills.new/bmad-*
+.ia/skills.new/packmind-*
+# CocoIndex Code (ccc)
+/.cocoindex_code/
+
+graphify-out/manifest.json    # mtime-based, breaks after git clone
+graphify-out/cost.json        # local only
+# graphify-out/cache/         # optional: commit for speed, skip to keep repo small

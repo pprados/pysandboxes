@@ -63,7 +63,19 @@ _cli = {
     "cli",
 }
 
-__all__ = list(_api | _exception)
+# Explicit list to avoid pyright warning about unsupported __all__ operation
+# Note: Exceptions are loaded via __getattr__ (lazy loading)
+__all__ = [
+    "sandboxes",
+    "sandbox",
+    "PySandboxesException",  # type: ignore[reportUnsupportedDunderAll]
+    "RuleException",  # type: ignore[reportUnsupportedDunderAll]
+    "RuleFileNotFoundError",
+    "RulePermissionError",
+    "RuleSocketConnectionRefusedError",
+    "RuleModuleNotFoundError",
+    "RuleAttributeError",
+]
 
 
 class LazySandboxesProxy:
@@ -107,6 +119,8 @@ class LazySandboxesProxy:
 
 
 _sandboxes = LazySandboxesProxy()
+
+os_sandbox: str = "none"
 
 
 def __getattr__(name: str) -> Any:

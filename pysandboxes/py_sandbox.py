@@ -14,6 +14,7 @@ import re
 import sys
 import tempfile
 import types
+import uuid
 from importlib import resources
 from pathlib import Path
 from typing import Any, cast
@@ -137,6 +138,7 @@ def load_and_parse_config(
     # Extra rules can be in form k=v or k=[v1,v2,...]
     extra_lines = []
     for k, all_v in extra_rules.items():
+
         k = k.replace("_", "-")
         if isinstance(all_v, set):
             if not all_v:
@@ -257,16 +259,19 @@ def parse_config(
         others,
     ) = guard_provider.parse_rules(config_path, others, errors)
 
-    from pysandboxes.os_sandbox import providers_factory
+    from pysandboxes._os_sandbox import providers_factory
+
+    from .immutable_dict import ImmutableDict
 
     providers_rules, others = parse_provider_rules(others)
 
+    os_sandbox_params: ImmutableDict[str, Any]
     if os_sandbox != "error":
         os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(
             providers_rules, errors
         )
     else:
-        os_sandbox_params = {}
+        os_sandbox_params = ImmutableDict({})
 
     socket_rules, others, pin_dns = guard_socket.parse_rules(others, errors)
     files_rules, others = guard_files.parse_rules(others, errors)
@@ -300,7 +305,7 @@ def parse_config(
         config=config,
         envs=sandbox_env,
         os_sandbox=os_sandbox,
-        os_sandbox_params=os_sandbox_params,
+        os_sandbox_params=os_sandbox_params,  # Already ImmutableDict from parse_rules
         use_py_sandbox=use_py_sandbox,
         port=port,
         learning_path=learning_path,
@@ -316,42 +321,59 @@ def parse_config(
 def activate_sandboxes(
     all_rules: AllRules,
     envs: Environ | None = None,
+    *,
+    rules_provider: str | None = None,
 ) -> None:
+    """Apply OS-provider rule tweaks then Python-level guards.
+
+    Args:
+        all_rules: Parsed profile (``os_sandbox`` names the real host provider).
+        envs: Environment mapping.
+        rules_provider: If set, use this factory key for ``update_rules_and_activate``
+            only (e.g. ``"none"`` in the QEMU guest so we do not import aiohttp via
+            qemu/subprocess daemons). The ``all_rules`` passed into the provider still
+            describe the real configuration including ``os_sandbox``.
+    """
     if envs is None:
         envs = os.environ
-    os_sandbox = all_rules.os_sandbox
-    if os_sandbox:
-        from pysandboxes.os_sandbox import providers_factory
+    provider_key = (
+        rules_provider if rules_provider is not None else all_rules.os_sandbox
+    )
+    if provider_key:
+        from pysandboxes._os_sandbox import providers_factory
 
-        if os_sandbox not in providers_factory:
-            raise ValueError(f"Unknown os-sandbox name: {os_sandbox}")
-        os_provider: BaseDaemon = providers_factory[os_sandbox](token=None)
-        # Offer the opportunity to update the rules (add, remove, etc)
-        all_rules = os_provider.update_rules(
+        if provider_key not in providers_factory:
+            raise ValueError(f"Unknown os-sandbox name: {provider_key}")
+        os_provider: BaseDaemon = providers_factory[provider_key](
+            str(uuid.uuid4()),
+        )
+        # Offer the opportunity to update the rules (add, remove, etc.)
+        all_rules = os_provider.update_rules_and_activate(
             all_rules=all_rules,
             envs=Envs(envs),
             temp=Path(tempfile.mkdtemp()),
         )
 
     # Apply the rules
-    env_patch_rules = guard_envs.patch_rules(all_rules.learn)
-    file_patch_rules = guard_files.patch_rules(all_rules.learn)
-    socket_patch_rules = guard_socket.patch_rules(all_rules.learn)
-    import_patch_rules = guard_import.patch_rules(all_rules.learn)
-    self_patch_rules = guard_self.patch_rules(all_rules.learn)
-    guard_import.activate_guard_import(
-        {
-            **file_patch_rules,
-            **socket_patch_rules,
-            **env_patch_rules,
-            **import_patch_rules,
-            **self_patch_rules,
-        },
-        all_rules.import_rules,
-    )
+    if all_rules.use_py_sandbox:
+        env_patch_rules = guard_envs.patch_rules(all_rules.learn)
+        file_patch_rules = guard_files.patch_rules(all_rules.learn)
+        socket_patch_rules = guard_socket.patch_rules(all_rules.learn)
+        import_patch_rules = guard_import.patch_rules(all_rules.learn)
+        self_patch_rules = guard_self.patch_rules(all_rules.learn)
+        guard_import.activate_guard_import(
+            {
+                **file_patch_rules,
+                **socket_patch_rules,
+                **env_patch_rules,
+                **import_patch_rules,
+                **self_patch_rules,
+            },
+            all_rules.import_rules,
+        )
 
-    guard_envs.activate_guard(all_rules.envs_rules)
-    guard_socket.activate_guard(all_rules.socket_rules)
-    guard_files.activate_guard(all_rules.file_rules)
-    set_learning_path(all_rules.learning_path)
-    guard_self.activate_guard()
+        guard_envs.activate_guard(all_rules.envs_rules)
+        guard_socket.activate_guard(all_rules.socket_rules)
+        guard_files.activate_guard(all_rules.file_rules)
+        set_learning_path(all_rules.learning_path)
+        guard_self.activate_guard()

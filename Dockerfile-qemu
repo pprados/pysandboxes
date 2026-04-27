@@ -1,0 +1,17 @@
+# qemu provider: base + QEMU and VM image for this Python version.
+# Build: make build-image-qemu  =>  python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
+ARG PYTHON_VERSION=3.10
+FROM python-sb:${PYTHON_VERSION}
+
+ENV PYSANDBOXES_VM_IMAGES_DIR=/var/lib/pysandboxes/vm-images
+# QEMU_PKG passed from Makefile (qemu-system-x86 or qemu-system-aarch64 per host arch)
+ARG QEMU_PKG=qemu-system-x86
+RUN set -eux \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "$QEMU_PKG" qemu-utils genisoimage \
+    && mkdir -p "${PYSANDBOXES_VM_IMAGES_DIR}" \
+    && python -m pysandboxes.remote.qemu_fetch_image \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+CMD ["python-sb"]

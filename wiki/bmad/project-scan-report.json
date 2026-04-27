@@ -1,0 +1,110 @@
+{
+  "workflow_version": "1.2.0",
+  "timestamps": {
+    "started": "2026-03-12T12:00:00.000Z",
+    "last_updated": "2026-03-12T12:05:00.000Z"
+  },
+  "mode": "initial_scan",
+  "scan_level": "exhaustive",
+  "project_root": "/home/philippe-prados/workspace/pysandboxes",
+  "project_knowledge": "/home/philippe-prados/workspace/pysandboxes/docs",
+  "completed_steps": [
+    {
+      "step": "step_1",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:00:00.000Z",
+      "summary": "Classified as monolith with 1 part"
+    },
+    {
+      "step": "step_2",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:01:00.000Z",
+      "summary": "Found 18+ existing docs; user added none"
+    },
+    {
+      "step": "step_3",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:02:00.000Z",
+      "summary": "Tech stack: FastAPI, uv, pytest, ruff, mypy"
+    },
+    {
+      "step": "step_4",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:03:00.000Z",
+      "summary": "Conditional analysis complete; api-contracts, data-models, comprehensive-analysis written"
+    },
+    {
+      "step": "step_5",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:05:00.000Z",
+      "summary": "Source tree documented"
+    },
+    {
+      "step": "step_6",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:05:00.000Z",
+      "summary": "Dev/deployment/contribution guides written"
+    },
+    {
+      "step": "step_8",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:05:00.000Z",
+      "summary": "Architecture doc written"
+    },
+    {
+      "step": "step_9",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:05:00.000Z",
+      "summary": "Supporting docs written"
+    },
+    {
+      "step": "step_10",
+      "status": "completed",
+      "timestamp": "2026-03-12T12:05:00.000Z",
+      "summary": "Master index generated"
+    }
+  ],
+  "current_step": "step_11",
+  "findings": {
+    "project_classification": {
+      "repository_type": "monolith",
+      "parts_count": 1,
+      "primary_language": "Python",
+      "architecture_type": "backend"
+    },
+    "technology_stack": [
+      {
+        "part_id": "main",
+        "tech_summary": "Python 3.10+, FastAPI, uvicorn, uv, hatchling, pytest"
+      }
+    ]
+  },
+  "outputs_generated": [
+    "project-scan-report.json",
+    "project-structure.md",
+    "project-parts-metadata.md",
+    "existing-documentation-inventory.md",
+    "user-provided-context.md",
+    "technology-stack.md",
+    "architecture-patterns.md",
+    "api-contracts-main.md",
+    "data-models-main.md",
+    "comprehensive-analysis-main.md",
+    "source-tree-analysis.md",
+    "development-guide.md",
+    "deployment-guide.md",
+    "contribution-guide.md",
+    "architecture.md",
+    "project-overview.md",
+    "component-inventory.md",
+    "index.md"
+  ],
+  "resume_instructions": "Resume from step 11: validate and review.",
+  "project_types": [
+    {
+      "part_id": "main",
+      "project_type_id": "backend",
+      "display_name": "pysandboxes"
+    }
+  ]
+}

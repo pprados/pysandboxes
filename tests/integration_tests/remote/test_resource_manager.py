@@ -1,5 +1,5 @@
 # %% Test resource manager
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandboxes
 from pysandboxes.tools import mixed_sync_and_async_error

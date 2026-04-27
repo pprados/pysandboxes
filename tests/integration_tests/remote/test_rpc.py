@@ -3,10 +3,10 @@ import os
 from pathlib import Path
 from typing import Any, Iterator
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandbox
-from pysandboxes.os_sandbox import shutdown_daemon, start_daemon
+from pysandboxes._os_sandbox import shutdown_daemon, start_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 
 
@@ -45,7 +45,7 @@ def test_sync_function() -> None:
 async def async_function(a: str, b: str) -> str:
     import asyncio
 
-    await asyncio.sleep(0)  # Simule une opération asynchrone
+    await asyncio.sleep(0)  # Simulate an async operation
     return f"{a} {b}"
 
 
