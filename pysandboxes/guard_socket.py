@@ -346,6 +346,7 @@ def _parse_rule(
         else:
             parser_directions = tuple([Direction[d] for d in split_directions])
 
+    ports_list_or_range: tuple[int, ...] | range = ()
     try:
         ports_list_or_range = _convert_ports_range(port_spec_str)
     except ValueError:
@@ -760,13 +761,10 @@ def _check_address_with_rules(
 
 
 # see _scoket.pyi
-if sys.version_info[:2] >= (3, 12):
-    from collections.abc import Buffer
-
-    ReadableBuffer: TypeAlias = Buffer  # stable
-else:
-    ReadableBuffer: TypeAlias = Any  # stable
-_Address: TypeAlias = tuple[Any, ...] | str | ReadableBuffer
+# ReadableBuffer type for socket operations
+# Using Any to avoid Buffer import issues with pyright
+ReadableBuffer: TypeAlias = Any
+_Address: TypeAlias = tuple[Any, ...] | str | Any
 _RetAddress: TypeAlias = Any
 
 _pin_dns: ImmutableDict[str, tuple[AddrInfoType, ...]] = ImmutableDict({})
@@ -775,17 +773,15 @@ _pin_dns: ImmutableDict[str, tuple[AddrInfoType, ...]] = ImmutableDict({})
 def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
     global _pin_dns
     assert not _pin_dns
-    logger.debug(
-        "pin_dns=\n  "
-        + "\n  ".join(
-            f"[{k}]:  " + ", ".join({x[4][0] for x in v}) for k, v in dns.items()
-        )
+    entries = (
+        f"[{k}]:  " + ", ".join(x[4][0] for x in (v or ())) for k, v in dns.items()
     )
-    _pin_dns = dns
+    logger.debug("pin_dns=\n  " + "\n  ".join(entries))
+    _pin_dns = ImmutableDict({k: (v or ()) for k, v in dns.items()})
 
 
 # Not used
-def _get_fammily(ip: str) -> int:
+def _get_family(ip: str) -> int:
     ip_object = ip_address(ip)
     if ip_object.version == 4:
         family = socket.AF_INET
@@ -804,6 +800,13 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
             for addr_info in _pin_dns[name]:
                 if addr_info[0] == socket.AF_INET:
                     return addr_info[4][0]
+            for addr_info in _pin_dns[name]:
+                if len(addr_info) > 4 and addr_info[4]:
+                    try:
+                        if ip_address(addr_info[4][0]).version == 4:
+                            return addr_info[4][0]
+                    except (ValueError, TypeError):
+                        continue
             err = socket.gaierror()
             err.errno = 3
             err.strerror = "Temporary failure in name resolution"
@@ -828,10 +831,9 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
 def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: dict[str, Any]) -> Any:
-        result = func(name, *args, **kwargs)
         if isinstance(name, str) and name in _pin_dns:
             addr_info = _pin_dns[name]
-            can_name = addr_info[0][3] or name
+            can_name = addr_info[0][3] or name if addr_info else name
             return (
                 can_name,
                 [],
@@ -841,6 +843,7 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
                     if dns_conf[0] == socket.AF_INET
                 ],
             )
+        result = func(name, *args, **kwargs)
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
                 LearnSocketRule(
@@ -1139,6 +1142,23 @@ def activate_guard(rules: SocketRules) -> None:
     _rules = rules
 
 
+def apply_pin_dns_resolution(socket_module: Any) -> None:
+    """Patch resolution functions on the socket module to use _pin_dns when set.
+
+    Use when pin_dns is non-empty but full Python sandbox (use_py_sandbox) is
+    disabled, so that guest/subprocess still resolve hostnames via pinned IPs.
+    """
+    if not _pin_dns:
+        return
+    socket_module.gethostbyname = _wrap_socket_gethostbyname(
+        socket_module.gethostbyname
+    )
+    socket_module.gethostbyname_ex = _wrap_socket_gethostbyname_ex(
+        socket_module.gethostbyname_ex
+    )
+    socket_module.getaddrinfo = _wrap_socket_getaddrinfo(socket_module.getaddrinfo)
+
+
 def _read_host_file() -> tuple[
     dict[str, set[IPv4Address | IPv6Address]],
     dict[IPv4Address | IPv6Address, set[str]],
@@ -1146,7 +1166,7 @@ def _read_host_file() -> tuple[
     dns: dict[str, set[IPv4Address | IPv6Address]] = {}
     inverse_dns: dict[IPv4Address | IPv6Address, set[str]] = {}
     # Read the host file
-    # Détecter le système d'exploitation pour trouver le bon chemin
+    # Detect the OS to find the correct hosts file path
     if sys.platform == "win32":
         system_root = os.environ.get("SystemRoot")
         if not system_root:

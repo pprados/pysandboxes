@@ -1,29 +1,79 @@
 # Firejail
 
-Firejail is a simple **OS-Sandbox** technology, allowing programs to be launched isolated from the rest of the system. It is possible to limit disk access, network access, system calls, etc. Consult the [documentation](https://man7.org/linux/man-pages/man1/firejail.1.html) for more information.
+**Firejail** is an **OS-sandbox** provider that runs code in an isolated environment with restricted filesystem access, optional network namespace (bridge), and configurable seccomp. It allows limiting disk access, network access, and system calls. See the [Firejail documentation](https://man7.org/linux/man-pages/man1/firejail.1.html) for details.
 
-If you want to use the network within a sandbox, it is preferable to set the `restricted-network no` parameter in the `/etc/firejail/firejail.config` file.
+## Solution in brief
 
-For security reasons, code running in firejail cannot access servers present on the host. To allow this communication, it is necessary to add a network bridge, as Docker also does.
+The host launches a Firejail sandbox with a generated profile: whitelist/read-only bindings from file rules, optional `--net=<bridge>` for network, and netfilter rules (FIFO) for socket rules. The sandbox runs `main_sandbox` which reads the configuration from a named pipe and starts the SSE server. The host talks to the sandbox via SSE on a local URL. For security, code running in Firejail cannot reach host servers unless a network bridge is used (e.g. `docker0`, `br0`).
 
-To use the [firejail](https://github.com/netblue30/firejail) technology, you must have a network bridge. Check it with:
+## Advantages
+
+| Aspect | Detail |
+|--------|--------|
+| **Isolation** | Filesystem whitelist, optional private network namespace, netfilter-based socket rules. |
+| **Ease of use** | Single binary, profile from template + Py-sandboxes rules; no VM or kernel feature beyond namespaces. |
+| **Security hardening** | Optional seccomp (allow/block lists) to restrict system calls. |
+| **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe) as bwrap/unshare. |
+
+## Disadvantages
+
+| Aspect | Detail |
+|--------|--------|
+| **Docker / Podman** | Not compatible with Docker and Podman (no Firejail in typical container images; bridge model differs). |
+| **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config`; host access requires a bridge (e.g. `add-bridge.sh`). |
+| **Debug** | Profile and netfilter generation can be complex; check logs and Firejail options for troubleshooting. |
+
+## How it works
+
+1. **Host**: The daemon builds Firejail arguments from the template, file rules (whitelist/read-only/read-write), and optional socket rules. If socket rules are used, it generates netfilter rules and passes them via FIFOs (`--netfilter`, `--netfilter6`). Config is written to a named pipe; the sandbox reads it on startup.
+2. **Launch**: The host runs `firejail [options] -- /usr/bin/env -i ... python -m pysandboxes.remote.main_sandbox --_named-pipe <path>`. Options include `--whitelist`, `--read-only`, `--net=<bridge>`, `--dns`, `--netfilter` when network rules are enabled.
+3. **Inside the sandbox**: `main_sandbox` loads the config from the pipe, applies Python guards, starts the SSE server on the expected port and waits for requests.
+4. **Communication**: The host sends calls over SSE to the sandbox (localhost or bridge-assigned IP when using `--net`).
+
+For more details, see the [Firejail documentation](https://firejail.wordpress.com/).
+
+## Using with Docker
+
+Firejail is **not** compatible with Docker. The project uses **one image per OS provider** (see [unshare](unshare.md), [bwrap](bwrap.md), [qemu](qemu.md)); there is **no container image for firejail**. Use **unshare**, **bwrap**, or **qemu** for container-based workflows.
+
+## Using with Podman
+
+Firejail is **not** compatible with Podman. Use **unshare**, **bwrap**, or **qemu** with their respective provider images for container-based workflows.
+
+## Using with Kubernetes
+
+Firejail is **not** supported in Kubernetes (no `python-sb-firejail` image). Use **unshare** (`python-sb-unshare`), **bwrap** (`python-sb-bwrap`), or **qemu** (`python-sb-qemu`) and their documentation for Kubernetes.
+
+## Configuration parameters
+
+You can add Firejail-specific options in `.py-sandboxes`. Any line of the form `firejail.<option>=<value>` is passed to Firejail as `--<option>=<value>` when the sandbox is started.
+
+### Network (firejail.net)
+
+To use a specific bridge interface (e.g. for host communication), set:
+
+- `firejail.net=my_bridge` — use the given bridge for the sandbox network.
+
+If `firejail.net` is not set and socket rules are used, the daemon picks a default (e.g. `docker0` or the first available bridge).
+
+### Seccomp (firejail.seccomp, firejail.seccomp.keep, firejail.seccomp.block)
+
+To restrict system calls, use an allow-list or block-list:
+
+- `firejail.seccomp=<path>` — path to a seccomp list file.
+- `firejail.seccomp.keep=<syscalls>` — comma-separated list of allowed syscalls.
+- `firejail.seccomp.block=<syscalls>` — comma-separated list of blocked syscalls.
+
+To discover which syscalls your application uses, you can run:
+
 ```bash
-ip link show type bridge
-```
-If you find `docker0` or `br0`, it's good.
-
-Otherwise, you must create a bridge. The `[add-bridge.sh](https://github.com/pprados/pysandboxes/tree/master/scripts)` script does this.
-```bash
-sudo uv run ./add-bridge.sh
-```
-
-## Specific Parameters
-Some specific parameters can be added to `.py-sandboxes` for *Firejail*. Parameters of the form `firejail.<xxx>=<yyy>` will be added in the form `--<xxx>=<yyy>` when launching firejail.
-
-To force to use a specific bridge, add `--firejail.eth=my_bridge`.
-
-You can thus further strengthen security by limiting the system calls authorized by your application. To do this, you need to identify them. We offer a script [extract_strace.sh](https://github.com/pprados/pysandboxes/tree/develop/scripts) to help you.
-```
 uv run extract_strace.sh <command to start your application>
 ```
-The `extract_strace.sh` script displays the list of system calls of your application. All that remains is to add them to the `firejail.seccomp=<xxx>` parameter, separated by commas and without spaces.
+
+Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`), separated by commas and without spaces.
+
+## Prerequisites
+
+- Firejail installed (e.g. `sudo apt install firejail`).
+- For network and socket rules: a bridge (e.g. `docker0`, `br0`). Check with `ip link show type bridge`. The script `scripts/add-bridge.sh` can create one if needed.
+- For socket rules: set `restricted-network no` in `/etc/firejail/firejail.config` so that network filtering can be applied.

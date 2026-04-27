@@ -5,16 +5,16 @@ from asyncio import AbstractEventLoop
 from pathlib import Path
 from typing import AsyncGenerator, Iterator
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandbox
-from pysandboxes.os_sandbox import async_shutdown_daemon, async_start_daemon
+from pysandboxes._os_sandbox import async_shutdown_daemon, async_start_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.tools import which_command
 
 
 # See https://github.com/tortoise/tortoise-orm/issues/638
-@pytest.yield_fixture(scope="module")
+@pytest.fixture(scope="module")
 def event_loop() -> Iterator[AbstractEventLoop]:
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
@@ -53,7 +53,7 @@ def test_sync_function() -> None:
 async def async_function(a: str, b: str) -> str:
     import asyncio
 
-    await asyncio.sleep(0)  # Simule une opération asynchrone
+    await asyncio.sleep(0)  # Simulate async operation
     return f"{a} {b}"
 
 

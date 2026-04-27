@@ -1,0 +1,13 @@
+# bwrap provider: base + bubblewrap.
+# Build: make build-image-bwrap  =>  python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest
+ARG PYTHON_VERSION=3.10
+FROM python-sb:${PYTHON_VERSION}
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    bubblewrap \
+    slirp4netns && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+CMD ["python-sb"]

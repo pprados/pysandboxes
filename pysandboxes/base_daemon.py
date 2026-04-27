@@ -40,7 +40,7 @@ class BaseDaemon(ABC):
     def __init__(
         self,
         token: str,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> None:
         """Initialize the daemon with a unique token.
 
@@ -60,7 +60,7 @@ class BaseDaemon(ABC):
         return ImmutableDict({}), rules
 
     @abstractmethod
-    def update_rules(
+    def update_rules_and_activate(
         self,
         *,
         envs: Envs,
@@ -116,7 +116,7 @@ class BaseDaemon(ABC):
         """Must be called via async_shutdown_daemon().
 
         Args:
-            graceful_shutdown: Whether to shutdown gracefully.
+            graceful_shutdown: Whether too shutdown gracefully.
         """
         self._accept_incoming = False
 
@@ -177,7 +177,7 @@ class BaseDaemon(ABC):
 
 
 class FakeDaemon(BaseDaemon):
-    def update_rules(
+    def update_rules_and_activate(
         self,
         *,
         envs: Envs,
@@ -185,8 +185,6 @@ class FakeDaemon(BaseDaemon):
         temp: Path,
     ) -> "AllRules":
         return all_rules
-
-    is_started = True
 
     async def _start(
         self,

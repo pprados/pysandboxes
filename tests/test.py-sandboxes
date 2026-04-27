@@ -2,13 +2,14 @@ py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
 env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
+env=TERM=${TERM}
 env=LLM_TOKEN=${LLM_TOKEN}
 
 # ⚠ Dangerous!
 python-import=atexit, importlib, inspect
 
 # Standard Python
+python-import=pickle, signal
 python-import=__future__, _decimal, _hashlib, _io, _multibytecodec, abc, array, ast
 python-import=base64, binascii, calendar, codecs, collections, colorsys
 python-import=configparser, contextlib, copy, dataclasses, datetime, decimal, email
@@ -21,6 +22,7 @@ python-import=traceback, types, typing, unicodedata, urllib, weakref, zipfile, z
 
 # External modules (Are you sure about the origin?)
 python-import=attr
+python-import=brotli
 python-import=certifi
 python-import=charset_normalizer
 python-import=idna
@@ -31,6 +33,8 @@ python-import=tests
 python-import=urllib3
 
 bind=./tmp,./tmp
+ro-bind=.,.
+ro-bind=/etc,/etc
 
 net=ALLOW|TCP|ip6-localhost|9999,0|IN
 net=ALLOW|TCP|localhost|9999|IN
@@ -38,3 +42,4 @@ net=ALLOW|TCP|www.google.com|80|OUT
 net=ALLOW|UDP|ip6-localhost|12345|OUT
 net=ALLOW|UDP|localhost|12345|IN
 net=ALLOW|UDP|localhost|12346,12345|OUT
+

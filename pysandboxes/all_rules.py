@@ -6,11 +6,12 @@ This module provides data structures to collect and organize all security rules
 from different guards (environment, files, network, imports) into a unified
 configuration object.
 """
+
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from pysandboxes.guard_envs import EnvsRules
-from pysandboxes.guard_files import FileRules
+from pysandboxes.guard_files import FilesRules
 from pysandboxes.guard_import import ImportRules
 from pysandboxes.guard_socket import PinDNS, SocketRules
 from pysandboxes.immutable_dict import ImmutableDict
@@ -49,7 +50,7 @@ class AllRules(NamedTuple):
     envs_rules: EnvsRules
     socket_rules: SocketRules
     pin_dns: PinDNS
-    file_rules: FileRules
+    file_rules: FilesRules
     import_rules: ImportRules
 
 

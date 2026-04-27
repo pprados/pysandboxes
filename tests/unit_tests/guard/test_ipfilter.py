@@ -6,7 +6,7 @@ from pathlib import Path
 from shutil import which
 from typing import List, Literal
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.main_logger import ErrorMsg
@@ -59,7 +59,7 @@ def _is_conntrack_kernel_module() -> bool:
 @pytest.fixture(autouse=True)
 def reset() -> None:
     # Create test files and symlinks
-    # It's executer without patch.
+    # Runs without patch.
     init_log_level()
     _deactivate_all_rules()
     _activate_guard_import_for_tests()

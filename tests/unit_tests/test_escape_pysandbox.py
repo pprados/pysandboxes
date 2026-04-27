@@ -3,7 +3,7 @@ import pickle
 from types import ModuleType
 from typing import Any, Dict, Set, Tuple
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleAttributeError
 
@@ -17,7 +17,7 @@ def test_escape_with_closure() -> None:
     assert original_open.__module__ in ["_io", "io"], "Not the _original io.open"
 
 
-@pytest.mark.skip
+@pytest.mark.skip(reason="escape via __subclasses__ not yet blocked")
 def test_escape_with_subclasses() -> None:
     # TODO Try to block the __subclasses__ access
     def find_all_subclasses(cls: type) -> Set[type]:
@@ -48,7 +48,7 @@ def test_escape_with_subclasses() -> None:
         import_module._rules = ()  # type: ignore[attr-defined]
 
 
-@pytest.mark.skip
+@pytest.mark.skip(reason="TODO: block sys.meta_path escape in guard_import")
 def test_escape_with_meta_path() -> None:
     import sys
 

@@ -30,8 +30,6 @@ from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
 from typing import Any, cast
 
-import netifaces
-
 logger = logging.getLogger(__name__)
 
 known_paths = [
@@ -57,6 +55,27 @@ def which_command(command: str) -> Path | None:
     if not full_path:
         return None
     return Path(full_path)
+
+
+def unshare_user_namespace_available() -> bool:
+    """Return True if unshare and slirp4netns exist and user namespaces are allowed.
+
+    When user namespaces are disabled (e.g. in containers, Cursor, or kernel
+    setting), unshare fails with 'Operation not permitted'. This avoids hanging
+    or long timeouts in tests.
+    """
+    if not which_command("unshare") or not which_command("slirp4netns"):
+        return False
+    try:
+        result = subprocess.run(
+            ["unshare", "--user", "--map-root-user", "true"],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
 
 def get_venv() -> str | None:
@@ -104,10 +123,15 @@ def configure_logging_level(verbose_count: int) -> int:
 def get_default_gateway_info() -> tuple[str, str] | None:
     """Get default network gateway information.
 
+    netifaces is imported lazily: its C extension can segfault on some minimal
+    VM/guest stacks; nothing in the daemon import path needs gateways at module load.
+
     Returns:
         Tuple of (gateway_ip, interface_name) or None if no gateway found.
     """
-    gws: dict[str, Any] = netifaces.gateways()
+    import netifaces
+
+    gws: dict[Any, Any] = netifaces.gateways()
 
     # Retrieve default IPv4 gateway
     try:
@@ -177,43 +201,35 @@ def suggest_package_installation(package_name: str) -> str:
             return f"sudo pacman -S {package_name}"
         else:
             # Fallback for unknown or other Linux distributions
-            return textwrap.dedent(
-                f"""
+            return textwrap.dedent(f"""
                 You can try installing {package_name!r} using common package managers like:
                 sudo apt update && sudo apt install {package_name}  (Debian/Ubuntu based systems)
                 sudo yum install {package_name}          (CentOS/RHEL based systems)
                 sudo dnf install {package_name}          (Fedora based systems)
                 sudo pacman -S {package_name}            (Arch Linux based systems)
                 Please refer to your distribution's documentation for the correct command.
-                """  # noqa: E501
-            ).strip()  # noqa
+                """).strip()  # noqa: E501  # noqa
 
     elif system == "darwin":
         # For macOS, suggest Homebrew
-        return textwrap.dedent(
-            f"""
+        return textwrap.dedent(f"""
             /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
             brew install {package_name}
-            """
-        ).strip()  # noqa
+            """).strip()  # noqa
     elif system == "win32":
         # For Windows, suggest Winget or Chocolatey
-        return textwrap.dedent(
-            f"""
+        return textwrap.dedent(f"""
             You can try installing {package_name!r} using:")
               winget install {package_name}            (Windows Package Manager)
               choco install {package_name}             (Chocolatey - if installed)
             You might need to install Winget or Chocolatey first if you don't have them.
-            """
-        ).strip()
+            """).strip()
     else:
         # For other or unknown systems
-        return textwrap.dedent(
-            f"""
+        return textwrap.dedent(f"""
             Your operating system ({system}) is not explicitly supported.
             Please refer to the documentation for {package_name!r} to find installation instructions for your system.
-            """  # noqa: E501
-        ).strip()
+            """).strip()  # noqa: E501
 
 
 def return_level_parameter(log_level: int) -> str:
@@ -247,7 +263,6 @@ def set_pdeathsig() -> None:
         logger.warning("set_pdeathsig() not supported on non-POSIX systems.")
         return
     try:
-        # Load libc and call prctl
         libc = cdll.LoadLibrary("libc.so.6")
         result = libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
         if result != 0:
@@ -561,8 +576,7 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
         # Execute the resolvectl status command
         resolvectl = shutil.which("resolvectl")
         if resolvectl is None:
-            logger.debug("Use default DNS servers because resolvectl not found")
-            return [ipaddress.ip_address("1.1.1.1"), ipaddress.ip_address("4.4.4.4")]
+            return []
         output = subprocess.run(
             [resolvectl, "status"],
             capture_output=True,
@@ -588,10 +602,63 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
     except FileNotFoundError:
         return []
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"Error executing 'resolvectl status': {e.stderr.strip()}"
-        ) from e
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError("Error: 'resolvectl status' command timed out.") from e
+        logger.debug("Error executing 'resolvectl status': %s", e.stderr.strip())
+        return []
+    except subprocess.TimeoutExpired:
+        logger.debug("'resolvectl status' command timed out.")
+        return []
     except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred during execution: {e}") from e
+        logger.debug("Unexpected error during resolvectl execution: %s", e)
+        return []
+
+
+# Stub resolver addresses used by systemd-resolved
+_STUB_RESOLVERS = {
+    ipaddress.ip_address("127.0.0.53"),
+    ipaddress.ip_address("127.0.0.54"),
+}
+
+# Well-known public DNS servers used as last resort
+_FALLBACK_DNS: list[IPv4Address | IPv6Address] = [
+    ipaddress.ip_address("1.1.1.1"),
+    ipaddress.ip_address("8.8.8.8"),
+]
+
+
+def get_upstream_dns() -> list[IPv4Address | IPv6Address]:
+    """Get upstream DNS servers, with or without systemd.
+
+    Tries multiple strategies in order:
+    1. systemd-resolved (static config then resolvectl)
+    2. /etc/resolv.conf (filtering out stub resolvers like 127.0.0.53)
+    3. Well-known public DNS as last resort
+
+    Returns:
+        List of upstream DNS server addresses.
+    """
+    if platform.system() != "Linux":
+        return list(_FALLBACK_DNS)
+
+    # Strategy 1: systemd-resolved
+    result = get_systemd_resolved_upstream_dns()
+    if result:
+        return result
+
+    # Strategy 2: /etc/resolv.conf (works on any Linux)
+    try:
+        ipv4_list, ipv6_list = get_dns_servers()
+        all_dns: list[IPv4Address | IPv6Address] = []
+        all_dns.extend(ipv4_list)
+        all_dns.extend(ipv6_list)
+        # Filter out stub resolvers (systemd-resolved writes 127.0.0.53)
+        real_dns = [
+            ip for ip in all_dns if ip not in _STUB_RESOLVERS and not ip.is_loopback
+        ]
+        if real_dns:
+            return real_dns
+    except (OSError, AssertionError):
+        logger.debug("Could not read /etc/resolv.conf")
+
+    # Strategy 3: fallback to well-known public DNS
+    logger.debug("Using fallback public DNS servers")
+    return list(_FALLBACK_DNS)

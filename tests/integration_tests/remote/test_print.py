@@ -1,5 +1,5 @@
 # %% Test print
-import _pytest
+import _pytest  # type: ignore[import-untyped]
 
 from pysandboxes import sandboxes
 
@@ -11,7 +11,7 @@ from ..sample import (
 )
 
 
-def test_sync_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixture) -> None:
+def test_sync_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixture) -> None:  # type: ignore[attr-defined]
     """
     Catch stdin and stdout from the sandbox, in the main process
     """
@@ -23,7 +23,7 @@ def test_sync_catch_stdout_and_stderr(capsys: _pytest.capture.CaptureFixture) ->
 
 
 async def test_async_catch_stdout_and_stderr(
-    capsys: _pytest.capture.CaptureFixture,
+    capsys: _pytest.capture.CaptureFixture,  # type: ignore[attr-defined]
 ) -> None:
     """
     Catch stdin and stdout from the sandbox, in the main process

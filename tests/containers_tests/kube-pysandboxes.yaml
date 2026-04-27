@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pysandboxes-test
+spec:
+  # Explicit DNS so config parsing can resolve hostnames (e.g. www.google.com in py-sandbox-test.profile)
+  dnsPolicy: "None"
+  dnsConfig:
+    nameservers:
+      - "8.8.8.8"
+      - "8.8.4.4"
+  containers:
+    - name: pysandboxes-test
+      image: python-sb-unshare:latest   # Overridden at test time to python-sb-<provider>:latest (unshare, bwrap, etc.)
+      imagePullPolicy: Never   # Image built locally in minikube (eval $(minikube docker-env) + make build-image-docker)
+      workingDir: /app
+      command: [ "/bin/sh", "-c","sleep infinity" ] # Keep the pod alive
+      env:
+        - name: My_ENV
+          value: "1"
+      securityContext:
+        privileged: true   # Required to mount /proc in the unshare namespace (sandbox)
+        capabilities:
+          add:
+            - SYS_ADMIN   # Allows unshare (create namespaces)
+            - NET_ADMIN   # Network configuration (ip link, etc.)
+        seccompProfile:
+          type: Unconfined  # Disable seccomp filter that blocks unshare
+      volumeMounts:
+        - name: code-local
+          mountPath: /app  # Path inside the pod
+        - name: dev-net-tun
+          mountPath: /dev/net/tun  # Required by slirp4netns
+  volumes:
+    - name: code-local
+      hostPath:
+        path: /mnt/pysandboxes
+        type: Directory
+    - name: dev-net-tun
+      hostPath:
+        path: /dev/net/tun
+        type: CharDevice

@@ -1,0 +1,92 @@
+[project]
+name = "mcp-server-demo"
+version = "0.1.0"
+description = "Sample mcp-server-demo: FastMCP server (Python package mcp_server, console mcp-server-demo)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Anthropic" }]
+keywords = ["mcp", ]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "pysandboxes",
+    "fastmcp>=2.12.4",
+    "httpx-file>=0.2.0",
+    "markdownify>=1.2.0",
+]
+[dependency-groups]
+dev = [
+    "playwright>=1.28.0",
+    "setuptools>=67.6.1",
+    "ipython",
+    "ipykernel",
+    "jupyter>=1.0",
+    "jupyterlab_rise>=0.42",
+    "pre-commit>=3.6",
+    "twine>=5.1.0",
+    "importlib-metadata==7.2.1",
+    "scikit-learn>=1.6",
+#    "pydevd-pycharm>=253.28086.55",
+    "rich>=14.0",
+    "mcp[cli]>=1.14.0",
+    "json-with-comments>=1.2.10",
+    "pyright>=1.1", 
+    "pytest>=8.3.3", 
+    "ruff>=0.6.9"
+]
+test = [
+    "pytest>=7.3.0",
+    "pytest-dotenv>=0.5.2",
+    "pytest-asyncio>=0.20.3",
+    "pytest-mock>=3.10.0",
+    "syrupy>=5.0.0",
+]
+codespell = [
+    "codespell>=2.2.5",
+]
+
+[project.scripts]
+mcp-server-demo = "mcp_server.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mcp_server"]
+
+[tool.pyright]
+include = ["mcp_server"]
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.uv]
+
+
+[tool.uv.sources]
+# Use only inside the pysandboxes git repository
+pysandboxes = { path = "../..", editable = true }
+#pysandboxes = { path = "../../dist/pysandboxes-0.0.0-py3-none-any.whl" }
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+asyncio_default_fixture_loop_scope = "session"

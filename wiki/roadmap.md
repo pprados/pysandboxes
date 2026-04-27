@@ -7,49 +7,77 @@ It also verifies the relevance of the multiple sandbox encapsulation strategy, w
 
 We have a planned roadmap. Developments will arrive gradually, with no specific order:
 
-- [X] Control environment variables
-- [X] Control import list
-- [X] Control file and network access
-- [X] Control life cycle of the daemon (restart if necessary)
-- [ ] Guard some criticals methods in Python (spawn, shell, etc.)
+- [ ] Guards
+  - [X] Control environment variables
+  - [X] Control import list
+  - [X] Control file and network access
+  - [X] Control life cycle of the daemon (restart if necessary)
+  - [ ] Guard some critical methods in Python (spawn, shell, etc.)
+  - [ ] Management of *Denial of Service*
+  - [ ] Management of regular expressions
+  - [ ] Control of `exec()` and `eval()`
+    - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
 - [ ] OS Compatible
   - [X] Linux
   - [ ] Windows
-  - [ ] Mac OS
-- [ ] New **OS-sandboxes**
-  - [X] None
-  - [X] sub process
-  - [ ] sub interpreter
-  - [X] firejail
-  - [ ] bubblejail
-  - [ ] bwrap
-  - [ ] Docker (Docker or OCI images, oci-a,rchive) (See [here](https://github.com/anthropics/claude-code/tree/main/.devcontainer))
-  - [ ] podman
-  - [ ] kubernetes
+  - [ ] Mac OS (see https://cursor.com/fr/blog/agent-sandboxing)
+- [ ] OS-sandboxes
+  - [ ] Basic
+    - [X] None
+    - [X] sub process
+    - [ ] sub interpreter
+    - [X] langlock
+  - [ ] Sandbox utilities
+    - [X] firejail
+    - [X] unshare
+    - [X] bwrap
+    - [ ] Proxy (voir proxy.md)
+  - [ ] Container
+    - [X] Docker (--privileged with unshare)
+    - [X] podman (--privileged with unshare)
+    - [X] kubernetes
+    - [ ] Flatpak
+    - [ ] rpm-ostree unprivileged
+    - [ ] bwrap-oci
+    - [ ] gVisor (user space kernel simulation, without docker)
+    - [ ] Firecracker
+  - [ ] VM
+    - [X] Qemu
+    - [ ] multipass
+    - [ ] lxc
+    - [ ] vagrant
   - [ ] micro-VM
-    - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
-    - [ ] [Firecracker](https://firecracker-microvm.github.io/)
-    - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
-    - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [QEMU-microvm](https://www.qemu.org/docs/master/system/i386/microvm.html)
+    - [ ] [Firecracker](https://firecracker-microvm.github.io/)
+    - [ ] [Fargate](https://aws.amazon.com/fr/fargate/)
+    - [ ] [Kata Containers](https://katacontainers.io/) (compatible classical containers management)
+    - [ ] [Smolvm](https://korben.info/smolvm-microvm-portable-rust.html) 
+  - [ ] Others strategies
+    - [ ] [container2wasm](https://github.com/container2wasm/container2wasm)
+    - [ ] [Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)
     - [ ] [Cloud morph](https://cloud.morph.so/)
+    - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
+  - [ ] Apple
+    - [ ] App Sandbox
+    - [ ] sandbox-exec
 - [ ] New samples
-  - [X] MCP server
+  - [/] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
+  - [/] [Crewai](https://www.crewai.com/)
+  - [/] [Google ADK](https://google.github.io/adk-docs/)
+  - [/] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
   - [X] MCP client
-  - [ ] A2A protocol
-  - [ ] langchain / langgraph
-  - [ ] [Crewai](https://www.crewai.com/)
-  - [ ] Google ADK
-  - [ ] [Smolagent](https://huggingface.co/docs/smolagents/index)
-  - [ ] Pydantic.ai
-  - [ ] [Strandsagents](https://strandsagents.com)
-- [ ] Management of *Denial of Service*
-- [ ] Management of regular expressions
-- [ ] Control of `exec()` and `eval()`
-  - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
-- [ ] Compile a part of code
-- [ ] Propagate the tracability id
-- [ ] Use anyio
+  - [X] MCP server
+  - [/] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
+  - [/] [Pydantic.ai](https://ai.pydantic.dev/)
+  - [/] [Smolagent](https://huggingface.co/docs/smolagents/index)
+  - [/] [Strandsagents](https://strandsagents.com)
+  - [/] [langchain](https://www.langchain.com/)
+- [ ] Features
+  - [ ] Compile a part of code
+  - [ ] Propagate the tracability id
+  - [ ] Use anyio
+  - [ ] Use [Condon JIT](https://docs.exaloop.io/integrations/python/codon-from-python/#using-codonjit)
+  - [ ] DevContainer
 
 ## Guard some critical methods
 Certain methods must be rejected, even if the package is authorized (`spawn`, `system`, `sys.exit()`, ....)
@@ -86,3 +114,56 @@ To strengthen security, we are considering compiling a part of the project to ma
 
 ## Propagate the tracability id
 The protocol break prevents tracking with OpenTelemetry. We want to propagate the necessary information to get a complete trace.
+
+
+## Dangerous patterns
+```
+DANGEROUS_PATTERNS = [
+
+    # Dynamic code execution
+    r"\b__import__\b",
+    r"\bimportlib\b",
+    r"\beval\s*\(",
+    r"\bexec\s*\(",
+    r"\bcompile\s*\(",
+    r"\btype\s*\(",
+    r"\bcallable\s*\(",
+
+    # Builtins/attribute access
+    r"\b__builtins__\b",
+    r"\b__dict__\b",
+    r"\b__class__\b",
+    r"\b__globals__\b",
+    r"\b__setattr__\b",
+    r"\b__getattribute__\b",
+
+    # Introspection
+    r"\bglobals\s*\(",
+    r"\blocals\s*\(",
+    r"\bvars\s*\(",
+    r"\bdir\s*\(",
+    r"\bgetattr\s*\(",
+    r"\bsetattr\s*\(",
+    r"\bdelattr\s*\(",
+    r"\bhasattr\s*\(",
+
+    # Deserialization
+    r"\bpickle\b",
+    r"\bmarshal\b",
+    r"\bloads\s*\(",
+
+    # File access
+    r"\bopen\s*\(",
+    r"\binput\s*\(",
+    r"\braw_input\s*\(",
+
+    # Shell patterns
+    r"\bbash\b",
+    r"\bsh\b",
+    r"\bcmd\b",
+    r"/bin/",
+    r"\bsubprocess\b",
+    r"\bos\.system\b",
+    r"\bpopen\s*\(",
+]
+```

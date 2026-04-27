@@ -13,14 +13,14 @@ import asyncio
 import functools
 import logging
 import threading
-from asyncio import AbstractEventLoop, Future
+from asyncio import AbstractEventLoop
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 # Weak reference to the background event loop to allow for garbage collection.
 _background_loop_ref: AbstractEventLoop | None = None
-_new_event_loop: bool = False  # True if use a private loop
+_new_event_loop: bool = False  # True, if used a private loop
 
 # Thread-safe lock for creating and managing the background loop.
 _lock = threading.Lock()
@@ -227,9 +227,7 @@ async def purge_loop() -> AbstractEventLoop | None:
         # 3. Wait for tasks to be cancelled/finished
         # Return exceptions=True to not raise CancelledError here,
         # as we expect the tasks to be cancelled.
-        results: list[Future[tuple[Any, ...]]] = await asyncio.gather(
-            *tasks, return_exceptions=True
-        )
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Optional: Log the results of cancellation attempts
         for res in results:

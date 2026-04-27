@@ -7,7 +7,7 @@ from .test_guard_io import activate_guard_files_rules
 
 
 def test_apply_dest_to_src_rule() -> None:
-    # TODO: test tous les chemins, dont path=""
+    # TODO: test all paths, including path=""
 
     cwd = str(Path.cwd())
     src_dir = f"{cwd}/tests"

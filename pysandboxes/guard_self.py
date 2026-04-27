@@ -15,11 +15,11 @@ class GuardModule(ModuleType):
 
     def __new__(cls, name: str, *args: Any, **kwargs: Dict[str, Any]) -> Any:
         if "_original" in kwargs and "_guard_attributs" in kwargs:
-            return super().__new__(GuardModule, *args, **kwargs)
+            return super().__new__(cls, *args, **kwargs)
         else:
             if cls == GuardModule:
                 # Return, not guarded module
-                obj = super().__new__(ModuleType)
+                obj = ModuleType.__new__(ModuleType)
                 obj.__init__(name)  # type: ignore[misc]
                 return obj
             else:

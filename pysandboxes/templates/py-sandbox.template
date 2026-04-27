@@ -187,3 +187,114 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # <learning_guard_import>
 
 # </learning_guard_import>
+
+#######################################################################################
+# OS PROVIDER PARAMETERS (os-sandbox=…)
+# ======================================
+# Lines below apply only when os-sandbox matches that provider. Syntax is always
+# <provider>.<key>=<value>; the runtime stores keys without the "<provider>." prefix.
+# See wiki/qemu.md, wiki/bwrap.md, wiki/unshare.md, wiki/firejail.md.
+
+#######################################################################################
+# QEMU (os-sandbox=qemu)
+# ======================
+#
+# qemu.use_kvm — Hardware acceleration
+#   true (default): pass -enable-kvm when /dev/kvm is usable; otherwise QEMU falls back
+#   to TCG (slower, unprivileged).
+#   false: never request KVM. In Docker/Podman, mount --device /dev/kvm when you want KVM.
+#
+# qemu.memory — Guest RAM (QEMU -m)
+#   Default: 2048 (MiB). Use a non-negative integer with an optional single suffix
+#   k/M/G/T/P/E (e.g. 512M, 2G). Forms like 2GB are invalid for QEMU and fall back to default.
+#   Raise for heavier workloads.
+#
+# qemu.show_boot_console — VM serial on the host + NoCloud verbosity + guest main_sandbox traces
+#   false (default): host output is filtered to Python between guest sentinels (boot hidden);
+#   NoCloud user-data stays minimal (no cloud-init debug block, no bash -x on bootstrap);
+#   no [PYSANDBOX_DIAG] breadcrumbs or faulthandler in the guest main_sandbox.
+#   true: full QEMU console (boot, cloud-init, bootstrap) on the host; tee to
+#   .pysandbox-qemu-console.log; verbose cloud-init and set -x on the guest bootstrap script;
+#   in the VM, stderr [PYSANDBOX_DIAG] lines and faulthandler after main() starts.
+#
+# qemu.virtfs — Staging exec trees before virtio-9p (nested containers)
+#   auto (default): enable staging only when the host looks like a container (/.dockerenv,
+#   /.containerenv, or "container" in the environment) to avoid SIGSEGV on overlay+9p mmap.
+#   on / off: force staging on or off. Legacy alias: qemu.virtfs_stage (same values).
+#
+# qemu.virtfs_security_model — 9p security_model for non-staged mounts
+#   Default: mapped-xattr. Staged trees use "none" automatically for reliable .so mmap.
+
+# qemu.use_kvm=true
+# qemu.memory=2G
+# qemu.show_boot_console=false
+# qemu.virtfs=auto
+
+#######################################################################################
+# Bubblewrap (os-sandbox=bwrap)
+# ==============================
+# Base command is built from pysandboxes/templates/bwrap.template, then PySandboxes adds
+# binds, env --setenv, and network mode. Extra options: man bwrap(1), wiki/bwrap.md.
+#
+# bwrap.share-net — Keep host (or container) network when you have socket rules
+#   If set to a truthy value (e.g. yes): do not use the isolated netns + slirp4netns +
+#   iptables path even when socket rules exist. Use when slirp4netns is unavailable or you
+#   want the sandbox to share the host network stack.
+#
+# bwrap.unshare-net — Disable network filtering / isolated netns
+#   no, 0, or false: same effect as forcing shared network—no --unshare-net for filtering.
+#
+# Any other bwrap.<option>=<value> is appended to bwrap as --<option>=<value> (or
+# --<option> if the value is empty). Keys share-net and unshare-net are interpreted only
+# by PySandboxes and are not passed as duplicate bwrap flags.
+
+# bwrap.share-net=yes
+# bwrap.hostname=my-sandbox
+
+# See https://man.archlinux.org/man/extra/bubblewrap/bwrap.1.en
+# bwrap.<param>=<value>
+
+#######################################################################################
+# Firejail (os-sandbox=firejail)
+# ===============================
+# Not supported inside Docker/Podman/Kubernetes images for this project; use bwrap, unshare,
+# or qemu there. Base flags come from pysandboxes/templates/firejail.template (and env
+# substitution e.g. FIREJAIL_RELIMIT, NICE). man firejail(1), wiki/firejail.md.
+#
+# Only these profile lines are parsed into Firejail flags. Any other firejail.* line is
+# ignored by the provider parser—extend firejail.template or env for more Firejail options:
+#
+# firejail.net — Network bridge for the sandbox (host reachability often needs a bridge).
+#   Example: firejail.net=docker0. If unset with socket rules, the daemon may pick a default.
+#
+# firejail.seccomp — Path to a seccomp list file (passed as --seccomp=…).
+# firejail.seccomp.keep — Allowed syscalls (comma-separated) as --seccomp.keep=…
+# firejail.seccomp.block — Blocked syscalls as --seccomp.block=…
+#
+# Socket rules require restricted-network no in /etc/firejail/firejail.config for netfilter
+# setup; see wiki/firejail.md.
+
+# firejail.net=docker0
+# firejail.seccomp.keep=read,write,exit
+
+# See https://man7.org/linux/man-pages/man1/firejail.1.html
+# firejail.<param>=<value>
+
+#######################################################################################
+# Unshare (os-sandbox=unshare)
+# ============================
+# Launches unshare with flags from pysandboxes/templates/unshare.template, then each
+# unshare.<key>=<value> as --key=value (or --key if empty). Requires slirp4netns and
+# iptables; kernel.unprivileged_userns_clone=1 on many systems. man unshare(1), wiki/unshare.md.
+#
+# Typical use: add or override unshare(1) long options the template does not set. The
+# template already enables --net, --user, -r, --mount, --propagation private, --pid, --fork,
+# --kill-child.
+
+# unshare.<param>=<value>
+
+#######################################################################################
+# Subprocess / none (os-sandbox=subprocess | os-sandbox=none)
+# ============================================================
+# No provider-specific profile keys (no subprocess.* / none.*). Configure env, file, net,
+# and import rules only; subprocess is the default isolated Python process provider.

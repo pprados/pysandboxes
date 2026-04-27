@@ -2,7 +2,7 @@ import pathlib as opl
 import stat
 from typing import Any, Dict, List
 
-import pytest
+import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine

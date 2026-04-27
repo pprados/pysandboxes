@@ -3,6 +3,8 @@
 # Usage : ./set_ip_env.sh path/to/your/config_file
 # This script can be used in the pre-launch of a run configuration within a development environment.
 
+set -euo pipefail
+
 # Check if a filename was provided as an argument
 if [ -z "$1" ]; then
     echo "Error: Please provide the path to the file to patch as a parameter."

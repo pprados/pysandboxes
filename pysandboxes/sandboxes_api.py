@@ -26,12 +26,11 @@ from typing import (
     Any,
     Callable,
     Coroutine,
-    TypeVar,
 )
 
+from ._os_sandbox import async_shutdown_daemon
 from .base_daemon import BaseDaemon, FakeDaemon
 from .e import ConfigSyntaxError
-from .os_sandbox import async_shutdown_daemon
 from .private_loop import get_sandbox_loop, sandbox_loop, set_sandbox_loop
 from .tools import (
     Environ,
@@ -43,8 +42,6 @@ from .tools import (
 logger = logging.getLogger(__name__)
 
 _lock = Lock()
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 def _check__main__coroutine(coroutine: Any) -> None:
@@ -65,7 +62,7 @@ def _check__main__coroutine(coroutine: Any) -> None:
 
 
 def sandbox(
-    _func: F | None = None,
+    _func: Callable[..., Any] | None = None,
 ) -> Callable[..., Any]:
     """Decorator to run a function in a sandbox.
 
@@ -98,7 +95,7 @@ def sandbox(
             return await some_operation()
         ```
     """
-    from pysandboxes.os_sandbox import async_call_in_sandbox, call_in_sandbox
+    from pysandboxes._os_sandbox import async_call_in_sandbox, call_in_sandbox
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 
@@ -137,7 +134,7 @@ class sandboxes:
         extra_rules: Additional security rules to apply.
         learning_path: Path for learning mode rule generation.
         python_args: Additional Python interpreter arguments.
-        graceful_shutdown: Whether to shutdown gracefully on exit.
+        graceful_shutdown: Whether to shut down gracefully on exit.
 
     Examples:
         Basic usage:
@@ -211,7 +208,7 @@ class sandboxes:
 
     def _unregister_signals_handlers(self) -> None:
         with self._lock:
-            # If use private a private loop, the signal will be removed if it's handle
+            # If used private a private loop, the signal will be removed if it's handle
             if threading.current_thread() is threading.main_thread():
                 for s, h in self._signals.items():
                     signal.signal(s, h)
@@ -238,7 +235,7 @@ class sandboxes:
             sandboxes_config: Path to configuration file or directory.
             envs: Environment variables to make available in sandbox.
             python_args: Additional arguments for Python interpreter.
-            graceful_shutdown: Whether to shutdown gracefully on exit.
+            graceful_shutdown: Whether to shut down gracefully on exit.
             **extra_rules: Additional security rules as keyword arguments.
         """
         self.init_fn = init_fn
@@ -268,8 +265,8 @@ class sandboxes:
         Raises:
             ConfigSyntaxError: If the configuration file has syntax errors.
         """
+        from ._os_sandbox import start_daemon
         from .e import ConfigSyntaxError
-        from .os_sandbox import start_daemon
         from .py_sandbox import load_and_parse_config
 
         self._register_signals_handlers()
@@ -329,7 +326,7 @@ class sandboxes:
         """
         self._register_signals_handlers()
         if not is_in_sandbox():
-            from pysandboxes.os_sandbox import async_start_daemon
+            from pysandboxes._os_sandbox import async_start_daemon
 
             from .py_sandbox import load_and_parse_config
 
@@ -400,6 +397,7 @@ def run(
         ):
             result = (await asyncio.create_task(main), "_start sandbox in run")
             return result
+        return None
 
     if not inspect.iscoroutine(main):
         raise ValueError("a coroutine was expected, got {!r}".format(main))
