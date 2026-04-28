@@ -140,6 +140,11 @@ class _RestrictedUnpickler(pickle.Unpickler):
     def find_class(self, module: str, name: str) -> type[Any]:
         """Find class with whitelist restriction.
 
+        WARNING: This only controls which classes can be instantiated. It does NOT
+        prevent code execution via __reduce__ or __setstate__ methods in whitelisted
+        classes. Whitelisted classes are trusted to be safe. Audit all whitelisted
+        classes for potentially dangerous deserialization hooks.
+
         Args:
             module: Module name being unpickled.
             name: Class name being unpickled.
@@ -192,6 +197,15 @@ def safe_unpickle(
     allowed_classes: list[str] | tuple[str, ...] | None = None,
 ) -> Any:
     """Safely unpickle data with class whitelist.
+
+    CRITICAL: Whitelisted classes MUST be audited for safe __reduce__ implementations.
+    A class with a malicious __reduce__ method can execute arbitrary code during
+    unpickling, even if whitelisted. Example:
+        class BadClass:
+            def __reduce__(self):
+                return (os.system, ("rm -rf /",))  # Executed on unpickle!
+
+    Only whitelist classes you fully control and have audited.
 
     Args:
         data: Pickled data to unpickle.
