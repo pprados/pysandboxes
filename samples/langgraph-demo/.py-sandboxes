@@ -1,0 +1,61 @@
+# PySandboxes Configuration File for LangGraph Demo
+# ===================================================
+# This configuration restricts network access to the web_fetcher tool,
+# allowing only example.com and denying all other domains.
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDERS
+# ===========================
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# NETWORK ACCESS CONTROL
+# =======================
+# Default: ALL network connections are DENIED unless explicitly ALLOWED.
+# This configuration only allows connections to example.com.
+
+# Allow HTTPS to example.com (443/tcp)
+net=ALLOW|tcp|example.com|443|OUT
+
+# Allow HTTP to example.com (80/tcp)
+net=ALLOW|tcp|example.com|80|OUT
+
+# Explicitly deny access to other domains (security by default-deny model)
+# These rules are implicit, but listed here for clarity.
+#
+# Connections to any IP/hostname not explicitly allowed will be denied.
+# This includes:
+# - Private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+# - Public internet (0.0.0.0/0 except example.com)
+# - Localhost (127.0.0.1, ::1)
+
+#######################################################################################
+# PYTHON IMPORTS CONTROL
+# =======================
+# Allow necessary modules for web fetching functionality.
+
+python-import=_io, abc, ast, asyncio, base64, codecs, collections
+python-import=contextlib, dataclasses, enum, functools, gzip, hashlib
+python-import=io, itertools, json, logging, operator, re, ssl
+python-import=string, struct, textwrap, time, typing, urllib, uuid
+python-import=urllib3, h11, httpcore, httpx, markdownify
+
+#######################################################################################
+# FILE SYSTEM ACCESS
+# ===================
+# Minimal file system access needed for the tool.
+# Allows reading only necessary system files and denies sensitive paths.
+
+#######################################################################################
+# ENVIRONMENT VARIABLES
+# =====================
+# By default, sandbox processes have NO access to environment variables.
+# Uncomment below to allow specific variables if needed.
+
+# env=USER=sandbox
+# env=TEMP=${TEMP:-${TMP}}

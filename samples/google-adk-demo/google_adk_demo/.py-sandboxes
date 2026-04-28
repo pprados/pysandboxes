@@ -1,0 +1,94 @@
+include ".py-sandboxes.pycharm"
+#learn=google_adk_demo/.py-sandboxes
+
+py-sandbox=true
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+env=MODEL=${MODEL}
+env=CHAT_MODEL=${CHAT_MODEL}
+env=GOOGLE_API_KEY=${GOOGLE_API_KEY}
+env=GROQ_API_KEY=${GROQ_API_KEY}
+env=OPENAI_API_KEY=${OPENAI_API_KEY}
+env=ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+env=HOME=${HOME}
+env=PATH=${PATH}
+env=LANGUAGE=${LANGUAGE}
+env=MY_IP=${MY_IP:-127.0.0.1}
+
+# ⚠ Dangerous!
+python-import=subprocess
+
+# Standard Python
+python-import=__future__, __main__, _cffi_backend, _decimal, _hashlib, _io, _socket
+python-import=_sysconfigdata__linux_x86_64-linux-gnu, _thread, _zoneinfo, abc
+python-import=argparse, array, ast, asyncio, atexit, base64, binascii, bisect
+python-import=builtins, calendar, codecs, collections, colorsys, concurrent
+python-import=configparser, contextlib, contextvars, copy, copyreg, dataclasses
+python-import=datetime, decimal, email, encodings, enum, errno, fnmatch, fractions
+python-import=functools, getpass, hashlib, heapq, hmac, html, http, importlib
+python-import=inspect, io, ipaddress, itertools, json, keyword, linecache, locale
+python-import=logging, marshal, math, mimetypes, mmap, numbers, operator, os
+python-import=pathlib, pickle, pkgutil, pprint, queue, random, re, reprlib, runpy
+python-import=secrets, select, shlex, shutil, signal, socket, ssl, stat, string
+python-import=stringprep, struct, sysconfig, tempfile, termios, textwrap, threading
+python-import=time, tokenize, traceback, types, typing, unicodedata, urllib, uuid
+python-import=weakref, webbrowser, zipfile, zlib, zoneinfo
+python-import=_suggestions, posixpath, socketserver
+
+# External modules (Are you sure about the origin?)
+python-import=annotated_types
+python-import=anyio
+python-import=arrow
+python-import=attr
+python-import=attrs
+python-import=authlib
+python-import=certifi
+python-import=click
+python-import=cryptography
+python-import=dateutil
+python-import=dotenv
+python-import=exceptiongroup
+python-import=fqdn
+python-import=google
+python-import=google.adk
+python-import=google.adk.agents
+python-import=google.adk.models
+python-import=google.adk.models.lite_llm
+python-import=google.adk.runners
+python-import=google.generativeai
+python-import=google.auth
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=httpx_sse
+python-import=idna
+python-import=litellm
+python-import=msgpack
+python-import=pydantic
+python-import=pydantic_core
+python-import=pydantic_settings
+python-import=pygments
+python-import=referencing
+python-import=rfc3339_validator
+python-import=rfc3986_validator
+python-import=rich
+python-import=six
+python-import=sniffio
+python-import=typing_extensions
+python-import=webcolors
+
+python-import=*
+
+net=ALLOW|TCP|api.x.ai|443|OUT
+net=ALLOW|TCP|api.openai.com|443|OUT
+net=ALLOW|TCP|generativelanguage.googleapis.com|443|OUT
+net=ALLOW|TCP|www.google.com|443|OUT
+net=ALLOW|TCP|www.google.com|80|OUT
+
+# Uses MY_IP to allow code in an OS_SANDBOX to communicate with the host, via a bridge.
+net=ALLOW|TCP|${MY_IP:-localhost}|8000|OUT
+
+ro-bind=.,.
+
+firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
+include ".py-sandboxes.pycharm"

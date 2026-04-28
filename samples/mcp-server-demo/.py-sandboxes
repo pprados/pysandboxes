@@ -1,0 +1,198 @@
+# PySandboxes Configuration File
+# ===============================
+# This configuration defines security rules for Python code execution in a sandboxed
+# environment. It follows a default-deny security model where all access is prohibited
+# unless explicitly allowed through rules.
+
+#######################################################################################
+# LEARNING MODE
+# =============
+# Learning mode automatically observes your application's behavior and generates
+# security rules. When enabled, the sandbox monitors file access, network connections,
+# imports, and environment variable usage, then creates appropriate whitelist rules.
+#
+# How it works:
+# 1. If no configuration exists, learning mode activates automatically
+# 2. Run your application through all its features to capture required permissions
+# 3. Review and validate the generated rules before deploying to production
+# 4. Disable learning mode for production use
+#
+# Security note: Never use learning mode with untrusted code as it may generate
+# overly permissive rules.
+
+# Uncomment to enable continuous learning (development only):
+#learn=.py-sandboxes
+
+# Uncomment to generate rules to a specific file:
+#learn=/path/to/custom-rules.conf
+
+#######################################################################################
+# CONFIGURATION COMPOSITION
+# ==========================
+# You can include additional configuration files for better organization.
+# Name without '/' may be in the same directory.
+# Missing files are silently ignored.
+
+include "./.local.py-sandboxes"  # May be add to .gitignore
+include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
+include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+# Controls whether Python-level security guards are active.
+# Set to false to disable Python API patching while keeping OS-level sandboxing.
+
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDERS
+# ===========================
+# Python-level sandboxing alone cannot prevent all escapes (native code, syscalls).
+# OS-level sandboxing provides additional isolation through system namespaces.
+#
+# Available providers:
+# - subprocess: Isolates code in separate Python process (default, safest)
+# - firejail: Advanced Linux sandboxing with syscall filtering, network isolation
+# - none: Disables @sandbox decorator (for testing/debugging only)
+#
+# Note: Some providers may not work in containers without additional privileges.
+
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# ENVIRONMENT VARIABLES
+# =====================
+# By default, sandbox processes have NO access to environment variables.
+# Use env rules to explicitly whitelist required variables.
+#
+# Syntax patterns:
+# - env=VAR=value                    Set fixed value
+# - env=VAR=${HOST_VAR}              Copy from host environment
+# - env=VAR=${HOST_VAR:-default}     Copy with fallback default
+# - env=PATTERN_*=${PATTERN_*}       Pattern matching for multiple vars
+# - unenv=VAR                        Explicitly remove variable
+#
+# Security considerations:
+# - Never expose secrets unnecessarily: review API keys, tokens, passwords
+# - Use specific variable names rather than wildcards when possible
+# - Consider using fixed values instead of copying sensitive host variables
+
+# Common safe variables:
+#env=USER=sandbox
+#env=TEMP=${TEMP:-${TMP}}
+
+# API access (high security risk):
+#env=*_API_KEY=${*_API_KEY}
+#unenv=OPENAI_API_KEY
+
+# Generated rules from learning mode:
+# <learning_guard_envs>
+
+# Add rules (2026/02/12 at 16:32)
+env=CONDA_HOME=${CONDA_HOME}
+env=PWD=${PWD}
+env=PYENV_ROOT=${PYENV_ROOT}
+env=PYTHONUSERBASE=${PYTHONUSERBASE}
+env=TEMP=${TEMP}
+env=TMP=${TMP}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# </learning_guard_envs>
+
+#######################################################################################
+# FILE SYSTEM ACCESS
+# ===================
+# By default, all file system access is denied. Use explicit rules to grant access.
+#
+# Rules:
+# - ignore=<glob pattern>          Block access to files matching glob pattern
+# - bind=<source>,<dest>           Mount source directory at dest (read-write)
+# - ro-bind=<source>,<dest>        Mount source directory at dest (read-only)
+#
+# Security guidelines:
+# - Always use most restrictive access possible (prefer ro-bind over bind)
+# - Use specific paths rather than broad patterns when possible
+# - Be careful with ignore patterns that might affect expected directories
+#
+# WARNING: ignore=.* blocks access to .venv, .git, and other hidden directories
+
+# Block sensitive files by default:
+#ignore=.env
+#ignore=*.log
+
+# Example directory mounts:
+#ro-bind=/usr,/usr                    # Read-only system libraries
+#ro-bind=.,.                # Read-only project directory
+#bind=./data,./data         # Read-write data directory
+#bind=/tmp,/tmp                       # Temporary files
+
+# Generated rules from learning mode:
+# <learning_guard_files>
+
+# </learning_guard_files>
+
+#######################################################################################
+# NETWORK ACCESS CONTROL
+# =======================
+# By default, ALL network connections are denied. Use explicit rules to allow access.
+#
+# Rule format: net=<ACTION>|<PROTOCOL>|<NETWORK>|<PORTS>|<DIRECTION>
+# - ACTION: ALLOW or DENY
+# - PROTOCOL: tcp, udp, or * (any)
+# - NETWORK: IP/CIDR, hostname, or * (any)
+# - PORTS: port number, range (80-443), list (80,443), or * (any)
+# - DIRECTION: IN (server), OUT (client), or * (both)
+#
+# Security guidelines:
+# - Use most restrictive rules possible
+# - Prefer specific ports over wildcards
+# - Consider blocking internal networks to prevent lateral movement
+# - Review rules regularly and remove unused access
+#
+# If you use a hostname in a rule, read 'wiki/dns.md' to fully understand the limitations of this approach.
+
+# Common outbound web access:
+#net=ALLOW|tcp|0.0.0.0/0|443|OUT         # HTTPS to anywhere
+#net=ALLOW|tcp|0.0.0.0/0|80|OUT          # HTTP to anywhere
+
+# Local server binding:
+#net=ALLOW|tcp|0.0.0.0/0|${PORT:-8000}|IN    # Accept connections on port
+
+# Block internal networks (recommended for production):
+#net=DENY|*|10.0.0.0/8|*|OUT             # Private Class A
+#net=DENY|*|172.16.0.0/12|*|OUT          # Private Class B
+#net=DENY|*|192.168.0.0/16|*|OUT         # Private Class C
+#net=DENY|*|169.254.0.0/16|*|OUT         # Link-local
+#net=DENY|*|127.0.0.0/8|*|OUT            # Loopback
+#net=DENY|*|fc00::/7|*|OUT               # IPv6 ULA
+#net=DENY|*|fe80::/10|*|OUT              # IPv6 Link-local
+# TODO: /etc/firejail/nolocal.net
+
+# Generated rules from learning mode:
+# <learning_guard_socket>
+
+# </learning_guard_socket>
+
+#######################################################################################
+# PYTHON IMPORTS CONTROL
+# =======================
+# By default, all Python imports are denied. Use import rules to allow access.
+#
+# Syntax:
+# - python-import=module1,module2      Allow only specific modules
+# - python-import=*                    Allow all imports
+#
+# Security considerations:
+# - Restrict dangerous modules: subprocess, os, sys, ctypes, importlib
+# - Allow only necessary libraries for your application
+# - Consider using virtual environments with minimal packages
+#
+# Examples:
+#python-import=json,requests,pandas     # Allow only these modules
+#python-import=*                        # Allow all imports
+
+# Generated rules from learning mode:
+# <learning_guard_import>
+
+# </learning_guard_import>
