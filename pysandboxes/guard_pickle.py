@@ -37,6 +37,9 @@ from typing import Any, NamedTuple
 
 logger = logging.getLogger(__name__)
 
+# Store original pickle.loads for restoration during testing
+_original_pickle_loads = pickle.loads
+
 
 class PickleRules(NamedTuple):
     """Rules for controlling pickle deserialization.
@@ -48,8 +51,6 @@ class PickleRules(NamedTuple):
 
     allowed_modules: tuple[str, ...]
     allowed_classes: tuple[str, ...]
-
-
 
 
 def parse_rules(
@@ -161,8 +162,18 @@ class _RestrictedUnpickler(pickle.Unpickler):
         # Additional safety: only allow safe builtins and whitelisted modules
         if module == "builtins":
             safe_builtins = {
-                "dict", "list", "tuple", "str", "int", "float",
-                "bool", "bytes", "bytearray", "frozenset", "set", "None"
+                "dict",
+                "list",
+                "tuple",
+                "str",
+                "int",
+                "float",
+                "bool",
+                "bytes",
+                "bytearray",
+                "frozenset",
+                "set",
+                "None",
             }
             if name not in safe_builtins:
                 raise pickle.UnpicklingError(
@@ -204,13 +215,50 @@ def safe_unpickle(
     return unpickler.load()
 
 
-def activate_import_guard() -> None:
-    """Activate the pickle import blocker at the start of sys.meta_path.
+def _patch_pickle_loads() -> None:
+    """Patch pickle.loads to block unsafe deserialization.
 
-    This should be called once during sandbox initialization to install
-    the import blocker before any other module imports pickle.
+    Replaces pickle.loads with a function that raises an error,
+    forcing code to use safe_unpickle() instead.
+    """
+
+    def blocked_loads(*_args: Any, **_kwargs: Any) -> Any:
+        raise ImportError(
+            "pickle.loads() is blocked for security. "
+            "Use pysandboxes.guard_pickle.safe_unpickle() with explicit class whitelist instead. "
+            "Allowed classes: safe_unpickle(..., allowed_classes=['ClassName1', 'ClassName2'])"
+        )
+
+    # Replace pickle.loads
+    pickle.loads = blocked_loads  # type: ignore[assignment]
+    logger.info("pickle.loads() patched to block unsafe deserialization")
+
+
+def activate_import_guard() -> None:
+    """Activate pickle security guards.
+
+    Installs both import blocker and patches pickle.loads to force use of safe_unpickle().
+    Should be called once during sandbox initialization.
     """
     blocker = PickleImportBlocker()
     if blocker not in sys.meta_path:
         sys.meta_path.insert(0, blocker)
-    logger.info("Pickle import guard activated")
+
+    # Patch pickle.loads if it hasn't been patched yet
+    if not hasattr(pickle.loads, "__wrapped__"):
+        _patch_pickle_loads()
+
+    logger.info("Pickle security guards activated")
+
+
+def _deactivate_guard_pickle() -> None:
+    """Deactivate pickle guards (for testing).
+
+    Removes the import blocker from sys.meta_path and restores original pickle.loads.
+    """
+    sys.meta_path[:] = [
+        item for item in sys.meta_path if not isinstance(item, PickleImportBlocker)
+    ]
+    # Restore original pickle.loads
+    pickle.loads = _original_pickle_loads  # type: ignore[assignment]
+    logger.info("Pickle guards deactivated")

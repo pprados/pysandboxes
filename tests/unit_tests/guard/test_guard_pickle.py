@@ -1,10 +1,12 @@
 import pickle
+
 import pytest
 
 from pysandboxes.guard_pickle import (
     PickleImportBlocker,
-    safe_unpickle,
+    activate_import_guard,
     parse_rules,
+    safe_unpickle,
 )
 
 
@@ -184,4 +186,37 @@ def test_safe_unpickle_set():
     pickled = pickle.dumps(data)
 
     result = safe_unpickle(pickled, allowed_classes=["frozenset", "int"])
+    assert result == data
+
+
+def test_activate_import_guard_patches_pickle_loads():
+    """Test that activating guard patches pickle.loads to block unsafe calls."""
+    # Save original pickle.loads in case it's already patched
+    import pysandboxes.guard_pickle as guard_module
+
+    # Activate guard
+    guard_module.activate_import_guard()
+
+    # Try to use pickle.loads - should raise ImportError
+    data = [1, 2, 3]
+    pickled = pickle.dumps(data)
+
+    with pytest.raises(ImportError) as exc_info:
+        pickle.loads(pickled)
+
+    assert "blocked for security" in str(exc_info.value)
+    assert "safe_unpickle" in str(exc_info.value)
+
+
+def test_guard_safe_unpickle_still_works():
+    """Test that safe_unpickle still works after guard is activated."""
+    import pysandboxes.guard_pickle as guard_module
+
+    guard_module.activate_import_guard()
+
+    data = {"key": "value"}
+    pickled = pickle.dumps(data)
+
+    # safe_unpickle should still work
+    result = safe_unpickle(pickled, allowed_classes=["dict", "str"])
     assert result == data
