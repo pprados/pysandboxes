@@ -15,11 +15,13 @@ from pysandboxes.tools import follow_links_executable
 def _deactivate_all_rules() -> None:
     from pysandboxes.guard_files import _deactivate_guard_files
     from pysandboxes.guard_import import _deactivate_guard_import
+    from pysandboxes.guard_pickle import _deactivate_guard_pickle
     from pysandboxes.guard_socket import _deactivate_guard_sockets
 
     _deactivate_guard_files()
     _deactivate_guard_sockets()
     _deactivate_guard_import()
+    _deactivate_guard_pickle()
 
 
 _guard_import_for_tests_activated: bool = False
