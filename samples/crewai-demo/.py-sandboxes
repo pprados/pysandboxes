@@ -1,0 +1,39 @@
+# PySandboxes Configuration for CrewAI Demo
+# ============================================
+# Security configuration for HTTP fetch tool sandboxing.
+# Uses default-deny policy with explicit whitelisting.
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDER
+# ==========================
+# Use subprocess isolation for safe execution
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# ENVIRONMENT VARIABLES
+# =====================
+# Minimal environment for HTTP client (only essentials)
+env=HOME=${HOME}
+env=TEMP=${TEMP:-${TMP}}
+env=TMP=${TMP:-/tmp}
+
+#######################################################################################
+# NETWORK ACCESS CONTROL
+# =======================
+# Allow HTTPS to example.com only.
+# All other network access is blocked by default.
+
+# Allow HTTPS (port 443) to example.com
+net=ALLOW|tcp|example.com|443|OUT
+
+# Optionally allow HTTP for testing (commented out by default for security)
+# net=ALLOW|tcp|example.com|80|OUT
+
+# Deny all other outbound connections
+net=DENY|*|*|*|OUT
+net=DENY|*|*|*|IN

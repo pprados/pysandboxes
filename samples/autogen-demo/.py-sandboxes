@@ -1,0 +1,64 @@
+# PySandboxes Configuration File for autogen-demo
+# ================================================
+# Security rules for the fetch_webpage function in the AutoGen demo.
+# This configuration uses a default-deny security model where all access
+# is prohibited unless explicitly allowed through rules.
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDERS
+# ===========================
+# Available options: subprocess (default), firejail, none
+# Use os-sandbox=none for testing without OS-level isolation
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# ENVIRONMENT VARIABLES
+# =====================
+# Sandbox processes have NO access to environment variables by default.
+
+# Common safe variables for HTTP client:
+env=TEMP=${TEMP:-${TMP}}
+env=TMP=${TMP}
+
+#######################################################################################
+# FILE SYSTEM ACCESS
+# ===================
+# All file system access is denied by default. Add explicit rules as needed.
+
+# For this demo, minimal file system access is needed.
+# The fetch_webpage function only needs to access network resources.
+
+#######################################################################################
+# NETWORK ACCESS CONTROL
+# =======================
+# Default: ALL network connections are DENIED. Explicit rules required.
+#
+# Rule format: net=<ACTION>|<PROTOCOL>|<NETWORK>|<PORTS>|<DIRECTION>
+# ACTION: ALLOW or DENY
+# PROTOCOL: tcp, udp, or * (any)
+# NETWORK: IP/CIDR, hostname, or * (any)
+# PORTS: port number, range (80-443), list (80,443), or * (any)
+# DIRECTION: IN (server), OUT (client), or * (both)
+
+# Allow HTTP and HTTPS to example.com
+net=ALLOW|tcp|example.com|80|OUT
+net=ALLOW|tcp|example.com|443|OUT
+
+# Optional: Allow HTTPS to any domain (uncomment for broader access)
+# net=ALLOW|tcp|0.0.0.0/0|443|OUT
+
+#######################################################################################
+# PYTHON IMPORTS CONTROL
+# =======================
+# All Python imports are denied by default. Explicit imports required.
+
+# Required for HTTP operations
+python-import=httpx
+python-import=_ssl, ssl
+python-import=socket
+python-import=urllib

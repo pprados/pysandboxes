@@ -46,14 +46,12 @@ def ensure_registry(db_path: Path | None = None) -> Path:
     path = db_path if db_path is not None else default_registry_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS providers (
                 id TEXT PRIMARY KEY NOT NULL,
                 chat_completions_url TEXT NOT NULL
             )
-            """
-        )
+            """)
         conn.executemany(
             "INSERT OR IGNORE INTO providers (id, chat_completions_url) VALUES (?, ?)",
             _DEFAULT_SEED,

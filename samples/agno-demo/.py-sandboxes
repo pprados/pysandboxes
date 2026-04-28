@@ -1,0 +1,37 @@
+# PySandboxes Configuration File for Agno Demo
+# ===============================================
+# This configuration demonstrates sandbox protection for the fetch_webpage tool.
+# It uses a default-deny security model allowing only whitelisted network access.
+
+# PYTHON SANDBOX ACTIVATION
+py-sandbox=true
+
+# OS-LEVEL SANDBOX PROVIDERS
+# Set to 'none' for testing/development (process isolation disabled)
+# Set to 'subprocess' for production (default, safest)
+os-sandbox=${OS_SANDBOX:-none}
+
+# ENVIRONMENT VARIABLES
+# Sandbox processes have NO access to environment variables by default.
+env=TEMP=${TEMP:-/tmp}
+env=TMP=${TMP:-/tmp}
+
+# NETWORK ACCESS CONTROL
+# Default: ALL network connections denied. Only explicitly allow required access.
+#
+# Rule format: net=<ACTION>|<PROTOCOL>|<NETWORK>|<PORTS>|<DIRECTION>
+# - ACTION: ALLOW or DENY
+# - PROTOCOL: tcp, udp, or *
+# - NETWORK: IP/CIDR, hostname, or *
+# - PORTS: port number, range, list, or *
+# - DIRECTION: IN, OUT, or *
+
+# Allow HTTPS outbound to example.com only
+net=ALLOW|tcp|example.com|443|OUT
+
+# Allow HTTP outbound to example.com only
+net=ALLOW|tcp|example.com|80|OUT
+
+# Deny all other network access (default-deny)
+# (This is implied, but explicitly documented for clarity)
+# net=DENY|*|*|*|OUT

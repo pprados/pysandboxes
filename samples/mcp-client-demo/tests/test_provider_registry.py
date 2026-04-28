@@ -30,9 +30,13 @@ def test_parse_chat_model_rejects_bad() -> None:
 def test_registry_seeded_and_lookup(tmp_path: Path) -> None:
     db = tmp_path / "t.sqlite"
     ensure_registry(db)
-    assert get_chat_completions_url("openai", db_path=db).startswith("https://api.openai")
+    assert get_chat_completions_url("openai", db_path=db).startswith(
+        "https://api.openai"
+    )
     assert get_chat_completions_url("groq", db_path=db).startswith("https://api.groq")
-    assert get_chat_completions_url("mistral", db_path=db).startswith("https://api.mistral")
+    assert get_chat_completions_url("mistral", db_path=db).startswith(
+        "https://api.mistral"
+    )
     assert get_chat_completions_url("ollama", db_path=db).startswith("http://127.0.0.1")
     with pytest.raises(KeyError, match="Unknown"):
         get_chat_completions_url("unknown", db_path=db)

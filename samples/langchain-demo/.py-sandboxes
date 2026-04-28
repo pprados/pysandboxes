@@ -1,0 +1,57 @@
+# PySandboxes Configuration File for LangChain Demo
+# ===================================================
+# This configuration defines security rules for the fetch_webpage tool
+# to prevent unauthorized network access while allowing specific domains.
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+# Enable Python-level security guards for network access control.
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDERS
+# ===========================
+# Use subprocess isolation (safest default for network restrictions).
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# NETWORK ACCESS CONTROL
+# =======================
+# By default, ALL network connections are denied.
+# Only allow HTTP/HTTPS to specific domains.
+#
+# This configuration demonstrates the whitelist security model:
+# - DEFAULT: All network access is DENIED
+# - ALLOWED: Only explicitly listed domains and protocols
+
+# Allow HTTPS to example.com (read-only web access)
+net=ALLOW|tcp|example.com|443|OUT
+
+# Allow HTTP to example.com (for testing with http://example.com)
+net=ALLOW|tcp|example.com|80|OUT
+
+# All other network access is implicitly denied by default
+
+#######################################################################################
+# PYTHON IMPORTS CONTROL
+# =======================
+# Allow only essential modules for fetch_webpage function.
+
+# httpx is required for the fetch_webpage tool
+python-import=httpx
+
+#######################################################################################
+# ENVIRONMENT VARIABLES
+# =====================
+# Sandbox processes have NO access to environment variables by default.
+# Add specific variables only if needed for the tool.
+
+# Example: If you need to pass an API key:
+# env=API_KEY=${API_KEY}
+
+#######################################################################################
+# FILE SYSTEM ACCESS
+# ===================
+# No file system access is granted by default.
+# The fetch_webpage tool only needs network access.

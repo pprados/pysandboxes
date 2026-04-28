@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+  // Version without `python-sb`. The user MCP client decide the rules to use
+    "mcp_server": {
+      "cwd": "../mcp-server",
+      "command": "python",
+      "args": [
+        "-m", "pysandboxes.python_sb",
+//        "--learn=.py-sandboxesXX",
+        "-m", "mcp_server.main",
+        "-t", "stdio"
+      ],
+      "env": {
+        "OS_SANDBOX": "None",
+        "PY_SANDBOX": "None"
+      }
+    }
+ }
+}
