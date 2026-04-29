@@ -43,29 +43,39 @@ def build_chat_completion_client() -> ChatCompletionClient:
 
     Supported providers:
 
-    - ``openai`` — OpenAI API (``OPENAI_API_KEY``).
-    - ``anthropic`` — Anthropic (``ANTHROPIC_API_KEY``).
-    - ``ollama`` — local Ollama (default base URL ``http://127.0.0.1:11434`).
-    - ``google_genai`` / ``gemini`` — Gemini via OpenAI-compatible API (``GOOGLE_API_KEY``).
+    - ``openai`` — OpenAI API (``OPENAI_API_KEY``, optional ``OPENAI_BASE_URL``).
+    - ``anthropic`` — Anthropic (``ANTHROPIC_API_KEY``, optional ``ANTHROPIC_BASE_URL``).
+    - ``ollama`` — local Ollama (default base URL ``http://127.0.0.1:11434``, override with ``OLLAMA_BASE_URL``).
+    - ``google_genai`` / ``gemini`` — Gemini via OpenAI-compatible API (``GOOGLE_API_KEY``, optional ``GEMINI_BASE_URL``).
     """
     raw = os.environ.get("CHAT_MODEL", "openai:gpt-4o-mini")
     provider, model_id = parse_provider_and_model(raw)
 
     if provider == "openai":
-        return OpenAIChatCompletionClient(model=model_id)
+        kwargs = {"model": model_id}
+        if base_url := os.environ.get("OPENAI_BASE_URL"):
+            kwargs["base_url"] = base_url
+        return OpenAIChatCompletionClient(**kwargs)
 
     if provider == "anthropic":
-        return AnthropicChatCompletionClient(model=model_id)
+        kwargs = {"model": model_id}
+        if base_url := os.environ.get("ANTHROPIC_BASE_URL"):
+            kwargs["base_url"] = base_url
+        return AnthropicChatCompletionClient(**kwargs)
 
     if provider == "ollama":
-        return OllamaChatCompletionClient(model=model_id)
+        kwargs = {"model": model_id}
+        if base_url := os.environ.get("OLLAMA_BASE_URL"):
+            kwargs["base_url"] = base_url
+        return OllamaChatCompletionClient(**kwargs)
 
     if provider in ("google_genai", "gemini", "google"):
         api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
+        base_url = os.environ.get("GEMINI_BASE_URL", _GEMINI_OPENAI_BASE)
         return OpenAIChatCompletionClient(
             model=model_id,
             api_key=api_key,
-            base_url=_GEMINI_OPENAI_BASE,
+            base_url=base_url,
             model_info=ModelInfo(
                 vision=True,
                 function_calling=True,
