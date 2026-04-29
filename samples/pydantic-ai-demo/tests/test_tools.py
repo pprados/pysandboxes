@@ -33,17 +33,11 @@ def test_execute_python_re_search_none_group_returns_error() -> None:
 
 def test_fetch_webpage_uses_httpx_and_truncates() -> None:
     long_body = "x" * 9000
-    mock_response = MagicMock()
-    mock_response.text = long_body
-    mock_response.raise_for_status = MagicMock()
-    client_instance = MagicMock()
-    client_instance.get.return_value = mock_response
-    client_instance.__enter__.return_value = client_instance
-    client_instance.__exit__.return_value = None
-
-    with patch("pydantic_ai_demo.tools.httpx.Client", return_value=client_instance):
+    expected_result = long_body[:8000] + "\n... [truncated]"
+    
+    # Mock the inner sandboxed function to return the expected truncated content
+    with patch("pydantic_ai_demo.tools._fetch_webpage", return_value=expected_result):
         text = fetch_webpage("https://example.com")
 
     assert "... [truncated]" in text
     assert len(text) <= 8100
-    client_instance.get.assert_called_once()

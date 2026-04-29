@@ -305,3 +305,18 @@ uv run -m mcp_simple_chatbot.main -c http.jsonc
 ### Exit the session
 
    Type `quit` or `exit` to end the session.
+
+## Sandbox Integration Notes
+
+This sample is an **MCP Client**, not a tool provider. It consumes tools and resources from remote MCP servers (e.g., `../mcp-server-demo`) via the `stdio` or `http` protocol.
+
+**No per-tool sandbox integration required** because:
+- The client does not define or expose its own web-fetching tools (e.g., `fetch_webpage`)
+- Tools like `fetch_webpage` are provided by the configured MCP servers
+- Sandbox protection for those tools is configured in the server sample (see `../mcp-server-demo/README.md`)
+
+When you run this client inside a sandbox (e.g., `uv run -m pysandboxes.python_sb -m mcp_simple_chatbot.main`), the sandbox protects:
+- The client's network requests to remote LLM APIs
+- MCP server subprocesses (if using `stdio` mode and server is sandboxed)
+
+For tool-level security, configure and test the MCP servers that provide the tools.
