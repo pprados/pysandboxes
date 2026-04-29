@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 from agents import function_tool
+from pysandboxes import sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,12 @@ def _safe_import(
     return __import__(name, globals_, locals_, fromlist, level)
 
 
-def fetch_webpage_impl(url: str) -> str:
+@sandbox
+def _fetch_webpage_impl(url: str) -> str:
     """HTTP GET a URL and return response body as text (truncated for large pages).
+
+    Sandboxed implementation that enforces network restrictions defined in
+    .py-sandboxes configuration.
 
     Args:
         url: Absolute http(s) URL to fetch.
@@ -55,6 +60,18 @@ def fetch_webpage_impl(url: str) -> str:
     if len(text) > _MAX_BODY_CHARS:
         return text[:_MAX_BODY_CHARS] + "\n... [truncated]"
     return text
+
+
+def fetch_webpage_impl(url: str) -> str:
+    """Wrapper for fetch_webpage exposed to framework.
+
+    Args:
+        url: Absolute http(s) URL to fetch.
+
+    Returns:
+        Response body text, or an error string.
+    """
+    return _fetch_webpage_impl(url)
 
 
 fetch_webpage = function_tool(fetch_webpage_impl, name_override="fetch_webpage")
