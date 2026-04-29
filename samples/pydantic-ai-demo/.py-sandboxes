@@ -1,0 +1,43 @@
+# PySandboxes Configuration File for pydantic-ai-demo
+# ====================================================
+# Security rules for the pydantic-ai-demo sample application.
+# This config enables HTTP web fetching with restricted network access.
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+# Enable Python-level security guards.
+
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDERS
+# ===========================
+# Use subprocess for process-level isolation (default, safest for demos).
+
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# ENVIRONMENT VARIABLES
+# =====================
+# Make essential environment variables available to sandboxed code.
+
+env=TEMP=${TEMP:-/tmp}
+env=TMP=${TMP:-/tmp}
+env=USER=${USER:-sandbox}
+
+#######################################################################################
+# NETWORK ACCESS CONTROL
+# =======================
+# Allow HTTP and HTTPS access to example.com only.
+# All other network connections are denied.
+
+# Allow HTTP to example.com
+net=ALLOW|tcp|example.com|80|OUT
+
+# Allow HTTPS to example.com
+net=ALLOW|tcp|example.com|443|OUT
+
+# Deny all other network access (implicit default, but explicit for clarity)
+net=DENY|*|*|*|OUT
+net=DENY|*|*|*|IN

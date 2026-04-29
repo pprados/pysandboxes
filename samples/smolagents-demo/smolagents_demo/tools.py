@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 from smolagents import tool
+from pysandboxes import sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,8 @@ def _safe_import(
     return __import__(name, globals_, locals_, fromlist, level)
 
 
-@tool
-def fetch_webpage(url: str) -> str:
+@sandbox
+def _fetch_webpage(url: str) -> str:
     """HTTP GET a URL and return response body as text (truncated for large pages).
 
     Args:
@@ -56,6 +57,19 @@ def fetch_webpage(url: str) -> str:
     if len(text) > _MAX_BODY_CHARS:
         return text[:_MAX_BODY_CHARS] + "\n... [truncated]"
     return text
+
+
+@tool
+def fetch_webpage(url: str) -> str:
+    """HTTP GET a URL and return response body as text (truncated for large pages).
+
+    Args:
+        url: Absolute http(s) URL to fetch.
+
+    Returns:
+        Response body text, or an error string.
+    """
+    return _fetch_webpage(url)
 
 
 def _safe_builtins() -> dict[str, Any]:
