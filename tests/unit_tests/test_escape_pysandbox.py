@@ -1,5 +1,4 @@
 import inspect
-import pickle
 from types import ModuleType
 from typing import Any, Dict, Set, Tuple
 
@@ -58,6 +57,7 @@ def test_escape_with_meta_path() -> None:
 
 
 def test_escape_with_pickle() -> None:
+    import pickle
     # CONFIRMED VULNERABLE: Pickle deserialization completely bypasses sandboxing.
     # pickle.loads() uses the stack-based opcode VM; GLOBAL opcode directly refs
     # modules in sys.modules WITHOUT going through guard_import, __import__, or
