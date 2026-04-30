@@ -71,7 +71,7 @@ spell_fix:
 	uvx codespell --toml pyproject.toml -w
 
 semgrep:
-	uvx semgrep --config p/python $(PYTHON_FILES)
+	uvx semgrep --config auto $(PYTHON_FILES)
 
 
 ###############
