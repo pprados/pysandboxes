@@ -53,6 +53,7 @@ packages = [
 
 [tool.uv]
 package = true
+exclude-newer = "7 days"
 #executable-path = "~/workspace.bda/langgraph-codeagent/.venv/bin/python-sb"
 #executable-name = "python-sb"
 # dev-dependencies = ["pysandboxes"] # TODO
