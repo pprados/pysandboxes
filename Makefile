@@ -70,6 +70,9 @@ spell_check:
 spell_fix:
 	uvx codespell --toml pyproject.toml -w
 
+## Run semgrep security audit
+semgrep:
+	uvx semgrep --config p/security-audit --config p/secrets $(PYTHON_FILES)
 
 ###############
 # DOCUMENTATION
@@ -204,7 +207,7 @@ uv.lock: pyproject.toml
 lock: $(LOCK)
 
 ## Validate the code
-validate: uv.lock format lint spell_check all-tests
+validate: uv.lock format lint spell_check semgrep all-tests
 
 
 _poetry-init:
