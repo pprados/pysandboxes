@@ -1,0 +1,5 @@
+rule-settings:
+  - id: python.lang.security.audit.eval-detected.eval-detected
+    enabled: false
+  - id: python.lang.security.audit.exec-detected.exec-detected
+    enabled: false
