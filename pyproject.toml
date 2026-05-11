@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "anthropic>=0.96.0",
+    "anthropic>=0.99.0",
     "httpcore (>=1.0.9)",
     "fastapi (>=0.115.0)",
     "uvicorn (>=0.34.0)",
