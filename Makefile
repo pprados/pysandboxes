@@ -131,13 +131,11 @@ spell_check:
 spell_fix:
 	uvx codespell --toml pyproject.toml -w
 
-## Run semgrep security audit
-semgrep:
-	uvx semgrep --config p/security-audit --config p/secrets $(PYTHON_FILES)
+spell_fix:
+	uvx codespell --toml pyproject.toml -w
 
-###############
-# DOCUMENTATION
-###############
+semgrep:
+	uvx semgrep --config auto $(PYTHON_FILES)
 
 # Clean the environment
 clean: docs_clean api_docs_clean
