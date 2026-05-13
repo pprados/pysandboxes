@@ -198,6 +198,20 @@ def get_ubuntu_image_url_for_python_version(
     return f"{UBUNTU_CLOUD_IMAGES_ROOT}/{release}/current/{filename}"
 
 
+def _validate_download_url(url: str) -> str:
+    """Validate that URL uses only http/https schemes (reject file://, etc.).
+
+    Raises ValueError if URL uses unsafe scheme.
+    """
+    url_lower = url.lower().strip()
+    if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
+        raise ValueError(
+            f"Unsafe URL scheme in image download URL. "
+            f"Only http:// and https:// are allowed, got: {url[:50]}"
+        )
+    return url
+
+
 def get_download_url(path: Path) -> str | None:
     """Return the URL to use for downloading the image at path, or None if not configured.
 
@@ -207,10 +221,11 @@ def get_download_url(path: Path) -> str | None:
     """
     full = os.environ.get(ENV_VM_IMAGE_URL)
     if full and full.strip():
-        return full.strip()
+        return _validate_download_url(full.strip())
     base = os.environ.get(ENV_VM_IMAGE_BASE_URL)
     if base and base.strip():
-        return f"{base.rstrip('/')}/{path.name}"
+        url = f"{base.rstrip('/')}/{path.name}"
+        return _validate_download_url(url)
     return get_standard_download_url()
 
 
