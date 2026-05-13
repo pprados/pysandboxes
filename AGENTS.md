@@ -67,11 +67,11 @@ Every section MUST have a description — at least one sentence explaining what 
 Each test in code should reference its spec with exactly one comment placed next to the relevant test — not at the top of the file:
 
 ```python
-# @lat: [[tests#User login#Rejects expired tokens]]
+# @lat: [[example-section]]  # example
 def test_rejects_expired_tokens():
     ...
 
-# @lat: [[tests#User login#Handles missing password]]
+# @lat: [[example-section]]  # example
 def test_handles_missing_password():
     ...
 ```
