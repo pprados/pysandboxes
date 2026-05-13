@@ -74,6 +74,8 @@ dev = [
     "devpi-server>=6.17.0",
     "devpi-web>=5.0.1",
     "devpi-client>=7.2.0",
+    "semgrep",
+    "pip-audit",
 ]
 test = [
     "pytest>=7.3.0",
