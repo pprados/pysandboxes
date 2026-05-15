@@ -1,103 +1,130 @@
-# Before starting work
+# CLAUDE.md
 
-- Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
-- Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Post-task checklist (REQUIRED — do not skip)
+## Project Overview
 
-After EVERY task, before responding to the user:
+PySandboxes is a Python security framework that provides sandbox environments for executing untrusted Python code safely. The project uses a multi-layered defense-in-depth security architecture combining Python API patching with OS-level containers.
 
-- [ ] Update `lat.md/` if you added or changed any functionality, architecture, tests, or behavior
-- [ ] Run `lat check` — all wiki links and code refs must pass
-- [ ] Do not skip these steps. Do not consider your task done until both are complete.
+## Development Commands
 
----
+### Testing
+```bash
+make test                    # Run unit tests
+make integration_tests       # Run integration tests
+make all-tests               # Run integration and unit tests
+make gh-test                 # Run test in a simulation of github action
+```
 
-# What is lat.md?
+### Code Quality
+```bash
+make lint                    # Run all linters (mypy, black, ruff)
+make format                  # Format code with black
+make spell_check             # Check spell
+make validate                # All validation
+```
 
-This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a structured knowledge graph of its architecture, design decisions, and test specs in the `lat.md/` directory. It is a set of cross-linked markdown files that describe **what** this project does and **why** — the domain concepts, key design decisions, business logic, and test specifications. Use it to ground your work in the actual architecture rather than guessing.
+### Build and Distribution
+```bash
+make clean                   # Clean build artifacts
+make dist                    # Build distribution packages
+make publish-minor           # Increment and publish a minor version
+make publish-patch           # Increment and publish a patch version
+```
 
-# Commands
+## Architecture
+
+### Core Components
+- **pysandboxes/sandboxes_api.py**: Main API with `@sandbox` decorator and `sandboxes()` context manager
+- **pysandboxes/py_sandbox.py**: Python-level sandbox implementation using dynamic patching
+- **pysandboxes/os_sandbox.py**: OS-level sandbox wrapper (firejail, Docker, etc.)
+- **pysandboxes/guard_*.py**: Security guards for files, network, imports, and environment
+- **pysandboxes/remote/**: Server-Sent Events (SSE) based IPC for remote execution
+
+### Security Model
+- **Default deny-all** with explicit whitelisting via `.py-sandboxes` configuration files
+- **Multi-layered protection**: Python API patching + OS containers
+- **Process isolation**: Main application communicates with sandboxed child processes via SSE over local HTTP
+- **Learning mode**: Automatic security rule generation based on application behavior
+
+### Configuration
+Security rules are defined in `.py-sandboxes` files using a whitelist-based system:
+- Located in working directory or as package resources
+- Support for environment variable substitution
+- Include mechanism for configuration composition
+- Learning mode for automatic rule discovery
+
+## Key Design Patterns
+
+- **Decorator Pattern**: Use `@sandbox` to mark functions for sandbox execution
+- **Context Manager**: Use `with sandboxes():` or `async with sandboxes():` for lifecycle management
+- **Dynamic Patching**: Runtime modification of Python standard library functions
+- **Whitelist Security**: Everything forbidden by default, explicit permissions required
+
+## Development Environment
+
+- **Python**: 3.10+ (tested up to 3.13)
+- **Package Manager**: mv
+- **Virtual Environment**: `.venv/` directory
+- **Entry Points**: `python-sb` CLI commands for sandboxed Python execution
+
+## Code Quality
+- Type hints required for all code
+- Public APIs must have docstrings
+- Functions must be focused and small
+- Follow existing patterns exactly
+- Line length: 78 chars maximum
+- Always uses 3.10 syntax (str | None in place of Optional[str])
+- avoid useless comments when generating code
+- For all new file, add the comment:
+```python
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+```
+
+## Testing Strategy
+
+- **Unit Tests**: `tests/unit_tests/` - Test individual components and guards
+- **Integration Tests**: `tests/integration_tests/` - Test remote execution and full workflows
+- **Async Support**: pytest-asyncio for testing async functionality
+
+## Important Notes
+
+- The project targets AI/LLM-generated code security use cases
+- Configuration files use whitelist-only security model
+- Multiple OS sandbox backends supported (firejail primary, Docker/podman planned)
+
+## Code Security Verification
+
+All generated code MUST be scanned with semgrep before committing:
 
 ```bash
-lat locate "Section Name"      # find a section by name (exact, fuzzy)
-lat refs "file#Section"        # find what references a section
-lat search "natural language"  # semantic search across all sections
-lat expand "user prompt text"  # expand [[refs]] to resolved locations
-lat check                      # validate all links and code refs
+# Scan with P/R rules (CRITICAL, HIGH, MEDIUM)
+semgrep --config=p/security-audit pysandboxes/
+
+# Scan generated file specifically
+semgrep --config=p/security-audit <file>
 ```
 
-Run `lat --help` when in doubt about available commands or options.
+### Semgrep Rules (Baseline)
+Generated code verified against:
+- **sql-injection**: SQL string concatenation, format strings in queries
+- **command-injection**: Shell execution without proper escaping
+- **hardcoded-secrets**: API keys, passwords, tokens in code
+- **unsafe-deserialization**: pickle, yaml.load, json.loads on untrusted input
+- **unsafe-file-operations**: Path traversal, symlink attacks
+- **unsafe-regex**: ReDoS patterns in regular expressions
+- **insecure-random**: random module vs secrets module
+- **unvalidated-user-input**: Missing input validation at boundaries
 
-If `lat search` fails because no API key is configured, explain to the user that semantic search requires a key provided via `LAT_LLM_KEY` (direct value), `LAT_LLM_KEY_FILE` (path to key file), or `LAT_LLM_KEY_HELPER` (command that prints the key). Supported key prefixes: `sk-...` (OpenAI) or `vck_...` (Vercel). If the user doesn't want to set it up, use `lat locate` for direct lookups instead.
+### When Generating Code
+1. Write code
+2. Run semgrep scan
+3. Fix findings before commit
+4. If auto-fixes available: `semgrep --fix` applies them
 
-# Syntax primer
-
-- **Section ids**: `lat.md/path/to/file#Heading#SubHeading` — full form uses project-root-relative path (e.g. `lat.md/tests/search#RAG Replay Tests`). Short form uses bare file name when unique (e.g. `search#RAG Replay Tests`, `cli#search#Indexing`).
-- **Wiki links**: `[[target]]` or `[[target|alias]]` — cross-references between sections. Can also reference source code: `[[src/foo.ts#myFunction]]`.
-- **Source code links**: Wiki links in `lat.md/` files can reference functions, classes, constants, and methods in TypeScript/JavaScript/Python/Rust/Go/C files. Use the full path: `[[src/config.ts#getConfigDir]]`, `[[src/server.ts#App#listen]]` (class method), `[[lib/utils.py#parse_args]]`, `[[src/lib.rs#Greeter#greet]]` (Rust impl method), `[[src/app.go#Greeter#Greet]]` (Go method), `[[src/app.h#Greeter]]` (C struct). `lat check` validates these exist.
-- **Code refs**: `// @lat: [[section-id]]` (JS/TS/Rust/Go/C) or `# @lat: [[section-id]]` (Python) — ties source code to concepts
-
-# Test specs
-
-Key tests can be described as sections in `lat.md/` files (e.g. `tests.md`). Add frontmatter to require that every leaf section is referenced by a `// @lat:` or `# @lat:` comment in test code:
-
-```markdown
----
-lat:
-  require-code-mention: true
----
-# Tests
-
-Authentication and authorization test specifications.
-
-## User login
-
-Verify credential validation and error handling for the login endpoint.
-
-### Rejects expired tokens
-Tokens past their expiry timestamp are rejected with 401, even if otherwise valid.
-
-### Handles missing password
-Login request without a password field returns 400 with a descriptive error.
-```
-
-Every section MUST have a description — at least one sentence explaining what the test verifies and why. Empty sections with just a heading are not acceptable. (This is a specific case of the general leading paragraph rule below.)
-
-Each test in code should reference its spec with exactly one comment placed next to the relevant test — not at the top of the file:
-
+### Disabling Rule (With Justification)
 ```python
-def test_rejects_expired_tokens():
-    ...
-
-def test_handles_missing_password():
-    ...
+# nosemgrep: <rule-id> — reason: <justification>
+unsafe_code_here()
 ```
-
-Do not duplicate refs. One `@lat:` comment per spec section, placed at the test that covers it. `lat check` will flag any spec section not covered by a code reference, and any code reference pointing to a nonexistent section.
-
-# Section structure
-
-Every section in `lat.md/` **must** have a leading paragraph — at least one sentence immediately after the heading, before any child headings or other block content. The first paragraph must be ≤250 characters (excluding `[[wiki link]]` content). This paragraph serves as the section's overview and is used in search results, command output, and RAG context — keeping it concise guarantees the section's essence is always captured.
-
-```markdown
-# Good Section
-
-Brief overview of what this section documents and why it matters.
-
-More detail can go in subsequent paragraphs, code blocks, or lists.
-
-## Child heading
-
-Details about this child topic.
-```
-
-```markdown
-# Bad Section
-
-## Child heading
-
-Details about this child topic.
-```
-
-The second example is invalid because `Bad Section` has no leading paragraph. `lat check` validates this rule and reports errors for missing or overly long leading paragraphs.
