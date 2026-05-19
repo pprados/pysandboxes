@@ -92,6 +92,8 @@ dev = [
     "mempalace>=3.0.0",
     "onnxruntime-gpu>=1.24.3",
     "pyright>=1.1.407",
+    "semgrep",
+    "pip-audit",
 ]
 test = [
     "pytest>=7.3.0",
