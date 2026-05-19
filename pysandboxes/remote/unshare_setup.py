@@ -278,6 +278,8 @@ def main() -> None:
     _run(["mount", "-t", "tmpfs", "none", new_root])
     for d in ["dev", "proc", "tmp", "etc", "home", "root"]:
         os.makedirs(os.path.join(new_root, d), exist_ok=True)
+    # reason: sticky bit required for /tmp semantics
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     os.chmod(os.path.join(new_root, "tmp"), 0o1777)
 
     # --- E. System mounts (SSL certs etc.) ---

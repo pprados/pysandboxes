@@ -12,6 +12,8 @@ uses --unshare-net with slirp4netns and iptables for user-land network filtering
 import asyncio
 import fnmatch
 import gc
+
+# nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2 — reason: Python 3.10+ only
 import importlib.resources
 import logging
 import os

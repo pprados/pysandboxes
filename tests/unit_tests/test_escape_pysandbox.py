@@ -75,8 +75,8 @@ def test_escape_with_pickle_blocked() -> None:
     # So even if sys.modules['pickle'] is deleted, pickle.loads() still works!
     # This test documents why naive removal-based blocking FAILS.
     from tests.unit_tests.guard.test_guard_io import (
-        _deactivate_all_rules,
         _activate_guard_import_blocking_pickle,
+        _deactivate_all_rules,
     )
 
     # Deactivate the default guard from conftest
@@ -163,7 +163,9 @@ def test_escape_with_obfuscated_strings() -> None:
 
         import_func = getattr(builtins, forbidden_name, None)
         if import_func is not None:
-            pytest.fail("chr() obfuscated __import__ access succeeded; sandbox compromised")
+            pytest.fail(
+                "chr() obfuscated __import__ access succeeded; sandbox compromised"
+            )
     except (AttributeError, RuleAttributeError):
         # Expected: sandbox blocked getattr on builtins
         pass

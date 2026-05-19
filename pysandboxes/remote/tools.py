@@ -283,8 +283,11 @@ def to_b85(obj: Any) -> str:
         Base85-encoded serialized object string.
     """
     result = base64.b85encode(
+        # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle — reason: serialization only
         pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
     ).decode("ascii")
+    # reason: round-trip check on locally built data
+    # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
     assert pickle.loads(base64.b85decode(result.encode("ascii"))) == obj
     return result
 
@@ -298,6 +301,8 @@ def from_b85(b85: str) -> Any:
     Returns:
         Deserialized object.
     """
+    # reason: IPC transport; child->parent results are untrusted (open issue)
+    # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
     return pickle.loads(
         base64.b85decode(b85.encode("ascii")),
     )

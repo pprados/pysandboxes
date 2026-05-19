@@ -199,6 +199,8 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
         _register_signals_handlers()
         script_body = script.read_text()
         sys.argv = [str(script)] + args
+        # reason: runs the user script by design; OS sandbox isolates it
+        # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
         exec(script_body)
         if sys.flags.inspect:
             return _python_interactive(all_rules=all_rules, ban=False)
@@ -215,6 +217,8 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
 def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> int:
     _register_signals_handlers()
     sys.argv = args
+    # reason: runs the user script by design; OS sandbox isolates it
+    # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
     exec(script_body)
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)

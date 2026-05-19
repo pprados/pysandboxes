@@ -223,6 +223,8 @@ async def run_server(process_config: DaemonParameters) -> int:
         module_name, function_name = str(process_config.init_fn).split(":", 1)
         set_is_in_sandbox(True)
         try:
+            # reason: init_fn declared by the trusted parent
+            # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
             module = importlib.import_module(module_name)
         except ImportError:
             pysandboxes_logger.error(
@@ -311,6 +313,8 @@ def main() -> int:
     pickle_data: bytes = config_path.read_bytes()
     # Only the parent process feeds the named_pipe; no risk of malicious pickle
     # injection.
+    # reason: payload written by the trusted parent
+    # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
     process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
