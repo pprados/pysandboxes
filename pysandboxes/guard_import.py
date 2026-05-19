@@ -21,6 +21,8 @@ import logging
 import os
 import sys
 from copy import copy
+
+# nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2 — reason: Python 3.10+ only
 from importlib import resources
 from importlib.abc import Loader
 from importlib.machinery import ModuleSpec

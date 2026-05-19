@@ -107,6 +107,8 @@ async def sandbox_daemon(
         module_name, function_name = function_id.split(":", 1)
         # set_is_in_sandbox(True)
         try:
+            # reason: function_id supplied by the trusted parent process
+            # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
             module = importlib.import_module(module_name)
             function = getattr(module, function_name)
         except ModuleNotFoundError as e:
@@ -158,6 +160,7 @@ async def sandbox_daemon(
             logger.debug("(%s) ... raise %s", session_id, repr(result["exception"]))
             traceback.print_exception(result["exception"][0])
             result["exception"] = base64.b85encode(
+                # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle — reason: serialization only
                 pickle.dumps(result["exception"], protocol=pickle.HIGHEST_PROTOCOL)
             ).decode("utf-8")
         yield _sse_msg(json.dumps(result))
