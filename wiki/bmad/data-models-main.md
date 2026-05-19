@@ -18,7 +18,7 @@ No traditional database or ORM; models are in-memory rule/config and RPC structu
 
 - **guard_import:** `PatchRule`, `LearnImportRule` (NamedTuples).
 - **guard_envs:** `EnvRule` (NamedTuple).
-- **guard_files:** `BindRule`, `IgnoreRule`, `LearnFileRule` (NamedTuples).
+- **guard_files:** `ExposeRule`, `IgnoreRule`, `LearnFileRule` (NamedTuples).
 - **guard_socket:** `SocketMask`, `SocketRule`, `LearnSocketRule` (NamedTuples).
 - **remote (daemon):** `DaemonParameters` (NamedTuple, `sse_client_subprocess_daemon`).
 

@@ -94,7 +94,7 @@ def test_fetch_webpage_sandbox_allows_configured():
    python-import=*
    net=ALLOW|TCP|example.com|443|OUT
    net=ALLOW|TCP|example.com|80|OUT
-   ro-bind=.,.
+   expose-ro=.
    ```
 
 2. **Update tool with `@sandbox` decorator:**

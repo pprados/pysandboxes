@@ -17,8 +17,9 @@ def test_builtins_open(files: Dict[str, Path]) -> None:  # noqa:F811
 
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
 
     activate_guard_files_rules(rules)
@@ -30,6 +31,3 @@ def test_builtins_open(files: Dict[str, Path]) -> None:  # noqa:F811
 
     with pytest.raises(RuleFileNotFoundError):
         builtins.open(files["ignore"])
-
-    with pytest.raises(RuleFileNotFoundError):
-        builtins.open(files["bind_src"] / "bound_file.txt")

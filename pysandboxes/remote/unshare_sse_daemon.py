@@ -35,7 +35,7 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
-from ..guard_files import BindRule, IgnoreRule
+from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, SocketRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg, pysandboxes_logger
@@ -300,9 +300,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 mounts.add((p, p, False))
 
         for rule in all_rules.file_rules:
-            if isinstance(rule, BindRule):
-                dest = rule.dest if rule.dest is not None else rule.source
-                mounts.add((rule.source, dest, rule.write))
+            if isinstance(rule, FSExposeRule):
+                mounts.add((rule.path, rule.path, rule.write))
             elif isinstance(rule, IgnoreRule):
                 pass  # Handled via ignore_paths overlay in unshare_setup
 

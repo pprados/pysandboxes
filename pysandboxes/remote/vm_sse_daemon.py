@@ -54,7 +54,7 @@ class VMSSEDaemon(BaseSubProcessDaemon, ABC):
 
     @abstractmethod
     def augment_rules_for_guest_run_mount(self, all_rules: AllRules) -> AllRules:
-        """Return ``all_rules`` with implicit bind for host tmp ↔ guest run mount."""
+        """Return ``all_rules`` with implicit expose rule for host tmp ↔ guest run mount."""
 
     @staticmethod
     def show_boot_console_truthy(all_rules: Any | None) -> bool:

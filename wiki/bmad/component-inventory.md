@@ -7,7 +7,7 @@
 | Module | Purpose |
 |--------|--------|
 | guard_envs | Environment variable access rules |
-| guard_files | File system bind/mount and ignore rules |
+| guard_files | File system expose (host↔sandbox paths) and ignore rules |
 | guard_import | Python import allow/block rules |
 | guard_self | Self-restriction / reflection rules |
 | guard_socket | Network/socket rules (DNS, addresses) |

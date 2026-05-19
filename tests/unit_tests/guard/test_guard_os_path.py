@@ -12,7 +12,8 @@ from .test_guard_io import (
 def test_os_path_abspath(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -29,8 +30,9 @@ def test_os_path_abspath(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_os_path_exists_and_lexists(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -45,8 +47,9 @@ def test_os_path_exists_and_lexists(files: Dict[str, Path]) -> None:  # noqa: F8
 def test_os_path_islink(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -54,14 +57,15 @@ def test_os_path_islink(files: Dict[str, Path]) -> None:  # noqa: F811
 
     assert not os.path.islink(files["path"] / "visible.txt")
     assert os.path.islink(files["home_link"])
-    assert not os.path.islink(files["bind_dest"] / "bound_file.txt")
+    assert os.path.islink(files["bind_dest"] / "bound_file.txt")
 
 
 def test_os_path_isdir(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -74,8 +78,9 @@ def test_os_path_isdir(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_os_path_isfile(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -88,8 +93,9 @@ def test_os_path_isfile(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_os_path_samefile(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -112,8 +118,9 @@ def test_os_path_samefile(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_os_path_realpath(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -123,7 +130,7 @@ def test_os_path_realpath(files: Dict[str, Path]) -> None:  # noqa: F811
         files["path"] / "visible.txt"
     )
     assert os.path.realpath(files["bind_dest"] / "bound_file.txt") == str(
-        files["bind_dest"] / "bound_file.txt"
+        files["bind_src"] / "bound_file.txt"
     )
 
 
@@ -132,8 +139,9 @@ def test_os_path_atime_mtime_ctime_and_size(
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 

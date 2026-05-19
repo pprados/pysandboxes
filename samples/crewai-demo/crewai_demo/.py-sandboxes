@@ -95,7 +95,7 @@ net=ALLOW|TCP|www.google.com|443|OUT
 # Uses MY_IP to allow code in an OS_SANDBOX to communicate with the host, via a bridge.
 net=ALLOW|TCP|${MY_IP:-localhost}|8000|OUT
 
-ro-bind=.,.
+expose-ro=.
 
 firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
 #firejail.net=br0  # Use specific brige ? Else, use docker0 if exist

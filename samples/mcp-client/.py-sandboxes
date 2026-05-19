@@ -94,7 +94,7 @@ net=ALLOW|TCP|${MY_IP:-localhost}|8000|OUT
 # communication with the sandbox on the server side must be authorized by forcing a port.
 net=ALLOW|TCP|localhost|48000|*
 
-ro-bind=.,.
+expose-ro=.
 
 firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
 firejail.net=br0  # Use specific brige ? Else, use docker0 if exist

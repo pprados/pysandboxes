@@ -25,7 +25,7 @@ from typing import Any, Mapping
 
 from ..all_rules import AllRules
 from ..config import DEBUG
-from ..guard_files import BindRule
+from ..guard_files import FSExposeRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
@@ -273,13 +273,13 @@ def _stage_exec_virtfs_mounts(
         )
 
 
-def _merge_staged_virtfs_into_bind_mounts(
+def _merge_staged_virtfs_into_expose_mounts(
     mount_specs: list[tuple[str, Path, str]],
 ) -> None:
-    """Point file-rule 9p binds at staged trees and drop redundant pysb_exec_* mounts.
+    """Point file-rule 9p mounts at staged trees and drop redundant pysb_exec_* mounts.
 
     After staging, ``pysb_exec_*`` and ``pysb_<n>`` can refer to the same guest path
-    (e.g. ``/app`` vs ``/app/``); the bind must use the staged host path and the
+    (e.g. ``/app`` vs ``/app/``); the expose mount must use the staged host path and the
     duplicate exec virtfs entry must be removed so the guest does not mount overlay twice.
     """
     staged_by_guest: dict[str, Path] = {}
@@ -308,10 +308,10 @@ def _merge_staged_virtfs_into_bind_mounts(
     ]
 
 
-def _rebase_file_bind_hosts_under_staged_app(
+def _rebase_file_expose_hosts_under_staged_app(
     mount_specs: list[tuple[str, Path, str]],
 ) -> None:
-    """Point ro-bind children of /app (e.g. ./tmp -> /app/tmp) at the staged /app tree.
+    """Point expose-ro children of /app (e.g. ./tmp -> /app/tmp) at the staged /app tree.
 
     Otherwise a second -virtfs for /app/tmp still uses the container overlay and breaks
     mmap in the guest for paths under /app.
@@ -341,7 +341,7 @@ def _rebase_file_bind_hosts_under_staged_app(
         new_host = (staged_app / rel).resolve()
         mount_specs[i] = (tag, new_host, guest_path)
         logger.debug(
-            "virtfs staging: rebase bind %s -> %s (guest %s)",
+            "virtfs staging: rebase expose mount %s -> %s (guest %s)",
             hr,
             new_host,
             guest_path,
@@ -734,11 +734,11 @@ def _stage_dynamic_linker_closure(
     return out
 
 
-def _stage_overlay_etc_bind_mount(
+def _stage_overlay_etc_expose_mount(
     temp: Path,
     mount_specs: list[tuple[str, Path, str]],
 ) -> None:
-    """Copy ro-bind /etc from container overlay into temp so 9p mmap is safe in the guest."""
+    """Copy expose-ro /etc from container overlay into temp so 9p mmap is safe in the guest."""
     misc = (temp / "virtfs_stage_misc").resolve()
     for i, (tag, host_path, guest_path) in enumerate(mount_specs):
         if not tag.startswith("pysb_") or not tag[5:].isdigit():
@@ -752,10 +752,10 @@ def _stage_overlay_etc_bind_mount(
         try:
             shutil.copytree(host_path, dest, symlinks=True, dirs_exist_ok=True)
         except OSError as e:
-            logger.error("virtfs staging: copy /etc bind failed: %s", e)
+            logger.error("virtfs staging: copy /etc expose mount failed: %s", e)
             raise
         mount_specs[i] = (tag, dest, guest_path)
-        logger.debug("virtfs staging: /etc bind copied to %s", dest)
+        logger.debug("virtfs staging: /etc expose mount copied to %s", dest)
         return
 
 
@@ -851,7 +851,7 @@ def _file_rules_mounts(
     pipe_path: Path,
     config_dir: Path | None = None,
 ) -> tuple[list[tuple[str, Path, str]], list[tuple[str, str]]]:
-    """Build one 9p (tag, host_path, guest_path) per BindRule, run dir, optional config dir, and execution dirs.
+    """Build one 9p (tag, host_path, guest_path) per FSExposeRule, run dir, optional config dir, and execution dirs.
 
     Returns (mount_specs, mount_list_for_iso) where mount_specs is used for -virtfs
     and mount_list_for_iso is [(tag, guest_path), ...] for the bootstrap script.
@@ -860,15 +860,15 @@ def _file_rules_mounts(
     mount_specs: list[tuple[str, Path, str]] = []
     mount_list: list[tuple[str, str]] = []
     for i, rule in enumerate(all_rules.file_rules):
-        if not isinstance(rule, BindRule):
+        if not isinstance(rule, FSExposeRule):
             continue
-        host_path = Path(rule.source).resolve()
+        host_path = Path(rule.path.rstrip("/")).resolve()
         if host_path.is_file():
             host_path = host_path.parent
         if not host_path.exists():
             continue
         tag = f"pysb_{i}"
-        guest_path = rule.dest if rule.dest is not None else f"/app/bind_{i}"
+        guest_path = str(host_path)
         mount_specs.append((tag, host_path, guest_path))
         mount_list.append((tag, guest_path))
     # Run dir (temp) for exitcode etc.
@@ -886,9 +886,9 @@ def _file_rules_mounts(
     existing_guest_paths = {_norm_guest_path(gp) for (_, gp) in mount_list}
     for tag, host_path, guest_path in _execution_dirs_mounts():
         gkey = _norm_guest_path(guest_path)
-        # When staging for container/overlay, we still add exec dirs that duplicate a bind
-        # (e.g. /app vs ro-bind .,.) so /app is copied to tmpfs; merge step then drops the
-        # redundant pysb_exec_* and retargets the bind mount at the staged tree.
+        # When staging for container/overlay, we still add exec dirs that duplicate an expose
+        # (e.g. /app vs expose-ro .) so /app is copied to tmpfs; merge step then drops the
+        # redundant pysb_exec_* and retargets the expose mount at the staged tree.
         if gkey in existing_guest_paths and not stage_exec:
             continue
         existing_guest_paths.add(gkey)
@@ -897,10 +897,10 @@ def _file_rules_mounts(
 
     if stage_exec:
         _stage_exec_virtfs_mounts(temp, mount_specs)
-        _merge_staged_virtfs_into_bind_mounts(mount_specs)
-        _rebase_file_bind_hosts_under_staged_app(mount_specs)
-        _stage_overlay_etc_bind_mount(temp, mount_specs)
-        # Prepend so sort places these before project binds; guest must see host ld.so/libc.
+        _merge_staged_virtfs_into_expose_mounts(mount_specs)
+        _rebase_file_expose_hosts_under_staged_app(mount_specs)
+        _stage_overlay_etc_expose_mount(temp, mount_specs)
+        # Prepend so sort places these before project expose mounts; guest must see host ld.so/libc.
         ld_mode = _normalize_ld_closure_libs_param(
             str(all_rules.os_sandbox_params.get("ld_closure_libs", "full"))
         )
@@ -1008,7 +1008,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         pipe_path: Path,
         config_dir: Path | None = None,
     ) -> tuple[Args, Environ]:
-        """Build QEMU command: one virtio-9p tag per file_rule BindRule + run dir.
+        """Build QEMU command: one virtio-9p tag per file_rule FSExposeRule + run dir.
 
         Optional config dir; ISO with 9p_mounts + pipe_name.
         """

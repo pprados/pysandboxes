@@ -44,7 +44,7 @@ class DaemonParameters(NamedTuple):
     python_main_args: tuple[str, ...] = ()
     # For QEMU python_sb: guest path where host run dir is mounted; guest writes exit code there
     guest_run_dir: str | None = None
-    # Host cwd at QEMU launch; guest bootstrap cds here so relative paths match bind=./tmp,./tmp etc.
+    # Host cwd at QEMU launch; guest bootstrap cds here so relative paths match expose-rw=./tmp etc.
     guest_working_dir: str | None = None
     # For bwrap/unshare: fd number to read until slirp4netns is ready (child has fd via pass_fds)
     slirp_ready_fd: int | None = None

@@ -65,7 +65,7 @@ def create_sandbox_config(allowed_urls: list[str] | None = None) -> str:
                 f"net=ALLOW|TCP|{host}|80|OUT",
             ])
 
-    config_lines.extend(["", "ro-bind=.,."])
+    config_lines.extend(["", "expose-ro=."])
     return "\n".join(config_lines)
 
 

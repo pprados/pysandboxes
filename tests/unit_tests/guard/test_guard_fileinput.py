@@ -11,11 +11,12 @@ from .test_guard_io import (
 )
 
 
-def test_fileinput_input(files: Dict[str, Path]) -> None:  # noqa:F811
+def test_fileinput_input(files: Dict[str, Path]) -> None:  # FIXME noqa:F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
 
     activate_guard_files_rules(rules)

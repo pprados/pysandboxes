@@ -4,7 +4,7 @@
 
 This module implements comprehensive file system sandboxing by intercepting and
 controlling access to files and directories. It provides a whitelist-based security
-model with support for ignore patterns, bind mounts, and access logging.
+model with support for ignore patterns, path exposure (host↔sandbox), and access logging.
 
 The guard patches standard library functions like open(), Path operations, and
 directory scanning to enforce security rules defined in the configuration.
@@ -63,18 +63,16 @@ _check_alias: contextvars.ContextVar[bool] = contextvars.ContextVar(
 
 
 # Internal representation of a rule
-class BindRule(NamedTuple):
-    """File system bind mount rule.
+class FSExposeRule(NamedTuple):
+    """Expose a host path with read-only or read-write access (same path in the sandbox).
 
     Attributes:
-        source: Source path on host system.
-        dest: Destination path in sandbox (None for same as source).
-        write: Whether write access is allowed.
+        path: Absolute or normalized path (directory with trailing ``/``, except ``/``).
+        write: Whether read-write access is allowed (False = read-only).
         config: Configuration line where rule was defined.
     """
 
-    source: str
-    dest: str | None
+    path: str
     write: bool
     config: ConfigLine
 
@@ -91,7 +89,7 @@ class IgnoreRule(NamedTuple):
     config: ConfigLine
 
 
-FilesRule = BindRule | IgnoreRule
+FilesRule = FSExposeRule | IgnoreRule
 
 FilesRules = tuple[FilesRule, ...]
 
@@ -143,7 +141,7 @@ def parse_rules(
 ) -> tuple[FilesRules, ConfigLines]:
     """Parse file system access rules from configuration.
 
-    Supports bind=src,dest and ignore=glob_pattern rules.
+    Supports expose-ro=path, expose-rw=path, and ignore=glob_pattern rules.
 
     Args:
         config: Configuration lines to parse.
@@ -154,95 +152,98 @@ def parse_rules(
     """
     """
     Parses rule strings into internal ParserRule objects.
-    Supports --bind=src,dest and --ignore=glob_pattern.
+    Supports expose-ro=path, expose-rw=path, and --ignore=glob_pattern.
     """
     rules_ignore: list[FilesRule] = []
-    rules_bind: list[BindRule] = []
+    rules_expose: list[FSExposeRule] = []
     ignore_rules: ConfigLines = []
     for rule in config:
-        if rule.rule.startswith("bind=") or rule.rule.startswith("ro-bind="):
-            value = rule.rule.split("=", 1)[1]
-            try:
-                s_src, s_dest = value.split(",", 1)
-                if not s_src and not s_dest:
-                    continue  # Ignore empty bind
-                if s_src and s_dest:
-                    src = Path(Path(s_src).expanduser()).resolve().absolute()
-                    dest = Path(Path(s_dest).expanduser()).resolve().absolute()
-                    if not src.is_dir() or not dest.is_dir():
-                        cwd = Path.cwd()
-                        if src.is_relative_to(cwd):
-                            s_src = str(src.relative_to(cwd))
-                        else:
-                            s_src = str(src)
-                        if dest.is_relative_to(cwd):
-                            s_dest = str(dest.relative_to(cwd))
-                        else:
-                            s_dest = str(dest)
-                        errors.append(
-                            (
-                                f"{format_ruleref(rule)}: "
-                                f"In 'bind={s_src},{s_dest}', "
-                                f"source and destination must exists "
-                                f"and must be directories.",
-                                rule.path,
-                                rule.ln,
-                            )
-                        )
-                        continue
-                    # Search same file_rules with different write flag
-                    is_write = rule.rule.startswith("bind=")
-                    for bind_rule in rules_bind:
-                        if bind_rule.source == src and bind_rule.dest == dest:
-                            if bind_rule.write != is_write:
-                                errors.append(
-                                    (
-                                        f"{format_ruleref(rule)}: "
-                                        f"In {rule.rule!r}, "
-                                        f"invalidate another rule "
-                                        f"from {format_ruleref(bind_rule.config)!r}.",
-                                        rule.path,
-                                        rule.ln,
-                                    )
-                                )
-                            else:
-                                # Detect duplicate bind rule
-                                break
-                    else:
-                        # Only one last "/"
-                        src_str = str(Path(src)) + "/" if src != Path("/") else "/"
-                        dest_str = str(Path(dest)) + "/" if dest != Path("/") else "/"
-                        rules_bind.append(
-                            BindRule(
-                                source=src_str,
-                                dest=dest_str,
-                                write=rule.rule.startswith("bind="),
-                                config=rule,
-                            )
-                        )
-                else:
-                    errors.append(
-                        (
-                            f"{format_ruleref(rule)}: "
-                            f"In {rule.rule!r}, "
-                            f" source and destination must be set",
-                            rule.path,
-                            rule.ln,
-                        )
-                    )
-                    continue
-
-            except ValueError:
+        if rule.rule.startswith("expose-ro=") or rule.rule.startswith("expose-rw="):
+            value = rule.rule.split("=", 1)[1].strip()
+            if "," in value:
                 errors.append(
                     (
                         f"{format_ruleref(rule)}: "
                         f"In {rule.rule!r}, "
-                        f"source and destination must be separated with a comma.",
+                        f"expected a single path (no comma).",
                         rule.path,
                         rule.ln,
                     )
                 )
                 continue
+            if not value:
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"In {rule.rule!r}, path must be set.",
+                        rule.path,
+                        rule.ln,
+                    )
+                )
+                continue
+            s_path = value
+            try:
+                resolved = Path(Path(s_path).expanduser()).resolve().absolute()
+            except (OSError, ValueError):
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"In {rule.rule!r}, path is invalid.",
+                        rule.path,
+                        rule.ln,
+                    )
+                )
+                continue
+            if not resolved.exists():
+                cwd = Path.cwd()
+                rel = (
+                    str(resolved.relative_to(cwd))
+                    if resolved.is_relative_to(cwd)
+                    else str(resolved)
+                )
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"In {rule.rule!r}, path {rel!r} must exist.",
+                        rule.path,
+                        rule.ln,
+                    )
+                )
+                continue
+            if not resolved.is_dir():
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"In {rule.rule!r}, path must be a directory.",
+                        rule.path,
+                        rule.ln,
+                    )
+                )
+                continue
+            is_write = rule.rule.startswith("expose-rw=")
+            path_str = str(Path(resolved)) + "/" if resolved != Path("/") else "/"
+            for expose_rule in rules_expose:
+                if expose_rule.path == path_str:
+                    if expose_rule.write != is_write:
+                        errors.append(
+                            (
+                                f"{format_ruleref(rule)}: "
+                                f"In {rule.rule!r}, "
+                                f"invalidate another rule "
+                                f"from {format_ruleref(expose_rule.config)!r}.",
+                                rule.path,
+                                rule.ln,
+                            )
+                        )
+                    break
+            else:
+                rules_expose.append(
+                    FSExposeRule(
+                        path=path_str,
+                        write=is_write,
+                        config=rule,
+                    )
+                )
         elif rule.rule.startswith("ignore="):
             pattern = rule.rule[len("ignore=") :]
             rules_ignore.append(IgnoreRule(pattern, rule))
@@ -252,18 +253,20 @@ def parse_rules(
     # Add path for python
     list_bin = list(follow_links_executable(Path(sys.executable), set()))
     for p in list_bin:
-        rules_bind.append(
-            BindRule(
-                source=str(p),
-                dest=str(p),
+        rp = Path(p).resolve()
+        if rp.is_dir():
+            p_str = str(rp) + "/" if rp != Path("/") else "/"
+        else:
+            p_str = str(rp)
+        rules_expose.append(
+            FSExposeRule(
+                path=p_str,
                 write=False,
                 config=ConfigLine("<python>", Path(), 0),
             )
         )
-    rules_bind = sorted(
-        rules_bind, key=lambda r: len(r.dest) if r.dest else 0, reverse=True
-    )
-    return tuple(rules_ignore + cast(list[FilesRule], rules_bind)), ignore_rules
+    rules_expose = sorted(rules_expose, key=lambda r: len(r.path), reverse=True)
+    return tuple(rules_ignore + cast(list[FilesRule], rules_expose)), ignore_rules
 
 
 def _check_is_in_rules(path: Path) -> bool:
@@ -278,8 +281,8 @@ def _check_is_in_rules(path: Path) -> bool:
     global _rules
     spath = str(path) + "/"
     for rule in _rules:
-        if isinstance(rule, BindRule):
-            if spath == rule.source:
+        if isinstance(rule, FSExposeRule):
+            if spath == rule.path:
                 return True
     return False
 
@@ -335,14 +338,14 @@ def generate_rules(
 ) -> list[str]:
     """Generate file system rules from learning data.
 
-    Creates bind and ignore rules based on observed file access
+    Creates expose-ro/expose-rw and ignore rules based on observed file access
     during learning mode execution.
 
     Args:
         learn: Set of learned file access patterns.
 
     Returns:
-        List of bind= and ignore= configuration rule strings.
+        List of expose-ro=/expose-rw= and ignore= configuration rule strings.
     """
     # Select only parent
     global _special_env, _special_home
@@ -407,7 +410,7 @@ def generate_rules(
             if not value:
                 value = str(path)
             if value and value != "${HOME}":
-                result.add("" + f'{"" if write else "ro-"}bind={value},{value}')
+                result.add(f'{"expose-rw" if write else "expose-ro"}={value}')
             if path != home:
                 allready_added.append(LearnFileRule(path, write))
     return sorted(list(result))
@@ -439,37 +442,11 @@ def _apply_src_to_dest_rules(
     original_path = path
 
     for rule in _rules:
-        if isinstance(rule, BindRule):
-            assert rule.source is not None
-            assert rule.dest is not None
-            if (
-                rule.source != rule.dest
-                and (real_path.startswith(rule.dest) or real_path == rule.dest[:-1])
-                and not accept_dest
-            ):
-                return None, rule
-            if (
-                rule.source != rule.dest
-                and real_path == rule.source[:-1]
-                and not accept_src
-            ):
-                return None, rule
-            if real_path.startswith(rule.source) or real_path == rule.source[:-1]:
-                if (
-                    rule.source != rule.dest
-                    and not accept_dest
-                    and real_path == rule.dest[:-1]
-                ):
-                    return None, rule
-                relative = os.path.relpath(real_path, rule.source)
-                if relative != ".":
-                    new_path = os.path.join(rule.dest, relative)
-                else:
-                    new_path = rule.dest
-                    if not path.endswith("/"):
-                        new_path = new_path[:-1]
-
-                return new_path, None
+        if isinstance(rule, FSExposeRule):
+            assert rule.path is not None
+            rp = rule.path
+            if real_path.startswith(rp) or real_path == rp[:-1]:
+                return real_path, None
         elif isinstance(rule, IgnoreRule):
             if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(
                 real_path, rule.source
@@ -503,45 +480,21 @@ def _apply_dest_to_src_rules(
     original_path = path
 
     for rule in _rules:
-        if isinstance(rule, BindRule):
-            if rule.source is None or rule.dest is None:
+        if isinstance(rule, FSExposeRule):
+            if rule.path is None:
                 continue
-            if (
-                rule.source != rule.dest
-                and str(fake_path).startswith(rule.dest[:-1])
-                and not accept_dest
-            ):
-                return None, rule
-            if rule.source != rule.dest and fake_path.startswith(rule.source[:-1]):
-                if not accept_src and _check_alias.get():
-                    return None, rule
-                relative = fake_path[len(rule.source) :]
-                new_path = os.path.join(rule.dest, relative)
-                if not fake_path.endswith("/") and relative == "":
-                    new_path = new_path[:-1]
-                return new_path, None
-
-            if fake_path.startswith(rule.dest) or fake_path == rule.dest[:-1]:
-                if fake_path == rule.dest[:-1]:
-                    fake_path_dir = rule.dest
-                else:
-                    fake_path_dir = fake_path
+            rp = rule.path
+            if fake_path.startswith(rp) or fake_path == rp[:-1]:
                 if not rule.write and write:
                     if is_learning_mode():
                         add_learning_rule(LearnFileRule(Path(str(path)), True))
                     else:
                         raise RulePermissionError(
-                            f"Cannot write to {rule.dest!r}. "
+                            f"Cannot write to {rp!r}. "
                             f"Rule {rule.config.rule!r} from "
                             f"{format_ruleref(rule.config)}"
                         )
-                relative = os.path.relpath(fake_path_dir, rule.dest)
-                if relative == ".":
-                    relative = ""
-                new_path = os.path.join(rule.source, relative)
-                if not fake_path.endswith("/") and relative == "":
-                    new_path = new_path[:-1]
-                return new_path, None
+                return fake_path, None
         elif isinstance(rule, IgnoreRule):
             assert rule.source is not None
             if rule.source[0] == "/":
@@ -1727,7 +1680,5 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
     def _deactivate_guard_files() -> None:
         global _rules
         _rules = (
-            BindRule(
-                source="/", dest="/", write=True, config=ConfigLine("pytest", Path(), 0)
-            ),
+            FSExposeRule(path="/", write=True, config=ConfigLine("pytest", Path(), 0)),
         )

@@ -90,10 +90,10 @@ def main() -> int:
     try:
         import IPython  # noqa: F401
 
-        binds = extra_rules.get("bind", set())
+        expose_rw = extra_rules.get("expose-rw", set())
         if Path("~/.ipython").expanduser().is_dir():
-            binds.add("~/.ipython,~/.ipython")
-            extra_rules["bind"] = binds
+            expose_rw.add("~/.ipython")
+            extra_rules["expose-rw"] = expose_rw
     except ImportError:
         pass  # Ignore. IPython not found
 

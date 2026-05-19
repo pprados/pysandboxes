@@ -107,11 +107,11 @@ env=VIRTUAL_ENV=${VIRTUAL_ENV}
 #
 # Rules:
 # - ignore=<glob pattern>          Block access to files matching glob pattern
-# - bind=<source>,<dest>           Mount source directory at dest (read-write)
-# - ro-bind=<source>,<dest>        Mount source directory at dest (read-only)
+# - expose-rw=<source>      Expose host directory (read-write)
+# - expose-ro=<source>      Expose host directory (read-only)
 #
 # Security guidelines:
-# - Always use most restrictive access possible (prefer ro-bind over bind)
+# - Always use most restrictive access possible (prefer expose-ro over expose-rw)
 # - Use specific paths rather than broad patterns when possible
 # - Be careful with ignore patterns that might affect expected directories
 #
@@ -122,10 +122,10 @@ env=VIRTUAL_ENV=${VIRTUAL_ENV}
 #ignore=*.log
 
 # Example directory mounts:
-#ro-bind=/usr,/usr                    # Read-only system libraries
-#ro-bind=.,.                # Read-only project directory
-#bind=./data,./data         # Read-write data directory
-#bind=/tmp,/tmp                       # Temporary files
+#expose-ro=/usr                    # Read-only system libraries
+#expose-ro=.                # Read-only project directory
+#expose-rw=./data         # Read-write data directory
+#expose-rw=/tmp                       # Temporary files
 
 # Generated rules from learning mode:
 # <learning_guard_files>

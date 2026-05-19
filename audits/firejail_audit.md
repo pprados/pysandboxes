@@ -11,16 +11,9 @@ _Exported on 24/03/2026 at 11:10:37 UTC+1 from Cursor (2.6.20)_
 
 **Cursor**
 
-
 Auditing the Firejail OS provider per the attached skill: tracing implementation, env/fs/network handling, and handoff risks.
 
-
-
-
 Verifying child environment construction when socket rules are absent vs present:
-
-
-
 
 Here is the **OS provider security audit for Firejail** (`pysandboxes` + `py-sandbox=false`), aligned with the skill template and repo paths.
 
@@ -65,18 +58,18 @@ Here is the **OS provider security audit for Firejail** (`pysandboxes` + `py-san
 **Findings:**
 
 - Firejail arguments are built from [`firejail.template`](pysandboxes/templates/firejail.template) (includes `disable-*.inc`, `private-etc`, `noroot`, `nonewprivs`, caps drop, etc.) plus **dynamic** `--whitelist` / `--read-only` / `--read-write` / `--blacklist` from `AllRules` ([`firejail_sse_daemon.py`](pysandboxes/remote/firejail_sse_daemon.py) 392–462).
-- Whitelist includes **`sys.executable`** (with symlink follow), **`sys.path`** dirs, **site-packages**, **`IgnoreRule` → `--blacklist`**, **`BindRule` → whitelist + RO/RW**, and the **temp area** for netfilter FIFOs / config pipe parent dir (418–422, 479–483).
+- Whitelist includes **`sys.executable`** (with symlink follow), **`sys.path`** dirs, **site-packages**, **`IgnoreRule` → `--blacklist`**, **`ExposeRule` → whitelist + RO/RW**, and the **temp area** for netfilter FIFOs / config pipe parent dir (418–422, 479–483).
 - **`/etc` is skipped** for some whitelist/read-only operations (`_firejail_skip_path`) to satisfy Firejail quirks (432–435, 445–462).
 
 **Weaknesses:**
 
-- With **`use_py_sandbox=False`**, **no** `guard_files` monkey-patching; **only** Firejail’s view of the profile applies. Mis-generated or too-broad **bind** rules directly become **writable** mounts (`--read-write`).
+- With **`use_py_sandbox=False`**, **no** `guard_files` monkey-patching; **only** Firejail’s view of the profile applies. Mis-generated or too-broad **expose-rw** rules directly become **writable** mounts (`--read-write`).
 - Executable resolution uses `follow_links_executable` with a **FIXME** (397); symlink/edge cases around the interpreter path can affect what gets whitelisted.
 - Template **`--private-*` full lockdown** is mostly commented out; isolation is **whitelist-centric**, not “empty FS + explicit grants,” so policy quality depends on rules + template.
 
 **Recommendations:**
 
-- Keep **bind rules** minimal; avoid broad RW mappings toward host trees.
+- Keep **expose rules** minimal; avoid broad RW mappings toward host trees.
 - Prefer **read-only** defaults; justify every `--read-write`.
 - Review Firejail **profile includes** on the target distro (they evolve with the `firejail` package).
 
@@ -94,17 +87,17 @@ Here is the **OS provider security audit for Firejail** (`pysandboxes` + `py-san
 **Findings:**
 
 - Template uses **`--private-etc=hosts,resolv.conf,nsswitch.conf`** and aggressive **disable-* includes**, which reduces exposure of full `/etc`.
-- Paths not **whitelisted** are generally inaccessible **inside** the jail subject to Firejail’s mount model; **whitelisted** paths (e.g. project dir via bind) remain readable/writable per rule.
+- Paths not **whitelisted** are generally inaccessible **inside** the jail subject to Firejail’s mount model; **whitelisted** paths (e.g. project dir via expose mapping) remain readable/writable per rule.
 
 **Weaknesses:**
 
-- **`.env` / credentials** under a **whitelisted project tree** are **readable** by untrusted code—same as any bind into the jail.
+- **`.env` / credentials** under a **whitelisted project tree** are **readable** by untrusted code—same as any exposed path into the jail.
 - **No Python file guard** when `py-sandbox=false`; there is no second layer to block `open()` to an allowed-but-sensitive file.
-- **Host `HOME`** is not inherently protected if a rule or template behavior exposes it (avoid wide binds).
+- **Host `HOME`** is not inherently protected if a rule or template behavior exposes it (avoid wide expose mappings).
 
 **Recommendations:**
 
-- Never whitelist **`~/.ssh`**, cloud credential dirs, or kubeconfig unless strictly required; use **narrow** read-only binds.
+- Never whitelist **`~/.ssh`**, cloud credential dirs, or kubeconfig unless strictly required; use **narrow** read-only expose paths.
 - Keep secrets **outside** whitelisted trees or use an outer **container** with read-only root and no secret mounts.
 
 **Cannot strengthen (reason):**
@@ -155,13 +148,13 @@ Here is the **OS provider security audit for Firejail** (`pysandboxes` + `py-san
 
 **Weaknesses:**
 
-- **Bind rule sources** on the host could be **swapped** (symlinks) between rule build and Firejail mount if paths are attacker-controlled—mitigation is **resolve and validate** paths at launch (see references).
+- **Expose rule sources** on the host could be **swapped** (symlinks) between rule build and Firejail mount if paths are attacker-controlled—mitigation is **resolve and validate** paths at launch (see references).
 - **Interpreter / sys.path follow_links** (FIXME) is a **TOCTOU-class** concern for **what** gets whitelisted.
 - **`pickle.loads` on trusted parent data** is acceptable only if the **parent is trusted**; a compromised host still owns the child config (inherent).
 
 **Recommendations:**
 
-- Use **stable, administrator-controlled** bind sources; resolve symlinks where appropriate before passing to Firejail.
+- Use **stable, administrator-controlled** expose sources; resolve symlinks where appropriate before passing to Firejail.
 - Prefer **single-use temp dirs** with tight permissions (already using `TemporaryDirectory`).
 
 **Cannot strengthen (reason):**
@@ -207,9 +200,8 @@ Here is the **OS provider security audit for Firejail** (`pysandboxes` + `py-san
 
 ## Residual risk
 
-Even with tight profiles and netfilter: **host compromise**, **Firejail implementation bugs**, **over-broad bind/whitelist rules**, **non-Python DNS/resolver paths**, and **metadata/exfiltration unless explicitly blocked** remain. **Outer** hardening (dedicated user, minimal parent env, optional LSM/AppArmor, network segmentation) is still necessary for hostile workloads.
+Even with tight profiles and netfilter: **host compromise**, **Firejail implementation bugs**, **over-broad expose/whitelist rules**, **non-Python DNS/resolver paths**, and **metadata/exfiltration unless explicitly blocked** remain. **Outer** hardening (dedicated user, minimal parent env, optional LSM/AppArmor, network segmentation) is still necessary for hostile workloads.
 
 ---
 
 **Evidence map (primary):** [`pysandboxes/remote/firejail_sse_daemon.py`](pysandboxes/remote/firejail_sse_daemon.py), [`pysandboxes/remote/client_subprocess_sse_daemon.py`](pysandboxes/remote/client_subprocess_sse_daemon.py), [`pysandboxes/remote/main_sandbox.py`](pysandboxes/remote/main_sandbox.py), [`pysandboxes/py_sandbox.py`](pysandboxes/py_sandbox.py), [`pysandboxes/templates/firejail.template`](pysandboxes/templates/firejail.template), [`wiki/firejail.md`](wiki/firejail.md).
-

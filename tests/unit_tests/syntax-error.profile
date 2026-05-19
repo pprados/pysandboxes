@@ -2,9 +2,9 @@ os-sandbox=toto
 os-sandbox=subprocess
 os-sandbox=firejail
 set-env=ERROR
-ro-bind=${PWD},not_exist
-bind=not_exist,${PWD}
-ro-bind=abc
+expose-ro=${PWD},not_exist
+expose-rw=not_exist,${PWD}
+expose-ro=abc
 ignore-parameter
 port=abc
 
@@ -20,9 +20,9 @@ net=ALLOW|tcp|acme.acme|*|IN
 net=ALLOW|tcp|0.0.0.0/0|a,b|IN
 net=ALLOW|tcp|0.0.0.0/0|*|
 
-bind=${PWD},${PWD}/tests
-bind=${PWD},${PWD}/tests/unit_tests
-ro-bind=${PWD},${PWD}/tests
+expose-rw=${PWD},${PWD}/tests
+expose-rw=${PWD},${PWD}/tests/unit_tests
+expose-ro=${PWD},${PWD}/tests
 py-sandbox=abc
 learn=True
 invalide-rule

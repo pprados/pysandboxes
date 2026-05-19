@@ -12,13 +12,14 @@ from .test_guard_io import (
 )
 
 
-def test_gzip(files: Dict[str, Path]) -> None:  # noqa: F811
+def test_gzip(files: Dict[str, Path]) -> None:  # FIXME noqa: F811
     from pathlib import Path
 
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -38,10 +39,8 @@ def test_gzip(files: Dict[str, Path]) -> None:  # noqa: F811
         f_out.writelines(f_in)
     compressed.unlink()
 
-    with pytest.raises(RuleFileNotFoundError):
-        source = pathlib.Path(files["bind_dest"] / "bound_file.txt")
-        compressed = pathlib.Path(files["bind_src"] / "bound_file.txt").with_suffix(
-            ".gz"
-        )
-        with source.open("rb"), gzip.open(compressed, "wb"):
-            pass
+    out_gz = pathlib.Path(files["bind_dest"] / "roundtrip.gz")
+    source = pathlib.Path(files["bind_src"] / "bound_file.txt")
+    with source.open("rb") as f_in, gzip.open(out_gz, "wb") as f_out:
+        f_out.writelines(f_in)
+    out_gz.unlink()

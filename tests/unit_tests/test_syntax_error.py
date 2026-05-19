@@ -17,7 +17,7 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
             extra: Mapping[str, Any] = {
                 "os-sandbox": "error",
                 "env": "abc",
-                "bind": "",
+                "expose-rw": "",
             }
             load_and_parse_config(
                 config_path,
@@ -37,12 +37,12 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
             "<arg>: Detect a missing '=' in rule: env=abc.",
             "<arg>: Invalid os-sandbox 'error'.",
             "syntax-error(2) and syntax-error(3): Multiple os-sandbox parameters.",
-            "<arg>: In 'bind=', source and destination must be separated with a comma.",
+            "<arg>: In 'expose-rw=', path must be set.",
             "syntax-error(1): Invalid os-sandbox 'toto'.",
             "syntax-error(4): Invalid rule 'set-env=ERROR'",
-            "syntax-error(5): In 'bind=.,not_exist', source and destination must exists and must be directories.",
-            "syntax-error(6): In 'bind=not_exist,.', source and destination must exists and must be directories.",
-            "syntax-error(7): In 'ro-bind=abc', source and destination must be separated with a comma.",
+            "syntax-error(5): In 'expose-ro=.,not_exist', expected a single path (no comma).",
+            "syntax-error(6): In 'expose-rw=not_exist,.', expected a single path (no comma).",
+            "syntax-error(7): In 'expose-ro=abc', path 'abc' must exist.",
             "syntax-error(8): Invalid rule 'ignore-parameter'",
             "Port must be a positive value",
             "syntax-error(11): 'net=ERROR' has incorrect number of parts separated by '|'. Expected 5, got 1. "
@@ -58,6 +58,9 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
             "syntax-error(17): In 'net=ALLOW|tcp||8000|IN', network part must be set.",
             "syntax-error(20): In 'net=ALLOW|tcp|0.0.0.0/0|a,b|IN', invalid port list.",
             "syntax-error(21): In 'net=ALLOW|tcp|0.0.0.0/0|*|', direction is not 'IN' or 'OUT'.",
+            "syntax-error(23): In 'expose-rw=.,./tests', expected a single path (no comma).",
+            "syntax-error(24): In 'expose-rw=.,./tests/unit_tests', expected a single path (no comma).",
+            "syntax-error(25): In 'expose-ro=.,./tests', expected a single path (no comma).",
             "syntax-error(26): Invalid value 'abc' for py-sandbox. Use true or false.",
             "syntax-error(27): Invalid value 'True' for 'learn'. Use the filename instead.",
             "syntax-error(28): Invalid rule 'invalide-rule'",

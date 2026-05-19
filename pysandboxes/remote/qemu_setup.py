@@ -40,20 +40,19 @@ def _qemu_show_boot_console_truthy(all_rules: Any | None) -> bool:
 
 
 def augment_all_rules_for_qemu_run_mount(all_rules: AllRules) -> AllRules:
-    """Prepend implicit bind for the guest 9p run mount (host ``/tmp/...``, exitcode).
+    """Prepend implicit expose rule for the guest 9p run mount (host ``/tmp/...``, exitcode).
 
     The dedicated run directory is mounted at `GUEST_RUN_MOUNT`; it is not described
     in the user profile, so guard_files would otherwise deny writes there.
     """
-    from ..guard_files import BindRule
+    from ..guard_files import FSExposeRule
     from ..sb_types import ConfigLine
 
     run_dir = str(GUEST_RUN_MOUNT)
     if not run_dir.endswith("/"):
         run_dir = run_dir + "/"
-    bind = BindRule(
-        source=run_dir,
-        dest=run_dir,
+    run_mount = FSExposeRule(
+        path=run_dir,
         write=True,
         config=ConfigLine(
             "<implicit qemu run mount>",
@@ -61,7 +60,7 @@ def augment_all_rules_for_qemu_run_mount(all_rules: AllRules) -> AllRules:
             0,
         ),
     )
-    return all_rules._replace(file_rules=(bind,) + all_rules.file_rules)
+    return all_rules._replace(file_rules=(run_mount,) + all_rules.file_rules)
 
 
 def _resolve_ignore_paths(current_dir: str, ignore_rules: list[Any]) -> list[str]:
@@ -88,7 +87,7 @@ def _resolve_ignore_paths(current_dir: str, ignore_rules: list[Any]) -> list[str
 
 
 def qemu_ignore_overlay_abs_paths(all_rules: Any, cwd: str) -> list[str]:
-    """Absolute host paths to mask with chmod-0 + bind mount in the guest (parity with bwrap/unshare)."""
+    """Absolute host paths to mask with chmod-0 + mount in the guest (parity with bwrap/unshare)."""
     from pysandboxes.guard_files import IgnoreRule
 
     ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
@@ -310,7 +309,7 @@ def _create_nocloud_iso(
     all_rules = getattr(process_config, "all_rules", None)
     guest_working_dir = getattr(process_config, "guest_working_dir", None)
     if isinstance(guest_working_dir, str) and guest_working_dir.strip():
-        # Match host cwd (e.g. repo root) so relative paths like tmp/file align with bind=./tmp,./tmp
+        # Match host cwd (e.g. repo root) so relative paths like tmp/file align with expose-rw=./tmp
         guest_cwd = guest_working_dir.strip()
     else:
         root_path = getattr(all_rules, "root_path", None)

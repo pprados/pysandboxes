@@ -83,7 +83,7 @@ env=HOME=${HOME}
 python-import=*
 net=ALLOW|TCP|example.com|443|OUT
 net=ALLOW|TCP|example.com|80|OUT
-ro-bind=.,.
+expose-ro=.
 ```
 
 **Rules:**

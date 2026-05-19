@@ -75,4 +75,6 @@ net=ALLOW|TCP|0.0.0.0/32|48000|IN  # For sandbox port
 net=ALLOW|TCP|0.0.0.0/32|8000|IN  # For MCP Server
 net=ALLOW|TCP|www.google.com|80|OUT
 
-ro-bind=.,.
+expose-ro=.
+
+include ".py-sandboxes.pycharm"
