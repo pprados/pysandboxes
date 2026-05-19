@@ -431,8 +431,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     _follow_links(Path(sp), whitelist)
 
         # Add ignore files rules
-        for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
-            args.append(f"--blacklist={rule.source}")
+        for ignore_rule in (
+            r for r in all_rules.file_rules if isinstance(r, IgnoreRule)
+        ):
+            args.append(f"--blacklist={ignore_rule.source}")
 
         # Ensure temp dir is whitelisted so firejail can read netfilter fifos and config pipe
         if pipe_path:
@@ -454,13 +456,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             return norm == "/etc"
 
         for rule in sorted(
-            filter(
-                lambda x: isinstance(x, FSExposeRule),
-                all_rules.file_rules,
-            ),
+            (r for r in all_rules.file_rules if isinstance(r, FSExposeRule)),
             key=lambda x: len(x.path),
         ):
-            rule = cast(FSExposeRule, rule)
             skip_path = _firejail_skip_path(rule.path)
             if rule.write or rule.path not in whitelist:
                 if rule.path != "/tmp/" and not skip_path:

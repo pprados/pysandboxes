@@ -1,9 +1,6 @@
 from pathlib import Path
 from typing import Dict
 
-import pytest  # type: ignore[import-untyped]
-
-from pysandboxes import RuleFileNotFoundError
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -12,7 +9,7 @@ from .test_guard_io import (
 )
 
 
-def test_gzip(files: Dict[str, Path]) -> None:  # FIXME noqa: F811
+def test_gzip(files: Dict[str, Path]) -> None:  # noqa: F811
     from pathlib import Path
 
     rules = [
