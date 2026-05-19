@@ -11,7 +11,7 @@ from .test_guard_io import (
 )
 
 
-def test_fileinput_input(files: Dict[str, Path]) -> None:  # FIXME noqa:F811
+def test_fileinput_input(files: Dict[str, Path]) -> None:  # noqa:F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"expose-rw={files['path']}", Path(), 0),

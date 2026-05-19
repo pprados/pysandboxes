@@ -202,7 +202,6 @@ def test_pathlib_chmod_and_lchmod(files: Dict[str, opl.Path]) -> None:  # noqa: 
     ]
     activate_guard_files_rules(rules)
 
-    import os
     import pathlib
 
     mode = pathlib.Path(files["path"]).stat().st_mode

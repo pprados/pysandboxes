@@ -10,7 +10,6 @@ from .test_guard_io import activate_guard_files_rules
 def test_apply_dest_to_src_rule() -> None:
     cwd = str(Path.cwd())
     src_dir = f"{cwd}/tests"
-    dst_dir = f"{cwd}/pysandboxes"
     rules = [
         ConfigLine(f"expose-rw={cwd}", Path(), 0),
         ConfigLine("ignore=c*", Path(), 0),
