@@ -35,4 +35,4 @@ python-import=uvicorn
 net=ALLOW|TCP|example.com|80|OUT
 net=ALLOW|TCP|example.com|443|OUT
 
-ro-bind=.,.
+expose-ro=.

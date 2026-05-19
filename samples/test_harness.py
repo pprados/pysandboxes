@@ -74,7 +74,7 @@ def create_sandbox_config(
             config_lines.append(f"net=ALLOW|TCP|{host}|80|OUT")
 
     config_lines.append("")
-    config_lines.append("ro-bind=.,.")
+    config_lines.append("expose-ro=.")
 
     return "\n".join(config_lines)
 

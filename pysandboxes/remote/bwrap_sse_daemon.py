@@ -4,7 +4,7 @@
 
 This module implements a bwrap-based sandbox daemon that combines
 PySandboxes Python-level security with bubblewrap OS-level isolation.
-It loads a bwrap template, translates file rules to bind mounts,
+It loads a bwrap template, translates file rules (expose-ro/expose-rw) to bubblewrap bind mounts,
 and launches the sandboxed Python process. When socket rules are present,
 uses --unshare-net with slirp4netns and iptables for user-land network filtering.
 """
@@ -31,7 +31,7 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
-from ..guard_files import BindRule, IgnoreRule
+from ..guard_files import FSExposeRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
@@ -338,15 +338,13 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                 if sp and os.path.isdir(sp):
                     args.extend(["--ro-bind", sp, sp])
 
-        # File rules: apply ro-bind first, then bind so writable mounts override
+        # File rules: apply expose-ro first, then expose-rw so writable mounts override
         for rule in all_rules.file_rules:
-            if isinstance(rule, BindRule) and not rule.write:
-                dest = rule.dest if rule.dest is not None else rule.source
-                args.extend(["--ro-bind", rule.source, dest])
+            if isinstance(rule, FSExposeRule) and not rule.write:
+                args.extend(["--ro-bind", rule.path, rule.path])
         for rule in all_rules.file_rules:
-            if isinstance(rule, BindRule) and rule.write:
-                dest = rule.dest if rule.dest is not None else rule.source
-                args.extend(["--bind", rule.source, dest])
+            if isinstance(rule, FSExposeRule) and rule.write:
+                args.extend(["--bind", rule.path, rule.path])
 
         # Temp dir so child can read the config pipe
         temp_str = str(temp)

@@ -8,10 +8,10 @@ env=My_ENV=${My_ENV}
 
 python-import=*
 
-bind=./tmp,./tmp
-ro-bind=.,.
-ro-bind=/etc,/etc
-# ro-bind=/run,/run
+expose-rw=./tmp
+expose-ro=.
+expose-ro=/etc
+# expose-ro=/run,/run
 
 
 net=ALLOW|TCP|0.0.0.0/32|50983|IN

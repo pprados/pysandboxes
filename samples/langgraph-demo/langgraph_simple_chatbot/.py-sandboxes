@@ -37,6 +37,6 @@ python-import=typing_extensions
 python-import=typing_inspection
 python-import=uvicorn
 
-ro-bind=.,.
+expose-ro=.
 
 net=ALLOW|TCP|0.0.0.0/32|52693|IN

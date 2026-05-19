@@ -30,8 +30,8 @@ python-import=rich
 python-import=tests
 python-import=urllib3
 
-bind=./tmp,./tmp
-ro-bind=/etc,/etc
+expose-rw=./tmp
+expose-ro=/etc
 
 net=ALLOW|TCP|ip6-localhost|9999,0|IN
 net=ALLOW|TCP|localhost|9999|IN

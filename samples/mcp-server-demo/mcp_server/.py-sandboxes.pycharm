@@ -6,5 +6,5 @@ python-import=pydevd_nest_asyncio
 python-import=pydev_ipython, pydevd_plugins, pydevd_tracing
 python-import=opcode,dis,platform,xmlrpc,xml,pyexpat, pydoc, ctypes
 
-ro-bind=~/.cache/JetBrains/,~/.cache/JetBrains/
-ro-bind=~/.local/share/JetBrains/,~/.local/share/JetBrains/
+expose-ro=~/.cache/JetBrains/
+expose-ro=~/.local/share/JetBrains/

@@ -4,13 +4,13 @@
 
 ## Solution in brief
 
-The host runs `bwrap` with options from a template (e.g. `--clearenv`) plus **`--share-net` or `--unshare-net`** depending on rules and `bwrap.*` overrides. It adds bind mounts from file rules plus minimal system binds (`/usr`, `/etc`, `/run` when present, `/lib`/`/lib64`, Python venv and `sys.path`). The sandbox runs `python -m pysandboxes.remote.main_sandbox` with config from a named pipe. The host talks to the sandbox via SSE on `http://localhost:PORT` (slirp4netns maps host loopback to the guest when a separate netns is used).
+The host runs `bwrap` with options from a template (e.g. `--clearenv`) plus **`--share-net` or `--unshare-net`** depending on rules and `bwrap.*` overrides. It translates **`expose-ro` / `expose-rw`** file rules into bubblewrap bind mounts, plus minimal system binds (`/usr`, `/etc`, `/run` when present, `/lib`/`/lib64`, Python venv and `sys.path`). The sandbox runs `python -m pysandboxes.remote.main_sandbox` with config from a named pipe. The host talks to the sandbox via SSE on `http://localhost:PORT` (slirp4netns maps host loopback to the guest when a separate netns is used).
 
 ## Advantages
 
 | Aspect | Detail |
 |--------|--------|
-| **Isolation** | Namespace-based (e.g. user, IPC); filesystem restricted to explicit bind mounts and file rules. |
+| **Isolation** | Namespace-based (e.g. user, IPC); filesystem restricted to explicit expose rules (implemented as bind mounts) and ignore rules. |
 | **Network modes** | Shared network when you have no socket rules (simple DNS and sockets). Optional isolated netns + user-land filtering when socket rules are present. |
 | **Lightweight** | Single child process from bubblewrap’s perspective; no VM; fast startup. |
 | **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe) as firejail/unshare; slirp/port-forward logic is shared with unshare via `slirp4netns_common`. |
@@ -29,7 +29,7 @@ The host runs `bwrap` with options from a template (e.g. `--clearenv`) plus **`-
    - **`--share-net`** if there are no socket rules, or if you force it with `bwrap.share-net=yes`, or if filtering is disabled with `bwrap.unshare-net=no` (or `0` / `false`).
    - **`--unshare-net`** if there are socket rules and filtering is not disabled (see [Configuration parameters](#configuration-parameters)).
 2. **Optional `bwrap.*` overrides**: Other `bwrap.<option>=<value>` lines become `--<option>=<value>` (or flag-only if value is empty). **`share-net` and `unshare-net` are handled by the logic above** and are not passed through as duplicate flags.
-3. **Binds**: Read-only binds for `/usr`, `/etc`, `/run` (when the directory exists, e.g. for `resolv.conf` under `/run`), `/lib`/`/lib64`, the resolved Python executable chain, `sys.path` and site-packages; then file-rule binds (ro first, then rw), temp dir for the config pipe, and placeholder binds for ignore rules (same idea as unshare).
+3. **Mounts**: Read-only bubblewrap binds for `/usr`, `/etc`, `/run` (when the directory exists, e.g. for `resolv.conf` under `/run`), `/lib`/`/lib64`, the resolved Python executable chain, `sys.path` and site-packages; then **`expose-ro` before `expose-rw`** from file rules, temp dir for the config pipe, and placeholder mounts for ignore rules (same idea as unshare).
 4. **Launch**: The host runs `bwrap [args] -- python -m pysandboxes.remote.main_sandbox --_named-pipe <path>`. The config is written to the named pipe; the child reads it on startup.
 5. **When `--unshare-net` is used**: After the bwrap child PID is known, a **background thread on the host** runs **slirp4netns** against that PID (shared helpers in `pysandboxes/remote/slirp4netns_common.py`). The child waits until the tap interface is ready, then **iptables** rules derived from socket rules are applied (DNS is expected at the usual slirp address **10.0.2.3**; inbound SSE from the host gateway **10.0.2.2** is allowed). **TCP/UDP ports** from inbound ALLOW rules (plus the SSE port) can be forwarded from host `127.0.0.1` into the namespace via the slirp API.
 6. **Inside the sandbox**: `main_sandbox` loads the config, applies Python guards, starts the SSE server on the expected port and waits for requests.

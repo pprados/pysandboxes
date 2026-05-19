@@ -1,12 +1,12 @@
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Dict, Iterator, List
 
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleFileNotFoundError
-from pysandboxes.guard_files import BindRule, activate_guard, parse_rules
+from pysandboxes.guard_files import FSExposeRule, activate_guard, parse_rules
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
 from pysandboxes.tools import follow_links_executable
@@ -81,14 +81,10 @@ def _activate_guard_import_blocking_pickle() -> None:
     )
 
 
-def _reset_rules() -> Iterator[Any]:
+@pytest.fixture(autouse=True)
+def reset_rules() -> Iterator[None]:
     yield
     _deactivate_all_rules()
-
-
-@pytest.fixture(autouse=True)
-def reset_rules() -> None:
-    _reset_rules()
 
 
 tmp_path = Path(tempfile.TemporaryDirectory(prefix="pysandboxes_test_").name)
@@ -107,12 +103,19 @@ def files() -> Dict[str, Path]:
     (tmp_path / "ignore.log").write_text("Should be ignored")
     (tmp_path / "bound.txt").write_text("Bound target")
 
-    # Create a bind destination
+    # Layout under a single exposed root (fs-expose): source files and a mirror dir
     bind_src = tmp_path / "bind_src"
-    bind_dest = tmp_path / "bind_dest"
+    bind_dest = tmp_path / "bind_dest"  # FIXME
     bind_src.mkdir(exist_ok=False)
     bind_dest.mkdir(exist_ok=False)
     (bind_src / "bound_file.txt").write_text("Content")
+    bf = bind_src / "bound_file.txt"
+    if not (bind_dest / "bound_file.txt").exists():
+        (bind_dest / "bound_file.txt").symlink_to(bf)
+    if not (bind_dest / "link_to_bind_src").exists():
+        (bind_dest / "link_to_bind_src").symlink_to(bf)
+    if not (bind_dest / "link_relative_to_bind_src").exists():
+        (bind_dest / "link_relative_to_bind_src").symlink_to("bound_file.txt")
 
     # Symlink to ignore.log
     if not (tmp_path / "home_link_to_ignore").exists():
@@ -143,7 +146,7 @@ def files() -> Dict[str, Path]:
         "ignore": tmp_path / "ignore.log",
         "bind_src": bind_src,
         "bind_dest": bind_dest,
-        "bound_file": bind_dest / "bound_file.txt",
+        "bound_file": bind_src / "bound_file.txt",
         "home_link_to_ignore": tmp_path / "home_link_to_ignore",
         "home_link": tmp_path / "home_link",
         "home_link_to_bind_src": tmp_path / "home_link_to_bind_src",
@@ -176,14 +179,18 @@ def activate_guard_files_rules(rules: ConfigLines) -> None:
     import pwd
     import sys
 
-    new_file_rules: List[BindRule] = []
+    new_file_rules: List[FSExposeRule] = []
     exe_paths: set[Path] = set()
     follow_links_executable(Path(sys.executable), exe_paths)
     for p in exe_paths:
+        rp = Path(p).resolve()
+        if rp.is_dir():
+            p_str = str(rp) + "/" if rp != Path("/") else "/"
+        else:
+            p_str = str(rp)
         new_file_rules.append(
-            BindRule(
-                source=str(p),
-                dest=str(p),
+            FSExposeRule(
+                path=p_str,
                 write=True,
                 config=ConfigLine("Hack for pytest", Path(), 0),
             )
@@ -192,10 +199,11 @@ def activate_guard_files_rules(rules: ConfigLines) -> None:
     import os  # noqa: F811
 
     username = pwd.getpwuid(os.getuid())[0]
+    tmp_pytest = Path(f"/tmp/pytest-of-{username}").resolve()
+    tmp_str = str(tmp_pytest) + "/" if tmp_pytest != Path("/") else "/"
     new_file_rules.append(
-        BindRule(
-            source=f"/tmp/pytest-of-{username}/",
-            dest=f"/tmp/pytest-of-{username}/",
+        FSExposeRule(
+            path=tmp_str,
             write=True,
             config=ConfigLine("Hack for pytest", Path(), 0),
         )
@@ -228,11 +236,10 @@ def test_io_open_code_ignore_rule_blocks_open_code_file_access(
         io.open_code(str(files["ignore"]))
 
 
-def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]) -> None:
-    rules = [ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)]
+def test_io_open_expose_rule_reads_under_exposed_dirs(files: Dict[str, Path]) -> None:
+    rules = [ConfigLine(f"expose-rw={files['path']}", Path(), 0)]
     activate_guard_files_rules(rules)
-    # Access using the dest path should redirect to src
-    target_path = files["bind_dest"] / "bound_file.txt"
+    target_path = files["bind_src"] / "bound_file.txt"
 
     import io
 
@@ -242,7 +249,7 @@ def test_io_open_bind_rule_redirects_file_access(files: Dict[str, Path]) -> None
 
 
 def test_io_open_write(files: Dict[str, Path]) -> None:
-    rules = [ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0)]
+    rules = [ConfigLine(f"expose-rw={files['path']}", Path(), 0)]
     activate_guard_files_rules(rules)
     target_path = files["bind_dest"] / "write.txt"
 
@@ -255,7 +262,7 @@ def test_io_open_write(files: Dict[str, Path]) -> None:
 
 
 def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
-    rules = [ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0)]
+    rules = [ConfigLine(f"expose-ro={files['path']}", Path(), 0)]
     activate_guard_files_rules(rules)
     target_path = files["bind_dest"] / "write.txt"
 
@@ -269,8 +276,7 @@ def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
 def test_io_open_visible_and_invisible_files(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -283,19 +289,18 @@ def test_io_open_visible_and_invisible_files(files: Dict[str, Path]) -> None:
         with io.open(files["ignore"]):
             pass
 
-    with io.open(files["bind_dest"] / "bound_file.txt"):
-        pass
+    with io.open(files["bind_src"] / "bound_file.txt") as f:
+        assert f.read() == "Content"
 
-    with pytest.raises(RuleFileNotFoundError):
-        with io.open(files["bind_src"] / "bound_file.txt"):
+    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
+        with io.open(files["bind_dest"] / "missing-bound.txt"):
             pass
 
 
 def test_io_FileIO(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -304,13 +309,13 @@ def test_io_FileIO(files: Dict[str, Path]) -> None:
     with io.FileIO(files["visible"], "r") as f:
         assert f.read() == b"Visible"
 
-    with io.FileIO(files["bind_dest"] / "bound_file.txt", "r") as f:
+    with io.FileIO(files["bind_src"] / "bound_file.txt", "r") as f:
         assert f.read() == b"Content"
 
     with pytest.raises(RuleFileNotFoundError):
         with io.FileIO(files["ignore"], "r"):
             pass
 
-    with pytest.raises(RuleFileNotFoundError):
-        with io.FileIO(files["bind_src"], "r"):
+    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
+        with io.FileIO(files["bind_dest"] / "missing-bound.txt", "r"):
             pass

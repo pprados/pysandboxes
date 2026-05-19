@@ -448,8 +448,7 @@ The features of each technology are proposed:
 | Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
-| bind=a,a                 |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| bind=a,b                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ❌  |        ❌         |
+| expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ?     |     ✅  |        ❌         |
 | **Network**              |      |            |           |           |           |        |        ❌         |
 | • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |

@@ -3,7 +3,7 @@ This version is a first implementation offered to the community. It allows for t
 
 It ensures that the patches for Python functions are correct and do not cause bugs in applications. If you find a case that presents a problem, open a ticket with a scenario to reproduce it. We will provide a fix as soon as possible.
 
-It also verifies the relevance of the multiple sandbox encapsulation strategy, with only *firejail* for the moment. The latter was selected because it allows for network-level filtering, prohibits access to files matching patterns, etc. Since it does not allow renaming directories during a `bind`, the **py-sandbox** layer handles this.
+It also verifies the relevance of the multiple sandbox encapsulation strategy. The latter was selected because it allows for network-level filtering, prohibits access to files matching patterns, etc. Since it does not allow renaming directories during an expose mapping, the **py-sandbox** layer handles this.
 
 We have a planned roadmap. Developments will arrive gradually, with no specific order:
 

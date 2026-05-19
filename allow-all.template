@@ -1,4 +1,4 @@
 set-env=*=${*}
-bind=/,/
+expose-rw=/
 net=ALLOW|*|*|*|*
 python-import=*

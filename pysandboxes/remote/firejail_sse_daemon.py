@@ -28,7 +28,7 @@ from typing import Any, Iterator, MutableSet, cast
 
 from ..all_rules import AllRules
 from ..config import DEBUG
-from ..guard_files import BindRule, IgnoreRule
+from ..guard_files import FSExposeRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
@@ -431,7 +431,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     _follow_links(Path(sp), whitelist)
 
         # Add ignore files rules
-        keep_rules: list[Any] = []
         for rule in filter(lambda x: isinstance(x, IgnoreRule), all_rules.file_rules):
             args.append(f"--blacklist={rule.source}")
 
@@ -456,44 +455,32 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
         for rule in sorted(
             filter(
-                lambda x: isinstance(x, BindRule),
+                lambda x: isinstance(x, FSExposeRule),
                 all_rules.file_rules,
             ),
-            key=lambda x: len(x.source),
+            key=lambda x: len(x.path),
         ):
-            rule = cast(BindRule, rule)
-            skip_path = _firejail_skip_path(rule.source)
-            if rule.source == rule.dest:
-                if rule.write or rule.source not in whitelist:
-                    if rule.source != "/tmp/" and not skip_path:
-                        args.append(f"--whitelist={rule.source}")
-                    whitelist.add(rule.source)
-            else:
-                # Note: py-sandbox manage the alias
-                whitelist.add(rule.source)
-                keep_rules.append(rule)
-                need_root = False
-                if not skip_path:
-                    args.append(f"--whitelist={rule.source}")
+            rule = cast(FSExposeRule, rule)
+            skip_path = _firejail_skip_path(rule.path)
+            if rule.write or rule.path not in whitelist:
+                if rule.path != "/tmp/" and not skip_path:
+                    args.append(f"--whitelist={rule.path}")
+                whitelist.add(rule.path)
             if not skip_path:
                 if not rule.write:
-                    args.append(f"--read-only={rule.source}")
+                    args.append(f"--read-only={rule.path}")
                 else:
-                    args.append(f"--read-write={rule.source}")
+                    args.append(f"--read-write={rule.path}")
 
         if REPLACE:
             from ..guard_files import parse_rules as files_parse_rules
 
             _new_files_rules, _ = files_parse_rules(
-                [ConfigLine("bind=/,/", Path(), 0)], []
+                [ConfigLine("expose-rw=/", Path(), 0)], []
             )
-            new_files_rules = cast(list[BindRule], _new_files_rules)
-            selected_rules = [
-                rule
-                for rule in all_rules.file_rules
-                if isinstance(rule, BindRule) and rule.source != rule.dest
-            ]
-            selected_rules.extend(new_files_rules)  # Respect the order
+            new_files_rules = cast(list[FSExposeRule], _new_files_rules)
+            selected_rules: list[Any] = []
+            selected_rules.extend(new_files_rules)
             all_rules = all_rules._replace(file_rules=tuple(selected_rules))
 
         # Add pipe_path rule

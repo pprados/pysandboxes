@@ -16,8 +16,9 @@ from .test_guard_io import (
 def test_shutil_chown(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -33,8 +34,9 @@ def test_shutil_chown(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_copy(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -49,8 +51,9 @@ def test_shutil_copy(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_copy2(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -69,8 +72,9 @@ def test_shutil_copy2(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_copyfile(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -90,8 +94,9 @@ def test_shutil_copyfile(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_copymode(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -104,8 +109,9 @@ def test_shutil_copymode(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_copystat(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -118,8 +124,9 @@ def test_shutil_copystat(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -137,8 +144,9 @@ def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_disk_usage(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -150,8 +158,9 @@ def test_shutil_disk_usage(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_make_archive(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -167,8 +176,9 @@ def test_shutil_make_archive(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_rmtree(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -191,8 +201,9 @@ def test_shutil_rmtree(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_shutil_move(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", Path(), 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 

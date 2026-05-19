@@ -32,7 +32,7 @@ from ctypes import Structure, c_int, c_size_t, c_uint32
 from pathlib import Path
 
 from ..all_rules import AllRules
-from ..guard_files import BindRule
+from ..guard_files import FSExposeRule
 from ..guard_socket import Action, Direction, Kind, SocketRules
 from ..override_compat import override
 from ..sb_types import Envs
@@ -426,14 +426,11 @@ def _collect_landlock_paths(
     add(cwd, "rw")
     add(str(temp), "rw")
 
-    # File rules: BindRule allows source (and dest) with write or ro
+    # File rules: FSExposeRule paths as read-only or read-write
     for rule in all_rules.file_rules:
-        if isinstance(rule, BindRule):
+        if isinstance(rule, FSExposeRule):
             access = "rw" if rule.write else "ro"
-            add(rule.source, access)
-            dest = rule.dest if rule.dest is not None else rule.source
-            if dest != rule.source:
-                add(dest, access)
+            add(rule.path, access)
         # IgnoreRule: no path to add for Landlock (filtering is semantic)
 
     return list(path_to_access.items())

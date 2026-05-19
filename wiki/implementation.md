@@ -5,7 +5,7 @@
 - To avoid having to load all modules in order to patch them before launching the program, we use a clever strategy. A specific import implementation is added. It imports the modules in the usual way and, if necessary, adds the changes required to protect the code.
 - This mechanism also allows authorized modules to be filtered.
 - Standard functions are replaced by versions that will check the parameters and possibly transform them.
-For file management, names will be checked against exclusion rules and modified if there is a bind parameter indicating a new name for the directories. If a file is not found in the bind rules, an exception is raised.
+For file management, names will be checked against exclusion rules and modified if there is an expose parameter indicating a new name for the directories. If a file is not found in the expose rules, an exception is raised.
 - For network connection processing, the procedure is similar. Connection settings are validated against various rules. DENY rules take priority so that a wide range of IP addresses can be ALLOWED, with certain addresses excluded. For example, accept all connections except localhost or intranet addresses.
 - For filtering environment variables, processing is performed before the sandbox is launched. This process is launched with only the variables that it has visibility of.
 
@@ -21,7 +21,7 @@ Here is a brief description of the implementation in **complete mode**. You will
 - The **os-sandbox** parameter is extracted.
 - Environment variables are injected into the configuration files.
 - The parameters are converted into specific parameters for **os-sandbox**.
-- Parameters may be modified to account for the specificities of the **os-sandbox** implementation. For instance, applying a double bind to directories is not relevant.
+- Parameters may be modified to account for the specificities of the **os-sandbox** implementation. For instance, applying a double expose mapping to directories is not relevant.
 - A standard `python` program is launched within the *OS sandbox technology* using the extracted python parameters and `-m pysandboxes.remote.main_sandbox`.
 - The sandbox\'s parameters, state, and log format are transmitted to the sandbox via a *named pipe*.
 - The main function read the configuration and detects the use of `python-sb`.
@@ -36,7 +36,7 @@ Here is a brief description of the implementation in **partial mode**. You will 
 - The `os-sandbox` parameter is extracted.
 - The environment variables are injected in the config lines
 - The parameters are converted into specific parameters for **os-sandbox**.
-- The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `bind` on directories is not relevant.
+- The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `expose-ro` / `expose-rw` on directories is not relevant.
 - A free TCP port is selected
 - a classical `python` program is started in the sandbox technology, with the extracted classical python parameter and the module `-m pysandboxes.remote.main_sandbox\'
 - The sandbox\'s parameters, port, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.

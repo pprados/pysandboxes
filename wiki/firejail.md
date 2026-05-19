@@ -4,7 +4,7 @@
 
 ## Solution in brief
 
-The host launches a Firejail sandbox with a generated profile: whitelist/read-only bindings from file rules, optional `--net=<bridge>` for network, and netfilter rules (FIFO) for socket rules. The sandbox runs `main_sandbox` which reads the configuration from a named pipe and starts the SSE server. The host talks to the sandbox via SSE on a local URL. For security, code running in Firejail cannot reach host servers unless a network bridge is used (e.g. `docker0`, `br0`).
+The host launches a Firejail sandbox with a generated profile: whitelist/read-only paths from **`expose-ro` / `expose-rw`** file rules, optional `--net=<bridge>` for network, and netfilter rules (FIFO) for socket rules. The sandbox runs `main_sandbox` which reads the configuration from a named pipe and starts the SSE server. The host talks to the sandbox via SSE on a local URL. For security, code running in Firejail cannot reach host servers unless a network bridge is used (e.g. `docker0`, `br0`).
 
 ## Advantages
 

@@ -18,8 +18,9 @@ NonePath = opl.Path()
 def test_pathlib_open(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
 
     activate_guard_files_rules(rules)
@@ -37,8 +38,9 @@ def test_pathlib_open(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 def test_pathlib_read_write_text(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
 
     activate_guard_files_rules(rules)
@@ -54,8 +56,9 @@ def test_pathlib_read_write_text(files: Dict[str, opl.Path]) -> None:  # noqa: F
 def test_pathlib_read_write_bytes(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -70,8 +73,9 @@ def test_pathlib_read_write_bytes(files: Dict[str, opl.Path]) -> None:  # noqa: 
 def test_pathlib_is(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -101,15 +105,16 @@ def test_pathlib_is(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     assert not pathlib.Path(files["path"]).is_socket()
     assert not pathlib.Path(files["bind_dest"]).is_socket()
     assert pathlib.Path(files["home_link"]).is_symlink()
-    assert not pathlib.Path(files["bind_dest"] / "bound_file.txt").is_symlink()
+    assert pathlib.Path(files["bind_dest"] / "bound_file.txt").is_symlink()
     assert pathlib.Path(files["bind_dest"] / "bound_file.txt").exists() is True
 
 
 def test_pathlib_info(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -124,9 +129,9 @@ def test_pathlib_info(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 def test_pathlib_glob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
-        ConfigLine("ro-bind=./pysandboxes,./pysandboxes", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
     import pathlib
@@ -148,8 +153,9 @@ def test_pathlib_glob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 def test_pathlib_rglob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -164,8 +170,9 @@ def test_pathlib_rglob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 def test_pathlib_iterdir(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -181,7 +188,7 @@ def test_pathlib_iterdir(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 
     path = pathlib.Path(files["path"])
     rc = list(path.iterdir())
-    assert files["bind_src"] not in rc
+    assert files["bind_src"] in rc
     assert files["ignore"] not in rc
     assert files["bind_dest"] in rc
 
@@ -189,18 +196,20 @@ def test_pathlib_iterdir(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 def test_pathlib_chmod_and_lchmod(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
+    import os
     import pathlib
 
     mode = pathlib.Path(files["path"]).stat().st_mode
     pathlib.Path(files["path"]).chmod(mode | stat.S_IREAD)
-    pathlib.Path(files["bind_dest"] / "bound_file.txt").chmod(mode | stat.S_IREAD)
+    pathlib.Path(files["bound_file"]).chmod(mode | stat.S_IREAD)
     pathlib.Path(files["path"]).lchmod(mode | stat.S_IREAD)
-    pathlib.Path(files["bind_dest"] / "bound_file.txt").lchmod(mode | stat.S_IREAD)
+    pathlib.Path(files["bound_file"]).lchmod(mode | stat.S_IREAD)
 
 
 def test_pathlib_statand_stat_and_lstat(
@@ -208,8 +217,9 @@ def test_pathlib_statand_stat_and_lstat(
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -232,8 +242,9 @@ def test_pathlib_mkdir_removedirs_and_rmdir(
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -251,8 +262,9 @@ def test_pathlib_link_symlink_and_readlink(
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -262,17 +274,18 @@ def test_pathlib_link_symlink_and_readlink(
     assert pathlib.Path(files["home_link_to_bind_src"]).readlink() == pathlib.Path(
         files["bound_file"]
     )
-    assert pathlib.Path(
-        files["home_link_relative_to_bind_src"]
-    ).readlink() == pathlib.Path(files["bound_file"])
-    assert pathlib.Path(
-        files["bind_dest"] / "link_to_bind_src"
-    ).readlink() == pathlib.Path(files["bound_file"])
+    assert pathlib.Path(files["home_link_relative_to_bind_src"]).readlink() == (
+        pathlib.Path(files["bound_file"])
+    )
+    assert pathlib.Path(files["bind_dest"] / "link_to_bind_src").readlink() == (
+        pathlib.Path(files["bound_file"])
+    )
     assert pathlib.Path(files["link_to_bind"]).readlink() == pathlib.Path(
         files["bound_file"]
     )
-    assert pathlib.Path(files["link_relative_to_bind"]).readlink() == pathlib.Path(
-        files["bound_file"]
+    assert (
+        pathlib.Path(files["link_relative_to_bind"]).readlink().resolve()
+        == pathlib.Path(files["bind_dest"] / "bound_file.txt").resolve()
     )
     with pytest.raises(RuleFileNotFoundError):
         pathlib.Path(files["home_link_to_ignore"]).readlink()
@@ -287,7 +300,7 @@ def test_pathlib_link_symlink_and_readlink(
     assert pathlib.Path(files["new_link_to_bind"]).exists() is True
     pathlib.Path(files["new_link_to_bind"]).unlink()
 
-    with pytest.raises(RuleFileNotFoundError):
+    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
         pathlib.Path(files["new_link"]).hardlink_to(files["bind_src"] / "toto")
 
     files["new_link"].unlink(missing_ok=True)
@@ -315,8 +328,9 @@ def test_pathlib_link_symlink_and_readlink_refused(
 ) -> None:
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -329,8 +343,9 @@ def test_pathlib_link_symlink_and_readlink_refused(
 def test_pathlib_touch(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -340,15 +355,15 @@ def test_pathlib_touch(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     pathlib.Path(files["bind_dest"] / "bound_file.txt").touch()
     with pytest.raises(RuleFileNotFoundError):
         pathlib.Path(files["ignore"]).touch()
-    with pytest.raises(RuleFileNotFoundError):
-        pathlib.Path(files["bind_src"]).touch()
+    pathlib.Path(files["bind_src"]).touch()
 
 
 def test_pathlib_touch_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -361,8 +376,9 @@ def test_pathlib_touch_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F81
 def test_pathlib_rename(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -382,15 +398,14 @@ def test_pathlib_rename(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 
     with pytest.raises(RuleFileNotFoundError):
         pathlib.Path(files["ignore"]).rename(pathlib.Path(files["ignore"]))
-    with pytest.raises(RuleFileNotFoundError):
-        pathlib.Path(files["bind_src"]).rename(pathlib.Path(files["bind_src"]))
 
 
 def test_pathlib_rename_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -403,8 +418,9 @@ def test_pathlib_rename_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F8
 def test_pathlib_replace(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -421,15 +437,13 @@ def test_pathlib_replace(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     with pytest.raises(RuleFileNotFoundError):
         pathlib.Path(files["ignore"]).replace(files["new_replace"])
 
-    with pytest.raises(RuleFileNotFoundError):
-        pathlib.Path(files["bind_src"]).replace(files["new_replace"])
-
 
 def test_pathlib_replace_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -442,8 +456,9 @@ def test_pathlib_replace_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F
 def test_pathlib_resolve(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -457,8 +472,9 @@ def test_pathlib_resolve(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 def test_pathlib_samefile(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -473,8 +489,9 @@ def test_pathlib_samefile(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 def test_pathlib_walk(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
-        ConfigLine(f"ro-bind={files['path']},{files['path']}", NonePath, 0),
-        ConfigLine(f"ro-bind={files['bind_src']},{files['bind_dest']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['path']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", NonePath, 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -483,10 +500,11 @@ def test_pathlib_walk(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     if hasattr(pathlib.Path, "walk"):
         rc = list(pathlib.Path(files["path"]).walk())  # type: ignore[attr-defined]
         assert rc[0][0] == pathlib.Path(files["path"])
-        assert "bind_src" not in rc[0][1]
+        assert "bind_src" in rc[0][1]
         assert "bind_dest" in rc[0][1]
-        assert rc[1][0] == pathlib.Path(files["bind_dest"])
-        assert "bound_file.txt" in rc[1][2]
+        dest_rows = [row for row in rc if row[0] == pathlib.Path(files["bind_dest"])]
+        assert dest_rows
+        assert "bound_file.txt" in dest_rows[0][2]
 
         rc = list(pathlib.Path(files["bind_dest"]).walk())  # type: ignore[attr-defined]
         assert rc[0][0] == pathlib.Path(files["bind_dest"])
