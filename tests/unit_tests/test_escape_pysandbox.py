@@ -6,7 +6,7 @@ from typing import Any, Dict, Set, Tuple
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleAttributeError, RuleModuleNotFoundError
+from pysandboxes import RuleAttributeError
 
 
 def test_escape_with_closure() -> None:
@@ -51,7 +51,6 @@ def test_escape_with_subclasses() -> None:
 
 @pytest.mark.skip(reason="TODO: block sys.meta_path escape in guard_import")
 def test_escape_with_meta_path() -> None:
-    import sys
 
     with pytest.raises(RuleAttributeError):
         new_list = list(sys.meta_path)[1:]

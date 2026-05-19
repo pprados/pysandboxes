@@ -4,7 +4,6 @@ import pytest
 
 from pysandboxes.guard_pickle import (
     PickleImportBlocker,
-    activate_import_guard,
     parse_rules,
     safe_unpickle,
 )
