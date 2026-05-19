@@ -11,11 +11,11 @@ from typing import Any
 import httpx
 from fastmcp import FastMCP
 from httpx_file import FileTransport
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
 from markdownify import markdownify as md
 from pysandboxes import is_in_sandbox, sandbox, sandboxes
 from pysandboxes.remote.tools import set_pdeathsig
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,11 @@ RESOURCES_DIR = Path(__file__).parent.parent / "resources"
 
 @mcp.resource("mcp-server-demo://version")
 def get_version() -> str:
+    return "1.0.0"
+
+
+@mcp.resource("config://version")
+def get_config_version() -> str:
     return "1.0.0"
 
 
@@ -137,6 +142,7 @@ def summarize_webpage(url: str) -> str:
     return f"""Please fetch and summarize the webpage at {url}.
 Use the fetch_webpage tool to get the content, then provide a concise summary."""
 
+
 _streamable_http_stale_session_patch_applied = False
 
 
@@ -172,9 +178,7 @@ def _apply_streamable_http_stale_session_patch() -> None:
                     "Ignoring unknown mcp-session-id (stale client session): %s",
                     sid[:16] + "..." if len(sid) > 16 else sid,
                 )
-                filtered = [
-                    (k, v) for k, v in scope["headers"] if k.lower() != _hdr
-                ]
+                filtered = [(k, v) for k, v in scope["headers"] if k.lower() != _hdr]
                 scope = {**scope, "headers": filtered}
         await _orig(self, scope, receive, send)
 
@@ -293,7 +297,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     if not args.config_path:
-        resource_path = importlib.resources.files(__package__)
+        resource_path = importlib.resources.files(__package__)  # type: ignore[attr-defined]
         args.config_path = resource_path / ".py-sandboxes"
 
     kwargs = {}

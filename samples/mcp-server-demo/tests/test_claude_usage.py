@@ -49,7 +49,6 @@ timeout = 30
 all_pysandboxes_mode = ["complete", "partial"]
 all_protocol = ["stdio", "http"]
 all_os_sandbox = [
-
     "None",
     "Subprocess",
     "firejail",
@@ -126,6 +125,8 @@ def _init_mcp_server(
 @pytest.mark.parametrize("protocol", all_protocol)
 @pytest.mark.parametrize("mode", all_pysandboxes_mode)
 def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> None:
+    if protocol == "http" and os_sandbox != "None":
+        pytest.skip("Skip parallel http tests (port 8000 conflict)")
     process = _init_mcp_server(protocol, os_sandbox, mode)
     try:
         cmd = (
@@ -164,6 +165,8 @@ def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> N
 @pytest.mark.parametrize("protocol", all_protocol)
 @pytest.mark.parametrize("mode", all_pysandboxes_mode)
 def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None:
+    if protocol == "http" and os_sandbox != "None":
+        pytest.skip("Skip parallel http tests (port 8000 conflict)")
     process = _init_mcp_server(protocol, os_sandbox, mode)
     try:
 
@@ -203,6 +206,8 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
 @pytest.mark.parametrize("protocol", all_protocol)
 @pytest.mark.parametrize("mode", all_pysandboxes_mode)
 def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
+    if protocol == "http" and os_sandbox != "None":
+        pytest.skip("Skip parallel http tests (port 8000 conflict)")
     process = _init_mcp_server(protocol, os_sandbox, mode)
     try:
 
@@ -240,6 +245,8 @@ def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
 @pytest.mark.parametrize("protocol", all_protocol)
 @pytest.mark.parametrize("mode", all_pysandboxes_mode)
 def test_claude_evaluate_expression(protocol: str, os_sandbox: str, mode: str) -> None:
+    if protocol == "http" and os_sandbox != "None":
+        pytest.skip("Skip parallel http tests (port 8000 conflict)")
     process = _init_mcp_server(protocol, os_sandbox, mode)
     try:
 
