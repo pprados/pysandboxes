@@ -12,8 +12,6 @@ from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, TextMess
 from autogen_agentchat.ui import Console
 from autogen_core.models import ChatCompletionClient
 
-from autogen_demo.tools import execute_python, fetch_webpage
-
 logger = logging.getLogger(__name__)
 
 AGENT_NAME = "tool_assistant"
@@ -58,9 +56,16 @@ async def run_agent_session(
     system_message: str,
     max_tool_iterations: int,
     verbose: bool,
+    tools: Sequence | None = None,
 ) -> str:
-    """Run ``AssistantAgent`` with fetch + Python tools; return final assistant text."""
-    tools: Sequence = [fetch_webpage, execute_python]
+    """Run ``AssistantAgent`` with provided tools; return final assistant text.
+
+    Args:
+        tools: Sequence of tool callables. If None, imports default tools from autogen_demo.tools.
+    """
+    if tools is None:
+        from autogen_demo.tools import execute_python, fetch_webpage
+        tools = [fetch_webpage, execute_python]
     agent = AssistantAgent(
         name=AGENT_NAME,
         model_client=model_client,
