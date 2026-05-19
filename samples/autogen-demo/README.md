@@ -49,6 +49,47 @@ autogen-demo -v
 autogen-demo --max-tool-iterations 15
 ```
 
+### Sandbox integration (python-sb)
+
+Run `execute_python` inside an **OS-level container** instead of just a namespace-restricted `exec`:
+
+```bash
+# Requires python-sb installed
+autogen-demo --use-python-sb
+
+# Sandbox + custom task
+autogen-demo --use-python-sb --task "Your custom task here"
+```
+
+**Setup python-sb:**
+```bash
+cd samples/autogen-demo
+uv pip install python-sb
+```
+
+**Comparison:**
+| Mode | Isolation | Speed | Setup |
+|------|-----------|-------|-------|
+| Default (`tools.py`) | Namespace + allowlist | Fast | None |
+| `--use-python-sb` | OS container (qemu/unshare) | Slower | `uv pip install python-sb` |
+
+### Annotated tools
+
+Use tools with **JSON Schema metadata** for better model type awareness:
+
+```bash
+autogen-demo --annotated-tools
+```
+
+**What changes:**
+- Each tool exposes `.parameters` (JSON Schema) for the model
+- Model can introspect exact parameter types and requirements before calling
+- Reduces  "wrong parameter shape" errors
+
+**Layout:**
+- `tools_annotated.py` — Same tools, wrapped with `ToolMetadata` + JSON Schema
+- Model sees structured parameter hints, not just docstrings
+
 ## Tests
 
 ```bash
@@ -59,9 +100,13 @@ make validate   # lint + tests (no network, no API keys)
 
 ## Layout
 
-- `autogen_demo/tools.py` — `fetch_webpage`, `execute_python` (async)
+- `autogen_demo/tools.py` — Default tools: `fetch_webpage`, `execute_python` (namespace-restricted)
+- `autogen_demo/tools_sandbox.py` — `execute_python` inside python-sb OS container (use with `--use-python-sb`)
+- `autogen_demo/tools_annotated.py` — Same tools with JSON Schema metadata (use with `--annotated-tools`)
 - `autogen_demo/model_client.py` — `CHAT_MODEL` → `ChatCompletionClient`
-- `autogen_demo/run.py` — `AssistantAgent` + `run_stream`
-- `autogen_demo/main.py` — CLI
+- `autogen_demo/run.py` — `AssistantAgent` + `run_stream` + tool routing
+- `autogen_demo/main.py` — CLI with flags for sandbox/annotated modes
 
-This sample does **not** depend on the `pysandboxes` library at runtime; `[tool.uv.sources]` is only for monorepo tooling.
+**Runtime dependencies:**
+- Default: No external sandbox library
+- `--use-python-sb`: Requires `python-sb` (in-tree at `python-sb/`)

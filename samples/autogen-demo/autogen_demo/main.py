@@ -35,6 +35,25 @@ def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
 
 
+def _load_tools(use_sandbox: bool, use_annotated: bool) -> Sequence:
+    """Load tools based on sandbox and annotation flags.
+
+    Returns:
+        Sequence of tool callables.
+    """
+    if use_sandbox and use_annotated:
+        raise ValueError("Cannot use both --use-python-sb and --annotated-tools together yet.")
+
+    if use_sandbox:
+        from autogen_demo.tools_sandbox import execute_python, fetch_webpage
+    elif use_annotated:
+        from autogen_demo.tools_annotated import execute_python, fetch_webpage
+    else:
+        from autogen_demo.tools import execute_python, fetch_webpage
+
+    return [fetch_webpage, execute_python]
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="AutoGen AgentChat tool demo (console).")
     p.add_argument(
@@ -49,6 +68,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Cap on tool-calling rounds inside the assistant (AutoGen max_tool_iterations).",
     )
     p.add_argument("-v", "--verbose", action="store_true", help="Stream agent output to the console.")
+    p.add_argument(
+        "--use-python-sb",
+        action="store_true",
+        help="Run execute_python inside python-sb OS sandbox (requires python-sb installed).",
+    )
+    p.add_argument(
+        "--annotated-tools",
+        action="store_true",
+        help="Use tools with JSON Schema annotations for better model type awareness.",
+    )
     return p.parse_args(list(argv) if argv is not None else None)
 
 
@@ -56,6 +85,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv()
     args = parse_args(argv)
     _configure_logging(args.verbose)
+
+    try:
+        tools = _load_tools(args.use_python_sb, args.annotated_tools)
+    except ValueError as e:
+        logging.getLogger(__name__).error("%s", e)
+        return 1
 
     try:
         model_client = build_chat_completion_client()
@@ -71,6 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 system_message=DEFAULT_SYSTEM,
                 max_tool_iterations=args.max_tool_iterations,
                 verbose=args.verbose,
+                tools=tools,
             )
         finally:
             await model_client.close()
