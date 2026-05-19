@@ -52,6 +52,35 @@ def _activate_guard_import_for_tests() -> None:
     )
 
 
+def _activate_guard_import_blocking_pickle() -> None:
+    """Activate guard_import with pickle BLOCKED by removing from sys.modules."""
+    import sys
+
+    # First, remove pickle from sys.modules so it's not available
+    sys.modules.pop("pickle", None)
+    sys.modules.pop("pickletools", None)
+    sys.modules.pop("_pickle", None)
+
+    # Then activate normally
+    from pysandboxes.guard_files import patch_rules as file_patch_rules
+    from pysandboxes.guard_import import (
+        activate_guard_import,
+    )
+    from pysandboxes.guard_import import (
+        patch_rules as import_path_rules,
+    )
+    from pysandboxes.guard_socket import patch_rules as socket_path_rules
+
+    activate_guard_import(
+        {
+            **file_patch_rules(learn=False),
+            **socket_path_rules(learn=False),
+            **import_path_rules(learn=False),
+        },
+        ("*",),  # Import all modules EXCEPT pickle (which was removed above)
+    )
+
+
 def _reset_rules() -> Iterator[Any]:
     yield
     _deactivate_all_rules()

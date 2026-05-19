@@ -1,10 +1,12 @@
 import inspect
+import pickle
+import sys
 from types import ModuleType
 from typing import Any, Dict, Set, Tuple
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleAttributeError
+from pysandboxes import RuleAttributeError, RuleModuleNotFoundError
 
 
 def test_escape_with_closure() -> None:
@@ -56,37 +58,45 @@ def test_escape_with_meta_path() -> None:
         sys.meta_path = new_list
 
 
-def test_escape_with_pickle() -> None:
-    import pickle
-    # CONFIRMED VULNERABLE: Pickle deserialization completely bypasses sandboxing.
-    # pickle.loads() uses the stack-based opcode VM; GLOBAL opcode directly refs
-    # modules in sys.modules WITHOUT going through guard_import, __import__, or
-    # sys.meta_path. This is a CRITICAL SECURITY GAP.
-    # https://docs.python.org/3/library/pickle.html
-    # See: https://intoli.com/blog/dangerous-pickle/
-    #
-    # Attack chain:
-    # 1. Pickle GLOBAL opcode (c) loads module.function from sys.modules directly
-    # 2. No guard_import applied to pickle's internal module loader
-    # 3. os.system() executes with full sandbox context access
-    # 4. Results in arbitrary code execution (echo to "echo pwned" proof)
-    #
-    # Payload hex: 636f730a737973746... (reads as: GLOBAL(os, system) REDUCE)
-    # This CANNOT be blocked at __import__ level; pickle bypasses it entirely.
-
-    # Test payload: calls os.system("echo pwned") → proof of execution
-    malicious_pickle = b"cos\nsystem\np0\n(S'echo pwned'\ntRp1\n."
+def test_escape_with_pickle_allowed() -> None:
+    # VULNERABLE (default): Pickle is ALLOWED by default (_activate_guard_import_for_tests)
+    # This test demonstrates pickle.loads() bypasses ALL import guards
+    malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_ALLOWED'\ntRp1\n."
 
     result = pickle.loads(malicious_pickle)  # type: ignore[arg-type]
-
-    # os.system() returns 0 on success. If this executes, sandbox is breached.
-    # guard_import CAN block this IF AND ONLY IF os module is pre-blocked,
-    # but pickle.loads() happens before guard_import checks take effect.
+    # os.system() returns 0 on success
     if result == 0:
-        # We confirmed the attack: os.system() executed inside sandbox
+        pytest.fail("VULNERABLE: pickle.loads() bypassed guards (allowed by default)")
+
+
+def test_escape_with_pickle_blocked() -> None:
+    # FAILED PROTECTION ATTEMPT: Removing pickle from sys.modules does NOT block the attack!
+    # pickle.loads() uses cached C extension code that doesn't re-import pickle module
+    # So even if sys.modules['pickle'] is deleted, pickle.loads() still works!
+    # This test documents why naive removal-based blocking FAILS.
+    from tests.unit_tests.guard.test_guard_io import (
+        _deactivate_all_rules,
+        _activate_guard_import_blocking_pickle,
+    )
+
+    # Deactivate the default guard from conftest
+    _deactivate_all_rules()
+
+    # Attempt to block pickle by removing from sys.modules
+    _activate_guard_import_blocking_pickle()
+
+    malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_STILL_WORKS'\ntRp1\n."
+
+    # PROBLEM: Removing pickle from sys.modules is NOT sufficient!
+    # The pickle C extension (_pickle) is already loaded and caches module references
+    # This is WHY we need guard_import to BLOCK the import at import time, not remove it after
+    result = pickle.loads(malicious_pickle)  # type: ignore[arg-type]
+
+    # If os.system() executed (result == 0), blocking failed!
+    if result == 0:
         pytest.fail(
-            "VULNERABLE: pickle.loads() executed os.system() "
-            "bypassing ALL sandbox guards. Result=0 (success)"
+            "EXPECTED FAILURE: Removing pickle from sys.modules does NOT block attack. "
+            "Need real import guard that blocks pickle BEFORE it's loaded."
         )
 
 
