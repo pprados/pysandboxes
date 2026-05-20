@@ -3,7 +3,7 @@ name = "autogen-demo"
 version = "0.1.0"
 description = "Microsoft AutoGen AgentChat console demo with web fetch and Python execution tools"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Philippe PRADOS" }]
 keywords = ["sandboxes", "autogen", "llm", "tools", "agent"]
 license = { text = "MIT" }
@@ -12,7 +12,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
     "autogen-agentchat>=0.7.5,<0.8",

@@ -3,7 +3,7 @@ name = "{{PROJECT_NAME}}"
 version = "0.1.0"
 description = "{{DESCRIPTION}}"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "{{AUTHOR}}" }]
 keywords = ["sandboxes", "{{KEYWORDS}}"]
 license = { text = "MIT" }
@@ -12,7 +12,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
     "pysandboxes",

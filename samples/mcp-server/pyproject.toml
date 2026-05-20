@@ -3,7 +3,7 @@ name = "mcp-server"
 version = "0.1.0"
 description = "A simple MCP server"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Anthropic" }]
 keywords = ["mcp", ]
 license = { text = "MIT" }
@@ -12,7 +12,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
     "pysandboxes",

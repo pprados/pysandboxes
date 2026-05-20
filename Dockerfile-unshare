@@ -1,6 +1,6 @@
 # unshare provider: base + iptables, iproute2, slirp4netns.
 # Build: make build-image-unshare  =>  python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.11
 FROM python-sb:${PYTHON_VERSION}
 
 RUN apt-get update && \

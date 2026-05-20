@@ -34,7 +34,7 @@ Les commentaires `##` devant une cible servent de description pour `make help`.
 
 ## pyproject.toml
 
-- `[project]` : `name`, `version`, `description`, `readme`, `requires-python = ">=3.10"`, `dependencies` (inclure `pysandboxes` si le sample l’utilise).
+- `[project]` : `name`, `version`, `description`, `readme`, `requires-python = ">=3.11"`, `dependencies` (inclure `pysandboxes` si le sample l’utilise).
 - `[dependency-groups]` : `dev` (mypy, black, ruff, pytest, etc.), `test` (pytest, pytest-asyncio, pytest-dotenv, pytest-mock, etc.), optionnel `codespell`.
 - `[tool.uv.sources]` : `pysandboxes = { path = "../..", editable = true }` pour être dans le repo pysandboxes.
 - `[build-system]` : `hatchling` ; `[tool.hatch.build.targets.wheel]` avec `packages = ["<package_dir>"]`.

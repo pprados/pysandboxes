@@ -6,7 +6,7 @@ The default task **requires** both tools: it asks the model to fetch `https://ww
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
 - API credentials for your chosen provider (see below)
 

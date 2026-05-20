@@ -6,7 +6,7 @@ The default user task **requires** both tools: fetch `https://www.google.com`, t
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
 - API keys for the provider you select with `CHAT_MODEL` (LiteLLM reads the usual provider env vars, e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`).
 
