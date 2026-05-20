@@ -10,7 +10,7 @@ The default task **requires** both tools: it loads `https://www.google.com`, the
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
 - API credentials for the provider you select (see below)
 

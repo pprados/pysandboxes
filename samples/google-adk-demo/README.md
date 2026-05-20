@@ -8,7 +8,7 @@ There is **no** `pysandboxes` integration in this sample (no sandbox daemon or g
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
 - API credentials for the model you select (see below)
 

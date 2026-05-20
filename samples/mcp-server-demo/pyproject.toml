@@ -3,7 +3,7 @@ name = "mcp-server-demo"
 version = "0.1.0"
 description = "Sample mcp-server-demo: FastMCP server (Python package mcp_server, console mcp-server-demo)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Anthropic" }]
 keywords = ["mcp", ]
 license = { text = "MIT" }
@@ -12,7 +12,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
     "pysandboxes",
@@ -64,7 +64,7 @@ venvPath = "."
 venv = ".venv"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 exclude = [".venv"]
 ignore_missing_imports = true
 explicit_package_bases = true

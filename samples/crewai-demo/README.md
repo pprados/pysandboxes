@@ -4,7 +4,7 @@ Console demo of a **CrewAI** agent with two tools—**HTTP fetch** and **restric
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://github.com/astral-sh/uv)
 
 ## Setup

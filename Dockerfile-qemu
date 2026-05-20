@@ -1,6 +1,6 @@
 # qemu provider: base + QEMU and VM image for this Python version.
 # Build: make build-image-qemu  =>  python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.11
 FROM python-sb:${PYTHON_VERSION}
 
 ENV PYSANDBOXES_VM_IMAGES_DIR=/var/lib/pysandboxes/vm-images

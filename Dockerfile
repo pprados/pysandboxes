@@ -1,6 +1,6 @@
 # Base image: Python + wheel only. No OS provider (no unshare, bwrap, firejail, qemu).
 # Build: make build-image-base  =>  python-sb-base:$(PYTHON_VERSION), python-sb-base:latest
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.11
 FROM python:${PYTHON_VERSION}-slim
 LABEL org.opencontainers.image.version="${PYTHON_VERSION}"
 
