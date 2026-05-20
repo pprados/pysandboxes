@@ -62,6 +62,7 @@ from typing import (
 )
 
 from .e import RuleSocketConnectionRefusedError
+from .guard_files import _apply_dest_to_src_rules
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref, pysandboxes_logger
@@ -760,6 +761,37 @@ def _check_address_with_rules(
     )
 
 
+def _check_unix_socket(address: str, *, write: bool, operation: str) -> None:
+    """Authorize an AF_UNIX address against the file rules.
+
+    ``net=`` rules describe IP endpoints only (``proto|host|port|direction``),
+    so a Unix domain socket cannot be expressed by one. A socket path is a
+    filesystem object, so authorization is delegated to the ``expose-ro=`` /
+    ``expose-rw=`` rules: reaching it requires a rule covering that path.
+    Without this, ``/var/run/docker.sock`` (root-equivalent on the host),
+    the ssh-agent socket and the D-Bus socket are reachable unrestricted.
+
+    Args:
+        address: Filesystem path of the socket.
+        write: Whether the operation needs write access to the path.
+        operation: Socket operation name, for the error message.
+
+    Raises:
+        RuleSocketConnectionRefusedError: If no file rule covers the path.
+    """
+    remapped, rule = _apply_dest_to_src_rules(address, write=write)
+    if rule or not remapped:
+        pysandboxes_logger.error(
+            "%s to AF_UNIX socket '%s' DENIED by implicit default policy.",
+            operation,
+            address,
+        )
+        raise RuleSocketConnectionRefusedError(
+            f"Guard {operation} to AF_UNIX socket {address!r} DENIED: no "
+            f"expose-ro=/expose-rw= rule covers this path."
+        )
+
+
 # see _scoket.pyi
 # ReadableBuffer type for socket operations
 # Using Any to avoid Buffer import issues with pyright
@@ -964,14 +996,14 @@ def _wrap_socket_bind(func: Callable) -> Callable:
                     conn_direction=Direction.IN,
                 )
         elif isinstance(address, str):  # AF_UNIX
-            logger.debug(
-                "Allowing bind to AF_UNIX address (not subject to IP rules): %s",
-                address,
-            )
+            # Binding creates a filesystem entry: require write access.
+            _check_unix_socket(address, write=True, operation="bind")
         else:
-            logger.warning(
-                "Unexpected address format for bind: %s. Skipping IP rule check.",
-                address,
+            # Deny by default: an address shape we cannot interpret must not
+            # reach the real syscall unchecked.
+            raise RuleSocketConnectionRefusedError(
+                f"Guard bind to {address!r} DENIED: unsupported address "
+                f"format, no rule can be evaluated."
             )
         func(self, address)
 
@@ -1008,18 +1040,13 @@ def _wrap_socket_connect(func: Callable) -> Callable:
                     conn_direction=Direction.OUT,
                 )
         elif isinstance(address, str):  # AF_UNIX
-            logger.debug(
-                "Allowing connect to AF_UNIX address (not subject to IP rules): %s",
-                address,
-            )
+            _check_unix_socket(address, write=False, operation="connect")
         else:
-            logger.warning(
-                "Unexpected address format for connect: %s. Skipping IP rule check.",
-                address,
-            )
-            assert False, (  # noqa: B011
-                f"Unexpected address format for connect: "
-                f"{address}. Skipping IP rule check."
+            # Was an ``assert False``, which vanishes under ``python -O``:
+            # a security check must raise unconditionally.
+            raise RuleSocketConnectionRefusedError(
+                f"Guard connect to {address!r} DENIED: unsupported address "
+                f"format, no rule can be evaluated."
             )
         return func(self, address)
 
@@ -1056,14 +1083,11 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
                     conn_direction=Direction.OUT,
                 )
         elif isinstance(address, str):  # AF_UNIX
-            logger.debug(
-                "Allowing connect_ex to AF_UNIX address (not subject to IP rules): %s",
-                address,
-            )
+            _check_unix_socket(address, write=False, operation="connect_ex")
         else:
-            logger.warning(
-                "Unexpected address format for connect_ex: %s. Skipping IP rule check.",
-                address,
+            raise RuleSocketConnectionRefusedError(
+                f"Guard connect_ex to {address!r} DENIED: unsupported "
+                f"address format, no rule can be evaluated."
             )
         return func(self, address)
 

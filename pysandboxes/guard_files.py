@@ -134,6 +134,22 @@ _rules: FilesRules = cast(FilesRules, ())
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 
+# Set while the guard canonicalizes a path for itself. ``os.path.realpath``
+# calls ``os.lstat``/``os.readlink``, which are patched, so canonicalizing
+# inside the check would recurse forever.
+_canonicalizing: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_canonicalizing", default=False
+)
+
+
+def _safe_realpath(path: str) -> str:
+    """Resolve symlinks in ``path`` without re-entering the file guard."""
+    token = _canonicalizing.set(True)
+    try:
+        return _os_path_realpath(path)
+    finally:
+        _canonicalizing.reset(token)
+
 
 def parse_rules(
     config: ConfigLines,
@@ -474,9 +490,22 @@ def _apply_dest_to_src_rules(
 
     if not path:
         return None, None
+    if _canonicalizing.get():
+        # Called back by our own realpath through the patched os.lstat /
+        # os.readlink. Do not re-check here: the resolved path is checked
+        # by the outer call that started the canonicalization.
+        return _os_path_abspath(str(path)), None
     fake_path: str = _os_path_abspath(str(path))
     if str(path).endswith("/"):
         fake_path = fake_path + "/"
+    # The decision is taken on the canonical path, so that a symlink cannot
+    # authorize an access outside the exposed directories (the rules are
+    # stored realpath-resolved, see parse_rules). The path *returned* stays
+    # unresolved: it is the one handed to the real syscall, and resolving it
+    # would change link semantics (os.path.islink, os.readlink, ...).
+    canon_path: str = _safe_realpath(str(path))
+    if str(path).endswith("/"):
+        canon_path = canon_path + "/"
     original_path = path
 
     for rule in _rules:
@@ -484,7 +513,7 @@ def _apply_dest_to_src_rules(
             if rule.path is None:
                 continue
             rp = rule.path
-            if fake_path.startswith(rp) or fake_path == rp[:-1]:
+            if canon_path.startswith(rp) or canon_path == rp[:-1]:
                 if not rule.write and write:
                     if is_learning_mode():
                         add_learning_rule(LearnFileRule(Path(str(path)), True))
@@ -1127,7 +1156,7 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
         dir_fd: int | None = None,
     ) -> Any:
 
-        if isinstance(str, int) or isinstance(dst, int):
+        if isinstance(src, int) or isinstance(dst, int):
             return func(
                 src=src,
                 dst=dst,
@@ -1137,7 +1166,7 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
         if isinstance(src, bytes):
             src = os.fsdecode(src)
         if isinstance(dst, bytes):
-            src = os.fsdecode(dst)
+            dst = os.fsdecode(dst)
         src = cast(str, src)
         dst = cast(str, dst)
         remapped, rule = _apply_dest_to_src_rules(dst, write=True)
@@ -1149,15 +1178,28 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
                 remapped = dst
             else:
                 _raise_access(dst)
-        if str(src).startswith("/"):
-            remapped_src, _ = _apply_dest_to_src_rules(
-                src, write=False, accept_src=True
-            )
-        else:
-            remapped_src = src  # Relative link
+        # The link target must be checked whatever its form: a relative
+        # target such as "../../etc/passwd" escapes the exposed directories
+        # exactly like an absolute one. A relative target resolves against
+        # the link directory, not the current one.
+        target = (
+            src if os.path.isabs(src) else os.path.join(os.path.dirname(remapped), src)
+        )
+        checked_src, src_rule = _apply_dest_to_src_rules(
+            target, write=False, accept_src=True
+        )
+        if src_rule:
+            _raise_ignore(src, src_rule)
+        if not checked_src:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(target), False))
+            else:
+                _raise_access(src)
 
+        # ``src`` is passed through unchanged: rewriting it would turn a
+        # relative link into an absolute one and change what the link means.
         return func(
-            remapped_src,
+            src,
             remapped,
             target_is_directory=target_is_directory,
             dir_fd=dir_fd,
@@ -1500,37 +1542,22 @@ _default_rules: dict[str, Callable[..., Any]] = {
     "os.removexattr": _f(_wrap_filename, write=True),
     "os.setxattr": _f(_wrap_filename, write=True),
     "os.getxattr": _f(_wrap_filename, write=False),
-    # DENY os.execv
-    # DENY os.execve
-    # DENY os.execl
-    # DENY os.execle
-    # DENY os.execlp
-    # DENY os.execlpe
-    # DENY os.execvp
-    # DENY os.execvpe
-    # DENY os.spawnv
-    # DENY os.spawnve
-    # DENY os.spawnvp
-    # DENY os.spawnvpe
-    # DENY os.spawnl
-    # DENY os.spawnle
-    # DENY os.spawnlp
-    # DENY os.spawnlpe
-    # DENY os.popen
+    # NOT PATCHED YET, and reachable as soon as ``os`` is importable:
+    #   os.execv, os.execve, os.execl, os.execle, os.execlp, os.execlpe,
+    #   os.execvp, os.execvpe, os.spawnv, os.spawnve, os.spawnvp,
+    #   os.spawnvpe, os.spawnl, os.spawnle, os.spawnlp, os.spawnlpe,
+    #   os.posix_spawn, os.posix_spawnp, os.popen, os.fork, os.forkpty,
+    #   os.system, os.kill, os.killpg, os.nice
+    # These run code outside the patched interpreter, so no file or socket
+    # rule applies to what they start. They are candidates for the planned
+    # blacklist layer, where each function is validated explicitly and
+    # learning mode captures the ones an application really uses. Do not
+    # gate them on a module import right: that would be a pseudo-import.
     # ALLOW os.getenv
     # ALLOW os.supports_bytes_environ
     # ALLOW os.environb
     # ALLOW os.getenvb
-    # DENY os.fork
-    # DENY os.forkpty
-    # DENY os.kill
-    # DENY os.killpg
-    # DENY os.nice
-    # DENY os.posix_spawn
-    # DENY os.posix_spawnp
-    # DENY os.putenv
-    # DENY os.unsetenv
-    # DENY os.system
+    # DENY os.putenv, os.unsetenv (see guard_envs)
     # %% high level access
     "io.open": _f(_wrap_io_open),
     "io.open_code": _f(_wrap_filename, write=False),
