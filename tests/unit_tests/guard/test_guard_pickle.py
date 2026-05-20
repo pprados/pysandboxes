@@ -15,18 +15,18 @@ class SimpleDataClass:
     def __init__(self, value: str):
         self.value = value
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, SimpleDataClass) and self.value == other.value
 
 
-def test_parse_rules_empty():
+def test_parse_rules_empty() -> None:
     """Test parsing empty configuration."""
     rules, remaining = parse_rules([])
     assert rules.allowed_classes == ()
     assert remaining == []
 
 
-def test_parse_rules_single_class():
+def test_parse_rules_single_class() -> None:
     """Test parsing single class whitelist rule."""
     rules, remaining = parse_rules(
         ["pickle-class=SimpleDataClass"],
@@ -35,7 +35,7 @@ def test_parse_rules_single_class():
     assert remaining == []
 
 
-def test_parse_rules_multiple_classes():
+def test_parse_rules_multiple_classes() -> None:
     """Test parsing multiple classes in whitelist."""
     rules, remaining = parse_rules(
         ["pickle-class=ClassA,ClassB,ClassC"],
@@ -44,7 +44,7 @@ def test_parse_rules_multiple_classes():
     assert remaining == []
 
 
-def test_parse_rules_wildcard():
+def test_parse_rules_wildcard() -> None:
     """Test parsing wildcard (allow all) - for testing only."""
     rules, remaining = parse_rules(
         ["pickle-class=*"],
@@ -53,7 +53,7 @@ def test_parse_rules_wildcard():
     assert remaining == []
 
 
-def test_parse_rules_mixed():
+def test_parse_rules_mixed() -> None:
     """Test parsing mixed rules."""
     rules, remaining = parse_rules(
         ["pickle-class=ClassA,ClassB", "other-rule=value"],
@@ -62,7 +62,7 @@ def test_parse_rules_mixed():
     assert remaining == ["other-rule=value"]
 
 
-def test_safe_unpickle_builtin_types():
+def test_safe_unpickle_builtin_types() -> None:
     """Test unpickling safe builtin types."""
     data_dict = {"key": "value", "count": 42}
     pickled = pickle.dumps(data_dict)
@@ -71,7 +71,7 @@ def test_safe_unpickle_builtin_types():
     assert result == data_dict
 
 
-def test_safe_unpickle_list():
+def test_safe_unpickle_list() -> None:
     """Test unpickling list (safe builtin)."""
     data_list = [1, 2, 3, "test"]
     pickled = pickle.dumps(data_list)
@@ -80,7 +80,7 @@ def test_safe_unpickle_list():
     assert result == data_list
 
 
-def test_safe_unpickle_rejected_class():
+def test_safe_unpickle_rejected_class() -> None:
     """Test that non-whitelisted classes are rejected."""
     data = SimpleDataClass("test")
     pickled = pickle.dumps(data)
@@ -91,7 +91,7 @@ def test_safe_unpickle_rejected_class():
     assert "not in whitelist" in str(exc_info.value)
 
 
-def test_safe_unpickle_dangerous_builtin():
+def test_safe_unpickle_dangerous_builtin() -> None:
     """Test that custom classes are restricted without whitelist."""
     # Pickle a custom class - this will require find_class
     obj = SimpleDataClass("test")
@@ -104,7 +104,7 @@ def test_safe_unpickle_dangerous_builtin():
     assert "not in whitelist" in str(exc_info.value)
 
 
-def test_safe_unpickle_wildcard_allows_all():
+def test_safe_unpickle_wildcard_allows_all() -> None:
     """Test wildcard allows all classes (for testing)."""
     data = SimpleDataClass("test")
     pickled = pickle.dumps(data)
@@ -114,7 +114,7 @@ def test_safe_unpickle_wildcard_allows_all():
     assert result == data
 
 
-def test_safe_unpickle_empty_allowlist():
+def test_safe_unpickle_empty_allowlist() -> None:
     """Test unpickling with empty allowlist blocks custom classes."""
     # Custom class needs to be in whitelist
     obj = SimpleDataClass("test")
@@ -127,7 +127,7 @@ def test_safe_unpickle_empty_allowlist():
     assert "not in whitelist" in str(exc_info.value)
 
 
-def test_safe_unpickle_tuple_allowed_classes():
+def test_safe_unpickle_tuple_allowed_classes() -> None:
     """Test that tuple of allowed classes works."""
     data_list = [1, 2, 3]
     pickled = pickle.dumps(data_list)
@@ -136,14 +136,14 @@ def test_safe_unpickle_tuple_allowed_classes():
     assert result == data_list
 
 
-def test_pickle_import_blocker_find_spec():
+def test_pickle_import_blocker_find_spec() -> None:
     """Test that PickleImportBlocker exists and has find_spec method."""
     blocker = PickleImportBlocker()
     assert hasattr(blocker, "find_spec")
     assert callable(blocker.find_spec)
 
 
-def test_safe_unpickle_none_allowed_classes():
+def test_safe_unpickle_none_allowed_classes() -> None:
     """Test safe_unpickle with None as allowed_classes blocks custom classes."""
     # Custom class needs to be in whitelist
     obj = SimpleDataClass("test")
@@ -156,7 +156,7 @@ def test_safe_unpickle_none_allowed_classes():
     assert "not in whitelist" in str(exc_info.value)
 
 
-def test_safe_unpickle_nested_dict():
+def test_safe_unpickle_nested_dict() -> None:
     """Test unpickling nested data structures."""
     data = {
         "outer": {
@@ -170,7 +170,7 @@ def test_safe_unpickle_nested_dict():
     assert result == data
 
 
-def test_safe_unpickle_tuple():
+def test_safe_unpickle_tuple() -> None:
     """Test unpickling tuple."""
     data = ("a", "b", "c")
     pickled = pickle.dumps(data)
@@ -179,7 +179,7 @@ def test_safe_unpickle_tuple():
     assert result == data
 
 
-def test_safe_unpickle_set():
+def test_safe_unpickle_set() -> None:
     """Test unpickling set."""
     data = frozenset([1, 2, 3])
     pickled = pickle.dumps(data)
@@ -188,7 +188,7 @@ def test_safe_unpickle_set():
     assert result == data
 
 
-def test_activate_import_guard_patches_pickle_loads():
+def test_activate_import_guard_patches_pickle_loads() -> None:
     """Test that activating guard patches pickle.loads to block unsafe calls."""
     # Save original pickle.loads in case it's already patched
     import pysandboxes.guard_pickle as guard_module
@@ -207,7 +207,7 @@ def test_activate_import_guard_patches_pickle_loads():
     assert "safe_unpickle" in str(exc_info.value)
 
 
-def test_guard_safe_unpickle_still_works():
+def test_guard_safe_unpickle_still_works() -> None:
     """Test that safe_unpickle still works after guard is activated."""
     import pysandboxes.guard_pickle as guard_module
 

@@ -100,6 +100,9 @@ gh-tests: format lint
 ## Make all tests
 all-tests: unit-tests integration-tests container-tests sample-tests
 
+## Run all the tests (alias of all-tests)
+test tests: all-tests
+
 test_watch:
 	unset VIRTUAL_ENV && uv run ptw --now . -- tests/unit_tests
 
@@ -127,9 +130,6 @@ format format_diff:
 
 spell_check:
 	uvx codespell --toml pyproject.toml
-
-spell_fix:
-	uvx codespell --toml pyproject.toml -w
 
 spell_fix:
 	uvx codespell --toml pyproject.toml -w
