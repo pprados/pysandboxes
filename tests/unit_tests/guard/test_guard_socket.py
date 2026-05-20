@@ -490,8 +490,6 @@ def test_invalid_sendTo() -> None:
 def test_getaddrinfo() -> None:
     from socket import getaddrinfo
 
-    x = getaddrinfo("www.google.com", 0)  # ,family=AddressFamily.AF_INET)
-    print(x)
     default_values = [
         (
             AddressFamily.AF_INET6,
