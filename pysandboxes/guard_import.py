@@ -113,6 +113,24 @@ _rules: ImportRules = cast(ImportRules, ())
 _patch_rules: PatchRules = ImmutableDict({})
 
 
+def _is_import_allowed(module_name: str) -> bool:
+    """Whether ``module_name`` may be imported under the active rules.
+
+    An empty rule set is a deny-all, not a missing filter: only an explicit
+    ``python-import=*`` opens everything. The package's own name is matched
+    exactly, so ``pysandboxesx`` is not this package.
+
+    Args:
+        module_name: Top-level module name.
+
+    Returns:
+        True if the import is allowed.
+    """
+    if _rules and _rules[0] == "*":
+        return True
+    return module_name == "pysandboxes" or module_name in _rules
+
+
 def parse_rules(
     config: ConfigLines,
     errors: list[ErrorMsg],
@@ -420,29 +438,23 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     and module_name != "pysandboxes"
                 ):
                     add_learning_rule(LearnImportRule(module_name))
-            else:
-                if _rules and _rules[0] != "*":
-                    # Reactiver le filtre de module
-                    if (
-                        not module_name.startswith("pysandboxes")
-                        and module_name not in _rules
-                    ):
-                        ex = RuleModuleNotFoundError(
-                            f"Module named {module_name!r} is not allowed by a rule"
-                        )
-                        try:
-                            logger.debug(
-                                "Module named %s is not allowed by a rule",
-                                repr(module_name),
-                            )
-                        except RecursionError:
-                            # Fall back if it's impossible to log the exception
-                            # It's possible if the module for log is not in a rule.
-                            print(
-                                f"Module named {module_name!r} is not allowed by a rule",
-                                file=sys.stderr,
-                            )
-                        raise ex
+            elif not _is_import_allowed(module_name):
+                ex = RuleModuleNotFoundError(
+                    f"Module named {module_name!r} is not allowed by a rule"
+                )
+                try:
+                    logger.debug(
+                        "Module named %s is not allowed by a rule",
+                        repr(module_name),
+                    )
+                except RecursionError:
+                    # Fall back if it's impossible to log the exception
+                    # It's possible if the module for log is not in a rule.
+                    print(
+                        f"Module named {module_name!r} is not allowed by a rule",
+                        file=sys.stderr,
+                    )
+                raise ex
             return new_spec
 
         # For all other imports, return None to let the standard import
