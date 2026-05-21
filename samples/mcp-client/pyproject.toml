@@ -48,7 +48,7 @@ codespell = [
 ]
 
 [tool.codespell]
-skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,./PPR/*'
+skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,uv.lock,*.min.js,*.css,package-lock.json,./PPR/*'
 # Ignore latin etc
 ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
 #ignore-words-list = ''

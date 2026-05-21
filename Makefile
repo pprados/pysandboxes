@@ -1,11 +1,7 @@
 SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready minikube-build-images init sync-rules
 
-# Switch to poetry to uv
 UV_GROUP?=--group dev --group test --group lint
-
-POETRY_EXTRA?=
-POETRY_WITH?=-with dev,lint,test,codespell
 
 # Use cursor-agent, claude, etc.
 LLM_CLI?=cursor-agent
@@ -149,15 +145,15 @@ docs_clean:
 	rm -rf docs/_dist
 
 docs_linkcheck:
-	poetry run linkchecker docs/_dist/docs_skeleton/ --ignore-url node_modules
+	unset VIRTUAL_ENV && uv run linkchecker docs/_dist/docs_skeleton/ --ignore-url node_modules
 
 api_docs_build:
-#	poetry run python docs/api_reference/create_api_rst.py
-#	cd docs/api_reference && poetry run make html
+#	unset VIRTUAL_ENV && uv run python docs/api_reference/create_api_rst.py
+#	cd docs/api_reference && uv run make html
 
 api_docs_clean:
 #	rm -f docs/api_reference/api_reference.rst
-#	cd docs/api_reference && poetry run make clean
+#	cd docs/api_reference && uv run make clean
 
 
 api_docs_linkcheck:
