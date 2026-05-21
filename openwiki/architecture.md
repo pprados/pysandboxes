@@ -15,7 +15,7 @@ The architecture of Py-Sandboxes is designed to enhance the security of Python a
 
 ## Technical Implementation
 - **API Interception**: Python's dynamic nature allows for API call interception, which forms the basis of the sandbox functionality. Calls to sensitive operations are wrapped with security checks.
-- **Security Filters**: Implement pre-emptive filtering to index and monitor file system access, network interactions, and execution of subprocesses.
+- **Security Filters**: Implement preemptive filtering to index and monitor file system access, network interactions, and execution of subprocesses.
 - **Layered Security**: Incorporation of `os-sandbox` alongside `py-sandbox` for robust, multi-layered protection mimicking models like [AppArmor](https://apparmor.net/).
 
 ## Benefits
