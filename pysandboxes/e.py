@@ -69,3 +69,18 @@ class RuleAttributeError(AttributeError, SandBoxError):
     """Exception raised when an attribute access is denied by sandbox rules."""
 
     pass
+
+
+class RuleApiPermissionError(PermissionError, SandBoxError):
+    """Raised when a sensitive API call is denied by the API guard."""
+
+    def __init__(self, qualname: str, category: str) -> None:
+        super().__init__(
+            f"{qualname}() is denied by the API guard "
+            f"(category: {category}).\n"
+            f"Add `python-api=ALLOW:{qualname}` for this function "
+            f"only,\n"
+            f"or `python-api=ALLOW:{category}` for the whole category."
+        )
+        self.qualname = qualname
+        self.category = category
