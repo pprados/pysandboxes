@@ -1,7 +1,6 @@
 SHELL=/bin/bash
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
 
-# Switch to poetry to uv
 UV=uv
 UV_GROUP?=--group dev --group test
 
