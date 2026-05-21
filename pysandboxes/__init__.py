@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .e import (
         ConfigSyntaxError,  # noqa: F401
+        RuleApiPermissionError,  # noqa: F401
         RuleAttributeError,  # noqa: F401
         RuleFileNotFoundError,  # noqa: F401
         RuleModuleNotFoundError,  # noqa: F401
@@ -57,6 +58,7 @@ _exception = {
     "RuleSocketConnectionRefusedError",
     "RuleModuleNotFoundError",
     "RuleAttributeError",
+    "RuleApiPermissionError",
 }
 
 _cli = {
@@ -68,13 +70,14 @@ _cli = {
 __all__ = [
     "sandboxes",
     "sandbox",
-    "PySandboxesException",  # type: ignore[reportUnsupportedDunderAll]
-    "RuleException",  # type: ignore[reportUnsupportedDunderAll]
+    "SandBoxError",
+    "ConfigSyntaxError",
     "RuleFileNotFoundError",
     "RulePermissionError",
     "RuleSocketConnectionRefusedError",
     "RuleModuleNotFoundError",
     "RuleAttributeError",
+    "RuleApiPermissionError",
 ]
 
 
