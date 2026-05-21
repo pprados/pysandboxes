@@ -137,6 +137,7 @@ semgrep:
 clean: docs_clean api_docs_clean
 	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \; || true
 	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
+	@rm -f .zshrc .bashrc .profile .zprofile .bash_profile .gitconfig .ripgreprc .git/config.lock || true
 
 docs_build:
 	docs/.local_build.sh
