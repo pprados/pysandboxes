@@ -3,6 +3,7 @@
 """Behaviour of the guard_api layer."""
 
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
 
@@ -12,8 +13,11 @@ from pysandboxes.guard_api import (
     ApiRule,
     activate_guard,
     all_qualnames,
+    arm,
     is_allowed,
+    is_armed,
     parse_rules,
+    patch_rules,
 )
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
@@ -194,3 +198,81 @@ def test_unknown_name_is_not_allowed() -> None:
     """A name outside the registry is never reported as allowed."""
     _activate("python-api=ALLOW:*")
     assert is_allowed("os.getcwd") is False
+
+
+def _guarded(qualname: str) -> Callable[..., Any]:
+    """Build the wrapper the patch table would install."""
+    table = patch_rules(learn=False)
+    return table[qualname](lambda *a, **k: "called")
+
+
+def test_disarmed_lets_everything_through() -> None:
+    activate_guard(())
+    assert is_armed() is False
+    assert _guarded("os.system")("ls") == "called"
+
+
+def test_armed_and_denied_raises() -> None:
+    activate_guard(())
+    wrapped = _guarded("os.system")
+    arm()
+    with pytest.raises(RuleApiPermissionError) as exc:
+        wrapped("ls")
+    assert exc.value.qualname == "os.system"
+    assert exc.value.category == "process-exec"
+
+
+def test_armed_and_allowed_passes() -> None:
+    _activate("python-api=ALLOW:os.system")
+    wrapped = _guarded("os.system")
+    arm()
+    assert wrapped("ls") == "called"
+
+
+def test_arm_is_idempotent() -> None:
+    activate_guard(())
+    arm()
+    arm()
+    assert is_armed() is True
+
+
+def test_patch_table_covers_every_applicable_entry() -> None:
+    """Every registry entry is patched except the inapplicable ones.
+
+    guard_import._apply_patch calls getattr before the factory, so an
+    entry absent from an imported module would raise at startup.
+    """
+    from pysandboxes.guard_api import _not_applicable
+
+    table = patch_rules(learn=False)
+    skip = _not_applicable()
+    for qualname in all_qualnames():
+        if qualname in skip:
+            assert qualname not in table, qualname
+        else:
+            assert qualname in table, qualname
+
+
+def test_every_patched_entry_actually_resolves() -> None:
+    """A patched name must exist, or startup would raise."""
+    import importlib
+
+    from pysandboxes.guard_api import split_qualname
+
+    for qualname in patch_rules(learn=False):
+        module_name, attribute_path = split_qualname(qualname)
+        try:
+            obj: Any = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        for node in attribute_path.split("."):
+            obj = getattr(obj, node)
+        assert obj is not None
+
+
+def test_factory_does_not_wrap_twice() -> None:
+    """An object already guarded through an alias is not re-wrapped."""
+    table = patch_rules(learn=False)
+    once = table["os.system"](lambda *a, **k: "called")
+    twice = table["posix.system"](once)
+    assert twice is once
