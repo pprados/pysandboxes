@@ -367,7 +367,9 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
     return all_paths
 
 
-def patch_factory(func: Callable[..., Any], **kwargs: Any) -> Callable[..., Any]:
+def patch_factory(
+    func: Callable[..., Any], **kwargs: Any
+) -> Callable[..., Any]:
     """Build a patch factory from a wrapper and its bound arguments.
 
     The returned callable takes the original stdlib object and returns
