@@ -8,7 +8,13 @@ import pytest
 
 import pysandboxes
 from pysandboxes.e import RuleApiPermissionError, SandBoxError
-from pysandboxes.guard_api import ApiRule, parse_rules
+from pysandboxes.guard_api import (
+    ApiRule,
+    activate_guard,
+    all_qualnames,
+    is_allowed,
+    parse_rules,
+)
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
 
@@ -120,3 +126,71 @@ def test_error_carries_provenance() -> None:
     assert path == Path("p")
     assert line == 0
     assert "threadz" in message
+
+
+def _activate(*rules: str) -> None:
+    parsed, errors = _parse(*rules)
+    assert not errors
+    activate_guard(parsed)
+
+
+@pytest.mark.parametrize(
+    "rules,settrace,start",
+    [
+        ((), False, False),
+        (("python-api=ALLOW:threads",), True, True),
+        (
+            (
+                "python-api=ALLOW:threads",
+                "python-api=DENY:threading.settrace",
+            ),
+            False,
+            True,
+        ),
+        (
+            (
+                "python-api=DENY:threads",
+                "python-api=ALLOW:threading.settrace",
+            ),
+            True,
+            False,
+        ),
+        (
+            (
+                "python-api=DENY:threading.settrace",
+                "python-api=ALLOW:threads",
+            ),
+            False,
+            True,
+        ),
+    ],
+)
+def test_specificity_decides_not_order(
+    rules: tuple[str, ...], settrace: bool, start: bool
+) -> None:
+    """A function rule beats its category, whatever the line order."""
+    if rules:
+        _activate(*rules)
+    else:
+        activate_guard(())
+    assert is_allowed("threading.settrace") is settrace
+    assert is_allowed("threading.Thread.start") is start
+
+
+def test_deny_wins_at_equal_specificity() -> None:
+    _activate(
+        "python-api=ALLOW:os.system",
+        "python-api=DENY:os.system",
+    )
+    assert is_allowed("os.system") is False
+
+
+def test_wildcard_allows_everything() -> None:
+    _activate("python-api=ALLOW:*")
+    assert all(is_allowed(q) for q in all_qualnames())
+
+
+def test_unknown_name_is_not_allowed() -> None:
+    """A name outside the registry is never reported as allowed."""
+    _activate("python-api=ALLOW:*")
+    assert is_allowed("os.getcwd") is False

@@ -9,9 +9,11 @@ calls to a finite registry of sensitive functions, independently of
 """
 
 import logging
+import os
 import sys
 from typing import NamedTuple
 
+from .immutable_dict import ImmutableDict
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 
@@ -303,3 +305,58 @@ def parse_rules(
         if not failed:
             parsed.extend(line_rules)
     return tuple(parsed), others
+
+
+_rules: ApiRules = ()
+_allowed: ImmutableDict[str, bool] = ImmutableDict({})
+_armed: bool = False
+
+
+def activate_guard(rules: ApiRules) -> None:
+    """Flatten the rules into a decision per registered function.
+
+    Resolution is by specificity, not by order: a function rule beats a
+    category rule wherever it sits, which keeps ``include`` composition
+    predictable. ``DENY`` wins at equal specificity.
+    """
+    global _rules, _allowed
+    _rules = rules
+    decisions: dict[str, bool] = {q: False for q in all_qualnames()}
+    wildcard = [r for r in rules if r.target == "*"]
+    if wildcard:
+        value = all(r.allow for r in wildcard)
+        decisions = {q: value for q in decisions}
+    cats: dict[str, bool] = {}
+    for rule in rules:
+        if rule.is_category:
+            cats[rule.target] = rule.allow and cats.get(rule.target, True)
+    for qualname in decisions:
+        category = _CATEGORY_OF[qualname]
+        if category in cats:
+            decisions[qualname] = cats[category]
+    funcs: dict[str, bool] = {}
+    for rule in rules:
+        if not rule.is_category and rule.target != "*":
+            funcs[rule.target] = rule.allow and funcs.get(rule.target, True)
+    decisions.update(funcs)
+    _allowed = ImmutableDict(decisions)
+    logger.debug(
+        "guard_api: %d/%d sensitive functions allowed",
+        sum(_allowed.values()),
+        len(_allowed),
+    )
+
+
+def is_allowed(qualname: str) -> bool:
+    """Return whether a registered function may be called."""
+    return _allowed.get(qualname, False)
+
+
+if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+
+    def _deactivate_guard_api() -> None:
+        """Reset the guard between tests."""
+        global _rules, _allowed, _armed
+        _rules = ()
+        _allowed = ImmutableDict({})
+        _armed = False
