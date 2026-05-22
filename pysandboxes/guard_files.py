@@ -41,6 +41,7 @@ from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 from .tools import follow_links_executable
+from .tools import patch_factory as _f
 
 if io or os:
     pass
@@ -1489,18 +1490,6 @@ def _wrap__io(module: ModuleType) -> ModuleType:
 
     assert io.open.__pysandbox__  # type: ignore [attr-defined]
     return io
-
-
-# Wrapper for factory to wrapper ;-)
-def _f(func: Callable[..., Any], **kwargs: Any) -> Callable[..., Any]:
-    def wrapper() -> Any:
-        def wrapper2(original: Any) -> Any:
-            return func(original, **kwargs)
-
-        wrapper2.__doc__ = func.__doc__
-        return wrapper2
-
-    return wrapper()
 
 
 _default_rules: dict[str, Callable[..., Any]] = {

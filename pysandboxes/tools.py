@@ -365,3 +365,20 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
                 "Impossible to resolve the sys.executable `%s`", sys.executable
             ) from e
     return all_paths
+
+
+def patch_factory(func: Callable[..., Any], **kwargs: Any) -> Callable[..., Any]:
+    """Build a patch factory from a wrapper and its bound arguments.
+
+    The returned callable takes the original stdlib object and returns
+    its replacement. Shared by guard_files, guard_envs and guard_api.
+    """
+
+    def wrapper() -> Any:
+        def wrapper2(original: Any) -> Any:
+            return func(original, **kwargs)
+
+        wrapper2.__doc__ = func.__doc__
+        return wrapper2
+
+    return wrapper()
