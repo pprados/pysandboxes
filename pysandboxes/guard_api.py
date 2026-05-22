@@ -10,6 +10,10 @@ calls to a finite registry of sensitive functions, independently of
 
 import logging
 import sys
+from typing import NamedTuple
+
+from .main_logger import ErrorMsg, format_ruleref
+from .sb_types import ConfigLine, ConfigLines
 
 logger = logging.getLogger(__name__)
 
@@ -196,3 +200,106 @@ def split_qualname(qualname: str) -> tuple[str, str]:
     """
     module_name, _, attribute_path = qualname.partition(".")
     return module_name, attribute_path
+
+
+_PREFIX = "python-api="
+_ACTIONS = {"ALLOW": True, "DENY": False}
+
+
+class ApiRule(NamedTuple):
+    """One parsed ``python-api=`` target."""
+
+    allow: bool
+    target: str
+    is_category: bool
+    config: ConfigLine
+
+
+ApiRules = tuple[ApiRule, ...]
+
+
+def _error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
+    errors.append(
+        (
+            f"{format_ruleref(rule)}: In {rule.rule!r}, {detail}",
+            rule.path,
+            rule.ln,
+        )
+    )
+
+
+def parse_rules(
+    config: ConfigLines,
+    errors: list[ErrorMsg],
+) -> tuple[ApiRules, ConfigLines]:
+    """Consume ``python-api=`` lines and return the other lines.
+
+    Unknown categories and unknown functions are configuration errors:
+    a typo must fail at startup rather than silently leave a hole.
+    """
+    parsed: list[ApiRule] = []
+    others: ConfigLines = []
+    for rule in config:
+        if not rule.rule.startswith(_PREFIX):
+            others.append(rule)
+            continue
+        value = rule.rule[len(_PREFIX) :].strip()
+        action, sep, targets = value.partition(":")
+        if not sep:
+            _error(
+                errors,
+                rule,
+                "expected the form 'ACTION:target', "
+                f"with ACTION in {sorted(_ACTIONS)}.",
+            )
+            continue
+        if action.strip() not in _ACTIONS:
+            _error(
+                errors,
+                rule,
+                f"unknown action {action.strip()!r}, "
+                f"expected one of {sorted(_ACTIONS)}.",
+            )
+            continue
+        allow = _ACTIONS[action.strip()]
+        line_rules: list[ApiRule] = []
+        failed = False
+        for target in targets.split(","):
+            target = target.strip()
+            if not target:
+                _error(errors, rule, "empty target.")
+                failed = True
+                break
+            if target.upper() in _ACTIONS or ":" in target:
+                _error(
+                    errors,
+                    rule,
+                    "one action per line: do not mix ALLOW and DENY.",
+                )
+                failed = True
+                break
+            if target == "*":
+                line_rules.append(ApiRule(allow, "*", False, rule))
+                continue
+            is_category = "." not in target
+            if is_category and target not in CATEGORIES:
+                _error(
+                    errors,
+                    rule,
+                    f"unknown category {target!r}, "
+                    f"expected one of {sorted(CATEGORIES)}.",
+                )
+                failed = True
+                break
+            if not is_category and target not in _CATEGORY_OF:
+                _error(
+                    errors,
+                    rule,
+                    f"{target!r} is not a registered sensitive " "function.",
+                )
+                failed = True
+                break
+            line_rules.append(ApiRule(allow, target, is_category, rule))
+        if not failed:
+            parsed.extend(line_rules)
+    return tuple(parsed), others
