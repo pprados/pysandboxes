@@ -23,7 +23,13 @@ from weakref import WeakKeyDictionary
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
-from .tools import Environ, resolve_env_variables
+from .tools import (
+    Environ,
+    resolve_env_variables,
+)
+from .tools import (
+    patch_factory as _f,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -317,18 +323,6 @@ def activate_guard(rules: EnvsRules) -> None:
     """
     global _rules
     _rules = rules
-
-
-# Wrapper for factory to wrapper ;-)
-def _f(func: Callable, **kwargs: Any) -> Callable:
-    def wrapper() -> Any:
-        def wrapper2(original: Any) -> Any:
-            return func(original, **kwargs)
-
-        wrapper2.__doc__ = func.__doc__
-        return wrapper2
-
-    return wrapper()
 
 
 def _wrap_os_putenv(func: Callable) -> Callable:
