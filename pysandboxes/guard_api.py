@@ -8,14 +8,18 @@ calls to a finite registry of sensitive functions, independently of
 ``python-import=``, and records attempted calls in learning mode.
 """
 
+import functools
 import logging
 import os
 import sys
-from typing import NamedTuple
+from typing import Any, Callable, NamedTuple
 
+from .e import RuleApiPermissionError
 from .immutable_dict import ImmutableDict
+from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
+from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
 
@@ -350,6 +354,73 @@ def activate_guard(rules: ApiRules) -> None:
 def is_allowed(qualname: str) -> bool:
     """Return whether a registered function may be called."""
     return _allowed.get(qualname, False)
+
+
+class LearnApiRule(NamedTuple):
+    """One sensitive call observed in learning mode."""
+
+    qualname: str
+
+
+def arm() -> None:
+    """Start enforcing, just before user code takes over.
+
+    Framework code runs while the guard is disarmed, so it needs no
+    exemption and no escape hatch. Idempotent: every entry point may
+    call it.
+    """
+    global _armed
+    if not _armed:
+        logger.debug("guard_api: armed")
+    _armed = True
+
+
+def is_armed() -> bool:
+    """Return whether the guard is enforcing."""
+    return _armed
+
+
+def _wrap_guarded(
+    func: Callable[..., Any], *, qualname: str, category: str
+) -> Callable[..., Any]:
+    """Wrap a sensitive function with the guard's control point."""
+    if getattr(func, "__pysandbox_api__", False):
+        return func
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if not _armed:
+            return func(*args, **kwargs)
+        if is_learning_mode():
+            if not _allowed.get(qualname, False):
+                add_learning_rule(LearnApiRule(qualname))
+            return func(*args, **kwargs)
+        if not _allowed.get(qualname, False):
+            raise RuleApiPermissionError(qualname, category)
+        return func(*args, **kwargs)
+
+    wrapper.__pysandbox_api__ = True  # type: ignore[attr-defined]
+    return wrapper
+
+
+def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
+    """Return the patch table for every registered function.
+
+    Every entry is patched, allowed or not: the rules are not known
+    yet when this is called (``py_sandbox.activate_sandboxes`` fills
+    them afterwards), and the decision is a dict lookup at call time.
+    """
+    del learn
+    skip = _not_applicable()
+    return {
+        qualname: _f(
+            _wrap_guarded,
+            qualname=qualname,
+            category=category,
+        )
+        for qualname, category in _CATEGORY_OF.items()
+        if qualname not in skip
+    }
 
 
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
