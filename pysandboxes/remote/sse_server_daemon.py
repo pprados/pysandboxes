@@ -30,6 +30,7 @@ from typing import Any, AsyncGenerator
 from uvicorn import Server
 
 from ..all_rules import AllRules
+from ..guard_api import arm
 from ..immutable_dict import ImmutableDict
 from ..private_loop import get_sandbox_loop
 from ..sb_types import Args, Envs
@@ -103,6 +104,7 @@ async def sandbox_daemon(
     global _active_requests
     try:
         _active_requests += 1
+        arm()
 
         module_name, function_name = function_id.split(":", 1)
         # set_is_in_sandbox(True)

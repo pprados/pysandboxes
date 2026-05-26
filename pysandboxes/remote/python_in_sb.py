@@ -19,6 +19,7 @@ from pysandboxes.learning import (
 from pysandboxes.tools import set_is_in_sandbox
 
 from ..all_rules import AllRules
+from ..guard_api import arm
 from ..main_logger import config_log
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ def _python_interactive(
     all_rules: AllRules,
     ban: bool,
 ) -> int:
+    arm()
     exit_msg = None
     term = os.environ.get("TERM")
     if sys.stdout.isatty() and (
@@ -187,6 +189,7 @@ def _python_module(all_rules: AllRules, mod_name: str) -> int:
     import runpy
 
     _register_signals_handlers()
+    arm()
 
     runpy.run_module(mod_name, run_name="__main__")
     if sys.flags.inspect:
@@ -197,6 +200,7 @@ def _python_module(all_rules: AllRules, mod_name: str) -> int:
 def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
     try:
         _register_signals_handlers()
+        arm()
         script_body = script.read_text()
         sys.argv = [str(script)] + args
         # reason: runs the user script by design; OS sandbox isolates it
@@ -216,6 +220,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
 
 def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> int:
     _register_signals_handlers()
+    arm()
     sys.argv = args
     # reason: runs the user script by design; OS sandbox isolates it
     # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
