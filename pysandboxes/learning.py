@@ -47,6 +47,7 @@ def generate_config_from_learning() -> None:
     if not is_learning_mode():
         return
     with _lock_generate:
+        from .guard_api import generate_rules as api_generate_rules
         from .guard_envs import generate_rules as env_generate_rules
         from .guard_files import generate_rules as file_generate_rules
         from .guard_import import generate_rules as import_generate_rules
@@ -66,6 +67,13 @@ def generate_config_from_learning() -> None:
             make_relative_path(learning_path),
             make_relative_path(old_learning_path),
         )
+
+        # Manage api rules
+        api_rules = api_generate_rules(learning)
+        if api_rules:
+            all_api_rules = "\n".join(api_rules)
+        else:
+            all_api_rules = ""
 
         # Manage envs rules
         env_rules = env_generate_rules()
@@ -97,6 +105,7 @@ def generate_config_from_learning() -> None:
 
         replaces: dict[str, str] = {
             # "learning_repeat": f"learn={learning_path}",
+            "learning_guard_api": all_api_rules,
             "learning_guard_envs": all_env_rules,
             "learning_guard_import": all_import_rules,
             "learning_guard_files": all_file_rules,

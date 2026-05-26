@@ -386,6 +386,48 @@ def is_armed() -> bool:
     return _armed
 
 
+_DANGEROUS = ("process-exec", "privileges", "native")
+
+_CATEGORY_HELP: dict[str, str] = {
+    "process-exec": "runs code outside the patched interpreter",
+    "process-control": "kills processes, exhausts host resources",
+    "privileges": "changes process identity or root",
+    "threads": "concurrency primitives",
+    "native": "native code and arbitrary memory access",
+    "introspection": "can be used to undo the patches",
+}
+
+
+def generate_rules(learn: set[Any]) -> list[str]:
+    """Emit ``python-api=`` lines for the calls seen in learning mode.
+
+    The category is inferred here, not recorded at call time: an
+    observed call only knows which function it reached. When the union
+    of the already-allowed functions and the learned ones covers a
+    category, a single category line is emitted instead of the function
+    lines; the two forms are never mixed.
+    """
+    names = {r.qualname for r in learn if isinstance(r, LearnApiRule)}
+    if not names:
+        return []
+    by_cat: dict[str, list[str]] = {}
+    for name in sorted(names):
+        by_cat.setdefault(_CATEGORY_OF[name], []).append(name)
+    lines: list[str] = []
+    for cat in SENSITIVE_API:
+        if cat not in by_cat:
+            continue
+        mark = "# ⚠ " if cat in _DANGEROUS else "# "
+        lines.append(f"{mark}{cat}: {_CATEGORY_HELP[cat]}")
+        entries = SENSITIVE_API[cat]
+        covered = {q for q in entries if is_allowed(q) or q in by_cat[cat]}
+        if covered == set(entries):
+            lines.append(f"python-api=ALLOW:{cat}")
+        else:
+            lines.extend(f"python-api=ALLOW:{q}" for q in by_cat[cat])
+    return lines
+
+
 def _wrap_guarded(
     func: Callable[..., Any], *, qualname: str, category: str
 ) -> Callable[..., Any]:
