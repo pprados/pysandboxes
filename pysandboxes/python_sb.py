@@ -128,13 +128,12 @@ def main() -> int:
 
         return python_in_sb(all_rules, python_cmd)
     os_provider = cast(BaseSubProcessDaemon, _daemon)
-    _host_tmp = "/tmp" if os.path.isdir("/tmp") else None
     _run_prefix = (
         cast(VMSSEDaemon, os_provider).host_run_temp_prefix
         if isinstance(os_provider, VMSSEDaemon)
         else "pysandboxes-sb-"
     )
-    with tempfile.TemporaryDirectory(prefix=_run_prefix, dir=_host_tmp) as tmpdir:
+    with tempfile.TemporaryDirectory(prefix=_run_prefix) as tmpdir:
         pipe_path = Path(tmpdir) / f"_{uuid.uuid4().hex}"
         pipe_path.unlink(missing_ok=True)
         launch_params: dict[str, Any] = {}
