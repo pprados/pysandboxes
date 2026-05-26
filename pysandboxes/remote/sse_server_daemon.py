@@ -376,6 +376,7 @@ class SSEServerDaemon(BaseSSESandbox):
             pin_dns=all_rules.pin_dns,
             file_rules=all_rules.file_rules,
             import_rules=all_rules.import_rules,
+            api_rules=all_rules.api_rules,
         )
 
     async def _start(
