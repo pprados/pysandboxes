@@ -66,6 +66,15 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "pty.fork",
         "multiprocessing.Process.start",
     ),
+    # os._exit/posix._exit are not listed: they terminate only the
+    # calling process, run no code outside the patched interpreter and
+    # touch no other process or resource — the normal way a program
+    # ends, just skipping its own finalisers. The framework depends on
+    # this call structurally to leave the sandboxed process, after
+    # arming, as that process's final act (main_sandbox.py); requiring
+    # an explicit ALLOW in every profile for the framework's own exit
+    # would be a defect by omission, not a safeguard. os.abort stays
+    # listed: same self-termination family, but it dumps core.
     "process-control": (
         "os.kill",
         "posix.kill",
@@ -77,8 +86,6 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "posix.setpriority",
         "os.abort",
         "posix.abort",
-        "os._exit",
-        "posix._exit",
         "os.setsid",
         "posix.setsid",
         "os.setpgid",
