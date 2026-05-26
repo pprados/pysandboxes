@@ -10,6 +10,7 @@ configuration object.
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from pysandboxes.guard_api import ApiRules
 from pysandboxes.guard_envs import EnvsRules
 from pysandboxes.guard_files import FilesRules
 from pysandboxes.guard_import import ImportRules
@@ -36,6 +37,7 @@ class AllRules(NamedTuple):
         socket_rules: Network access rules.
         file_rules: File system access rules.
         import_rules: Python import rules.
+        api_rules: Sensitive API call rules.
     """
 
     root_path: Path
@@ -52,6 +54,7 @@ class AllRules(NamedTuple):
     pin_dns: PinDNS
     file_rules: FilesRules
     import_rules: ImportRules
+    api_rules: ApiRules = ()
 
 
 EmptyRules = AllRules(
@@ -69,4 +72,5 @@ EmptyRules = AllRules(
     pin_dns=ImmutableDict({}),
     file_rules=(),
     import_rules=(),
+    api_rules=(),
 )
