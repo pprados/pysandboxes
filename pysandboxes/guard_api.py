@@ -131,13 +131,19 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "threading.stack_size",
         "_thread.stack_size",
     ),
+    # ctypes.PyDLL is not listed: it inherits __init__ from ctypes.CDLL
+    # without overriding it (measured: ``ctypes.PyDLL.__init__ is
+    # ctypes.CDLL.__init__``), so patching ctypes.CDLL already guards
+    # it. mmap.mmap and ctypes.memmove are not listed either: mmap.mmap
+    # is an immutable C type whose __init__ cannot be patched, and
+    # ctypes.memmove is a CFunctionType instance, not a class — wrapping
+    # it in a plain function would drop its restype/argtypes/errcheck
+    # configuration attributes. Both trade-offs are acceptable because
+    # "native" is documented as detection and friction, not a barrier.
     "native": (
         "ctypes.CDLL",
-        "ctypes.PyDLL",
-        "ctypes.memmove",
         "ctypes.cast",
         "ctypes.string_at",
-        "mmap.mmap",
     ),
     "introspection": (
         "sys.settrace",
@@ -392,15 +398,31 @@ def _wrap_guarded(
         if not _armed:
             return func(*args, **kwargs)
         if is_learning_mode():
-            if not _allowed.get(qualname, False):
+            if not is_allowed(qualname):
                 add_learning_rule(LearnApiRule(qualname))
             return func(*args, **kwargs)
-        if not _allowed.get(qualname, False):
+        if not is_allowed(qualname):
             raise RuleApiPermissionError(qualname, category)
         return func(*args, **kwargs)
 
     wrapper.__pysandbox_api__ = True  # type: ignore[attr-defined]
     return wrapper
+
+
+# A handful of registry names are classes, not functions: patching them
+# directly would replace the class with a plain function, breaking
+# isinstance/issubclass/subclassing for every caller, allowed or not.
+# The fix is to patch their __init__ instead, which mutates the class
+# rather than replacing it. The registry name stays the public,
+# documented target; only the patch table's key moves.
+#
+# Residual gap, documented rather than fixed: ctypes.pythonapi is a
+# ctypes.PyDLL *instance* built at import time, so using it calls no
+# __init__ and is never guarded.
+_PATCH_TARGET: dict[str, str] = {
+    "subprocess.Popen": "subprocess.Popen.__init__",
+    "ctypes.CDLL": "ctypes.CDLL.__init__",
+}
 
 
 def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
@@ -413,7 +435,7 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
     del learn
     skip = _not_applicable()
     return {
-        qualname: _f(
+        _PATCH_TARGET.get(qualname, qualname): _f(
             _wrap_guarded,
             qualname=qualname,
             category=category,

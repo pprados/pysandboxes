@@ -206,6 +206,18 @@ def _guarded(qualname: str) -> Callable[..., Any]:
     return table[qualname](lambda *a, **k: "called")
 
 
+def _reset_guard() -> None:
+    """Undo activate_guard()/arm() so state never survives a test.
+
+    The autouse fixture in conftest.py only resets *before* each test,
+    so a test that calls arm() must reset it itself, or _armed would
+    stay True to the end of the session.
+    """
+    from pysandboxes.guard_api import _deactivate_guard_api
+
+    _deactivate_guard_api()
+
+
 def test_disarmed_lets_everything_through() -> None:
     activate_guard(())
     assert is_armed() is False
@@ -215,42 +227,131 @@ def test_disarmed_lets_everything_through() -> None:
 def test_armed_and_denied_raises() -> None:
     activate_guard(())
     wrapped = _guarded("os.system")
-    arm()
-    with pytest.raises(RuleApiPermissionError) as exc:
-        wrapped("ls")
-    assert exc.value.qualname == "os.system"
-    assert exc.value.category == "process-exec"
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            wrapped("ls")
+        assert exc.value.qualname == "os.system"
+        assert exc.value.category == "process-exec"
+    finally:
+        _reset_guard()
 
 
 def test_armed_and_allowed_passes() -> None:
     _activate("python-api=ALLOW:os.system")
     wrapped = _guarded("os.system")
-    arm()
-    assert wrapped("ls") == "called"
+    try:
+        arm()
+        assert wrapped("ls") == "called"
+    finally:
+        _reset_guard()
 
 
 def test_arm_is_idempotent() -> None:
     activate_guard(())
-    arm()
-    arm()
-    assert is_armed() is True
+    try:
+        arm()
+        arm()
+        assert is_armed() is True
+    finally:
+        _reset_guard()
+
+
+def test_learning_mode_records_without_raising() -> None:
+    """The most critical path: learning never blocks, only records."""
+    from unittest.mock import patch as mock_patch
+
+    from pysandboxes.guard_api import LearnApiRule
+    from pysandboxes.learning import set_learning_mode
+
+    activate_guard(())  # nothing allowed
+    wrapped = _guarded("os.system")
+    set_learning_mode(True)
+    try:
+        arm()
+        with mock_patch("pysandboxes.guard_api.add_learning_rule") as rec:
+            assert wrapped("ls") == "called"
+        rec.assert_called_once_with(LearnApiRule("os.system"))
+    finally:
+        set_learning_mode(False)
+        _reset_guard()
 
 
 def test_patch_table_covers_every_applicable_entry() -> None:
     """Every registry entry is patched except the inapplicable ones.
 
     guard_import._apply_patch calls getattr before the factory, so an
-    entry absent from an imported module would raise at startup.
+    entry absent from an imported module would raise at startup. A
+    registry name redirected by _PATCH_TARGET is checked against its
+    patch target, since that is the table's actual key.
     """
-    from pysandboxes.guard_api import _not_applicable
+    from pysandboxes.guard_api import _PATCH_TARGET, _not_applicable
 
     table = patch_rules(learn=False)
     skip = _not_applicable()
     for qualname in all_qualnames():
+        target = _PATCH_TARGET.get(qualname, qualname)
         if qualname in skip:
-            assert qualname not in table, qualname
+            assert target not in table, qualname
         else:
-            assert qualname in table, qualname
+            assert target in table, qualname
+
+
+def test_class_entries_keep_their_class_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Patching a class-backed entry must not turn it into a function.
+
+    _PATCH_TARGET redirects these entries to their __init__, which
+    mutates the class in place instead of replacing it: isinstance,
+    issubclass and subclassing must keep working, armed or not.
+    """
+    import subprocess
+
+    table = patch_rules(learn=False)
+    original_init = subprocess.Popen.__init__
+    wrapped = table["subprocess.Popen.__init__"](original_init)
+    monkeypatch.setattr(subprocess.Popen, "__init__", wrapped)
+
+    instance = object.__new__(subprocess.Popen)
+    assert isinstance(instance, subprocess.Popen)
+    assert issubclass(subprocess.Popen, subprocess.Popen)
+
+    class SubPopen(subprocess.Popen):
+        pass
+
+    assert issubclass(SubPopen, subprocess.Popen)
+
+
+def test_class_entry_denies_and_allows_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The redirected wrapper still enforces, on the real target."""
+    import subprocess
+    import sys
+
+    table = patch_rules(learn=False)
+    original_init = subprocess.Popen.__init__
+    wrapped = table["subprocess.Popen.__init__"](original_init)
+    monkeypatch.setattr(subprocess.Popen, "__init__", wrapped)
+    cmd = [sys.executable, "-c", "pass"]
+
+    activate_guard(())
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            subprocess.Popen(cmd)
+        assert exc.value.qualname == "subprocess.Popen"
+    finally:
+        _reset_guard()
+
+    _activate("python-api=ALLOW:subprocess.Popen")
+    try:
+        arm()
+        proc = subprocess.Popen(cmd)
+        proc.wait()
+    finally:
+        _reset_guard()
 
 
 def test_every_patched_entry_actually_resolves() -> None:
