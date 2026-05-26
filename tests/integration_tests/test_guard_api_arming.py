@@ -54,13 +54,9 @@ def test_command_path_denies_the_posix_alias(tmp_path: Path) -> None:
 
 
 def test_command_path_allows_an_explicit_function(tmp_path: Path) -> None:
-    # main_sandbox.py's __main__ block calls os._exit() unconditionally
-    # after python_in_sb() returns, i.e. after arm(): every `-c`/`-m`/
-    # script run needs this allowed to exit cleanly once armed (see
-    # the report for task 10).
     profile = _write_profile(
         tmp_path,
-        "python-api=ALLOW:os.system,posix.system,os._exit",
+        "python-api=ALLOW:os.system,posix.system",
     )
     result = _run(profile, "-c", "import os; print(os.system('true'))")
     assert result.returncode == 0, result.stderr
@@ -68,7 +64,11 @@ def test_command_path_allows_an_explicit_function(tmp_path: Path) -> None:
 
 
 def test_module_path_denies_os_system(tmp_path: Path) -> None:
-    profile = _write_profile(tmp_path)
+    # Reading the script itself goes through the file guard, unlike
+    # `-c`, which needs no file access: expose the directory so the
+    # script is readable, leaving the API guard as the only thing
+    # under test.
+    profile = _write_profile(tmp_path, f"expose-ro={tmp_path}")
     module = tmp_path / "boom.py"
     module.write_text("import os\nos.system('true')\n")
     result = _run(profile, str(module))
