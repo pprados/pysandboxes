@@ -10,10 +10,15 @@ import pytest
 import pysandboxes
 from pysandboxes.e import RuleApiPermissionError, SandBoxError
 from pysandboxes.guard_api import (
+    _CATEGORY_HELP,
+    CATEGORIES,
+    SENSITIVE_API,
     ApiRule,
+    LearnApiRule,
     activate_guard,
     all_qualnames,
     arm,
+    generate_rules,
     is_allowed,
     is_armed,
     parse_rules,
@@ -377,3 +382,49 @@ def test_factory_does_not_wrap_twice() -> None:
     once = table["os.system"](lambda *a, **k: "called")
     twice = table["posix.system"](once)
     assert twice is once
+
+
+def test_partial_category_yields_function_lines() -> None:
+    activate_guard(())
+    lines = generate_rules({LearnApiRule("os.system")})
+    assert "python-api=ALLOW:os.system" in lines
+    assert "python-api=ALLOW:process-exec" not in lines
+
+
+def test_full_category_yields_one_category_line() -> None:
+    activate_guard(())
+    learned = {LearnApiRule(q) for q in SENSITIVE_API["introspection"]}
+    lines = generate_rules(learned)
+    assert "python-api=ALLOW:introspection" in lines
+    for qualname in SENSITIVE_API["introspection"]:
+        assert f"python-api=ALLOW:{qualname}" not in lines
+
+
+def test_category_completed_by_already_allowed_functions() -> None:
+    """The union of allowed and learned decides, not the learned set."""
+    already = SENSITIVE_API["introspection"][:-1]
+    _activate(*(f"python-api=ALLOW:{q}" for q in already))
+    last = SENSITIVE_API["introspection"][-1]
+    lines = generate_rules({LearnApiRule(last)})
+    assert "python-api=ALLOW:introspection" in lines
+    assert f"python-api=ALLOW:{last}" not in lines
+
+
+def test_other_learning_rules_are_ignored() -> None:
+    activate_guard(())
+    assert generate_rules({"not-an-api-rule"}) == []
+
+
+def test_generated_lines_parse_back_without_error() -> None:
+    activate_guard(())
+    exec_rule = LearnApiRule("os.system")
+    trace_rule = LearnApiRule("sys.settrace")
+    lines = generate_rules({exec_rule, trace_rule})
+    directives = [ln for ln in lines if not ln.startswith("#")]
+    _, errors = _parse(*directives)
+    assert not errors, errors
+
+
+def test_category_help_covers_every_category() -> None:
+    """A missing entry would raise at learning time, not at import time."""
+    assert set(_CATEGORY_HELP) == CATEGORIES
