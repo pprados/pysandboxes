@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 GUEST_CIDATA_MOUNT = "/mnt/cidata"
 GUEST_RUN_MOUNT = "/mnt/pysandbox_run"
 GUEST_CONFIG_MOUNT = "/mnt/pysandbox_config"
-# Host directory for this QEMU run (9p → ``GUEST_RUN_MOUNT``). Created under ``/tmp``.
+# Host directory for this QEMU run (9p → ``GUEST_RUN_MOUNT``). Created
+# under the system temp directory (honours ``TMPDIR``).
 QEMU_HOST_RUN_PREFIX = "pysandboxes-qemu-"
 PIPE_NAME_FILE = "pipe_name"
 NOCLOUD_ISO = "nocloud.iso"
