@@ -237,7 +237,7 @@ class ApiRule(NamedTuple):
 ApiRules = tuple[ApiRule, ...]
 
 
-def _error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
+def _add_error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
     errors.append(
         (
             f"{format_ruleref(rule)}: In {rule.rule!r}, {detail}",
@@ -265,7 +265,7 @@ def parse_rules(
         value = rule.rule[len(_PREFIX) :].strip()
         action, sep, targets = value.partition(":")
         if not sep:
-            _error(
+            _add_error(
                 errors,
                 rule,
                 "expected the form 'ACTION:target', "
@@ -273,7 +273,7 @@ def parse_rules(
             )
             continue
         if action.strip() not in _ACTIONS:
-            _error(
+            _add_error(
                 errors,
                 rule,
                 f"unknown action {action.strip()!r}, "
@@ -286,11 +286,11 @@ def parse_rules(
         for target in targets.split(","):
             target = target.strip()
             if not target:
-                _error(errors, rule, "empty target.")
+                _add_error(errors, rule, "empty target.")
                 failed = True
                 break
             if target.upper() in _ACTIONS or ":" in target:
-                _error(
+                _add_error(
                     errors,
                     rule,
                     "one action per line: do not mix ALLOW and DENY.",
@@ -302,7 +302,7 @@ def parse_rules(
                 continue
             is_category = "." not in target
             if is_category and target not in CATEGORIES:
-                _error(
+                _add_error(
                     errors,
                     rule,
                     f"unknown category {target!r}, "
@@ -311,7 +311,7 @@ def parse_rules(
                 failed = True
                 break
             if not is_category and target not in _CATEGORY_OF:
-                _error(
+                _add_error(
                     errors,
                     rule,
                     f"{target!r} is not a registered sensitive " "function.",
@@ -393,7 +393,7 @@ def is_armed() -> bool:
     return _armed
 
 
-_DANGEROUS = ("process-exec", "privileges", "native")
+_WARN_CATEGORIES = ("process-exec", "privileges", "native")
 
 _CATEGORY_HELP: dict[str, str] = {
     "process-exec": "runs code outside the patched interpreter",
@@ -424,7 +424,7 @@ def generate_rules(learn: set[Any]) -> list[str]:
     for cat in SENSITIVE_API:
         if cat not in by_cat:
             continue
-        mark = "# ⚠ " if cat in _DANGEROUS else "# "
+        mark = "# ⚠ " if cat in _WARN_CATEGORIES else "# "
         lines.append(f"{mark}{cat}: {_CATEGORY_HELP[cat]}")
         entries = SENSITIVE_API[cat]
         covered = {q for q in entries if is_allowed(q) or q in by_cat[cat]}
