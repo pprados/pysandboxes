@@ -19,6 +19,7 @@ from pysandboxes.learning import (
 from pysandboxes.tools import set_is_in_sandbox
 
 from ..all_rules import AllRules
+from ..e import RuleApiPermissionError
 from ..guard_api import arm
 from ..main_logger import config_log
 
@@ -55,7 +56,10 @@ def _register_signals_handlers() -> None:
         # Iterate through all child processes and send them SIGTERM
         logger.info("Pysandboxes: Catch signal %s.", signum)
         handler = signals.pop(signal.Signals(signum))
-        signal.signal(signal.Signals(s), handler)  # Remove myself
+        try:
+            signal.signal(signal.Signals(s), handler)  # Remove myself
+        except RuleApiPermissionError:
+            pass  # Re-registration is best-effort, not required
         generate_config_from_learning()  # Save learning rules
         if callable(handler):
             return handler(signum, frame)
