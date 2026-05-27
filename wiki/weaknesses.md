@@ -10,4 +10,12 @@ Here are some vulnerabilities:
   - A child process, if it has the rights to read `/proc/${PPID}/environ`, can search for tokens there. **OS-sandboxes** generally prohibit this.
   - A direct network connection to the sandbox it's possible. A secret token, a random port and a limitation of localhost network are used.
 
+The sensitive functions that used to be reachable as soon as their module was importable (`os.system`, `os.fork`, `os.kill`, ...) are now denied by default, independently of import rights. That closes a hole; it does not close the three below, all measured while building it:
+
+  - `ctypes.pythonapi` is a `ctypes.PyDLL` instance built at import time. Using it calls no `__init__`, so it escapes the guard, even though `ctypes.CDLL` itself is patched through `__init__`.
+  - The daemon's private event loop calls `_thread.interrupt_main` from its `except KeyboardInterrupt` handler around `run_forever()`, in a background thread. Its reach is narrow: CPython delivers `SIGINT` to the main thread, so this only fires on an explicit `KeyboardInterrupt` in that loop.
+  - Enforcement only starts once `arm()` has been called, and that flag can be reset the same way the rules above can be found and modified: through `object().__subclasses__()`. This is not a new class of weakness, just the existing one applied to one more flag.
+
+None of this makes patching complete against hostile code: arbitrary Python can always call native code. The layer raises the cost of a sensitive call from non-hostile code, and makes such calls visible in learning mode. The OS-sandboxes remain the real barrier.
+
 We invite you to try out these approaches, without looking at the sources if you are gamers. This will teach you the ins and outs of Python. If you find any new vulnerabilities, we would be happy to hear about them. Note that the code is still hardened.
