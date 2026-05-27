@@ -1531,17 +1531,11 @@ _default_rules: dict[str, Callable[..., Any]] = {
     "os.removexattr": _f(_wrap_filename, write=True),
     "os.setxattr": _f(_wrap_filename, write=True),
     "os.getxattr": _f(_wrap_filename, write=False),
-    # NOT PATCHED YET, and reachable as soon as ``os`` is importable:
-    #   os.execv, os.execve, os.execl, os.execle, os.execlp, os.execlpe,
-    #   os.execvp, os.execvpe, os.spawnv, os.spawnve, os.spawnvp,
-    #   os.spawnvpe, os.spawnl, os.spawnle, os.spawnlp, os.spawnlpe,
-    #   os.posix_spawn, os.posix_spawnp, os.popen, os.fork, os.forkpty,
-    #   os.system, os.kill, os.killpg, os.nice
-    # These run code outside the patched interpreter, so no file or socket
-    # rule applies to what they start. They are candidates for the planned
-    # blacklist layer, where each function is validated explicitly and
-    # learning mode captures the ones an application really uses. Do not
-    # gate them on a module import right: that would be a pseudo-import.
+    # These run code outside the patched interpreter, so no file or
+    # socket rule applies to what they start. They are guarded by
+    # guard_api (SENSITIVE_API, categories "process-exec" and
+    # "process-control"), denied by default. Do not gate them on a
+    # module import right: that would be a pseudo-import.
     # ALLOW os.getenv
     # ALLOW os.supports_bytes_environ
     # ALLOW os.environb
