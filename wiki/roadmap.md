@@ -12,7 +12,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [X] Control import list
   - [X] Control file and network access
   - [X] Control life cycle of the daemon (restart if necessary)
-  - [ ] Guard some critical methods in Python (spawn, shell, etc.)
+  - [X] Guard some critical methods in Python (spawn, shell, etc.)
   - [ ] Management of *Denial of Service*
   - [ ] Management of regular expressions
   - [ ] Control of `exec()` and `eval()`
@@ -80,7 +80,11 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] DevContainer
 
 ## Guard some critical methods
-Certain methods must be rejected, even if the package is authorized (`spawn`, `system`, `sys.exit()`, ....)
+A registry of 106 sensitive functions, in six categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`), is denied by default, independently of the import rights granted by `python-import=`.
+
+- Configured with `python-api=ALLOW:<category>|<function>` and `python-api=DENY:<category>|<function>`, resolved by specificity: a function rule beats its category, and `DENY` wins at equal specificity.
+- Learning mode records what an application really calls and generates the matching lines.
+- Honest limits: `native` and `introspection` are detection and friction, not a barrier — the real barrier is the OS provider.
 
 ## New **OS-sandboxes**
 Other OS-level sandbox solutions will be integrated, including `Docker` of course.
