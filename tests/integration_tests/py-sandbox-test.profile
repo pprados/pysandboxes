@@ -8,6 +8,13 @@ env=My_ENV=${My_ENV}
 
 python-import=*
 
+# tst_usage.py lines 126, 465, 467 call signal.signal(). CPython's
+# signal.signal() is a pure-Python wrapper that delegates to the C
+# builtin _signal.signal() (signal.py:58 in this venv's 3.13), so both
+# names are guarded doors on this one call; both are needed, or the
+# call fails on the second door. Delete when those calls are removed.
+python-api=ALLOW:signal.signal,_signal.signal
+
 expose-rw=./tmp
 expose-ro=.
 expose-ro=/etc
