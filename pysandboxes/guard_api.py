@@ -324,7 +324,6 @@ def parse_rules(
     return tuple(parsed), others
 
 
-_rules: ApiRules = ()
 _allowed: ImmutableDict[str, bool] = ImmutableDict({})
 _armed: bool = False
 
@@ -336,8 +335,7 @@ def activate_guard(rules: ApiRules) -> None:
     category rule wherever it sits, which keeps ``include`` composition
     predictable. ``DENY`` wins at equal specificity.
     """
-    global _rules, _allowed
-    _rules = rules
+    global _allowed
     decisions: dict[str, bool] = {q: False for q in all_qualnames()}
     wildcard = [r for r in rules if r.target == "*"]
     if wildcard:
@@ -420,13 +418,14 @@ def generate_rules(learn: set[Any]) -> list[str]:
     by_cat: dict[str, list[str]] = {}
     for name in sorted(names):
         by_cat.setdefault(_CATEGORY_OF[name], []).append(name)
+    skip = _not_applicable()
     lines: list[str] = []
     for cat in SENSITIVE_API:
         if cat not in by_cat:
             continue
         mark = "# ⚠ " if cat in _WARN_CATEGORIES else "# "
         lines.append(f"{mark}{cat}: {_CATEGORY_HELP[cat]}")
-        entries = SENSITIVE_API[cat]
+        entries = [q for q in SENSITIVE_API[cat] if q not in skip]
         covered = {q for q in entries if is_allowed(q) or q in by_cat[cat]}
         if covered == set(entries):
             lines.append(f"python-api=ALLOW:{cat}")
@@ -498,7 +497,6 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_api() -> None:
         """Reset the guard between tests."""
-        global _rules, _allowed, _armed
-        _rules = ()
+        global _allowed, _armed
         _allowed = ImmutableDict({})
         _armed = False
