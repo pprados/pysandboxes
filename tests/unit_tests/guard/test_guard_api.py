@@ -400,6 +400,24 @@ def test_full_category_yields_one_category_line() -> None:
         assert f"python-api=ALLOW:{qualname}" not in lines
 
 
+def test_optional_entries_do_not_block_category_line() -> None:
+    """A category holding OPTIONAL entries must still emit its line.
+
+    ``threads`` holds three OPTIONAL entries (version-dependent thread
+    launch primitives), never patched on this interpreter and so never
+    observed. Comparing against the whole category would make it
+    permanently incomplete; only the applicable entries must count.
+    """
+    from pysandboxes.guard_api import _not_applicable
+
+    activate_guard(())
+    skip = _not_applicable()
+    applicable = [q for q in SENSITIVE_API["threads"] if q not in skip]
+    learned = {LearnApiRule(q) for q in applicable}
+    lines = generate_rules(learned)
+    assert "python-api=ALLOW:threads" in lines
+
+
 def test_category_completed_by_already_allowed_functions() -> None:
     """The union of allowed and learned decides, not the learned set."""
     already = SENSITIVE_API["introspection"][:-1]
