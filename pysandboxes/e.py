@@ -75,6 +75,12 @@ class RuleApiPermissionError(PermissionError, SandBoxError):
     """Raised when a sensitive API call is denied by the API guard."""
 
     def __init__(self, qualname: str, category: str) -> None:
+        """Initialize the exception with the denied call and its category.
+
+        Args:
+            qualname: Qualified name of the denied function.
+            category: Registry category the function belongs to.
+        """
         super().__init__(
             f"{qualname}() is denied by the API guard "
             f"(category: {category}).\n"

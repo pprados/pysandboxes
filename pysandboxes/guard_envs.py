@@ -23,13 +23,8 @@ from weakref import WeakKeyDictionary
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
-from .tools import (
-    Environ,
-    resolve_env_variables,
-)
-from .tools import (
-    patch_factory as _f,
-)
+from .tools import Environ, resolve_env_variables
+from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
 
