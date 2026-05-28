@@ -216,16 +216,6 @@ def activate_guard_files_rules(rules: ConfigLines) -> None:
     activate_guard(tuple(all_rules))
 
 
-def activate_guard_api_rules(rules: ConfigLines) -> None:
-    """Parse and activate guard_api rules for a test."""
-    from pysandboxes.guard_api import activate_guard, parse_rules
-
-    errors: list[ErrorMsg] = []
-    api_rules, _ = parse_rules(rules, errors)
-    assert not errors, errors
-    activate_guard(api_rules)
-
-
 def test_io_open_ignore_rule_blocks_file_access(files: Dict[str, Path]) -> None:
     rules = [ConfigLine(f"ignore={files['ignore']}", Path(), 0)]
     activate_guard_files_rules(rules)
