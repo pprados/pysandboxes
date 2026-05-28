@@ -199,6 +199,19 @@ def test_wildcard_allows_everything() -> None:
     assert all(is_allowed(q) for q in all_qualnames())
 
 
+def test_wildcard_allow_with_function_deny() -> None:
+    """A function-level DENY wins over ALLOW:*, nothing else is affected."""
+    _activate("python-api=ALLOW:*", "python-api=DENY:os.system")
+    assert is_allowed("os.system") is False
+    assert all(is_allowed(q) for q in all_qualnames() if q != "os.system")
+
+
+def test_wildcard_allow_and_deny_together_denies() -> None:
+    """ALLOW:* and DENY:* both at wildcard level: the all() fold denies."""
+    _activate("python-api=ALLOW:*", "python-api=DENY:*")
+    assert not any(is_allowed(q) for q in all_qualnames())
+
+
 def test_unknown_name_is_not_allowed() -> None:
     """A name outside the registry is never reported as allowed."""
     _activate("python-api=ALLOW:*")
