@@ -120,8 +120,10 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "posix.setregid",
         "os.setgroups",
         "posix.setgroups",
-        "os.chroot",
-        "posix.chroot",
+        # os.chroot / posix.chroot: not listed here. chroot is a
+        # filesystem operation, and guard_files already patches both
+        # names with a path check (_wrap_filename), which is strictly
+        # stronger than this category's binary allow/deny.
         "os.umask",
         "posix.umask",
     ),

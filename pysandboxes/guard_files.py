@@ -1502,6 +1502,7 @@ _default_rules: dict[str, Callable[..., Any]] = {
     "os.access": _f(_wrap_os_access, write=False),
     "os.chmod": _f(_wrap_filename, write=True),
     "os.chroot": _f(_wrap_filename, write=False),
+    "posix.chroot": _f(_wrap_filename, write=False),
     "os.link": _f(_wrap_two_filenames),
     "os.listdir": _f(_wrap_os_listdir),
     "os.mkdir": _f(_wrap_filename, write=False),
