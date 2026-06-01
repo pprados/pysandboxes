@@ -196,3 +196,34 @@ env=VIRTUAL_ENV=${VIRTUAL_ENV}
 # <learning_guard_import>
 
 # </learning_guard_import>
+
+#######################################################################################
+# PYTHON API CONTROL
+# ===================
+# Sensitive function calls. Everything in the registry is denied by
+# default, whatever python-import= allows: an import right is not a
+# call right.
+# - python-api=ALLOW:<category>   Allow a whole category
+# - python-api=ALLOW:<function>   Allow one function, e.g. os.system
+# - python-api=DENY:<target>      Deny; a function rule beats its
+#                                 category, whatever the line order
+# - python-api=ALLOW:*            Allow everything (disables the layer)
+# Categories: process-exec, process-control, privileges, threads,
+# native, introspection.
+# Note: the native and introspection categories are detection and
+# friction, not a barrier. Sandboxed code can undo Python-level patches
+# (see wiki/weaknesses.md); the OS provider is the real barrier.
+
+# Generated rules from learning mode: running
+# `python_sb -m mcp_server.main -t stdio` (stdin closed) with learning
+# enabled on a copy of this profile, no LLM call involved.
+# <learning_guard_api>
+python-api=ALLOW:_signal.signal
+python-api=ALLOW:signal.signal
+python-api=ALLOW:threading.Thread.start
+python-api=ALLOW:threading._start_joinable_thread
+# ctypes.CDLL: not a third-party dependency here. It is pysandboxes'
+# own set_pdeathsig() (pysandboxes/remote/tools.py) loading libc.so.6
+# via cdll.LoadLibrary to arm PR_SET_PDEATHSIG for this subprocess.
+python-api=ALLOW:ctypes.CDLL
+# </learning_guard_api>
