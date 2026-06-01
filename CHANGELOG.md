@@ -6,12 +6,37 @@
 | ✅ 3.11   | ✅ Firejail   | ☐ MacOS   | ✅ Files   |
 | ✅ 3.12   | ☐ Docker     | ☐ Windows | ✅ Network |
 | ✅ 3.13   | ☐ Podman     |           | ✅ Import  |
-| ✅ 3.14   | ☐ qemu       |           | ☐ API     |
+| ✅ 3.14   | ☐ qemu       |           | ✅ API     |
 |          | ☐ VM         |           | ☐ Source  |
 |          |              |           | ☐ Regexp  |
 |          |              |           | ☐ DoS     |
 
 ## [0.0.0] - 202X-XX-XX
+
+### Added
+- Control of sensitive API calls, independent of import rights: an
+  import right is not a call right. A registry of 104 sensitive
+  functions in six categories (`process-exec`, `process-control`,
+  `privileges`, `threads`, `native`, `introspection`) is denied by
+  default, and permissions are granted with
+  `python-api=ALLOW:<category>|<function>` (and `DENY:`), resolved by
+  specificity. Learning mode records what an application really calls
+  and generates the lines.
+- `posix.chroot` is now guarded by the file layer with the same path
+  check as `os.chroot`, which was previously unguarded.
+
+### Fixed
+- `python-sb` honours `TMPDIR` for its host-side run directory instead
+  of hardcoding `/tmp`, so it works where `/tmp` is read-only.
+
+### Notes
+- `native` and `introspection` are detection and friction, not a
+  barrier: sandboxed code can undo Python-level patches (see
+  `wiki/weaknesses.md`). The OS-sandboxes remain the real barrier.
+- A single call can cross several guarded doors in series — for example
+  `subprocess.run` reaches `Popen` — so for `process-exec` the category
+  form is usually the right one. Each refusal names the door it stopped
+  at.
 
 ## [0.1.0] - 2025-11-27
 
