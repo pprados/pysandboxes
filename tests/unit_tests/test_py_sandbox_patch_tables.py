@@ -21,14 +21,17 @@ from pysandboxes import (
     guard_socket,
 )
 
-# Known, pre-existing collision, not introduced by this branch:
-# guard_files patches "os.chroot" for its path argument, guard_api
-# patches it again as a "privileges" sensitive call, and the flat merge
-# in py_sandbox.py keeps only the second, silently dropping the first.
-# Remediation (drop one side, or compose both factories) changes the
-# sandbox's security posture and is left to the owner; this allowlist
-# keeps the test asserting on any *other*, still-undiscovered collision.
-_KNOWN_COLLISIONS = frozenset({"os.chroot"})
+# Known collision, introduced by this branch's guard_api registry, not
+# fixed here: guard_files already patched "os.chroot" for its path
+# argument; guard_api now patches it again as a "privileges" sensitive
+# call, and the flat merge in py_sandbox.py keeps only the second,
+# silently dropping the first. Remediation (drop one side, or compose
+# both factories) changes the sandbox's security posture and is left
+# to the owner. Keyed by the exact pair, not the bare name, so a third
+# table patching "os.chroot" would still be caught.
+_KNOWN_COLLISIONS: dict[tuple[str, str], frozenset[str]] = {
+    ("guard_files", "guard_api"): frozenset({"os.chroot"}),
+}
 
 
 def test_patch_table_keys_are_pairwise_disjoint() -> None:
@@ -43,5 +46,6 @@ def test_patch_table_keys_are_pairwise_disjoint() -> None:
     }
     pairs = itertools.combinations(tables.items(), 2)
     for (name_a, table_a), (name_b, table_b) in pairs:
-        shared = set(table_a) & set(table_b) - _KNOWN_COLLISIONS
+        allowed = _KNOWN_COLLISIONS.get((name_a, name_b), frozenset())
+        shared = (set(table_a) & set(table_b)) - allowed
         assert not shared, f"{name_a} and {name_b} both patch {shared}"
