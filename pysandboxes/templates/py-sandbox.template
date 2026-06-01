@@ -204,6 +204,23 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # Note: the native and introspection categories are detection and
 # friction, not a barrier. Sandboxed code can undo Python-level patches
 # (see wiki/weaknesses.md); the OS provider is the real barrier.
+#
+# One call can cross SEVERAL guarded doors in series, because some of
+# these functions delegate to others in the registry:
+#   subprocess.getoutput -> getstatusoutput -> check_output -> run
+#                        -> Popen -> os.posix_spawn
+#   pty.spawn -> pty.fork -> os.fork / os.forkpty / os.setsid
+#   signal.signal -> _signal.signal
+#   threading.Thread.start -> threading._start_joinable_thread
+# Allowing the outer name alone is then refused on the inner one. Each
+# refusal names the door it stopped at, so iterating converges; a
+# category covers a whole chain in one line, which is why the category
+# form is usually the right one for process-exec.
+#
+# To generate these rules from real behaviour, run the application once
+# in learning mode: the lines land in the block below. Review them
+# before keeping them. httpx and anyio create threads, so ALLOW:threads
+# is common and legitimate; an ALLOW:process-exec deserves a hard look.
 # <learning_guard_api>
 # </learning_guard_api>
 
