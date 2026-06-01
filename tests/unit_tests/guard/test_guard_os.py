@@ -875,5 +875,24 @@ def test_os_walk_and_fwalk(files: Dict[str, Path]) -> None:  # noqa: F811
     assert "bound_file.txt" in dir_files
 
 
-# Missing tests
-# - os.chroot
+def test_os_and_posix_chroot_refused(files: Dict[str, Path]) -> None:  # noqa: F811
+    """guard_files guards both os.chroot and posix.chroot the same
+    way: a target outside the exposed rules is refused before the
+    real chroot(2) call is ever attempted, on either door.
+    """
+    rules = [
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import os
+    import posix
+
+    with pytest.raises(RuleFileNotFoundError):
+        os.chroot(files["ignore"])
+
+    with pytest.raises(RuleFileNotFoundError):
+        posix.chroot(files["ignore"])
