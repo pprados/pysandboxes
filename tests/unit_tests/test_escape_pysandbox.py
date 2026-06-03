@@ -59,8 +59,7 @@ def test_escape_with_meta_path() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="pickle.loads() escape not blocked: guard_pickle is never wired "
-    "into the sandbox pipeline",
+    reason="pickle.loads() escape not blocked: guard_pickle is never wired " "into the sandbox pipeline",
 )
 def test_escape_with_pickle_allowed() -> None:
     # VULNERABLE (default): Pickle is ALLOWED by default (_activate_guard_import_for_tests)
@@ -168,9 +167,7 @@ def test_escape_with_obfuscated_strings() -> None:
 
         import_func = getattr(builtins, forbidden_name, None)
         if import_func is not None:
-            pytest.fail(
-                "chr() obfuscated __import__ access succeeded; sandbox compromised"
-            )
+            pytest.fail("chr() obfuscated __import__ access succeeded; sandbox compromised")
     except (AttributeError, RuleAttributeError):
         # Expected: sandbox blocked getattr on builtins
         pass

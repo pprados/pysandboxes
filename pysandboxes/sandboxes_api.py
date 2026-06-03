@@ -56,9 +56,7 @@ def _check__main__coroutine(coroutine: Any) -> None:
     module = inspect.getmodule(coroutine.cr_frame)
     if module and hasattr(module, "__name__"):
         if module.__name__ == "__main__":
-            raise ValueError(
-                "The coroutine must be declared in a module " "other than __main__."
-            )
+            raise ValueError("The coroutine must be declared in a module " "other than __main__.")
 
 
 def sandbox(
@@ -305,9 +303,7 @@ class sandboxes:
         """
         self._unregister_signals_handlers()
         if not is_in_sandbox():
-            asyncio.run_coroutine_threadsafe(
-                self._stop_daemon(), get_sandbox_loop()
-            ).result()
+            asyncio.run_coroutine_threadsafe(self._stop_daemon(), get_sandbox_loop()).result()
         self._daemon = None
         return
 

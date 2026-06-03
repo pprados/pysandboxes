@@ -117,8 +117,7 @@ class PickleImportBlocker:
         # Allow only pysandboxes internal modules
         if not caller_module.startswith("pysandboxes"):
             raise ImportError(
-                f"pickle import denied from {caller_module}. "
-                "Use pysandboxes.guard_pickle.safe_unpickle() instead."
+                f"pickle import denied from {caller_module}. " "Use pysandboxes.guard_pickle.safe_unpickle() instead."
             )
 
         return None
@@ -162,9 +161,7 @@ class _RestrictedUnpickler(pickle.Unpickler):
         if name not in self.allowed_classes:
             # reason: raising the stdlib error type, not deserializing
             # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-            raise pickle.UnpicklingError(
-                f"Class {module}.{name} not in whitelist. Allowed: {self.allowed_classes}"
-            )
+            raise pickle.UnpicklingError(f"Class {module}.{name} not in whitelist. Allowed: {self.allowed_classes}")
 
         # Additional safety: only allow safe builtins and whitelisted modules
         if module == "builtins":
@@ -185,15 +182,11 @@ class _RestrictedUnpickler(pickle.Unpickler):
             if name not in safe_builtins:
                 # reason: raising the stdlib error type, not deserializing
                 # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                raise pickle.UnpicklingError(
-                    f"Builtin {name} not allowed (potential RCE vector)"
-                )
+                raise pickle.UnpicklingError(f"Builtin {name} not allowed (potential RCE vector)")
         elif not module.startswith(("pysandboxes", "__main__")):
             # reason: raising the stdlib error type, not deserializing
             # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-            raise pickle.UnpicklingError(
-                f"Module {module} not trusted. Only pysandboxes modules allowed."
-            )
+            raise pickle.UnpicklingError(f"Module {module} not trusted. Only pysandboxes modules allowed.")
 
         return getattr(__import__(module, fromlist=[name]), name)
 
@@ -276,9 +269,7 @@ def _deactivate_guard_pickle() -> None:
 
     Removes the import blocker from sys.meta_path and restores original pickle.loads.
     """
-    sys.meta_path[:] = [
-        item for item in sys.meta_path if not isinstance(item, PickleImportBlocker)
-    ]
+    sys.meta_path[:] = [item for item in sys.meta_path if not isinstance(item, PickleImportBlocker)]
     # Restore original pickle.loads
     pickle.loads = _original_pickle_loads  # type: ignore[assignment]
     logger.info("Pickle guards deactivated")

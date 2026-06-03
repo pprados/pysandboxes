@@ -37,9 +37,7 @@ def test_execution_dirs_mounts_include_peer_usr_local_lib(tmp_path: Path) -> Non
 
     host_paths = {str(p.resolve()) for _, p, _ in specs}
     assert str(resolved_bin) in host_paths, "interpreter bin directory must be mounted"
-    assert (
-        str(resolved_lib) in host_paths
-    ), "peer /usr/local/lib with libpython must be mounted"
+    assert str(resolved_lib) in host_paths, "peer /usr/local/lib with libpython must be mounted"
 
 
 def test_virtfs_stage_copytree_ignore_skips_venv_and_samples() -> None:

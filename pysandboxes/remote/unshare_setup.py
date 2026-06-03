@@ -58,9 +58,7 @@ class UnshareSetupConfig:
     named_pipe: str
     netfilter_rules: list[str]
     current_dir: str
-    ignore_paths: list[
-        str
-    ]  # paths relative to current_dir to mask (overlay with no-access)
+    ignore_paths: list[str]  # paths relative to current_dir to mask (overlay with no-access)
 
     def to_json(self) -> str:
         return json.dumps(
@@ -123,9 +121,7 @@ def _ensure_mount_target(target: str, new_root: str) -> None:
         if link_target.startswith("/"):
             resolved = new_root + link_target
         else:
-            resolved = os.path.normpath(
-                os.path.join(os.path.dirname(target), link_target)
-            )
+            resolved = os.path.normpath(os.path.join(os.path.dirname(target), link_target))
         os.makedirs(os.path.dirname(resolved), exist_ok=True)
         Path(resolved).touch()
     elif not os.path.exists(target):
@@ -139,9 +135,7 @@ def main() -> None:
     logger.debug("************* unshare_setup *************")
     args = sys.argv[1:]
     if not args:
-        print(
-            "Usage: unshare_setup <config_path> -- <command> [args...]", file=sys.stderr
-        )
+        print("Usage: unshare_setup <config_path> -- <command> [args...]", file=sys.stderr)
         sys.exit(1)
 
     config_path = args[0]
@@ -233,13 +227,9 @@ def main() -> None:
         # "File exists" means route already there; success
         if r.stderr and "File exists" in r.stderr:
             break
-        logger.debug(
-            "ip route add default (attempt %s): %s", attempt + 1, r.stderr or r.stdout
-        )
+        logger.debug("ip route add default (attempt %s): %s", attempt + 1, r.stderr or r.stdout)
     else:
-        logger.warning(
-            "Could not add default route via %s after 5 attempts", SLIRP_GATEWAY
-        )
+        logger.warning("Could not add default route via %s after 5 attempts", SLIRP_GATEWAY)
     # Brief delay so the kernel/slirp stack is ready before we apply iptables and exec
     time.sleep(1.0)
     # Log current state (print so it appears even when logging is not configured)
@@ -308,15 +298,11 @@ def main() -> None:
             # Path in chroot = new_root + current_dir + rel_path (current_dir can be absolute)
             full_in_chroot = os.path.normpath(new_root + prefix + rel_path)
             if not os.path.exists(full_in_chroot):
-                logger.debug(
-                    "ignore path %s not present in chroot, skip", full_in_chroot
-                )
+                logger.debug("ignore path %s not present in chroot, skip", full_in_chroot)
                 continue
             try:
                 if os.path.isfile(full_in_chroot):
-                    fd, placeholder = tempfile.mkstemp(
-                        dir=os.path.join(new_root, "tmp")
-                    )
+                    fd, placeholder = tempfile.mkstemp(dir=os.path.join(new_root, "tmp"))
                     os.close(fd)
                     os.chmod(placeholder, 0o000)
                     _run(["mount", "--bind", placeholder, full_in_chroot])
@@ -325,9 +311,7 @@ def main() -> None:
                     os.chmod(placeholder, 0o000)
                     _run(["mount", "--bind", placeholder, full_in_chroot])
             except Exception as e:
-                logger.warning(
-                    "Could not overlay ignore path %s: %s", full_in_chroot, e
-                )
+                logger.warning("Could not overlay ignore path %s: %s", full_in_chroot, e)
 
     # --- H. Pseudo-filesystems ---
     logger.debug("Pseudo-filesystems:")
@@ -358,9 +342,7 @@ def main() -> None:
     if config.dns_servers:
         logger.debug("DNS/hosts setup:")
         # Custom DNS: create resolv.conf and hosts
-        resolv_tmp = tempfile.NamedTemporaryFile(
-            mode="w", delete=False, suffix=".resolv"
-        )
+        resolv_tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".resolv")
         logger.debug(f"write dns {config.dns_servers=}")
         dns_servers = config.dns_servers
         for dns in dns_servers:

@@ -112,9 +112,7 @@ async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
             os.close(master_fd)
 
 
-async def _read_stream(
-    stream: asyncio.StreamReader, callback: Callable[[str], None]
-) -> None:
+async def _read_stream(stream: asyncio.StreamReader, callback: Callable[[str], None]) -> None:
     """Read data from stream and call callback for each line.
 
     Args:
@@ -178,9 +176,7 @@ async def launch_sandbox(
                 "#!/bin/bash\n"
                 + cmd[0]
                 + " "
-                + " \\\n  ".join(
-                    param if " " not in param else repr(param) for param in cmd[1:]
-                )
+                + " \\\n  ".join(param if " " not in param else repr(param) for param in cmd[1:])
                 + "\n"
             )
             logger.debug("DEBUG_LAUNCH: wrote %s", run_sh.resolve())
@@ -193,9 +189,7 @@ async def launch_sandbox(
                 extra_preexec_fn()
             os.umask(0o006)  # Only user:RW
 
-        logger.debug(
-            "Start process: " + " ".join((repr(c) if " " in c else c for c in cmd))
-        )
+        logger.debug("Start process: " + " ".join((repr(c) if " " in c else c for c in cmd)))
         subprocess_kwargs: dict[str, Any] = dict(
             env=dict(envs),
             preexec_fn=preexec_fn,
@@ -435,16 +429,12 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                         self._base_delay * (self._factor ** (self._attempts - 1)),
                     )
 
-                    wait_time: float = random.uniform(
-                        current_base_backoff * 0.9, current_base_backoff
-                    )
+                    wait_time: float = random.uniform(current_base_backoff * 0.9, current_base_backoff)
                     logger.debug("watchdog sleep %i", wait_time)
                     await asyncio.sleep(wait_time)
                     # await self._shutdown()
                     self._last_reset = time.time()
-                    await self._re_start(
-                        all_rules, envs=envs, log_level=log_level, init_fn=init_fn
-                    )
+                    await self._re_start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
         except CancelledError:
             pass  # Ignore
 
@@ -473,9 +463,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
             # Add rules for the communication with the sandbox
             socket_rules: list[SocketRule] = list(all_rules.socket_rules)
-            _new_socket_rules, *_ = socket_parse_rules(
-                [ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], []
-            )
+            _new_socket_rules, *_ = socket_parse_rules([ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], [])
             socket_rules.extend(_new_socket_rules)
 
             from pysandboxes.guard_socket import SocketRules
@@ -549,9 +537,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         else:
             env = dict(all_rules.envs)
         env = {**os.environ, **extra_envs}
-        logger.debug(
-            "Launch process:" + " ".join((repr(c) if " " in c else c for c in args))
-        )
+        logger.debug("Launch process:" + " ".join((repr(c) if " " in c else c for c in args)))
         self._process = await launch_sandbox(
             args + ["--_named-pipe", str(pipe_path)],
             pipe_path=pipe_path,
@@ -592,9 +578,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                         if response.status == 200:
                             break
                         else:
-                            raise RuntimeError(
-                                f"Unexpected status {response.status} from {ping_url}"
-                            )
+                            raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                 except TimeoutError:
                     if count_loop % 15 == 0:
                         logger.info(
@@ -649,18 +633,14 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             if graceful_shutdown:
                 if self._process:
                     try:
-                        await asyncio.wait_for(
-                            self._process.wait(), timeout=TIMEOUT_FOR_STOP_DAEMON
-                        )
+                        await asyncio.wait_for(self._process.wait(), timeout=TIMEOUT_FOR_STOP_DAEMON)
                     except asyncio.TimeoutError:
                         logger.warning("Kill the sandbox daemon")
                         self._process.kill()
                     logger.debug("Sandbox daemon is terminated")
                     self._process = None
             else:
-                logger.info(
-                    "Kill the sandbox daemon (graceful_shutdown=%s)", graceful_shutdown
-                )
+                logger.info("Kill the sandbox daemon (graceful_shutdown=%s)", graceful_shutdown)
                 if self._process:
                     self._process.kill()
         except OSError:

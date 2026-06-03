@@ -71,9 +71,7 @@ class TestGetDefaultImagePath:
         path = get_default_image_path()
         assert path.name == get_default_image_filename()
         # Filename is either URL segment (e.g. ubuntu-*.img) or python-3.x-arch.qcow2
-        assert "ubuntu" in path.name or (
-            path.suffix == ".qcow2" and "python" in path.name
-        )
+        assert "ubuntu" in path.name or (path.suffix == ".qcow2" and "python" in path.name)
 
 
 class TestGetStandardDownloadUrl:
@@ -165,25 +163,19 @@ class TestGetUbuntuImageUrlForPythonVersion:
 class TestGetDownloadUrl:
     """Tests for get_download_url."""
 
-    def test_full_url_env_takes_precedence(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_full_url_env_takes_precedence(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(ENV_VM_IMAGE_URL, "https://example.com/image.qcow2")
         monkeypatch.delenv(ENV_VM_IMAGE_BASE_URL, raising=False)
         path = get_default_image_path()
         assert get_download_url(path) == "https://example.com/image.qcow2"
 
-    def test_base_url_env_appends_path_name(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_base_url_env_appends_path_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(ENV_VM_IMAGE_URL, raising=False)
         monkeypatch.setenv(ENV_VM_IMAGE_BASE_URL, "https://example.com/base/")
         path = get_default_image_path(python_version=(3, 12), arch="x86_64")
         assert get_download_url(path) == f"https://example.com/base/{path.name}"
 
-    def test_falls_back_to_standard_url_when_no_env(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_falls_back_to_standard_url_when_no_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(ENV_VM_IMAGE_URL, raising=False)
         monkeypatch.delenv(ENV_VM_IMAGE_BASE_URL, raising=False)
         path = get_default_image_path()
@@ -202,9 +194,7 @@ class TestEnsureImage:
             image.write_bytes(b"fake")
             assert ensure_image(image) == image
 
-    def test_raises_when_missing_and_no_download_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_raises_when_missing_and_no_download_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(ENV_VM_IMAGE_URL, raising=False)
         monkeypatch.delenv(ENV_VM_IMAGE_BASE_URL, raising=False)
         monkeypatch.setattr(

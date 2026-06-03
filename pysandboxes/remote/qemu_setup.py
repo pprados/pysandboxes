@@ -167,9 +167,7 @@ def _bootstrap_script_content(
     lines.append("      ph=$(mktemp)")
     lines.append("    fi")
     lines.append('    chmod 000 "$ph" 2>/dev/null || true')
-    lines.append(
-        '    mount --bind "$ph" "$ign_path" 2>&1 | sed \'s/^/[pysandbox-ignore] /\' >&2 || true'
-    )
+    lines.append('    mount --bind "$ph" "$ign_path" 2>&1 | sed \'s/^/[pysandbox-ignore] /\' >&2 || true')
     lines.append(f"  done < {ign_file}")
     lines.append("fi")
     lines.append("")
@@ -182,9 +180,7 @@ def _bootstrap_script_content(
             'echo "[pysandbox-bootstrap] required Python version: ${PYTHON_VERSION:-none}" >&2',
             "PYTHON_EXE=''",
             # Prefer host binary path (9p-mounted) if present
-            "HOST_EXE=$(cat "
-            + f"{GUEST_CIDATA_MOUNT}/{PYTHON_EXE_FILE}"
-            + " 2>/dev/null | tr -d '\\n' || true)",
+            "HOST_EXE=$(cat " + f"{GUEST_CIDATA_MOUNT}/{PYTHON_EXE_FILE}" + " 2>/dev/null | tr -d '\\n' || true)",
             # If the host recorded a Python path but 9p did not expose it, do not fall back to
             # the VM image interpreter: PYTHONPATH still points at host site-packages and native
             # extensions (.so) would be the wrong libc → immediate segfault.
@@ -280,8 +276,7 @@ def _bootstrap_script_content(
         [
             f'cd "{guest_cwd}" || true',
             "set +e",
-            env_py
-            + '"$PYTHON_EXE" -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH"',
+            env_py + '"$PYTHON_EXE" -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH"',
             "GUEST_RC=$?",
             "set -e",
             'echo "[pysandbox-bootstrap] main_sandbox finished with exit code $GUEST_RC" >&2',
@@ -316,11 +311,7 @@ def _create_nocloud_iso(
         root_path = getattr(all_rules, "root_path", None)
         if isinstance(root_path, Path):
             # Fallback: config file directory (differs from host cwd when config is under a subdir)
-            guest_cwd = (
-                str(root_path.parent.resolve())
-                if root_path.is_file()
-                else str(root_path.resolve())
-            )
+            guest_cwd = str(root_path.parent.resolve()) if root_path.is_file() else str(root_path.resolve())
         else:
             guest_cwd = None
     cwd_for_ignore = guest_cwd if guest_cwd else str(Path.cwd().resolve())
@@ -352,10 +343,7 @@ def _create_nocloud_iso(
     )
     debug_block = "debug:\n  verbosity: 2\n\n" if bootstrap_verbose else ""
     bootcmd_banner = (
-        (
-            "  - echo '[pysandbox] cloud-init bootcmd (early)' "
-            "| tee /dev/ttyS0 /dev/console >/dev/null 2>&1 || true\n"
-        )
+        ("  - echo '[pysandbox] cloud-init bootcmd (early)' " "| tee /dev/ttyS0 /dev/console >/dev/null 2>&1 || true\n")
         if bootstrap_verbose
         else ""
     )

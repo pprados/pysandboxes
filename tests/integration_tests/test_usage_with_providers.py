@@ -78,9 +78,7 @@ def _skip_reason(os_sandbox: str) -> str | None:
         return "bwrap not installed"
     if os_sandbox == "qemu":
         arch = platform.machine()
-        if not which_command(f"qemu-system-{arch}") and not which_command(
-            "qemu-system-x86_64"
-        ):
+        if not which_command(f"qemu-system-{arch}") and not which_command("qemu-system-x86_64"):
             return "QEMU not installed"
     return None
 
@@ -97,6 +95,4 @@ def test_usage_with_provider(os_sandbox: str) -> None:
         print(result.stdout)
     if result.stderr:
         print(result.stderr, file=sys.stderr)
-    assert (
-        result.returncode == 0
-    ), f"tst_usage (os_sandbox={os_sandbox}) exited with code {result.returncode}"
+    assert result.returncode == 0, f"tst_usage (os_sandbox={os_sandbox}) exited with code {result.returncode}"

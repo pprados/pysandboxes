@@ -118,9 +118,7 @@ async def sandbox_daemon(
             raise ValueError(f"Module {module_name} not found") from e
         except AttributeError as e:
             logger.error("Function %s.%s() not found", module_name, function_name)
-            raise ValueError(
-                f"Function {module_name}.{function_name}() not found"
-            ) from e
+            raise ValueError(f"Function {module_name}.{function_name}() not found") from e
         use_async = inspect.iscoroutinefunction(function)
         logger.debug(
             "(%s) calling %s%s.%s(%s,%s)...",
@@ -140,9 +138,7 @@ async def sandbox_daemon(
             rc = await acatch_stdio(stdio_queue, function, kwargs, *args)
             return rc
 
-        async_fut = asyncio.create_task(
-            _async_set_sandbox_and_catch_stdio(), name="catch_stdio"
-        )
+        async_fut = asyncio.create_task(_async_set_sandbox_and_catch_stdio(), name="catch_stdio")
         while stdio_queue:
             msg = await stdio_queue.get()
             if "result" in msg:
@@ -204,9 +200,7 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
     @app.post("/rpc")
     async def rpc_endpoint(
         request: Request,
-        payload: RPCPayload = Body(  # noqa: B008
-            ..., description="Payload containing code and authentication token."
-        ),
+        payload: RPCPayload = Body(..., description="Payload containing code and authentication token."),  # noqa: B008
     ) -> StreamingResponse:
         """
         SSE endpoint to process a given code string, authenticated by a token,
@@ -215,16 +209,11 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
         from .._os_sandbox import is_accept_incoming_call
 
         # logger.debug(request.headers["Authorization"])
-        if (
-            "Authorization" not in request.headers
-            or request.headers["Authorization"] != f"Bearer {token}"
-        ):
+        if "Authorization" not in request.headers or request.headers["Authorization"] != f"Bearer {token}":
             logger.error("Invalid token")
             raise HTTPException(status_code=401, detail="Invalid token")
         if not is_accept_incoming_call():
-            raise HTTPException(
-                status_code=503, detail="The sandbox daemon is being stopped."
-            )
+            raise HTTPException(status_code=503, detail="The sandbox daemon is being stopped.")
         # Pass the code and authenticated user_id to the event generator
         return StreamingResponse(
             sandbox_daemon(
@@ -267,17 +256,14 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
             },
             "access": {
                 "()": "uvicorn.logging.AccessFormatter",
-                "fmt": "%(levelprefix)s %(client_addr)s - "
-                '"%(request_line)s" %(status_code)s',
+                "fmt": "%(levelprefix)s %(client_addr)s - " '"%(request_line)s" %(status_code)s',
                 # noqa: E501
             },
         },
         "handlers": {
             "default": {
                 "formatter": "default",
-                "class": ".".join(
-                    [root_handler.__module__, root_handler.__class__.__qualname__]
-                ),
+                "class": ".".join([root_handler.__module__, root_handler.__class__.__qualname__]),
                 "stream": stream,
             },
             "access": {
@@ -403,9 +389,7 @@ class SSEServerDaemon(BaseSSESandbox):
                 await init_fn()
             else:
                 init_fn()
-        logging.basicConfig(
-            level=logging.INFO
-        )  # Set logs if it's not already set by init_fn()
+        logging.basicConfig(level=logging.INFO)  # Set logs if it's not already set by init_fn()
         loop = get_sandbox_loop()
         initial_threshold: float = loop.slow_callback_duration
         try:
@@ -433,9 +417,7 @@ class SSEServerDaemon(BaseSSESandbox):
                                 timeout=TIMEOUT_GRACEFUL_SHUTDOWN,
                             )
                         except asyncio.TimeoutError:
-                            logger.warning(
-                                "Timeout during uvicorn daemon_shutdown. Force exit"
-                            )
+                            logger.warning("Timeout during uvicorn daemon_shutdown. Force exit")
                             self.uvicorn.force_exit = True
                         self.uvicorn.started = False
                 except SystemExit:
@@ -471,9 +453,7 @@ class SSEServerDaemon(BaseSSESandbox):
         global _active_requests
         start_time = asyncio.get_event_loop().time()
         while _active_requests > max_pending:
-            if (
-                asyncio.get_event_loop().time() - start_time
-            ) >= TIMEOUT_FOR_STOP_DAEMON:
+            if (asyncio.get_event_loop().time() - start_time) >= TIMEOUT_FOR_STOP_DAEMON:
                 logger.info(
                     "Impossible to _stop %i current request",
                     _active_requests - max_pending,

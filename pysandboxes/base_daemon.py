@@ -22,10 +22,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_mixed_sync_and_async_error = (
-    "Cannot call the synchronize sandbox function "
-    "from another sandbox async function"
-)
+_mixed_sync_and_async_error = "Cannot call the synchronize sandbox function " "from another sandbox async function"
 
 
 class BaseDaemon(ABC):

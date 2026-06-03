@@ -187,9 +187,7 @@ def _resolve_on_host(hostname: str, timeout: float = 5.0) -> str | None:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             continue
     try:
-        infos = socket.getaddrinfo(
-            hostname, None, family=socket.AF_INET, type=socket.SOCK_STREAM
-        )
+        infos = socket.getaddrinfo(hostname, None, family=socket.AF_INET, type=socket.SOCK_STREAM)
         if infos:
             addr = infos[0][4][0]
             return addr if isinstance(addr, str) else None
@@ -261,9 +259,7 @@ def _qemu_kvm_run_extra_flags() -> list[str]:
             gid,
         )
     except OSError as e:
-        logger.warning(
-            "container-tests (qemu): could not stat /dev/kvm for --group-add: %s", e
-        )
+        logger.warning("container-tests (qemu): could not stat /dev/kvm for --group-add: %s", e)
     return extra
 
 
@@ -280,9 +276,7 @@ def _ensure_image(runtime: str, image_name: str, os_sandbox: str) -> None:
     if provider == "none":
         provider = "base"
     make_target = f"build-image-{provider}"
-    logger.error(
-        "Image %s not found, building with make %s...", image_name, make_target
-    )
+    logger.error("Image %s not found, building with make %s...", image_name, make_target)
     subprocess.run(
         ["make", make_target],
         cwd=ROOT_DIR,
@@ -307,9 +301,7 @@ def _run_container_runtime(
     volume_mount = f"{ROOT_DIR}:/app"
 
     if runtime == "docker":
-        prefix = (
-            "chmod -R a+rX /app && mkdir -p /app/tmp && chmod -R a+rwX /app/tmp && "
-        )
+        prefix = "chmod -R a+rX /app && mkdir -p /app/tmp && chmod -R a+rwX /app/tmp && "
     else:
         prefix = ""
 
@@ -390,9 +382,7 @@ def _run_container_runtime(
                 CONTAINER_RUN_TIMEOUT,
             )
 
-    hb = threading.Thread(
-        target=_heartbeat, name="container-test-heartbeat", daemon=True
-    )
+    hb = threading.Thread(target=_heartbeat, name="container-test-heartbeat", daemon=True)
     hb.start()
     try:
         out_io, err_io, ctty = _container_run_stdio()
@@ -433,9 +423,7 @@ def _run_container_runtime(
 @pytest.mark.skip("TODO")  # TODO
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
 @pytest.mark.parametrize("runtime", all_container_worker)
-def test_container_runtime(
-    runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool
-) -> None:
+def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool) -> None:
     """Run container test with podman or docker; success = exit code 0.
 
     Nested output goes to the **controlling TTY** when available (not pytest's captured
@@ -515,9 +503,7 @@ def _ensure_minikube_ready() -> None:
             cwd=ROOT_DIR,
         )
     except FileNotFoundError:
-        raise RuntimeError(
-            "minikube not found in PATH; install minikube to run Kubernetes tests"
-        ) from None
+        raise RuntimeError("minikube not found in PATH; install minikube to run Kubernetes tests") from None
     except subprocess.CalledProcessError:
         logger.info("minikube is not running, starting minikube...")
         subprocess.run(
@@ -695,9 +681,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             cwd=ROOT_DIR,
         )
         if r.returncode != 0:
-            logger.error(
-                f"ERROR: Pod did not become Ready in {WAIT_TIMEOUT}s. Pod status:"
-            )
+            logger.error(f"ERROR: Pod did not become Ready in {WAIT_TIMEOUT}s. Pod status:")
             subprocess.run(
                 ["kubectl", "get", "pod", POD_NAME, "-o", "wide"],
                 capture_output=False,
@@ -731,9 +715,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
 
             if dns_ok:
                 term = os.environ.get("TERM", "xterm")
-                os_sandbox_env = (
-                    os_sandbox.lower() if os_sandbox != "none" else os_sandbox
-                )
+                os_sandbox_env = os_sandbox.lower() if os_sandbox != "none" else os_sandbox
                 py_sandbox_args = f"--py-sandbox={py_sandbox}"
                 exec_timeout = _k8s_exec_timeout_seconds(os_sandbox)
                 exec_cmd = (
@@ -743,8 +725,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                 )
 
                 logger.info(
-                    f"Executing tests inside the pod (timeout: {exec_timeout}s, "
-                    f"os_sandbox={os_sandbox})..."
+                    f"Executing tests inside the pod (timeout: {exec_timeout}s, " f"os_sandbox={os_sandbox})..."
                 )
                 logger.info(
                     "kubectl exec output streams below (no pipe capture — avoids deadlock "
@@ -761,8 +742,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                         _terminal_newline_before_log()
                         elapsed = time.monotonic() - start
                         logger.debug(
-                            "k8s-test: kubectl exec still running "
-                            "(os_sandbox=%s, elapsed=%.0fs, timeout=%ss)",
+                            "k8s-test: kubectl exec still running " "(os_sandbox=%s, elapsed=%.0fs, timeout=%ss)",
                             os_sandbox,
                             elapsed,
                             exec_timeout,
@@ -798,8 +778,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                         )
                 except subprocess.TimeoutExpired:
                     logger.debug(
-                        f"ERROR: Test execution timed out after {exec_timeout}s "
-                        f"(os_sandbox={os_sandbox})",
+                        f"ERROR: Test execution timed out after {exec_timeout}s " f"(os_sandbox={os_sandbox})",
                     )
                     rc = 1
                 finally:
@@ -822,11 +801,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             print(log_result.stdout or "", end="")
             if log_result.stderr:
                 print(log_result.stderr, file=sys.stderr, end="")
-        elif (
-            log_result.returncode != 0
-            and log_result.stderr
-            and "NotFound" not in log_result.stderr
-        ):
+        elif log_result.returncode != 0 and log_result.stderr and "NotFound" not in log_result.stderr:
             print(log_result.stderr, file=sys.stderr)
         cleanup()
 
@@ -835,12 +810,8 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
 
 
 @pytest.mark.skip("TODO")  # TODO
-@pytest.mark.parametrize(
-    "os_sandbox,py_sandbox,privileged", [x[0] for x in _all_os_sandbox_params()]
-)
-def test_container_kubernetes(
-    os_sandbox: str, py_sandbox: bool, privileged: bool
-) -> None:
+@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", [x[0] for x in _all_os_sandbox_params()])
+def test_container_kubernetes(os_sandbox: str, py_sandbox: bool, privileged: bool) -> None:
     """Run Kubernetes pod test (minikube); success = exit code 0. Starts minikube if needed."""
 
     try:

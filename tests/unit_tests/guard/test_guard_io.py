@@ -125,18 +125,12 @@ def files() -> Dict[str, Path]:
     if not (tmp_path / "home_link").exists():
         (tmp_path / "home_link").symlink_to(tmp_path / "visible.txt")
     if not (tmp_path / "home_link_to_bind_src").exists():
-        (tmp_path / "home_link_to_bind_src").symlink_to(
-            tmp_path / "bind_src/bound_file.txt"
-        )
+        (tmp_path / "home_link_to_bind_src").symlink_to(tmp_path / "bind_src/bound_file.txt")
     if not (tmp_path / "home_link_relative_to_bind_src").exists():
-        (tmp_path / "home_link_relative_to_bind_src").symlink_to(
-            "bind_src/bound_file.txt"
-        )
+        (tmp_path / "home_link_relative_to_bind_src").symlink_to("bind_src/bound_file.txt")
 
     if not (tmp_path / "bind_src/link_to_bind_src").exists():
-        (tmp_path / "bind_src/link_to_bind_src").symlink_to(
-            tmp_path / "bind_src/bound_file.txt"
-        )
+        (tmp_path / "bind_src/link_to_bind_src").symlink_to(tmp_path / "bind_src/bound_file.txt")
     if not (tmp_path / "bind_src/link_relative_to_bind_src").exists():
         (tmp_path / "bind_src/link_relative_to_bind_src").symlink_to("bound_file.txt")
 
@@ -156,8 +150,7 @@ def files() -> Dict[str, Path]:
         "link_to_bind": tmp_path / "bind_dest/link_to_bind_src",
         "new_link_to_bind": tmp_path / "bind_dest/new_link_to_bind_src",
         "link_relative_to_bind": tmp_path / "bind_dest/link_relative_to_bind_src",
-        "new_link_relative_to_bind": tmp_path
-        / "bind_dest/new_link_relative_to_bind_src",
+        "new_link_relative_to_bind": tmp_path / "bind_dest/new_link_relative_to_bind_src",
         "to_rename": tmp_path / "to_rename.txt",
         "new_rename": tmp_path / "new_rename.txt",
         "bind_to_rename": tmp_path / "bind_dest/to_rename.txt",

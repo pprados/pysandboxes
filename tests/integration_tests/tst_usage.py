@@ -95,9 +95,7 @@ def init_log_level(use_rich: bool = True) -> None:
     # logging.debug("DEBUG test")
 
 
-def signal_handler_main(
-    signum: int, frame: FrameType | None
-) -> Any | int | signal.Handlers:
+def signal_handler_main(signum: int, frame: FrameType | None) -> Any | int | signal.Handlers:
     logger.info("********** catch signal in main")
     return None
 
@@ -105,9 +103,7 @@ def signal_handler_main(
 _old_sigint_handler = None
 
 
-def signal_handler_sandbox(
-    signum: int, frame: FrameType | None
-) -> Any | int | signal.Handlers:
+def signal_handler_sandbox(signum: int, frame: FrameType | None) -> Any | int | signal.Handlers:
     global _old_sigint_handler
     logger.info("********** catch signal in sandbox")
     if callable(_old_sigint_handler):
@@ -184,15 +180,9 @@ def _test_network() -> int:
     # Learn a direct connection to google
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            remote_ip = _network_dns_result(
-                lambda: socket.gethostbyname("www.google.com")
-            )
+            remote_ip = _network_dns_result(lambda: socket.gethostbyname("www.google.com"))
             _network_dns_result(lambda: socket.gethostbyname_ex("www.google.com"))
-            _network_dns_result(
-                lambda: socket.getaddrinfo(
-                    "www.google.com", None, family=socket.AF_UNSPEC
-                )
-            )
+            _network_dns_result(lambda: socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC))
             sock.settimeout(timeout)
             sock.connect((remote_ip, 80))
             logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
@@ -242,9 +232,7 @@ def _test_network() -> int:
         logger.error(f"{KO} get http://www.google.com {e}")
         rc = 1
     except requests.exceptions.ConnectionError as e:
-        logger.error(
-            f"{KO} get http://www.google.com (network unreachable or refused) {e}"
-        )
+        logger.error(f"{KO} get http://www.google.com (network unreachable or refused) {e}")
         rc = 1
 
     # udp connection ipv4
@@ -318,9 +306,7 @@ def _test_network() -> int:
     if not learning_mode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                remote_ip = _network_dns_result(
-                    lambda: socket.gethostbyname("www.github.com")
-                )
+                remote_ip = _network_dns_result(lambda: socket.gethostbyname("www.github.com"))
                 sock.settimeout(timeout)
                 sock.connect((remote_ip, 80))
             if learning_mode:
@@ -431,9 +417,7 @@ def _test_files() -> int:
                     "landlock",
                     "bwrap",
                 ]:  # FIXME: bwrap and .env
-                    logger.warning(
-                        f"{OK} .env is accessible (os_sandbox={pysandboxes.os_sandbox!r})"
-                    )
+                    logger.warning(f"{OK} .env is accessible (os_sandbox={pysandboxes.os_sandbox!r})")
                 else:
                     logger.error(f"{KO} .env must not be accessible")
                     rc = 1

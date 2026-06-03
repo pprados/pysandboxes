@@ -42,9 +42,7 @@ class TestWhichCommand:
         expected_path = Path("/usr/bin/python3")
 
         with patch("pysandboxes.remote.tools.known_paths", []):
-            with patch(
-                "pysandboxes.remote.tools.shutil.which", return_value=str(expected_path)
-            ):
+            with patch("pysandboxes.remote.tools.shutil.which", return_value=str(expected_path)):
                 result = which_command("python3")
                 assert result == expected_path
 
@@ -148,9 +146,7 @@ class TestGetDefaultGatewayInfo:
     @patch("netifaces.gateways")
     def test_get_default_gateway_info_ipv4(self, mock_gateways: Mock) -> None:
         """Test getting IPv4 default gateway."""
-        mock_gateways.return_value = {
-            "default": {2: ("192.168.1.1", "eth0", True)}  # AF_INET = 2
-        }
+        mock_gateways.return_value = {"default": {2: ("192.168.1.1", "eth0", True)}}  # AF_INET = 2
 
         with patch("netifaces.AF_INET", 2):
             result = get_default_gateway_info()
@@ -159,9 +155,7 @@ class TestGetDefaultGatewayInfo:
     @patch("netifaces.gateways")
     def test_get_default_gateway_info_ipv6(self, mock_gateways: Mock) -> None:
         """Test getting IPv6 default gateway when IPv4 not available."""
-        mock_gateways.return_value = {
-            "default": {10: ("fe80::1", "eth0", True)}  # AF_INET6 = 10
-        }
+        mock_gateways.return_value = {"default": {10: ("fe80::1", "eth0", True)}}  # AF_INET6 = 10
 
         with patch("netifaces.AF_INET", 2):
             with patch("netifaces.AF_INET6", 10):

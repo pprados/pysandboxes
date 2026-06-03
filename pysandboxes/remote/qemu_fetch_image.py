@@ -34,9 +34,7 @@ def main() -> int:  # FIXME documenter
         return 0
     except FileNotFoundError as e:
         print(f"\n{e}")
-        print(
-            f"Set {ENV_VM_IMAGE_URL} (full URL) or {ENV_VM_IMAGE_BASE_URL} (base URL) to enable download."
-        )
+        print(f"Set {ENV_VM_IMAGE_URL} (full URL) or {ENV_VM_IMAGE_BASE_URL} (base URL) to enable download.")
         return 1
     except OSError as e:
         print(f"\nDownload failed: {e}", file=sys.stderr)

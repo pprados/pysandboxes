@@ -187,9 +187,7 @@ def suggest_package_installation(package_name: str) -> str:
             except FileNotFoundError:
                 pass  # No specific distro info found
 
-        distro_id: str = distro_info.get(
-            "ID", ""
-        ).lower()  # Get the ID of the distribution
+        distro_id: str = distro_info.get("ID", "").lower()  # Get the ID of the distribution
 
         if distro_id == "ubuntu" or distro_id == "debian":
             return f"sudo apt update && sudo apt install {package_name}"
@@ -266,9 +264,7 @@ def set_pdeathsig() -> None:
         libc = cdll.LoadLibrary("libc.so.6")
         result = libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
         if result != 0:
-            logging.warning(
-                "prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s", result
-            )
+            logging.warning("prctl(PR_SET_PDEATHSIG, SIGTERM) failed with code %s", result)
     except OSError:
         logging.warning("prctl not available (not Linux or libc not found).")
 
@@ -324,18 +320,14 @@ def _get_default_interface_via_ip() -> str | None:
         # 1. Execute the 'ip route' command to get the routing table
         # We use a timeout to prevent the call from hanging indefinitely
         # check=True will raise CalledProcessError on non-zero exit codes
-        result = subprocess.run(
-            ["ip", "route"], capture_output=True, text=True, check=True, timeout=5
-        )
+        result = subprocess.run(["ip", "route"], capture_output=True, text=True, check=True, timeout=5)
         output: str = result.stdout
 
         # 2. Search for the default route line
         # The line typically starts with 'default via <gateway_ip> dev <interface_name>'
         # Example: 'default via 192.168.1.1 dev eth0 proto dhcp src 192.168.1.100 metric 100'
         # We use a regex to capture the 'dev <interface_name>' part
-        default_route_pattern: re.Pattern = re.compile(
-            r"^default\s+.*dev\s+(\S+)", re.MULTILINE
-        )
+        default_route_pattern: re.Pattern = re.compile(r"^default\s+.*dev\s+(\S+)", re.MULTILINE)
 
         match: re.Match[str] | None = default_route_pattern.search(output)
 
@@ -349,9 +341,7 @@ def _get_default_interface_via_ip() -> str | None:
 
     except FileNotFoundError:
         # This occurs if the 'ip' command is not found on the system (highly unlikely on Ubuntu)
-        logger.warning(
-            "Error: 'ip' command not found. Ensure iproute2 package is installed."
-        )
+        logger.warning("Error: 'ip' command not found. Ensure iproute2 package is installed.")
         return None
     except subprocess.CalledProcessError as e:
         # This handles non-zero exit codes from the command
@@ -443,18 +433,12 @@ def get_bridge_interfaces() -> list[str]:
 
         return bridge_interfaces
     except PermissionError as e:
-        raise RuntimeError(
-            "Error: Insufficient permissions to read /sys/class/net."
-        ) from e
+        raise RuntimeError("Error: Insufficient permissions to read /sys/class/net.") from e
     except Exception as e:
-        raise RuntimeError(
-            f"An unexpected error occurred while reading interfaces: {e}"
-        ) from e
+        raise RuntimeError(f"An unexpected error occurred while reading interfaces: {e}") from e
 
 
-def get_dns_servers() -> (
-    tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]
-):
+def get_dns_servers() -> tuple[list[ipaddress.IPv4Address], list[ipaddress.IPv6Address]]:
     """
     Reads /etc/resolv.conf and extracts all nameserver IP addresses,
     separating them into IPv4 and IPv6 lists.
@@ -543,12 +527,8 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
                     # The captured group (1) contains the IP list (e.g., "8.8.8.8 8.8.4.4")
                     ip_list: str = match.group(1).strip()
                     # Split the string by spaces and filter out any empty strings
-                    servers_found: list[str] = [
-                        ip.strip() for ip in ip_list.split() if ip
-                    ]
-                    dns_servers.extend(
-                        [ipaddress.ip_address(ip) for ip in servers_found]
-                    )
+                    servers_found: list[str] = [ip.strip() for ip in ip_list.split() if ip]
+                    dns_servers.extend([ipaddress.ip_address(ip) for ip in servers_found])
 
         return list(set(dns_servers))
     except IOError as e:
@@ -593,9 +573,7 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
         # Regex to capture the IPs following "Current DNS Server" or "DNS Servers"
         # from both Global and Link configuration sections.
         # Group 2 captures the list of IPs.
-        dns_pattern: re.Pattern = re.compile(
-            r"^\s*(Current\s+)?DNS\s+Servers:\s*(.*?)\s*$", re.MULTILINE
-        )
+        dns_pattern: re.Pattern = re.compile(r"^\s*(Current\s+)?DNS\s+Servers:\s*(.*?)\s*$", re.MULTILINE)
 
         all_ips: list[IPv4Address | IPv6Address] = []
         # Find all matches across the output
@@ -656,9 +634,7 @@ def get_upstream_dns() -> list[IPv4Address | IPv6Address]:
         all_dns.extend(ipv4_list)
         all_dns.extend(ipv6_list)
         # Filter out stub resolvers (systemd-resolved writes 127.0.0.53)
-        real_dns = [
-            ip for ip in all_dns if ip not in _STUB_RESOLVERS and not ip.is_loopback
-        ]
+        real_dns = [ip for ip in all_dns if ip not in _STUB_RESOLVERS and not ip.is_loopback]
         if real_dns:
             return real_dns
     except (OSError, AssertionError):

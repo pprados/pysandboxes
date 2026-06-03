@@ -59,8 +59,7 @@ def extract_port_forwards(
         if isinstance(ports, range) and len(ports) > 1000:
             if log_wildcard:
                 logger.warning(
-                    "Cannot forward wildcard port range from rule '%s'. "
-                    "Use explicit ports instead.",
+                    "Cannot forward wildcard port range from rule '%s'. " "Use explicit ports instead.",
                     rule.config.rule,
                 )
             continue
@@ -212,11 +211,7 @@ def run_slirp_watcher(
         proc = subprocess.Popen(
             slirp_arg,
             stdout=subprocess.DEVNULL,
-            stderr=(
-                subprocess.PIPE
-                if logger.isEnabledFor(logging.DEBUG)
-                else subprocess.DEVNULL
-            ),
+            stderr=(subprocess.PIPE if logger.isEnabledFor(logging.DEBUG) else subprocess.DEVNULL),
             pass_fds=(pipe_w,),
         )
         if process_holder is not None:
@@ -230,18 +225,14 @@ def run_slirp_watcher(
             except subprocess.TimeoutExpired:
                 if shutdown_event.is_set():
                     return
-        stderr_output = (
-            proc.stderr.read().decode(errors="replace") if proc.stderr else ""
-        )
+        stderr_output = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
         if shutdown_event.is_set():
             return
         logger.debug("slirp_watcher: slirp4netns exited with code %s", proc.returncode)
         if stderr_output:
             logger.error("slirp_watcher: slirp4netns stderr: %s", stderr_output.strip())
         if proc.returncode not in (0, -9):
-            logger.warning(
-                "slirp_watcher: slirp4netns exited with code %s", proc.returncode
-            )
+            logger.warning("slirp_watcher: slirp4netns exited with code %s", proc.returncode)
     except Exception:
         logger.exception("slirp_watcher: exception launching slirp4netns")
     finally:

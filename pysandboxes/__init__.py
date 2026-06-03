@@ -112,9 +112,7 @@ class LazySandboxesProxy:
 
             module_api = importlib.import_module(".sandboxes_api", package=__name__)
             module_exception = importlib.import_module(".e", package=__name__)
-            self.modules = {api: module_api for api in _api} | {
-                api: module_exception for api in _exception
-            }
+            self.modules = {api: module_api for api in _api} | {api: module_exception for api in _exception}
         if name in self.modules:
             return getattr(self.modules[name], name)
         else:

@@ -47,9 +47,7 @@ def test_no_rules_denied_connection(mock_getaddrinfo: Mock) -> None:
         socket.AF_INET,
         Kind.TCP,
     )
-    mock_getaddrinfo.return_value = [
-        (s_family, s_kind, 6, "", ("93.184.216.34", 80))
-    ]  # Used s_family
+    mock_getaddrinfo.return_value = [(s_family, s_kind, 6, "", ("93.184.216.34", 80))]  # Used s_family
     errors: List[ErrorMsg] = []
     rules, *_ = parse_rules([], errors)
     address: Tuple[str, int] = ("example.com", 80)
@@ -92,10 +90,7 @@ def test_hostname_resolution_failure_raises_value_error(
     address: Tuple[str, int] = ("nonexistent.example.com", 80)
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            r"Invalid hostname or IP address (resolution failed): "
-            r"nonexistent.example.com"
-        ),
+        match=re.escape(r"Invalid hostname or IP address (resolution failed): " r"nonexistent.example.com"),
     ):
         _check_address_with_rules(rules, s_kind, address, Direction.OUT)
     pass
@@ -127,16 +122,12 @@ def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     # in this scenario.
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            r"Invalid hostname or IP address (resolution failed): empty.resolve.com"
-        ),
+        match=re.escape(r"Invalid hostname or IP address (resolution failed): empty.resolve.com"),
     ):
         _check_address_with_rules(rules, s_kind, address, Direction.OUT)
 
     # Test with non-IP address in sockaddr (e.g. AF_UNIX) when socket family is AF_INET
-    mock_getaddrinfo.return_value = [
-        (socket.AF_UNIX, Kind.TCP.value, 0, "", ("/path/to/socket"))
-    ]  # type: ignore
+    mock_getaddrinfo.return_value = [(socket.AF_UNIX, Kind.TCP.value, 0, "", ("/path/to/socket"))]  # type: ignore
     # This ValueError is also unlikely. Corrected s_family.value to s_family.
     with pytest.raises(
         ValueError,
@@ -154,9 +145,7 @@ def test_explicit_deny_rule_blocks_connection(mock_getaddrinfo: Mock) -> None:
 
     errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
-    mock_getaddrinfo.return_value = [
-        (s_family, s_kind, 6, "", ("192.168.1.100", 8080))
-    ]  # Used s_family
+    mock_getaddrinfo.return_value = [(s_family, s_kind, 6, "", ("192.168.1.100", 8080))]  # Used s_family
     rules, *_ = parse_rules(
         [
             ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
@@ -179,9 +168,7 @@ def test_explicit_deny_rule_any_port_blocks_connection(mock_getaddrinfo: Mock) -
 
     errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
-    mock_getaddrinfo.return_value = [
-        (s_family, s_kind, 6, "", ("10.0.0.5", 1234))
-    ]  # Used s_family
+    mock_getaddrinfo.return_value = [(s_family, s_kind, 6, "", ("10.0.0.5", 1234))]  # Used s_family
     rules, *_ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp,udp|0.0.0.0/0|*|OUT", Path(), 0),
@@ -204,9 +191,7 @@ def test_accept_all_syntaxes(mock_getaddrinfo: Mock) -> None:
 
     errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
-    mock_getaddrinfo.return_value = [
-        (s_family, s_kind, 6, "", ("10.0.0.5", 1234))
-    ]  # Used s_family
+    mock_getaddrinfo.return_value = [(s_family, s_kind, 6, "", ("10.0.0.5", 1234))]  # Used s_family
     rules, *_ = parse_rules(
         [
             ConfigLine("net=ALLOW|tcp,udp|0.0.0.0/0|*|*", Path(), 0),
@@ -227,9 +212,7 @@ def test_explicit_deny_ipv6_rule_blocks_connection(mock_getaddrinfo: Mock) -> No
 
     errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET6, Kind.TCP
-    mock_getaddrinfo.return_value = [
-        (s_family, s_kind, 6, "", ("::1", 443, 0, 0))
-    ]  # Used s_family
+    mock_getaddrinfo.return_value = [(s_family, s_kind, 6, "", ("::1", 443, 0, 0))]  # Used s_family
     rules, *_ = parse_rules(
         [
             ConfigLine("net=ALLOW|any|::1/0|*|OUT", Path(), 0),
@@ -283,9 +266,7 @@ def test_explicit_allow_rule_not_triggers_allow_exception(
 
     errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
-    mock_getaddrinfo.return_value = [
-        (s_family, s_kind, 6, "", ("8.8.8.8", 53))
-    ]  # Used s_family
+    mock_getaddrinfo.return_value = [(s_family, s_kind, 6, "", ("8.8.8.8", 53))]  # Used s_family
     rules, *_ = parse_rules(
         [
             # ConfigLine("net=DENY|any|1.1.1.1/32|1234|OUT", Path(), 0),
@@ -308,9 +289,7 @@ def test_bind_direction_check_explicit_deny(mock_getaddrinfo: Mock) -> None:
 
     errors: List[ErrorMsg] = []
     s_family, s_kind = socket.AF_INET, Kind.TCP
-    mock_getaddrinfo.return_value = [
-        (s_family, s_kind, 6, "", ("0.0.0.0", 8080))
-    ]  # Used s_family
+    mock_getaddrinfo.return_value = [(s_family, s_kind, 6, "", ("0.0.0.0", 8080))]  # Used s_family
     rules, *_ = parse_rules(
         [
             ConfigLine("net=ALLOW|any|0.0.0.0/0|*|OUT", Path(), 0),
@@ -379,9 +358,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: Mock) -> None:
     hostname, port = "anytype.example.com", 1234
     ip_address = "1.2.3.4"
 
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, s_kind, 6, "", (ip_address, port))
-    ]
+    mock_getaddrinfo.return_value = [(socket.AF_INET, s_kind, 6, "", (ip_address, port))]
     # Rule ALLOWING 'any' type
     rules, *_ = parse_rules(
         [
@@ -422,9 +399,7 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: Mock) -> None:
         ("80, ,443", (80, 443)),  # Empty element in the middle
     ],
 )
-def test_convert_ports_range_valid_cases(
-    port_spec: str, expected_output: Union[int, Tuple[int, ...], range]
-) -> None:
+def test_convert_ports_range_valid_cases(port_spec: str, expected_output: Union[int, Tuple[int, ...], range]) -> None:
     """
     Tests the _convert_ports_range function with valid port specification syntaxes
     that should return a list or range of ports without raising an exception.
@@ -456,9 +431,7 @@ def test_convert_ports_range_valid_cases(
         ("-8000", "Invalid range format: '-8000'. Range _start cannot be empty."),
     ],
 )
-def test_convert_ports_range_invalid_cases(
-    port_spec: str, expected_exception_message: str
-) -> None:
+def test_convert_ports_range_invalid_cases(port_spec: str, expected_exception_message: str) -> None:
     """
     Tests the _convert_ports_range function with invalid port specification syntaxes
     that should raise a ValueError with a specific message.
@@ -541,17 +514,8 @@ def test_getaddrinfo() -> None:
         ImmutableDict({"www.google.com": default_values}),
     )
 
-    assert (
-        getaddrinfo("www.google.com", 0)
-        == pysandboxes.guard_socket._pin_dns["www.google.com"]
-    )
+    assert getaddrinfo("www.google.com", 0) == pysandboxes.guard_socket._pin_dns["www.google.com"]
     assert all(x[4][1] == 80 for x in getaddrinfo("www.google.com", 80))
-    assert all(
-        x[0] == AddressFamily.AF_INET
-        for x in getaddrinfo("www.google.com", 0, family=AddressFamily.AF_INET)
-    )
-    assert all(
-        x[1] == SocketKind.SOCK_STREAM
-        for x in getaddrinfo("www.google.com", 0, type=SocketKind.SOCK_STREAM)
-    )
+    assert all(x[0] == AddressFamily.AF_INET for x in getaddrinfo("www.google.com", 0, family=AddressFamily.AF_INET))
+    assert all(x[1] == SocketKind.SOCK_STREAM for x in getaddrinfo("www.google.com", 0, type=SocketKind.SOCK_STREAM))
     assert all(x[2] == 6 for x in getaddrinfo("www.google.com", 0, proto=6))

@@ -90,14 +90,10 @@ def _guest_python_exe_path() -> str:
             return str(exe.resolve(strict=True))
         return str(exe.resolve(strict=True))
     except FileNotFoundError as e:
-        raise RuntimeError(
-            "Impossible to resolve the sys.executable `%s`", sys.executable
-        ) from e
+        raise RuntimeError("Impossible to resolve the sys.executable `%s`", sys.executable) from e
 
 
-def _bin_paths_include_resolved_interpreter(
-    executable: Path, bin_paths: set[Path]
-) -> None:
+def _bin_paths_include_resolved_interpreter(executable: Path, bin_paths: set[Path]) -> None:
     """Register the resolved interpreter file when ``follow_links_executable`` no-ops.
 
     That helper returns immediately for ``/usr/bin`` and ``/usr/local/bin`` to avoid
@@ -256,9 +252,7 @@ def _stage_exec_virtfs_mounts(
             elif host_path.is_file():
                 shutil.copy2(host_path, dest)
             else:
-                logger.warning(
-                    "virtfs staging: skip missing path %s (tag %s)", host_path, tag
-                )
+                logger.warning("virtfs staging: skip missing path %s (tag %s)", host_path, tag)
                 continue
         except OSError as e:
             logger.error("virtfs staging: copy %s -> %s failed: %s", host_path, dest, e)
@@ -300,11 +294,7 @@ def _merge_staged_virtfs_into_expose_mounts(
         if tag.startswith("pysb_") and tag[5:].isdigit()
     }
     mount_specs[:] = [
-        m
-        for m in mount_specs
-        if not (
-            m[0].startswith("pysb_exec_") and _norm_guest_path(m[2]) in file_norm_guests
-        )
+        m for m in mount_specs if not (m[0].startswith("pysb_exec_") and _norm_guest_path(m[2]) in file_norm_guests)
     ]
 
 
@@ -318,11 +308,7 @@ def _rebase_file_expose_hosts_under_staged_app(
     """
     staged_app: Path | None = None
     for tag, hp, gp in mount_specs:
-        if (
-            tag.startswith("pysb_")
-            and tag[5:].isdigit()
-            and _norm_guest_path(gp) == "/app"
-        ):
+        if tag.startswith("pysb_") and tag[5:].isdigit() and _norm_guest_path(gp) == "/app":
             staged_app = hp
             break
     if staged_app is None:
@@ -652,14 +638,10 @@ def _ensure_ld_closure_soname_symlink(dest: Path) -> None:
     try:
         link.symlink_to(name)
     except OSError as e:
-        logger.debug(
-            "ld closure: could not soname-symlink %s -> %s: %s", soname, name, e
-        )
+        logger.debug("ld closure: could not soname-symlink %s -> %s: %s", soname, name, e)
 
 
-def _stage_dynamic_linker_closure(
-    temp: Path, *, ld_closure_libs: str = "full"
-) -> list[tuple[str, Path, str]]:
+def _stage_dynamic_linker_closure(temp: Path, *, ld_closure_libs: str = "full") -> list[tuple[str, Path, str]]:
     """Copy ldd closure of the host interpreter; mount loader + glibc paths on the guest.
 
     PT_INTERP must resolve to the host loader on 9p, not the guest disk, or libc
@@ -720,11 +702,7 @@ def _stage_dynamic_linker_closure(
     elif libgnu.is_dir():
         out.append(("pysb_lib_gnu", libgnu, guest_lib))
     if out:
-        mode = (
-            "full multiarch merge + ldd seeds"
-            if ld_closure_libs == "full"
-            else "sparse ldd + compat seeds"
-        )
+        mode = "full multiarch merge + ldd seeds" if ld_closure_libs == "full" else "sparse ldd + compat seeds"
         logger.debug(
             "QEMU virtio-9p: staged dynamic linker closure (%d ldd objects, %s) for "
             "container interpreter + shell/bootstrap utils (nested /lib overlay)",
@@ -901,12 +879,8 @@ def _file_rules_mounts(
         _rebase_file_expose_hosts_under_staged_app(mount_specs)
         _stage_overlay_etc_expose_mount(temp, mount_specs)
         # Prepend so sort places these before project expose mounts; guest must see host ld.so/libc.
-        ld_mode = _normalize_ld_closure_libs_param(
-            str(all_rules.os_sandbox_params.get("ld_closure_libs", "full"))
-        )
-        mount_specs[:] = (
-            _stage_dynamic_linker_closure(temp, ld_closure_libs=ld_mode) + mount_specs
-        )
+        ld_mode = _normalize_ld_closure_libs_param(str(all_rules.os_sandbox_params.get("ld_closure_libs", "full")))
+        mount_specs[:] = _stage_dynamic_linker_closure(temp, ld_closure_libs=ld_mode) + mount_specs
 
     mount_list = [(tag, gp) for tag, _hp, gp in mount_specs]
 
@@ -965,9 +939,7 @@ class QemuSSEDaemon(VMSSEDaemon):
     def augment_rules_for_guest_run_mount(self, all_rules: AllRules) -> AllRules:
         return augment_all_rules_for_qemu_run_mount(all_rules)
 
-    def __init__(
-        self, token: str, *, python_args: list[str] | None = None, **kwargs: Any
-    ) -> None:
+    def __init__(self, token: str, *, python_args: list[str] | None = None, **kwargs: Any) -> None:
         # Force IPv4 so hostfwd (TCP only on 0.0.0.0) is used; "localhost" can resolve to ::1.
         super().__init__(
             token,
@@ -1014,9 +986,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         """
         image_path = get_default_image_path()
         ensure_image(image_path)
-        mount_specs, mount_list = _file_rules_mounts(
-            all_rules, temp, pipe_path, config_dir=config_dir
-        )
+        mount_specs, mount_list = _file_rules_mounts(all_rules, temp, pipe_path, config_dir=config_dir)
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
         nocloud_iso = prepare_guest_env(
@@ -1063,13 +1033,7 @@ class QemuSSEDaemon(VMSSEDaemon):
                 security = "none"
             else:
                 configured = (
-                    str(
-                        all_rules.os_sandbox_params.get(
-                            "virtfs_security_model", "mapped-xattr"
-                        )
-                    )
-                    .strip()
-                    .lower()
+                    str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr")).strip().lower()
                 )
                 # QEMU has no security_model=auto; treat as mapped-xattr (guest-friendly default).
                 security = "mapped-xattr" if configured in ("auto", "") else configured
@@ -1089,13 +1053,9 @@ class QemuSSEDaemon(VMSSEDaemon):
         ]
 
         # Ubuntu cloud images use .img extension but are QCOW2 format (see Ubuntu docs)
-        use_qcow2 = image_path.suffix == ".qcow2" or (
-            image_path.suffix == ".img" and "cloudimg" in image_path.name
-        )
+        use_qcow2 = image_path.suffix == ".qcow2" or (image_path.suffix == ".img" and "cloudimg" in image_path.name)
         drive_image = (
-            f"file={image_path!s},format=qcow2,if=virtio"
-            if use_qcow2
-            else f"file={image_path!s},format=raw,if=virtio"
+            f"file={image_path!s},format=qcow2,if=virtio" if use_qcow2 else f"file={image_path!s},format=raw,if=virtio"
         )
         drive_nocloud = f"file={nocloud_iso!s},format=raw,if=virtio"
         cmd: Args = [
@@ -1178,15 +1138,12 @@ class QemuSSEDaemon(VMSSEDaemon):
             init_fn_ref = f"{module}:{func_ref}"
 
         dns_guest = [IPv4Address("10.0.2.3")]
-        netfilter_list = list(
-            rule_to_netfilter(all_rules.socket_rules, dns_guest, is_ipv6=False)
-        )
+        netfilter_list = list(rule_to_netfilter(all_rules.socket_rules, dns_guest, is_ipv6=False))
         # Allow host (10.0.2.2 in QEMU user mode) to reach the SSE server port.
         if "COMMIT" in netfilter_list:
             idx = netfilter_list.index("COMMIT")
             sse_allow = (
-                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} "
-                "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} " "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
             )
             netfilter_list = netfilter_list[:idx] + [sse_allow] + netfilter_list[idx:]
         netfilter_rules: tuple[str, ...] = tuple(netfilter_list)
@@ -1221,13 +1178,9 @@ class QemuSSEDaemon(VMSSEDaemon):
         else:
             config_dir = None
 
-        cmd, _ = self._build_qemu_cmd(
-            all_rules, temp, process_config, port, pipe_path, config_dir=config_dir
-        )
+        cmd, _ = self._build_qemu_cmd(all_rules, temp, process_config, port, pipe_path, config_dir=config_dir)
 
-        logger.debug(
-            "Launch QEMU: %s", " ".join((repr(a) if " " in a else a for a in cmd))
-        )
+        logger.debug("Launch QEMU: %s", " ".join((repr(a) if " " in a else a for a in cmd)))
 
         # When DEBUG_CONFIG, config is in 9p-mounted dir; else launch_sandbox writes to FIFO
         def _noop_config_writer(_: DaemonParameters) -> None:
@@ -1309,9 +1262,7 @@ class QemuSSEDaemon(VMSSEDaemon):
                             response.status,
                             ping_url,
                         )
-                        raise RuntimeError(
-                            f"Unexpected status {response.status} from {ping_url}"
-                        )
+                        raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                 except (
                     TimeoutError,
                     ClientConnectorError,

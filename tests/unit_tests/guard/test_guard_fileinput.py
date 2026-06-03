@@ -22,9 +22,7 @@ def test_fileinput_input(files: Dict[str, Path]) -> None:  # noqa:F811
     activate_guard_files_rules(rules)
 
     shutil.copy2(files["visible"], files["new_replace"])
-    with fileinput.input(
-        files=[files["new_replace"]], inplace=True, backup=".bak"
-    ) as f:
+    with fileinput.input(files=[files["new_replace"]], inplace=True, backup=".bak") as f:
         for line in f:
             print(line.replace("Visible", "in place"), end="")
     with open(files["new_replace"]) as f:

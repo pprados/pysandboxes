@@ -49,9 +49,7 @@ def _search_module_config(config_path: Path | None) -> Path:
     pysb_module_name = __name__.split(".", 1)[0]
     # Search the module of the caller
     frame = sys._getframe()
-    while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(
-        pysb_module_name + "."
-    ):
+    while cast(str, frame.f_globals.get("__name__", "__main__")).startswith(pysb_module_name + "."):
         assert frame.f_back is not None
         frame = frame.f_back
     # Module of the caller
@@ -102,10 +100,7 @@ def _get_caller_module(skip: int) -> types.ModuleType | None:
 
 def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
     return remove_config_comments(
-        [
-            ConfigLine(line, config_path, ln + 1)
-            for ln, line in enumerate(config_path.read_text().splitlines())
-        ]
+        [ConfigLine(line, config_path, ln + 1) for ln, line in enumerate(config_path.read_text().splitlines())]
     )
 
 
@@ -202,16 +197,12 @@ def _parse_include(
                         include_config = remove_config_comments(
                             [
                                 ConfigLine(line, filename, ln + 1)
-                                for ln, line in enumerate(
-                                    filename.read_text().split("\n")
-                                )
+                                for ln, line in enumerate(filename.read_text().split("\n"))
                             ]
                         )
                         # Recursive include
                         includes.add(filename.absolute())
-                        others.extend(
-                            _parse_include(root_path, includes, include_config)
-                        )
+                        others.extend(_parse_include(root_path, includes, include_config))
                 except PermissionError:
                     pass  # Ignore
         else:
@@ -271,9 +262,7 @@ def parse_config(
 
     os_sandbox_params: ImmutableDict[str, Any]
     if os_sandbox != "error":
-        os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(
-            providers_rules, errors
-        )
+        os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
     else:
         os_sandbox_params = ImmutableDict({})
 
@@ -287,8 +276,7 @@ def parse_config(
         for invalide_rule in others:
             errors.append(
                 (
-                    f"{format_ruleref(invalide_rule)}: "
-                    f"Invalid rule {invalide_rule.rule!r}",
+                    f"{format_ruleref(invalide_rule)}: " f"Invalid rule {invalide_rule.rule!r}",
                     invalide_rule.path,
                     invalide_rule.ln,
                 )
@@ -297,9 +285,7 @@ def parse_config(
     # 3. Print error
     if errors:
         errors = sorted(errors, key=lambda r: (str(r[1]), r[2]))
-        raise ConfigSyntaxError(
-            "Syntax error in config files.", [error[0] for error in errors]
-        )
+        raise ConfigSyntaxError("Syntax error in config files.", [error[0] for error in errors])
 
     if learn:
         # Force os_sandbox to subprocess
@@ -342,9 +328,7 @@ def activate_sandboxes(
     """
     if envs is None:
         envs = os.environ
-    provider_key = (
-        rules_provider if rules_provider is not None else all_rules.os_sandbox
-    )
+    provider_key = rules_provider if rules_provider is not None else all_rules.os_sandbox
     if provider_key:
         from pysandboxes._os_sandbox import providers_factory
 

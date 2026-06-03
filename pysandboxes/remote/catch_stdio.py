@@ -39,9 +39,7 @@ class QueueStringIO(io.StringIO):
         super().__init__()
         self.type = type
         self._message_queue: TQueue | None = queue
-        self._buffer: io.StringIO = (
-            io.StringIO()
-        )  # Underlying buffer for aggregated content
+        self._buffer: io.StringIO = io.StringIO()  # Underlying buffer for aggregated content
 
     def write(self, s: str) -> int:
         """
@@ -155,9 +153,7 @@ def catch_stdio(
         A dictionary containing the result, stdout, and stderr.
     """
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
-    result = asyncio.run_coroutine_threadsafe(
-        acatch_stdio(queue, fn, kwargs, *args), asyncio.get_event_loop()
-    )
+    result = asyncio.run_coroutine_threadsafe(acatch_stdio(queue, fn, kwargs, *args), asyncio.get_event_loop())
     return result.result()
 
 
@@ -183,12 +179,8 @@ async def acatch_stdio(
         A dictionary containing the result, stdout, and stderr.
     """
     assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
-    captured_stdout: io.StringIO = QueueStringIO(
-        type="stdout", queue=sync_or_async_queue
-    )
-    captured_stderr: io.StringIO = QueueStringIO(
-        type="stderr", queue=sync_or_async_queue
-    )
+    captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=sync_or_async_queue)
+    captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=sync_or_async_queue)
     fn_result: Any = None
 
     async def run_in_context() -> dict[str, Any]:

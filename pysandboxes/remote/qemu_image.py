@@ -108,9 +108,7 @@ def get_standard_download_url(
         python_version = sys.version_info[:2]
     if arch is None:
         arch = platform.machine()
-    url = get_ubuntu_image_url_for_python_version(
-        python_version[0], python_version[1], arch
-    )
+    url = get_ubuntu_image_url_for_python_version(python_version[0], python_version[1], arch)
     if url is not None:
         return url
     return get_standard_image_url(arch)
@@ -206,8 +204,7 @@ def _validate_download_url(url: str) -> str:
     url_lower = url.lower().strip()
     if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
         raise ValueError(
-            f"Unsafe URL scheme in image download URL. "
-            f"Only http:// and https:// are allowed, got: {url[:50]}"
+            f"Unsafe URL scheme in image download URL. " f"Only http:// and https:// are allowed, got: {url[:50]}"
         )
     return url
 
@@ -268,9 +265,7 @@ def download_image(
     callback = progress_callback or _default_progress_callback
     try:
         logger.info("Downloading QEMU image from %s to %s", url, path)
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "pysandboxes-qemu-provider/1.0"}
-        )
+        req = urllib.request.Request(url, headers={"User-Agent": "pysandboxes-qemu-provider/1.0"})
         # reason: url validated by _validate_download_url in get_download_url
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp:

@@ -25,9 +25,7 @@ class TestEnsureBackgroundLoop:
             assert result is None
 
     @patch("asyncio.get_running_loop")
-    def test_ensure_background_loop_in_coroutine(
-        self, mock_get_running_loop: Mock
-    ) -> None:
+    def test_ensure_background_loop_in_coroutine(self, mock_get_running_loop: Mock) -> None:
         """Test _ensure_background_loop when already in a coroutine."""
         mock_loop = Mock()
         mock_loop.is_running.return_value = True
@@ -40,9 +38,7 @@ class TestEnsureBackgroundLoop:
             mock_get_running_loop.assert_called_once()
 
     @patch("asyncio.get_running_loop")
-    def test_ensure_background_loop_runtime_error(
-        self, mock_get_running_loop: Mock
-    ) -> None:
+    def test_ensure_background_loop_runtime_error(self, mock_get_running_loop: Mock) -> None:
         """Test _ensure_background_loop handles RuntimeError when not
         in async context."""
         mock_get_running_loop.side_effect = RuntimeError("no running event loop")
@@ -140,9 +136,7 @@ class TestGetSandboxLoop:
 
     @patch("pysandboxes.private_loop._ensure_background_loop")
     @patch("asyncio.get_running_loop")
-    def test_get_sandbox_loop_none_returned(
-        self, mock_get_running_loop: Mock, mock_ensure_loop: Mock
-    ) -> None:
+    def test_get_sandbox_loop_none_returned(self, mock_get_running_loop: Mock, mock_ensure_loop: Mock) -> None:
         """Test get_sandbox_loop when _ensure_background_loop returns None."""
         mock_ensure_loop.return_value = None
         mock_fallback_loop = Mock()

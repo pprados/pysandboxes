@@ -130,8 +130,7 @@ class TestRuleToNetfilter:
 
         # Check that the rule was added (with correct spacing)
         tcp_rule_found = any(
-            "-A OUTPUT -p tcp -m conntrack--ctstate NEW -d 192.168.1.0/24 "
-            "-m multiport --dports 80 -j ACCEPT"
+            "-A OUTPUT -p tcp -m conntrack--ctstate NEW -d 192.168.1.0/24 " "-m multiport --dports 80 -j ACCEPT"
             for rule in result
         )
         assert tcp_rule_found
@@ -181,9 +180,7 @@ class TestRuleToNetfilter:
         # Currently, UDP rules are not generated due to implementation bug
         # This test documents the current behavior rather than expected behavior
         udp_rule_found = any(
-            "-A OUTPUT -p udp -d 8.8.8.8/32 "
-            "-m multiport --dports 53 -j ACCEPT" in rule
-            for rule in result
+            "-A OUTPUT -p udp -d 8.8.8.8/32 " "-m multiport --dports 53 -j ACCEPT" in rule for rule in result
         )
         assert udp_rule_found  # Should be False due to bug
 
@@ -204,8 +201,7 @@ class TestRuleToNetfilter:
 
         # Check that the REJECT rule was added
         reject_rule_found = any(
-            "-A OUTPUT -p tcp -m conntrack --ctstate NEW "
-            "-m multiport --dports 22 -j REJECT" in rule
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW " "-m multiport --dports 22 -j REJECT" in rule
             for rule in result
         )
         assert reject_rule_found
@@ -226,9 +222,7 @@ class TestRuleToNetfilter:
         result = rule_to_netfilter(socket_rules, [], is_ipv6=True)
 
         # Check that the IPv6 rule was added
-        ipv6_rule_found = any(
-            "2001:db8::/32" in rule and "tcp" in rule for rule in result
-        )
+        ipv6_rule_found = any("2001:db8::/32" in rule and "tcp" in rule for rule in result)
         assert ipv6_rule_found
 
     def test_rule_to_netfilter_multiple_kinds(self) -> None:
@@ -240,9 +234,7 @@ class TestRuleToNetfilter:
             [
                 SocketRule(
                     Action.ALLOW,
-                    SocketMask(
-                        (Kind.TCP, Kind.UDP), IPv4Network("192.168.1.0/24"), (80, 443)
-                    ),
+                    SocketMask((Kind.TCP, Kind.UDP), IPv4Network("192.168.1.0/24"), (80, 443)),
                     (Direction.OUT,),
                     ConfigLine("<arg>", Path(), 0),
                 )
@@ -252,13 +244,9 @@ class TestRuleToNetfilter:
         result = rule_to_netfilter(socket_rules, [], is_ipv6=False)
 
         # Check that TCP rule was added
-        tcp_rule_found = any(
-            "-p tcp" in rule and "192.168.1.0/24" in rule for rule in result
-        )
+        tcp_rule_found = any("-p tcp" in rule and "192.168.1.0/24" in rule for rule in result)
         # UDP rules are not generated due to implementation bug
-        udp_rule_found = any(
-            "-p udp" in rule and "192.168.1.0/24" in rule for rule in result
-        )
+        udp_rule_found = any("-p udp" in rule and "192.168.1.0/24" in rule for rule in result)
 
         assert tcp_rule_found
         assert udp_rule_found  # Should be False due to bug
@@ -279,12 +267,8 @@ class TestRuleToNetfilter:
         result = rule_to_netfilter(socket_rules, [], is_ipv6=False)
 
         # Check that both INPUT and OUTPUT rules were added
-        input_rule_found = any(
-            "-A INPUT" in rule and "192.168.1.0/24" in rule for rule in result
-        )
-        output_rule_found = any(
-            "-A OUTPUT" in rule and "192.168.1.0/24" in rule for rule in result
-        )
+        input_rule_found = any("-A INPUT" in rule and "192.168.1.0/24" in rule for rule in result)
+        output_rule_found = any("-A OUTPUT" in rule and "192.168.1.0/24" in rule for rule in result)
 
         assert input_rule_found
         assert output_rule_found
@@ -295,9 +279,7 @@ class TestRuleToNetfilter:
             [
                 SocketRule(
                     Action.ALLOW,
-                    SocketMask(
-                        (Kind.TCP,), IPv4Network("192.168.1.0/24"), range(65536)
-                    ),
+                    SocketMask((Kind.TCP,), IPv4Network("192.168.1.0/24"), range(65536)),
                     (Direction.OUT,),
                     ConfigLine("<arg>", Path(), 0),
                 )
@@ -307,9 +289,7 @@ class TestRuleToNetfilter:
         result = rule_to_netfilter(socket_rules, [], is_ipv6=False)
 
         # Check that rule without multiport was added
-        tcp_rule_found = any(
-            "-A OUTPUT -p tcp" in rule and "multiport" not in rule for rule in result
-        )
+        tcp_rule_found = any("-A OUTPUT -p tcp" in rule and "multiport" not in rule for rule in result)
         assert tcp_rule_found
 
     def test_rule_to_netfilter_commits_at_end(self) -> None:
@@ -351,11 +331,7 @@ class TestRuleToNetfilter:
         result = rule_to_netfilter(socket_rules, [], is_ipv6=False)
 
         # Count occurrences of the same rule
-        tcp_rules = [
-            rule
-            for rule in result
-            if "-A OUTPUT -p tcp" in rule and "192.168.1.0/24" in rule
-        ]
+        tcp_rules = [rule for rule in result if "-A OUTPUT -p tcp" in rule and "192.168.1.0/24" in rule]
 
         # Should only have one rule even though we added the same rule twice
         assert len(tcp_rules) == 1
