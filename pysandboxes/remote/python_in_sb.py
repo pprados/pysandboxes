@@ -19,7 +19,6 @@ from pysandboxes.learning import (
 from pysandboxes.tools import set_is_in_sandbox
 
 from ..all_rules import AllRules
-from ..e import RuleApiPermissionError
 from ..guard_api import arm
 from ..main_logger import config_log
 
@@ -44,6 +43,7 @@ def _register_signals_handlers() -> None:
     register_signal = (signal.SIGINT, signal.SIGTERM, signal.SIGQUIT)
 
     signals = {s: signal.getsignal(s) for s in register_signal}
+    saved: set[bool] = set()
 
     def signal_handler(
         signum: int,
@@ -52,15 +52,18 @@ def _register_signals_handlers() -> None:
         """
         Handles termination signals for the parent process.
         It will save the rules before exiting itself.
+
+        Stays installed and delegates to the original handler instead
+        of re-registering it: ``signal.signal`` is a guarded API and
+        this runs after ``arm()``, so restoring it would be denied by
+        the profile that does not allow ``process-control``, losing
+        the learning rules with it.
         """
-        # Iterate through all child processes and send them SIGTERM
         logger.info("Pysandboxes: Catch signal %s.", signum)
-        handler = signals.pop(signal.Signals(signum))
-        try:
-            signal.signal(signal.Signals(s), handler)  # Remove myself
-        except RuleApiPermissionError:
-            pass  # Re-registration is best-effort, not required
-        generate_config_from_learning()  # Save learning rules
+        handler = signals[signal.Signals(signum)]
+        if not saved:
+            saved.add(True)
+            generate_config_from_learning()  # Save learning rules, once
         if callable(handler):
             return handler(signum, frame)
         return None
@@ -95,9 +98,7 @@ def _python_interactive(
         except ValueError:
             pass
         sb_mode = (
-            f"{BOLD}API calls are LEARNED and saved in "
-            f"{str(conf_path)!r} at the "
-            f"end of the session.{RESET}\n"
+            f"{BOLD}API calls are LEARNED and saved in " f"{str(conf_path)!r} at the " f"end of the session.{RESET}\n"
         )
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
@@ -109,10 +110,7 @@ def _python_interactive(
             sb_mode += f"and by the os-sandbox={all_rules.os_sandbox!r}"
         sb_mode += f"{RESET}\n"
     else:
-        sb_mode = (
-            f"*** APIs are LIMITED only by the os-sandbox "
-            f"of type {all_rules.os_sandbox!r} ***\n"
-        )
+        sb_mode = f"*** APIs are LIMITED only by the os-sandbox " f"of type {all_rules.os_sandbox!r} ***\n"
     banner = (
         f"{RED}SANDBOXES Python{RESET} {sys.version} on {sys.platform}\n"
         f"{sb_mode}"
@@ -215,8 +213,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
         return 0
     except FileNotFoundError:
         print(
-            f"python: can't open file {str(script)!r}: "
-            f"[Errno 2] No such file or directory",
+            f"python: can't open file {str(script)!r}: " f"[Errno 2] No such file or directory",
             file=sys.stderr,
         )
         return 2
@@ -265,9 +262,7 @@ def python_in_sb(
     try:
         set_is_in_sandbox(True)
 
-        set_learning_path(
-            all_rules.learning_path
-        )  # TODO: may be duplicate of main_sandbox
+        set_learning_path(all_rules.learning_path)  # TODO: may be duplicate of main_sandbox
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
             _python_interactive(all_rules, True)

@@ -144,8 +144,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         if "COMMIT" in netfilter:
             idx = netfilter.index("COMMIT")
             sse_allow = (
-                f"-A INPUT -p tcp -s {SLIRP_GW}/32 --dport {port} "
-                "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+                f"-A INPUT -p tcp -s {SLIRP_GW}/32 --dport {port} " "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
             )
             netfilter = list(netfilter[:idx]) + [sse_allow] + list(netfilter[idx:])
         return tuple(netfilter)
@@ -196,9 +195,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             os.close(fd)
             os.unlink(api_socket)
             self._slirp_api_socket = api_socket
-            result["process_config"] = process_config._replace(
-                slirp_ready_fd=slirp_pipe_r
-            )
+            result["process_config"] = process_config._replace(slirp_ready_fd=slirp_pipe_r)
 
             def on_launched(pid: int) -> None:
                 threading.Thread(
@@ -211,9 +208,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                     },
                     daemon=True,
                 ).start()
-                ports_spec = slirp_extract_port_forwards(
-                    all_rules, self.port, log_wildcard=False
-                )
+                ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
                 if ports_spec:
                     threading.Thread(
                         target=slirp_setup_port_forwarding,
@@ -258,8 +253,13 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
     @property
     @override
     def base_url(self) -> str:
-        """Localhost; with --unshare-net slirp4netns forwards host 127.0.0.1 to guest."""
-        return "http://localhost:{PORT}"
+        """Loopback; with --unshare-net slirp4netns forwards host 127.0.0.1 to guest.
+
+        An IP literal, not a hostname: aiohttp resolves with
+        AI_ADDRCONFIG, which fails an IPv4 lookup when only 'lo'
+        carries an address.
+        """
+        return "http://127.0.0.1:{PORT}"
 
     def _bwrap_args(
         self,
@@ -326,9 +326,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         for p in bin_paths:
             args.extend(["--ro-bind", str(p), str(p)])
         resolved_exe = Path(sys.executable).resolve(strict=True)
-        if resolved_exe not in bin_paths and not any(
-            p in resolved_exe.parents for p in bin_paths
-        ):
+        if resolved_exe not in bin_paths and not any(p in resolved_exe.parents for p in bin_paths):
             args.extend(["--ro-bind", str(resolved_exe), str(resolved_exe)])
         for sp in sys.path:
             if sp and os.path.isdir(sp):
@@ -368,9 +366,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                     placeholder.mkdir(exist_ok=True)
                 args.extend(["--bind", str(placeholder), full_host])
             except OSError as e:
-                logger.debug(
-                    "Could not create overlay for ignore path %s: %s", full_host, e
-                )
+                logger.debug("Could not create overlay for ignore path %s: %s", full_host, e)
 
         return args
 
@@ -383,12 +379,8 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         temp: Path,
     ) -> tuple[Args, Environ]:
         """Build full command: bwrap [args] -- python -m pysandboxes.remote.main_sandbox ..."""
-        inner_cmd, extra_env = super().subprocess_cmd(
-            all_rules, envs, pipe_path, temp=temp
-        )
-        bwrap_args = self._bwrap_args(
-            all_rules=all_rules, envs=dict(envs), pipe_path=pipe_path, temp=temp
-        )
+        inner_cmd, extra_env = super().subprocess_cmd(all_rules, envs, pipe_path, temp=temp)
+        bwrap_args = self._bwrap_args(all_rules=all_rules, envs=dict(envs), pipe_path=pipe_path, temp=temp)
         bwrap_args.append("--")
         bwrap_args.extend(inner_cmd)
         return bwrap_args, extra_env
@@ -466,9 +458,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                     },
                     daemon=True,
                 ).start()
-                ports_spec = slirp_extract_port_forwards(
-                    all_rules, self.port, log_wildcard=False
-                )
+                ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
                 if ports_spec:
                     threading.Thread(
                         target=slirp_setup_port_forwarding,
@@ -514,9 +504,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                     ) as response:
                         if response.status == 200:
                             break
-                        raise RuntimeError(
-                            f"Unexpected status {response.status} from {ping_url}"
-                        )
+                        raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                 except TimeoutError:
                     if count_loop % 15 == 0:
                         logger.info(
