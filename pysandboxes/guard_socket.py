@@ -55,6 +55,7 @@ from typing import (
     Any,
     Callable,
     Generator,
+    Iterable,
     Iterator,
     NamedTuple,
     TypeAlias,
@@ -177,6 +178,44 @@ _all_networks = ["0.0.0.0/0", "::1/0"]
 _rules: SocketRules = cast(SocketRules, ())
 
 
+# Loopback names resolvable only through /etc/hosts. That file is not
+# guaranteed to carry them: Docker Desktop rewrites it without the
+# standard IPv6 block, and minimal images ship none of the entries.
+# An unresolvable name in a net= rule is a fatal config error, so a
+# profile written against these names would be valid or not depending
+# on the host. Only names absent from the file get the fallback, so a
+# correct /etc/hosts still wins. "localhost" maps to IPv4 alone, as
+# the standard file does: adding ::1 would silently widen a rule.
+_LOOPBACK_HOSTS: dict[str, tuple[str, ...]] = {
+    "localhost": ("127.0.0.1",),
+    "ip6-localhost": ("::1",),
+    "ip6-loopback": ("::1",),
+}
+
+
+def _addr_infos_from_ips(ips: Iterable[IPv4Address | IPv6Address]) -> list[AddrInfoType]:
+    """Build addrinfo entries for known IPs, without asking a resolver.
+
+    Both socket types are emitted: the patched getaddrinfo filters
+    pinned entries by type, so a stream-only answer would leave an UDP
+    lookup with nothing.
+    """
+    infos: list[AddrInfoType] = []
+    for ip in sorted(ips, key=str):
+        family: int
+        sockaddr: tuple[str, int] | tuple[str, int, int, int]
+        if ip.version == 6:
+            family, sockaddr = socket.AF_INET6, (str(ip), 0, 0, 0)
+        else:
+            family, sockaddr = socket.AF_INET, (str(ip), 0)
+        for kind, proto in (
+            (socket.SOCK_STREAM, socket.IPPROTO_TCP),
+            (socket.SOCK_DGRAM, socket.IPPROTO_UDP),
+        ):
+            infos.append((family, kind, proto, "", cast(Any, sockaddr)))
+    return infos
+
+
 def _yield_networks_from_string(
     input_str: str, pin_dns: InternalDNS
 ) -> Generator[IPv4Network | IPv6Network, None, None]:
@@ -198,8 +237,13 @@ def _yield_networks_from_string(
         # Resolve all IPs for the hostname and treat each as a /32 or /128 network
         if input_str in host_dns:
             # Use pined dns?
-            for ip in host_dns[input_str]:
+            try:
                 pin_dns[input_str] = getaddrinfo(input_str, 0)
+            except socket.gaierror:
+                # The name is known here but not to the resolver: pin
+                # the addresses the hosts table already gave us.
+                pin_dns[input_str] = _addr_infos_from_ips(host_dns[input_str])
+            for ip in host_dns[input_str]:
                 yield ip_network(ip, strict=False)
         else:
             all_adresss = set()
@@ -1153,7 +1197,13 @@ def _read_host_file() -> tuple[
                     inverse_dns.setdefault(ip_address(ip), set()).add(hosts[0])
                 for host in hosts:
                     dns.setdefault(host, set()).add(ip_address(ip))
-    # Force localhost
+    for host, ips in _LOOPBACK_HOSTS.items():
+        if host in dns:
+            continue
+        for ip_str in ips:
+            loopback_ip = ip_address(ip_str)
+            dns.setdefault(host, set()).add(loopback_ip)
+            inverse_dns.setdefault(loopback_ip, set()).add(host)
     return dns, inverse_dns
 
 
