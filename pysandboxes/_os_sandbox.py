@@ -256,18 +256,29 @@ def start_daemon(
 
         loop = get_sandbox_loop()
         start_event = threading.Event()
+        start_failure: list[BaseException] = []
 
         async def _start_daemon_and_signal() -> None:
-            """Helper to run async start and signal completion."""
-            await async_start_daemon(
-                all_rules,
-                envs=envs,
-                log_level=log_level,
-                init_fn=init_fn,
-                python_args=python_args,
-            )
-            start_event.set()
-            logger.debug("Start event set")
+            """Helper to run async start and signal completion.
+
+            A failure is handed back to the caller rather than left in
+            the task: without this the event stays unset, the caller
+            burns the whole timeout, and the real cause is lost behind
+            a message blaming the sandbox tooling.
+            """
+            try:
+                await async_start_daemon(
+                    all_rules,
+                    envs=envs,
+                    log_level=log_level,
+                    init_fn=init_fn,
+                    python_args=python_args,
+                )
+            except Exception as e:  # noqa: BLE001 — re-raised by the caller
+                start_failure.append(e)
+            finally:
+                start_event.set()
+                logger.debug("Start event set")
 
         logger.info(
             "Starting %s daemon (waiting up to %ss for ready)",
@@ -281,6 +292,8 @@ def start_daemon(
                 f"Daemon failed to start within {start_timeout}s. "
                 "Check that unshare/slirp4netns are installed and the environment allows namespaces."
             )
+        if start_failure:
+            raise start_failure[0]
         assert _current_daemon
 
     return cast(BaseDaemon, _current_daemon)
@@ -331,17 +344,29 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
             return
         loop = get_sandbox_loop()
         stop_event = threading.Event()
+        stop_failure: list[BaseException] = []
 
         @sandbox_loop
         async def _async_shutdown_daemon() -> None:
-            """Helper to run async shutdown and signal completion."""
-            await async_shutdown_daemon()
-            stop_event.set()
-            _reset_sandbox_loop()
+            """Helper to run async shutdown and signal completion.
+
+            Same contract as the start path: report the failure instead
+            of letting the caller time out on a silent task.
+            """
+            try:
+                await async_shutdown_daemon()
+                stop_event.set()
+                _reset_sandbox_loop()
+            except Exception as e:  # noqa: BLE001 — re-raised by the caller
+                stop_failure.append(e)
+            finally:
+                stop_event.set()  # idempotent
 
         loop.call_soon_threadsafe(lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
         if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
             raise RuntimeError("Impossible to shutdown the sandbox")
+        if stop_failure:
+            raise stop_failure[0]
 
 
 def get_token() -> str:
