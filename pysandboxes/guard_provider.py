@@ -47,8 +47,7 @@ def parse_rules(
             else:
                 errors.append(
                     (
-                        f"{format_ruleref(rule)}: "
-                        f"Invalid value {value!r} for py-sandbox. Use true or false.",
+                        f"{format_ruleref(rule)}: " f"Invalid value {value!r} for py-sandbox. Use true or false.",
                         rule.path,
                         rule.ln,
                     )
@@ -128,8 +127,7 @@ def parse_rules(
                 all_error_lines = [format_ruleref(rule) for _, rule in s]
                 errors.append(
                     (
-                        f"{format_error_list(all_error_lines)}: "
-                        f"Multiple {k} parameters.",
+                        f"{format_error_list(all_error_lines)}: " f"Multiple {k} parameters.",
                         Path(""),
                         0,
                     )
@@ -139,12 +137,8 @@ def parse_rules(
 
     provider = parameters_prioritize_single_value.get("os-sandbox", ["subprocess"])[0]
     use_py_sandbox = parameters_prioritize_single_value.get("py-sandbox", [True])[0]
-    learning_path = parameters_prioritize_single_value.get(
-        "learning_path", [config_path]
-    )[0]
-    learn: bool = cast(
-        bool, parameters_prioritize_single_value.get("learn", [False])[0]
-    )
+    learning_path = parameters_prioritize_single_value.get("learning_path", [config_path])[0]
+    learn: bool = cast(bool, parameters_prioritize_single_value.get("learn", [False])[0])
     if learning_path is None:
         learning_path = config_path
 

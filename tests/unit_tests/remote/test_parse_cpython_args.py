@@ -92,9 +92,7 @@ class TestParsePythonCmdLine:
             mock_exit.assert_called_once_with(0)
 
     @patch("sys.exit")
-    def test_parse_python_cmd_line_help_flag_with_question(
-        self, mock_exit: Mock
-    ) -> None:
+    def test_parse_python_cmd_line_help_flag_with_question(self, mock_exit: Mock) -> None:
         """Test parsing with -? help flag exits."""
         args = ["-?"]
 

@@ -67,9 +67,7 @@ def _make_symlink(target: str, link: Path) -> None:
 
 
 @pytest.mark.parametrize("target", ["absolute", "relative"])
-def test_symlink_leaving_the_exposed_dir_is_denied(
-    exposed_dir: Path, target: str
-) -> None:
+def test_symlink_leaving_the_exposed_dir_is_denied(exposed_dir: Path, target: str) -> None:
     """A link inside the scope must not authorize its outside target."""
     secret = exposed_dir.parent / "secret.txt"
     link = exposed_dir / f"{target}.txt"
@@ -82,9 +80,7 @@ def test_symlink_leaving_the_exposed_dir_is_denied(
 
 
 @pytest.mark.parametrize("target", ["absolute", "relative"])
-def test_creating_a_symlink_out_of_scope_is_refused(
-    exposed_dir: Path, target: str
-) -> None:
+def test_creating_a_symlink_out_of_scope_is_refused(exposed_dir: Path, target: str) -> None:
     """``os.symlink`` must validate its target, in either form."""
     secret = exposed_dir.parent / "secret.txt"
     wrapped = _wrap_os_symlink(lambda src, dst, **kwargs: "created")

@@ -128,9 +128,7 @@ def test_os_link_symlink_and_readlink(files: Dict[str, Path]) -> None:  # noqa: 
 
     assert os.readlink(files["home_link"]) == str(files["visible"])
     assert os.readlink(files["home_link_to_bind_src"]) == str(files["bound_file"])
-    assert Path(os.readlink(files["home_link_relative_to_bind_src"])) == Path(
-        files["bound_file"]
-    )
+    assert Path(os.readlink(files["home_link_relative_to_bind_src"])) == Path(files["bound_file"])
     assert os.readlink(files["link_to_bind"]) == str(files["bound_file"])
     assert (
         Path(files["bind_dest"] / os.readlink(files["link_relative_to_bind"])).resolve()

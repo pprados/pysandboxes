@@ -44,9 +44,7 @@ def _is_conntrack_kernel_module() -> bool:
         )
 
         filtered_lines: List[str] = [
-            line.strip()
-            for line in lsmod_result.stdout.splitlines()
-            if "nf_conntrack" in line
+            line.strip() for line in lsmod_result.stdout.splitlines() if "nf_conntrack" in line
         ]
         return len(filtered_lines) > 0
 
@@ -75,9 +73,7 @@ def check_root_status() -> Literal["root", "user", "not_unix"]:
         return "not_unix"
 
 
-def check_iptables_rules_syntax(
-    rules_content: str, is_ipv6: bool = False
-) -> tuple[bool, str]:
+def check_iptables_rules_syntax(rules_content: str, is_ipv6: bool = False) -> tuple[bool, str]:
     """
     Checks the syntax of iptables/ip6tables rules without applying them.
 

@@ -80,8 +80,7 @@ def parse_rules(
             if "=" not in rule.rule:
                 errors.append(
                     (
-                        f"{format_ruleref(orule)}: "
-                        f"Detect a missing '=' in rule: {orule.rule}.",
+                        f"{format_ruleref(orule)}: " f"Detect a missing '=' in rule: {orule.rule}.",
                         rule.path,
                         rule.ln,
                     )
@@ -105,9 +104,7 @@ def parse_rules(
                 v = substitute_value(value_pattern)
                 # Always add key so "key in os.environ" is True (e.g. My_ENV for tests)
                 new_vars[key_pattern] = v
-                envs_rules.add(
-                    EnvRule(re.compile(re.escape(key_pattern)), False, orule)
-                )
+                envs_rules.add(EnvRule(re.compile(re.escape(key_pattern)), False, orule))
         elif orule.rule.startswith("unenv="):
             remove_key = orule.rule[len("unenv=") :]
             new_vars.pop(remove_key, None)
@@ -153,9 +150,7 @@ class LearnEnviron(os._Environ):
             assert hasattr(os.environ, "_data")
             data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
-            self._ignore_keys: WeakKeyDictionary[
-                threading.Thread, tuple[FrameType, set[str]]
-            ] = WeakKeyDictionary()
+            self._ignore_keys: WeakKeyDictionary[threading.Thread, tuple[FrameType, set[str]]] = WeakKeyDictionary()
             self._keys_used: set[str] = set()
             self._original_envs = os.environ
 
@@ -172,18 +167,12 @@ class LearnEnviron(os._Environ):
             t = threading.current_thread()
             for k in root_iter:
                 cur_frame = inspect.currentframe()
-                if (
-                    cur_frame is None
-                    or cur_frame.f_back is None
-                    or cur_frame.f_back.f_back is None
-                ):
+                if cur_frame is None or cur_frame.f_back is None or cur_frame.f_back.f_back is None:
                     continue
                 iter_frame: FrameType = cur_frame.f_back.f_back
                 keys: set[str]
                 if id(iter_frame) == id(frame):
-                    iter_frame, keys = self._ignore_keys.get(
-                        t, (cast(FrameType, frame), set())
-                    )
+                    iter_frame, keys = self._ignore_keys.get(t, (cast(FrameType, frame), set()))
                     keys.add(k)
                     self._ignore_keys[t] = (iter_frame, keys)
                 else:

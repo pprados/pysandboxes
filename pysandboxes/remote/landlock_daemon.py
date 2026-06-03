@@ -85,11 +85,7 @@ HANDLED_ACCESS_FS = (
 )
 
 # Read-only: execute, read files, list directory.
-ACCESS_RO = (
-    LANDLOCK_ACCESS_FS_EXECUTE
-    | LANDLOCK_ACCESS_FS_READ_FILE
-    | LANDLOCK_ACCESS_FS_READ_DIR
-)
+ACCESS_RO = LANDLOCK_ACCESS_FS_EXECUTE | LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_READ_DIR
 # Read-write: ACCESS_RO plus full directory semantics (create/remove/link/rename/truncate).
 # Includes all MAKE_* so writable dirs can have subdirs, regular files, symlinks, sockets, FIFOs.
 # REFER is required for rename/link across dirs. TRUNCATE is required for open(O_TRUNC)/creat/ftruncate.
@@ -383,9 +379,7 @@ def landlock_user_available() -> bool:
     return _landlock_available()
 
 
-def _collect_landlock_paths(
-    all_rules: AllRules, temp: Path, cwd: str
-) -> list[tuple[str, str]]:
+def _collect_landlock_paths(all_rules: AllRules, temp: Path, cwd: str) -> list[tuple[str, str]]:
     """Build list of (path, 'ro'|'rw') for the Landlock launcher config."""
     path_to_access: dict[str, str] = {}
 
@@ -454,23 +448,17 @@ class LandlockSSEDaemon(SubProcessDaemon):
     ) -> AllRules:
         """No rule transformation for Landlock."""
         if not _landlock_available():
-            logger.error(
-                "Landlock not available (kernel < 5.13 or not Linux), exec without Landlock"
-            )
+            logger.error("Landlock not available (kernel < 5.13 or not Linux), exec without Landlock")
             sys.exit(-1)
         try:
             _set_no_new_privs()
             net_ports: list[tuple[int, bool, bool]] | None = (
-                _collect_landlock_net_ports(all_rules.socket_rules)
-                if all_rules.socket_rules
-                else None
+                _collect_landlock_net_ports(all_rules.socket_rules) if all_rules.socket_rules else None
             )
             cwd = os.getcwd()
             temp_dir = Path(tempfile.gettempdir())
             path_tuples = _collect_landlock_paths(all_rules, temp_dir, cwd)
-            paths_for_landlock = [
-                (path, access == "rw") for path, access in path_tuples
-            ]
+            paths_for_landlock = [(path, access == "rw") for path, access in path_tuples]
             _apply_landlock(paths_for_landlock, net_ports=net_ports)
         except OSError as e:
             if e.errno == 38:  # ENOSYS

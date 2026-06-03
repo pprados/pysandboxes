@@ -27,9 +27,7 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
     except ConfigSyntaxError as e:
         cwd = str(Path.cwd())
         without_filename = [
-            error.replace(cwd, ".").replace(
-                "tests/unit_tests/syntax-error.profile", "syntax-error"
-            )
+            error.replace(cwd, ".").replace("tests/unit_tests/syntax-error.profile", "syntax-error")
             for error in e.errors
         ]
         # Check syntax error

@@ -97,9 +97,7 @@ class NoneDaemon(BaseDaemon):
         """
         raise NotImplementedError
 
-    async def async_call_in_sandbox(
-        self, func: Callable[..., Any], *args: Any, **kwargs: Any
-    ) -> Any:
+    async def async_call_in_sandbox(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute async function in sandbox.
 
         Args:

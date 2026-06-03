@@ -25,13 +25,10 @@ class TestCheckMainCoroutine:
 
         mock_coroutine.cr_frame = mock_frame
 
-        with patch(
-            "pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module
-        ):
+        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
             with pytest.raises(
                 ValueError,
-                match="The coroutine must be declared in a module "
-                "other than __main__",
+                match="The coroutine must be declared in a module " "other than __main__",
             ):
                 _check__main__coroutine(mock_coroutine)
 
@@ -44,9 +41,7 @@ class TestCheckMainCoroutine:
 
         mock_coroutine.cr_frame = mock_frame
 
-        with patch(
-            "pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module
-        ):
+        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
             # Should not raise
             _check__main__coroutine(mock_coroutine)
 
@@ -68,9 +63,7 @@ class TestCheckMainCoroutine:
 
         mock_coroutine.cr_frame = mock_frame
 
-        with patch(
-            "pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module
-        ):
+        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
             # Should not raise
             _check__main__coroutine(mock_coroutine)
 
@@ -98,9 +91,7 @@ class TestSandboxDecorator:
 
     @patch("pysandboxes._os_sandbox.async_call_in_sandbox")
     @pytest.mark.asyncio
-    async def test_sandbox_decorator_async_function(
-        self, mock_async_call_in_sandbox: Mock
-    ) -> None:
+    async def test_sandbox_decorator_async_function(self, mock_async_call_in_sandbox: Mock) -> None:
         """Test sandbox decorator on asynchronous function."""
 
         mock_async_call_in_sandbox.return_value = 42
@@ -152,9 +143,7 @@ class TestSandboxesContextManager:
 
     @patch("pysandboxes._os_sandbox.start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
-    def test_sandboxes_sync_context_manager(
-        self, mock_shutdown: Mock, mock_start: Mock
-    ) -> None:
+    def test_sandboxes_sync_context_manager(self, mock_shutdown: Mock, mock_start: Mock) -> None:
         """Test synchronous sandboxes context manager."""
         mock_daemon = Mock()
         mock_start.return_value = mock_daemon
@@ -168,9 +157,7 @@ class TestSandboxesContextManager:
     @patch("pysandboxes._os_sandbox.async_start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
     @pytest.mark.asyncio
-    async def test_sandboxes_async_context_manager(
-        self, mock_async_shutdown: Mock, mock_async_start: Mock
-    ) -> None:
+    async def test_sandboxes_async_context_manager(self, mock_async_shutdown: Mock, mock_async_start: Mock) -> None:
         """Test asynchronous sandboxes context manager."""
         mock_daemon = Mock()
         mock_async_start.return_value = mock_daemon
@@ -183,9 +170,7 @@ class TestSandboxesContextManager:
 
     @patch("pysandboxes._os_sandbox.start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
-    def test_sandboxes_context_manager_with_exception(
-        self, mock_shutdown: Mock, mock_start: Mock
-    ) -> None:
+    def test_sandboxes_context_manager_with_exception(self, mock_shutdown: Mock, mock_start: Mock) -> None:
         """Test that sandboxes context manager cleans up on exception."""
         mock_daemon = Mock()
         mock_start.return_value = mock_daemon
@@ -216,9 +201,7 @@ class TestSandboxesContextManager:
 
     @patch("pysandboxes._os_sandbox.start_daemon")
     @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
-    def test_sandboxes_context_manager_parameters(
-        self, mock_async_shutdown: Mock, mock_async_start: Mock
-    ) -> None:
+    def test_sandboxes_context_manager_parameters(self, mock_async_shutdown: Mock, mock_async_start: Mock) -> None:
         """Test sandboxes context manager with parameters."""
         mock_daemon = Mock()
         mock_async_start.return_value = mock_daemon

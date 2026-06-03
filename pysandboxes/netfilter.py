@@ -44,9 +44,7 @@ def _build_network(network_obj: Union[IPv4Network, IPv6Network], ipv6: bool) -> 
     return network
 
 
-def rule_to_netfilter(
-    socket_rules: SocketRules, dns_server: list[IPv4Address], is_ipv6: bool
-) -> List[str]:
+def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], is_ipv6: bool) -> List[str]:
     netfilter = [
         "*filter",
         ":INPUT DROP [0:0]",
@@ -57,13 +55,9 @@ def rule_to_netfilter(
     ]
     for dns in dns_server:
         if not is_ipv6:
-            netfilter.append(
-                f"-A OUTPUT -p udp -d {dns}/32 --dport 53 -m conntrack --ctstate NEW -j ACCEPT"
-            )
+            netfilter.append(f"-A OUTPUT -p udp -d {dns}/32 --dport 53 -m conntrack --ctstate NEW -j ACCEPT")
         else:
-            netfilter.append(
-                f"-A OUTPUT -p udp -d {dns}/128 --dport 53 -m conntrack --ctstate NEW -j ACCEPT"
-            )
+            netfilter.append(f"-A OUTPUT -p udp -d {dns}/128 --dport 53 -m conntrack --ctstate NEW -j ACCEPT")
     _map_direction = {Direction.IN: "INPUT", Direction.OUT: "OUTPUT"}
     _map_action = {Action.ALLOW: "ACCEPT", Action.DENY: "REJECT"}
     for (

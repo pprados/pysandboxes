@@ -119,9 +119,7 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
                 os._exit(-1)
 
         global _thread
-        _thread = threading.Thread(
-            target=_start_background_loop, daemon=True, name="Sandbox Private loop"
-        )
+        _thread = threading.Thread(target=_start_background_loop, daemon=True, name="Sandbox Private loop")
         _thread.start()
         start_event.wait()  # Wait for the loop to be running in the new thread.
     return loop
@@ -231,9 +229,7 @@ async def purge_loop() -> AbstractEventLoop | None:
 
         # Optional: Log the results of cancellation attempts
         for res in results:
-            if isinstance(res, Exception) and not isinstance(
-                res, asyncio.CancelledError
-            ):
+            if isinstance(res, Exception) and not isinstance(res, asyncio.CancelledError):
                 logger.debug("Task finished with unexpected error: %s" % res)
 
         return loop

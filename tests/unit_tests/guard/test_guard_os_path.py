@@ -19,12 +19,8 @@ def test_os_path_abspath(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import os
 
-    assert os.path.abspath(files["path"] / "visible.txt") == str(
-        files["path"] / "visible.txt"
-    )
-    assert os.path.abspath(files["bind_dest"] / "bound_file.txt") == str(
-        files["bind_dest"] / "bound_file.txt"
-    )
+    assert os.path.abspath(files["path"] / "visible.txt") == str(files["path"] / "visible.txt")
+    assert os.path.abspath(files["bind_dest"] / "bound_file.txt") == str(files["bind_dest"] / "bound_file.txt")
 
 
 def test_os_path_exists_and_lexists(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -101,17 +97,9 @@ def test_os_path_samefile(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import os
 
-    assert (
-        os.path.samefile(files["path"] / "visible.txt", files["path"] / "visible.txt")
-        is True
-    )
+    assert os.path.samefile(files["path"] / "visible.txt", files["path"] / "visible.txt") is True
     os.stat(files["bind_dest"] / "bound_file.txt")
-    assert (
-        os.path.samefile(
-            files["bind_dest"] / "bound_file.txt", files["bind_dest"] / "bound_file.txt"
-        )
-        is True
-    )
+    assert os.path.samefile(files["bind_dest"] / "bound_file.txt", files["bind_dest"] / "bound_file.txt") is True
     assert os.path.samefile(files["path"] / "visible.txt", files["bound_file"]) is False
 
 
@@ -126,12 +114,8 @@ def test_os_path_realpath(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import os
 
-    assert os.path.realpath(files["path"] / "visible.txt") == str(
-        files["path"] / "visible.txt"
-    )
-    assert os.path.realpath(files["bind_dest"] / "bound_file.txt") == str(
-        files["bind_src"] / "bound_file.txt"
-    )
+    assert os.path.realpath(files["path"] / "visible.txt") == str(files["path"] / "visible.txt")
+    assert os.path.realpath(files["bind_dest"] / "bound_file.txt") == str(files["bind_src"] / "bound_file.txt")
 
 
 def test_os_path_atime_mtime_ctime_and_size(

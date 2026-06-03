@@ -91,10 +91,7 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigL
     Returns:
         Configuration lines with environment variables resolved.
     """
-    return [
-        ConfigLine(resolve_env_variables(line, env_vars), path, ln)
-        for line, path, ln in lines
-    ]
+    return [ConfigLine(resolve_env_variables(line, env_vars), path, ln) for line, path, ln in lines]
 
 
 def remove_config_comments(config: ConfigLines) -> ConfigLines:
@@ -361,15 +358,11 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
         try:
             follow_links_executable(executable.resolve(strict=True), all_paths)
         except FileNotFoundError as e:
-            raise RuntimeError(
-                "Impossible to resolve the sys.executable `%s`", sys.executable
-            ) from e
+            raise RuntimeError("Impossible to resolve the sys.executable `%s`", sys.executable) from e
     return all_paths
 
 
-def patch_factory(
-    func: Callable[..., Any], **kwargs: Any
-) -> Callable[..., Any]:
+def patch_factory(func: Callable[..., Any], **kwargs: Any) -> Callable[..., Any]:
     """Build a patch factory from a wrapper and its bound arguments.
 
     The returned callable takes the original stdlib object and returns

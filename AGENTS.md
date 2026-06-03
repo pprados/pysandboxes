@@ -73,7 +73,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - Public APIs must have docstrings
 - Functions must be focused and small
 - Follow existing patterns exactly
-- Line length: 78 chars maximum
+- Line length: 120 chars maximum (`line-length` in pyproject.toml, for both ruff and black)
 - Always uses 3.10 syntax (str | None in place of Optional[str])
 - avoid useless comments when generating code
 - For all new file, add the comment:

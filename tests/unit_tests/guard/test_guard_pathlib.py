@@ -27,9 +27,7 @@ def test_pathlib_open(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 
     import pathlib
 
-    with pathlib.Path(
-        files["visible"]
-    ).open() as f:  # Need to use new Path() implementation
+    with pathlib.Path(files["visible"]).open() as f:  # Need to use new Path() implementation
         f.read()
     with pathlib.Path(files["bound_file"]).open() as f:
         f.read()
@@ -228,9 +226,7 @@ def test_pathlib_statand_stat_and_lstat(
     with pytest.raises(RuleFileNotFoundError):
         assert pathlib.Path(files["ignore"]).stat()
     assert pathlib.Path(files["home_link"]).stat(follow_symlinks=True)
-    assert pathlib.Path(files["bind_dest"] / "bound_file.txt").stat(
-        follow_symlinks=True
-    )
+    assert pathlib.Path(files["bind_dest"] / "bound_file.txt").stat(follow_symlinks=True)
 
     assert pathlib.Path(files["home_link"]).lstat()
     assert pathlib.Path(files["bind_dest"] / "bound_file.txt").lstat()
@@ -270,18 +266,10 @@ def test_pathlib_link_symlink_and_readlink(
     import pathlib
 
     assert pathlib.Path(files["home_link"]).readlink() == pathlib.Path(files["visible"])
-    assert pathlib.Path(files["home_link_to_bind_src"]).readlink() == pathlib.Path(
-        files["bound_file"]
-    )
-    assert pathlib.Path(files["home_link_relative_to_bind_src"]).readlink() == (
-        pathlib.Path(files["bound_file"])
-    )
-    assert pathlib.Path(files["bind_dest"] / "link_to_bind_src").readlink() == (
-        pathlib.Path(files["bound_file"])
-    )
-    assert pathlib.Path(files["link_to_bind"]).readlink() == pathlib.Path(
-        files["bound_file"]
-    )
+    assert pathlib.Path(files["home_link_to_bind_src"]).readlink() == pathlib.Path(files["bound_file"])
+    assert pathlib.Path(files["home_link_relative_to_bind_src"]).readlink() == (pathlib.Path(files["bound_file"]))
+    assert pathlib.Path(files["bind_dest"] / "link_to_bind_src").readlink() == (pathlib.Path(files["bound_file"]))
+    assert pathlib.Path(files["link_to_bind"]).readlink() == pathlib.Path(files["bound_file"])
     assert (
         pathlib.Path(files["link_relative_to_bind"]).readlink().resolve()
         == pathlib.Path(files["bind_dest"] / "bound_file.txt").resolve()
@@ -309,13 +297,9 @@ def test_pathlib_link_symlink_and_readlink(
     pathlib.Path(files["new_link"]).unlink()
 
     files["new_link_to_bind"].unlink(missing_ok=True)
-    pathlib.Path(files["new_link_to_bind"]).symlink_to(
-        pathlib.Path(files["bound_file"])
-    )
+    pathlib.Path(files["new_link_to_bind"]).symlink_to(pathlib.Path(files["bound_file"]))
     assert pathlib.Path(files["new_link_to_bind"]).exists() is True
-    assert pathlib.Path(files["new_link_to_bind"]).readlink() == pathlib.Path(
-        files["bound_file"]
-    )
+    assert pathlib.Path(files["new_link_to_bind"]).readlink() == pathlib.Path(files["bound_file"])
     pathlib.Path(files["new_link_to_bind"]).unlink()
 
     # Link to unknown file
@@ -384,15 +368,15 @@ def test_pathlib_rename(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     import pathlib
 
     pathlib.Path(files["to_rename"]).write_text("To rename")
-    assert pathlib.Path(files["to_rename"]).rename(
-        pathlib.Path(files["new_rename"])
-    ) == pathlib.Path(files["new_rename"])
+    assert pathlib.Path(files["to_rename"]).rename(pathlib.Path(files["new_rename"])) == pathlib.Path(
+        files["new_rename"]
+    )
     pathlib.Path(files["new_rename"]).unlink()
 
     pathlib.Path(files["bind_to_rename"]).write_text("To rename")
-    assert pathlib.Path(files["bind_to_rename"]).rename(
+    assert pathlib.Path(files["bind_to_rename"]).rename(files["new_bind_rename"]) == pathlib.Path(
         files["new_bind_rename"]
-    ) == pathlib.Path(files["new_bind_rename"])
+    )
     pathlib.Path(files["new_bind_rename"]).unlink()
 
     with pytest.raises(RuleFileNotFoundError):
@@ -463,9 +447,7 @@ def test_pathlib_resolve(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 
     import pathlib
 
-    assert pathlib.Path(
-        files["bind_dest"] / ".." / "visible.txt"
-    ).resolve() == pathlib.Path(files["visible"])
+    assert pathlib.Path(files["bind_dest"] / ".." / "visible.txt").resolve() == pathlib.Path(files["visible"])
 
 
 def test_pathlib_samefile(files: Dict[str, opl.Path]) -> None:  # noqa: F811

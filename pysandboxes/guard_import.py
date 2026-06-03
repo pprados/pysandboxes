@@ -179,9 +179,7 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             #     continue
             new_value = patch.patch_factory(original_value)
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
-            if __debug__ and isinstance(
-                new_value, type(_apply_patch)
-            ):  # Fake kinds.FunctionType
+            if __debug__ and isinstance(new_value, type(_apply_patch)):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined]
             setattr(cur_object, paths[-1], new_value)
             # logger.debug("Patch %s.%s",name, patch.code_path)
@@ -317,9 +315,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         from importlib.metadata import FastPath, Prepared  # type: ignore[attr-defined]
 
         prepared = Prepared(name)
-        return itertools.chain.from_iterable(
-            path.search(prepared) for path in map(FastPath, paths)
-        )
+        return itertools.chain.from_iterable(path.search(prepared) for path in map(FastPath, paths))
 
     __slots__ = ("_finders",)
 
@@ -403,9 +399,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                 if original_spec.parent:
                     # Use __init__
                     if original_spec.submodule_search_locations:
-                        init_file = os.path.join(
-                            original_spec.submodule_search_locations[0], "__init__.py"
-                        )
+                        init_file = os.path.join(original_spec.submodule_search_locations[0], "__init__.py")
                     else:
                         if original_spec.origin is None:
                             return None
@@ -432,16 +426,10 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         if new_spec:
             module_name = fullname.split(".", 1)[0]
             if is_learning_mode() and is_in_sandbox():
-                if (
-                    "*" not in _rules
-                    and module_name not in _rules
-                    and module_name != "pysandboxes"
-                ):
+                if "*" not in _rules and module_name not in _rules and module_name != "pysandboxes":
                     add_learning_rule(LearnImportRule(module_name))
             elif not _is_import_allowed(module_name):
-                ex = RuleModuleNotFoundError(
-                    f"Module named {module_name!r} is not allowed by a rule"
-                )
+                ex = RuleModuleNotFoundError(f"Module named {module_name!r} is not allowed by a rule")
                 try:
                     logger.debug(
                         "Module named %s is not allowed by a rule",
@@ -609,9 +597,7 @@ def generate_rules(
     danger_result = set()
     black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())
     std_modules = set(resources.read_text(__name__, "modules_standard.txt").split())
-    deprecated_modules = set(
-        resources.read_text(__name__, "modules_deprecated.txt").split()
-    )
+    deprecated_modules = set(resources.read_text(__name__, "modules_deprecated.txt").split())
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         if learn_rule.name in black_list:
@@ -628,42 +614,19 @@ def generate_rules(
     result = []
     if danger_result:
         result.append("# \u26a0 Dangerous!")
-        result.extend(
-            sorted(
-                [
-                    f"python-import={name}"
-                    for name in _group_by_width(sorted(danger_result), width)
-                ]
-            )
-        )
+        result.extend(sorted([f"python-import={name}" for name in _group_by_width(sorted(danger_result), width)]))
         result.append("")
     if standard_result:
         result.append("# Standard Python")
-        result.extend(
-            sorted(
-                [
-                    f"python-import={name}"
-                    for name in _group_by_width(sorted(standard_result), width)
-                ]
-            )
-        )
+        result.extend(sorted([f"python-import={name}" for name in _group_by_width(sorted(standard_result), width)]))
         result.append("")
     if deprecated_result:
         result.append("# \u26a0 Deprecated Python module")
-        result.extend(
-            sorted(
-                [
-                    f"python-import={name}"
-                    for name in _group_by_width(sorted(deprecated_result), width)
-                ]
-            )
-        )
+        result.extend(sorted([f"python-import={name}" for name in _group_by_width(sorted(deprecated_result), width)]))
         result.append("")
     if other_result:
         result.append("# External modules (Are you sure about the origin?)")
-        result.extend(
-            sorted([f"python-import={name}" for name in sorted(other_result)])
-        )
+        result.extend(sorted([f"python-import={name}" for name in sorted(other_result)]))
     return result
 
 

@@ -201,9 +201,7 @@ def _not_applicable() -> frozenset[str]:
 
 
 _CATEGORY_OF: dict[str, str] = {
-    qualname: category
-    for category, qualnames in SENSITIVE_API.items()
-    for qualname in qualnames
+    qualname: category for category, qualnames in SENSITIVE_API.items() for qualname in qualnames
 }
 
 
@@ -270,16 +268,14 @@ def parse_rules(
             _add_error(
                 errors,
                 rule,
-                "expected the form 'ACTION:target', "
-                f"with ACTION in {sorted(_ACTIONS)}.",
+                "expected the form 'ACTION:target', " f"with ACTION in {sorted(_ACTIONS)}.",
             )
             continue
         if action.strip() not in _ACTIONS:
             _add_error(
                 errors,
                 rule,
-                f"unknown action {action.strip()!r}, "
-                f"expected one of {sorted(_ACTIONS)}.",
+                f"unknown action {action.strip()!r}, " f"expected one of {sorted(_ACTIONS)}.",
             )
             continue
         allow = _ACTIONS[action.strip()]
@@ -307,8 +303,7 @@ def parse_rules(
                 _add_error(
                     errors,
                     rule,
-                    f"unknown category {target!r}, "
-                    f"expected one of {sorted(CATEGORIES)}.",
+                    f"unknown category {target!r}, " f"expected one of {sorted(CATEGORIES)}.",
                 )
                 failed = True
                 break
@@ -436,9 +431,7 @@ def generate_rules(learn: set[Any]) -> list[str]:
     return lines
 
 
-def _wrap_guarded(
-    func: Callable[..., Any], *, qualname: str, category: str
-) -> Callable[..., Any]:
+def _wrap_guarded(func: Callable[..., Any], *, qualname: str, category: str) -> Callable[..., Any]:
     """Wrap a sensitive function with the guard's control point."""
     if getattr(func, "__pysandbox_api__", False):
         return func

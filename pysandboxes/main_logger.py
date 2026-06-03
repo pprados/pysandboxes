@@ -56,9 +56,7 @@ def format_ruleref(rule: ConfigLine) -> str:
     Returns:
         A formatted string showing file path and line number.
     """
-    empty_path = rule.path == Path() or (
-        isinstance(rule.path, str) and rule.path.strip() in ("", ".")
-    )
+    empty_path = rule.path == Path() or (isinstance(rule.path, str) and rule.path.strip() in ("", "."))
     if empty_path:
         path = "<arg>"
     else:
@@ -79,14 +77,10 @@ def format_error_list(errors: Sequence[str]) -> str:
         A formatted string with proper conjunction usage.
     """
     errors = sorted(errors)
-    return (
-        errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]
-    )
+    return errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]
 
 
-def config_log(
-    log_level: int, format: str | None = None, use_rich: bool = False
-) -> None:
+def config_log(log_level: int, format: str | None = None, use_rich: bool = False) -> None:
     handlers: list[logging.Handler] = []
     if use_rich:
         try:

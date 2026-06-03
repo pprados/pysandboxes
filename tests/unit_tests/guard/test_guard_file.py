@@ -68,9 +68,7 @@ def test_apply_src_to_dest_rules() -> None:
         os.path.abspath(cwd),
         None,
     )
-    assert _apply_src_to_dest_rules(
-        f"{src_dir}", accept_src=True, accept_dest=False
-    ) == (f"{src_dir}", None)
+    assert _apply_src_to_dest_rules(f"{src_dir}", accept_src=True, accept_dest=False) == (f"{src_dir}", None)
 
     assert _apply_src_to_dest_rules(f"{dst_dir}/", accept_dest=False) == (
         os.path.abspath(dst_dir),

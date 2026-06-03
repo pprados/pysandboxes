@@ -14,9 +14,7 @@ Rule = namedtuple("Rule", ["rule", "path", "ln"])
 
 
 # Helper to create a mock Path object
-def create_mock_path(
-    path_str: str, exists_val: bool = True, parent_exists_val: bool = True
-) -> MagicMock:
+def create_mock_path(path_str: str, exists_val: bool = True, parent_exists_val: bool = True) -> MagicMock:
     mock_p = MagicMock(spec=Path)
     mock_p.__str__.return_value = path_str  # type: ignore[attr-defined]
     mock_p.exists.return_value = exists_val
@@ -26,9 +24,7 @@ def create_mock_path(
     mock_p.parent.exists.return_value = parent_exists_val  # Mock parent's exists
 
     # Mock the division operator for path joining
-    mock_p.__truediv__.side_effect = lambda other: create_mock_path(
-        str(Path(path_str) / other)
-    )
+    mock_p.__truediv__.side_effect = lambda other: create_mock_path(str(Path(path_str) / other))
 
     return mock_p
 
@@ -44,17 +40,13 @@ def test_parse_rules_defaults_no_config_exists(mocker: MagicMock) -> None:
 
     # Configure the mocked Path class to return our specific mock when called with the config path
     mock_path_class.side_effect = lambda p: (
-        config_path_mock
-        if str(p) == "/fake/pysandbox.conf"
-        else create_mock_path(str(p))
+        config_path_mock if str(p) == "/fake/pysandbox.conf" else create_mock_path(str(p))
     )
 
     rules: list[ConfigLine] = []
     errors: list[ErrorMsg] = []
 
-    port, provider, use_py_sandbox, learning_path, learn, other_rules = parse_rules(
-        config_path_mock, rules, errors
-    )
+    port, provider, use_py_sandbox, learning_path, learn, other_rules = parse_rules(config_path_mock, rules, errors)
 
     assert port == -1
     assert provider == "subprocess"
@@ -75,17 +67,13 @@ def test_parse_rules_defaults_config_exists(mocker: MagicMock) -> None:
     config_path_mock = create_mock_path("/fake/pysandbox.conf", exists_val=True)
 
     mock_path_class.side_effect = lambda p: (
-        config_path_mock
-        if str(p) == "/fake/pysandbox.conf"
-        else create_mock_path(str(p))
+        config_path_mock if str(p) == "/fake/pysandbox.conf" else create_mock_path(str(p))
     )
 
     rules: list[ConfigLine] = []
     errors: list[ErrorMsg] = []
 
-    port, provider, use_py_sandbox, learning_path, learn, other_rules = parse_rules(
-        config_path_mock, rules, errors
-    )
+    port, provider, use_py_sandbox, learning_path, learn, other_rules = parse_rules(config_path_mock, rules, errors)
 
     assert port == -1
     assert provider == "subprocess"
@@ -249,12 +237,8 @@ def test_learn_path(mocker: MagicMock) -> None:
     mock_path_class = mocker.patch("pysandboxes.guard_provider.Path", autospec=True)
 
     config_path_mock = create_mock_path("/fake/pysandbox.conf", exists_val=True)
-    rule_path_mock = create_mock_path(
-        "/tmp/pysandbox.conf", exists_val=True, parent_exists_val=True
-    )
-    learning_file_path_mock = create_mock_path(
-        "/tmp/new_config.conf", exists_val=False, parent_exists_val=True
-    )
+    rule_path_mock = create_mock_path("/tmp/pysandbox.conf", exists_val=True, parent_exists_val=True)
+    learning_file_path_mock = create_mock_path("/tmp/new_config.conf", exists_val=False, parent_exists_val=True)
 
     mock_path_class.side_effect = lambda p: {
         "/fake/pysandbox.conf": config_path_mock,
@@ -309,9 +293,7 @@ def test_multiple_rules(mocker: MagicMock) -> None:
         ConfigLine("unrelated=rule", cli_path_mock, 4),
     ]
     errors: list[ErrorMsg] = []
-    port, provider, use_py_sandbox, _, _, other_rules = parse_rules(
-        config_path_mock, rules, errors
-    )
+    port, provider, use_py_sandbox, _, _, other_rules = parse_rules(config_path_mock, rules, errors)
     assert port == 9999
     assert provider == "subprocess"
     assert use_py_sandbox is True
@@ -325,9 +307,7 @@ def test_multiple_values_error(mocker: MagicMock) -> None:
 
     config_path_mock = create_mock_path("/fake/pysandbox.conf", exists_val=True)
     some_path_mock = create_mock_path("/some/path/pysandbox.conf", exists_val=True)
-    another_path_mock = create_mock_path(
-        "/another/path/pysandbox.conf", exists_val=True
-    )
+    another_path_mock = create_mock_path("/another/path/pysandbox.conf", exists_val=True)
 
     mock_path_class.side_effect = lambda p: {
         "/fake/pysandbox.conf": config_path_mock,

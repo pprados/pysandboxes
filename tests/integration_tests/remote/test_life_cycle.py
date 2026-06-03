@@ -29,9 +29,7 @@ def find_process_childrens(parent_pid: int) -> List[int]:
                     # Ensure the status file exists and is readable.
                     # A process might exit between listdir and open,
                     # or permissions might be restricted.
-                    if status_file_path.exists() and os.access(
-                        status_file_path, os.R_OK
-                    ):
+                    if status_file_path.exists() and os.access(status_file_path, os.R_OK):
                         with open(status_file_path, "r") as f:
                             # Read lines until 'PPid:' is found
                             for line in f:
@@ -79,9 +77,7 @@ def test_multi_thread() -> None:
 
         for i in r:
             # Create a new thread with the worker function and a unique ID
-            thread: threading.Thread = threading.Thread(
-                target=_worker, args=(i,), name=f"Thread-{i}"
-            )
+            thread: threading.Thread = threading.Thread(target=_worker, args=(i,), name=f"Thread-{i}")
             threads.append(thread)
 
             # Start the thread

@@ -109,11 +109,7 @@ def is_accept_incoming_call() -> bool:
     Returns:
         True if the daemon is running and accepting calls, False otherwise.
     """
-    return (
-        is_daemon_started()
-        and _current_daemon is not None
-        and _current_daemon._accept_incoming
-    )
+    return is_daemon_started() and _current_daemon is not None and _current_daemon._accept_incoming
 
 
 async def async_start_daemon(
@@ -156,12 +152,8 @@ async def async_start_daemon(
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
         try:
             token = str(uuid.uuid4())
-            os_provider: BaseDaemon = providers_factory[all_rules.os_sandbox](
-                token, python_args=python_args
-            )
-            await os_provider._start(
-                all_rules, envs=envs, log_level=log_level, init_fn=init_fn
-            )
+            os_provider: BaseDaemon = providers_factory[all_rules.os_sandbox](token, python_args=python_args)
+            await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
             _current_daemon = os_provider
             assert os_provider.is_started
             _startup_counter += 1
@@ -280,20 +272,10 @@ def start_daemon(
         logger.info(
             "Starting %s daemon (waiting up to %ss for ready)",
             all_rules.os_sandbox,
-            (
-                TIMEOUT_FOR_START_DAEMON_QEMU
-                if all_rules.os_sandbox == "qemu"
-                else TIMEOUT_FOR_START_DAEMON
-            ),
+            (TIMEOUT_FOR_START_DAEMON_QEMU if all_rules.os_sandbox == "qemu" else TIMEOUT_FOR_START_DAEMON),
         )
-        loop.call_soon_threadsafe(
-            lambda: loop.create_task(_start_daemon_and_signal(), name="Start daemon")
-        )
-        start_timeout = (
-            TIMEOUT_FOR_START_DAEMON_QEMU
-            if all_rules.os_sandbox == "qemu"
-            else TIMEOUT_FOR_START_DAEMON
-        )
+        loop.call_soon_threadsafe(lambda: loop.create_task(_start_daemon_and_signal(), name="Start daemon"))
+        start_timeout = TIMEOUT_FOR_START_DAEMON_QEMU if all_rules.os_sandbox == "qemu" else TIMEOUT_FOR_START_DAEMON
         if not start_event.wait(timeout=start_timeout):
             raise RuntimeError(
                 f"Daemon failed to start within {start_timeout}s. "
@@ -357,11 +339,7 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
             stop_event.set()
             _reset_sandbox_loop()
 
-        loop.call_soon_threadsafe(
-            lambda: loop.create_task(
-                _async_shutdown_daemon(), name="daemon_shutdown daemon"
-            )
-        )
+        loop.call_soon_threadsafe(lambda: loop.create_task(_async_shutdown_daemon(), name="daemon_shutdown daemon"))
         if not stop_event.wait(timeout=TIMEOUT_FOR_STOP_DAEMON):
             raise RuntimeError("Impossible to shutdown the sandbox")
 
@@ -381,9 +359,7 @@ def get_token() -> str:
     return _current_daemon.token
 
 
-async def async_call_in_sandbox(
-    func: Callable[..., Any], *args: Any, **kwargs: Any
-) -> Any:
+async def async_call_in_sandbox(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """
     Asynchronously executes a function inside the sandbox.
 
@@ -430,9 +406,7 @@ def call_in_sandbox(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     global _current_daemon
     if is_in_sandbox():
         return func(*args, **kwargs)
-    assert _current_daemon is not None, (
-        "Daemon not started. Use 'with sandboxes()' " "or 'pysandboxes.run()'"
-    )
+    assert _current_daemon is not None, "Daemon not started. Use 'with sandboxes()' " "or 'pysandboxes.run()'"
     check_mixte_async_async()
 
     return _current_daemon.call_in_sandbox(func, False, *args, **kwargs)

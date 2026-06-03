@@ -247,28 +247,17 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # when the daemon runs inside a container (e.g. podman).
         slirp_dns = IPv4Address(SLIRP_DNS)
         dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
-        if (
-            not dns_servers
-            or os.path.exists("/.dockerenv")
-            or os.path.exists("/run/.containerenv")
-        ):
+        if not dns_servers or os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
             dns_servers = [slirp_dns]
         else:
-            dns_servers = [slirp_dns] + [ip for ip in dns_servers if ip != slirp_dns][
-                :1
-            ]
-        net_filter4 = rule_to_netfilter(
-            all_rules.socket_rules, dns_servers, is_ipv6=False
-        )
+            dns_servers = [slirp_dns] + [ip for ip in dns_servers if ip != slirp_dns][:1]
+        net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
 
         # Build hosts from OUT ALLOW rules so the sandbox resolves hostnames to the
         # same IPs that iptables allows (avoids mismatch when sandbox uses slirp DNS).
         hosts_entries: set[tuple[str, str]] = set()
         for socket_rule in all_rules.socket_rules:
-            if (
-                socket_rule.action != Action.ALLOW
-                or Direction.OUT not in socket_rule.directions
-            ):
+            if socket_rule.action != Action.ALLOW or Direction.OUT not in socket_rule.directions:
                 continue
             net = socket_rule.mask.network
             if not isinstance(net, IPv4Network) or net.prefixlen != 32:
@@ -331,9 +320,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         template_path: Path = (
             cast(
                 Path,
-                importlib.resources.files(
-                    ".".join(__name__.rsplit(".", maxsplit=1)[:-1])
-                ),
+                importlib.resources.files(".".join(__name__.rsplit(".", maxsplit=1)[:-1])),
             )
             / ".."
             / "templates"
@@ -590,9 +577,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                         self._max_delay,
                         self._base_delay * (self._factor ** (self._attempts - 1)),
                     )
-                    wait_time: float = random.uniform(
-                        current_base_backoff * 0.9, current_base_backoff
-                    )
+                    wait_time: float = random.uniform(current_base_backoff * 0.9, current_base_backoff)
                     logger.debug("watchdog sleep %i", wait_time)
                     await asyncio.sleep(wait_time)
                     self._last_reset = time.time()
@@ -624,9 +609,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             from ..guard_socket import parse_rules as socket_parse_rules
 
             socket_rules: list[SocketRule] = list(all_rules.socket_rules)
-            _new_socket_rules, *_ = socket_parse_rules(
-                [ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], []
-            )
+            _new_socket_rules, *_ = socket_parse_rules([ConfigLine(f"net=ALLOW|TCP|*|{self.port}|IN", Path(), 0)], [])
             socket_rules.extend(_new_socket_rules)
 
             from pysandboxes.guard_socket import SocketRules
@@ -713,9 +696,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             env["PID_FILE"] = pid_file
             project_root = os.getcwd()
             existing_pp = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = (
-                f"{project_root}:{existing_pp}" if existing_pp else project_root
-            )
+            env["PYTHONPATH"] = f"{project_root}:{existing_pp}" if existing_pp else project_root
 
             # Extract ports for forwarding
             ports_spec = slirp_extract_port_forwards(all_rules, self.port)
@@ -745,9 +726,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             # Pass slirp readiness fd via environment variable
             env["SLIRP_READY_FD"] = str(slirp_pipe_r)
 
-            logger.debug(
-                "Start process: " + " ".join((repr(c) if " " in c else c for c in cmd))
-            )
+            logger.debug("Start process: " + " ".join((repr(c) if " " in c else c for c in cmd)))
 
             # Launch unshare process
             @sandbox_loop
@@ -833,9 +812,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                             if response.status == 200:
                                 break
                             else:
-                                raise RuntimeError(
-                                    f"Unexpected status {response.status} from {ping_url}"
-                                )
+                                raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                     except TimeoutError:
                         pass
                     except (ClientConnectorError, ServerDisconnectedError):

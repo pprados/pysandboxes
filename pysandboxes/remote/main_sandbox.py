@@ -58,9 +58,7 @@ def _qemu_show_boot_console_guest_trace_enabled(
     )
 
 
-def _qemu_show_boot_console_guest_trace(
-    process_config: DaemonParameters, msg: str
-) -> None:
+def _qemu_show_boot_console_guest_trace(process_config: DaemonParameters, msg: str) -> None:
     """Stderr breadcrumbs in QEMU guest when ``qemu.show_boot_console`` is truthy."""
     if not _qemu_show_boot_console_guest_trace_enabled(process_config):
         return
@@ -86,10 +84,7 @@ def _debug_log() -> None:
     logging.getLogger("pysandboxes").setLevel(sandbox_level)
     logging.getLogger("pysandboxes.guard_import").setLevel(logging.INFO)
     logging.getLogger("pysandboxes.remote.firejail_daemon").setLevel(sandbox_level)
-    logger.debug(
-        "*** Start main_sandbox ***\n"
-        + " ".join((repr(c) if " " in c else c for c in sys.argv))
-    )
+    logger.debug("*** Start main_sandbox ***\n" + " ".join((repr(c) if " " in c else c for c in sys.argv)))
 
 
 # %%
@@ -149,9 +144,7 @@ def run_guest(process_config: DaemonParameters) -> int:
 
     def _write_exitcode(code: int) -> None:
         if not guest_run_dir:
-            logger.warning(
-                "QEMU guest: guest_run_dir missing; cannot write exitcode %s", code
-            )
+            logger.warning("QEMU guest: guest_run_dir missing; cannot write exitcode %s", code)
             return
         try:
             path = Path(guest_run_dir).joinpath("exitcode")
@@ -172,9 +165,7 @@ def run_guest(process_config: DaemonParameters) -> int:
             # In guest VM, use subprocess so start_daemon() launches a local Python server
             # instead of trying to start another QEMU.
             os.environ["OS_SANDBOX"] = "subprocess"
-            _qemu_show_boot_console_guest_trace(
-                process_config, "run_guest: before python_in_sb"
-            )
+            _qemu_show_boot_console_guest_trace(process_config, "run_guest: before python_in_sb")
             from .python_in_sb import python_in_sb
             from .vm_sse_daemon import (
                 PYTHON_OUTPUT_END,
@@ -227,9 +218,7 @@ async def run_server(process_config: DaemonParameters) -> int:
             # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
             module = importlib.import_module(module_name)
         except ImportError:
-            pysandboxes_logger.error(
-                "Impossible to import the module %s", repr(module_name)
-            )
+            pysandboxes_logger.error("Impossible to import the module %s", repr(module_name))
             sys.exit(-1)
         set_is_in_sandbox(False)  # Learn the import during the import
         assert hasattr(module, function_name)
@@ -247,9 +236,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         "qemu",
     )
     if all_rules.use_py_sandbox:
-        pysandboxes_logger.info(
-            f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}"
-        )
+        pysandboxes_logger.info(f"Start a py-sandbox encapsulated in an os-sandox of type {os_sandbox!r}")
     else:
         pysandboxes_logger.info(f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
@@ -294,13 +281,9 @@ def main() -> int:
     if DEBUG:
         _debug_log()
 
-    parser = argparse.ArgumentParser(
-        description="Start a Python-sandbox daemon inside os-sandbox."
-    )
+    parser = argparse.ArgumentParser(description="Start a Python-sandbox daemon inside os-sandbox.")
 
-    parser.add_argument(
-        "--_python-sb", action="store_true", default=False, help="_internal parameter"
-    )
+    parser.add_argument("--_python-sb", action="store_true", default=False, help="_internal parameter")
 
     parser.add_argument("--_named-pipe", help="_internal parameter")
 
@@ -325,8 +308,7 @@ def main() -> int:
         faulthandler.enable(file=sys.stderr, all_threads=True)
     _qemu_show_boot_console_guest_trace(
         process_config,
-        "main: config loaded, python_main_args="
-        + repr(getattr(process_config, "python_main_args", ())),
+        "main: config loaded, python_main_args=" + repr(getattr(process_config, "python_main_args", ())),
     )
 
     netfilter_rules = getattr(process_config, "netfilter_rules", ()) or ()
@@ -369,17 +351,13 @@ def main() -> int:
                     )
                 break
         else:
-            logger.warning(
-                "iptables-restore not found at /usr/sbin or /sbin; skipping netfilter rules"
-            )
+            logger.warning("iptables-restore not found at /usr/sbin or /sbin; skipping netfilter rules")
 
     # After slirp setup: loop until network is reachable (bwrap cannot pass pipe fd to inner process)
     if netfilter_rules or getattr(process_config, "wait_network", False):
         _wait_network_ready()
 
-    _qemu_show_boot_console_guest_trace(
-        process_config, "main: after netfilter / wait_network"
-    )
+    _qemu_show_boot_console_guest_trace(process_config, "main: after netfilter / wait_network")
 
     from ..learning import set_learning_path
     from ..main_logger import config_log
@@ -408,9 +386,7 @@ def main() -> int:
     # In this case, use the standard loop in place of the private sandbox loop
 
     # Activate python sandbox
-    _qemu_show_boot_console_guest_trace(
-        process_config, "main: before import pysandboxes / activate_sandboxes"
-    )
+    _qemu_show_boot_console_guest_trace(process_config, "main: before import pysandboxes / activate_sandboxes")
     import pysandboxes
     from pysandboxes.py_sandbox import activate_sandboxes
 
@@ -439,9 +415,7 @@ def main() -> int:
         os.environ,
         rules_provider="none" if python_main_args else None,
     )
-    _qemu_show_boot_console_guest_trace(
-        process_config, "main: after activate_sandboxes"
-    )
+    _qemu_show_boot_console_guest_trace(process_config, "main: after activate_sandboxes")
 
     # QEMU/python_sb: config was written by host with python_main_args → run user module in guest
     if python_main_args:
@@ -458,9 +432,7 @@ def main() -> int:
         return python_in_sb(all_rules, sandboxes_args)
 
     # Else _start the server
-    _qemu_show_boot_console_guest_trace(
-        process_config, "main: entering asyncio.run(run_server)"
-    )
+    _qemu_show_boot_console_guest_trace(process_config, "main: entering asyncio.run(run_server)")
     return asyncio.run(run_server(process_config))
 
 

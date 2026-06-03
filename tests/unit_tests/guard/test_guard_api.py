@@ -174,9 +174,7 @@ def _activate(*rules: str) -> None:
         ),
     ],
 )
-def test_specificity_decides_not_order(
-    rules: tuple[str, ...], settrace: bool, start: bool
-) -> None:
+def test_specificity_decides_not_order(rules: tuple[str, ...], settrace: bool, start: bool) -> None:
     """A function rule beats its category, whatever the line order."""
     if rules:
         _activate(*rules)

@@ -80,9 +80,7 @@ def main() -> int:
     if DEBUG:
         _debug_log()
 
-    python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(
-        sys.argv[1:]
-    )
+    python_parsed_args, sandboxes_args, python_cmd, config_path = parse_python_cmd_line(sys.argv[1:])
 
     extra_rules = convert_extra_rules(sandboxes_args)
 
@@ -116,9 +114,7 @@ def main() -> int:
     token = str(uuid.uuid4())
     log_level = logging.getLogger().getEffectiveLevel()
 
-    _daemon: BaseDaemon = providers_factory[all_rules.os_sandbox](
-        token, python_args=python_parsed_args
-    )
+    _daemon: BaseDaemon = providers_factory[all_rules.os_sandbox](token, python_args=python_parsed_args)
     logger.debug(f"{_daemon=} {all_rules.learn=}")
     if "--version" in python_parsed_args:
         print("Python", ".".join(map(str, sys.version_info[0:3])))
@@ -152,9 +148,7 @@ def main() -> int:
                     "LINES": str(lines),
                 }
             )
-            guest_all_rules = vm.augment_rules_for_guest_run_mount(
-                all_rules._replace(envs=guest_envs)
-            )
+            guest_all_rules = vm.augment_rules_for_guest_run_mount(all_rules._replace(envs=guest_envs))
             process_config = DaemonParameters(
                 all_rules=guest_all_rules,
                 log_level=log_level,
@@ -169,9 +163,7 @@ def main() -> int:
             )
             # Store config so subprocess_cmd can build boot media; guest reads config from mount
             vm._iso_config = process_config  # type: ignore[attr-defined]
-            cmd, extra_envs = vm.subprocess_cmd(
-                all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
-            )
+            cmd, extra_envs = vm.subprocess_cmd(all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir))
 
             # Config is in 9p-mounted config dir, no FIFO
             def _noop_config_writer(_: DaemonParameters) -> None:
@@ -179,9 +171,7 @@ def main() -> int:
 
             config_writer = _noop_config_writer
         else:
-            os_provider.port = (
-                find_free_port() if all_rules.port == -1 else all_rules.port
-            )
+            os_provider.port = find_free_port() if all_rules.port == -1 else all_rules.port
             cmd, extra_envs = os_provider.subprocess_cmd(
                 all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
             )
@@ -272,9 +262,7 @@ def main() -> int:
                     process_config=process_config,
                     extra_preexec_fn=extra_preexec_fn,
                     pass_fds=launch_params.get("pass_fds", pass_fds),
-                    on_launched=launch_params.get(
-                        "on_launched", os_provider.on_process_launched
-                    ),
+                    on_launched=launch_params.get("on_launched", os_provider.on_process_launched),
                     config_writer=config_writer,
                 )
                 try:

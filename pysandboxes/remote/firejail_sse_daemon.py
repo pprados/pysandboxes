@@ -131,9 +131,7 @@ class AllowList(MutableSet[str]):
                 return
 
         # Find existing directories that are prefixed by the new directory.
-        to_remove = {
-            existing_dir for existing_dir in self._set if existing_dir.startswith(value)
-        }
+        to_remove = {existing_dir for existing_dir in self._set if existing_dir.startswith(value)}
 
         # If any directories are to be removed, perform the replacement.
         if to_remove:
@@ -173,9 +171,7 @@ def _follow_links(filename: Path, whitelist: AllowList) -> None:
         if Path(filename).is_symlink():
             whitelist.add(str(Path(filename).resolve(strict=True)))
     except FileNotFoundError as e:
-        raise RuntimeError(
-            "Impossible to resolve the sys.executable `%s`", sys.executable
-        ) from e
+        raise RuntimeError("Impossible to resolve the sys.executable `%s`", sys.executable) from e
 
 
 def parse_firejail_net_print(pid: int) -> ipaddress.IPv4Address | None:
@@ -254,9 +250,7 @@ def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address:
         raise
     except Exception as e:
         logger.error("with firejail command, an unexpected error occurred: %s.", e)
-        raise RuntimeError(
-            f"with firejail command, an unexpected error occurred: {e}."
-        ) from e
+        raise RuntimeError(f"with firejail command, an unexpected error occurred: {e}.") from e
 
 
 class FireJailSSEDaemon(BaseSubProcessDaemon):
@@ -386,8 +380,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append("--quiet")
         else:
             logger.debug(
-                "Activate Firejail's output (to remove, "
-                "change the level of the logger %s)",
+                "Activate Firejail's output (to remove, " "change the level of the logger %s)",
                 __name__,
             )
 
@@ -431,9 +424,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     _follow_links(Path(sp), whitelist)
 
         # Add ignore files rules
-        for ignore_rule in (
-            r for r in all_rules.file_rules if isinstance(r, IgnoreRule)
-        ):
+        for ignore_rule in (r for r in all_rules.file_rules if isinstance(r, IgnoreRule)):
             args.append(f"--blacklist={ignore_rule.source}")
 
         # Ensure temp dir is whitelisted so firejail can read netfilter fifos and config pipe
@@ -473,9 +464,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         if REPLACE:
             from ..guard_files import parse_rules as files_parse_rules
 
-            _new_files_rules, _ = files_parse_rules(
-                [ConfigLine("expose-rw=/", Path(), 0)], []
-            )
+            _new_files_rules, _ = files_parse_rules([ConfigLine("expose-rw=/", Path(), 0)], [])
             new_files_rules = cast(list[FSExposeRule], _new_files_rules)
             selected_rules: list[Any] = []
             selected_rules.extend(new_files_rules)
@@ -493,8 +482,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             # network rules: keep existing behavior (error + exit).
             if restricted_network and not restricted_network_explicit_yes:
                 logger.error(
-                    "Set 'restricted_network no' in %s "
-                    "to use firejail with networks rules.",
+                    "Set 'restricted_network no' in %s " "to use firejail with networks rules.",
                     repr(str(firejail_config)),
                 )
                 sys.exit(1)
@@ -513,9 +501,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 skip_network_setup = False
 
             if not skip_network_setup:
-                dns_servers = [
-                    ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)
-                ]
+                dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
 
                 if dns_servers:
                     for dns in dns_servers:
@@ -546,15 +532,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                             bridge = bridges[0]
                     logger.debug(f"Select bridge {bridges}")
                     if not default_interface:
-                        raise ValueError(
-                            "Impossible to detect the default network interface"
-                        )
+                        raise ValueError("Impossible to detect the default network interface")
                     args.append(f"--net={bridge}")
 
                 if pipe_path:  # Update rules?
-                    net_filter4 = rule_to_netfilter(
-                        all_rules.socket_rules, dns_servers, is_ipv6=False
-                    )
+                    net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
 
                     if DEBUG_NETFILTER:
                         Path("tmp").mkdir(parents=True, exist_ok=True)
@@ -572,9 +554,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                     args.append(f"--netfilter={netfilter_file}")
 
-                    net_filter6 = rule_to_netfilter(
-                        all_rules.socket_rules, [], is_ipv6=True
-                    )
+                    net_filter6 = rule_to_netfilter(all_rules.socket_rules, [], is_ipv6=True)
                     if DEBUG_NETFILTER:
                         # tmp already created above for netfilter.net
                         netfilter6_file = Path("tmp/netfilter6.net")
@@ -594,9 +574,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             if REPLACE:
                 from ..guard_socket import parse_rules as socket_parse_rules
 
-                new_socket_rules, *_ = socket_parse_rules(
-                    [ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], []
-                )
+                new_socket_rules, *_ = socket_parse_rules([ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
                 all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
             # Clean env variable
@@ -635,8 +613,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             temp=temp,
         )
 
-        cmd_parameters, _ = self._firejail_args(
-            all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp
-        )
+        cmd_parameters, _ = self._firejail_args(all_rules=all_rules, envs=envs, pipe_path=pipe_path, temp=temp)
         cmd_parameters.extend(run_daemon_cmd)
         return cmd_parameters, {}

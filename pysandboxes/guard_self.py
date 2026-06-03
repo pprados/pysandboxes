@@ -47,9 +47,7 @@ class GuardModule(ModuleType):
     def __setattr__(self, name: str, value: object) -> None:
         guard_attributs = GuardModule._states[self].get("_guard_attributs", set())
         if name in guard_attributs:
-            raise RuleAttributeError(
-                f"Cannot set attribute {self.__name__ + '.' + name!r}"
-            )
+            raise RuleAttributeError(f"Cannot set attribute {self.__name__ + '.' + name!r}")
         super().__setattr__(name, value)
 
 
