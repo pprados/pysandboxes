@@ -22,10 +22,13 @@ expose-ro=/etc
 
 
 net=ALLOW|TCP|0.0.0.0/32|50983|IN
-net=ALLOW|TCP|ip6-localhost|9999,0|IN
+# IP literal, not 'ip6-localhost': that name is absent from
+# /etc/hosts on hosts where Docker Desktop rewrote the file,
+# and an unresolvable name is a config syntax error.
+net=ALLOW|TCP|::1|9999,0|IN
 net=ALLOW|TCP|localhost|9999|IN
 net=ALLOW|TCP|www.google.com|80|OUT
-net=ALLOW|UDP|ip6-localhost|12345|OUT
+net=ALLOW|UDP|::1|12345|OUT
 net=ALLOW|UDP|localhost|12345|IN
 net=ALLOW|UDP|localhost|12346,12345|OUT
 net=ALLOW|*|*|53|*

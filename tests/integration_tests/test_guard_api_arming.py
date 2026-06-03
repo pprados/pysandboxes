@@ -3,24 +3,22 @@
 """The API guard must be armed on every user-code entry point.
 
 Uses a minimal profile written per test instead of the shared
-``py-sandbox-test.profile``: that profile carries ``net=`` rules
-resolving ``ip6-localhost`` and ``www.google.com``, which this
-environment cannot resolve (no DNS) and which this test never needs.
+``py-sandbox-test.profile``: that profile carries ``net=`` rules whose
+hostnames must resolve at startup, an outcome unrelated to arming and
+which none of these tests need.
 
-Two of the five arming points from task 9 have no test here:
+Two of the five arming points have no test here:
 
 - ``_python_interactive`` (the standalone REPL, no args): driving it
-  needs stdin fed to an interactive `code.interact()`/IPython prompt,
-  which does not reduce to a `subprocess.run()` with captured output.
-  Left to the owner to judge whether that is worth building.
-- the SSE handler (``@sandbox``/``sandboxes()``): the sandbox RPC does
-  not complete in this environment independently of arming —
-  `tests/integration_tests/remote/test_exceptions.py` fails
-  identically (2 failed in 279s, zero guard denials) on `ff14342`
-  (before this branch existed) and on `b526e5f` (before this task's
-  first commit). A test here would fail for a pre-existing,
-  unrelated reason, not prove or disprove arming. This is a gap to
-  close in an environment where that suite passes, not an oversight.
+  needs stdin fed to an interactive ``code.interact()``/IPython
+  prompt, which does not reduce to a ``subprocess.run()`` with
+  captured output.
+- the SSE handler (``@sandbox``/``sandboxes()``): reaching it means
+  standing up a daemon, so the test belongs next to the other remote
+  tests in ``remote/`` rather than here, where every case is a plain
+  ``subprocess.run()``.
+
+Both are gaps to close, not deliberate exclusions.
 """
 
 import subprocess
@@ -31,16 +29,12 @@ from pathlib import Path
 def _write_profile(tmp_path: Path, *extra_lines: str) -> Path:
     profile = tmp_path / "arming.profile"
     profile.write_text(
-        "py-sandbox=true\n"
-        "os-sandbox=subprocess\n"
-        "python-import=*\n" + "".join(f"{line}\n" for line in extra_lines)
+        "py-sandbox=true\n" "os-sandbox=subprocess\n" "python-import=*\n" + "".join(f"{line}\n" for line in extra_lines)
     )
     return profile
 
 
-def _run(
-    profile: Path, *args: str, cwd: Path | None = None
-) -> subprocess.CompletedProcess[str]:
+def _run(profile: Path, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             sys.executable,

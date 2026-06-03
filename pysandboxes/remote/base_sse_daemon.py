@@ -56,7 +56,11 @@ class BaseSSESandbox(BaseDaemon):
     ) -> None:
         super().__init__(token)
         self.port = 0
-        self.host = "localhost"
+        # IP literal, not "localhost": aiohttp resolves with
+        # AI_ADDRCONFIG, which fails an IPv4 lookup when only 'lo'
+        # carries an address (netns, --network none). QEMU hostfwd
+        # also needs IPv4, being TCP on 0.0.0.0 only.
+        self.host = "127.0.0.1"
         self.max_connect_retry = max_connect_retry
 
     @property
@@ -83,9 +87,7 @@ class BaseSSESandbox(BaseDaemon):
                 token = get_token()
                 params = _get_rpc_params(args, func, kwargs)
 
-                sandbox_server_url = (
-                    self.base_url.replace("{PORT}", str(self.port)) + "/rpc"
-                )
+                sandbox_server_url = self.base_url.replace("{PORT}", str(self.port)) + "/rpc"
                 logger.info("Calling sandbox at %s", sandbox_server_url)
                 logger.debug("Try to call %s", sandbox_server_url)
                 # Force IPv4 for localhost/127.0.0.1 so QEMU hostfwd is used.
@@ -100,9 +102,7 @@ class BaseSSESandbox(BaseDaemon):
                         "Accept": "text/event-stream",
                         "Authorization": f"Bearer {token}",
                     },
-                    "reconnection_time": timedelta(
-                        seconds=INTERVAL_FOR_RETRY_CONNECTION
-                    ),
+                    "reconnection_time": timedelta(seconds=INTERVAL_FOR_RETRY_CONNECTION),
                     "max_connect_retry": self.max_connect_retry,
                 }
                 if session is not None:
