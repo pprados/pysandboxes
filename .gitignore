@@ -185,7 +185,7 @@ tst_wasm/
 #.gemini/
 #.ia/
 #.opencode/
-#.claude/
+.claude/
 
 # https://docs.entire.io/introduction
 # Capture IA session in git
