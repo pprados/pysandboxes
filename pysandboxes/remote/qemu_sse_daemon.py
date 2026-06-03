@@ -1229,7 +1229,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         import socket
 
         import aiohttp
-        from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
+        from aiohttp import ClientOSError, ClientTimeout, ServerDisconnectedError
 
         # Force IPv4 so QEMU hostfwd is used (hostfwd is TCP on 0.0.0.0, not IPv6).
         connector = aiohttp.TCPConnector(family=socket.AF_INET)
@@ -1265,7 +1265,7 @@ class QemuSSEDaemon(VMSSEDaemon):
                         raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                 except (
                     TimeoutError,
-                    ClientConnectorError,
+                    ClientOSError,
                     ServerDisconnectedError,
                 ) as e:
                     if count_loop % 25 == 0 or count_loop <= 3:

@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import aiohttp
-from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
+from aiohttp import ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..config import DEBUG
@@ -586,7 +586,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                             count_loop,
                             LOOP_FOR_PING,
                         )
-                except (ClientConnectorError, ServerDisconnectedError) as e:
+                except (ClientOSError, ServerDisconnectedError) as e:
                     if count_loop % 15 == 0:
                         logger.info(
                             "Ping attempt %d/%d: %s",

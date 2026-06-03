@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import aiohttp
-from aiohttp import ClientConnectorError, ClientTimeout, ServerDisconnectedError
+from aiohttp import ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..guard_files import FSExposeRule, IgnoreRule
@@ -815,7 +815,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                                 raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                     except TimeoutError:
                         pass
-                    except (ClientConnectorError, ServerDisconnectedError):
+                    except (ClientOSError, ServerDisconnectedError):
                         pass
 
                     await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
