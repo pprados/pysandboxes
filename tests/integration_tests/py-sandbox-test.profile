@@ -14,6 +14,10 @@ python-import=*
 # one call; both are needed, or the call fails on the second door.
 # Delete when those calls are removed.
 python-api=ALLOW:signal.signal,_signal.signal
+# tst_usage caps blocking NSS lookups with a worker thread
+# (_network_dns_result): NSS can hang for minutes in nested QEMU.
+# Two doors again, like signal above.
+python-api=ALLOW:threading.Thread.start,threading._start_joinable_thread
 
 expose-rw=./tmp
 expose-ro=.
