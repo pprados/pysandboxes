@@ -105,11 +105,11 @@ def generate_config_from_learning() -> None:
 
         replaces: dict[str, str] = {
             # "learning_repeat": f"learn={learning_path}",
-            "learning_guard_api": all_api_rules,
             "learning_guard_envs": all_env_rules,
             "learning_guard_import": all_import_rules,
             "learning_guard_files": all_file_rules,
             "learning_guard_socket": all_socket_rules,
+            "learning_guard_api": all_api_rules,
         }
 
         header = f"# Add rules ({datetime.now().strftime('%Y/%m/%d at %H:%M')})"
@@ -122,8 +122,7 @@ def generate_config_from_learning() -> None:
         else:
             # Load template
             with resources.as_file(
-                resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates")
-                / "py-sandbox.template"
+                resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates") / "py-sandbox.template"
             ) as resource_path:
                 all_lines = resource_path.read_text().split("\n")
 
@@ -138,9 +137,7 @@ def generate_config_from_learning() -> None:
             if match and match.group(1) in replaces:
                 if replaces[match.group(1)]:
                     logger.debug("Insert %s", match.group(1))
-                    all_lines[i] = (
-                        header + "\n" + replaces[match.group(1)] + "\n\n" + line
-                    )
+                    all_lines[i] = header + "\n" + replaces[match.group(1)] + "\n\n" + line
                     update_file = True
                     del replaces[match.group(1)]
 
@@ -162,9 +159,7 @@ def generate_config_from_learning() -> None:
             pysandboxes_logger.setLevel(logging.INFO)
             logger.debug(f"{learning_path=} {old_learning_path=}")
             if learning_path.absolute().is_relative_to(Path().absolute()):
-                relative_lerning_path = learning_path.absolute().relative_to(
-                    Path().absolute()
-                )
+                relative_lerning_path = learning_path.absolute().relative_to(Path().absolute())
             else:
                 relative_lerning_path = learning_path
             msg = f"\nWrite all learning rules in '{relative_lerning_path}'. {find_learning}"
