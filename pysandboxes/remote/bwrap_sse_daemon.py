@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import aiohttp
-from aiohttp import ClientOSError, ClientTimeout, ServerDisconnectedError
+from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..guard_files import FSExposeRule, IgnoreRule
@@ -70,7 +70,7 @@ from .slirp4netns_common import (
 from .slirp4netns_common import (
     setup_port_forwarding as slirp_setup_port_forwarding,
 )
-from .tools import suggest_package_installation, which_command
+from .tools import is_transient_connection_error, suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)
 
@@ -512,12 +512,22 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                             count_loop,
                             LOOP_FOR_PING,
                         )
-                except (ClientOSError, ServerDisconnectedError):
+                except (ClientConnectorError, ServerDisconnectedError):
                     if count_loop % 15 == 0:
                         logger.info(
                             "Ping attempt %d/%d: connection failed",
                             count_loop,
                             LOOP_FOR_PING,
+                        )
+                except ClientOSError as e:
+                    if not is_transient_connection_error(e):
+                        raise
+                    if count_loop % 15 == 0:
+                        logger.info(
+                            "Ping attempt %d/%d: %s",
+                            count_loop,
+                            LOOP_FOR_PING,
+                            type(e).__name__,
                         )
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
         await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)

@@ -56,7 +56,7 @@ from .qemu_setup import (
     augment_all_rules_for_qemu_run_mount,
     prepare_guest_env,
 )
-from .tools import which_command
+from .tools import is_transient_connection_error, which_command
 from .vm_sse_daemon import VMSSEDaemon
 
 # VM boot + cloud-init can take 20–40s before main_sandbox listens; wait before pinging.
@@ -1229,7 +1229,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         import socket
 
         import aiohttp
-        from aiohttp import ClientOSError, ClientTimeout, ServerDisconnectedError
+        from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
         # Force IPv4 so QEMU hostfwd is used (hostfwd is TCP on 0.0.0.0, not IPv6).
         connector = aiohttp.TCPConnector(family=socket.AF_INET)
@@ -1265,9 +1265,19 @@ class QemuSSEDaemon(VMSSEDaemon):
                         raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                 except (
                     TimeoutError,
-                    ClientOSError,
+                    ClientConnectorError,
                     ServerDisconnectedError,
                 ) as e:
+                    if count_loop % 25 == 0 or count_loop <= 3:
+                        logger.debug(
+                            "Ping attempt %d/%d failed: %s",
+                            count_loop,
+                            QEMU_LOOP_FOR_PING,
+                            type(e).__name__,
+                        )
+                except ClientOSError as e:
+                    if not is_transient_connection_error(e):
+                        raise
                     if count_loop % 25 == 0 or count_loop <= 3:
                         logger.debug(
                             "Ping attempt %d/%d failed: %s",
