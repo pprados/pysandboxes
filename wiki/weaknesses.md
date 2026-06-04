@@ -10,7 +10,7 @@ Here are some vulnerabilities:
   - A child process, if it has the rights to read `/proc/${PPID}/environ`, can search for tokens there. **OS-sandboxes** generally prohibit this.
   - A direct network connection to the sandbox it's possible. A secret token, a random port and a limitation of localhost network are used.
 
-The sensitive functions that used to be reachable as soon as their module was importable (`os.system`, `os.fork`, `os.kill`, ...) are now denied by default, independently of import rights. That closes a hole; it does not close the three below, all measured while building it:
+The sensitive functions that used to be reachable as soon as their module was importable (`os.system`, `os.fork`, `os.kill`, ...) are denied by default, independently of import rights. That closes a hole; it does not close the three below, all measured while building it:
 
   - `ctypes.pythonapi` is a `ctypes.PyDLL` instance built at import time. Using it calls no `__init__`, so it escapes the guard, even though `ctypes.CDLL` itself is patched through `__init__`.
   - The daemon's private event loop calls `_thread.interrupt_main` from its `except KeyboardInterrupt` handler around `run_forever()`, in a background thread. Its reach is narrow: CPython delivers `SIGINT` to the main thread, so this only fires on an explicit `KeyboardInterrupt` in that loop.
