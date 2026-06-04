@@ -16,8 +16,11 @@ python-import=*
 python-api=ALLOW:signal.signal,_signal.signal
 # tst_usage caps blocking NSS lookups with a worker thread
 # (_network_dns_result): NSS can hang for minutes in nested QEMU.
-# Two doors again, like signal above.
-python-api=ALLOW:threading.Thread.start,threading._start_joinable_thread
+# Several doors again, like signal above. The private start primitive
+# is spelled _start_new_thread up to 3.12 and _start_joinable_thread
+# from 3.13; both are listed so the profile stays portable, and the
+# guard patches only the applicable one.
+python-api=ALLOW:threading.Thread.start,threading._start_new_thread,threading._start_joinable_thread
 
 expose-rw=./tmp
 expose-ro=.
