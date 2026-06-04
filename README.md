@@ -2,7 +2,7 @@
 
 ![Sandboxes](py-sandboxes-small.png)
 
-> Protect Python programs without their knowledge
+> Protect Python programs without their knowledge.
 
 [Home Page](https://www.github.com/pprados/pysandboxes/)
 
@@ -451,6 +451,7 @@ The features of each technology are proposed:
 | import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
 | expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ?     |     ✅  |        ❌         |
+| python-api=*             |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | **Network**              |      |            |           |           |           |        |        ❌         |
 | • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
