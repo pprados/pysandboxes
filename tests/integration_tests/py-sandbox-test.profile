@@ -8,15 +8,9 @@ env=My_ENV=${My_ENV}
 
 python-import=*
 
-# tst_usage.py lines 126, 465, 467 call signal.signal(). CPython's
-# signal.signal() is a pure-Python wrapper that delegates to the C
-# builtin _signal.signal(), so both names are guarded doors on this
-# one call; both are needed, or the call fails on the second door.
-# Delete when those calls are removed.
-python-api=ALLOW:signal.signal,_signal.signal
 # tst_usage caps blocking NSS lookups with a worker thread
 # (_network_dns_result): NSS can hang for minutes in nested QEMU.
-# Several doors again, like signal above. The private start primitive
+# One call crosses several guarded doors. The private start primitive
 # is spelled _start_new_thread up to 3.12 and _start_joinable_thread
 # from 3.13; both are listed so the profile stays portable, and the
 # guard patches only the applicable one.

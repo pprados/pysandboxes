@@ -92,8 +92,20 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "posix.setpgid",
         "os.setpgrp",
         "posix.setpgrp",
-        "signal.signal",
-        "_signal.signal",
+        # signal.signal/_signal.signal are not listed: registering a
+        # handler is not emitting a signal. It installs a callback for a
+        # signal aimed at the calling process, and grants no capability
+        # sandboxed code lacks — it already runs arbitrary code. The
+        # emitters stay listed (kill, killpg, raise_signal,
+        # pthread_kill), as do the timers that emit (alarm, setitimer).
+        # Residual gap, documented rather than fixed: remote/tools.py
+        # set_pdeathsig() uses prctl(PR_SET_PDEATHSIG, SIGTERM), so
+        # signal.signal(SIGTERM, SIG_IGN) lets a sandboxed process
+        # outlive its parent. That is persistence, not a confinement
+        # escape — the file, socket and env rules still hold — and it is
+        # reachable anyway through a loop that never returns. Guarding
+        # the registration was costing IPython, orderly shutdown and
+        # alarm-based timeouts for that single case.
         "signal.alarm",
         "_signal.alarm",
         "signal.setitimer",

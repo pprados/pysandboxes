@@ -214,8 +214,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         module_name, function_name = str(process_config.init_fn).split(":", 1)
         set_is_in_sandbox(True)
         try:
-            # reason: init_fn declared by the trusted parent
-            # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
+            # Init_fn declared by the trusted parent
             module = importlib.import_module(module_name)
         except ImportError:
             pysandboxes_logger.error("Impossible to import the module %s", repr(module_name))
@@ -296,8 +295,7 @@ def main() -> int:
     pickle_data: bytes = config_path.read_bytes()
     # Only the parent process feeds the named_pipe; no risk of malicious pickle
     # injection.
-    # reason: payload written by the trusted parent
-    # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+    # Payload written by the trusted parent
     process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
@@ -408,6 +406,12 @@ def main() -> int:
         if getattr(process_config, "guest_run_dir", None):
             os.environ.setdefault("TERM", "xterm-256color")
             os.environ.setdefault("FORCE_COLOR", "1")
+    if sandboxes_parsed._python_sb and not python_main_args:
+        # python-sb runs the user program in this process. Load its entry point
+        # before arming: once the guards are active, the stdlib imports of
+        # python_in_sb (os, logging, pathlib, ...) would be charged to the
+        # user's python-import rules and denied.
+        import pysandboxes.remote.python_in_sb  # noqa: F401
     # Guest runs user code inside the VM: do not load qemu/subprocess daemons here
     # (they pull aiohttp/native stack and can segfault in the minimal guest).
     activate_sandboxes(

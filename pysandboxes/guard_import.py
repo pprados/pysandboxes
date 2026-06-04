@@ -22,7 +22,7 @@ import os
 import sys
 from copy import copy
 
-# nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2 — reason: Python 3.10+ only
+# Python 3.10+ only
 from importlib import resources
 from importlib.abc import Loader
 from importlib.machinery import ModuleSpec
@@ -524,6 +524,10 @@ def activate_guard_import(
     keep = [
         "warnings",
         "tokenize",  # For assertion
+        # CPython's _bootstrap_external.get_data() reads every source file
+        # through _io.open_code(). Evicting _io makes the loader re-import it,
+        # and that import is denied by any ruleset, so no module can be loaded.
+        "_io",
         "asyncio",
         "sys",
         "threadpool",

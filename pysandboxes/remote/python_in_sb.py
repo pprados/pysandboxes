@@ -1,13 +1,16 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
+import code
 import importlib
 import importlib.util
 import logging
 import os
+import runpy
 import signal
 import sys
+import traceback
 from pathlib import Path
-from types import FrameType
+from types import FrameType, ModuleType
 from typing import Any, Dict, List, Set
 
 from pysandboxes.learning import (
@@ -19,7 +22,8 @@ from pysandboxes.learning import (
 from pysandboxes.tools import set_is_in_sandbox
 
 from ..all_rules import AllRules
-from ..guard_api import arm
+from ..e import RuleApiPermissionError, SandBoxError
+from ..guard_api import arm, is_allowed
 from ..main_logger import config_log
 
 logger = logging.getLogger(__name__)
@@ -54,10 +58,9 @@ def _register_signals_handlers() -> None:
         It will save the rules before exiting itself.
 
         Stays installed and delegates to the original handler instead
-        of re-registering it: ``signal.signal`` is a guarded API and
-        this runs after ``arm()``, so restoring it would be denied by
-        the profile that does not allow ``process-control``, losing
-        the learning rules with it.
+        of restoring it: the ``saved`` set already makes the save
+        happen once, so re-registering from inside a handler would buy
+        nothing and would mutate the handler table at delivery time.
         """
         logger.info("Pysandboxes: Catch signal %s.", signum)
         handler = signals[signal.Signals(signum)]
@@ -117,11 +120,19 @@ def _python_interactive(
         'Type "help", "copyright", "credits" or "license" for more information.'
     )
     prefix = "\u26a0 "
+    banner_shown = False
 
     try:
-        # Try to import and use IPython for a better REPL experience
-        from types import ModuleType
+        # IPython starts a history-saving thread, and prompt_toolkit a
+        # stdout-proxy thread on every prompt, so it cannot run without the
+        # "threads" door. Refuse up front rather than let it fail halfway
+        # through initialisation. Learning mode still tries it, so the rules
+        # get recorded.
+        _door, _category = "threading.Thread.start", "threads"
+        if not is_learning_mode() and not is_allowed(_door):
+            raise RuleApiPermissionError(_door, _category)
 
+        # Try to import and use IPython for a better REPL experience
         # Hack for IPython
         sys.modules["__main__"] = ModuleType(name="__main__")
 
@@ -147,6 +158,7 @@ def _python_interactive(
         # c.InteractiveShellApp.exit_msg=exit_msg
         if ban:
             print(banner)
+            banner_shown = True
         print(
             f"IPython {getattr(IPython, '__version__', 'unknown')} -- An enhanced Interactive Python. "
             f"Type '?' for help."
@@ -156,13 +168,16 @@ def _python_interactive(
             user_ns=None,
             config=c,
         )
-    except ImportError:
-        import traceback
-
-        traceback.print_exc()
+    except (ImportError, SandBoxError) as err:
+        if isinstance(err, ImportError):
+            traceback.print_exc()
+        else:
+            # IPython needs more than the plain REPL: threads for its history
+            # saver and the prompt_toolkit stdout proxy, and a writable profile
+            # directory. A rule refusal there is a configuration choice, not a
+            # crash: name the door and keep the REPL that does not need it.
+            print(f"{err}\nFalling back to the standard Python REPL.", file=sys.stderr)
         # Fallback to the standard Python REPL if IPython is not installed
-        import code
-
         # Create a banner for the standard REPL
         if hasattr(sys, "ps1"):
             sys.ps1 = prefix + getattr(sys, "ps1")  # noqa: B009
@@ -175,7 +190,7 @@ def _python_interactive(
             if sys.version_info[:2] >= (3, 13):
                 extra = {"local_exit": True}
             code.interact(
-                banner=banner if ban else "",
+                banner=banner if ban and not banner_shown else "",
                 exitmsg=exit_msg,
                 # When self.local_exit is True, we overwrite the builtins so
                 # exit() and quit() only raises SystemExit and we can catch that
@@ -188,8 +203,6 @@ def _python_interactive(
 
 
 def _python_module(all_rules: AllRules, mod_name: str) -> int:
-    import runpy
-
     _register_signals_handlers()
     arm()
 
@@ -205,8 +218,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
         arm()
         script_body = script.read_text()
         sys.argv = [str(script)] + args
-        # reason: runs the user script by design; OS sandbox isolates it
-        # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
+        # Runs the user script by design; the OS sandbox isolates it.
         exec(script_body)
         if sys.flags.inspect:
             return _python_interactive(all_rules=all_rules, ban=False)
@@ -223,8 +235,7 @@ def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> i
     _register_signals_handlers()
     arm()
     sys.argv = args
-    # reason: runs the user script by design; OS sandbox isolates it
-    # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
+    # Runs the user script by design; the OS sandbox isolates it.
     exec(script_body)
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)
@@ -265,6 +276,10 @@ def python_in_sb(
         set_learning_path(all_rules.learning_path)  # TODO: may be duplicate of main_sandbox
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
+            # The other branches register the handlers in their own helper, which
+            # _python_interactive does not do. Register here, before its arm(),
+            # so a SIGTERM during the REPL still saves the learned rules.
+            _register_signals_handlers()
             _python_interactive(all_rules, True)
         elif python_cmd[0] == "-m":
             # Case: Execute a module
