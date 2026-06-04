@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import aiohttp
-from aiohttp import ClientOSError, ClientTimeout, ServerDisconnectedError
+from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..guard_files import FSExposeRule, IgnoreRule
@@ -85,7 +85,7 @@ from .slirp4netns_common import (
 from .slirp4netns_common import (
     setup_port_forwarding as slirp_setup_port_forwarding,
 )
-from .tools import get_upstream_dns, which_command
+from .tools import get_upstream_dns, is_transient_connection_error, which_command
 from .unshare_setup import UnshareSetupConfig
 
 logger = logging.getLogger(__name__)
@@ -815,8 +815,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                                 raise RuntimeError(f"Unexpected status {response.status} from {ping_url}")
                     except TimeoutError:
                         pass
-                    except (ClientOSError, ServerDisconnectedError):
+                    except (ClientConnectorError, ServerDisconnectedError):
                         pass
+                    except ClientOSError as e:
+                        if not is_transient_connection_error(e):
+                            raise
 
                     await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
 

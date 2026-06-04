@@ -14,6 +14,7 @@ Key utilities:
 """
 
 import base64
+import errno as errno_mod
 import ipaddress
 import logging
 import os
@@ -37,6 +38,31 @@ known_paths = [
     Path("/usr/bin/"),
     Path("/usr/local/bin/"),
 ]
+
+
+# Errno values a daemon's readiness ping must ride out. The listening
+# socket can already be open while the server finishes initialising, so
+# the accepted connection gets reset; aiohttp surfaces that as a
+# ClientOSError, which derives from OSError. Anything outside this set
+# (EMFILE, ENOMEM, EACCES) is a real fault and must not be swallowed by
+# a retry loop, or it only shows up once the ping budget runs out.
+_TRANSIENT_CONNECTION_ERRNOS = frozenset(
+    {
+        errno_mod.ECONNRESET,
+        errno_mod.ECONNABORTED,
+        errno_mod.EPIPE,
+    }
+)
+
+
+def is_transient_connection_error(error: OSError) -> bool:
+    """Whether a connection error is worth retrying during startup.
+
+    Takes an OSError rather than aiohttp's ClientOSError so this module
+    keeps no HTTP client import. An error carrying no errno is treated
+    as a real fault: better to surface it than to retry blindly.
+    """
+    return error.errno in _TRANSIENT_CONNECTION_ERRNOS
 
 
 def which_command(command: str) -> Path | None:

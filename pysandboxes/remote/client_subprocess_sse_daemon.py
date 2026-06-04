@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import aiohttp
-from aiohttp import ClientOSError, ClientTimeout, ServerDisconnectedError
+from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
 from ..config import DEBUG
@@ -39,6 +39,7 @@ from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, ConfigLine, Envs
 from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
+from .tools import is_transient_connection_error
 from . import main_shutdown
 from .base_sse_daemon import BaseSSESandbox
 from .daemon_parameters import DaemonParameters
@@ -586,7 +587,17 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                             count_loop,
                             LOOP_FOR_PING,
                         )
-                except (ClientOSError, ServerDisconnectedError) as e:
+                except (ClientConnectorError, ServerDisconnectedError) as e:
+                    if count_loop % 15 == 0:
+                        logger.info(
+                            "Ping attempt %d/%d: %s",
+                            count_loop,
+                            LOOP_FOR_PING,
+                            type(e).__name__,
+                        )
+                except ClientOSError as e:
+                    if not is_transient_connection_error(e):
+                        raise
                     if count_loop % 15 == 0:
                         logger.info(
                             "Ping attempt %d/%d: %s",
