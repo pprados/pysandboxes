@@ -210,7 +210,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 #   subprocess.getoutput -> getstatusoutput -> check_output -> run
 #                        -> Popen -> os.posix_spawn
 #   pty.spawn -> pty.fork -> os.fork / os.forkpty / os.setsid
-#   signal.signal -> _signal.signal
 #   threading.Thread.start -> threading._start_joinable_thread
 # Allowing the outer name alone is then refused on the inner one. Each
 # refusal names the door it stopped at, so iterating converges; a

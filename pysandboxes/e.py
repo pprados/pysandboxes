@@ -85,7 +85,7 @@ class RuleApiPermissionError(PermissionError, SandBoxError):
             f"{qualname}() is denied by the API guard "
             f"(category: {category}).\n"
             f"Add `python-api=ALLOW:{qualname}` for this function "
-            f"only,\n"
+            f"only, "
             f"or `python-api=ALLOW:{category}` for the whole category."
         )
         self.qualname = qualname

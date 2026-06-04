@@ -102,8 +102,13 @@ def parse_rules(
             # Case: Simple rule like key=value or key=${VAR}
             else:
                 v = substitute_value(value_pattern)
-                # Always add key so "key in os.environ" is True (e.g. My_ENV for tests)
-                new_vars[key_pattern] = v
+                # A "${...}" pattern forwards a host variable: an empty result
+                # means the variable is unset, so the key must stay absent.
+                # Creating it empty would make os.getenv(key, default) return ""
+                # instead of the caller's default. A literal value is kept as
+                # written, so "key in os.environ" is True (e.g. My_ENV for tests).
+                if v or "${" not in value_pattern:
+                    new_vars[key_pattern] = v
                 envs_rules.add(EnvRule(re.compile(re.escape(key_pattern)), False, orule))
         elif orule.rule.startswith("unenv="):
             remove_key = orule.rule[len("unenv=") :]
