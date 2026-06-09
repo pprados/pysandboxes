@@ -25,13 +25,20 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 
 PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.profile"
 
-# All OS sandbox providers to test (no container); skip conditions applied per provider
+# All OS sandbox providers to test (no container); skip conditions applied per provider.
+# A provider whose binary is missing skips itself, see _skip_reason, so this list
+# stays portable. The two commented entries are held back on purpose:
+#   qemu   boots a VM, so it needs nested virtualisation and a 600s timeout.
+#   bwrap  hangs until the timeout when an `ignore=` pattern matches a symlink
+#          pointing outside the exposed tree: _resolve_ignore_paths in
+#          bwrap_sse_daemon.py tests os.path.isfile(), which follows the link, and
+#          bwrap then cannot create the mount point that masks it.
 all_os_sandbox: list[str] = [
-    # "subprocess",
-    "qemu",
-    # "unshare",
-    # "firejail",
-    # "landlock",
+    "subprocess",
+    # "qemu",
+    "unshare",
+    "firejail",
+    "landlock",
     # "bwrap",
 ]
 
