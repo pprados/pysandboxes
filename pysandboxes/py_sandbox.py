@@ -16,7 +16,7 @@ import tempfile
 import types
 import uuid
 
-# nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2 — reason: Python 3.10+ only
+# Python 3.10+ only
 from importlib import resources
 from pathlib import Path
 from typing import Any, cast
@@ -53,7 +53,7 @@ def _search_module_config(config_path: Path | None) -> Path:
         assert frame.f_back is not None
         frame = frame.f_back
     # Module of the caller
-    # nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2 — reason: Python 3.10+ only
+    # Python 3.10+ only
     from importlib.resources import files
 
     caller_modules = frame.f_globals.get("__name__", "__main__").split(".")

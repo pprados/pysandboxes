@@ -217,7 +217,7 @@ async def launch_sandbox(
         gc.collect()
         if use_fifo:
             with open(pipe_path, "wb") as fifo:
-                # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle — reason: serialization only
+                # serialization only
                 fifo.write(pickle.dumps(process_config))
                 fifo.flush()
                 fifo.close()
