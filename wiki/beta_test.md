@@ -2,7 +2,7 @@
 
 Read all the documentation and test the project with small demos.
 
-This project is currently under development. It is neither stable nor [finished](roadmap.md). A first major step has been achieved: **patching all APIs that provide file and network access.**
+This project is currently under development. It is neither stable nor [finished](roadmap.md). A first major step has been achieved: **patching all APIs that provide file and network access**, to which a third family has been added: **denying calls to a registry of sensitive functions**, independently of the import rights.
 
 # 1. Check usage
 These APIs are sensitive. A small error in the patch will cause a program to crash, even if it runs fine without sandbox activation. It is crucial to ensure that applications run without any changes when invoked with **`python-sb`**.

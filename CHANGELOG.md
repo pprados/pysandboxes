@@ -15,7 +15,7 @@
 
 ### Added
 - Control of sensitive API calls, independent of import rights: an
-  import right is not a call right. A registry of 104 sensitive
+  import right is not a call right. A registry of 102 sensitive
   functions in six categories (`process-exec`, `process-control`,
   `privileges`, `threads`, `native`, `introspection`) is denied by
   default, and permissions are granted with
