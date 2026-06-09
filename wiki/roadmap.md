@@ -80,7 +80,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] DevContainer
 
 ## Guard some critical methods
-A registry of 106 sensitive functions, in six categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`), is denied by default, independently of the import rights granted by `python-import=`.
+A registry of 102 sensitive functions, in six categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`), is denied by default, independently of the import rights granted by `python-import=`.
 
 - Configured with `python-api=ALLOW:<category>|<function>` and `python-api=DENY:<category>|<function>`, resolved by specificity: a function rule beats its category, and `DENY` wins at equal specificity.
 - Learning mode records what an application really calls and generates the matching lines.

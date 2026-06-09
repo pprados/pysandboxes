@@ -107,6 +107,7 @@ To disable only one rule family, use the generic acceptance settings.
 - `expose-rw=/,/`
 - `net=ALLOW|*|*|*|*`
 - `import=*`
+- `python-api=ALLOW:*`
 
 Or
 - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.

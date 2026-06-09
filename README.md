@@ -380,7 +380,7 @@ What are the security filters offered by **Py-Sandboxes**?
 - **Network access control**: It is possible to control the direction, IP addresses, domain names, and ports available to the sandbox.
 - **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. It is also possible to use a different directory name in the sandbox than the original name. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
 - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
-- **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `signal.signal`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
+- **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
 
 Consult the [parameter file](pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
 
