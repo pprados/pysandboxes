@@ -1,21 +1,23 @@
-name: Python Tests
+name: Python Integration Tests
 
+# Manual only. These tests launch real sandboxed child processes, so they are
+# slower and less hermetic than the unit suite, and the provider matrix in
+# tests/integration_tests/test_usage_with_providers.py currently targets qemu,
+# which a hosted runner cannot boot. Providers whose binary is missing skip
+# themselves cleanly (see _skip_reason), so the run stays green on a bare
+# runner. Add a `schedule:` block here to also run it nightly.
+#
+# container-tests and sample-tests are deliberately absent: the first needs
+# minikube plus locally built images, the second needs the samples' API keys.
 on:
-  push:
-    branches: [ "**" ]
-  pull_request:
-    branches: [ "**" ]
+  workflow_dispatch:
 
-# Unit tests only. integration-tests, container-tests and sample-tests are
-# not run here: they need an OS provider, minikube-built images and the
-# samples' own API keys. See integration.yml for the integration suite.
 jobs:
-  test:
+  integration:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        #python-version: ["3.11","3.12","3.13", "3.14"]
         python-version: ["3.13"]
 
     steps:
@@ -52,5 +54,5 @@ jobs:
     - name: Install dependencies
       run: uv sync --group test
 
-    - name: Run unit tests
-      run: make unit-tests
+    - name: Run integration tests
+      run: make integration-tests

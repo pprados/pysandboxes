@@ -314,7 +314,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
 
     def _get_unshare_flags(self, all_rules: AllRules, envs: Environ) -> list[str]:
         """Get unshare flags from template and custom params."""
-        # nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2 — reason: Python 3.10+ only
+        # Python 3.10+ only
         import importlib.resources
 
         template_path: Path = (
@@ -777,7 +777,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             # which happens after unshare_setup completes namespace configuration.
             gc.collect()
             with open(pipe_path, "wb") as fifo:
-                # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle — reason: serialization only
+                # serialization only
                 fifo.write(pickle.dumps(process_config))
                 fifo.flush()
             pipe_path.unlink()

@@ -54,8 +54,7 @@ def _load_provider_class(key: str) -> type[BaseDaemon]:
         raise KeyError(key)
     if key not in _provider_class_cache:
         mod_path, cls_name = _PROVIDER_SPECS[key]
-        # reason: name from internal registry, not user input
-        # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
+        # Name from internal registry, not user input
         mod = importlib.import_module(f".{mod_path}", package="pysandboxes")
         _provider_class_cache[key] = getattr(mod, cls_name)
     return _provider_class_cache[key]

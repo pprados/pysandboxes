@@ -1099,7 +1099,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         else:
             config_dir = temp / "pysb_config"
         config_dir.mkdir(parents=True, exist_ok=True)
-        # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle — reason: serialization only
+        # serialization only
         (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
         return self._build_qemu_cmd(
             all_rules,
@@ -1173,7 +1173,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         if DEBUG_CONFIG:
             config_dir = Path("tmp") / "pysb_config"
             config_dir.mkdir(parents=True, exist_ok=True)
-            # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle — reason: serialization only
+            # serialization only
             (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
         else:
             config_dir = None

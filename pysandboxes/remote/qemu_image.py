@@ -266,8 +266,7 @@ def download_image(
     try:
         logger.info("Downloading QEMU image from %s to %s", url, path)
         req = urllib.request.Request(url, headers={"User-Agent": "pysandboxes-qemu-provider/1.0"})
-        # reason: url validated by _validate_download_url in get_download_url
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+        # Url validated by _validate_download_url in get_download_url
         with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp:
             if resp.status != 200:
                 raise OSError(f"Download failed: HTTP {resp.status} for {url}")

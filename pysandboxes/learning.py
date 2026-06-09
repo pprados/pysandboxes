@@ -15,7 +15,7 @@ import re
 import threading
 from datetime import datetime
 
-# nosemgrep: python.lang.compatibility.python37.python37-compatibility-importlib2 — reason: Python 3.10+ only
+# Python 3.10+ only
 from importlib import resources
 from pathlib import Path
 from typing import Any, Set

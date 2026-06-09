@@ -10,10 +10,12 @@ PySandboxes is a Python security framework that provides sandbox environments fo
 
 ### Testing
 ```bash
-make test                    # Run unit tests
-make integration_tests       # Run integration tests
-make all-tests               # Run integration and unit tests
-make gh-test                 # Run test in a simulation of github action
+make unit-tests              # Run unit tests
+make integration-tests       # Run integration tests
+make container-tests         # Run docker/podman/kubernetes tests (needs images + minikube)
+make sample-tests            # Run the samples' own test suites
+make all-tests               # All four of the above (alias: make test)
+make gh-tests                # Run the github action locally, through `gh act`
 ```
 
 ### Code Quality
@@ -68,6 +70,13 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - **Virtual Environment**: `.venv/` directory
 - **Entry Points**: `python-sb` CLI commands for sandboxed Python execution
 
+### Branches
+- **`develop`** is the integration branch: day-to-day work happens there, and feature
+  branches start from it and go back to it.
+- **`master`** is for releases only. It receives a merge at publication time, never as
+  part of ordinary work. Do not propose a pull request or a merge towards `master`
+  outside a release, and compare a branch against `develop`, not `master`.
+
 ## Code Quality
 - Type hints required for all code
 - Public APIs must have docstrings
@@ -93,38 +102,3 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - The project targets AI/LLM-generated code security use cases
 - Configuration files use whitelist-only security model
 - Multiple OS sandbox backends supported (firejail primary, Docker/podman planned)
-
-## Code Security Verification
-
-All generated code MUST be scanned with semgrep before committing:
-
-```bash
-# Scan with P/R rules (CRITICAL, HIGH, MEDIUM)
-semgrep --config=p/security-audit pysandboxes/
-
-# Scan generated file specifically
-semgrep --config=p/security-audit <file>
-```
-
-### Semgrep Rules (Baseline)
-Generated code verified against:
-- **sql-injection**: SQL string concatenation, format strings in queries
-- **command-injection**: Shell execution without proper escaping
-- **hardcoded-secrets**: API keys, passwords, tokens in code
-- **unsafe-deserialization**: pickle, yaml.load, json.loads on untrusted input
-- **unsafe-file-operations**: Path traversal, symlink attacks
-- **unsafe-regex**: ReDoS patterns in regular expressions
-- **insecure-random**: random module vs secrets module
-- **unvalidated-user-input**: Missing input validation at boundaries
-
-### When Generating Code
-1. Write code
-2. Run semgrep scan
-3. Fix findings before commit
-4. If auto-fixes available: `semgrep --fix` applies them
-
-### Disabling Rule (With Justification)
-```python
-# nosemgrep: <rule-id> — reason: <justification>
-unsafe_code_here()
-```

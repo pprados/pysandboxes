@@ -159,8 +159,7 @@ class _RestrictedUnpickler(pickle.Unpickler):
             return getattr(__import__(module, fromlist=[name]), name)
 
         if name not in self.allowed_classes:
-            # reason: raising the stdlib error type, not deserializing
-            # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            # Raising the stdlib error type, not deserializing
             raise pickle.UnpicklingError(f"Class {module}.{name} not in whitelist. Allowed: {self.allowed_classes}")
 
         # Additional safety: only allow safe builtins and whitelisted modules
@@ -180,12 +179,10 @@ class _RestrictedUnpickler(pickle.Unpickler):
                 "None",
             }
             if name not in safe_builtins:
-                # reason: raising the stdlib error type, not deserializing
-                # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                # Raising the stdlib error type, not deserializing
                 raise pickle.UnpicklingError(f"Builtin {name} not allowed (potential RCE vector)")
         elif not module.startswith(("pysandboxes", "__main__")):
-            # reason: raising the stdlib error type, not deserializing
-            # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+            # Raising the stdlib error type, not deserializing
             raise pickle.UnpicklingError(f"Module {module} not trusted. Only pysandboxes modules allowed.")
 
         return getattr(__import__(module, fromlist=[name]), name)
