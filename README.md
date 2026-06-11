@@ -70,9 +70,9 @@ Like [TypeScript Deno](https://docs.deno.com/runtime/fundamentals/security/#perm
 - [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
 - [X] **Token Theft**: Accessible files and environment variables are filtered.
 - [X] **Remote Access**: Network and code actions are limited.
-- [ ] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules (not yet implemented).
-- [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (not yet implemented).
-- [ ] **Malicious syntax**: The syntax of python code may be filtered
+- [X] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules.
+- [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (**not yet implemented**).
+- [ ] **Malicious syntax**: The syntax of python code may be filtered (**not yet implemented**)
 
 ---
 
@@ -378,7 +378,7 @@ What are the security filters offered by **Py-Sandboxes**?
 
 - **Environment variable control**: The environment variables visible in the sandbox are limited. Mapping rules allow easily forwarding sets of variables from the outside to the inside of the sandbox (e.g., `env=*_API_KEY=${*_API_KEY}`).
 - **Network access control**: It is possible to control the direction, IP addresses, domain names, and ports available to the sandbox.
-- **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. It is also possible to use a different directory name in the sandbox than the original name. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
+- **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
 - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
 - **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
 
@@ -493,6 +493,8 @@ Depending on your level of paranoia, you can choose a suitable approach.
 | Paranoia | Py-sandbox       | os-sandbox     | docker/pod | --privileged |
 |:--------:|------------------|----------------|:----------:|:------------:|
 |    0     | python           | None           |     No     |              |
+|    1     | python-sb        | subprocess     |     No     |              |
+|    2     | with sandboxes() | subprocess     |     No     |              |
 |    3     | python-sb        | landlock       |     No     |              |
 |    4     | with sandboxes() | landlock       |     No     |              |
 |    5     | python-sb        | unshare        |     No     |              |
