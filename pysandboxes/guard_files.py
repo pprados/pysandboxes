@@ -121,6 +121,11 @@ class _DirEntry:
     def __setattr__(self, name: str, value: Any) -> None:
         setattr(self._target, name, value)
 
+    def __fspath__(self) -> str:
+        # Implicit dunder lookups bypass ``__getattr__``, so ``os.fspath()`` cannot reach the
+        # delegated attribute. Like a real ``os.DirEntry``, it must match ``.path``.
+        return self._path
+
     def __str__(self) -> str:
         return str(self._target.path)
 

@@ -785,6 +785,24 @@ def test_os_scandir(files: Dict[str, Path]) -> None:  # noqa: F811
         assert "bound_file.txt" in [e.name for e in b]
 
 
+def test_os_scandir_entry_is_pathlike(files: Dict[str, Path]) -> None:  # noqa: F811
+    """A scanned entry must be usable as a path, and expose the aliased path, not the real one."""
+    rules = [
+        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import os
+
+    with os.scandir(files["bind_dest"]) as entries:
+        entry = next(e for e in entries if e.name == "bound_file.txt")
+
+    assert isinstance(entry, os.PathLike)
+    assert os.fspath(entry) == entry.path
+    assert Path(entry) == files["bind_dest"] / "bound_file.txt"
+
+
 def test_os_walk(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
