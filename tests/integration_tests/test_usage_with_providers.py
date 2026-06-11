@@ -27,18 +27,14 @@ PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.p
 
 # All OS sandbox providers to test (no container); skip conditions applied per provider.
 # A provider whose binary is missing skips itself, see _skip_reason, so this list
-# stays portable. Only bwrap is held back, and it is a defect rather than a
-# limitation: it hangs until the timeout when an `ignore=` pattern matches a
-# symlink pointing outside the exposed tree, because _resolve_ignore_paths in
-# bwrap_sse_daemon.py selects with os.path.isfile(), which follows the link, and
-# bwrap then cannot create the mount point that masks it.
+# stays portable.
 all_os_sandbox: list[str] = [
     "subprocess",
     "qemu",
     "unshare",
     "firejail",
     "landlock",
-    # "bwrap",
+    "bwrap",
 ]
 
 # TODO: test with split mode

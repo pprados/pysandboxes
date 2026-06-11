@@ -109,9 +109,9 @@ test_watch:
 
 # Define a variable for Python and notebook files.
 PYTHON_FILES=pysandboxes/ tests/
-lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d develop | grep -E '\.py$$|\.ipynb$$')
+lint_diff format_diff: PYTHON_FILES=$(shell git diff --name-only --diff-filter=d develop | grep -E '\.py$$|\.ipynb$$')
 
-lint: format
+lint lint_diff: format
 	unset VIRTUAL_ENV && uv run mypy $(PYTHON_FILES)
 	uvx pyright $(PYTHON_FILES)
 	uvx black --check $(PYTHON_FILES)
@@ -391,7 +391,7 @@ uv.lock: pyproject.toml
 lock: $(LOCK)
 
 ## Validate the code
-validate: uv.lock format lint spell_check all-tests
+validate: uv.lock format lint spell_check unit-tests
 
 
 _uv-init:

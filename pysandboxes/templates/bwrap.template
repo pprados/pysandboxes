@@ -9,7 +9,12 @@
 # Parse nul-separated arguments from the given file descriptor (can be repeated)
 #--args FD
 
-# Set argv[0] for the launched program
+# Set argv[0] for the launched program.
+# CPython derives sys.prefix and finds pyvenv.cfg from argv[0]. A bare name has
+# no slash, so the interpreter searches PATH for "python", does not find the
+# venv, and dies with "Failed to import encodings module" before the daemon can
+# start. BWrapSSEDaemon compensates by setting PYTHONHOME and PYTHONPATH; do not
+# uncomment this without them.
 --argv0 python
 
 # =============================================================================
