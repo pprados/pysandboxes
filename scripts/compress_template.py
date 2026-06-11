@@ -11,14 +11,16 @@ def compress_template(template_file: str, output_file: str) -> None:
     result = subprocess.run(
         ['claude', '--dangerously-skip-permissions',
          '--settings','{"sandbox":{"enabled":true,"autoAllowBashIfSandboxed":true}}',
-         '-c', prompt],
-        input=content,
+         '-p', prompt],
         text=True,
         capture_output=True
     )
 
     if result.returncode != 0:
         raise RuntimeError(f"Claude CLI failed: {result.stderr}")
+
+    if not result.stdout.strip():
+        raise RuntimeError(f"Claude CLI returned empty output, {output_file} left untouched")
 
     with open(output_file, 'w') as f:
         f.write(result.stdout)
