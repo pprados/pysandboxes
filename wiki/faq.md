@@ -41,7 +41,7 @@ sb = sandboxes().__enter__()
 ```
 
 ## Why the current directory is used?
-Sometime, with the learn process, the rule `expose-ro=.,.` is added. This is usually due to the presence of an `.env` file that is found by a library. This causes this directory to be added to the rules. You can set the variables manually and temporarily rename this file while the learning process is underway.
+Sometime, with the learn process, the rule `expose-ro=.` is added. This is usually due to the presence of an `.env` file that is found by a library. This causes this directory to be added to the rules. You can set the variables manually and temporarily rename this file while the learning process is underway.
 
 ```bash
 set -o allexport
