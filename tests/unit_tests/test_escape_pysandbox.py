@@ -18,7 +18,7 @@ def test_escape_with_closure() -> None:
     assert original_open.__module__ in ["_io", "io"], "Not the _original io.open"
 
 
-@pytest.mark.skip(reason="escape via __subclasses__ not yet blocked")
+@pytest.mark.xfail(strict=True, reason="escape via __subclasses__ not yet blocked")
 def test_escape_with_subclasses() -> None:
     # TODO Try to block the __subclasses__ access
     def find_all_subclasses(cls: type) -> Set[type]:
@@ -49,7 +49,7 @@ def test_escape_with_subclasses() -> None:
         import_module._rules = ()  # type: ignore[attr-defined]
 
 
-@pytest.mark.skip(reason="TODO: block sys.meta_path escape in guard_import")
+@pytest.mark.xfail(strict=True, reason="TODO: block sys.meta_path escape in guard_import")
 def test_escape_with_meta_path() -> None:
 
     with pytest.raises(RuleAttributeError):
@@ -104,7 +104,7 @@ def test_escape_with_pickle_blocked() -> None:
         pickle.loads(malicious_pickle)  # type: ignore[arg-type]
 
 
-@pytest.mark.skip(reason="escape via __globals__ introspection not yet blocked")
+@pytest.mark.xfail(strict=True, reason="escape via __globals__ introspection not yet blocked")
 def test_escape_with_globals_introspection() -> None:
     # __globals__ trick: any function object exposes its definition module's namespace
     # via __globals__, allowing access to all module-level imports/objects.
@@ -133,7 +133,7 @@ def test_escape_with_globals_introspection() -> None:
             _ = gen.gi_frame.f_globals
 
 
-@pytest.mark.skip(reason="escape via obfuscated string access not yet blocked")
+@pytest.mark.xfail(strict=True, reason="escape via obfuscated string access not yet blocked")
 def test_escape_with_obfuscated_strings() -> None:
     # Obfuscation bypass: AST-based filters (RestrictedPython, Basilisk) scan for
     # obvious patterns like "__import__", "eval", "exec", "__subclasses__".

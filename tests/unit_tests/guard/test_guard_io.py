@@ -170,8 +170,7 @@ def activate_guard_files_rules(rules: ConfigLines) -> None:
     file_rules, _ = parse_rules(rules, errors)
     assert not errors
 
-    # Add more rules for pytests
-    import pwd
+    # Add more rules for pytests: the interpreter must stay readable.
     import sys
 
     new_file_rules: List[FSExposeRule] = []
@@ -191,18 +190,6 @@ def activate_guard_files_rules(rules: ConfigLines) -> None:
             )
         )
 
-    import os  # noqa: F811
-
-    username = pwd.getpwuid(os.getuid())[0]
-    tmp_pytest = Path(f"/tmp/pytest-of-{username}").resolve()
-    tmp_str = str(tmp_pytest) + "/" if tmp_pytest != Path("/") else "/"
-    new_file_rules.append(
-        FSExposeRule(
-            path=tmp_str,
-            write=True,
-            config=ConfigLine("Hack for pytest", Path(), 0),
-        )
-    )
     # activate_guard(tuple(list(file_rules) + new_file_rules))
     all_rules = list(file_rules)
     all_rules.extend(new_file_rules)

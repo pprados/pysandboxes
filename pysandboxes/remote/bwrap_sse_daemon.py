@@ -101,6 +101,35 @@ def _resolve_ignore_paths(
     return result
 
 
+def _is_inside_exposed(path: str, exposed: list[str]) -> bool:
+    """True when path is covered by one of the exposed prefixes.
+
+    Directory rules carry a trailing separator, so the directory itself is matched
+    by comparing against the prefix without it, as guard_files does.
+    """
+    return any(path.startswith(p) or path == p.rstrip("/") for p in exposed)
+
+
+def _is_reachable_in_sandbox(path: str, exposed: list[str], max_hops: int = 32) -> bool:
+    """True when path can still be resolved once only the exposed tree is mounted.
+
+    Every hop of a symlink chain must itself be exposed: the sandbox resolves the
+    chain in its own namespace, so an intermediate target outside the mounted tree
+    dangles there even when the final target happens to be inside.
+    """
+    if not _is_inside_exposed(path, exposed):
+        return False
+    current = path
+    for _ in range(max_hops):
+        if not os.path.islink(current):
+            return True
+        target = os.path.join(os.path.dirname(current), os.readlink(current))
+        current = os.path.normpath(target)
+        if not _is_inside_exposed(current, exposed):
+            return False
+    return False
+
+
 class BWrapSSEDaemon(BaseSubProcessDaemon):
     """Bubblewrap-based subprocess daemon for OS-level sandboxing.
 
@@ -291,6 +320,15 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         for line in template_lines:
             args.extend(shlex.split(line))
 
+        # The template masks argv[0] with a bare "python", which stops CPython from
+        # deriving its prefix from the executable path. Name the prefix explicitly,
+        # then put the venv's site-packages back: PYTHONHOME resets sys.path to the
+        # base installation, so without this the child cannot import pysandboxes.
+        args.extend(["--setenv", "PYTHONHOME", sys.base_prefix])
+        site_packages = [p for p in site.getsitepackages() if os.path.isdir(p)]
+        if site_packages:
+            args.extend(["--setenv", "PYTHONPATH", os.pathsep.join(site_packages)])
+
         # Profile env vars so the child sees TERM, My_ENV, etc. (template uses --clearenv)
         for k, v in all_rules.envs.items():
             args.extend(["--setenv", k, str(v)])
@@ -353,9 +391,18 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
         current_dir = os.getcwd()
         ignore_paths = _resolve_ignore_paths(current_dir, ignore_rules)
+        exposed = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
         for i, rel_path in enumerate(ignore_paths):
             full_host = os.path.normpath(os.path.join(current_dir, rel_path))
             if not os.path.exists(full_host):
+                continue
+            # A symlink that leaves the exposed tree is already invisible in the
+            # sandbox, so there is nothing to mask. Binding over it would also fail:
+            # bwrap creates the mount point by following the link, which dangles
+            # inside the sandbox, and aborts the whole launch with
+            # "Can't create file at ...: No such file or directory".
+            if not _is_reachable_in_sandbox(full_host, exposed):
+                logger.debug("Ignore path %s leaves the exposed tree: nothing to mask", full_host)
                 continue
             try:
                 if os.path.isfile(full_host):

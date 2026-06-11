@@ -39,7 +39,6 @@ from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
 from ..sb_types import Args, ConfigLine, Envs
 from ..tools import Environ, SyncOrAsyncFunc, get_callable_info
-from .tools import is_transient_connection_error
 from . import main_shutdown
 from .base_sse_daemon import BaseSSESandbox
 from .daemon_parameters import DaemonParameters
@@ -55,6 +54,7 @@ from .parameters import (
     TIMEOUT_FOR_PING,
     TIMEOUT_FOR_STOP_DAEMON,
 )
+from .tools import is_transient_connection_error
 
 logger = logging.getLogger(__name__)
 
