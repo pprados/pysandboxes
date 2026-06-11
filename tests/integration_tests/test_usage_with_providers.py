@@ -27,15 +27,14 @@ PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.p
 
 # All OS sandbox providers to test (no container); skip conditions applied per provider.
 # A provider whose binary is missing skips itself, see _skip_reason, so this list
-# stays portable. The two commented entries are held back on purpose:
-#   qemu   boots a VM, so it needs nested virtualisation and a 600s timeout.
-#   bwrap  hangs until the timeout when an `ignore=` pattern matches a symlink
-#          pointing outside the exposed tree: _resolve_ignore_paths in
-#          bwrap_sse_daemon.py tests os.path.isfile(), which follows the link, and
-#          bwrap then cannot create the mount point that masks it.
+# stays portable. Only bwrap is held back, and it is a defect rather than a
+# limitation: it hangs until the timeout when an `ignore=` pattern matches a
+# symlink pointing outside the exposed tree, because _resolve_ignore_paths in
+# bwrap_sse_daemon.py selects with os.path.isfile(), which follows the link, and
+# bwrap then cannot create the mount point that masks it.
 all_os_sandbox: list[str] = [
     "subprocess",
-    # "qemu",
+    "qemu",
     "unshare",
     "firejail",
     "landlock",
