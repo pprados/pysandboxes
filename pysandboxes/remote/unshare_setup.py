@@ -114,6 +114,29 @@ def _mount_bind(src: str, dst: str, new_root: str, readonly: bool) -> None:
     # logger.debug(f"")
 
 
+def _is_reachable_in_chroot(path: str, new_root: str, max_hops: int = 32) -> bool:
+    """True when path still resolves once new_root has become the filesystem root.
+
+    Symlink targets are followed the way the kernel will inside the chroot: an
+    absolute target is resolved against new_root, not against the host root. A
+    link aiming at a host path that was never mounted therefore dangles, and
+    binding a placeholder over it would land outside the sandbox.
+    """
+    root = os.path.normpath(new_root)
+    current = path
+    for _ in range(max_hops):
+        if not os.path.islink(current):
+            return os.path.exists(current)
+        target = os.readlink(current)
+        if os.path.isabs(target):
+            current = os.path.normpath(os.path.join(root, target.lstrip("/")))
+        else:
+            current = os.path.normpath(os.path.join(os.path.dirname(current), target))
+        if not current.startswith(root + os.sep):
+            return False
+    return False
+
+
 def _ensure_mount_target(target: str, new_root: str) -> None:
     """Ensure a mount target exists, resolving symlinks within the chroot."""
     if os.path.islink(target):
@@ -296,8 +319,8 @@ def main() -> None:
             rel_path = rel_path.lstrip("/")
             # Path in chroot = new_root + current_dir + rel_path (current_dir can be absolute)
             full_in_chroot = os.path.normpath(new_root + prefix + rel_path)
-            if not os.path.exists(full_in_chroot):
-                logger.debug("ignore path %s not present in chroot, skip", full_in_chroot)
+            if not _is_reachable_in_chroot(full_in_chroot, new_root):
+                logger.debug("ignore path %s does not resolve inside the chroot, skip", full_in_chroot)
                 continue
             try:
                 if os.path.isfile(full_in_chroot):
