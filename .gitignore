@@ -214,3 +214,18 @@ graphify-out/cost.json        # local only
 # graphify-out/cache/         # optional: commit for speed, skip to keep repo small
 graphify-out/
 
+
+# Read-only stubs (0 byte, mode 444) dropped in the working directory by the
+# Claude Code Bash sandbox on every sandboxed command, to hold a read-only bind
+# mount over each path. They are not produced by the test suite: the full
+# integration run over all six OS-sandbox providers creates none of them, while
+# a bare `true` inside the sandbox creates all nine.
+/.bashrc
+/.zshrc
+/.profile
+/.bash_profile
+/.zprofile
+/.gitconfig
+/.gitmodules
+/.ripgreprc
+/.mcp.json
