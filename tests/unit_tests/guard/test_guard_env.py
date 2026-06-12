@@ -176,6 +176,8 @@ def test_rules_flag_env_and_unenv() -> None:
     by_ignore = {rule.ignore: rule for rule in rules}
     assert by_ignore[False].pattern.match("FOO")
     assert by_ignore[True].pattern.match("BAZ")
+    assert not by_ignore[False].pattern.match("FOOBAR")
+    assert not by_ignore[True].pattern.match("BAZOOKA")
 
 
 def test_wildcard_rule_keeps_a_matching_pattern() -> None:
@@ -186,6 +188,18 @@ def test_wildcard_rule_keeps_a_matching_pattern() -> None:
     assert len(rules) == 1
     assert rules[0].pattern.match("ANY_API_KEY")
     assert not rules[0].pattern.match("OTHER")
+    assert not rules[0].pattern.match("ANY_API_KEYZZZ")
+
+
+def test_wildcard_rule_does_not_forward_a_longer_key() -> None:
+    """``*_API_KEY`` must match the suffix, not merely contain it."""
+    errors: List[ErrorMsg] = []
+    source = {"ANY_API_KEY": "kept", "ANY_API_KEY_AND_MORE": "leaked"}
+    rules, envs, _ = parse_rules([ConfigLine("env=*_API_KEY=${*_API_KEY}", Path(), 0)], source, errors)
+
+    assert not errors
+    assert envs["ANY_API_KEY"] == "kept"
+    assert "ANY_API_KEY_AND_MORE" not in envs
 
 
 @pytest.fixture

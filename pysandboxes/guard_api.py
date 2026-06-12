@@ -166,7 +166,15 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "ctypes.cast",
         "ctypes.string_at",
     ),
+    # importlib.reload rebinds a module's attributes in place, on the very
+    # module object every reference already holds: reloading ``os`` puts the
+    # original C functions back over the ones guard_files patched, and every
+    # later os.* call in the process runs unguarded. It is listed here rather
+    # than under a module-system category of its own, which would add a
+    # profile keyword for a single name; closing the sys.meta_path escape
+    # will justify one.
     "introspection": (
+        "importlib.reload",
         "sys.settrace",
         "sys.setprofile",
         "sys.addaudithook",

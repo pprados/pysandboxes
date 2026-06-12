@@ -50,6 +50,16 @@ EnvsRules = tuple[EnvRule, ...]
 _rules: EnvsRules = cast(EnvsRules, ())
 
 
+def _compile_key_pattern(key_pattern: str) -> re.Pattern[str]:
+    """Compile an environment key pattern, anchored on both ends.
+
+    ``*`` is the only wildcard. The call sites use ``match()``, which anchors
+    the start only, so without the trailing anchor ``*_API_KEY`` would also
+    forward ``ANY_API_KEY_AND_MORE``.
+    """
+    return re.compile(re.escape(key_pattern).replace("\\*", ".*") + r"\Z")
+
+
 def parse_rules(
     rules: ConfigLines,
     source_vars: Environ,
@@ -92,7 +102,7 @@ def parse_rules(
             # Case: Wildcard rule like *_API_KEY=${*_API_KEY}
             if "*" in key_pattern:
                 # Convert wildcard to regex pattern
-                regex_key = re.compile(re.escape(key_pattern).replace("\\*", ".*"))
+                regex_key = _compile_key_pattern(key_pattern)
                 envs_rules.add(EnvRule(regex_key, False, orule))
                 for source_key, source_value in source_vars.items():
                     if regex_key.match(source_key):
@@ -109,11 +119,11 @@ def parse_rules(
                 # written, so "key in os.environ" is True (e.g. My_ENV for tests).
                 if v or "${" not in value_pattern:
                     new_vars[key_pattern] = v
-                envs_rules.add(EnvRule(re.compile(re.escape(key_pattern)), False, orule))
+                envs_rules.add(EnvRule(_compile_key_pattern(key_pattern), False, orule))
         elif orule.rule.startswith("unenv="):
             remove_key = orule.rule[len("unenv=") :]
             new_vars.pop(remove_key, None)
-            envs_rules.add(EnvRule(re.compile(re.escape(remove_key)), True, orule))
+            envs_rules.add(EnvRule(_compile_key_pattern(remove_key), True, orule))
         else:
             ignore_rules.append(orule)
 

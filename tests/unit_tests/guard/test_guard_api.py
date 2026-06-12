@@ -253,6 +253,20 @@ def test_armed_and_denied_raises() -> None:
         _reset_guard()
 
 
+def test_armed_denies_importlib_reload() -> None:
+    """reload() puts a module's original attributes back over the patches."""
+    activate_guard(())
+    wrapped = _guarded("importlib.reload")
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            wrapped("os")
+        assert exc.value.qualname == "importlib.reload"
+        assert exc.value.category == "introspection"
+    finally:
+        _reset_guard()
+
+
 def test_armed_and_allowed_passes() -> None:
     _activate("python-api=ALLOW:os.system")
     wrapped = _guarded("os.system")
