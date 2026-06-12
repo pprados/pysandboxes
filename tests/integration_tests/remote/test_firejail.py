@@ -12,6 +12,15 @@ from pysandboxes._os_sandbox import async_shutdown_daemon, async_start_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.tools import which_command
 
+from .._env import NO_DEFAULT_ROUTE_REASON, default_route_available
+
+_FIREJAIL_SKIP_REASON = f"firejail not installed, or: {NO_DEFAULT_ROUTE_REASON}"
+
+
+def _firejail_integration_ready() -> bool:
+    # firejail derives its network namespace from the host default interface
+    return bool(which_command("firejail")) and default_route_available()
+
 
 # See https://github.com/tortoise/tortoise-orm/issues/638
 @pytest.fixture(scope="module")
@@ -23,6 +32,9 @@ def event_loop() -> Iterator[AbstractEventLoop]:
 
 @pytest.fixture(scope="module", autouse=True)
 async def start_daemon_for_tests() -> AsyncGenerator[None, None]:
+    if not _firejail_integration_ready():
+        yield
+        return
     config_path = Path(__file__).parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
@@ -43,7 +55,7 @@ def sync_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-@pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")
+@pytest.mark.skipif(not _firejail_integration_ready(), reason=_FIREJAIL_SKIP_REASON)
 def test_sync_function() -> None:
     result_sync = sync_function("a", b="b")
     assert result_sync == "a b"
@@ -57,7 +69,7 @@ async def async_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-@pytest.mark.skipif(not which_command("firejail"), reason="Install firejail")
+@pytest.mark.skipif(not _firejail_integration_ready(), reason=_FIREJAIL_SKIP_REASON)
 async def test_async_function() -> None:
     result_async = await async_function("a", b="b")
     assert result_async == "a b"

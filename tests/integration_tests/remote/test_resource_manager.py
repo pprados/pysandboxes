@@ -4,7 +4,10 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes import sandboxes
 from pysandboxes.tools import mixed_sync_and_async_error
 
+from .._env import NO_PROFILE_DNS_REASON, profile_hosts_resolvable
 from ..sample import async_forty_two, config_path, init_sandbox, sync_forty_two
+
+pytestmark = pytest.mark.skipif(not profile_hosts_resolvable(), reason=NO_PROFILE_DNS_REASON)
 
 
 async def test_async_run_sandboxes_twice() -> None:

@@ -12,6 +12,17 @@ from pysandboxes._os_sandbox import shutdown_daemon, start_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.tools import unshare_user_namespace_available
 
+from .._env import NO_DEFAULT_ROUTE_REASON, default_route_available
+
+_UNSHARE_SKIP_REASON = (
+    f"unshare/slirp4netns missing, user namespaces not permitted (e.g. in containers), or: {NO_DEFAULT_ROUTE_REASON}"
+)
+
+
+def _unshare_integration_ready() -> bool:
+    # slirp4netns installs a default route in the namespace, copied from the host one
+    return unshare_user_namespace_available() and default_route_available()
+
 
 # See https://github.com/tortoise/tortoise-orm/issues/638
 @pytest.fixture(scope="module")
@@ -24,6 +35,9 @@ def event_loop() -> Iterator[AbstractEventLoop]:
 @pytest.fixture(scope="module", autouse=True)
 def start_daemon_for_tests() -> Iterator[None]:
     """Start daemon on the sandbox private loop so sync and async tests both work."""
+    if not _unshare_integration_ready():
+        yield
+        return
     config_path = Path(__file__).parent / "py-sandbox-test.profile"
 
     log_level = logging.root.getEffectiveLevel()
@@ -45,10 +59,7 @@ def sync_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-@pytest.mark.skipif(
-    not unshare_user_namespace_available(),
-    reason="unshare/slirp4netns missing or user namespaces not permitted (e.g. in containers)",
-)
+@pytest.mark.skipif(not _unshare_integration_ready(), reason=_UNSHARE_SKIP_REASON)
 def test_sync_function() -> None:
     result_sync = sync_function("a", b="b")
     assert result_sync == "a b"
@@ -62,10 +73,7 @@ async def async_function(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-@pytest.mark.skipif(
-    not unshare_user_namespace_available(),
-    reason="unshare/slirp4netns missing or user namespaces not permitted (e.g. in containers)",
-)
+@pytest.mark.skipif(not _unshare_integration_ready(), reason=_UNSHARE_SKIP_REASON)
 async def test_async_function() -> None:
     result_async = await async_function("a", b="b")
     assert result_async == "a b"
