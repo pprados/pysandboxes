@@ -3,7 +3,10 @@ import pytest  # type: ignore[import-untyped]
 import pysandboxes
 from pysandboxes.tools import mixed_sync_and_async_error
 
+from .._env import NO_PROFILE_DNS_REASON, profile_hosts_resolvable
 from ..sample import async_forty_two, async_sanboxes, bridge_async_to_sync, config_path
+
+pytestmark = pytest.mark.skipif(not profile_hosts_resolvable(), reason=NO_PROFILE_DNS_REASON)
 
 
 def test_run() -> None:

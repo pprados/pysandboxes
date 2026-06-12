@@ -18,6 +18,13 @@ import pytest
 from pysandboxes.remote.landlock_daemon import landlock_user_available
 from pysandboxes.remote.tools import unshare_user_namespace_available, which_command
 
+from ._env import (
+    NO_DEFAULT_ROUTE_REASON,
+    NO_PROFILE_DNS_REASON,
+    default_route_available,
+    profile_hosts_resolvable,
+)
+
 logger = logging.getLogger(__name__)
 
 # Project root (parent of tests/)
@@ -70,6 +77,10 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
 
 def _skip_reason(os_sandbox: str) -> str | None:
     """Return skip reason for provider if unavailable, else None."""
+    if not profile_hosts_resolvable():
+        return NO_PROFILE_DNS_REASON
+    if os_sandbox in ("firejail", "unshare") and not default_route_available():
+        return NO_DEFAULT_ROUTE_REASON
     if os_sandbox == "firejail" and not which_command("firejail"):
         return "firejail not installed"
     if os_sandbox == "unshare" and not unshare_user_namespace_available():
