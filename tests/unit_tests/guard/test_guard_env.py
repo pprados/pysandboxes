@@ -116,13 +116,13 @@ def test_other_directives_are_returned_untouched() -> None:
     assert [line.rule for line in ignored] == ["python-import=os"]
 
 
-def test_unknown_variable_becomes_an_empty_value() -> None:
-    """The key is still declared, so `"FOO" in os.environ` stays True."""
+def test_unknown_variable_leaves_the_key_absent() -> None:
+    """An unset `${...}` source keeps the key out, so `os.getenv(key, default)` returns the default."""
     errors: List[ErrorMsg] = []
     _, env, _ = parse_rules([ConfigLine("env=FOO=${MISSING}", Path(), 0)], {}, errors)
 
     assert not errors
-    assert env == Envs({"FOO": ""})
+    assert env == Envs({})
 
 
 def test_wildcard_skips_empty_source_values() -> None:
