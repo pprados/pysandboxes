@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 import pytest  # type: ignore[import-untyped]
 
+from pysandboxes import RulePermissionError
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -12,7 +13,6 @@ from .test_guard_io import (
 )
 
 
-@pytest.mark.skip(reason="not implemented")
 def test_shutil_chown(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -29,6 +29,10 @@ def test_shutil_chown(files: Dict[str, Path]) -> None:  # noqa: F811
     gid = os.stat(files["bind_dest"]).st_gid
 
     shutil.chown(files["bind_dest"], uid, gid)
+
+    # files["path"] is exposed read-only: shutil.chown delegates to the guarded os.chown
+    with pytest.raises(RulePermissionError):
+        shutil.chown(files["visible"], uid, gid)
 
 
 def test_shutil_copy(files: Dict[str, Path]) -> None:  # noqa: F811
