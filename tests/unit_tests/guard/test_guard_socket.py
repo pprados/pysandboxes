@@ -2,6 +2,8 @@ import re
 from pathlib import Path
 from socket import AddressFamily, SocketKind
 from typing import (
+    Any,
+    Callable,
     Iterator,
     List,
     Tuple,
@@ -21,7 +23,9 @@ from pysandboxes.guard_socket import (
     Kind,
     _check_address_with_rules,
     _convert_ports_range,
+    activate_guard,
     parse_rules,
+    patch_rules,
 )
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.main_logger import ErrorMsg
@@ -447,6 +451,80 @@ def test_convert_ports_range_duplicates_and_sorting() -> None:
     """
     assert _convert_ports_range("443,80,443") == (80, 443)
     assert _convert_ports_range("8080-8082,8000-8001") == (8000, 8001, 8080, 8081, 8082)
+
+
+class _FakeSocket:
+    """Stand-in for a socket object: the wrappers only read ``type``.
+
+    SOCK_RAW needs CAP_NET_RAW, so a real socket would make the test
+    root-only for no gain.
+    """
+
+    def __init__(self, kind: SocketKind) -> None:
+        self.type = kind
+
+
+def _arm(*rules: str) -> None:
+    """Arm the socket guard with the given ``net=`` rules."""
+    errors: List[ErrorMsg] = []
+    lines = [ConfigLine(rule, Path(), ln) for ln, rule in enumerate(rules)]
+    socket_rules, _, _ = parse_rules(lines, errors)
+    assert not errors
+    activate_guard(socket_rules)
+
+
+def _guarded(qualname: str) -> Callable[..., Any]:
+    """Build the wrapper the patch table would install."""
+    return patch_rules(learn=False)[qualname](lambda *a, **k: "called")
+
+
+def test_connect_ex_enforces_the_rules() -> None:
+    """connect_ex() reached a method that does not exist, never the rules."""
+    _arm("net=ALLOW|TCP|127.0.0.1|80|OUT")
+    wrapped = _guarded("socket.socket.connect_ex")
+    sock = _FakeSocket(SocketKind.SOCK_STREAM)
+
+    assert wrapped(sock, ("127.0.0.1", 80)) == "called"
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(sock, ("127.0.0.1", 8080))
+
+
+def test_connect_enforces_the_rules() -> None:
+    """The same coverage for connect(), which decides IN vs OUT itself."""
+    _arm("net=ALLOW|TCP|127.0.0.1|80|OUT")
+    wrapped = _guarded("socket.socket.connect")
+    sock = _FakeSocket(SocketKind.SOCK_STREAM)
+
+    assert wrapped(sock, ("127.0.0.1", 80)) == "called"
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(sock, ("127.0.0.1", 8080))
+
+
+def test_sendto_enforces_the_udp_rules() -> None:
+    _arm("net=ALLOW|UDP|127.0.0.1|12345|OUT")
+    wrapped = _guarded("socket.socket.sendto")
+    sock = _FakeSocket(SocketKind.SOCK_DGRAM)
+
+    assert wrapped(sock, b"x", ("127.0.0.1", 12345)) == "called"
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(sock, b"x", ("127.0.0.1", 9999))
+
+
+def test_sendto_refuses_a_socket_type_no_rule_can_express() -> None:
+    """SOCK_RAW used to fall through to the real sendto, unfiltered."""
+    _arm("net=ALLOW|UDP|127.0.0.1|12345|OUT")
+    wrapped = _guarded("socket.socket.sendto")
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(_FakeSocket(SocketKind.SOCK_RAW), b"x", ("127.0.0.1", 12345))
+
+
+def test_sendto_refuses_an_unsupported_address_format() -> None:
+    _arm("net=ALLOW|UDP|127.0.0.1|12345|OUT")
+    wrapped = _guarded("socket.socket.sendto")
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(_FakeSocket(SocketKind.SOCK_DGRAM), b"x", b"\x00raw")
 
 
 def test_invalid_sendTo() -> None:

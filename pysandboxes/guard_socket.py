@@ -1062,7 +1062,7 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
                     ),
                 )
             else:
-                self._check_address(
+                _check_address(
                     self,
                     (str(address[0]), int(address[1])),
                     conn_direction=Direction.OUT,
@@ -1108,8 +1108,23 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
                         (str(address[0]), int(address[1])),
                         conn_direction=Direction.OUT,
                     )
-            else:
-                logger.debug("Invalid usage of sendto")
+            elif self.type != Kind.TCP.value:
+                # A net= rule speaks TCP or UDP only, so no rule can be
+                # evaluated for any other type -- SOCK_RAW above all -- and
+                # the whitelist refuses rather than letting the datagram out
+                # unchecked. sendto() on a TCP socket keeps falling through:
+                # the address is ignored, the OS refuses the call, and it
+                # reaches nothing the connect rules did not already allow.
+                raise RuleSocketConnectionRefusedError(
+                    f"Guard sendto to {address!r} DENIED: socket type "
+                    f"{self.type!r} cannot be evaluated by a net= rule."
+                )
+        elif isinstance(address, str):  # AF_UNIX
+            _check_unix_socket(address, write=False, operation="sendto")
+        else:
+            raise RuleSocketConnectionRefusedError(
+                f"Guard sendto to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
+            )
         return func(self, data, address)
 
     return wrapper
