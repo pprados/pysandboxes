@@ -130,6 +130,30 @@ def _is_reachable_in_sandbox(path: str, exposed: list[str], max_hops: int = 32) 
     return False
 
 
+def _ignore_mask_targets(current_dir: str, ignore_paths: list[str], exposed: list[str]) -> list[str]:
+    """Real paths to mask for the ignore rules, symlinks resolved and duplicates removed.
+
+    ``bwrap`` refuses a symlink as a mount destination ("Can't mount on symlink
+    destination") and aborts the whole launch, so a link is masked through the file it
+    points to. A chain leaving the exposed tree is already invisible in the sandbox and
+    needs no mask.
+    """
+    targets: list[str] = []
+    for rel_path in ignore_paths:
+        full_host = os.path.normpath(os.path.join(current_dir, rel_path))
+        if not os.path.exists(full_host):
+            continue
+        if not _is_reachable_in_sandbox(full_host, exposed):
+            logger.debug("Ignore path %s leaves the exposed tree: nothing to mask", full_host)
+            continue
+        target = os.path.realpath(full_host) if os.path.islink(full_host) else full_host
+        if not _is_inside_exposed(target, exposed):
+            continue
+        if target not in targets:
+            targets.append(target)
+    return targets
+
+
 class BWrapSSEDaemon(BaseSubProcessDaemon):
     """Bubblewrap-based subprocess daemon for OS-level sandboxing.
 
@@ -392,18 +416,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         current_dir = os.getcwd()
         ignore_paths = _resolve_ignore_paths(current_dir, ignore_rules)
         exposed = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
-        for i, rel_path in enumerate(ignore_paths):
-            full_host = os.path.normpath(os.path.join(current_dir, rel_path))
-            if not os.path.exists(full_host):
-                continue
-            # A symlink that leaves the exposed tree is already invisible in the
-            # sandbox, so there is nothing to mask. Binding over it would also fail:
-            # bwrap creates the mount point by following the link, which dangles
-            # inside the sandbox, and aborts the whole launch with
-            # "Can't create file at ...: No such file or directory".
-            if not _is_reachable_in_sandbox(full_host, exposed):
-                logger.debug("Ignore path %s leaves the exposed tree: nothing to mask", full_host)
-                continue
+        for i, full_host in enumerate(_ignore_mask_targets(current_dir, ignore_paths, exposed)):
             try:
                 if os.path.isfile(full_host):
                     placeholder = temp / f"pysb_ignore_{i}"
