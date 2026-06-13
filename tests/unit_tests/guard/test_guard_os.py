@@ -495,6 +495,30 @@ def test_os_access_read_write(files: Dict[str, Path]) -> None:  # noqa: F811
     assert os.access(files["bind_src"], os.R_OK | os.W_OK)
 
 
+def test_os_access_outside_the_rules_is_reported_inaccessible(
+    files: Dict[str, Path],  # noqa: F811
+) -> None:
+    """A path no rule exposes must answer False, not the truth.
+
+    Answering for real turns os.access into an existence and permission
+    oracle over the whole host filesystem; raising would break the
+    documented bool contract every caller relies on.
+    """
+    rules = [
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import os
+
+    assert os.access(files["bind_src"], os.R_OK)
+    # Exists on the host, exposed by no rule.
+    assert not os.access(files["visible"], os.R_OK)
+    # Absent as well: the two answers must not differ, or the oracle is back.
+    assert not os.access(files["path"] / "does_not_exist", os.R_OK)
+
+
 def test_os_access_read_only(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
