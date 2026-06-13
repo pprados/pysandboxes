@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RulePermissionError
+from pysandboxes import RuleFileNotFoundError, RulePermissionError
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -143,6 +143,22 @@ def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
     shutil.copytree(files["bind_src"], files["path"] / "tmp")
     shutil.move(files["path"] / "tmp", files["path"] / "tmp2")
     shutil.rmtree(files["path"] / "tmp2")
+
+
+def test_shutil_copytree_outside_the_rules_is_denied(
+    files: Dict[str, Path],  # noqa: F811
+) -> None:
+    """A destination no rule exposes must be refused."""
+    rules = [
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import shutil
+
+    with pytest.raises(RuleFileNotFoundError):
+        shutil.copytree(files["bind_src"], files["bind_dest"] / "copied")
 
 
 def test_shutil_disk_usage(files: Dict[str, Path]) -> None:  # noqa: F811

@@ -272,6 +272,37 @@ def test_os_mkdir_removedirs_and_rmdir_refused(
     os.mkdir(files["bind_src"] / "dir_to_remove")
     os.rmdir(files["bind_src"] / "dir_to_remove")
 
+    # The name says "refused", so something must be: files["path"] is exposed
+    # by no rule here.
+    with pytest.raises(RuleFileNotFoundError):
+        os.mkdir(files["path"] / "refused")
+
+
+def test_os_directory_reads_outside_the_rules_are_denied(
+    files: Dict[str, Path],  # noqa: F811
+) -> None:
+    """chdir, listdir and scandir all refuse a directory no rule exposes.
+
+    Their deny branch had no test: only allowed directories were ever read,
+    so a broken wrapper would have exposed the whole host filesystem.
+    """
+    rules = [
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import os
+
+    outside = files["bind_dest"]
+
+    with pytest.raises(RuleFileNotFoundError):
+        os.chdir(outside)
+    with pytest.raises(RuleFileNotFoundError):
+        os.listdir(outside)
+    with pytest.raises(RuleFileNotFoundError):
+        list(os.scandir(outside))
+
 
 def test_os_rename(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [

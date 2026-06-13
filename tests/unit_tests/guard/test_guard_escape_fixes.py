@@ -17,6 +17,7 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes import guard_import
 from pysandboxes.e import (
     RuleFileNotFoundError,
+    RuleModuleNotFoundError,
     RuleSocketConnectionRefusedError,
 )
 from pysandboxes.guard_files import _apply_dest_to_src_rules, _wrap_os_symlink
@@ -140,6 +141,24 @@ def test_own_package_is_matched_exactly(import_rules: None) -> None:
 
     assert guard_import._is_import_allowed("pysandboxes")
     assert not guard_import._is_import_allowed("pysandboxesx")
+
+
+def test_find_spec_denies_a_module_outside_the_rules(import_rules: None) -> None:
+    """The finder's own deny branch, not just the predicate it calls.
+
+    ctypes reaches the filesystem straight through libc and subprocess
+    reaches it through a child process, so neither is stopped by the file
+    rules: the import rule is what closes them. subprocess is already in
+    sys.modules by the time the guard arms, so a cached entry must not keep
+    it reachable either.
+    """
+    guard_import._rules = ("os",)
+    # The deny branch raises before delegating, so it needs no real finder.
+    finder = guard_import.GuardFinder([])
+
+    for module_name in ("ctypes", "subprocess", "socket"):
+        with pytest.raises(RuleModuleNotFoundError):
+            finder.find_spec(module_name, None, None)
 
 
 def test_unix_socket_out_of_scope_is_denied(exposed_dir: Path) -> None:

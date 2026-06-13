@@ -148,6 +148,20 @@ def test_pathlib_glob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     assert "bound_file.txt" in result
 
 
+def test_pathlib_glob_outside_the_rules_is_denied(
+    files: Dict[str, opl.Path],  # noqa: F811
+) -> None:
+    """glob and rglob refuse a root no rule exposes."""
+    rules = [ConfigLine(f"expose-ro={files['bind_dest']}", NonePath, 0)]
+    activate_guard_files_rules(rules)
+    import pathlib
+
+    with pytest.raises(RuleFileNotFoundError):
+        list(pathlib.Path(files["path"]).glob("*"))
+    with pytest.raises(RuleFileNotFoundError):
+        list(pathlib.Path(files["path"]).rglob("*"))
+
+
 def test_pathlib_rglob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
