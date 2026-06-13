@@ -520,6 +520,43 @@ def test_connect_enforces_the_rules() -> None:
         wrapped(sock, ("127.0.0.1", 8080))
 
 
+def test_bind_enforces_the_in_rules() -> None:
+    """bind() is what decides IN, connect() what decides OUT.
+
+    Every direction test called _check_address_with_rules directly with a
+    hand-written Direction, so swapping the two call sites would have made
+    every IN-only and OUT-only rule permeable the wrong way round with no
+    test noticing.
+    """
+    _arm("net=ALLOW|TCP|127.0.0.1|9999|IN")
+    # bind() returns None, so record the call instead of reading a result.
+    calls: List[Tuple[Any, ...]] = []
+    wrapped = patch_rules(learn=False)["socket.socket.bind"](lambda *a, **k: calls.append(a))
+    sock = _FakeSocket(SocketKind.SOCK_STREAM)
+
+    wrapped(sock, ("127.0.0.1", 9999))
+    assert calls == [(sock, ("127.0.0.1", 9999))]
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(sock, ("127.0.0.1", 8888))
+    assert len(calls) == 1
+
+
+def test_an_in_rule_does_not_authorise_connecting_out() -> None:
+    _arm("net=ALLOW|TCP|127.0.0.1|9999|IN")
+    sock = _FakeSocket(SocketKind.SOCK_STREAM)
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _guarded("socket.socket.connect")(sock, ("127.0.0.1", 9999))
+
+
+def test_an_out_rule_does_not_authorise_binding_in() -> None:
+    _arm("net=ALLOW|TCP|127.0.0.1|9999|OUT")
+    sock = _FakeSocket(SocketKind.SOCK_STREAM)
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _guarded("socket.socket.bind")(sock, ("127.0.0.1", 9999))
+
+
 def test_sendto_enforces_the_udp_rules() -> None:
     _arm("net=ALLOW|UDP|127.0.0.1|12345|OUT")
     wrapped = _guarded("socket.socket.sendto")
@@ -581,6 +618,94 @@ def test_a_kind_list_allows_every_listed_kind() -> None:
             _check_address_with_rules(rules, kind, ("127.0.0.1", 80), Direction.OUT)
 
 
+# DNS pinning is the anti-rebinding defence: a host named in a rule is
+# resolved once, at parse time, and every later lookup must be answered from
+# that pin instead of asking the resolver again. None of the three wrappers
+# that implement it had a test. The fake resolver below answers an attacker
+# address, so a test only passes if the pin really short-circuits it.
+_ATTACKER_IP = "203.0.113.66"  # TEST-NET-3, never routable
+_PINNED_IP = "198.51.100.7"  # TEST-NET-2
+
+
+@pytest.fixture
+def pin_dns() -> Iterator[None]:
+    """Restore the pinned resolution table after a test set it."""
+    import pysandboxes.guard_socket as gs
+
+    saved = gs._pin_dns
+    yield
+    gs._pin_dns = saved
+
+
+def _pin(host: str, *addresses: str, family: AddressFamily = AddressFamily.AF_INET) -> None:
+    """Pin ``host`` to ``addresses``, the way parse_rules would."""
+    import pysandboxes.guard_socket as gs
+
+    infos = tuple((family, SocketKind.SOCK_STREAM, 6, "", (address, 0)) for address in addresses)
+    gs._pin_dns = cast(
+        ImmutableDict[str, Tuple[AddrInfoType, ...]],
+        ImmutableDict({host: infos}),
+    )
+
+
+def _over_resolver(qualname: str, answer: Any) -> Callable[..., Any]:
+    """Build the wrapper over a resolver that would answer ``answer``."""
+    return patch_rules(learn=False)[qualname](lambda *a, **k: answer)
+
+
+def test_gethostbyname_answers_from_the_pin(pin_dns: None) -> None:
+    _pin("pinned.example", _PINNED_IP)
+    wrapped = _over_resolver("socket.gethostbyname", _ATTACKER_IP)
+
+    assert wrapped("pinned.example") == _PINNED_IP
+    # A host no rule names is not pinned, so it still asks the resolver.
+    assert wrapped("other.example") == _ATTACKER_IP
+
+
+def test_gethostbyname_ex_answers_from_the_pin(pin_dns: None) -> None:
+    _pin("pinned.example", _PINNED_IP, "198.51.100.8")
+    wrapped = _over_resolver("socket.gethostbyname_ex", ("evil.example", [], [_ATTACKER_IP]))
+
+    _name, _aliases, addresses = wrapped("pinned.example")
+    assert addresses == [_PINNED_IP, "198.51.100.8"]
+    assert _ATTACKER_IP not in addresses
+
+
+def test_getaddrinfo_answers_from_the_pin(pin_dns: None) -> None:
+    _pin("pinned.example", _PINNED_IP)
+    wrapped = _over_resolver(
+        "socket.getaddrinfo",
+        [(AddressFamily.AF_INET, SocketKind.SOCK_STREAM, 6, "", (_ATTACKER_IP, 443))],
+    )
+
+    result = wrapped("pinned.example", 443)
+    assert [entry[4][0] for entry in result] == [_PINNED_IP]
+    # The pin carries no port, so the requested one is patched in.
+    assert all(entry[4][1] == 443 for entry in result)
+
+
+def test_getaddrinfo_accepts_a_bytes_host(pin_dns: None) -> None:
+    """The pin is keyed by str, so a bytes host must be decoded first."""
+    _pin("pinned.example", _PINNED_IP)
+    wrapped = _over_resolver("socket.getaddrinfo", [])
+
+    assert [entry[4][0] for entry in wrapped(b"pinned.example", 80)] == [_PINNED_IP]
+
+
+def test_gethostbyname_fails_when_the_pin_holds_no_ipv4(pin_dns: None) -> None:
+    """gethostbyname returns an IPv4: a v6-only pin must fail, not fall back.
+
+    Falling through to the resolver here would be the rebinding hole.
+    """
+    from pysandboxes.guard_socket import socket as guarded_socket
+
+    _pin("v6only.example", "2001:db8::1", family=AddressFamily.AF_INET6)
+    wrapped = _over_resolver("socket.gethostbyname", _ATTACKER_IP)
+
+    with pytest.raises(guarded_socket.gaierror):
+        wrapped("v6only.example")
+
+
 def test_invalid_sendTo() -> None:
     """
     Test if a invalid sendTo continue to raise an exception
@@ -592,7 +717,7 @@ def test_invalid_sendTo() -> None:
             sock.sendto(b"hello", ("127.0.0.1", 12345))
 
 
-def test_getaddrinfo() -> None:
+def test_getaddrinfo(pin_dns: None) -> None:
     from socket import getaddrinfo
 
     default_values = [
