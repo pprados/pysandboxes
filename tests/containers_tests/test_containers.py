@@ -420,7 +420,6 @@ def _run_container_runtime(
                 pass
 
 
-@pytest.mark.skip("TODO")  # TODO
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
 @pytest.mark.parametrize("runtime", all_container_worker)
 def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool) -> None:
@@ -809,7 +808,6 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     return rc
 
 
-@pytest.mark.skip("TODO")  # TODO
 @pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", [x[0] for x in _all_os_sandbox_params()])
 def test_container_kubernetes(os_sandbox: str, py_sandbox: bool, privileged: bool) -> None:
     """Run Kubernetes pod test (minikube); success = exit code 0. Starts minikube if needed."""
