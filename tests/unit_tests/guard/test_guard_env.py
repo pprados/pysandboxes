@@ -1,5 +1,9 @@
+import os
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
-from typing import List, Set
+from typing import Any, Callable, List, Set, Tuple
 
 import pytest
 
@@ -208,6 +212,87 @@ def learned_keys(monkeypatch: pytest.MonkeyPatch) -> Set[str]:
     monkeypatch.setattr(guard_envs, "_rules", ())
     monkeypatch.setattr(LearnEnviron, "_instance", None)
     return LearnEnviron()._keys_used
+
+
+@pytest.fixture
+def learning_environ(learned_keys: Set[str], monkeypatch: pytest.MonkeyPatch) -> Set[str]:
+    """Install the learning environment the wrappers assert on."""
+    monkeypatch.setattr(os, "environ", LearnEnviron())
+    return learned_keys
+
+
+def test_the_environment_wrappers_record_the_key(learning_environ: Set[str]) -> None:
+    """patch_rules had its dict keys compared, never its wrappers called.
+
+    All three could have stopped recording, or stopped calling through, with
+    the existing test still green.
+    """
+    calls: List[Tuple[str, Any]] = []
+    table: dict[str, Callable[..., Any]] = patch_rules(learn=True)
+
+    getenv = table["os.getenv"](lambda key, default=None: calls.append(("getenv", key)))
+    putenv = table["os.putenv"](lambda name, value: calls.append(("putenv", name)))
+    unsetenv = table["os.unsetenv"](lambda name: calls.append(("unsetenv", name)))
+
+    getenv("READ_VAR")
+    putenv("WRITTEN_VAR", "value")
+    unsetenv("REMOVED_VAR")
+
+    assert learning_environ >= {"READ_VAR", "WRITTEN_VAR", "REMOVED_VAR"}
+    assert calls == [
+        ("getenv", "READ_VAR"),
+        ("putenv", "WRITTEN_VAR"),
+        ("unsetenv", "REMOVED_VAR"),
+    ]
+
+
+def test_a_bytes_key_is_recorded_decoded(learning_environ: Set[str]) -> None:
+    """The generated rule is a name, so a bytes key must not be stored raw."""
+    getenv = patch_rules(learn=True)["os.getenv"](lambda key, default=None: None)
+
+    getenv(b"BYTES_VAR")
+
+    assert "BYTES_VAR" in learning_environ
+
+
+def test_reading_a_variable_records_it(learning_environ: Set[str]) -> None:
+    os.environ["PATH"]
+
+    assert "PATH" in learning_environ
+
+
+_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_iterating_the_environment_yields_every_key_at_module_level() -> None:
+    """Iteration must not depend on how deep the caller sits.
+
+    Attributing a key to its reader walks two frames back. At module level
+    there is no such frame, and the key was dropped instead of yielded, so a
+    top-level ``for k in os.environ`` saw an empty environment while len()
+    and dict() still reported every variable. Only a fresh process reproduces
+    that depth: under pytest the stack is always deeper.
+    """
+    script = textwrap.dedent("""
+        import os
+        from pysandboxes.guard_envs import LearnEnviron
+
+        expected = len(os.environ)
+        os.environ = LearnEnviron()
+        print(expected, len([k for k in os.environ]))
+        """)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=_ROOT,
+    )
+
+    assert result.returncode == 0, result.stderr
+    expected, seen = result.stdout.split()
+    assert int(expected) > 0
+    assert seen == expected
 
 
 def test_learn_environ_is_a_singleton(monkeypatch: pytest.MonkeyPatch) -> None:
