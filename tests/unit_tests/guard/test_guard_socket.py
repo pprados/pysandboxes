@@ -1,4 +1,5 @@
 import re
+from ipaddress import ip_address
 from pathlib import Path
 from socket import AddressFamily, SocketKind
 from typing import (
@@ -21,9 +22,11 @@ from pysandboxes.guard_socket import (
     AddrInfoType,
     Direction,
     Kind,
+    LearnSocketRule,
     _check_address_with_rules,
     _convert_ports_range,
     activate_guard,
+    generate_rules,
     parse_rules,
     patch_rules,
 )
@@ -704,6 +707,76 @@ def test_gethostbyname_fails_when_the_pin_holds_no_ipv4(pin_dns: None) -> None:
 
     with pytest.raises(guarded_socket.gaierror):
         wrapped("v6only.example")
+
+
+# Learning mode writes what generate_rules() returns into a real
+# .py-sandboxes file, and test_learning.py patches the function out, so none
+# of this ever ran under test: a bug here silently produces rules that are
+# broader than what the program actually did.
+
+
+@pytest.fixture
+def learning_without_host_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make generate_rules() depend on its argument only.
+
+    It otherwise reads /etc/hosts and scans os.environ to alias a
+    destination or a port, which makes the outcome depend on the host.
+    """
+    import pysandboxes.guard_socket as gs
+
+    monkeypatch.setattr(gs, "_read_host_file", lambda: ({}, {}))
+    monkeypatch.setattr(gs.os, "environ", {})
+
+
+def _ports_of(rule: str) -> set:
+    """Extract the port field, which is joined from an unordered set."""
+    return set(rule.split("|")[3].split(","))
+
+
+def test_generate_rules_masks_a_direct_ip(learning_without_host_file: None) -> None:
+    learned = {LearnSocketRule("connect", Kind.TCP, "198.51.100.7", 443, Direction.OUT, ())}
+
+    assert generate_rules(learned) == ["net=ALLOW|TCP|198.51.100.7/32|443|OUT"]
+
+
+def test_generate_rules_keeps_the_two_directions_apart(
+    learning_without_host_file: None,
+) -> None:
+    """Ports aggregate per destination and per direction, not across them."""
+    learned = {
+        LearnSocketRule("connect", Kind.TCP, "198.51.100.7", 80, Direction.OUT, ()),
+        LearnSocketRule("connect", Kind.TCP, "198.51.100.7", 443, Direction.OUT, ()),
+        LearnSocketRule("bind", Kind.TCP, "198.51.100.7", 9999, Direction.IN, ()),
+    }
+
+    rules = generate_rules(learned)
+    by_direction = {rule.split("|")[4]: rule for rule in rules}
+    assert set(by_direction) == {"IN", "OUT"}
+    assert _ports_of(by_direction["OUT"]) == {"80", "443"}
+    assert _ports_of(by_direction["IN"]) == {"9999"}
+
+
+def test_generate_rules_collapses_an_ip_to_its_learned_hostname(
+    learning_without_host_file: None,
+) -> None:
+    """A resolution observed earlier names the destination of a later access.
+
+    Without it the generated rule pins an IP that may well be reassigned,
+    and a profile written from it stops matching.
+    """
+    learned = {
+        LearnSocketRule(
+            "getaddrinfo",
+            Kind.UNKNOWN,
+            "pinned.example",
+            0,
+            Direction.OUT,
+            (ip_address("198.51.100.7"),),
+        ),
+        LearnSocketRule("connect", Kind.TCP, "198.51.100.7", 443, Direction.OUT, ()),
+    }
+
+    assert generate_rules(learned) == ["net=ALLOW|TCP|pinned.example|443|OUT"]
 
 
 def test_invalid_sendTo() -> None:

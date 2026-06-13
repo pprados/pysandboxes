@@ -183,6 +183,12 @@ class LearnEnviron(os._Environ):
             for k in root_iter:
                 cur_frame = inspect.currentframe()
                 if cur_frame is None or cur_frame.f_back is None or cur_frame.f_back.f_back is None:
+                    # No caller frame to compare the key against, which is what
+                    # a module-level ``for k in os.environ`` looks like. The key
+                    # cannot be attributed, so it is not recorded -- but it must
+                    # still be yielded: dropping it made the whole environment
+                    # look empty to the sandboxed program.
+                    yield k
                     continue
                 iter_frame: FrameType = cur_frame.f_back.f_back
                 keys: set[str]
