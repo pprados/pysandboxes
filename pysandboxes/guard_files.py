@@ -956,8 +956,13 @@ def _wrap_os_access(func: Callable[..., Any], *, write: bool) -> Callable[..., A
             )
         if isinstance(path, bytes):
             path = os.fsdecode(path)
-        # Detect call from posixpath
-        if isinstance(path, int):
+        path = cast(str, path)
+        remapped, rule = _apply_dest_to_src_rules(path, write=write)
+        if rule:
+            return False
+        if is_learning_mode():
+            # Learning mode observes, it does not remap: the rules that would
+            # say where to remap to are still being discovered.
             return func(
                 path=path,
                 mode=mode,
@@ -965,15 +970,16 @@ def _wrap_os_access(func: Callable[..., Any], *, write: bool) -> Callable[..., A
                 effective_ids=effective_ids,
                 follow_symlinks=follow_symlinks,
             )
-        path = cast(str, path)
-        remapped, rule = _apply_dest_to_src_rules(path, write=write)
-        if rule:
-            return False
         if not remapped:
-            remapped = path
-        if is_learning_mode():
-            # add_learning_rule(LearnFileRule(Path(file), False))
-            remapped = path
+            # os.access answers a question, it opens nothing, and its
+            # documented contract is a bool: callers write
+            # ``if os.access(p, R_OK):``, this package included
+            # (generate_rules below, guard_socket's hosts-file probe).
+            # Raising would break them, so a path no rule exposes is reported
+            # inaccessible, exactly like the ignore= rule above. Answering for
+            # real would instead make os.access an existence and permission
+            # oracle over the whole host filesystem.
+            return False
         return func(
             path=remapped,
             mode=mode,
