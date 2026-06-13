@@ -116,6 +116,11 @@ class Kind(Enum):
 
     TCP = socket.SOCK_STREAM
     UDP = socket.SOCK_DGRAM
+    # Deliberately the same value as UDP, so it stays an alias rather than a
+    # third member: ``list(Kind)`` builds the vocabulary a net= rule accepts
+    # (see _parse_kinds and the error messages), and "UNKNOWN" is not a
+    # specifier a profile may write. It only names the absent socket type when
+    # a learning record comes from a DNS lookup instead of a socket.
     UNKNOWN = socket.SOCK_DGRAM
 
 
@@ -680,7 +685,11 @@ def _check_address_with_rules(
                 config,
             ) in socket_rules:
                 if action == rule_type_to_check:
-                    kind_match = (rule_kind != Kind.UNKNOWN) or (socket_kind in rule_kind)
+                    # rule_kind is SocketMask.kinds, a tuple: comparing it to a
+                    # Kind member was always true, so kind_match was always true
+                    # and the socket type of a net= rule was never enforced --
+                    # an ALLOW|TCP rule also let UDP through.
+                    kind_match = socket_kind in rule_kind
 
                     if kind_match:
                         if conn_direction in rule_directions:

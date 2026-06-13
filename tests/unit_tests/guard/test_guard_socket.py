@@ -207,6 +207,20 @@ def test_accept_all_syntaxes(mock_getaddrinfo: Mock) -> None:
     address: Tuple[str, int] = ("internal.service", 1234)
     _check_address_with_rules(rules, s_kind, address, Direction.OUT)
 
+    # Without a rule that can refuse, the test would pass with the deny logic
+    # deleted: a DENY must still win over both wildcard ALLOWs.
+    denying, *_ = parse_rules(
+        [
+            ConfigLine("net=ALLOW|tcp,udp|0.0.0.0/0|*|*", Path(), 0),
+            ConfigLine("net=ALLOW|*|*|*|*", Path(), 0),
+            ConfigLine("net=DENY|*|10.0.0.0/8|*|*", Path(), 0),
+        ],
+        errors,
+    )
+    assert not errors
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(denying, s_kind, address, Direction.OUT)
+
 
 def test_explicit_deny_ipv6_rule_blocks_connection(mock_getaddrinfo: Mock) -> None:
     """
@@ -283,6 +297,12 @@ def test_explicit_allow_rule_not_triggers_allow_exception(
     assert not errors
     address: Tuple[str, int] = ("google.pin_dns", 53)
     _check_address_with_rules(rules, s_kind, address, Direction.OUT)
+
+    # Same host, outside the rule: the port and the direction must both count.
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, s_kind, ("google.pin_dns", 54), Direction.OUT)
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, s_kind, address, Direction.IN)
 
 
 def test_bind_direction_check_explicit_deny(mock_getaddrinfo: Mock) -> None:
@@ -525,6 +545,40 @@ def test_sendto_refuses_an_unsupported_address_format() -> None:
 
     with pytest.raises(RuleSocketConnectionRefusedError):
         wrapped(_FakeSocket(SocketKind.SOCK_DGRAM), b"x", b"\x00raw")
+
+
+def _parse_ok(*rules: str) -> Any:
+    """Parse net= rules that must not produce an error."""
+    errors: List[ErrorMsg] = []
+    lines = [ConfigLine(rule, Path(), ln) for ln, rule in enumerate(rules)]
+    parsed, *_ = parse_rules(lines, errors)
+    assert not errors
+    return parsed
+
+
+def test_a_tcp_rule_refuses_udp() -> None:
+    """The kind of a net= rule was compared by dead code and never enforced."""
+    rules = _parse_ok("net=ALLOW|TCP|127.0.0.1|80|OUT")
+
+    _check_address_with_rules(rules, Kind.TCP, ("127.0.0.1", 80), Direction.OUT)
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.UDP, ("127.0.0.1", 80), Direction.OUT)
+
+
+def test_a_udp_rule_refuses_tcp() -> None:
+    rules = _parse_ok("net=ALLOW|UDP|127.0.0.1|53|OUT")
+
+    _check_address_with_rules(rules, Kind.UDP, ("127.0.0.1", 53), Direction.OUT)
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, ("127.0.0.1", 53), Direction.OUT)
+
+
+def test_a_kind_list_allows_every_listed_kind() -> None:
+    """``any`` and an explicit list must still accept both kinds."""
+    for spec in ("tcp,udp", "any", "*"):
+        rules = _parse_ok(f"net=ALLOW|{spec}|127.0.0.1|80|OUT")
+        for kind in (Kind.TCP, Kind.UDP):
+            _check_address_with_rules(rules, kind, ("127.0.0.1", 80), Direction.OUT)
 
 
 def test_invalid_sendTo() -> None:
