@@ -13,7 +13,7 @@ class GuardModule(ModuleType):
 
     __slot__ = ()
 
-    def __new__(cls, name: str, *args: Any, **kwargs: Dict[str, Any]) -> Any:
+    def __new__(cls, name: str, *args: Any, **kwargs: Any) -> Any:
         if "_original" in kwargs and "_guard_attributs" in kwargs:
             return super().__new__(cls, *args, **kwargs)
         else:
