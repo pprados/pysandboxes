@@ -91,6 +91,19 @@ def test_safe_unpickle_rejected_class() -> None:
     assert "not in whitelist" in str(exc_info.value)
 
 
+def test_safe_unpickle_rejects_a_whitelisted_name_from_an_untrusted_module() -> None:
+    """The name is allowed, the module is not: that is what the check is for.
+
+    Every other rejection test uses a name absent from the whitelist, so it
+    stops at the name check and the module-trust branch never runs.
+    """
+    data = SimpleDataClass("test")
+    pickled = pickle.dumps(data)
+
+    with pytest.raises(pickle.UnpicklingError):
+        safe_unpickle(pickled, allowed_classes=["SimpleDataClass"])
+
+
 def test_safe_unpickle_dangerous_builtin() -> None:
     """Test that custom classes are restricted without whitelist."""
     # Pickle a custom class - this will require find_class
