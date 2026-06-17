@@ -13,6 +13,8 @@ Key components:
 """
 
 import asyncio
+import errno
+import fcntl
 import gc
 import logging
 import os
@@ -34,6 +36,7 @@ from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDi
 
 from ..all_rules import AllRules
 from ..config import DEBUG
+from ..e import SandBoxError
 from ..guard_socket import SocketRule
 from ..main_logger import pysandboxes_logger
 from ..private_loop import sandbox_loop
@@ -46,12 +49,14 @@ from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     LOOP_FOR_PING,
     MAX_CONNECT_RETRY,
+    POLLING_DELAY,
     RETRY_BASE_DELAY,
     RETRY_FACTOR,
     RETRY_MAX_ATTEMPTS,
     RETRY_MAX_DELAY,
     RETRY_RESET_DELAY,
     TIMEOUT_FOR_PING,
+    TIMEOUT_FOR_START_DAEMON,
     TIMEOUT_FOR_STOP_DAEMON,
 )
 from .tools import is_transient_connection_error
@@ -126,6 +131,36 @@ async def _read_stream(stream: asyncio.StreamReader, callback: Callable[[str], N
             callback(line.decode("utf-8").strip())
         else:
             break
+
+
+async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
+    """Open the configuration FIFO for writing without hanging when the sandbox is gone.
+
+    A blocking ``open`` on a FIFO waits for a reader forever, so a sandbox that never
+    starts (bwrap refusing an option, a missing binary) would freeze the caller instead
+    of reporting the failure. Opening non-blocking turns "no reader yet" into ``ENXIO``,
+    which lets us watch the process between attempts; the descriptor is switched back to
+    blocking mode so a payload larger than the pipe buffer still writes in one go.
+    """
+    deadline = time.monotonic() + TIMEOUT_FOR_START_DAEMON
+    while True:
+        try:
+            fd = os.open(pipe_path, os.O_WRONLY | os.O_NONBLOCK)
+        except OSError as e:
+            if e.errno != errno.ENXIO:
+                raise
+        else:
+            fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) & ~os.O_NONBLOCK)
+            return fd
+        if process.returncode is not None:
+            raise SandBoxError(
+                f"The sandbox process exited with code {process.returncode} before reading its configuration."
+            )
+        if time.monotonic() > deadline:
+            raise SandBoxError(
+                f"The sandbox process did not read its configuration within {TIMEOUT_FOR_START_DAEMON}s."
+            )
+        await asyncio.sleep(POLLING_DELAY)
 
 
 @sandbox_loop
@@ -216,11 +251,10 @@ async def launch_sandbox(
         # It's a good time for that
         gc.collect()
         if use_fifo:
-            with open(pipe_path, "wb") as fifo:
+            with os.fdopen(await _open_fifo_for_write(pipe_path, process), "wb") as fifo:
                 # serialization only
                 fifo.write(pickle.dumps(process_config))
                 fifo.flush()
-                fifo.close()
             pipe_path.unlink()
         return process
     finally:
