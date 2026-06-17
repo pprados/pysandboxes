@@ -44,12 +44,13 @@ def test_virtfs_stage_copytree_ignore_skips_venv_and_samples() -> None:
     names = [
         "pysandboxes",
         ".venv",
+        ".ai",
         ".claude",
         "samples",
         "foo.egg-info",
         "README.md",
     ]
     skipped = set(_virtfs_stage_copytree_ignore("/fake", names))
-    assert skipped == {".venv", ".claude", "samples", "foo.egg-info"}
+    assert skipped == {".venv", ".ai", ".claude", "samples", "foo.egg-info"}
     assert "pysandboxes" not in skipped
     assert "README.md" not in skipped
