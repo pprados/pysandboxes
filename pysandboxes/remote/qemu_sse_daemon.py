@@ -177,6 +177,7 @@ _VIRTFS_STAGE_SKIP_DIR_NAMES = frozenset(
         "venv",
         "node_modules",
         ".git",
+        ".ai",
         ".cursor",
         ".claude",
         ".codex",
