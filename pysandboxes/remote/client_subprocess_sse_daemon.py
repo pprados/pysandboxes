@@ -571,7 +571,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             env = {**os.environ, **all_rules.envs}
         else:
             env = dict(all_rules.envs)
-        env = {**os.environ, **extra_envs}
+        env = {**env, **extra_envs}
         logger.debug("Launch process:" + " ".join((repr(c) if " " in c else c for c in args)))
         self._process = await launch_sandbox(
             args + ["--_named-pipe", str(pipe_path)],
