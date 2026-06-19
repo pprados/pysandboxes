@@ -44,8 +44,6 @@ all_os_sandbox: list[str] = [
     "bwrap",
 ]
 
-# TODO: test with split mode
-
 
 def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
     """Run tst_usage via python-sb with the given OS_SANDBOX provider."""
@@ -109,3 +107,74 @@ def test_usage_with_provider(os_sandbox: str) -> None:
     if result.stderr:
         print(result.stderr, file=sys.stderr)
     assert result.returncode == 0, f"tst_usage (os_sandbox={os_sandbox}) exited with code {result.returncode}"
+
+
+# --- Partial mode (the README's "split mode": only the @sandbox functions are isolated) ---
+
+# Partial mode is the mode where the leak matters: the application keeps every privilege it
+# has, API tokens included, and only the sandboxed part must be blind to them. python-sb
+# strips os.environ before spawning anything, so complete mode hides a leak in the spawn
+# path itself -- the parent it spawns from is already clean. A plain interpreter does not.
+PARTIAL_MODE_SECRET = "s3cr3t-do-not-leak"
+
+# unshare builds its namespaces, mounts and iptables rules *before* the sandbox exists, so
+# its setup stage needs the host PATH; it then execs the daemon with that same environment
+# (unshare_setup.py) and the whitelist never reaches the sandbox.
+# QEMU partial mode boots the VM past the 30s configuration timeout; declared, not run,
+# because the row costs ten minutes to fail.
+_PARTIAL_MODE_XFAIL: dict[str, tuple[str, bool]] = {
+    "unshare": ("unshare_setup execs the sandbox daemon with the host environment", True),
+    "qemu": ("partial mode exceeds the 30s configuration timeout while the VM boots", False),
+}
+
+
+def _partial_mode_params() -> list:
+    """One row per provider; the two known holes are declared xfail instead of hidden."""
+    rows = []
+    for os_sandbox in all_os_sandbox:
+        marks = []
+        if os_sandbox in _PARTIAL_MODE_XFAIL:
+            reason, run = _PARTIAL_MODE_XFAIL[os_sandbox]
+            marks.append(pytest.mark.xfail(reason=reason, run=run, strict=True))
+        rows.append(pytest.param(os_sandbox, marks=marks))
+    return rows
+
+
+def _run_partial_mode(os_sandbox: str) -> subprocess.CompletedProcess:
+    """Run tst_env_leak with a plain interpreter, so the parent keeps its real environment."""
+    env = os.environ.copy()
+    env["OS_SANDBOX"] = os_sandbox.lower()
+    env.setdefault("TERM", "dumb")
+    env["My_ENV"] = "1"
+    env["SECRET_TOKEN"] = PARTIAL_MODE_SECRET
+
+    timeout = 600 if os_sandbox == "qemu" else 120
+
+    return subprocess.run(
+        [sys.executable, "-m", "tests.integration_tests.tst_env_leak"],
+        cwd=ROOT_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+@pytest.mark.parametrize("os_sandbox", _partial_mode_params())
+def test_partial_mode_hides_the_parent_environment(os_sandbox: str) -> None:
+    """In partial mode the sandbox sees the variables the profile whitelists, and nothing else."""
+    reason = _skip_reason(os_sandbox)
+    if reason:
+        pytest.skip(reason)
+
+    result = _run_partial_mode(os_sandbox)
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
+
+    assert PARTIAL_MODE_SECRET not in (result.stdout + result.stderr), "the secret must not be logged"
+    assert result.returncode == 0, (
+        f"partial mode (os_sandbox={os_sandbox}) exited with code {result.returncode}: "
+        "the sandbox saw an environment variable no rule whitelists"
+    )
