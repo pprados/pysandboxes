@@ -450,7 +450,7 @@ The features of each technology are proposed:
 | env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
 | expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ?     |     ✅  |        ❌         |
+| ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ✅     |     ✅  |        ❌         |
 | python-api=*             |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | **Network**              |      |            |           |           |           |        |        ❌         |
 | • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
@@ -468,6 +468,10 @@ The features of each technology are proposed:
 | • NET_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌  |        ❌         |
 | **Extra**                |      |            |           |           |           |        |                  |
 | • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅  |        ?         |
+
+`ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the
+path disappear (`FileNotFoundError`), while **bwrap** masks it, so a read succeeds and returns
+nothing. **landlock** denies access to a path but cannot hide one, so it has no equivalent.
 | • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |   ✅    |        ✅         |
 | • Delais                 | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |       >20        |
 
