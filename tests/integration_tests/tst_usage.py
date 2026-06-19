@@ -412,11 +412,14 @@ def _test_files() -> int:
             if s:
                 import pysandboxes
 
+                # `none` is the no-op provider, and landlock denies paths without being
+                # able to hide them, so it has no OS-level equivalent of `ignore=` (see the
+                # guard table in README.md). Both leave .env readable with py-sandbox off.
+                # bwrap masks it instead: the read returns empty, so `if s:` is already false.
                 if pysandboxes.os_sandbox in [
                     "none",
                     "landlock",
-                    "bwrap",
-                ]:  # FIXME: bwrap and .env
+                ]:
                     logger.warning(f"{OK} .env is accessible (os_sandbox={pysandboxes.os_sandbox!r})")
                 else:
                     logger.error(f"{KO} .env must not be accessible")
