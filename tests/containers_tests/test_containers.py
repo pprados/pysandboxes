@@ -23,6 +23,8 @@ from typing import TextIO
 
 import pytest
 
+from pysandboxes.remote.landlock_daemon import landlock_user_available
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,18 +68,38 @@ all_container_worker: list[str] = [
 ]
 
 
+# firejail is incompatible with containers
+all_os_sandbox_provider: list[str] = [
+    "none",
+    "landlock",
+    "unshare",
+    "bwrap",
+    "qemu",
+]
+
+# Providers that cannot run in an unprivileged container: they create their own namespaces
+# (unshare) or need mount privileges the default container does not grant (bwrap).
+needs_privileged: frozenset[str] = frozenset({"unshare", "bwrap"})
+
+
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
 # QEMU in Podman: nested VM + tst_usage may need a higher CONTAINER_RUN_TIMEOUT (see wiki/qemu.md).
 # Run on host: pytest tests/integration_tests/test_usage_with_providers.py -k qemu
-# Currently only qemu is enabled; re-enable others when needed:
 def _all_os_sandbox_params() -> list:
-    rows = [
-        # firejail is incompatible with containers
-        pytest.param("none", True, False),
-        pytest.param("unshare", False, True),
-        pytest.param("bwrap", False, True),
-        pytest.param("qemu", True, False),
-    ]
+    """Full os_sandbox x py_sandbox x privileged matrix; unviable rows are declared xfail, not run."""
+    rows = []
+    for os_sandbox in all_os_sandbox_provider:
+        for py_sandbox in (True, False):
+            for privileged in (True, False):
+                marks = []
+                if not privileged and os_sandbox in needs_privileged:
+                    marks.append(
+                        pytest.mark.xfail(
+                            reason=f"{os_sandbox} needs a privileged container (namespaces, mounts)",
+                            run=False,
+                        )
+                    )
+                rows.append(pytest.param(os_sandbox, py_sandbox, privileged, marks=marks))
     return rows
 
 
@@ -453,6 +475,9 @@ def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, priv
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip(f"{runtime} not available")
 
+    if os_sandbox == "landlock" and not landlock_user_available():
+        pytest.skip("Landlock not available (kernel < 5.13 or not Linux)")
+
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     assert result.returncode == 0, (
         f"Container test ({runtime}, os_sandbox={os_sandbox}) exited with code {result.returncode}. "
@@ -468,6 +493,25 @@ POD_NAME = "pysandboxes-test"
 KUBE_MANIFEST = CONTAINER_SCRIPT_DIR / "kube-pysandboxes.yaml"
 WAIT_TIMEOUT = int(os.environ.get("WAIT_TIMEOUT", "120"))
 DNS_WAIT = int(os.environ.get("DNS_WAIT", "60"))
+
+# The elevated block of the pod: `privileged`, the added capabilities and the disabled
+# seccomp filter. Matched as a whole because dropping only `privileged: true` would leave
+# SYS_ADMIN, NET_ADMIN and seccompProfile: Unconfined in place: the pod would still be
+# elevated and an unprivileged row would pass for the wrong reason.
+_SECURITY_CONTEXT_RE = re.compile(r"^      securityContext:\n(?:^ {8,}.*\n)*", re.MULTILINE)
+
+
+def _kube_manifest_text(image_name: str, privileged: bool) -> str:
+    """Return the pod manifest for one matrix row: image substituted, privileges applied."""
+    text = KUBE_MANIFEST.read_text(encoding="utf-8")
+    text, count = re.subn(r"image:\s*[\w/:.-]+", f"image: {image_name}", text, count=1)
+    assert count == 1, f"no image line to substitute in {KUBE_MANIFEST}"
+    if not privileged:
+        text, count = _SECURITY_CONTEXT_RE.subn("", text)
+        assert count == 1, f"no securityContext block to remove in {KUBE_MANIFEST}"
+    return text
+
+
 MINIKUBE_NODE_READY_TIMEOUT = int(os.environ.get("MINIKUBE_NODE_READY_TIMEOUT", "120"))
 MINIKUBE_DNS_READY_TIMEOUT = int(os.environ.get("MINIKUBE_DNS_READY_TIMEOUT", "120"))
 
@@ -640,13 +684,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
         time.sleep(3)
 
         image_name = _image_for_os_provider(os_sandbox)
-        manifest_text = KUBE_MANIFEST.read_text(encoding="utf-8")
-        manifest_text = re.sub(
-            r"image:\s*[\w/:.-]+",
-            f"image: {image_name}",
-            manifest_text,
-            count=1,
-        )
+        manifest_text = _kube_manifest_text(image_name, privileged)
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".yaml",
@@ -808,7 +846,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
     return rc
 
 
-@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", [x[0] for x in _all_os_sandbox_params()])
+@pytest.mark.parametrize("os_sandbox,py_sandbox,privileged", all_os_sandbox)
 def test_container_kubernetes(os_sandbox: str, py_sandbox: bool, privileged: bool) -> None:
     """Run Kubernetes pod test (minikube); success = exit code 0. Starts minikube if needed."""
 
