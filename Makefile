@@ -72,6 +72,13 @@ container-tests: build-image
 integration-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests
 
+## Report test coverage (integration first: the unit tests leave the socket guard
+## armed with a deny-all rule set, which breaks the in-process integration tests).
+## Only the parent process is measured: the sandbox is whitelist-only, so coverage's
+## own environment variables never reach the sandboxed child.
+coverage:
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-report=term --cov-report=html
+
 ## Make integration tests
 sample-tests:
 	# (cd samples/agno-demo && make tests && true)
