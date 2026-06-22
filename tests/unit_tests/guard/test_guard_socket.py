@@ -25,6 +25,7 @@ from pysandboxes.guard_socket import (
     LearnSocketRule,
     _check_address_with_rules,
     _convert_ports_range,
+    _deactivate_guard_sockets,
     activate_guard,
     generate_rules,
     parse_rules,
@@ -884,6 +885,23 @@ def test_an_unarmed_guard_enforces_nothing() -> None:
     The autouse fixture leaves every guard disarmed, so this is the state of a test
     that never calls ``activate_guard`` -- and of the whole process before arming.
     """
+    assert _guarded("socket.socket.connect")(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 9999)) == "called"
+
+
+def test_disarming_makes_the_guard_inactive_and_not_deny_all() -> None:
+    """Disarming has to undo an arming, which is the only case where it matters.
+
+    Clearing the rules alone leaves a deny-all guard behind: the wrappers stay
+    installed for the rest of the process, so every later connection is refused.
+    That is what made the whole integration suite fail once the unit tests had run
+    first, and only a disarm that follows an arm can catch it.
+    """
+    _arm("net=ALLOW|TCP|127.0.0.1|9999|OUT")
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _guarded("socket.socket.connect")(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 9999))
+
+    _deactivate_guard_sockets()
+
     assert _guarded("socket.socket.connect")(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 9999)) == "called"
 
 
