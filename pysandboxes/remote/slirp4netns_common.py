@@ -20,6 +20,7 @@ from pathlib import Path
 
 from ..all_rules import AllRules
 from ..guard_socket import Action, Direction, Kind
+from .tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
 
@@ -208,11 +209,17 @@ def run_slirp_watcher(
             SLIRP_INTERFACE,
         ]
         logger.debug("slirp_watcher: launching: %s", " ".join(slirp_arg))
+        # slirp4netns holds the sandbox network namespace open itself, so it does not
+        # notice its target dying and outlives the whole of pysandboxes -- keeping a
+        # listening socket on the host for every forwarded port. PR_SET_PDEATHSIG makes
+        # the kernel signal it when the thread that spawned it goes away, which covers
+        # the paths no `finally` reaches: SIGKILL, a crash, interpreter teardown.
         proc = subprocess.Popen(
             slirp_arg,
             stdout=subprocess.DEVNULL,
             stderr=(subprocess.PIPE if logger.isEnabledFor(logging.DEBUG) else subprocess.DEVNULL),
             pass_fds=(pipe_w,),
+            preexec_fn=set_pdeathsig,  # noqa: PLW1509
         )
         if process_holder is not None:
             process_holder.clear()
