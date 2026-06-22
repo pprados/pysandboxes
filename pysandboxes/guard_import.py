@@ -233,6 +233,19 @@ class GuardLoader(Loader):
         module = self.original_loader.create_module(self.original_spec)
         return module  # Not initialized
 
+    def get_resource_reader(self, fullname: str) -> Any:
+        """Delegate packaged-resource access to the original loader.
+
+        ``importlib.resources.files()`` asks the loader for a reader and, finding
+        none, silently falls back to a degraded wrapper whose paths carry no
+        ``resolve()`` or ``read_bytes()``. Wrapping a loader without forwarding this
+        therefore broke every packaged-resource read while the guard was armed.
+        The reader still reads through the patched ``open``, so the file guard keeps
+        deciding what it may reach.
+        """
+        getter = getattr(self.original_loader, "get_resource_reader", None)
+        return getter(fullname) if getter else None
+
     def exec_module(self, module: ModuleType) -> None:
         """Execute module code and apply custom modifications.
 

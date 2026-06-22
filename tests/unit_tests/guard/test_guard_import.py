@@ -162,3 +162,22 @@ def test_generated_lines_parse_back_without_error() -> None:
 
     assert "json" in parsed
     assert "mycompany" in parsed
+
+
+def test_packaged_resources_stay_readable_while_the_guard_is_armed() -> None:
+    """``importlib.resources.files()`` must reach the real reader through GuardLoader.
+
+    The autouse fixture arms the import guard, so ``pysandboxes.__spec__.loader`` is a
+    GuardLoader here. A loader that does not forward ``get_resource_reader`` makes
+    ``files()`` fall back to a degraded wrapper whose paths have no ``resolve()``, which
+    broke the bwrap and firejail daemons: both load their template that way.
+    """
+    import importlib.resources
+    import sys
+
+    from pysandboxes.guard_import import GuardLoader
+
+    assert isinstance(sys.modules["pysandboxes"].__spec__.loader, GuardLoader), "guard not armed"
+
+    template = importlib.resources.files("pysandboxes") / "templates" / "bwrap.template"
+    assert template.resolve().is_file()

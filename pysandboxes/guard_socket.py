@@ -181,6 +181,11 @@ class LearnSocketRule(NamedTuple):
 _all_networks = ["0.0.0.0/0", "::1/0"]
 
 _rules: SocketRules = cast(SocketRules, ())
+# An empty rule set is a legitimate deny-all whitelist, so it cannot double as
+# "not armed": the two states must be told apart by their own flag. False means
+# the guard lets everything through, and only the pytest-only disarm below ever
+# returns it to False -- production arms once and stays armed.
+_armed: bool = False
 
 
 # Loopback names resolvable only through /etc/hosts. That file is not
@@ -942,8 +947,24 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
     return wrapper
 
 
+def _resolve_wildcard_host(self: Any, address: tuple[str, int]) -> tuple[str, int]:
+    """Turn ``bind(("", port))`` into the wildcard address the rules are written against.
+
+    An empty host means every interface, not a name to look up: ``getaddrinfo("")``
+    always fails, so the check raised ``ValueError`` before it ever consulted a rule,
+    and a guarded process could not listen at all. The profiles already spell the rule
+    ``0.0.0.0/32``, which is exactly this address.
+    """
+    hostname, port = address[0], address[1]
+    if hostname == "":
+        hostname = "::" if getattr(self, "family", None) == socket.AF_INET6 else "0.0.0.0"
+    return hostname, port
+
+
 def _check_address(self: Any, address: tuple[str, int], conn_direction: Direction) -> None:
-    _check_address_with_rules(_rules, Kind(self.type), address, conn_direction)
+    if not _armed:
+        return
+    _check_address_with_rules(_rules, Kind(self.type), _resolve_wildcard_host(self, address), conn_direction)
 
 
 def _socket_add_learning_rule(
@@ -1166,12 +1187,11 @@ def activate_guard(rules: SocketRules) -> None:
     Raises:
         RuntimeError: If guard is already activated.
     """
-    if not rules:
-        return
-    global _rules
-    if _rules:
+    global _rules, _armed
+    if _armed:
         raise RuntimeError("Guard_socket already activated.")
     _rules = rules
+    _armed = True
 
 
 def apply_pin_dns_resolution(socket_module: Any) -> None:
@@ -1335,5 +1355,12 @@ def generate_rules(
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_sockets() -> None:
-        global _rules
+        """Return the guard to its pre-arming state, where it enforces nothing.
+
+        Resetting only the rules would leave a deny-all guard behind, which is not
+        an inactive one: the socket wrappers stay installed for the rest of the
+        process and refuse every connection a later test makes.
+        """
+        global _rules, _armed
         _rules = ()
+        _armed = False
