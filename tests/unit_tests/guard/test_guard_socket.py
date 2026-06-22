@@ -477,14 +477,15 @@ def test_convert_ports_range_duplicates_and_sorting() -> None:
 
 
 class _FakeSocket:
-    """Stand-in for a socket object: the wrappers only read ``type``.
+    """Stand-in for a socket object: the wrappers read ``type`` and ``family``.
 
     SOCK_RAW needs CAP_NET_RAW, so a real socket would make the test
     root-only for no gain.
     """
 
-    def __init__(self, kind: SocketKind) -> None:
+    def __init__(self, kind: SocketKind, family: AddressFamily = AddressFamily.AF_INET) -> None:
         self.type = kind
+        self.family = family
 
 
 def _arm(*rules: str) -> None:
@@ -849,3 +850,46 @@ def test_getaddrinfo(pin_dns: None) -> None:
     assert all(x[0] == AddressFamily.AF_INET for x in getaddrinfo("www.google.com", 0, family=AddressFamily.AF_INET))
     assert all(x[1] == SocketKind.SOCK_STREAM for x in getaddrinfo("www.google.com", 0, type=SocketKind.SOCK_STREAM))
     assert all(x[2] == 6 for x in getaddrinfo("www.google.com", 0, proto=6))
+
+
+def test_wildcard_bind_is_matched_against_the_rules_not_resolved() -> None:
+    """``bind(("", port))`` means every interface, so it must reach the rules.
+
+    An empty host is not a name: sending it to ``getaddrinfo`` always fails, which
+    used to turn every wildcard bind into a ``ValueError`` before any rule was read.
+    """
+    _arm("net=ALLOW|TCP|0.0.0.0/32|8000|IN")
+    calls: List[Tuple[Any, ...]] = []
+    wrapped = patch_rules(learn=False)["socket.socket.bind"](lambda *a, **k: calls.append(a))
+    sock = _FakeSocket(SocketKind.SOCK_STREAM)
+
+    wrapped(sock, ("", 8000))
+    assert calls == [(sock, ("", 8000))], "the guard must pass the address through untouched"
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(sock, ("", 9999))
+
+
+def test_wildcard_bind_on_ipv6_uses_the_ipv6_wildcard() -> None:
+    """An AF_INET6 socket binds ``::``, which an IPv4 wildcard rule must not allow."""
+    _arm("net=ALLOW|TCP|0.0.0.0/32|8000|IN")
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _guarded("socket.socket.bind")(_FakeSocket(SocketKind.SOCK_STREAM, AddressFamily.AF_INET6), ("", 8000))
+
+
+def test_an_unarmed_guard_enforces_nothing() -> None:
+    """Never armed means inactive, which is not the same as armed with no rules.
+
+    The autouse fixture leaves every guard disarmed, so this is the state of a test
+    that never calls ``activate_guard`` -- and of the whole process before arming.
+    """
+    assert _guarded("socket.socket.connect")(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 9999)) == "called"
+
+
+def test_arming_with_no_rules_still_denies_everything() -> None:
+    """An empty whitelist is a deny-all, not a disarm."""
+    _arm()
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _guarded("socket.socket.connect")(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 9999))
