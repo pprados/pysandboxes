@@ -450,7 +450,7 @@ The features of each technology are proposed:
 | env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
 | expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| ignore=*                 |  ❌   |     ✅      |     ❌     |     ❌     |     ✅     |     ✅  |        ❌         |
+| ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
 | python-api=*             |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | **Network**              |      |            |           |           |           |        |        ❌         |
 | • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
@@ -470,8 +470,10 @@ The features of each technology are proposed:
 | • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅  |        ?         |
 
 `ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the
-path disappear (`FileNotFoundError`), while **bwrap** masks it, so a read succeeds and returns
-nothing. **landlock** denies access to a path but cannot hide one, so it has no equivalent.
+path disappear (`FileNotFoundError`), **unshare** has the OS refuse it, and **bwrap** and
+**qemu** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path
+but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays
+readable there.
 | • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |   ✅    |        ✅         |
 | • Delais                 | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |       >20        |
 
