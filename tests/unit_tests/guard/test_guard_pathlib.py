@@ -136,13 +136,10 @@ def test_pathlib_glob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
 
     result: List[Any]
 
-    # result = [f for f in pathlib.Path("pysandboxes").glob("**/*.template")]
-    # assert pathlib.Path("templates/py-sandbox.template") in result
-    # FIXME
-    # result = [pathlib.Path(f).name for f in pathlib.Path(files["path"]).glob("*")]
-    # assert "ignore.log" not in result
-    # assert "bound.txt" in result
-    # assert "visible.txt" in result
+    result = [pathlib.Path(f).name for f in pathlib.Path(files["path"]).glob("*")]
+    assert "ignore.log" not in result, "an ignored file must not show up in a glob"
+    assert "bound.txt" in result
+    assert "visible.txt" in result
 
     result = [pathlib.Path(f).name for f in pathlib.Path(files["bind_dest"]).glob("*")]
     assert "bound_file.txt" in result
