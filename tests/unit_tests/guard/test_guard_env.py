@@ -330,3 +330,24 @@ def test_patch_covers_the_environment_entry_points() -> None:
 
 
 # TODO: test activate with os.environ and os.environb
+
+
+def test_disarming_clears_the_rules_a_learning_run_would_read() -> None:
+    """``generate_rules()`` skips any variable an armed rule already covers.
+
+    Rules left over from an earlier arming therefore make a later learning run
+    under-report what it saw, which is a silently incomplete profile.
+    """
+    from pysandboxes.guard_envs import _deactivate_guard_envs
+
+    errors: List[ErrorMsg] = []
+    rules, _, _ = parse_rules([ConfigLine("env=MY_VAR=1", Path(), 0)], {"MY_VAR": "1"}, errors)
+    assert not errors
+    activate_guard(rules)
+
+    LearnEnviron()._keys_used.add("MY_VAR")
+    assert "env=MY_VAR=${MY_VAR}" not in generate_rules(), "an armed rule must hide the variable"
+
+    _deactivate_guard_envs()
+
+    assert "env=MY_VAR=${MY_VAR}" in generate_rules(), "a disarmed guard must hide nothing"

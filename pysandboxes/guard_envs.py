@@ -395,3 +395,19 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         }
     else:
         return {}
+
+
+if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+
+    def _deactivate_guard_envs() -> None:
+        """Return the guard to its pre-arming state.
+
+        ``_rules`` only feeds ``generate_rules()``, so leaving it set makes a later
+        learning run under-report the variables it saw. Nothing else here needs
+        undoing: outside learning mode ``patch_rules`` installs nothing, and the
+        ``env=`` whitelist is applied when the sandbox is spawned, not in-process.
+        A test that installs a ``LearnEnviron`` over ``os.environ`` restores it
+        itself -- that replacement belongs to the test, not to this guard.
+        """
+        global _rules
+        _rules = cast(EnvsRules, ())
