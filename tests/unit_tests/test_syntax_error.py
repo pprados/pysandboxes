@@ -42,7 +42,7 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
             "syntax-error(6): In 'expose-rw=not_exist,.', expected a single path (no comma).",
             "syntax-error(7): In 'expose-ro=abc', path 'abc' must exist.",
             "syntax-error(8): Invalid rule 'ignore-parameter'",
-            "Port must be a positive value",
+            "syntax-error(9): Port must be a positive value",
             "syntax-error(11): 'net=ERROR' has incorrect number of parts separated by '|'. Expected 5, got 1. "
             "Format: <DENY,ALLOW>|<TCP,UDP list or *>|<ip/mask>, *|<port list>|<IN, OUT>.",
             "syntax-error(12): 'net=ERROR|tcp|127.0.0.1/32|8000|IN' use an invalid action. Must be 'ALLOW' or 'DENY'.",

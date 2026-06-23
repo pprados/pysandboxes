@@ -60,7 +60,7 @@ def parse_rules(
                 if port < 0:
                     errors.append(
                         (
-                            "Port must be a positive value",
+                            f"{format_ruleref(rule)}: Port must be a positive value",
                             rule.path,
                             rule.ln,
                         )
@@ -70,7 +70,7 @@ def parse_rules(
             except ValueError:
                 errors.append(
                     (
-                        "Port must be a positive value",
+                        f"{format_ruleref(rule)}: Port must be a positive value",
                         rule.path,
                         rule.ln,
                     )
