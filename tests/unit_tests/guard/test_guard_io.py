@@ -14,6 +14,7 @@ from pysandboxes.tools import follow_links_executable
 
 def _deactivate_all_rules() -> None:
     from pysandboxes.guard_api import _deactivate_guard_api
+    from pysandboxes.guard_envs import _deactivate_guard_envs
     from pysandboxes.guard_files import _deactivate_guard_files
     from pysandboxes.guard_import import _deactivate_guard_import
     from pysandboxes.guard_pickle import _deactivate_guard_pickle
@@ -24,6 +25,7 @@ def _deactivate_all_rules() -> None:
     _deactivate_guard_import()
     _deactivate_guard_pickle()
     _deactivate_guard_api()
+    _deactivate_guard_envs()
 
 
 _guard_import_for_tests_activated: bool = False
