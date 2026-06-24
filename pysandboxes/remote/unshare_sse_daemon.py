@@ -309,6 +309,9 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             netfilter_rules=net_filter4,
             current_dir=current_dir,
             ignore_paths=ignore_paths,
+            # The setup stage runs with the host environment, on purpose; this is what
+            # it narrows down to before exec'ing into the sandbox.
+            sandbox_envs={k: str(v) if v is not None else "" for k, v in dict(all_rules.envs).items()},
         )
         return config, dns_servers
 
