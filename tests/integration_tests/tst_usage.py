@@ -138,21 +138,56 @@ def run_in_sandbox() -> tuple[int, int]:
     return 42, rc
 
 
+# Set by the parent and whitelisted by no rule, so its presence inside is a leak.
+# `USER` alone used to carry this check, but a parent without `USER` made it pass
+# without proving anything; this one the harness always sets.
+SECRET_ENV = "USAGE_SECRET"
+
+# Every variable measured inside a sandbox of the providers that could be exercised
+# here: the two `env=` rules of the profile, the locale the interpreter sets itself,
+# and the plumbing each technology re-exports. Anything else is reported by name --
+# never by value, so a leak report cannot copy the secret into the logs. Reported and
+# not fatal on purpose: qemu and the container images were not measured, and failing
+# on plumbing never seen would break runs this check cannot vouch for.
+_EXPECTED_ENVS = frozenset(
+    {
+        "TERM",
+        "My_ENV",
+        "LC_CTYPE",
+        # bwrap
+        "PATH",
+        "PWD",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+        "TEMP",
+        "TMP",
+        # unshare
+        "PID_FILE",
+        "SLIRP_READY_FD",
+        # container harnesses
+        "PYTHONUNBUFFERED",
+        "PYTHONUSERBASE",
+        "OS_SANDBOX",
+    }
+)
+
+
 def _test_envs() -> int:
     rc = 0
-    if "TERM" not in os.environ:
-        logger.error(f"{KO} TERM must be in os.environ")
+    if not os.environ.get("TERM"):
+        logger.error(f"{KO} TERM must be in os.environ, with the value the rule substituted")
         rc = 1
     else:
         logger.info(f"{OK} TERM is visible")
 
     # os.putenv("My_ENV", "hello")
-    if "My_ENV" in os.environ:
+    if os.environ.get("My_ENV") == "1":
         os.getenv("My_ENV")
         os.unsetenv("My_ENV")
-        logger.info(f"{OK} My_ENV is visible")
+        logger.info(f"{OK} My_ENV is visible, with the expected value")
     else:
-        logger.error(f"{KO} My_ENV must be in os.environ")
+        logger.error(f"{KO} My_ENV must be in os.environ with the value '1'")
         rc = 1
 
     learning_mode = is_learning_mode()
@@ -160,11 +195,16 @@ def _test_envs() -> int:
         learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
 
     if not learning_mode:
-        if "USER" in os.environ:
-            logger.error(f"{KO} USER must not be visible")
-            rc = 1
-        else:
-            logger.info(f"{OK} USER is not visible")
+        for name in ("USER", SECRET_ENV):
+            if name in os.environ:
+                logger.error(f"{KO} {name} must not be visible")
+                rc = 1
+            else:
+                logger.info(f"{OK} {name} is not visible")
+
+        unexpected = sorted(set(os.environ) - _EXPECTED_ENVS)
+        if unexpected:
+            logger.warning(f"{KO} unexpected env names visible in the sandbox: {', '.join(unexpected)}")
     logger.info(f"{OK} Test Env")
     return rc
 
