@@ -32,7 +32,7 @@ from ctypes import Structure, c_int, c_size_t, c_uint32
 from pathlib import Path
 
 from ..all_rules import AllRules
-from ..guard_files import FSExposeRule
+from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, Kind, SocketRules
 from ..override_compat import override
 from ..sb_types import Envs
@@ -430,6 +430,27 @@ def _collect_landlock_paths(all_rules: AllRules, temp: Path, cwd: str) -> list[t
     return list(path_to_access.items())
 
 
+def _warn_ignore_rules_are_not_enforced(all_rules: AllRules) -> None:
+    """Tell the user that Landlock cannot honour an ``ignore=`` rule on its own.
+
+    Landlock only knows how to allow a path (``path_beneath``); it has no deny
+    primitive, so hiding one file inside an exposed directory is inexpressible.
+    With the Python layer on, ``guard_files`` still refuses the path in-process and
+    the rule holds. With ``py-sandbox=False`` nothing enforces it at all, and the
+    silence is what makes it dangerous: the profile says the file is hidden and the
+    sandbox reads it anyway.
+    """
+    if all_rules.use_py_sandbox:
+        return
+    ignored = [rule.source for rule in all_rules.file_rules if isinstance(rule, IgnoreRule)]
+    if ignored:
+        logger.warning(
+            "Landlock cannot enforce ignore= (%s): its ABI has only allow rules, and py-sandbox=False "
+            "switches off the Python layer that would refuse these paths. They stay readable in the sandbox.",
+            ", ".join(ignored),
+        )
+
+
 class LandlockSSEDaemon(SubProcessDaemon):
     """Subprocess daemon that applies Landlock filesystem and network restrictions.
 
@@ -447,6 +468,7 @@ class LandlockSSEDaemon(SubProcessDaemon):
         temp: Path,
     ) -> AllRules:
         """No rule transformation for Landlock."""
+        _warn_ignore_rules_are_not_enforced(all_rules)
         if not _landlock_available():
             logger.error("Landlock not available (kernel < 5.13 or not Linux), exec without Landlock")
             sys.exit(-1)
