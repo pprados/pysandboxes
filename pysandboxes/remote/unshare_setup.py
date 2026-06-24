@@ -59,6 +59,7 @@ class UnshareSetupConfig:
     netfilter_rules: list[str]
     current_dir: str
     ignore_paths: list[str]  # paths relative to current_dir to mask (overlay with no-access)
+    sandbox_envs: dict[str, str]  # the profile's env= whitelist, all the sandbox may see
 
     def to_json(self) -> str:
         return json.dumps(
@@ -71,6 +72,7 @@ class UnshareSetupConfig:
                 "netfilter_rules": self.netfilter_rules,
                 "current_dir": self.current_dir,
                 "ignore_paths": self.ignore_paths,
+                "sandbox_envs": self.sandbox_envs,
             }
         )
 
@@ -86,6 +88,7 @@ class UnshareSetupConfig:
             netfilter_rules=d["netfilter_rules"],
             current_dir=d["current_dir"],
             ignore_paths=d.get("ignore_paths", []),
+            sandbox_envs=d.get("sandbox_envs", {}),
         )
 
 
@@ -401,14 +404,19 @@ def main() -> None:
     os.chdir(new_root)
     proc_path = os.path.join(new_root, "proc")
 
-    # The launcher describes its own supervision through the environment, and
-    # ``execvp`` below would hand that description to the sandboxed code. Both
-    # variables have been consumed by now -- the readiness fd was read and closed
-    # above, and the pid file is written by the daemon on the host -- so nothing
-    # inside needs them. PYTHONPATH stays: the child still has to import
-    # pysandboxes (see the comment in unshare_sse_daemon.subprocess_cmd).
-    for name in ("PID_FILE", "SLIRP_READY_FD"):
-        os.environ.pop(name, None)
+    # This stage needed the host environment -- PATH for mount/ip/iptables, and the
+    # launcher's own PID_FILE and SLIRP_READY_FD -- but the sandbox must not inherit
+    # any of it: ``execvp`` below would hand the parent's whole environment, API
+    # tokens included, to the code being isolated. Everything above is done, so
+    # narrow the environment to what the profile whitelists.
+    #
+    # PYTHONPATH survives because the daemon on the other side of the exec still has
+    # to import pysandboxes (see the comment in unshare_sse_daemon.subprocess_cmd);
+    # it names the project directory, which the sandbox can already see.
+    preserved = {name: os.environ[name] for name in ("PYTHONPATH",) if name in os.environ}
+    os.environ.clear()
+    os.environ.update(config.sandbox_envs)
+    os.environ.update(preserved)
 
     logger.debug("Enter in sandbox...")
     exec_args = [

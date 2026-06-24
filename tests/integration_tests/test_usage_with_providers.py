@@ -121,12 +121,11 @@ def test_usage_with_provider(os_sandbox: str) -> None:
 PARTIAL_MODE_SECRET = "s3cr3t-do-not-leak"
 
 # unshare builds its namespaces, mounts and iptables rules *before* the sandbox exists, so
-# its setup stage needs the host PATH; it then execs the daemon with that same environment
-# (unshare_setup.py) and the whitelist never reaches the sandbox.
+# its setup stage needs the host PATH; it now narrows os.environ down to the profile's
+# whitelist just before exec'ing the daemon, which is why this row is no longer xfail.
 # QEMU partial mode boots the VM past the 30s configuration timeout; declared, not run,
 # because the row costs ten minutes to fail.
 _PARTIAL_MODE_XFAIL: dict[str, tuple[str, bool]] = {
-    "unshare": ("unshare_setup execs the sandbox daemon with the host environment", True),
     "qemu": ("partial mode exceeds the 30s configuration timeout while the VM boots", False),
 }
 
