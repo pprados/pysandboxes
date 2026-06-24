@@ -1,4 +1,5 @@
 import logging
+from typing import Iterator
 
 import pytest  # type: ignore[import-untyped]
 
@@ -23,9 +24,15 @@ def init_log_level() -> None:
 
 
 @pytest.fixture(autouse=True)
-def activate_guard() -> None:
+def activate_guard() -> Iterator[None]:
     # Create test files and symlinks
     # Runs without patch.
     init_log_level()
     _deactivate_all_rules()
     _activate_guard_import_for_tests()
+    yield
+    # Disarm on the way out too, not only on the way in: the last test of a run
+    # otherwise leaves its rules armed, and pytest ends the session with an
+    # `os.chdir` back to the root directory that no rule exposes, so a plain
+    # `pytest <file>` finishes on a RuleFileNotFoundError traceback.
+    _deactivate_all_rules()
