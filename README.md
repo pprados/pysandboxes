@@ -452,7 +452,7 @@ The features of each technology are proposed:
 | expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
 | python-api=*             |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| **Network**              |      |            |           |           |           |        |        ❌         |
+| **Network**              |      |            |           |           |           |        |                  |
 | • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
 | • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
@@ -468,14 +468,21 @@ The features of each technology are proposed:
 | • NET_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌  |        ❌         |
 | **Extra**                |      |            |           |           |           |        |                  |
 | • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅  |        ?         |
+| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |   ✅    |        ✅         |
+| • Delais                 | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        |
 
 `ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the
 path disappear (`FileNotFoundError`), **unshare** has the OS refuse it, and **bwrap** and
 **qemu** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path
 but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays
 readable there.
-| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |   ✅    |        ✅         |
-| • Delais                 | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |       >20        |
+
+A `❌` in the **py-sandbox** column is a deliberate posture, not a gap: with
+`py-sandbox=False` (or `--py-sandbox=False`) the Python layer is switched off on purpose, so
+`python-api=`, `import=`, the Python-code guard and, on **landlock**, `ignore=` stop being
+enforced. Only the OS layer of the chosen technology remains. Use it when the sandboxed code
+is trusted not to attack the interpreter itself and you want the OS boundary alone; keep the
+Python layer on otherwise.
 
 
 

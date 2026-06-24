@@ -24,6 +24,7 @@ from ._env import (
     default_route_available,
     profile_hosts_resolvable,
 )
+from .tst_usage import SECRET_ENV
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,8 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
     env["OS_SANDBOX"] = os_sandbox.lower()
     env.setdefault("TERM", "dumb")
     env["My_ENV"] = "1"
+    # No rule whitelists this, so tst_usage fails if the sandbox can see it.
+    env[SECRET_ENV] = "must-not-reach-the-sandbox"
 
     cmd = [
         sys.executable,
