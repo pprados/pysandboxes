@@ -401,6 +401,15 @@ def main() -> None:
     os.chdir(new_root)
     proc_path = os.path.join(new_root, "proc")
 
+    # The launcher describes its own supervision through the environment, and
+    # ``execvp`` below would hand that description to the sandboxed code. Both
+    # variables have been consumed by now -- the readiness fd was read and closed
+    # above, and the pid file is written by the daemon on the host -- so nothing
+    # inside needs them. PYTHONPATH stays: the child still has to import
+    # pysandboxes (see the comment in unshare_sse_daemon.subprocess_cmd).
+    for name in ("PID_FILE", "SLIRP_READY_FD"):
+        os.environ.pop(name, None)
+
     logger.debug("Enter in sandbox...")
     exec_args = [
         "/usr/bin/unshare",
