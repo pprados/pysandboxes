@@ -15,8 +15,6 @@ from dotenv import load_dotenv
 from fastmcp import Client
 from pysandboxes.tools import resolve_env_variables
 
-from .provider_registry import ResolvedChatModel, resolve_chat_model
-
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -31,7 +29,6 @@ class Configuration:
         """Initialize configuration with environment variables."""
         self.load_env()
         self.api_key = self._get_api_key()
-        self.chat: ResolvedChatModel = resolve_chat_model()
 
     @staticmethod
     def load_env() -> None:
@@ -50,7 +47,7 @@ class Configuration:
 
     @staticmethod
     def load_config(file_path: str) -> Dict[str, Any]:
-        """Load server configuration from JSONC file."""
+        """Load server configuration from JSON file."""
         body = Path(file_path).read_text()
         body = resolve_env_variables(body, os.environ)
         return json.loads(body)
@@ -59,16 +56,6 @@ class Configuration:
     def llm_api_key(self) -> str:
         """Get the LLM API key."""
         return self.api_key
-
-    @property
-    def chat_completions_url(self) -> str:
-        """OpenAI-compatible chat completions URL for the selected provider."""
-        return self.chat.chat_completions_url
-
-    @property
-    def llm_model(self) -> str:
-        """Remote model name passed to the provider API."""
-        return self.chat.model
 
 
 def _extract_first_json(text: str) -> Dict[str, Any] | List[Any] | None:
@@ -94,14 +81,12 @@ def _extract_first_json(text: str) -> Dict[str, Any] | List[Any] | None:
 class LLMClient:
     """Manages communication with the LLM provider."""
 
-    def __init__(self, api_key: str, chat_completions_url: str, model: str) -> None:
+    def __init__(self, api_key: str) -> None:
         self.api_key = api_key
-        self.chat_completions_url = chat_completions_url
-        self.model = model
 
     def get_response(self, messages: List[Dict[str, str]]) -> str:
         """Get a response from the LLM."""
-        url = self.chat_completions_url
+        url = os.environ["API_URL"]
 
         headers = {
             "Content-Type": "application/json",
@@ -109,7 +94,7 @@ class LLMClient:
         }
         payload = {
             "messages": messages,
-            "model": self.model,
+            "model": os.environ["MODEL"],
             "temperature": 0.7,
             "max_tokens": 4096,
             "top_p": 1,
@@ -301,11 +286,9 @@ async def run(args: argparse.Namespace) -> None:
 
     for mcp_server in server_config["mcpServers"].values():
         if "command" in mcp_server:
-            w_command = which(Path(mcp_server["command"]))
+            w_command = which(mcp_server["command"])
             if w_command:
                 mcp_server["command"] = w_command
-            elif mcp_server["command"] in ("python", "python3"):
-                mcp_server["command"] = sys.executable
             else:
                 logger.debug(
                     "Impossible to find the command %s", repr(mcp_server["command"])
@@ -315,11 +298,7 @@ async def run(args: argparse.Namespace) -> None:
     client = Client(server_config, roots=[str(Path("./resources").resolve().as_uri())])
     async with client:
 
-        llm_client = LLMClient(
-            config.llm_api_key,
-            config.chat_completions_url,
-            config.llm_model,
-        )
+        llm_client = LLMClient(config.llm_api_key)
         chat_session = ChatSession(client, llm_client)
         if args.print:
             logger.info("Invoke ")
@@ -344,7 +323,7 @@ def main() -> int:
         dest="mcp",
         type=str,
         required=False,
-        default="servers_config.jsonc",
+        default="servers_config.json",
         help="The mcp server configuration file.",
     )
 

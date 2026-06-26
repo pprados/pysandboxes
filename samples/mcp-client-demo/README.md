@@ -1,6 +1,6 @@
 # MCP Simple Chatbot
 
-This example demonstrates how to integrate the Model Context Protocol (MCP) into a simple CLI chatbot. It is configured to use the tools from [`../mcp-server-demo`](../mcp-server-demo/README.md) via **Py-sandboxes**.
+This example demonstrates how to integrate the Model Context Protocol (MCP) into a simple CLI chatbot. It is configured to use the tools from [`../mcp-server`](../mcp-server/README.md) via **Py-sandboxes**.
 
 ## Installation
 
@@ -12,25 +12,22 @@ You must:
 ### Install the dependencies:
 Use uv
 ```bash
-cd path/to/mcp-client-demo
+cd path/to/mcp-client
 uv sync
 ```
 ### Set up environment variables:
 
-Create a `.env` file in the sample root (see `.env.example`). The chatbot uses an **OpenAI-compatible** HTTP API. You choose the remote model with `CHAT_MODEL` in the form `provider/model`; the base URL for each `provider` is stored in a small **SQLite** registry shipped with the client (`mcp_simple_chatbot/provider_registry.py`, file `provider_urls.sqlite` created on first run).
+Create a `.env` file in the root directory and add your API key:
 
 ```plaintext
-export CHAT_MODEL=openai/gpt-4o-mini
-API_KEY=your_api_key_here
+OPENAI_API_KEY=your_api_key_here
 ```
 
-Built-in providers (see `_DEFAULT_SEED` in `provider_registry.py`) include among others `cerebras`, `deepseek`, `fireworks`, `groq`, `mistral`, `ollama` (local), `openai`, `openrouter`, `together`, and `xai`. To add a provider, insert a row into the SQLite table `providers` (or set `CHAT_PROVIDER_URLS_DB` to your own database file).
-
-> **Note:** `API_KEY` is the bearer token for the provider you use (OpenAI, xAI, Groq, etc.). It replaces the older separate `API_URL` and `MODEL` variables.
+> **Note:** The current implementation is configured to use the [Groq API endpoint](`https://api.groq.com/openai/v1/chat/completions`) with the `llama-3.2-90b-vision-preview` model or OpenAI. If you plan to use a different LLM provider, you\'ll need to modify the `LLMClient` class in `main.py` to use the appropriate endpoint URL and model parameters and the `.env` file.
 
 ### Configure servers
 
-The `servers_config.jsonc` follows the same structure as Claude Desktop, allowing for easy integration of multiple servers.
+The `servers_config.json` follows the same structure as Claude Desktop, allowing for easy integration of multiple servers.
 MCP's `stdio` mode consists of launching a child process with the MCP server. The client can then configure the launch to use different sandboxing scenarios.
 
 Here\'s some examples. You must choice only one:
@@ -60,7 +57,7 @@ Here\'s some examples. You must choice only one:
 
  ```
 
-Use the parameter `CONFIG='-c stdio_no_sandbox.jsonc'`
+Use the parameter `CONFIG='-c stdio_no_sandbox.json'`
 
 #### MCP Client use `stdio` to call MCP Server with `python-sb` in complete mode
 
@@ -92,7 +89,7 @@ Use the parameter `CONFIG='-c stdio_no_sandbox.jsonc'`
      style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
  ```
 
-Use the parameter `CONFIG='-c stdio_sandboxes_complete.jsonc'`
+Use the parameter `CONFIG='-c stdio_sandboxes_complete.json'`
 
 #### MCP Client use `stdio` to call MCP Server in partial mode
 
@@ -127,7 +124,7 @@ This version allows isolating a part of the **MCP server** in `stdio` mode, with
 
  ```
 
-Use the parameter `CONFIG='-c stdio_sandboxes_partial.jsonc'`
+Use the parameter `CONFIG='-c stdio_sandboxes_partial.json'`
 
 ### Run the client
 
@@ -191,7 +188,7 @@ uv run -m pysandboxes.python_sb -m mcp_sample_chatbot.main ${CONFIG}
 
 ### Isolated MCP client use MCP Server with `http` protocol
 
-This version allows isolating the client with **PY-sandboxes** and invoking the MCP via the `http` protocol. The latter is isolated according to the launch parameters (see [here](../mcp-server-demo/README.md))
+This version allows isolating the client with **PY-sandboxes** and invoking the MCP via the `http` protocol. The latter is isolated according to the launch parameters (see [here](../mcp-server/README.md))
 
 ```mermaid
 flowchart TD
@@ -290,7 +287,7 @@ graph TD
 
 Start with
 ```bash
-uv run -m mcp_simple_chatbot.main -c http.jsonc
+uv run -m mcp_simple_chatbot.main -c http.json
 ```
 
 ### Interact with the assistant
@@ -305,18 +302,3 @@ uv run -m mcp_simple_chatbot.main -c http.jsonc
 ### Exit the session
 
    Type `quit` or `exit` to end the session.
-
-## Sandbox Integration Notes
-
-This sample is an **MCP Client**, not a tool provider. It consumes tools and resources from remote MCP servers (e.g., `../mcp-server-demo`) via the `stdio` or `http` protocol.
-
-**No per-tool sandbox integration required** because:
-- The client does not define or expose its own web-fetching tools (e.g., `fetch_webpage`)
-- Tools like `fetch_webpage` are provided by the configured MCP servers
-- Sandbox protection for those tools is configured in the server sample (see `../mcp-server-demo/README.md`)
-
-When you run this client inside a sandbox (e.g., `uv run -m pysandboxes.python_sb -m mcp_simple_chatbot.main`), the sandbox protects:
-- The client's network requests to remote LLM APIs
-- MCP server subprocesses (if using `stdio` mode and server is sandboxed)
-
-For tool-level security, configure and test the MCP servers that provide the tools.

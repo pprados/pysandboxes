@@ -40,7 +40,7 @@ make help                    # Show all commands
 Each sample has its own uv environment:
 
 ```bash
-cd samples/mcp-client
+cd samples/mcp-client-demo
 source .venv/bin/activate
 make tests
 ```

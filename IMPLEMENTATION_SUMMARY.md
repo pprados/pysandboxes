@@ -10,7 +10,7 @@
 - `sandbox_config_allow_example()`: fixture for permissive config
 - `sandbox_config_deny_all()`: fixture for restrictive config
 
-**File:** `samples/mcp-server/tests/conftest.py`
+**File:** `samples/mcp-server-demo/tests/conftest.py`
 - Path configuration for MCP server test imports
 - Pattern: each sample can replicate for its own package imports
 
@@ -41,7 +41,7 @@
 
 ### 3. Example Implementation
 
-**File:** `samples/mcp-server/tests/test_fetch_sandbox.py`
+**File:** `samples/mcp-server-demo/tests/test_fetch_sandbox.py`
 - Concrete test examples for MCP server
 - Scenario A tests (without sandbox, mocked)
 - Scenario B tests (with sandbox, marked for runtime)
@@ -134,7 +134,7 @@ make unit-tests
 make container-tests
 
 # Single sample
-cd samples/mcp-server
+cd samples/mcp-server-demo
 pytest tests/test_fetch_sandbox.py -v
 ```
 
@@ -148,7 +148,7 @@ pytest tests/test_fetch_sandbox.py -v
 
 ✅ **Ready to test:**
 ```bash
-cd samples/mcp-server
+cd samples/mcp-server-demo
 pytest tests/test_fetch_sandbox.py::test_fetch_webpage_without_sandbox_returns_content
 ```
 
@@ -178,13 +178,13 @@ samples/
 ├── conftest.py                          # Shared test fixtures
 ├── SANDBOX_INTEGRATION.md               # Integration guide
 ├── README_SANDBOX_TESTS.md              # Testing overview
-├── mcp-server/
+├── mcp-server-demo/
 │   ├── tests/
 │   │   ├── conftest.py                  # Path config (NEW)
 │   │   └── test_fetch_sandbox.py        # Example tests (NEW)
 │   └── .py-sandboxes                    # Already exists
 │
-├── mcp-client/
+├── mcp-client-demo/
 ├── pydantic-ai-demo/                    # (Needs integration)
 ├── langgraph-demo/                      # (Needs integration)
 └── [Other samples]
@@ -207,4 +207,4 @@ Refer to:
 - **How to add sandbox?** → `SANDBOX_INTEGRATION.md`
 - **How to run tests?** → `README_SANDBOX_TESTS.md`
 - **Full context?** → `SAMPLES_CLARIFICATION.md`
-- **Working example?** → `samples/mcp-server/tests/test_fetch_sandbox.py`
+- **Working example?** → `samples/mcp-server-demo/tests/test_fetch_sandbox.py`

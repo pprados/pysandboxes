@@ -11,7 +11,7 @@ TEST_FILE ?= tests
 
 ## Test the code
 tests:
-	set -a && if [ -f .env ]; then source .env; fi && uv run python -m pytest -v $(TEST_FILE)
+	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v $(TEST_FILE)
 
 ######################
 # LINTING AND FORMATTING
@@ -111,7 +111,7 @@ uv.lock: pyproject.toml
 
 
 ## Refresh lock
-lock: uv.lock
+lock: $(LOCK)
 
 ## Validate the code
 validate: uv.lock format lint spell_check tests
@@ -124,5 +124,4 @@ _uv-init:
 inspector:
 	npx @modelcontextprotocol/inspector
 
-# Initialize the environment
 init: _uv-init

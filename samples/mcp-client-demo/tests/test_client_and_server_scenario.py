@@ -8,7 +8,6 @@ import re
 import subprocess
 from shutil import which
 from subprocess import Popen, run
-from time import sleep
 from typing import Optional
 
 import pytest
@@ -19,16 +18,14 @@ logger = logging.getLogger(__name__)
 timeout = 30
 all_mcp_client_os_sandbox: list[str] = [
     "None",
-    # "Subprocess",
-    # "firejail",
-    # "unshare",
-    "landlock",
+    "Subprocess",
+    "firejail",
 ]
 all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",
-    # "stdio_sandboxes_complete",
-    # "stdio_sandboxes_partial",
-    # "http",
+    "stdio_sandboxes_complete",
+    "stdio_sandboxes_partial",
+    "http",
 ]
 
 
@@ -105,7 +102,7 @@ MY_IP = _get_ip_from_interface(_get_default_interface())
 
 def _start_server(mcp_server_config: str) -> Popen | None:
     process: Popen | None = None
-    if mcp_server_config == "http.jsonc":
+    if mcp_server_config == "http.json":
         cmd = (
             "uv",
             "run",
@@ -122,7 +119,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
         logger.debug("Run " + " ".join(cmd))
         process = Popen(
             cmd,
-            cwd="../mcp-server-demo",
+            cwd="../mcp-server",
             env=os.environ.copy() | {"OS_SANDBOX": "None", "PY_SANDBOX": "None"},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -134,7 +131,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
 
 
 # @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
-@pytest.mark.skipif(not os.environ.get("CHAT_MODEL"), reason="Set CHAT_MODEL")
+@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
@@ -144,21 +141,20 @@ def test_claude_evaluate_expression(
 ) -> None:
     process: Popen | None = None
     try:
-        mcp_server_config += ".jsonc"
+        mcp_server_config += ".json"
 
-        if mcp_server_config == "http.jsonc":
+        if mcp_server_config == "http.json":
             if not get_bridge_interfaces():
                 pytest.skip("Need 'bridge' interface. Use `sudo add-bridge.sh`")
-        if "partial" not in mcp_server_config:
-            start_client = ["-m", "pysandboxes.python_sb"]
-        else:
-            start_client = []
 
         process = _start_server(mcp_server_config)
         python_executable = which("python")
         assert python_executable is not None
-        start_client += ["-m", "mcp_simple_chatbot.main"]
-
+        start_client = (
+            ["-m", "pysandboxes.python_sb"]
+            +
+            ["-m", "mcp_simple_chatbot.main"]
+        )
         cmd: list[str] = [
             python_executable,
             "-u",
@@ -178,17 +174,10 @@ def test_claude_evaluate_expression(
             timeout=timeout,
             input="",
             capture_output=True,  # To debug, deactivate capture_output
-            check=False,
+            check=True,
             text=True,
             shell=False,
         )
-        if result.returncode != 0:
-            stderr = result.stderr or ""
-            if "429 Too Many Requests" in stderr or "429" in stderr:
-                pytest.skip("OpenAI API rate limit (429) - retry later")
-            raise subprocess.CalledProcessError(
-                result.returncode, cmd, result.stdout, stderr
-            )
         print(result.stdout)
         if result.stderr:
             print("-------")
@@ -197,11 +186,10 @@ def test_claude_evaluate_expression(
     finally:
         if process:
             process.kill()
-            sleep(1)
 
 
-@pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
-@pytest.mark.skipif(not os.environ.get("CHAT_MODEL"), reason="Set CHAT_MODEL")
+# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
@@ -211,17 +199,13 @@ def test_claude_fetch_webpage(
 ) -> None:
     process: Popen | None = None
     try:
-        mcp_server_config += ".jsonc"
+        mcp_server_config += ".json"
         process = _start_server(mcp_server_config)
 
-        if "partial" not in mcp_server_config:
-            start_client = ["-m", "pysandboxes.python_sb"]
-        else:
-            start_client = []
         python_executable = which("python")
         assert python_executable is not None
 
-        start_client += ["-m", "mcp_simple_chatbot.main"]
+        start_client = ["-m", "pysandboxes.python_sb", "-m", "mcp_simple_chatbot.main"]
         cmd: list[str] = [
             python_executable,
             *start_client,
