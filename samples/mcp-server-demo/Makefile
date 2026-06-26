@@ -12,7 +12,7 @@ TEST_FILE ?= tests
 
 ## Test the code
 tests:
-	uv run python -m pytest -v $(TEST_FILE)
+	uv run pytest -v $(TEST_FILE)
 
 ######################
 # LINTING AND FORMATTING
@@ -112,7 +112,7 @@ uv.lock: pyproject.toml
 
 
 ## Refresh lock
-lock: uv.lock
+lock: $(LOCK)
 
 ## Validate the code
 validate: uv.lock format lint spell_check tests

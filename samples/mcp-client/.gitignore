@@ -1,3 +1,0 @@
-.local.py-sandboxes
-.env
-.venv
