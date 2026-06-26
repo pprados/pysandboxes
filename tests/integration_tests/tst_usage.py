@@ -143,17 +143,24 @@ def run_in_sandbox() -> tuple[int, int]:
 # without proving anything; this one the harness always sets.
 SECRET_ENV = "USAGE_SECRET"
 
-# Every variable measured inside a sandbox of the providers that could be exercised
-# here: the two `env=` rules of the profile, the locale the interpreter sets itself,
-# and the plumbing each technology re-exports. Anything else is reported by name --
-# never by value, so a leak report cannot copy the secret into the logs. Reported and
-# not fatal on purpose: qemu and the container images were not measured, and failing
-# on plumbing never seen would break runs this check cannot vouch for.
+# Every variable measured inside a sandbox, provider by provider: the two `env=` rules
+# of the profile, the locale the interpreter sets itself, and the plumbing each
+# technology re-exports. Anything else fails the check and is reported by name --
+# never by value, so a leak report cannot copy the secret into the logs.
+#
+# Adding a name here is the way to accept new plumbing, and it should be a deliberate
+# act: the point of the check is that nobody has to notice a warning for a leak to be
+# caught. The container harnesses are the one set never measured directly; if one of
+# them exports something new, this check names it and the run fails.
 _EXPECTED_ENVS = frozenset(
     {
         "TERM",
         "My_ENV",
         "LC_CTYPE",
+        # sync_main and async_main plant this one themselves, with a dummy value, and in
+        # complete mode they run inside the sandbox -- so the check sees the test's own
+        # fixture rather than anything the sandbox was handed.
+        "LLM_TOKEN",
         # bwrap
         "PATH",
         "PWD",
@@ -165,6 +172,11 @@ _EXPECTED_ENVS = frozenset(
         # unshare passes PYTHONPATH so the child can import pysandboxes; its own
         # supervision (PID_FILE, SLIRP_READY_FD) is dropped before the exec into
         # the sandbox, so seeing either name back here is a regression.
+        # qemu: python_sb propagates the host terminal size to the guest, and
+        # main_sandbox restores what Rich needs on the serial console.
+        "COLUMNS",
+        "LINES",
+        "FORCE_COLOR",
         # container harnesses
         "PYTHONUNBUFFERED",
         "PYTHONUSERBASE",
@@ -204,7 +216,10 @@ def _test_envs() -> int:
 
         unexpected = sorted(set(os.environ) - _EXPECTED_ENVS)
         if unexpected:
-            logger.warning(f"{KO} unexpected env names visible in the sandbox: {', '.join(unexpected)}")
+            logger.error(f"{KO} unexpected env names visible in the sandbox: {', '.join(unexpected)}")
+            rc = 1
+        else:
+            logger.info(f"{OK} the sandbox sees no environment variable beyond the expected set")
     logger.info(f"{OK} Test Env")
     return rc
 
