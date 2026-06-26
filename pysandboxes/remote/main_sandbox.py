@@ -130,7 +130,7 @@ def run_guest(process_config: DaemonParameters) -> int:
 
     Used by QEMU guest bootstrap when config is already loaded from the pipe.
     """
-    from ..learning import set_learning_mode, set_learning_path
+    from ..learning import set_learning_path
     from ..main_logger import config_log
 
     _qemu_show_boot_console_guest_trace(process_config, "run_guest: start")
@@ -161,7 +161,6 @@ def run_guest(process_config: DaemonParameters) -> int:
     try:
         python_main_args = getattr(process_config, "python_main_args", ()) or ()
         if python_main_args:
-            set_learning_mode(all_rules.learn)
             # In guest VM, use subprocess so start_daemon() launches a local Python server
             # instead of trying to start another QEMU.
             os.environ["OS_SANDBOX"] = "subprocess"
@@ -201,7 +200,6 @@ async def run_server(process_config: DaemonParameters) -> int:
     """
     import importlib
 
-    from ..learning import set_learning_mode
     from ..tools import set_is_in_sandbox
 
     _qemu_show_boot_console_guest_trace(process_config, "run_server: start")
@@ -258,7 +256,6 @@ async def run_server(process_config: DaemonParameters) -> int:
         log_level=process_config.log_level,
         init_fn=init_fn,
     )
-    set_learning_mode(all_rules.learn)
     logger.info(
         "SSE server listening on 0.0.0.0:%s; joining server_daemon (blocking until shutdown)",
         process_config.port,
@@ -357,8 +354,9 @@ def main() -> int:
 
     _qemu_show_boot_console_guest_trace(process_config, "main: after netfilter / wait_network")
 
-    from ..learning import set_learning_path
+    from ..learning import set_learning_mode, set_learning_path
     from ..main_logger import config_log
+    from ..tools import set_is_in_sandbox
 
     # Add ident inside the sandbox
     log_format = " " + process_config.log_format
@@ -419,6 +417,16 @@ def main() -> int:
         os.environ,
         rules_provider="none" if python_main_args else None,
     )
+    # From here on, this process *is* the sandbox, and the learning mode must be
+    # armed at the same moment as the guards. Every deferred import the harness
+    # makes after this point -- run_server() starts with `import importlib` --
+    # is charged to the user's python-import rules; the import guard only
+    # records instead of denying when `is_learning_mode() and is_in_sandbox()`,
+    # so both flags have to be raised here. Arming them any later makes learning
+    # unable to bootstrap from an absent configuration: the sandbox dies on its
+    # own imports before reaching the user's code.
+    set_is_in_sandbox(True)
+    set_learning_mode(all_rules.learn)
     _qemu_show_boot_console_guest_trace(process_config, "main: after activate_sandboxes")
 
     # QEMU/python_sb: config was written by host with python_main_args → run user module in guest
@@ -428,9 +436,6 @@ def main() -> int:
 
     # Use python-sb command? (subprocess/firejail path: args from CLI)
     if sandboxes_parsed._python_sb:
-        from ..learning import set_learning_mode
-
-        set_learning_mode(all_rules.learn)
         from .python_in_sb import python_in_sb
 
         return python_in_sb(all_rules, sandboxes_args)
