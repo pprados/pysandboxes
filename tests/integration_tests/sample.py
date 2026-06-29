@@ -32,6 +32,14 @@ def raise_in_sandbox() -> NoReturn:
     raise ValueError("raised inside the sandbox")
 
 
+@sandbox
+def raise_sandbox_error_in_sandbox() -> NoReturn:
+    """Raise the framework's own base error, from application code."""
+    from pysandboxes.e import SandBoxError
+
+    raise SandBoxError("raised by the application, not by the transport")
+
+
 async def async_forty_two() -> int:
     rc = await arun_in_sandbox()
     assert rc == 42

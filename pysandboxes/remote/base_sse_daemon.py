@@ -16,7 +16,7 @@ from aiohttp_sse_client import client as sse_client
 
 from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
-from ..e import SandBoxError
+from ..e import SandBoxProtocolError
 from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
@@ -97,7 +97,7 @@ class BaseSSESandbox(BaseDaemon):
         if is_in_sandbox():
             return await func(*args, **kwargs)
         if not _force_incomming and not self._accept_incoming:
-            raise RuntimeError("The sandbox daemon is being stopped.")
+            raise SandBoxProtocolError("The sandbox daemon is being stopped.")
 
         retry = self.max_connect_retry
         while retry > 0:
@@ -144,10 +144,10 @@ class BaseSSESandbox(BaseDaemon):
                             break
                         if "error" in msg:
                             # The sandbox could not transport its own exception.
-                            raised = SandBoxError(f"Sandbox reported: {msg['error']}")
+                            raised = SandBoxProtocolError(f"Sandbox reported: {msg['error']}")
                             break
                         if "cancelled" in msg:
-                            raised = SandBoxError("The sandbox cancelled the call.")
+                            raised = SandBoxProtocolError("The sandbox cancelled the call.")
                             break
 
                         if "stdout" in msg:
@@ -155,7 +155,7 @@ class BaseSSESandbox(BaseDaemon):
                         if "stderr" in msg:
                             print(msg["stderr"], end="", file=sys.stderr)
                     else:
-                        raise RuntimeError("No result received from the sandbox")
+                        raise SandBoxProtocolError("No result received from the sandbox")
             except (ClientPayloadError, ClientConnectorError, ConnectionRefusedError):
                 logger.debug("Connection error. Retry")
                 retry -= 1
@@ -165,7 +165,7 @@ class BaseSSESandbox(BaseDaemon):
             # Other exceptions are from the called function
             raise raised
 
-        raise RuntimeError("No result received from the sandbox")
+        raise SandBoxProtocolError("No result received from the sandbox")
 
     @sandbox_loop
     def call_in_sandbox(
@@ -178,7 +178,7 @@ class BaseSSESandbox(BaseDaemon):
         if is_in_sandbox():
             return func(*args, **kwargs)
         if not _force_incomming and not self._accept_incoming:
-            raise RuntimeError("The sandbox daemon is being stopped.")
+            raise SandBoxProtocolError("The sandbox daemon is being stopped.")
 
         # Use sandbox loop so the coroutine runs on the loop that is actually
         # running (e.g. in a background thread), avoiding deadlock when the
@@ -191,7 +191,7 @@ class BaseSSESandbox(BaseDaemon):
         try:
             return future.result(timeout=TIMEOUT_FOR_RPC_CALL)
         except FutureTimeoutError:
-            raise RuntimeError(
+            raise SandBoxProtocolError(
                 f"Sandbox RPC did not respond within {TIMEOUT_FOR_RPC_CALL}s. "
                 "Check that the guest is reachable (e.g. QEMU hostfwd, firewall)."
             ) from None

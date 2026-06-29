@@ -411,13 +411,15 @@ def main() -> int:
         # user's python-import rules and denied.
         import pysandboxes.remote.python_in_sb  # noqa: F401
     # The transport pickles an exception together with its tblib traceback, and
-    # catch_stdio imports tblib from inside its own except handler. Load it
-    # before arming: charged to the user's python-import rules it could never be
-    # there, since learning only records what a run imported and a run that
-    # raised nothing never reached that handler. Denied there, the handler fails
-    # while reporting the failure, no response reaches the wire, and the caller
-    # waits out the RPC timeout instead of seeing the exception.
-    import tblib  # noqa: F401
+    # catch_stdio imports tblib from inside its own except handler. That import
+    # belongs to the framework, not to the user: a learned profile can never
+    # carry it, since learning only records what a run imported and a run that
+    # raised nothing never reached that handler. Denied there, the sandbox fails
+    # while reporting a failure and the caller waits out the RPC timeout instead
+    # of seeing the exception.
+    from ..guard_import import preimport_framework_module
+
+    preimport_framework_module("tblib")
 
     # Guest runs user code inside the VM: do not load qemu/subprocess daemons here
     # (they pull aiohttp/native stack and can segfault in the minimal guest).

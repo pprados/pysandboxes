@@ -464,6 +464,34 @@ class GuardFinder(importlib.abc.MetaPathFinder):
 
 
 _pending_modules: dict[str, ModuleType] = {}
+
+# Modules the framework loads for itself before the guards are armed. Arming
+# evicts sys.modules, so a module has to be listed here to survive it; see
+# preimport_framework_module().
+_framework_modules: set[str] = set()
+
+
+def preimport_framework_module(name: str) -> ModuleType:
+    """Load a module the framework needs for itself, before the guards are armed.
+
+    A module loaded through this function is exempt from the user's
+    ``python-import`` rules: it is imported before arming and kept when arming
+    evicts everything else from ``sys.modules``. Reserve it for the framework's
+    own runtime dependencies, and above all for code that runs *while reporting
+    a denial*. Such code can never appear in a learned profile -- learning only
+    records what a run imported, and a run that raised nothing never reached the
+    error path -- so charging it to the user means the sandbox fails while
+    reporting a failure.
+
+    Args:
+        name: Absolute module name to import and keep.
+
+    Returns:
+        The imported module.
+    """
+    module = importlib.import_module(name)
+    _framework_modules.add(name)
+    return module
 _guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
 
 _activated = False
@@ -541,21 +569,15 @@ def activate_guard_import(
         # through _io.open_code(). Evicting _io makes the loader re-import it,
         # and that import is denied by any ruleset, so no module can be loaded.
         "_io",
-        # The transport pickles a raised exception together with its tblib
-        # traceback, and catch_stdio imports tblib from inside its own except
-        # handler. Evicting it means that import is charged to the user's
-        # python-import rules, where it can never legitimately appear: learning
-        # only records what a run imported, and a run that raised nothing never
-        # reached the handler. Denied there, the sandbox fails while reporting a
-        # failure and the caller waits out the RPC timeout instead of seeing the
-        # exception. main_sandbox imports it before arming so it is here to keep.
-        "tblib",
         "asyncio",
         "sys",
         "threadpool",
         "builtins",
         "__main__",
     ]  # TODO: add in rules ?
+    # Whatever the framework pre-imported for itself must outlive the eviction:
+    # those modules are its own, never the user's to allow.
+    keep.extend(_framework_modules)
     # logger.warning("NO DELETE MODULE")
     for k in _pending_modules:
         # logger.error("Remove %s", k)
