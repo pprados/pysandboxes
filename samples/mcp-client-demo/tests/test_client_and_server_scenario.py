@@ -19,7 +19,6 @@ timeout = 30
 all_mcp_client_os_sandbox: list[str] = [
     "None",
     "Subprocess",
-    "firejail",
 ]
 all_mcp_server_config: list[str] = [
     "stdio_no_sandbox",
@@ -27,6 +26,15 @@ all_mcp_server_config: list[str] = [
     "stdio_sandboxes_partial",
     "http",
 ]
+
+# End-to-end through a live model: two tests over four server configurations and
+# two providers, each spending tokens, and each depending on the model choosing
+# to call the tool under test. Useful by hand, useless as a gate -- what the
+# sample must guarantee is checked without a model in test_tool_dispatch.py.
+requires_llm = pytest.mark.skipif(
+    not os.environ.get("RUN_LLM_TESTS"),
+    reason="drives a live model and spends tokens; set RUN_LLM_TESTS=1",
+)
 
 
 def _get_default_interface() -> str:
@@ -97,7 +105,11 @@ def _get_ip_from_interface(interface_name: str) -> str | None:
 
 # In some scenarios, it is not possible to access localhost from an OS sandbox.
 # For example, with firejail. It is necessary to use the host's IP address and enable a bridge.
-MY_IP = _get_ip_from_interface(_get_default_interface())
+# Computed on demand: at import time this runs `ip addr` on every collection,
+# and _get_default_interface() raises on a host with no default route, turning a
+# skipped test into a collection error.
+def _my_ip() -> str | None:
+    return _get_ip_from_interface(_get_default_interface())
 
 
 def _start_server(mcp_server_config: str) -> Popen | None:
@@ -119,7 +131,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
         logger.debug("Run " + " ".join(cmd))
         process = Popen(
             cmd,
-            cwd="../mcp-server",
+            cwd="../mcp-server-demo",
             env=os.environ.copy() | {"OS_SANDBOX": "None", "PY_SANDBOX": "None"},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -130,7 +142,7 @@ def _start_server(mcp_server_config: str) -> Popen | None:
     return process
 
 
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@requires_llm
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
@@ -166,11 +178,12 @@ def test_claude_evaluate_expression(
         ]
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
-        assert MY_IP is not None
+        my_ip = _my_ip()
+        assert my_ip is not None
         result = run(
             cmd,
             env=os.environ.copy()
-            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
+            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},
             timeout=timeout,
             input="",
             capture_output=True,  # To debug, deactivate capture_output
@@ -188,7 +201,7 @@ def test_claude_evaluate_expression(
             process.kill()
 
 
-# @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@requires_llm
 @pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
 @pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
@@ -216,11 +229,12 @@ def test_claude_fetch_webpage(
         ]
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
-        assert MY_IP is not None
+        my_ip = _my_ip()
+        assert my_ip is not None
         result = run(
             cmd,
             env=os.environ.copy()
-            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": MY_IP},
+            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},
             timeout=timeout,
             capture_output=True,  # To debug, deactivate capture_output
             input="",

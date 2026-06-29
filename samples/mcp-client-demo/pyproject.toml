@@ -29,7 +29,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipython",
-    "mcp-server",
+    "mcp-server-demo",
     "pydevd>=3.4.1",
 #    "pydevd-pycharm>=253.28086.55",
 ]
@@ -85,7 +85,7 @@ dev-dependencies = ["pyright>=1.1.379", "pytest>=8.3.3", "ruff>=0.6.9"]
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository
 pysandboxes = { path = "../..", editable = true }
-mcp-server = { path = "../mcp-server", editable = true }
+mcp-server-demo = { path = "../mcp-server-demo", editable = true }
 
 [tool.pytest.ini_options]
 # --strict-markers will raise errors on unknown marks.
