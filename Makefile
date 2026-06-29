@@ -38,7 +38,7 @@ fix-gemini: .gemini/commands/*
 ## Compress AGENTS.md from template
 AGENTS.md: AGENTS.template.md
 
-## Compress all .ai/rules/*.md from templates (.template.md and .template.mdc)
+# Compress all .ai/rules/*.md from templates (.template.md and .template.mdc)
 .ai/rules/%.md: .ai/rules/%.template.md
 .ai/rules/%.md: .ai/rules/%.template.mdc
 
@@ -72,26 +72,31 @@ container-tests: build-image
 integration-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests
 
-## Report test coverage (integration first: the unit tests leave the socket guard
-## armed with a deny-all rule set, which breaks the in-process integration tests).
-## Only the parent process is measured: the sandbox is whitelist-only, so coverage's
-## own environment variables never reach the sandboxed child.
+# (integration first: the unit tests leave the socket guard
+# armed with a deny-all rule set, which breaks the in-process integration tests).
+# Only the parent process is measured: the sandbox is whitelist-only, so coverage's
+# own environment variables never reach the sandboxed child.
+## Report test coverage
 coverage:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-report=term --cov-report=html
 
 ## Make integration tests
 sample-tests:
-	# (cd samples/agno-demo && make tests && true)
-	# (cd samples/autogen-demo && make tests && true)
-	# (cd samples/crewai-demo && make tests && true)
-	# (cd samples/google-adk-demo && make tests && true)
-	(cd samples/langchain-demo && make tests && true)
-	(cd samples/mcp-server-demo && make tests && true)
-	(cd samples/mcp-server-demo && make tests && true)
-	# (cd samples/openai-agents-sdk-demo && make tests && true)
-	# (cd samples/pydantic-ai-demo && make tests && true)
-	# (cd samples/smolagents-demo && make tests && true)
-	# (cd samples/strands-agents-demo && make tests && true)
+	# Uncomment a sample only once it satisfies the acceptance criteria of
+	# the samples design spec
+	# Order of treatment: mcp-server-demo, then mcp-client-demo, then the frameworks.
+	# (cd samples/agno-demo && make tests)
+	# (cd samples/autogen-demo && make tests)
+	# (cd samples/crewai-demo && make tests)
+	# (cd samples/google-adk-demo && make tests)
+	# (cd samples/langchain-demo && make tests)
+	# (cd samples/langgraph-demo && make tests)
+	# (cd samples/mcp-client-demo && make tests)
+	(cd samples/mcp-server-demo && make tests)
+	# (cd samples/openai-agents-sdk-demo && make tests)
+	# (cd samples/pydantic-ai-demo && make tests)
+	# (cd samples/smolagents-demo && make tests)
+	# (cd samples/strands-agents-demo && make tests)
 
 
 ## Make github tests locally
@@ -154,11 +159,11 @@ docs_clean:
 docs_linkcheck:
 	unset VIRTUAL_ENV && uv run linkchecker docs/_dist/docs_skeleton/ --ignore-url node_modules
 
-api_docs_build:
+api_docs_build:  # FIXME
 #	unset VIRTUAL_ENV && uv run python docs/api_reference/create_api_rst.py
 #	cd docs/api_reference && uv run make html
 
-api_docs_clean:
+api_docs_clean:  # FIXME
 #	rm -f docs/api_reference/api_reference.rst
 #	cd docs/api_reference && uv run make clean
 

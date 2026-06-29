@@ -1,30 +1,234 @@
-py-sandbox=true
-os-sandbox=${OS_SANDBOX:-subprocess}
-env=HOME=${HOME}
-env=OS_SANDBOX=${OS_SANDBOX}
+# PySandboxes Configuration File
+# ===============================
+# This configuration defines security rules for Python code execution in a sandboxed
+# environment. It follows a default-deny security model where all access is prohibited
+# unless explicitly allowed through rules.
 
+#######################################################################################
+# LEARNING MODE
+# =============
+# Learning mode automatically observes your application's behavior and generates
+# security rules. When enabled, the sandbox monitors file access, network connections,
+# imports, and environment variable usage, then creates appropriate whitelist rules.
+#
+# How it works:
+# 1. If no configuration exists, learning mode activates automatically
+# 2. Run your application through all its features to capture required permissions
+# 3. Review and validate the generated rules before deploying to production
+# 4. Disable learning mode for production use
+#
+# Security note: Never use learning mode with untrusted code as it may generate
+# overly permissive rules.
+
+# Uncomment to enable continuous learning (development only):
+#learn=.py-sandboxes
+
+# Uncomment to generate rules to a specific file:
+#learn=/path/to/custom-rules.conf
+
+#######################################################################################
+# CONFIGURATION COMPOSITION
+# ==========================
+# You can include additional configuration files for better organization.
+# Name without '/' may be in the same directory.
+# Missing files are silently ignored.
+
+include "./.local.py-sandboxes"  # May be add to .gitignore
+include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
+include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+# Controls whether Python-level security guards are active.
+# Set to false to disable Python API patching while keeping OS-level sandboxing.
+
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDERS
+# ===========================
+# Python-level sandboxing alone cannot prevent all escapes (native code, syscalls).
+# OS-level sandboxing provides additional isolation through system namespaces.
+#
+# Available providers:
+# - subprocess: Isolates code in separate Python process (default, safest)
+# - firejail: Advanced Linux sandboxing with syscall filtering, network isolation
+# - none: Disables @sandbox decorator (for testing/debugging only)
+#
+# Note: Some providers may not work in containers without additional privileges.
+
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# ENVIRONMENT VARIABLES
+# =====================
+# By default, sandbox processes have NO access to environment variables.
+# Use env rules to explicitly whitelist required variables.
+#
+# Syntax patterns:
+# - env=VAR=value                    Set fixed value
+# - env=VAR=${HOST_VAR}              Copy from host environment
+# - env=VAR=${HOST_VAR:-default}     Copy with fallback default
+# - env=PATTERN_*=${PATTERN_*}       Pattern matching for multiple vars
+# - unenv=VAR                        Explicitly remove variable
+#
+# Security considerations:
+# - Never expose secrets unnecessarily: review API keys, tokens, passwords
+# - Use specific variable names rather than wildcards when possible
+# - Consider using fixed values instead of copying sensitive host variables
+
+# Common safe variables:
+#env=USER=sandbox
+#env=TEMP=${TEMP:-${TMP}}
+
+# API access (high security risk):
+#env=*_API_KEY=${*_API_KEY}
+#unenv=OPENAI_API_KEY
+
+# Generated rules from learning mode:
+# <learning_guard_envs>
+
+# Add rules (2026/09/09 at 17:53)
+env=COLORTERM=${COLORTERM}
+env=CONDA_HOME=${CONDA_HOME}
+env=FORCE_COLOR=${FORCE_COLOR}
+env=HOME=${HOME}
+env=LANGUAGE=${LANGUAGE}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=PYDANTIC_VALIDATE_CORE_SCHEMAS=${PYDANTIC_VALIDATE_CORE_SCHEMAS}
+env=PYENV_ROOT=${PYENV_ROOT}
+env=PYTHONUSERBASE=${PYTHONUSERBASE}
+env=TEMP=${TEMP}
+env=TERM=${TERM}
+env=TMP=${TMP}
+
+# </learning_guard_envs>
+
+#######################################################################################
+# FILE SYSTEM ACCESS
+# ===================
+# By default, all file system access is denied. Use explicit rules to grant access.
+#
+# Rules:
+# - ignore=<glob pattern>   Block access to files matching glob pattern
+# - expose-rw=<source>      Expose host directory (read-write)
+# - expose-ro=<source>      Expose host directory (read-only)
+#
+# Security guidelines:
+# - Always use most restrictive access possible (prefer expose-ro over expose-rw)
+# - Use specific paths rather than broad patterns when possible
+# - Be careful with ignore patterns that might affect expected directories
+#
+# WARNING: ignore=.* blocks access to .venv, .git, and other hidden directories
+
+# Block sensitive files by default:
+#ignore=.env
+#ignore=*.log
+
+# Example directory mounts:
+#expose-ro=/usr             # Read-only system libraries
+#expose-ro=.                # Read-only project directory
+#expose-rw=./data           # Read-write data directory
+#expose-rw=/tmp             # Temporary files
+
+# Generated rules from learning mode:
+# <learning_guard_files>
+
+# Add rules (2026/09/09 at 17:53)
+expose-ro=~/workspace/pysandboxes
+
+# </learning_guard_files>
+
+#######################################################################################
+# NETWORK ACCESS CONTROL
+# =======================
+# By default, ALL network connections are denied. Use explicit rules to allow access.
+#
+# Rule format: net=<ACTION>|<PROTOCOL>|<NETWORK>|<PORTS>|<DIRECTION>
+# - ACTION: ALLOW or DENY
+# - PROTOCOL: tcp, udp, or * (any)
+# - NETWORK: IP/CIDR, hostname, or * (any)
+# - PORTS: port number, range (80-443), list (80,443), or * (any)
+# - DIRECTION: IN (server), OUT (client), or * (both)
+#
+# Security guidelines:
+# - Use most restrictive rules possible
+# - Prefer specific ports over wildcards
+# - Consider blocking internal networks to prevent lateral movement
+# - Review rules regularly and remove unused access
+#
+# If you use a hostname in a rule, read 'wiki/dns.md' to fully understand the limitations of this approach.
+
+# Common outbound web access:
+#net=ALLOW|tcp|0.0.0.0/0|443|OUT         # HTTPS to anywhere
+#net=ALLOW|tcp|0.0.0.0/0|80|OUT          # HTTP to anywhere
+
+# Local server binding:
+#net=ALLOW|tcp|0.0.0.0/0|${PORT:-8000}|IN    # Accept connections on port
+
+# Block internal networks (recommended for production):
+#net=DENY|*|10.0.0.0/8|*|OUT             # Private Class A
+#net=DENY|*|172.16.0.0/12|*|OUT          # Private Class B
+#net=DENY|*|192.168.0.0/16|*|OUT         # Private Class C
+#net=DENY|*|169.254.0.0/16|*|OUT         # Link-local
+#net=DENY|*|127.0.0.0/8|*|OUT            # Loopback
+#net=DENY|*|fc00::/7|*|OUT               # IPv6 ULA
+#net=DENY|*|fe80::/10|*|OUT              # IPv6 Link-local
+# TODO: /etc/firejail/nolocal.net
+
+# Generated rules from learning mode:
+# <learning_guard_socket>
+
+# Add rules (2026/09/09 at 17:53)
+net=ALLOW|TCP|www.google.com|443|OUT
+
+# </learning_guard_socket>
+
+#######################################################################################
+# PYTHON IMPORTS CONTROL
+# =======================
+# By default, all Python imports are denied. Use import rules to allow access.
+#
+# Syntax:
+# - python-import=module1,module2      Allow only specific modules
+# - python-import=*                    Allow all imports
+#
+# Security considerations:
+# - Restrict dangerous modules: subprocess, os, sys, ctypes, importlib
+# - Allow only necessary libraries for your application
+# - Consider using virtual environments with minimal packages
+#
+# Examples:
+#python-import=json,requests,pandas     # Allow only these modules
+#python-import=*                        # Allow all imports
+
+# Generated rules from learning mode:
+# <learning_guard_import>
+
+# Add rules (2026/09/09 at 17:53)
 # ⚠ Dangerous!
-python-import=subprocess
+python-import=atexit, importlib, inspect, mmap, subprocess, webbrowser
 
 # Standard Python
-python-import=__future__, _cffi_backend, _decimal, _hashlib, _io, _markupbase
-python-import=_multibytecodec, _socket, _sysconfigdata__linux_x86_64-linux-gnu
-python-import=_zoneinfo, abc, argparse, array, ast, asyncio, atexit, base64
-python-import=binascii, calendar, codecs, collections, colorsys, concurrent
-python-import=configparser, contextlib, contextvars, copy, copyreg, dataclasses
-python-import=datetime, decimal, email, encodings, enum, errno, fnmatch, fractions
-python-import=functools, getpass, hashlib, heapq, hmac, html, http, importlib
-python-import=inspect, io, ipaddress, itertools, json, keyword, linecache, logging
-python-import=math, mimetypes, mmap, numbers, operator, os, pathlib, pickle, pprint
-python-import=queue, random, re, reprlib, secrets, select, shlex, shutil, signal
-python-import=socket, ssl, stat, string, stringprep, struct, sysconfig, tempfile
-python-import=termios, textwrap, threading, time, traceback, types, typing
-python-import=unicodedata, urllib, uuid, weakref, webbrowser, zipfile, zlib
-python-import=zoneinfo
+python-import=__future__, _cffi_backend, _decimal, _hashlib, _markupbase
+python-import=_multibytecodec, _multiprocessing, _queue, _socket
+python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
+python-import=array, ast, asyncio, base64, binascii, calendar, codecs, collections
+python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
+python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, errno
+python-import=fnmatch, fractions, functools, getpass, gettext, hashlib, heapq, hmac
+python-import=html, http, io, ipaddress, itertools, json, keyword, linecache, locale
+python-import=logging, marshal, math, mimetypes, multiprocessing, numbers, operator
+python-import=os, pathlib, pickle, platform, pprint, queue, random, re, reprlib
+python-import=secrets, select, selectors, shlex, shutil, signal, socket
+python-import=socketserver, ssl, stat, string, stringprep, struct, sysconfig
+python-import=tempfile, termios, textwrap, threading, time, traceback, types, typing
+python-import=unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
 
 # External modules (Are you sure about the origin?)
 python-import=aiofiles
-python-import=annotated_doc
 python-import=annotated_types
 python-import=anyio
 python-import=attr
@@ -68,13 +272,157 @@ python-import=starlette
 python-import=typing_extensions
 python-import=typing_inspection
 python-import=uvicorn
-python-import=locale, runpy
-python-import=*
 
-net=ALLOW|TCP|0.0.0.0/32|48000|IN  # For sandbox port
-net=ALLOW|TCP|0.0.0.0/32|8000|IN  # For MCP Server
-net=ALLOW|TCP|www.google.com|80|OUT
+# </learning_guard_import>
 
-expose-ro=.
+#######################################################################################
+# PYTHON API CONTROL
+# ===================
+# Sensitive function calls. Everything in the registry is denied by
+# default, whatever python-import= allows: an import right is not a
+# call right.
+# - python-api=ALLOW:<category>   Allow a whole category
+# - python-api=ALLOW:<function>   Allow one function, e.g. os.system
+# - python-api=DENY:<target>      Deny; a function rule beats its
+#                                 category, whatever the line order
+# - python-api=ALLOW:*            Allow everything (disables the layer)
+# Categories: process-exec, process-control, privileges, threads,
+# native, introspection.
+# Note: the native and introspection categories are detection and
+# friction, not a barrier. Sandboxed code can undo Python-level patches
+# (see wiki/weaknesses.md); the OS provider is the real barrier.
+#
+# One call can cross SEVERAL guarded doors in series, because some of
+# these functions delegate to others in the registry:
+#   subprocess.getoutput -> getstatusoutput -> check_output -> run
+#                        -> Popen -> os.posix_spawn
+#   pty.spawn -> pty.fork -> os.fork / os.forkpty / os.setsid
+#   threading.Thread.start -> threading._start_joinable_thread
+# Allowing the outer name alone is then refused on the inner one. Each
+# refusal names the door it stopped at, so iterating converges; a
+# category covers a whole chain in one line, which is why the category
+# form is usually the right one for process-exec.
+#
+# To generate these rules from real behaviour, run the application once
+# in learning mode: the lines land in the block below. Review them
+# before keeping them. httpx and anyio create threads, so ALLOW:threads
+# is common and legitimate; an ALLOW:process-exec deserves a hard look.
+# <learning_guard_api>
 
-include ".py-sandboxes.pycharm"
+# Add rules (2026/09/09 at 17:53)
+# threads: concurrency primitives
+python-api=ALLOW:threading.Thread.start
+python-api=ALLOW:threading._start_joinable_thread
+
+# </learning_guard_api>
+
+#######################################################################################
+# OS PROVIDER PARAMETERS (os-sandbox=…)
+# ======================================
+# Lines below apply only when os-sandbox matches that provider. Syntax is always
+# <provider>.<key>=<value>; the runtime stores keys without the "<provider>." prefix.
+# See wiki/qemu.md, wiki/bwrap.md, wiki/unshare.md, wiki/firejail.md.
+
+#######################################################################################
+# QEMU (os-sandbox=qemu)
+# ======================
+#
+# qemu.use_kvm — Hardware acceleration
+#   true (default): pass -enable-kvm when /dev/kvm is usable; otherwise QEMU falls back
+#   to TCG (slower, unprivileged).
+#   false: never request KVM. In Docker/Podman, mount --device /dev/kvm when you want KVM.
+#
+# qemu.memory — Guest RAM (QEMU -m)
+#   Default: 2048 (MiB). Use a non-negative integer with an optional single suffix
+#   k/M/G/T/P/E (e.g. 512M, 2G). Forms like 2GB are invalid for QEMU and fall back to default.
+#   Raise for heavier workloads.
+#
+# qemu.show_boot_console — VM serial on the host + NoCloud verbosity + guest main_sandbox traces
+#   false (default): host output is filtered to Python between guest sentinels (boot hidden);
+#   NoCloud user-data stays minimal (no cloud-init debug block, no bash -x on bootstrap);
+#   no [PYSANDBOX_DIAG] breadcrumbs or faulthandler in the guest main_sandbox.
+#   true: full QEMU console (boot, cloud-init, bootstrap) on the host; tee to
+#   .pysandbox-qemu-console.log; verbose cloud-init and set -x on the guest bootstrap script;
+#   in the VM, stderr [PYSANDBOX_DIAG] lines and faulthandler after main() starts.
+#
+# qemu.virtfs — Staging exec trees before virtio-9p (nested containers)
+#   auto (default): enable staging only when the host looks like a container (/.dockerenv,
+#   /.containerenv, or "container" in the environment) to avoid SIGSEGV on overlay+9p mmap.
+#   on / off: force staging on or off. Legacy alias: qemu.virtfs_stage (same values).
+#
+# qemu.virtfs_security_model — 9p security_model for non-staged mounts
+#   Default: mapped-xattr. Staged trees use "none" automatically for reliable .so mmap.
+
+# qemu.use_kvm=true
+# qemu.memory=2G
+# qemu.show_boot_console=false
+# qemu.virtfs=auto
+
+#######################################################################################
+# Bubblewrap (os-sandbox=bwrap)
+# ==============================
+# Base command is built from pysandboxes/templates/bwrap.template, then PySandboxes adds
+# binds, env --setenv, and network mode. Extra options: man bwrap(1), wiki/bwrap.md.
+#
+# bwrap.share-net — Keep host (or container) network when you have socket rules
+#   If set to a truthy value (e.g. yes): do not use the isolated netns + slirp4netns +
+#   iptables path even when socket rules exist. Use when slirp4netns is unavailable or you
+#   want the sandbox to share the host network stack.
+#
+# bwrap.unshare-net — Disable network filtering / isolated netns
+#   no, 0, or false: same effect as forcing shared network—no --unshare-net for filtering.
+#
+# Any other bwrap.<option>=<value> is appended to bwrap as --<option>=<value> (or
+# --<option> if the value is empty). Keys share-net and unshare-net are interpreted only
+# by PySandboxes and are not passed as duplicate bwrap flags.
+
+# bwrap.share-net=yes
+# bwrap.hostname=my-sandbox
+
+# See https://man.archlinux.org/man/extra/bubblewrap/bwrap.1.en
+# bwrap.<param>=<value>
+
+#######################################################################################
+# Firejail (os-sandbox=firejail)
+# ===============================
+# Not supported inside Docker/Podman/Kubernetes images for this project; use bwrap, unshare,
+# or qemu there. Base flags come from pysandboxes/templates/firejail.template (and env
+# substitution e.g. FIREJAIL_RELIMIT, NICE). man firejail(1), wiki/firejail.md.
+#
+# Only these profile lines are parsed into Firejail flags. Any other firejail.* line is
+# ignored by the provider parser—extend firejail.template or env for more Firejail options:
+#
+# firejail.net — Network bridge for the sandbox (host reachability often needs a bridge).
+#   Example: firejail.net=docker0. If unset with socket rules, the daemon may pick a default.
+#
+# firejail.seccomp — Path to a seccomp list file (passed as --seccomp=…).
+# firejail.seccomp.keep — Allowed syscalls (comma-separated) as --seccomp.keep=…
+# firejail.seccomp.block — Blocked syscalls as --seccomp.block=…
+#
+# Socket rules require restricted-network no in /etc/firejail/firejail.config for netfilter
+# setup; see wiki/firejail.md.
+
+# firejail.net=docker0
+# firejail.seccomp.keep=read,write,exit
+
+# See https://man7.org/linux/man-pages/man1/firejail.1.html
+# firejail.<param>=<value>
+
+#######################################################################################
+# Unshare (os-sandbox=unshare)
+# ============================
+# Launches unshare with flags from pysandboxes/templates/unshare.template, then each
+# unshare.<key>=<value> as --key=value (or --key if empty). Requires slirp4netns and
+# iptables; kernel.unprivileged_userns_clone=1 on many systems. man unshare(1), wiki/unshare.md.
+#
+# Typical use: add or override unshare(1) long options the template does not set. The
+# template already enables --net, --user, -r, --mount, --propagation private, --pid, --fork,
+# --kill-child.
+
+# unshare.<param>=<value>
+
+#######################################################################################
+# Subprocess / none (os-sandbox=subprocess | os-sandbox=none)
+# ============================================================
+# No provider-specific profile keys (no subprocess.* / none.*). Configure env, file, net,
+# and import rules only; subprocess is the default isolated Python process provider.

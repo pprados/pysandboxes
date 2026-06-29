@@ -21,32 +21,17 @@ dependencies = [
     "markdownify>=1.2.0",
 ]
 [dependency-groups]
-dev = [
-    "playwright>=1.28.0",
-    "setuptools>=67.6.1",
-    "ipython",
-    "pre-commit>=3.6",
-    "twine>=5.1.0",
-    "importlib-metadata==7.2.1",
-    "scikit-learn>=1.6",
-#    "pydevd-pycharm>=253.28086.55",
-    "rich>=14.0",
-    "mcp[cli]>=1.14.0",
-    "json-with-comments>=1.2.10",
-]
+dev = []
 test = [
     "pytest>=7.3.0",
-    "pytest-dotenv>=0.5.2",
     "pytest-asyncio>=0.20.3",
-    "pytest-mock>=3.10.0",
-    "syrupy>=5.0.0",
 ]
 codespell = [
     "codespell>=2.2.5",
 ]
 
 [project.scripts]
-mcp-server = "mcp_server.main:main"
+mcp-server-demo = "mcp_server.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -67,9 +52,6 @@ ignore = []
 [tool.ruff]
 line-length = 120
 target-version = "py310"
-
-[tool.uv]
-dev-dependencies = ["pyright>=1.1.379", "pytest>=8.3.3", "ruff>=0.6.9"]
 
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository

@@ -2,7 +2,7 @@
   "mcpServers": {
   // Version without `python-sb`. The user MCP client decide the rules to use
     "mcp_server": {
-      "cwd": "../mcp-server",
+      "cwd": "../mcp-server-demo",
       "command": "python",
       "args": [
         "-m", "pysandboxes.python_sb",
