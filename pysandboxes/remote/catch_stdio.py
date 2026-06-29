@@ -212,6 +212,9 @@ async def acatch_stdio(
         except Exception as e:
             import tblib
 
+            from ..e import attach_sandbox_denials
+
+            attach_sandbox_denials(e)
             result = {"exception": (e, tblib.Traceback(e.__traceback__))}
 
             if sync_or_async_queue is not None:
