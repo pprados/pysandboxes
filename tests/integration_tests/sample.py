@@ -1,6 +1,7 @@
 import logging
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 from pysandboxes import sandbox, sandboxes
 
@@ -24,6 +25,11 @@ async def arun_in_sandbox() -> int:
 def run_in_sandbox() -> int:
     print(42)
     return 42
+
+
+@sandbox
+def raise_in_sandbox() -> NoReturn:
+    raise ValueError("raised inside the sandbox")
 
 
 async def async_forty_two() -> int:

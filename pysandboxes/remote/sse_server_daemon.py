@@ -163,14 +163,14 @@ async def sandbox_daemon(
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
-        yield json.dumps({"session_id": session_id, "cancelled": True})
+        yield _sse_msg(json.dumps({"session_id": session_id, "cancelled": True}))
     except AssertionError:
         logger.exception("assertion %s", traceback.format_exc())
         sys.exit(-1)
         # Ignore?
     except Exception as e:
         logger.exception("(%s) ... error %s", session_id, repr(e))
-        yield json.dumps({"session_id": session_id, "error": repr(e)})
+        yield _sse_msg(json.dumps({"session_id": session_id, "error": repr(e)}))
     finally:
         _active_requests -= 1
 

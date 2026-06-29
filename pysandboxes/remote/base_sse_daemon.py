@@ -16,6 +16,7 @@ from aiohttp_sse_client import client as sse_client
 
 from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
+from ..e import SandBoxError
 from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
@@ -42,6 +43,25 @@ def _get_rpc_params(
         "kwargs": to_b85(kwargs),
     }
     return params
+
+
+def _rebuild_remote_exception(payload: str) -> BaseException:
+    """Rebuild an exception raised inside the sandbox, with its remote traceback.
+
+    Args:
+        payload: The base85 payload carrying the pickled (exception, traceback).
+
+    Returns:
+        The exception, with the sandbox frames attached.
+    """
+    exception, serial_traceback = from_b85(payload)
+    traceback = serial_traceback.as_traceback()
+    # Drop the transport frames, which say nothing about the denial itself.
+    for _ in range(3):
+        if traceback.tb_next is None:
+            break
+        traceback = traceback.tb_next
+    return exception.with_traceback(traceback)
 
 
 class BaseSSESandbox(BaseDaemon):
@@ -116,22 +136,26 @@ class BaseSSESandbox(BaseDaemon):
                         if "result" in msg:
                             return from_b85(msg["result"])
                         if "exception" in msg:
-                            exception, serial_traceback = from_b85(msg["exception"])
-                            traceback = serial_traceback.as_traceback()
-                            remove = 3
-                            while remove:
-                                remove -= 1
-                                if traceback.tb_next:
-                                    traceback = traceback.tb_next
-                                else:
-                                    break
-                            raise exception.with_traceback(traceback)
+                            # Raised after the try block: the sandboxed function
+                            # may itself raise ConnectionRefusedError (every
+                            # network denial does), which the retry clause below
+                            # would otherwise mistake for a transport failure.
+                            raised = _rebuild_remote_exception(msg["exception"])
+                            break
+                        if "error" in msg:
+                            # The sandbox could not transport its own exception.
+                            raised = SandBoxError(f"Sandbox reported: {msg['error']}")
+                            break
+                        if "cancelled" in msg:
+                            raised = SandBoxError("The sandbox cancelled the call.")
+                            break
 
                         if "stdout" in msg:
                             print(msg["stdout"], end="")
                         if "stderr" in msg:
                             print(msg["stderr"], end="", file=sys.stderr)
-                    raise RuntimeError("No result received from the sandbox")
+                    else:
+                        raise RuntimeError("No result received from the sandbox")
             except (ClientPayloadError, ClientConnectorError, ConnectionRefusedError):
                 logger.debug("Connection error. Retry")
                 retry -= 1
@@ -139,6 +163,7 @@ class BaseSSESandbox(BaseDaemon):
             except SystemExit:
                 raise
             # Other exceptions are from the called function
+            raise raised
 
         raise RuntimeError("No result received from the sandbox")
 
