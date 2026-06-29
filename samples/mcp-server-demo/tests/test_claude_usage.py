@@ -54,6 +54,15 @@ all_os_sandbox = [
     "firejail",
 ]
 
+# End-to-end through the real `claude` binary: four tests over two modes, two
+# protocols and three providers, each with its own 30s budget, and each one
+# spends tokens. Useful to run by hand, wrong as a regression gate -- it is what
+# made `make sample-tests` hang. Opt in explicitly.
+requires_claude_cli = pytest.mark.skipif(
+    not os.environ.get("RUN_CLAUDE_TESTS"),
+    reason="drives the real claude CLI and spends tokens; set RUN_CLAUDE_TESTS=1",
+)
+
 
 def _init_mcp_server(
     protocol: str, os_sandbox: str, pysandboxes_mode: str
@@ -119,6 +128,7 @@ def _init_mcp_server(
 
 
 # @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@requires_claude_cli
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -157,6 +167,7 @@ def test_claude_resource_version(protocol: str, os_sandbox: str, mode: str) -> N
 
 
 # @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@requires_claude_cli
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -196,6 +207,7 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
 
 
 # @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@requires_claude_cli
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
@@ -233,6 +245,7 @@ def test_claude_prompt(protocol: str, os_sandbox: str, mode: str) -> None:
 
 
 # @pytest.mark.skip(reason="To save tokens.")  # FIX_RELEASE
+@requires_claude_cli
 @pytest.mark.skipif(not which("claude"), reason="Install claude")
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
 @pytest.mark.parametrize("protocol", all_protocol)
