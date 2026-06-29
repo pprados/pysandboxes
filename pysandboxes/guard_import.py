@@ -541,6 +541,15 @@ def activate_guard_import(
         # through _io.open_code(). Evicting _io makes the loader re-import it,
         # and that import is denied by any ruleset, so no module can be loaded.
         "_io",
+        # The transport pickles a raised exception together with its tblib
+        # traceback, and catch_stdio imports tblib from inside its own except
+        # handler. Evicting it means that import is charged to the user's
+        # python-import rules, where it can never legitimately appear: learning
+        # only records what a run imported, and a run that raised nothing never
+        # reached the handler. Denied there, the sandbox fails while reporting a
+        # failure and the caller waits out the RPC timeout instead of seeing the
+        # exception. main_sandbox imports it before arming so it is here to keep.
+        "tblib",
         "asyncio",
         "sys",
         "threadpool",

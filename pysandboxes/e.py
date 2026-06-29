@@ -40,6 +40,15 @@ class ConfigSyntaxError(SandBoxError):
         """
         return self.message + "\n" + "\n".join(self.errors)
 
+    def __reduce__(self) -> tuple[type, tuple[str, list[str]]]:
+        """Rebuild the exception from its own attributes.
+
+        ``BaseException.__reduce__`` replays ``args``, which this class does not
+        populate. Without this, unpickling calls ``__init__`` with the wrong
+        arity and the exception is lost while being transported.
+        """
+        return self.__class__, (self.message, self.errors)
+
 
 class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
     """Exception raised when a file access is denied by sandbox rules."""
@@ -90,3 +99,14 @@ class RuleApiPermissionError(PermissionError, SandBoxError):
         )
         self.qualname = qualname
         self.category = category
+
+    def __reduce__(self) -> tuple[type, tuple[str, str]]:
+        """Rebuild the exception from its own attributes.
+
+        ``BaseException.__reduce__`` replays ``args``, which here holds the
+        formatted message instead of the two constructor parameters. Without
+        this, a denial raised inside the sandbox cannot be unpickled by the
+        caller: the transport loses it and the call ends on a timeout instead
+        of on the refusal.
+        """
+        return self.__class__, (self.qualname, self.category)
