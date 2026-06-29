@@ -182,6 +182,13 @@ expose-ro=~/workspace/pysandboxes
 # <learning_guard_socket>
 
 # Add rules (2026/09/09 at 17:53)
+# The transport's own ports, which learning cannot produce: they are the
+# sandbox talking to its parent, not the application reaching out. Needed only
+# when a port is forced -- mcp-client-demo's launch configurations pass
+# --sandbox-port=48000 -- since an auto-chosen port is allowed implicitly.
+net=ALLOW|TCP|0.0.0.0/32|48000|IN  # sandbox <-> parent, see --sandbox-port
+net=ALLOW|TCP|0.0.0.0/32|8000|IN   # MCP server, http transport
+
 net=ALLOW|TCP|www.google.com|443|OUT
 
 # </learning_guard_socket>
