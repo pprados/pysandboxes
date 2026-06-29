@@ -13,6 +13,22 @@ class SandBoxError(RuntimeError):
     pass
 
 
+class SandBoxProtocolError(SandBoxError):
+    """Raised when the dialogue with the sandbox fails, not the code it ran.
+
+    The transport reports two unrelated kinds of failure to the caller: an
+    exception raised by the sandboxed function, which is rebuilt as itself, and
+    a failure of the exchange -- no answer within the RPC timeout, a stream that
+    ended without a result, a call the sandbox cancelled, or a sandbox that
+    could not transport its own exception. Only the second kind uses this class,
+    so `except SandBoxProtocolError` never catches an application error and a
+    caller can tell "my code was refused" from "the sandbox stopped answering".
+
+    A sandboxed function raising SandBoxError, or any other RuntimeError, still
+    reaches the caller as that exception.
+    """
+
+
 class ConfigSyntaxError(SandBoxError):
     """Exception raised when configuration file has syntax errors.
 

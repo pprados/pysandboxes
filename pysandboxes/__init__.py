@@ -46,12 +46,14 @@ if TYPE_CHECKING:
         RulePermissionError,  # noqa: F401
         RuleSocketConnectionRefusedError,  # noqa: F401
         SandBoxError,  # noqa: F401
+        SandBoxProtocolError,  # noqa: F401
     )
     from .sandboxes_api import is_in_sandbox, run, sandbox, sandboxes  # noqa: F401
 
 _api = {"sandboxes", "sandbox", "run", "is_in_sandbox"}
 _exception = {
     "SandBoxError",
+    "SandBoxProtocolError",
     "ConfigSyntaxError",
     "RuleFileNotFoundError",
     "RulePermissionError",
@@ -78,6 +80,7 @@ __all__ = [
     "RuleModuleNotFoundError",
     "RuleAttributeError",
     "RuleApiPermissionError",
+    "SandBoxProtocolError",
 ]
 
 

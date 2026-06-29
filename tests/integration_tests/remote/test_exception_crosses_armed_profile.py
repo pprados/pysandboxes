@@ -23,7 +23,12 @@ from pathlib import Path
 import pytest
 
 from pysandboxes import sandboxes
-from tests.integration_tests.sample import raise_in_sandbox, run_in_sandbox
+from pysandboxes.e import SandBoxError, SandBoxProtocolError
+from tests.integration_tests.sample import (
+    raise_in_sandbox,
+    raise_sandbox_error_in_sandbox,
+    run_in_sandbox,
+)
 
 
 def _learn_the_happy_path(tmp_path: Path) -> Path:
@@ -45,3 +50,22 @@ def test_an_exception_crosses_a_learned_profile(tmp_path: Path) -> None:
     with sandboxes(sandboxes_config=learned):
         with pytest.raises(ValueError, match="raised inside the sandbox"):
             raise_in_sandbox()
+
+
+def test_an_application_sandbox_error_is_not_reported_as_a_protocol_failure(
+    tmp_path: Path,
+) -> None:
+    """The two kinds of failure the transport reports must stay distinguishable.
+
+    A sandboxed function is free to raise the framework's own SandBoxError.
+    That is an application error and must reach the caller as itself, never as
+    the SandBoxProtocolError the transport uses for a failed exchange.
+    """
+    learned = _learn_the_happy_path(tmp_path)
+
+    with sandboxes(sandboxes_config=learned):
+        with pytest.raises(SandBoxError) as caught:
+            raise_sandbox_error_in_sandbox()
+
+    assert not isinstance(caught.value, SandBoxProtocolError)
+    assert "raised by the application" in str(caught.value)

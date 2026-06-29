@@ -21,6 +21,7 @@ from pysandboxes.e import (
     RulePermissionError,
     RuleSocketConnectionRefusedError,
     SandBoxError,
+    SandBoxProtocolError,
 )
 
 
@@ -60,4 +61,22 @@ def test_message_only_errors_round_trip(exception_class: type[BaseException]) ->
     restored = pickle.loads(pickle.dumps(original))
 
     assert type(restored) is exception_class
+    assert str(restored) == str(original)
+
+
+def test_a_protocol_failure_is_not_an_application_error() -> None:
+    """`except SandBoxProtocolError` must never catch what the sandboxed code raised."""
+    assert not isinstance(SandBoxError("raised by the application"), SandBoxProtocolError)
+    assert not isinstance(RuntimeError("raised by the application"), SandBoxProtocolError)
+
+    # The reverse direction stays usable: the framework's base class still
+    # catches both kinds, for a caller that does not care which happened.
+    assert isinstance(SandBoxProtocolError("no answer"), SandBoxError)
+
+
+def test_protocol_error_round_trip() -> None:
+    original = SandBoxProtocolError("No result received from the sandbox")
+    restored = pickle.loads(pickle.dumps(original))
+
+    assert type(restored) is SandBoxProtocolError
     assert str(restored) == str(original)
