@@ -12,7 +12,7 @@ import httpx
 from fastmcp import FastMCP
 from httpx_file import FileTransport
 from markdownify import markdownify as md
-from pysandboxes import is_in_sandbox, sandbox, sandboxes
+from pysandboxes import is_in_sandbox, sandbox, sandbox_denials, sandboxes
 from pysandboxes.remote.tools import set_pdeathsig
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,20 @@ async def _read_file_resource(path: str) -> str:
     return file_path.read_text()
 
 
+def _explain(error: Exception) -> str:
+    """Name the rule that refused the call, when one did.
+
+    A tool reports over MCP, which carries text: whatever the caller receives is
+    a string. httpx rewrites a refused connection into "All connection attempts
+    failed", so without this the client cannot tell a rule from an outage --
+    which is the whole point of putting the tool in a sandbox.
+    """
+    denials = sandbox_denials(error)
+    if not denials:
+        return str(error)
+    return f"{error} [refused by the sandbox: {'; '.join(denials)}]"
+
+
 @sandbox
 async def _fetch_webpage(url: str) -> str:
     """Fetches the content of a webpage and returns it as markdown."""
@@ -83,7 +97,7 @@ async def _fetch_webpage(url: str) -> str:
             logger.info(f"Successfully fetched: {url}")
             return md(response.text)
     except Exception as e:
-        raise ValueError(f"Failed to fetch webpage: {e}")
+        raise ValueError(f"Failed to fetch webpage: {_explain(e)}")
 
 
 @mcp.tool(
@@ -112,7 +126,7 @@ async def _evaluate_expression(expression: str) -> float:
         logger.info(f"Result : {result}")
         return result
     except Exception as e:
-        raise ValueError(f"Invalid expression: {e}")
+        raise ValueError(f"Invalid expression: {_explain(e)}")
 
 
 @mcp.tool(

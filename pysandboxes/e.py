@@ -161,6 +161,11 @@ def sandbox_denials(exception: BaseException) -> list[str]:
     Args:
         exception: An exception raised by sandboxed code.
 
+    Works in both usage modes. In partial mode the exception crossed the
+    transport, which recorded the denials on the way out because pickle would
+    have dropped the chain carrying them; in complete mode nothing crossed
+    anything, so the chain is still intact and gets walked here.
+
     Returns:
         One entry per denial, ``"<ExceptionName>: <message>"``. Empty when the
         failure was not a sandbox refusal, so a caller can tell a rule from an
@@ -174,8 +179,10 @@ def sandbox_denials(exception: BaseException) -> list[str]:
                 ...  # a rule refused it
         ```
     """
-    denials = getattr(exception, _DENIALS_ATTRIBUTE, [])
-    return list(denials) if isinstance(denials, list) else []
+    recorded = getattr(exception, _DENIALS_ATTRIBUTE, None)
+    if isinstance(recorded, list):
+        return list(recorded)
+    return [f"{type(e).__name__}: {e}" for e in _walk_chain(exception) if isinstance(e, SandBoxError)]
 
 
 def _walk_chain(exception: BaseException) -> list[BaseException]:
