@@ -126,3 +126,71 @@ class RuleApiPermissionError(PermissionError, SandBoxError):
         of on the refusal.
         """
         return self.__class__, (self.qualname, self.category)
+
+
+_DENIALS_ATTRIBUTE = "__pysandboxes_denials__"
+
+
+def attach_sandbox_denials(exception: BaseException) -> None:
+    """Record on ``exception`` the sandbox denials that caused it.
+
+    A library between the guard and the caller routinely rewrites the reason a
+    call failed. httpx reports a refused connection as ``All connection attempts
+    failed``, keeping the ``RuleSocketConnectionRefusedError`` only in an
+    ``ExceptionGroup`` under ``__context__`` -- and plain pickle drops
+    ``__cause__``, ``__context__`` and the members of a group, so nothing of it
+    survives the transport. A caller then cannot tell a rule from an outage,
+    which is the one thing a sandbox has to be able to say.
+
+    The framework recognises its own refusals, so it collects them on the way
+    out instead of asking the caller to reconstruct a third party's exception
+    tree. Read them back with :func:`sandbox_denials`.
+
+    Args:
+        exception: The exception leaving the sandbox. Left untouched if no
+            sandbox denial appears in its chain.
+    """
+    denials = [f"{type(e).__name__}: {e}" for e in _walk_chain(exception) if isinstance(e, SandBoxError)]
+    if denials:
+        setattr(exception, _DENIALS_ATTRIBUTE, denials)
+
+
+def sandbox_denials(exception: BaseException) -> list[str]:
+    """Return the sandbox denials that caused ``exception``, innermost first.
+
+    Args:
+        exception: An exception raised by sandboxed code.
+
+    Returns:
+        One entry per denial, ``"<ExceptionName>: <message>"``. Empty when the
+        failure was not a sandbox refusal, so a caller can tell a rule from an
+        ordinary error:
+
+        ```python
+        try:
+            fetch(url)
+        except Exception as e:
+            if sandbox_denials(e):
+                ...  # a rule refused it
+        ```
+    """
+    denials = getattr(exception, _DENIALS_ATTRIBUTE, [])
+    return list(denials) if isinstance(denials, list) else []
+
+
+def _walk_chain(exception: BaseException) -> list[BaseException]:
+    """Flatten an exception chain, entering the members of every group."""
+    found: list[BaseException] = []
+    seen: set[int] = set()
+
+    def visit(current: BaseException | None) -> None:
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            found.append(current)
+            if isinstance(current, BaseExceptionGroup):
+                for member in current.exceptions:
+                    visit(member)
+            current = current.__cause__ or current.__context__
+
+    visit(exception)
+    return found

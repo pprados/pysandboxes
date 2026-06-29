@@ -22,9 +22,10 @@ from pathlib import Path
 
 import pytest
 
-from pysandboxes import sandboxes
+from pysandboxes import sandbox_denials, sandboxes
 from pysandboxes.e import SandBoxError, SandBoxProtocolError
 from tests.integration_tests.sample import (
+    connect_outside_the_rules,
     raise_in_sandbox,
     raise_sandbox_error_in_sandbox,
     run_in_sandbox,
@@ -69,3 +70,29 @@ def test_an_application_sandbox_error_is_not_reported_as_a_protocol_failure(
 
     assert not isinstance(caught.value, SandBoxProtocolError)
     assert "raised by the application" in str(caught.value)
+
+
+def test_a_denial_is_readable_even_when_the_message_is_rewritten(
+    tmp_path: Path,
+) -> None:
+    """A caller must be able to tell a refused call from a failure of its own.
+
+    Nothing forces the library between the guard and the caller to keep the
+    reason: httpx reports a refused connection as "All connection attempts
+    failed" and keeps the refusal only in an ExceptionGroup under __context__,
+    which the transport does not carry. Asserting on the message would pass for
+    any outage, so the framework reports its own denials instead.
+    """
+    learned = _learn_the_happy_path(tmp_path)
+
+    with sandboxes(sandboxes_config=learned):
+        with pytest.raises(OSError) as caught:
+            connect_outside_the_rules()
+
+        denials = sandbox_denials(caught.value)
+        assert denials, "the refusal did not reach the caller"
+        assert any("DENIED" in denial for denial in denials), denials
+
+        # A call the rules allow reports nothing, so the check above cannot pass
+        # by accident on an unrelated failure.
+        assert sandbox_denials(ValueError("an ordinary error")) == []
