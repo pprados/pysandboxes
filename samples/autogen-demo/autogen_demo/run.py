@@ -64,8 +64,9 @@ async def run_agent_session(
         tools: Sequence of tool callables. If None, imports default tools from autogen_demo.tools.
     """
     if tools is None:
-        from autogen_demo.tools import execute_python, fetch_webpage
-        tools = [fetch_webpage, execute_python]
+        from autogen_demo.tools import evaluate_expression, fetch_webpage
+
+        tools = [fetch_webpage, evaluate_expression]
     agent = AssistantAgent(
         name=AGENT_NAME,
         model_client=model_client,
