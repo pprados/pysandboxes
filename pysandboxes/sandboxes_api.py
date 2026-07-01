@@ -391,9 +391,7 @@ def run(
             graceful_shutdown=graceful_shutdown,
             **kwargs,
         ):
-            result = (await asyncio.create_task(main), "_start sandbox in run")
-            return result
-        return None
+            return await asyncio.create_task(main)
 
     if not inspect.iscoroutine(main):
         raise ValueError("a coroutine was expected, got {!r}".format(main))

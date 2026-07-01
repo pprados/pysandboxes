@@ -12,9 +12,13 @@ pytestmark = pytest.mark.skipif(not profile_hosts_resolvable(), reason=NO_PROFIL
 def test_run() -> None:
     """
     Invoke the sandboxes.run() function
+
+    The return value is asserted: `run()` is documented as a replacement for
+    `asyncio.run()`, and a caller that ignores what it returns cannot see it
+    hand back something else.
     """
     assert config_path.exists()
-    pysandboxes.run(async_forty_two(), config_path=config_path)
+    assert pysandboxes.run(async_forty_two(), config_path=config_path) == 42
 
 
 def test_run_and_async_sanboxes() -> None:
