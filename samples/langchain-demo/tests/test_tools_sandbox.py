@@ -1,197 +1,171 @@
-"""Tests for sandbox protection in fetch_webpage tool.
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+"""What pysandboxes enforces on the two tools LangChain exposes to the model.
 
-This module demonstrates the security difference between:
-- Scenario A: Direct network access (UNSAFE - without sandbox)
-- Scenario B: Sandboxed network access (SAFE - with sandbox and .py-sandboxes config)
+The tools are declared with `@tool` on a thin wrapper that delegates to a
+module-level ``_``-prefixed function carrying `@sandbox` -- the indirection D7
+of the design spec asks for. The tests call the inner function, which is what
+the wrapper ends up calling; test_chain.py covers the other direction, driving
+the wrapper through the agent loop.
 
-Note: To avoid requiring the pysandboxes daemon in unit tests, we mock
-the _fetch_webpage_sandboxed function. Integration tests with actual
-sandbox enforcement are in the SandboxIntegration class.
+Scenario A, the negative control, runs in a separate process. A baseline
+profile leaves ``is_in_sandbox()`` true behind it, so an armed block running
+afterwards in the same process short-circuits and silently reproduces the
+baseline's results -- which is how a blocking test ends up unable to fail.
+
+Scenarios B and C run armed, against the real network. Nothing is mocked: a
+mocked transport proves the mock, not the rule.
 """
 
-from unittest.mock import MagicMock, patch
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
+from pysandboxes import sandbox_denials, sandboxes
 
-from langchain_demo.tools import _fetch_webpage_sandboxed, fetch_webpage
+from langchain_demo.tools import _evaluate_expression, _fetch_webpage, evaluate_expression, fetch_webpage
+
+SAMPLE_ROOT = Path(__file__).parent.parent
+CONFIG = SAMPLE_ROOT / ".py-sandboxes"
+
+# Host the learned profile allows.
+ALLOWED_URL = "https://www.google.com/"
+# Real, resolvable host deliberately absent from net=ALLOW: a real name keeps
+# the refusal attributable to the rule instead of to an NXDOMAIN.
+DENIED_URL = "https://example.com/"
+
+# Reaches Popen through the subclass tree, which an emptied __builtins__ does
+# not hide. The tool is a plain eval() on purpose: whatever stops this is the
+# sandbox, not a parser.
+POPEN_ESCAPE = (
+    "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
+)
 
 
-class TestScenarioA_WithoutSandbox:
-    """Scenario A: Demonstrates network access WITHOUT sandbox protection.
+def armed_kwargs() -> dict[str, object]:
+    return {"sandboxes_config": CONFIG, "py_sandbox": "true", "os_sandbox": "subprocess"}
 
-    This scenario shows the vulnerability when network access is unrestricted.
-    In production, the .py-sandboxes configuration protects against this.
 
-    Note: These tests demonstrate the conceptual vulnerability without
-    actually executing unprotected code.
+def test_scenario_a_the_escape_succeeds_without_the_sandbox() -> None:
+    """Without pysandboxes the malicious expression runs. Otherwise C proves nothing."""
+    # subprocess is imported first because the escape walks the subclass tree
+    # and Popen has to be loaded -- as it is in the real process, httpx and
+    # langchain pulling it in long before a model says anything.
+    script = f"import subprocess; print(eval({POPEN_ESCAPE!r}, {{'__builtins__': {{}}}}, {{}}))"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=SAMPLE_ROOT,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Popen" in result.stdout, result.stdout
+
+
+def test_scenario_b2_an_allowed_host_is_reached() -> None:
+    with sandboxes(**armed_kwargs()):
+        page = _fetch_webpage(ALLOWED_URL)
+
+    assert page.strip(), "the allowed host returned nothing"
+
+
+def test_scenario_b1_a_host_outside_the_rules_is_refused() -> None:
+    """The refusal is attributable, which asserting on the message would not be."""
+    with sandboxes(**armed_kwargs()):
+        with pytest.raises(Exception) as caught:
+            _fetch_webpage(DENIED_URL)
+
+    denials = sandbox_denials(caught.value)
+    assert denials, f"no denial reported, only {caught.value!r}"
+    assert any("DENIED" in denial for denial in denials), denials
+
+
+def test_the_expression_tool_still_computes() -> None:
+    with sandboxes(**armed_kwargs()):
+        assert _evaluate_expression("2*(3+4)") == 14
+
+
+def test_scenario_c_the_malicious_expression_is_confined() -> None:
+    """The escape of scenario A reaches Popen and is refused there, by the API guard.
+
+    Not by the import guard: python-import=subprocess cannot be removed, since
+    httpx and langchain load it themselves.
     """
+    with sandboxes(**armed_kwargs()):
+        with pytest.raises(Exception) as caught:
+            _evaluate_expression(POPEN_ESCAPE)
 
-    def test_scenario_a_demonstrates_unrestricted_access(self) -> None:
-        """Test showing that without sandbox, any domain is accessible.
-
-        This test documents the vulnerability that the sandbox prevents.
-        In Scenario A (without sandbox): any domain can be fetched.
-        In Scenario B (with sandbox): only allowed domains work.
-        """
-        # Scenario A concept: Without sandbox, this would work for any domain
-        # We demonstrate by showing what an unprotected implementation would do
-        unprotected_result_allowed_domain = "Content from example.com"
-        unprotected_result_malicious = "Content from malicious-domain.com"
-
-        # In production without sandbox, both would work (vulnerability)
-        assert unprotected_result_allowed_domain is not None
-        assert unprotected_result_malicious is not None
-        # With sandbox + .py-sandboxes, only allowed_domain would work
-
-    def test_scenario_a_conceptual_vulnerability(self) -> None:
-        """Demonstrates the conceptual vulnerability without sandbox.
-
-        This test documents why sandboxing is necessary for untrusted tools.
-        """
-        # Without sandbox protection, a compromised tool could access any domain
-        vulnerable_access_pattern = {
-            "allowed": "example.com",  # Would work
-            "unauthorized": "malicious-domain.com",  # Would also work!
-            "internal": "192.168.1.1",  # Could access internal networks
-        }
-
-        # All would be accessible without sandbox (bad!)
-        assert len(vulnerable_access_pattern) == 3
-        # With sandbox + config, only 'allowed' works
+    denials = sandbox_denials(caught.value)
+    assert denials, f"no denial reported, only {caught.value!r}"
+    assert any("process-exec" in denial for denial in denials), denials
 
 
-class TestScenarioB_WithSandbox:
-    """Scenario B: Demonstrates network access WITH sandbox protection.
+def test_the_wrappers_report_the_rule_to_the_model() -> None:
+    """A model gets text, so the refusal has to be legible in it.
 
-    The @sandbox decorator on _fetch_webpage_sandboxed enforces the rules
-    defined in .py-sandboxes configuration file. Only domains explicitly
-    allowed in the configuration can be accessed.
+    This also exercises the D7 indirection end to end: `@tool` produced a
+    StructuredTool, and invoking it has to reach the sandboxed inner function
+    through the bridge, which resolves it by `module:qualname`.
     """
+    with sandboxes(**armed_kwargs()):
+        refused_fetch = fetch_webpage.invoke({"url": DENIED_URL})
+        refused_eval = evaluate_expression.invoke({"expression": POPEN_ESCAPE})
+        allowed_eval = evaluate_expression.invoke({"expression": "2*(3+4)"})
 
-    def test_scenario_b_fetch_webpage_wrapper_calls_sandboxed(self) -> None:
-        """Test that fetch_webpage wrapper correctly delegates to sandboxed function."""
-        # Mock the sandboxed function to avoid actual sandbox execution in tests
-        with patch("langchain_demo.tools._fetch_webpage_sandboxed") as mock_sandboxed:
-            mock_sandboxed.return_value = "Wrapped response"
-
-            # Use .invoke() for LangChain tool interface
-            result = fetch_webpage.invoke({"url": "https://example.com"})
-
-            # Verify the wrapper called the sandboxed function
-            mock_sandboxed.assert_called_once_with("https://example.com")
-            assert result == "Wrapped response"
-
-    def test_scenario_b_fetch_webpage_truncates_large_content(self) -> None:
-        """Test that fetch_webpage truncates responses larger than max chars."""
-        large_content = "x" * 9000
-        truncated_response = large_content[:8000] + "\n... [truncated]"
-
-        with patch("langchain_demo.tools._fetch_webpage_sandboxed") as mock_sandboxed:
-            mock_sandboxed.return_value = truncated_response
-
-            # Call through the wrapper to avoid requiring the sandbox daemon
-            result = fetch_webpage.invoke({"url": "https://example.com"})
-
-        assert "... [truncated]" in result
-        assert len(result) <= 8100
-
-    def test_scenario_b_handles_network_errors(self) -> None:
-        """Test that fetch_webpage handles network errors gracefully."""
-        error_response = "Error fetching URL: RuntimeError: Connection timeout"
-
-        with patch("langchain_demo.tools._fetch_webpage_sandboxed") as mock_sandboxed:
-            mock_sandboxed.return_value = error_response
-
-            result = fetch_webpage.invoke({"url": "https://example.com"})
-
-        assert "Error fetching URL" in result
-        assert "RuntimeError" in result
-
-    def test_scenario_b_handles_http_errors(self) -> None:
-        """Test that fetch_webpage handles HTTP errors (4xx, 5xx)."""
-        error_response = "Error fetching URL: RuntimeError: 404 Not Found"
-
-        with patch("langchain_demo.tools._fetch_webpage_sandboxed") as mock_sandboxed:
-            mock_sandboxed.return_value = error_response
-
-            result = fetch_webpage.invoke({"url": "https://example.com/notfound"})
-
-        assert "Error fetching URL" in result
-        assert "RuntimeError" in result
+    assert "refused by the sandbox" in refused_fetch, refused_fetch
+    assert "DENIED" in refused_fetch, refused_fetch
+    assert "process-exec" in refused_eval, refused_eval
+    assert allowed_eval == "14.0", allowed_eval
 
 
-class TestSandboxIntegration:
-    """Integration tests for sandbox protection with fetch_webpage."""
+def test_the_profile_is_a_whitelist() -> None:
+    """Guard the two ways this demonstration has silently died before."""
+    active = [
+        line.strip()
+        for line in CONFIG.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
 
-    def test_fetch_webpage_tool_via_langchain_invoke(self) -> None:
-        """Test fetch_webpage tool through LangChain's invoke interface."""
-        # Mock the sandboxed function to test the LangChain tool interface
-        with patch("langchain_demo.tools._fetch_webpage_sandboxed") as mock_sandboxed:
-            mock_sandboxed.return_value = "Example.com content"
-
-            # Invoke through the @tool decorator (LangChain interface)
-            result = fetch_webpage.invoke({"url": "https://example.com"})
-
-        assert "Example.com content" in result
-        mock_sandboxed.assert_called_once_with("https://example.com")
-
-    def test_sandbox_configuration_exists(self) -> None:
-        """Verify that .py-sandboxes configuration file exists and is accessible.
-
-        This test ensures the sandbox configuration is deployed alongside the tool.
-        """
-        from pathlib import Path
-
-        config_path = Path(__file__).parent.parent / ".py-sandboxes"
-        assert config_path.exists(), "Missing .py-sandboxes configuration file"
-
-        config_content = config_path.read_text()
-        # Verify key security rules are present
-        assert "net=ALLOW|tcp|example.com|443|OUT" in config_content
-        assert "python-import=httpx" in config_content
-        assert "py-sandbox=true" in config_content
+    assert "python-import=*" not in active, "a wildcard import rule voids the whitelist"
+    assert not [line for line in active if line.startswith("python-api=ALLOW:process-exec")], (
+        "allowing process-exec would void scenario C"
+    )
 
 
-class TestSecurityScenarios:
-    """Test scenarios that demonstrate sandbox security benefits."""
+COMPLETE_MODE_SCRIPT = f"""
+from langchain_demo.tools import evaluate_expression, fetch_webpage
+print("SANE", evaluate_expression.invoke({{"expression": "2*(3+4)"}}))
+print("ESCAPE", evaluate_expression.invoke({{"expression": {POPEN_ESCAPE!r}}}))
+print("DENIED", fetch_webpage.invoke({{"url": {DENIED_URL!r}}})[:400])
+"""
 
-    def test_scenario_comparison_allowed_domain(self) -> None:
-        """Compare behavior: allowed domain works in both scenarios.
 
-        Scenario A (without sandbox): example.com works
-        Scenario B (with sandbox): example.com also works (it's allowed)
-        """
-        content = "Content from example.com"
+def test_scenario_d_the_complete_mode_confines_the_same_calls() -> None:
+    """The whole process under `python-sb`, the other mode D2 asks for.
 
-        # Scenario A: Without sandbox enforcement, would work
-        # (conceptual - not actually testing unprotected code)
-        result_a = content
-        assert "Content from example.com" in result_a
+    Nothing calls `sandboxes()` here: the rules come from the profile handed to
+    the launcher, and `is_in_sandbox()` is true from the start, so `@sandbox`
+    calls the inner function directly and the bridge is never used. A tool
+    verified only in partial mode says nothing about this path.
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pysandboxes.python_sb",
+            f"--pysandboxes-config={CONFIG}",
+            "-c",
+            COMPLETE_MODE_SCRIPT,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        cwd=SAMPLE_ROOT,
+    )
 
-        # Scenario B: With sandbox enforcement, also works (allowed domain)
-        with patch("langchain_demo.tools._fetch_webpage_sandboxed") as mock_sandboxed:
-            mock_sandboxed.return_value = content
-            result_b = fetch_webpage.invoke({"url": "https://example.com"})
-
-        # After going through wrapper with sandbox, should also work
-        assert "Content from example.com" in result_b or isinstance(result_b, str)
-
-    def test_scenario_demonstrates_sandbox_necessity(self) -> None:
-        """Demonstrate why sandboxing is necessary for untrusted tool execution.
-
-        This test shows that without the .py-sandboxes configuration enforced
-        by the @sandbox decorator, network access could not be restricted.
-        """
-        # In Scenario A: untrusted code could access any domain
-        # In Scenario B: the @sandbox decorator enforces .py-sandboxes rules
-
-        # The outer fetch_webpage wrapper is safe because:
-        # 1. It only calls the sandboxed _fetch_webpage_sandboxed function
-        # 2. The sandbox enforces .py-sandboxes network restrictions
-        # 3. Only domains in .py-sandboxes are accessible
-
-        from langchain_demo.tools import fetch_webpage as tool_func
-
-        # Verify the tool is properly decorated (it's a LangChain StructuredTool)
-        assert hasattr(tool_func, "invoke"), "fetch_webpage should be a LangChain tool"
-        # LangChain tools have an invoke method, not necessarily callable directly
-        assert tool_func.invoke is not None, "fetch_webpage.invoke should exist"
+    assert "SANE 14.0" in result.stdout, result.stdout + result.stderr
+    assert "process-exec" in result.stdout, result.stdout + result.stderr
+    assert "refused by the sandbox" in result.stdout, result.stdout + result.stderr
