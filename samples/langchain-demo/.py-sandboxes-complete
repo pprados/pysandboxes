@@ -92,7 +92,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # Add rules (2026/09/10 at 06:41)
 env=CONDA_HOME=${CONDA_HOME}
 env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
 env=PWD=${PWD}
 env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
 env=PYENV_ROOT=${PYENV_ROOT}
@@ -211,23 +210,21 @@ python-import=atexit, importlib, inspect, mmap, subprocess
 
 # Standard Python
 python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
-python-import=_codecs_kr, _codecs_tw, _hashlib, _markupbase, _multibytecodec
-python-import=_multiprocessing, _queue, _sysconfigdata__linux_x86_64-linux-gnu
-python-import=_zoneinfo, abc, array, ast, asyncio, base64, binascii, bisect
-python-import=calendar, codecs, collections, colorsys, concurrent, configparser
-python-import=contextlib, contextvars, copy, copyreg, dataclasses, datetime, decimal
-python-import=email, encodings, enum, errno, fnmatch, fractions, functools, getpass
-python-import=gettext, hashlib, heapq, hmac, html, http, io, ipaddress, itertools
-python-import=json, keyword, locale, logging, math, mimetypes, multiprocessing
-python-import=numbers, operator, os, pathlib, pickle, platform, pprint, queue
-python-import=random, re, reprlib, secrets, select, selectors, shlex, signal, socket
-python-import=socketserver, ssl, stat, stringprep, struct, sysconfig, tempfile
-python-import=termios, textwrap, threading, time, traceback, types, typing
-python-import=unicodedata, urllib, uuid, weakref, xml, zipfile, zlib, zoneinfo
+python-import=_codecs_kr, _codecs_tw, _hashlib, _markupbase, _multibytecodec, _queue
+python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, array, ast
+python-import=base64, binascii, bisect, calendar, codecs, collections, colorsys
+python-import=concurrent, configparser, contextlib, contextvars, copy, copyreg
+python-import=dataclasses, datetime, decimal, email, encodings, enum, errno, fnmatch
+python-import=fractions, functools, getpass, gettext, hashlib, heapq, hmac, html
+python-import=http, io, ipaddress, itertools, json, keyword, logging, math
+python-import=mimetypes, multiprocessing, numbers, operator, os, pathlib, pickle
+python-import=platform, pprint, queue, random, re, reprlib, select, signal, socket
+python-import=ssl, stat, stringprep, struct, sysconfig, tempfile, termios, textwrap
+python-import=threading, time, traceback, types, typing, unicodedata, urllib, uuid
+python-import=weakref, xml, zipfile, zlib, zoneinfo
 
 # External modules (Are you sure about the origin?)
 python-import=81d243bd2c585b0f4821__mypyc
-python-import=annotated_doc
 python-import=annotated_types
 python-import=anyio
 python-import=attr
@@ -235,8 +232,6 @@ python-import=bs4
 python-import=certifi
 python-import=charset_normalizer
 python-import=click
-python-import=email_validator
-python-import=fastapi
 python-import=filetype
 python-import=h11
 python-import=h2
@@ -263,13 +258,11 @@ python-import=rich
 python-import=six
 python-import=sniffio
 python-import=soupsieve
-python-import=starlette
+python-import=tenacity
 python-import=typing_extensions
 python-import=typing_inspection
 python-import=urllib3
 python-import=uuid_utils
-python-import=uvicorn
-python-import=websockets
 python-import=xxhash
 python-import=zstandard
 

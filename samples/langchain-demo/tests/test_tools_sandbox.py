@@ -27,7 +27,14 @@ from pysandboxes import sandbox_denials, sandboxes
 from langchain_demo.tools import _evaluate_expression, _fetch_webpage, evaluate_expression, fetch_webpage
 
 SAMPLE_ROOT = Path(__file__).parent.parent
+# One profile per mode, each learned in its own. They are not
+# interchangeable: the partial profile has to allow the bridge that runs
+# inside the sandbox with the tool (fastapi, uvicorn, starlette...), and the
+# complete one has to allow the framework's own dispatch (tenacity), which in
+# partial mode stays in the parent. Sharing one profile would grant each mode
+# the other's privileges for nothing.
 CONFIG = SAMPLE_ROOT / ".py-sandboxes"
+CONFIG_COMPLETE = SAMPLE_ROOT / ".py-sandboxes-complete"
 
 # Host the learned profile allows.
 ALLOWED_URL = "https://www.google.com/"
@@ -121,17 +128,21 @@ def test_the_wrappers_report_the_rule_to_the_model() -> None:
     assert allowed_eval == "14.0", allowed_eval
 
 
-def test_the_profile_is_a_whitelist() -> None:
+@pytest.mark.parametrize("profile", [CONFIG, CONFIG_COMPLETE], ids=["partial", "complete"])
+def test_the_profile_is_a_whitelist(profile: Path) -> None:
     """Guard the two ways this demonstration has silently died before."""
     active = [
         line.strip()
-        for line in CONFIG.read_text().splitlines()
+        for line in profile.read_text().splitlines()
         if line.strip() and not line.strip().startswith("#")
     ]
 
     assert "python-import=*" not in active, "a wildcard import rule voids the whitelist"
     assert not [line for line in active if line.startswith("python-api=ALLOW:process-exec")], (
         "allowing process-exec would void scenario C"
+    )
+    assert not [line for line in active if line.startswith("learn=")], (
+        "a learn= rule left behind records instead of denying"
     )
 
 
@@ -156,7 +167,7 @@ def test_scenario_d_the_complete_mode_confines_the_same_calls() -> None:
             sys.executable,
             "-m",
             "pysandboxes.python_sb",
-            f"--pysandboxes-config={CONFIG}",
+            f"--pysandboxes-config={CONFIG_COMPLETE}",
             "-c",
             COMPLETE_MODE_SCRIPT,
         ],
