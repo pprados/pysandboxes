@@ -1,0 +1,98 @@
+# Learned in the complete mode, and only usable there: the whole server runs
+# under `python-sb`, so this profile has to allow the framework's own dispatch.
+# The partial mode has its own profile, `.py-sandboxes`, deliberately separate --
+# sharing one file would grant each mode the other's privileges for nothing.
+#
+# Relearn with:
+#   python -m pysandboxes.python_sb --pysandboxes-config=mcp_server/.py-sandboxes-complete \
+#       --learn=mcp_server/.py-sandboxes-complete _learn_complete.py
+#
+# The net rule is not learned: which hosts a tool may reach is the author's
+# decision, not an observation.
+py-sandbox=true
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+net=ALLOW|TCP|www.google.com|443|OUT
+
+# Add rules (2026/09/10 at 06:56)
+env=COLORTERM=${COLORTERM}
+env=CONDA_HOME=${CONDA_HOME}
+env=FORCE_COLOR=${FORCE_COLOR}
+env=HOME=${HOME}
+env=LANGUAGE=${LANGUAGE}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=PYDANTIC_VALIDATE_CORE_SCHEMAS=${PYDANTIC_VALIDATE_CORE_SCHEMAS}
+env=PYENV_ROOT=${PYENV_ROOT}
+env=PYTHONUSERBASE=${PYTHONUSERBASE}
+env=TEMP=${TEMP}
+env=TMP=${TMP}
+
+# ⚠ Dangerous!
+python-import=atexit, importlib, inspect, mmap, subprocess, webbrowser
+
+# Standard Python
+python-import=__future__, _cffi_backend, _decimal, _hashlib, _markupbase
+python-import=_multibytecodec, _multiprocessing, _queue, _socket
+python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
+python-import=array, ast, asyncio, base64, binascii, calendar, codecs, collections
+python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
+python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, errno
+python-import=fnmatch, fractions, functools, getpass, gettext, hashlib, heapq, hmac
+python-import=html, http, io, ipaddress, itertools, json, keyword, linecache, locale
+python-import=logging, marshal, math, mimetypes, multiprocessing, numbers, operator
+python-import=os, pathlib, pickle, platform, pprint, queue, random, re, reprlib
+python-import=secrets, select, selectors, shlex, shutil, signal, socket
+python-import=socketserver, ssl, stat, string, stringprep, struct, sysconfig
+python-import=tempfile, termios, textwrap, threading, time, traceback, types, typing
+python-import=unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
+
+# External modules (Are you sure about the origin?)
+python-import=aiofiles
+python-import=annotated_types
+python-import=anyio
+python-import=attr
+python-import=attrs
+python-import=authlib
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=cryptography
+python-import=dotenv
+python-import=exceptiongroup
+python-import=fastmcp
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=httpx_file
+python-import=httpx_sse
+python-import=idna
+python-import=jsonschema
+python-import=jsonschema_specifications
+python-import=markdownify
+python-import=mcp
+python-import=mcp_server
+python-import=pydantic
+python-import=pydantic_core
+python-import=pydantic_settings
+python-import=pygments
+python-import=python_multipart
+python-import=referencing
+python-import=rfc3339_validator
+python-import=rich
+python-import=rpds
+python-import=six
+python-import=sniffio
+python-import=soupsieve
+python-import=sse_starlette
+python-import=starlette
+python-import=typing_extensions
+python-import=typing_inspection
+python-import=uvicorn
+
+expose-ro=~/workspace/pysandboxes
+
+# threads: concurrency primitives
+python-api=ALLOW:threading.Thread.start
+python-api=ALLOW:threading._start_joinable_thread

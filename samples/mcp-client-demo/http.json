@@ -1,7 +1,8 @@
 {
   "mcpServers": {
   // Version with `python-sb`. The user MCP client decide the rules
-  //  to use (complete mode) in `../mcp-server-demo/.py-sandboxes`
+  //  to use (complete mode) in `../mcp-server-demo/mcp_server/.py-sandboxes-complete`,
+  //  a profile learned in the complete mode and used only there
     "mcp_server": {
       "transport": "http",
        "url": "http://${MY_IP:-127.0.0.1}:8000/mcp",

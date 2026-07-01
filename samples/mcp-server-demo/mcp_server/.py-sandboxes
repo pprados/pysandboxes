@@ -1,3 +1,9 @@
+# Profile for the PARTIAL mode: only the tool bodies enter the sandbox.
+# The complete mode has its own profile, `.py-sandboxes-complete`, deliberately
+# separate -- sharing one file would grant each mode the other's privileges for
+# nothing, which is the opposite of what the partial mode is for. Relearn both
+# with `learn.py`; see its docstring.
+#
 # PySandboxes Configuration File
 # ===============================
 # This configuration defines security rules for Python code execution in a sandboxed
