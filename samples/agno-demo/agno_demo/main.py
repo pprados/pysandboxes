@@ -3,27 +3,26 @@
 import argparse
 import logging
 import os
+from pathlib import Path
 from typing import Sequence
 
 from agno.agent import Agent
 from dotenv import load_dotenv
+from pysandboxes import sandboxes
 
-from agno_demo.tools import execute_python, fetch_webpage
+from agno_demo.tools import evaluate_expression, fetch_webpage
+
+CONFIG = Path(__file__).parent.parent / ".py-sandboxes"
 
 DEFAULT_SYSTEM = (
     "You must use the provided tools for any live webpage content or any computation. "
-    "Do not invent HTML, titles, or numeric results without calling the tools. "
-    "When you call execute_python, pass the exact text returned by fetch_webpage as your HTML "
-    "string (assign it to a variable and parse that). "
-    "When using re.search, check the match is not None before calling .group(); if there is no "
-    "match, widen the pattern or inspect the HTML."
+    "Do not invent page content or numeric results without calling the tools."
 )
 
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, then use execute_python "
-    "on the fetched HTML (not a made-up snippet) to extract the text inside the first "
-    "<title>...</title> and report how many words that title contains (split on whitespace). "
-    "End with a one-sentence summary that includes the word count."
+    "Using the tools: fetch https://www.google.com with fetch_webpage, report how many "
+    "words its title contains, then use evaluate_expression to compute that count squared. "
+    "End with a one-sentence summary that includes both numbers."
 )
 
 
@@ -56,7 +55,7 @@ def build_agent(
     """Agent with tools; ``search_knowledge`` disabled so only our tools are offered."""
     return Agent(
         model=model_spec,
-        tools=[fetch_webpage, execute_python],
+        tools=[fetch_webpage, evaluate_expression],
         system_message=DEFAULT_SYSTEM,
         search_knowledge=False,
         tool_call_limit=max_tool_calls,
@@ -91,7 +90,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     agent = build_agent(model_spec=model_spec, max_tool_calls=args.max_tool_calls)
     try:
-        run_output = agent.run(args.task)
+        # Partial mode: only the tool bodies run in the sandbox. The context
+        # manager has to wrap the run that *calls* them -- @sandbox needs a
+        # running daemon at call time, and agent.run() is where the calls happen.
+        with sandboxes(sandboxes_config=CONFIG):
+            run_output = agent.run(args.task)
     except Exception as e:
         logging.getLogger(__name__).error("Agent failed: %s", e, exc_info=True)
         return 1

@@ -15,8 +15,10 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
+    "pysandboxes",
     "agno>=2.5,<3",
     "httpx>=0.28",
+    "markdownify>=1.2.0",
     "python-dotenv>=1.0",
     # Provider SDKs used by agno.models (see agno.models.utils._get_model_class)
     "openai",
