@@ -46,7 +46,8 @@ def build_chat_completion_client() -> ChatCompletionClient:
     - ``openai`` — OpenAI API (``OPENAI_API_KEY``, optional ``OPENAI_BASE_URL``).
     - ``anthropic`` — Anthropic (``ANTHROPIC_API_KEY``, optional ``ANTHROPIC_BASE_URL``).
     - ``ollama`` — local Ollama (default base URL ``http://127.0.0.1:11434``, override with ``OLLAMA_BASE_URL``).
-    - ``google_genai`` / ``gemini`` — Gemini via OpenAI-compatible API (``GOOGLE_API_KEY``, optional ``GEMINI_BASE_URL``).
+    - ``google_genai`` / ``gemini`` — Gemini via OpenAI-compatible API (``GOOGLE_API_KEY``,
+      optional ``GEMINI_BASE_URL``).
     """
     raw = os.environ.get("CHAT_MODEL", "openai:gpt-4o-mini")
     provider, model_id = parse_provider_and_model(raw)
@@ -86,5 +87,5 @@ def build_chat_completion_client() -> ChatCompletionClient:
         )
 
     raise ValueError(
-        f"Unsupported CHAT_MODEL provider {provider!r}. " "Use openai, anthropic, ollama, or google_genai (gemini)."
+        f"Unsupported CHAT_MODEL provider {provider!r}. Use openai, anthropic, ollama, or google_genai (gemini)."
     )

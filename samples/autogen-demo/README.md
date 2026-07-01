@@ -1,8 +1,30 @@
 # autogen-demo
 
-Console demo of [Microsoft AutoGen](https://github.com/microsoft/autogen) **AgentChat** with two tools—**HTTP fetch** and **restricted Python execution**—driven by the model’s tool calls (not hard-coded script logic).
+Console demo of [Microsoft AutoGen](https://github.com/microsoft/autogen) **AgentChat** with two tools—**`fetch_webpage`** and **`evaluate_expression`**—driven by the model’s tool calls (not hard-coded script logic).
 
-The default task **requires** both tools: it asks the model to fetch `https://www.google.com`, parse the HTML in Python, and report a word count. **This is not an OS-level sandbox**; `execute_python` is a small `exec` demo only.
+The default task **requires** both tools: it asks the model to fetch `https://www.google.com`, report how many words its title contains, then compute that count squared.
+
+## What the sandbox does here
+
+Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
+given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__`—which is
+known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`. That
+is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
+filter can take the credit.
+
+Both tools are coroutines, AutoGen's own idiom, and `@sandbox` supports them. The partial mode
+is armed with `pysandboxes.run()`, the asynchronous entry point: it arms the profile *and*
+binds the sandbox loop, which `async with sandboxes(...)` alone does not do.
+
+Two profiles, one per mode, each learned in its own by `learn.py`:
+
+| Profile | Mode | What is confined |
+|---------|------|------------------|
+| `.py-sandboxes` | partial | the tool bodies only (`pysandboxes.run()` around the session) |
+| `.py-sandboxes-complete` | complete | the whole process, launched with `python -m pysandboxes.python_sb` |
+
+They are deliberately separate: sharing one file would grant each mode the other's privileges
+for nothing, which is the opposite of what the partial mode is for.
 
 ## Prerequisites
 
@@ -49,47 +71,6 @@ autogen-demo -v
 autogen-demo --max-tool-iterations 15
 ```
 
-### Sandbox integration (python-sb)
-
-Run `execute_python` inside an **OS-level container** instead of just a namespace-restricted `exec`:
-
-```bash
-# Requires python-sb installed
-autogen-demo --use-python-sb
-
-# Sandbox + custom task
-autogen-demo --use-python-sb --task "Your custom task here"
-```
-
-**Setup python-sb:**
-```bash
-cd samples/autogen-demo
-uv pip install python-sb
-```
-
-**Comparison:**
-| Mode | Isolation | Speed | Setup |
-|------|-----------|-------|-------|
-| Default (`tools.py`) | Namespace + allowlist | Fast | None |
-| `--use-python-sb` | OS container (qemu/unshare) | Slower | `uv pip install python-sb` |
-
-### Annotated tools
-
-Use tools with **JSON Schema metadata** for better model type awareness:
-
-```bash
-autogen-demo --annotated-tools
-```
-
-**What changes:**
-- Each tool exposes `.parameters` (JSON Schema) for the model
-- Model can introspect exact parameter types and requirements before calling
-- Reduces  "wrong parameter shape" errors
-
-**Layout:**
-- `tools_annotated.py` — Same tools, wrapped with `ToolMetadata` + JSON Schema
-- Model sees structured parameter hints, not just docstrings
-
 ## Tests
 
 ```bash
@@ -100,13 +81,11 @@ make validate   # lint + tests (no network, no API keys)
 
 ## Layout
 
-- `autogen_demo/tools.py` — Default tools: `fetch_webpage`, `execute_python` (namespace-restricted)
-- `autogen_demo/tools_sandbox.py` — `execute_python` inside python-sb OS container (use with `--use-python-sb`)
-- `autogen_demo/tools_annotated.py` — Same tools with JSON Schema metadata (use with `--annotated-tools`)
+- `autogen_demo/tools.py` — `fetch_webpage`, `evaluate_expression`, each `@sandbox`ed behind a wrapper
+- `learn.py` — relearns either profile, in its own mode
 - `autogen_demo/model_client.py` — `CHAT_MODEL` → `ChatCompletionClient`
 - `autogen_demo/run.py` — `AssistantAgent` + `run_stream` + tool routing
-- `autogen_demo/main.py` — CLI with flags for sandbox/annotated modes
+- `autogen_demo/main.py` — CLI, arms the partial profile around the session
 
-**Runtime dependencies:**
-- Default: No external sandbox library
-- `--use-python-sb`: Requires `python-sb` (in-tree at `python-sb/`)
+**Runtime dependencies:** `pysandboxes` (in-tree at the repository root), `httpx`,
+`markdownify`.
