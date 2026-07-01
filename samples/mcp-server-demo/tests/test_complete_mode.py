@@ -25,7 +25,7 @@ from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
 
 SAMPLE_ROOT = Path(__file__).parent.parent
-CONFIG = "mcp_server/.py-sandboxes"
+CONFIG = "mcp_server/.py-sandboxes-complete"
 
 ALLOWED_URL = "https://www.google.com/"
 DENIED_URL = "https://example.com/"

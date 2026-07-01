@@ -26,7 +26,13 @@ from pysandboxes import sandbox_denials, sandboxes
 from mcp_server.main import _evaluate_expression, _fetch_webpage
 
 SAMPLE_ROOT = Path(__file__).parent.parent
+# One profile per mode, each learned in its own by `learn.py`. They are not
+# interchangeable: the partial profile has to allow the bridge that runs inside
+# the sandbox with the tool, and the complete one has to allow the framework's
+# own dispatch. Sharing one profile would grant each mode the other's
+# privileges for nothing.
 CONFIG = SAMPLE_ROOT / "mcp_server" / ".py-sandboxes"
+CONFIG_COMPLETE = SAMPLE_ROOT / "mcp_server" / ".py-sandboxes-complete"
 
 # Host listed in net=ALLOW of the profile above.
 ALLOWED_URL = "https://www.google.com/"
@@ -43,12 +49,11 @@ def armed_kwargs() -> dict[str, object]:
         "os_sandbox": "subprocess",
     }
 
+
 # Reaches Popen through the subclass tree, which an empty __builtins__ does not
 # hide. The expression tool is a plain eval() on purpose: what stops this is the
 # sandbox, not a parser.
-POPEN_ESCAPE = (
-    "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
-)
+POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
 
 
 def test_scenario_a_the_escape_succeeds_without_the_sandbox() -> None:
@@ -117,12 +122,16 @@ async def test_scenario_c_the_malicious_expression_is_confined() -> None:
     assert any("process-exec" in denial for denial in denials), denials
 
 
-def test_the_profile_is_a_whitelist() -> None:
-    """Guard the two ways this demonstration has silently died before."""
-    rules = [line.strip() for line in CONFIG.read_text().splitlines()]
+@pytest.mark.parametrize("profile", [CONFIG, CONFIG_COMPLETE], ids=["partial", "complete"])
+def test_the_profile_is_a_whitelist(profile: Path) -> None:
+    """Guard the three ways this demonstration has silently died before."""
+    rules = [line.strip() for line in profile.read_text().splitlines()]
     active = [line for line in rules if line and not line.startswith("#")]
 
     assert "python-import=*" not in active, "a wildcard import rule voids the whitelist"
     assert not [line for line in active if line.startswith("python-api=ALLOW:process-exec")], (
         "allowing process-exec would void scenario C"
+    )
+    assert not [line for line in active if line.startswith("learn=")], (
+        "a profile left in learning mode records instead of denying"
     )

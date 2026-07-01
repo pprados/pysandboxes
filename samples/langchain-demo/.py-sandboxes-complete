@@ -1,3 +1,8 @@
+# Profile for the COMPLETE mode: the whole agent runs under `python-sb`, so this
+# profile has to allow the framework's own dispatch (`tenacity`). The partial
+# mode has its own profile, `.py-sandboxes`, deliberately separate. Relearn both
+# with `learn.py`; see its docstring.
+#
 # PySandboxes Configuration File
 # ===============================
 # This configuration defines security rules for Python code execution in a sandboxed
