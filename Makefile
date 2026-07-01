@@ -89,7 +89,7 @@ sample-tests:
 	# (cd samples/autogen-demo && make tests)
 	# (cd samples/crewai-demo && make tests)
 	# (cd samples/google-adk-demo && make tests)
-	# (cd samples/langchain-demo && make tests)
+	(cd samples/langchain-demo && make tests)
 	# (cd samples/langgraph-demo && make tests)
 	(cd samples/mcp-client-demo && make tests)
 	(cd samples/mcp-server-demo && make tests)

@@ -36,6 +36,7 @@ dependencies = [
     "langchain-perplexity",
     "langchain-litellm",
     "httpx>=0.28",
+    "markdownify>=1.2.0",
     "python-dotenv>=1.0",
 ]
 

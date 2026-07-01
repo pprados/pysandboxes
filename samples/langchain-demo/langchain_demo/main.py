@@ -4,30 +4,29 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from pysandboxes import sandboxes
 
 from langchain_demo.chain import run_agent_loop
-from langchain_demo.tools import execute_python, fetch_webpage
+from langchain_demo.tools import evaluate_expression, fetch_webpage
+
+CONFIG = Path(__file__).parent.parent / ".py-sandboxes"
 
 DEFAULT_SYSTEM = (
     "You must use the provided tools for any live webpage content or any computation. "
-    "Do not invent HTML, titles, or numeric results without calling the tools. "
-    "When you call execute_python, pass the exact text returned by fetch_webpage as your HTML "
-    "string (assign it to a variable and parse that). "
-    "When using re.search, check the match is not None before calling .group(); if there is no "
-    "match, widen the pattern or inspect the HTML."
+    "Do not invent page content or numeric results without calling the tools. "
+    "evaluate_expression takes a single expression, not statements."
 )
 
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, then use execute_python "
-    "on the fetched HTML (not a made-up snippet) to extract the text inside the first "
-    "<title>...</title> and report how many words that title contains (split on whitespace). "
-    "End with a one-sentence summary that includes the word count."
+    "Using the tools: fetch https://www.google.com with fetch_webpage, then use "
+    "evaluate_expression to compute 2*(3+4), and report both results in one sentence."
 )
 
 
@@ -75,19 +74,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     _configure_logging(args.verbose)
 
-    tools = [fetch_webpage, execute_python]
+    tools = [fetch_webpage, evaluate_expression]
     llm = build_chat_model()
     messages = [
         SystemMessage(content=DEFAULT_SYSTEM),
         HumanMessage(content=args.task),
     ]
     try:
-        final = run_agent_loop(
-            llm,
-            tools,
-            messages,
-            max_iterations=args.max_iterations,
-        )
+        # Partial mode: only the tools run in the sandbox. The context manager
+        # has to wrap the loop that *calls* them -- @sandbox needs a running
+        # daemon at call time, and the loop is where the calls happen.
+        with sandboxes(sandboxes_config=CONFIG):
+            final = run_agent_loop(
+                llm,
+                tools,
+                messages,
+                max_iterations=args.max_iterations,
+            )
     except Exception as e:
         logging.getLogger(__name__).error("Agent failed: %s", e, exc_info=True)
         return 1
