@@ -17,6 +17,8 @@ classifiers = [
 # pydantic-ai-slim optional groups: see https://ai.pydantic.dev/install/
 # (openai, anthropic, google, groq, mistral, cohere, bedrock, huggingface, vertexai, …)
 dependencies = [
+    "pysandboxes",
+    "markdownify>=1.2.0",
     "pydantic-ai-slim[anthropic,bedrock,cohere,google,groq,huggingface,mistral,openai,vertexai]>=1.70.0",
     "httpx>=0.28",
     "python-dotenv>=1.0",

@@ -3,18 +3,21 @@
 import argparse
 import logging
 import os
+from pathlib import Path
 from typing import Sequence
 
 from dotenv import load_dotenv
 from pydantic_ai.usage import UsageLimits
+from pysandboxes import sandboxes
 
 from pydantic_ai_demo.agent_factory import build_agent
 
+CONFIG = Path(__file__).parent.parent / ".py-sandboxes"
+
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, then use execute_python "
-    "on the fetched HTML (not a made-up snippet) to extract the text inside the first "
-    "<title>...</title> and report how many words that title contains (split on whitespace). "
-    "End with a one-sentence summary that includes the word count."
+    "Using the tools: fetch https://www.google.com with fetch_webpage, report how many "
+    "words its title contains, then use evaluate_expression to compute that count squared. "
+    "End with a one-sentence summary that includes both numbers."
 )
 
 
@@ -67,7 +70,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     usage_limits = UsageLimits(request_limit=max(1, args.max_iterations))
 
     try:
-        result = agent.run_sync(args.task, usage_limits=usage_limits)
+        # Partial mode: only the tool bodies run in the sandbox. The context
+        # manager has to wrap the run that *calls* them -- @sandbox needs a
+        # running daemon at call time, and run_sync() is where the calls happen.
+        with sandboxes(sandboxes_config=CONFIG):
+            result = agent.run_sync(args.task, usage_limits=usage_limits)
     except Exception as e:
         logging.getLogger(__name__).error("Agent failed: %s", e, exc_info=True)
         return 1
