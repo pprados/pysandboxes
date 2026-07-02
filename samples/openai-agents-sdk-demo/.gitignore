@@ -8,3 +8,6 @@ __pycache__/
 .ruff_cache/
 dist/
 .benchmarks/
+
+# Backups written by learning mode (see learn.py)
+.py-sandboxes*.old*
