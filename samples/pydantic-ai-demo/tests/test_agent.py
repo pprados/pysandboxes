@@ -13,7 +13,12 @@ pytestmark = pytest.mark.anyio
 
 
 @pytest.fixture(autouse=True)
-def _block_real_model_requests() -> Iterator[None]:
+def _block_real_model_requests(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    # `build_agent("openai:...")` constructs the provider client eagerly, which
+    # raises without a key even though every request here goes to TestModel and
+    # ALLOW_MODEL_REQUESTS forbids reaching a real one. A placeholder keeps the
+    # suite deterministic offline.
+    monkeypatch.setenv("OPENAI_API_KEY", "test-placeholder")
     models.ALLOW_MODEL_REQUESTS = False
     yield
     models.ALLOW_MODEL_REQUESTS = True

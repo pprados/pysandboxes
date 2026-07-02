@@ -1,3 +1,6 @@
 .local.py-sandboxes
 .env
 .venv
+
+# Backups written by learning mode (see learn.py)
+.py-sandboxes*.old*

@@ -1,12 +1,26 @@
 # Pydantic AI demo (`pydantic-ai-demo`)
 
-Console **agent** using [Pydantic AI](https://ai.pydantic.dev/): a chat model with **`fetch_webpage`** and **`execute_python`** registered as tools. The framework runs the **model ↔ tools** loop internally (`run_sync`); this sample caps **model requests** with **`UsageLimits(request_limit=…)`** so runs cannot spin forever.
+Console **agent** using [Pydantic AI](https://ai.pydantic.dev/): a chat model with **`fetch_webpage`** and **`evaluate_expression`** registered as tools. The framework runs the **model ↔ tools** loop internally (`run_sync`); this sample caps **model requests** with **`UsageLimits(request_limit=…)`** so runs cannot spin forever.
 
-The default task **requires** both tools: it loads `https://www.google.com`, then runs Python on the HTML (for example to count words in the `<title>`). The model must not answer from memory alone.
+The default task **requires** both tools: it loads `https://www.google.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
 
-## Security note
+## What the sandbox does here
 
-`execute_python` uses a **restricted** namespace for demonstration only. It is **not** an OS-level sandbox. Do not point this demo at untrusted users or secrets.
+Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
+given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__`—which is
+known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`. That
+is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
+filter can take the credit.
+
+Two profiles, one per mode, each learned in its own by `learn.py`:
+
+| Profile | Mode | What is confined |
+|---------|------|------------------|
+| `.py-sandboxes` | partial | the tool bodies only (`with sandboxes(...)` around `run_sync()`) |
+| `.py-sandboxes-complete` | complete | the whole process, launched with `python -m pysandboxes.python_sb` |
+
+They are deliberately separate: sharing one file would grant each mode the other's privileges
+for nothing, which is the opposite of what the partial mode is for.
 
 ## Prerequisites
 
@@ -72,7 +86,8 @@ make validate
 
 | Path | Role |
 |------|------|
-| `pydantic_ai_demo/tools.py` | `fetch_webpage`, `execute_python` (plain functions) |
+| `pydantic_ai_demo/tools.py` | `fetch_webpage`, `evaluate_expression`, each `@sandbox`ed behind a wrapper |
+| `learn.py` | relearns either profile, in its own mode |
 | `pydantic_ai_demo/agent_factory.py` | `build_agent` — `Agent` + `@agent.tool_plain` registration |
 | `pydantic_ai_demo/main.py` | CLI, `CHAT_MODEL`, `run_sync` + `UsageLimits` |
 

@@ -16,7 +16,6 @@ def configure_pysandboxes_path() -> None:
     This ensures that when tests use @sandbox decorator, the configuration
     is loaded from the correct location.
     """
-    from pysandboxes import sandboxes
     # The .py-sandboxes file should be in the sample directory
     # PySandboxes will automatically search for it in the current directory
     # and parent directories, so this fixture documents the expectation
