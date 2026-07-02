@@ -22,7 +22,7 @@ def test_main_kickoff_prints(mock_build_llm: MagicMock, mock_crew_cls: MagicMock
     mock_crew.kickoff.return_value = mock_result
     mock_crew_cls.return_value = mock_crew
 
-    code = main(["--task", "Use tools to add 1 and 1 via execute_python only."])
+    code = main(["--task", "Use tools to add 1 and 1 via evaluate_expression only."])
 
     assert code == 0
     mock_crew.kickoff.assert_called_once()

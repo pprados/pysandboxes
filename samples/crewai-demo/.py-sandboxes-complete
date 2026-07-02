@@ -1,17 +1,13 @@
-# Profile for the PARTIAL mode: only the tool bodies enter the sandbox.
-# The complete mode has its own profile, `.py-sandboxes-complete`, deliberately
-# separate -- sharing one file would grant each mode the other's privileges for
-# nothing, which is the opposite of what the partial mode is for. Relearn both
-# with `learn.py`; see its docstring.
-#
-# The `net=` rule is not learned: which hosts a tool may reach is the author's
-# decision, not an observation.
+# Profile for the COMPLETE mode: the whole process runs under `python-sb`, so
+# this profile has to allow the framework's own dispatch too. The partial mode
+# has its own profile, `.py-sandboxes`, deliberately separate. Relearn both with
+# `learn.py`; see its docstring.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:17)
+# Add rules (2026/09/10 at 07:18)
 env=AGENTQL_API_KEY=${AGENTQL_API_KEY}
 env=AIOHTTP_CONNECTOR_LIMIT=${AIOHTTP_CONNECTOR_LIMIT}
 env=AIOHTTP_CONNECTOR_LIMIT_PER_HOST=${AIOHTTP_CONNECTOR_LIMIT_PER_HOST}
@@ -165,7 +161,6 @@ env=JITTER=${JITTER}
 env=JSON_LOGS=${JSON_LOGS}
 env=LANGFUSE_MOCK_LATENCY_MS=${LANGFUSE_MOCK_LATENCY_MS}
 env=LANGSMITH_MOCK_LATENCY_MS=${LANGSMITH_MOCK_LATENCY_MS}
-env=LANGUAGE=${LANGUAGE}
 env=LENGTH_OF_LITELLM_GENERATED_KEY=${LENGTH_OF_LITELLM_GENERATED_KEY}
 env=LITELLM_ANTHROPIC_BETA_HEADERS_URL=${LITELLM_ANTHROPIC_BETA_HEADERS_URL}
 env=LITELLM_API_KEY=${LITELLM_API_KEY}
@@ -335,7 +330,6 @@ env=SSL_VERIFY=${SSL_VERIFY}
 env=SYSTEM_MESSAGE_TOKEN_COUNT=${SYSTEM_MESSAGE_TOKEN_COUNT}
 env=TEMP=${TEMP}
 env=TEMPORARILY_DISABLE_PROTOBUF_VERSION_CHECK=${TEMPORARILY_DISABLE_PROTOBUF_VERSION_CHECK}
-env=TERM=${TERM}
 env=TETRATE_API_KEY=${TETRATE_API_KEY}
 env=TMP=${TMP}
 env=TOGETHER_AI_110_B=${TOGETHER_AI_110_B}
@@ -373,21 +367,20 @@ python-import=webbrowser
 # Standard Python
 python-import=__future__, _cffi_backend, _codecs_cn, _codecs_hk, _codecs_iso2022
 python-import=_codecs_jp, _codecs_kr, _codecs_tw, _compression, _elementtree
-python-import=_hashlib, _markupbase, _multibytecodec, _multiprocessing, _queue
-python-import=_sqlite3, _string, _sysconfigdata__linux_x86_64-linux-gnu, _thread
-python-import=_zoneinfo, abc, argparse, array, ast, asyncio, base64, binascii
-python-import=bisect, calendar, codecs, collections, colorsys, concurrent
-python-import=configparser, contextlib, contextvars, copy, copyreg, dataclasses
-python-import=datetime, decimal, difflib, dis, email, encodings, enum, errno, fcntl
-python-import=fnmatch, fractions, functools, getpass, gettext, graphlib, grp, gzip
-python-import=hashlib, heapq, hmac, html, http, io, ipaddress, itertools, json
-python-import=keyword, locale, logging, marshal, math, mimetypes, multiprocessing
-python-import=numbers, operator, os, pathlib, pickle, platform, posixpath, pprint
-python-import=pwd, queue, random, re, reprlib, secrets, select, selectors, shlex
-python-import=shutil, signal, socket, socketserver, sqlite3, ssl, stat, string
-python-import=stringprep, struct, sysconfig, tarfile, tempfile, termios, textwrap
-python-import=threading, time, traceback, types, typing, unicodedata, urllib, uuid
-python-import=weakref, xml, zipfile, zipimport, zlib, zoneinfo
+python-import=_hashlib, _markupbase, _multibytecodec, _queue, _sqlite3, _string
+python-import=_sysconfigdata__linux_x86_64-linux-gnu, _thread, _zoneinfo, abc
+python-import=argparse, array, ast, base64, binascii, bisect, calendar, codecs
+python-import=collections, colorsys, concurrent, configparser, contextlib
+python-import=contextvars, copy, copyreg, dataclasses, datetime, decimal, difflib
+python-import=dis, email, encodings, enum, errno, fcntl, fnmatch, fractions
+python-import=functools, getpass, gettext, graphlib, grp, gzip, hashlib, heapq, hmac
+python-import=html, http, io, ipaddress, itertools, json, keyword, logging, marshal
+python-import=math, mimetypes, multiprocessing, numbers, operator, os, pathlib
+python-import=pickle, platform, posixpath, pprint, pwd, queue, random, re, reprlib
+python-import=secrets, select, shlex, shutil, signal, socket, sqlite3, ssl, stat
+python-import=string, stringprep, struct, sysconfig, tarfile, tempfile, termios
+python-import=textwrap, threading, time, traceback, types, typing, unicodedata
+python-import=urllib, uuid, weakref, xml, zipfile, zipimport, zlib, zoneinfo
 
 # External modules (Are you sure about the origin?)
 python-import=81d243bd2c585b0f4821__mypyc
@@ -416,7 +409,6 @@ python-import=google
 python-import=grpc
 python-import=h11
 python-import=httpcore
-python-import=httptools
 python-import=httpx
 python-import=idna
 python-import=importlib_metadata
@@ -460,9 +452,6 @@ python-import=tokenizers
 python-import=typing_extensions
 python-import=typing_inspection
 python-import=urllib3
-python-import=uvicorn
-python-import=watchfiles
-python-import=websockets
 python-import=yaml
 python-import=zipp
 

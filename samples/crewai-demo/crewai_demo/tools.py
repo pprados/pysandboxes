@@ -1,114 +1,102 @@
-"""Tools for CrewAI agents: HTTP fetch and restricted Python execution."""
+"""Tools exposed to the chat model via CrewAI's tool API.
 
-import io
+Two tools, the same two every sample carries: one reaches the network, one
+evaluates an expression the model supplies. What they demonstrate is that
+pysandboxes can confine both without either of them being written defensively.
+
+The shape is the indirection D7 of the design spec asks for. `@tool` returns a
+structured tool object, not a function, so what the model calls is no longer
+callable by name -- and the sandbox bridge resolves a function by
+``module:qualname``, re-importing it inside the sandbox. So `@sandbox` goes on a
+module-level ``_``-prefixed function and `@tool` on a thin wrapper that
+delegates to it. Reversing the two makes the tool unresolvable in partial mode.
+
+The wrapper also converts errors. `@sandbox` re-raises, while a tool reports to
+a model in text, and a refusal has to say which rule refused: httpx rewrites a
+blocked connection into "All connection attempts failed", which any outage
+produces too.
+"""
+
 import logging
-import re
-from typing import Any
 
 import httpx
 from crewai.tools import tool
+from markdownify import markdownify as md
+from pysandboxes import is_in_sandbox, sandbox, sandbox_denials
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 15.0
 _MAX_BODY_CHARS = 8000
 
-_ALLOWED_IMPORTS: frozenset[str] = frozenset(
-    {"re", "math", "json", "itertools", "functools", "collections", "operator", "string"}
-)
+
+def _explain(error: Exception) -> str:
+    """Name the rule that refused the call, when one did."""
+    denials = sandbox_denials(error)
+    if not denials:
+        return f"{type(error).__name__}: {error}"
+    return f"{type(error).__name__}: {error} [refused by the sandbox: {'; '.join(denials)}]"
 
 
-def _safe_import(
-    name: str,
-    globals_: dict[str, Any] | None = None,
-    locals_: dict[str, Any] | None = None,
-    fromlist: tuple[str, ...] = (),
-    level: int = 0,
-) -> Any:
-    if level != 0 or not name or name.split(".")[0] not in _ALLOWED_IMPORTS:
-        raise ImportError(
-            f"import of {name!r} is not allowed. "
-            f"Allowed: {', '.join(sorted(_ALLOWED_IMPORTS))}. "
-            "For regex, `re` is also available without importing."
-        )
-    return __import__(name, globals_, locals_, fromlist, level)
-
-
-@tool("fetch_webpage")
-def fetch_webpage(url: str) -> str:
-    """HTTP GET a URL and return response body as text (truncated for large pages).
-
-    Args:
-        url: Absolute http(s) URL to fetch.
-
-    Returns:
-        Response body text, or an error string.
-    """
-    try:
-        with httpx.Client(timeout=_DEFAULT_TIMEOUT, follow_redirects=True) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            text = response.text
-    except Exception as e:
-        logger.warning("fetch_webpage failed for %s: %s", url, e, exc_info=True)
-        return f"Error fetching URL: {type(e).__name__}: {e}"
+@sandbox
+def _fetch_webpage(url: str) -> str:
+    """Fetch a webpage and return it as markdown."""
+    assert is_in_sandbox()
+    logger.info("Fetching webpage: %s", url)
+    with httpx.Client(timeout=_DEFAULT_TIMEOUT, follow_redirects=True) as client:
+        response = client.get(url)
+        response.raise_for_status()
+        text = md(response.text)
     if len(text) > _MAX_BODY_CHARS:
         return text[:_MAX_BODY_CHARS] + "\n... [truncated]"
     return text
 
 
-def _safe_builtins() -> dict[str, Any]:
-    return {
-        "__import__": _safe_import,
-        "len": len,
-        "range": range,
-        "str": str,
-        "int": int,
-        "float": float,
-        "bool": bool,
-        "list": list,
-        "dict": dict,
-        "tuple": tuple,
-        "set": set,
-        "min": min,
-        "max": max,
-        "sum": sum,
-        "abs": abs,
-        "enumerate": enumerate,
-        "zip": zip,
-        "re": re,
-    }
+@sandbox
+def _evaluate_expression(expression: str) -> float:
+    """Evaluate a mathematical expression and return the result.
+
+    A plain eval() with an emptied ``__builtins__``, which is the naive
+    hardening and is known not to hold: ``().__class__.__base__.__subclasses__()``
+    still reaches Popen. That is the point. No expression is filtered here, so
+    whatever blocks the escape is the sandbox and nothing else.
+    """
+    assert is_in_sandbox()
+    logger.info("Evaluating: %s", expression)
+    result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307
+    logger.info("Result: %s", result)
+    return float(result)
 
 
-@tool("execute_python")
-def execute_python(code: str) -> str:
-    """Run Python code in a restricted namespace (demo only — not an OS sandbox).
-
-    Use print() for output, or assign to the variable ``result`` for a return value.
-    For ``re.search`` / ``re.match``, verify the match is not ``None`` before ``.group()``.
+@tool("fetch_webpage")
+def fetch_webpage(url: str) -> str:
+    """HTTP GET a URL and return the response body as markdown.
 
     Args:
-        code: Python source to execute.
+        url: Absolute http(s) URL to fetch.
 
     Returns:
-        Captured printed output, ``result`` value, or an error string.
+        The page as markdown, or a message naming the rule that refused it.
     """
-    buf = io.StringIO()
-
-    def safe_print(*args: object, **kwargs: Any) -> None:
-        print(*args, file=buf, **kwargs)
-
-    builtins_dict = _safe_builtins()
-    builtins_dict["print"] = safe_print
-    g: dict[str, Any] = {"__builtins__": builtins_dict}
-    local_ns: dict[str, Any] = {}
     try:
-        exec(compile(code, "<execute_python>", "exec"), g, local_ns)  # noqa: S102
+        return _fetch_webpage(url)
     except Exception as e:
-        logger.warning("execute_python failed: %s: %s", type(e).__name__, e)
-        return f"Error: {type(e).__name__}: {e}"
-    out = buf.getvalue().strip()
-    if "result" in local_ns:
-        suffix = repr(local_ns["result"])
-        return f"{out}\n{suffix}" if out else suffix
-    return out or "(no output)"
+        logger.warning("fetch_webpage refused for %s: %s", url, e)
+        return f"Error fetching URL: {_explain(e)}"
+
+
+@tool("evaluate_expression")
+def evaluate_expression(expression: str) -> str:
+    """Evaluate a mathematical expression and return the result.
+
+    Args:
+        expression: A Python expression, for instance "2 + 2" or "10 ** 2".
+
+    Returns:
+        The result as a string, or a message naming the rule that refused it.
+    """
+    try:
+        return str(_evaluate_expression(expression))
+    except Exception as e:
+        logger.warning("evaluate_expression refused for %r: %s", expression, e)
+        return f"Error evaluating expression: {_explain(e)}"

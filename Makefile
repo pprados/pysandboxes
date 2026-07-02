@@ -87,7 +87,7 @@ sample-tests:
 	# Order of treatment: mcp-server-demo, then mcp-client-demo, then the frameworks.
 	(cd samples/agno-demo && make tests)
 	(cd samples/autogen-demo && make tests)
-	# (cd samples/crewai-demo && make tests)
+	(cd samples/crewai-demo && make tests)
 	# (cd samples/google-adk-demo && make tests)
 	(cd samples/langchain-demo && make tests)
 	# (cd samples/langgraph-demo && make tests)
