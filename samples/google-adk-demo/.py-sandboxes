@@ -1,38 +1,76 @@
-# Sandbox configuration for google-adk-demo
-# This file configures security rules for the fetch_webpage sandbox
-#learn=.py-sandboxes
-
+# Profile for the PARTIAL mode: only the tool bodies enter the sandbox.
+# The complete mode has its own profile, `.py-sandboxes-complete`, deliberately
+# separate -- sharing one file would grant each mode the other's privileges for
+# nothing, which is the opposite of what the partial mode is for. Relearn both
+# with `learn.py`; see its docstring.
+#
+# The `net=` rule is not learned: which hosts a tool may reach is the author's
+# decision, not an observation.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
+net=ALLOW|TCP|www.google.com|443|OUT
+
+# Add rules (2026/09/10 at 07:20)
+env=CONDA_HOME=${CONDA_HOME}
+env=HOME=${HOME}
+env=LANGUAGE=${LANGUAGE}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=PYENV_ROOT=${PYENV_ROOT}
 env=PYTHONUSERBASE=${PYTHONUSERBASE}
+env=TEMP=${TEMP}
+env=TMP=${TMP}
 
 # ⚠ Dangerous!
-python-import=subprocess
+python-import=atexit, importlib, inspect, mmap, subprocess
 
-# Standard Python library imports
-python-import=__future__, _decimal, _hashlib, _io, _socket
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, array, ast
-python-import=asyncio, base64, binascii, collections, colorsys, concurrent
+# Standard Python
+python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
+python-import=_codecs_kr, _codecs_tw, _hashlib, _markupbase, _multibytecodec
+python-import=_multiprocessing, _queue, _sysconfigdata__linux_x86_64-linux-gnu
+python-import=_zoneinfo, abc, array, ast, asyncio, base64, binascii, bisect
+python-import=calendar, codecs, collections, colorsys, concurrent, configparser
 python-import=contextlib, contextvars, copy, copyreg, dataclasses, datetime, decimal
-python-import=email, enum, errno, fractions, functools, hashlib, hmac, html, http
-python-import=importlib, inspect, io, ipaddress, itertools, json, keyword, logging
-python-import=marshal, math, mimetypes, numbers, operator, os, pathlib, pickle, queue, random
-python-import=re, secrets, select, shlex, shutil, signal, socket, ssl, stat, struct
-python-import=sysconfig, tempfile, textwrap, threading, time, tokenize, traceback, types
-python-import=typing, unicodedata, urllib, uuid, weakref, zoneinfo
+python-import=email, encodings, enum, errno, fnmatch, fractions, functools, getpass
+python-import=gettext, hashlib, heapq, hmac, html, http, io, ipaddress, itertools
+python-import=json, keyword, locale, logging, math, mimetypes, multiprocessing
+python-import=numbers, operator, os, pathlib, pickle, platform, queue, random, re
+python-import=reprlib, secrets, select, selectors, shlex, shutil, signal, socket
+python-import=socketserver, ssl, stat, stringprep, struct, sysconfig, tempfile
+python-import=termios, textwrap, threading, time, traceback, types, typing
+python-import=unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
 
-# External modules for HTTP and sandbox infrastructure
+# External modules (Are you sure about the origin?)
+python-import=81d243bd2c585b0f4821__mypyc
+python-import=annotated_doc
+python-import=annotated_types
+python-import=anyio
+python-import=attr
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=email_validator
+python-import=fastapi
+python-import=google_adk_demo
 python-import=h11
 python-import=httpcore
 python-import=httpx
 python-import=idna
+python-import=markdownify
+python-import=pydantic
+python-import=pydantic_core
+python-import=pygments
+python-import=python_multipart
+python-import=rich
+python-import=six
 python-import=sniffio
+python-import=soupsieve
 python-import=starlette
+python-import=typing_extensions
+python-import=typing_inspection
 python-import=uvicorn
+python-import=websockets
 
-# Allow example.com only, deny all other domains
-net=ALLOW|TCP|example.com|80|OUT
-net=ALLOW|TCP|example.com|443|OUT
-
-expose-ro=.
+expose-ro=~/workspace/pysandboxes
