@@ -1,0 +1,54 @@
+# Profile for the COMPLETE mode: the whole process runs under `python-sb`, so
+# this profile has to allow the framework's own dispatch too. The partial mode
+# has its own profile, `.py-sandboxes`, deliberately separate. Relearn both with
+# `learn.py`; see its docstring.
+py-sandbox=true
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+net=ALLOW|TCP|www.google.com|443|OUT
+
+# Add rules (2026/09/10 at 07:20)
+env=CONDA_HOME=${CONDA_HOME}
+env=HOME=${HOME}
+env=PWD=${PWD}
+env=PYENV_ROOT=${PYENV_ROOT}
+env=TEMP=${TEMP}
+env=TMP=${TMP}
+
+# ⚠ Dangerous!
+python-import=atexit, importlib, inspect, mmap, subprocess
+
+# Standard Python
+python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
+python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, abc, array, ast
+python-import=base64, bisect, calendar, codecs, collections, colorsys, concurrent
+python-import=configparser, contextlib, contextvars, copy, copyreg, dataclasses
+python-import=datetime, decimal, email, encodings, enum, errno, fnmatch, fractions
+python-import=functools, getpass, gettext, hashlib, html, http, io, ipaddress
+python-import=itertools, json, logging, math, mimetypes, numbers, operator, os
+python-import=pathlib, pickle, random, re, reprlib, select, signal, socket, ssl
+python-import=stat, stringprep, struct, tempfile, termios, textwrap, threading, time
+python-import=types, typing, unicodedata, urllib, weakref, zipfile, zlib
+
+# External modules (Are you sure about the origin?)
+python-import=81d243bd2c585b0f4821__mypyc
+python-import=anyio
+python-import=attr
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=google_adk_demo
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=idna
+python-import=markdownify
+python-import=pygments
+python-import=rich
+python-import=six
+python-import=sniffio
+python-import=soupsieve
+python-import=typing_extensions
+
+expose-ro=.
