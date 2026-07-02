@@ -1,10 +1,26 @@
 # OpenAI Agents SDK demo
 
-Console demo using the [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) (`openai-agents`): an agent with two **function tools** — HTTP fetch and restricted Python execution — driven by the model through the SDK’s **`Runner`** (tool loop until a final answer or `max_turns`).
+Console demo using the [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) (`openai-agents`): an agent with two **function tools** — `fetch_webpage` and `evaluate_expression` — driven by the model through the SDK’s **`Runner`** (tool loop until a final answer or `max_turns`).
 
-The default task **requires** both tools: fetch `https://www.google.com`, then run Python on the returned HTML to analyze the `<title>`.
+The default task **requires** both tools: fetch `https://www.google.com`, report how many words its title contains, then compute that count squared.
 
-**Security:** `execute_python` is a **demo** (restricted `exec` in-process). It is **not** an OS-level sandbox.
+## What the sandbox does here
+
+Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
+given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__`—which is
+known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`. That
+is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
+filter can take the credit.
+
+Two profiles, one per mode, each learned in its own by `learn.py`:
+
+| Profile | Mode | What is confined |
+|---------|------|------------------|
+| `.py-sandboxes` | partial | the tool bodies only (`pysandboxes.run()` around the `Runner`) |
+| `.py-sandboxes-complete` | complete | the whole process, launched with `python -m pysandboxes.python_sb` |
+
+They are deliberately separate: sharing one file would grant each mode the other's privileges
+for nothing, which is the opposite of what the partial mode is for.
 
 ## Setup
 

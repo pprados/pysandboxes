@@ -1,270 +1,183 @@
-"""Tests for sandbox protection in fetch_webpage tool.
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+"""What pysandboxes enforces on the two tools the OpenAI Agents SDK exposes to the model.
 
-This module demonstrates two scenarios:
-- Scenario A: Baseline behavior without sandbox protection
-- Scenario B: With sandbox protection (network restrictions via .py-sandboxes)
+`function_tool()` wraps a plain function, which itself delegates to a
+module-level ``_``-prefixed one carrying `@sandbox` -- the indirection D7 of the
+design spec asks for. The tests call the inner function, which is what the
+wrapper ends up calling, and then the plain wrapper, which is what
+`function_tool()` invokes.
 
-The sandboxed inner function (_fetch_webpage_impl) enforces the security policy
-defined in .py-sandboxes configuration:
-- Allows: example.com (HTTP and HTTPS)
-- Denies: All other domains, localhost, private networks, etc.
+Scenario A, the negative control, runs in a separate process. A baseline
+profile leaves ``is_in_sandbox()`` true behind it, so an armed block running
+afterwards in the same process short-circuits and silently reproduces the
+baseline's results -- which is how a blocking test ends up unable to fail.
 
-For practical unit testing, we test:
-1. The unsandboxed outer function behavior (Scenario A baseline)
-2. The configuration policy that would be enforced (Scenario B policy)
-3. Error handling is preserved through both layers
+Scenarios B and C run armed, against the real network. Nothing is mocked: a
+mocked transport proves the mock, not the rule.
 """
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
-from unittest.mock import MagicMock, patch
+from pysandboxes import sandbox_denials, sandboxes
 
-import httpx
+from openai_agents_sdk_demo.tools import (
+    _evaluate_expression,
+    _fetch_webpage,
+    evaluate_expression_impl,
+    fetch_webpage_impl,
+)
 
-from openai_agents_sdk_demo.tools import fetch_webpage_impl, _fetch_webpage_impl
+SAMPLE_ROOT = Path(__file__).parent.parent
+# One profile per mode, each learned in its own. They are not
+# interchangeable: the partial profile has to allow the bridge that runs
+# inside the sandbox with the tool (fastapi, uvicorn, starlette...), and the
+# complete one has to allow the framework's own dispatch, which in partial mode
+# stays in the parent. Sharing one profile would grant each mode
+# the other's privileges for nothing.
+CONFIG = SAMPLE_ROOT / ".py-sandboxes"
+CONFIG_COMPLETE = SAMPLE_ROOT / ".py-sandboxes-complete"
+
+# Host the learned profile allows.
+ALLOWED_URL = "https://www.google.com/"
+# Real, resolvable host deliberately absent from net=ALLOW: a real name keeps
+# the refusal attributable to the rule instead of to an NXDOMAIN.
+DENIED_URL = "https://example.com/"
+
+# Reaches Popen through the subclass tree, which an emptied __builtins__ does
+# not hide. The tool is a plain eval() on purpose: whatever stops this is the
+# sandbox, not a parser.
+POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
 
 
-class TestFetchWebpageScenarioA:
-    """Scenario A: Baseline without sandbox protection.
+def armed_kwargs() -> dict[str, object]:
+    return {"sandboxes_config": CONFIG, "py_sandbox": "true", "os_sandbox": "subprocess"}
 
-    These tests verify the tool behavior without sandbox isolation.
-    They establish baseline expectations that should not change when
-    sandbox protection is added (outer wrapper layer).
+
+def test_scenario_a_the_escape_succeeds_without_the_sandbox() -> None:
+    """Without pysandboxes the malicious expression runs. Otherwise C proves nothing."""
+    # subprocess is imported first because the escape walks the subclass tree
+    # and Popen has to be loaded -- as it is in the real process, httpx and
+    # the SDK pulling it in long before a model says anything.
+    script = f"import subprocess; print(eval({POPEN_ESCAPE!r}, {{'__builtins__': {{}}}}, {{}}))"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=SAMPLE_ROOT,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Popen" in result.stdout, result.stdout
+
+
+def test_scenario_b2_an_allowed_host_is_reached() -> None:
+    with sandboxes(**armed_kwargs()):
+        page = _fetch_webpage(ALLOWED_URL)
+
+    assert page.strip(), "the allowed host returned nothing"
+
+
+def test_scenario_b1_a_host_outside_the_rules_is_refused() -> None:
+    """The refusal is attributable, which asserting on the message would not be."""
+    with sandboxes(**armed_kwargs()):
+        with pytest.raises(Exception) as caught:
+            _fetch_webpage(DENIED_URL)
+
+    denials = sandbox_denials(caught.value)
+    assert denials, f"no denial reported, only {caught.value!r}"
+    assert any("DENIED" in denial for denial in denials), denials
+
+
+def test_the_expression_tool_still_computes() -> None:
+    with sandboxes(**armed_kwargs()):
+        assert _evaluate_expression("2*(3+4)") == 14
+
+
+def test_scenario_c_the_malicious_expression_is_confined() -> None:
+    """The escape of scenario A reaches Popen and is refused there, by the API guard.
+
+    Not by the import guard: python-import=subprocess cannot be removed, since
+    httpx and the SDK load it themselves.
     """
+    with sandboxes(**armed_kwargs()):
+        with pytest.raises(Exception) as caught:
+            _evaluate_expression(POPEN_ESCAPE)
 
-    def test_fetch_successful_from_example_com(self):
-        """Test successful fetch from example.com."""
-        mock_response = MagicMock()
-        mock_response.text = "<html><body><h1>Example Domain</h1></body></html>"
-        mock_response.raise_for_status = MagicMock()
-
-        with patch("httpx.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.__enter__.return_value.get.return_value = mock_response
-            mock_client.return_value = mock_instance
-
-            result = fetch_webpage_impl("https://example.com")
-
-            assert len(result) > 10
-            assert "Error" not in result[:20]
-            assert "Example Domain" in result or "<html>" in result
-
-    def test_fetch_http_error_handling(self):
-        """Test HTTP error handling (404, 500, etc.)."""
-        with patch("httpx.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_get = MagicMock(
-                side_effect=httpx.HTTPStatusError(
-                    "404 Not Found",
-                    request=MagicMock(),
-                    response=MagicMock()
-                )
-            )
-            mock_instance.__enter__.return_value.get = mock_get
-            mock_client.return_value = mock_instance
-
-            result = fetch_webpage_impl("https://example.com/404")
-
-            assert "Error" in result
-            assert "HTTPStatusError" in result or "404" in result
-
-    def test_fetch_timeout_handling(self):
-        """Test timeout error handling."""
-        with patch("httpx.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_get = MagicMock(
-                side_effect=httpx.TimeoutException("Timeout")
-            )
-            mock_instance.__enter__.return_value.get = mock_get
-            mock_client.return_value = mock_instance
-
-            result = fetch_webpage_impl("https://example.com")
-
-            assert "Error" in result
-            assert "TimeoutException" in result or "Timeout" in result
-
-    def test_fetch_generic_exception_handling(self):
-        """Test generic exception handling."""
-        with patch("httpx.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_get = MagicMock(
-                side_effect=Exception("Generic error")
-            )
-            mock_instance.__enter__.return_value.get = mock_get
-            mock_client.return_value = mock_instance
-
-            result = fetch_webpage_impl("https://example.com")
-
-            assert "Error" in result
-            assert "Exception" in result or "Generic error" in result
-
-    def test_fetch_truncation_for_large_pages(self):
-        """Test that large responses are truncated."""
-        large_html = "<html>" + "x" * 10000 + "</html>"
-        mock_response = MagicMock()
-        mock_response.text = large_html
-        mock_response.raise_for_status = MagicMock()
-
-        with patch("httpx.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.__enter__.return_value.get.return_value = mock_response
-            mock_client.return_value = mock_instance
-
-            result = fetch_webpage_impl("https://example.com")
-
-            assert len(result) <= 8000 + 20  # Max chars + margin for truncation message
-            assert "[truncated]" in result
+    denials = sandbox_denials(caught.value)
+    assert denials, f"no denial reported, only {caught.value!r}"
+    assert any("process-exec" in denial for denial in denials), denials
 
 
-class TestFetchWebpageScenarioB:
-    """Scenario B: With sandbox protection enforced.
+def test_the_wrappers_report_the_rule_to_the_model() -> None:
+    """A model gets text, so the refusal has to be legible in it.
 
-    These tests demonstrate the security policy enforced by sandbox protection.
-    The .py-sandboxes configuration file defines:
-    - Allowed: example.com (TCP/80, TCP/443)
-    - Denied: All other domains, localhost, private networks
-
-    Note: These tests document expected behavior. In production with real
-    sandbox execution, attempting to access denied domains would raise
-    RuleSocksError or similar exceptions.
+    This also exercises the D7 indirection end to end: calling the wrapper --
+    the same callable `function_tool()` invokes -- has to reach the sandboxed
+    inner function through the bridge, which resolves it by `module:qualname`.
     """
+    with sandboxes(**armed_kwargs()):
+        refused_fetch = fetch_webpage_impl(DENIED_URL)
+        refused_eval = evaluate_expression_impl(POPEN_ESCAPE)
+        allowed_eval = evaluate_expression_impl("2*(3+4)")
 
-    def test_sandbox_config_security_policy(self):
-        """Document the security policy in .py-sandboxes configuration."""
-        policy = {
-            "allowed_domains": ["example.com"],
-            "allowed_ports": [80, 443],
-            "allowed_protocols": ["tcp"],
-            "denied_domains": [
-                "google.com",
-                "github.com",
-                "malicious.example.com",
-                "127.0.0.1",
-                "localhost",
-                "::1",  # IPv6 loopback
-            ],
-            "denied_networks": [
-                "10.0.0.0/8",
-                "172.16.0.0/12",
-                "192.168.0.0/16",
-                "169.254.0.0/16",  # Link-local
-            ],
-        }
+    assert "refused by the sandbox" in refused_fetch, refused_fetch
+    assert "DENIED" in refused_fetch, refused_fetch
+    assert "process-exec" in refused_eval, refused_eval
+    assert allowed_eval == "14.0", allowed_eval
 
-        # Verify policy is defined correctly
-        assert "example.com" in policy["allowed_domains"]
-        assert len(policy["allowed_domains"]) == 1
-        assert len(policy["denied_domains"]) > 0
-        assert len(policy["denied_networks"]) > 0
 
-    def test_sandboxed_function_preserves_outer_interface(self):
-        """Verify that sandboxing doesn't break the outer interface.
+@pytest.mark.parametrize("profile", [CONFIG, CONFIG_COMPLETE], ids=["partial", "complete"])
+def test_the_profile_is_a_whitelist(profile: Path) -> None:
+    """Guard the two ways this demonstration has silently died before."""
+    active = [
+        line.strip() for line in profile.read_text().splitlines() if line.strip() and not line.strip().startswith("#")
+    ]
 
-        The outer wrapper (fetch_webpage_impl) should transparently pass calls
-        through the sandboxed inner function (_fetch_webpage_impl).
-        """
-        mock_response = MagicMock()
-        mock_response.text = "<h1>Test</h1><p>Success</p>"
-        mock_response.raise_for_status = MagicMock()
+    assert "python-import=*" not in active, "a wildcard import rule voids the whitelist"
+    assert not [line for line in active if line.startswith("python-api=ALLOW:process-exec")], (
+        "allowing process-exec would void scenario C"
+    )
+    assert not [line for line in active if line.startswith("learn=")], (
+        "a learn= rule left behind records instead of denying"
+    )
 
-        with patch("httpx.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.__enter__.return_value.get.return_value = mock_response
-            mock_client.return_value = mock_instance
 
-            # Call through the outer wrapper interface
-            result = fetch_webpage_impl("https://example.com")
+COMPLETE_MODE_SCRIPT = f"""
+from openai_agents_sdk_demo.tools import evaluate_expression_impl, fetch_webpage_impl
+print("SANE", evaluate_expression_impl("2*(3+4)"))
+print("ESCAPE", evaluate_expression_impl({POPEN_ESCAPE!r}))
+print("DENIED", fetch_webpage_impl({DENIED_URL!r})[:400])
+"""
 
-            # Verify result is as expected
-            assert isinstance(result, str)
-            assert len(result) > 0
-            assert "Error" not in result[:20]
 
-    def test_sandbox_decorator_applied_to_inner_function(self):
-        """Verify that @sandbox decorator is applied to inner function.
+def test_scenario_d_the_complete_mode_confines_the_same_calls() -> None:
+    """The whole process under `python-sb`, the other mode D2 asks for.
 
-        The security isolation happens at _fetch_webpage_impl level.
-        The outer fetch_webpage_impl is just a wrapper for framework integration.
-        """
-        from openai_agents_sdk_demo import tools as tools_module
+    Nothing calls `sandboxes()` here: the rules come from the profile handed to
+    the launcher, and `is_in_sandbox()` is true from the start, so `@sandbox`
+    calls the inner function directly and the bridge is never used. A tool
+    verified only in partial mode says nothing about this path.
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pysandboxes.python_sb",
+            f"--pysandboxes-config={CONFIG_COMPLETE}",
+            "-c",
+            COMPLETE_MODE_SCRIPT,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        cwd=SAMPLE_ROOT,
+    )
 
-        # Verify the inner function exists and has sandbox applied
-        assert hasattr(tools_module, "_fetch_webpage_impl")
-        inner_func = tools_module._fetch_webpage_impl
-
-        # Check that the function is wrapped (sandbox adds wrapper)
-        assert hasattr(inner_func, "__wrapped__") or callable(inner_func)
-
-    def test_network_restriction_policy_enforced_example_com(self):
-        """Document that example.com access would be allowed by sandbox policy."""
-        # With sandbox enabled (.py-sandboxes config), example.com is explicitly
-        # allowed for both HTTP (80) and HTTPS (443)
-        allowed_urls = [
-            "https://example.com",
-            "http://example.com",
-            "https://example.com/path",
-            "https://example.com:443/path",
-        ]
-
-        for url in allowed_urls:
-            # These URLs are in the allowed set per .py-sandboxes
-            assert "example.com" in url
-
-    def test_network_restriction_policy_denied_other_domains(self):
-        """Document domains that would be blocked by sandbox policy."""
-        # With sandbox enabled, these domains would be denied
-        denied_scenarios = [
-            ("https://google.com", "Different domain"),
-            ("https://github.com", "Different domain"),
-            ("http://127.0.0.1", "Localhost IPv4"),
-            ("http://localhost", "Localhost hostname"),
-            ("http://127.0.0.1:8000", "Localhost IPv4 with port"),
-            ("http://192.168.1.1", "Private network"),
-            ("http://10.0.0.1", "Private network Class A"),
-            ("http://172.16.0.1", "Private network Class B"),
-        ]
-
-        for url, reason in denied_scenarios:
-            # These URLs are not in the allowed set per .py-sandboxes
-            assert "example.com" not in url, f"Unexpected: {reason} - {url}"
-
-    def test_fetch_webpage_impl_calls_inner_impl(self):
-        """Verify that outer fetch_webpage_impl calls the sandboxed inner function."""
-        mock_response = MagicMock()
-        mock_response.text = "<h1>Sandboxed Test</h1>"
-        mock_response.raise_for_status = MagicMock()
-
-        with patch("httpx.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.__enter__.return_value.get.return_value = mock_response
-            mock_client.return_value = mock_instance
-
-            # Call the outer function
-            result = fetch_webpage_impl("https://example.com")
-
-            # Verify it succeeded
-            assert isinstance(result, str)
-            assert "Error" not in result[:20]
-
-    def test_sandbox_isolation_enforced_on_inner_function(self):
-        """Verify that the inner function has sandbox isolation applied.
-
-        The @sandbox decorator on _fetch_webpage_impl ensures that:
-        1. Network requests respect .py-sandboxes configuration
-        2. Disallowed domains are blocked at the system level
-        3. Allowed domains pass through with network restrictions
-        """
-        # The inner function _fetch_webpage_impl is decorated with @sandbox
-        # When executed with PYSANDBOX_PY=true, it will enforce the rules
-        # from .py-sandboxes configuration
-
-        # Verify the function exists and is decorated
-        from openai_agents_sdk_demo import tools as tools_module
-        assert hasattr(tools_module, "_fetch_webpage_impl")
-        assert callable(tools_module._fetch_webpage_impl)
-
-        # The decorator application can be verified by checking attributes
-        inner_func = tools_module._fetch_webpage_impl
-        # Sandbox-decorated functions are wrapped, so they should have
-        # either __wrapped__ or be a different type than plain function
-        is_wrapped = hasattr(inner_func, "__wrapped__") or str(type(inner_func)) != "<class 'function'>"
-        assert is_wrapped, "Inner function should be wrapped by @sandbox decorator"
+    assert "SANE 14.0" in result.stdout, result.stdout + result.stderr
+    assert "process-exec" in result.stdout, result.stdout + result.stderr
+    assert "refused by the sandbox" in result.stdout, result.stdout + result.stderr

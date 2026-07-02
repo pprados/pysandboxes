@@ -1,37 +1,31 @@
-"""CLI: OpenAI Agents SDK ``Runner`` with ``fetch_webpage`` and ``execute_python``."""
+"""CLI: OpenAI Agents SDK ``Runner`` with ``fetch_webpage`` and ``evaluate_expression``."""
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import logging
 import os
+from pathlib import Path
 from typing import Sequence
 
+import pysandboxes
 from agents import Agent, Runner, set_tracing_disabled
 from dotenv import load_dotenv
 
 from openai_agents_sdk_demo.model_config import normalize_chat_model_spec
-from openai_agents_sdk_demo.tools import execute_python, fetch_webpage
+from openai_agents_sdk_demo.tools import evaluate_expression, fetch_webpage
+
+CONFIG = Path(__file__).parent.parent / ".py-sandboxes"
 
 DEFAULT_SYSTEM = (
     "You must use the provided tools for any live webpage content or any computation. "
-    "Do not invent HTML, titles, or numeric results without calling the tools. "
-    "When you call execute_python, use the exact text returned by fetch_webpage as your HTML "
-    "source. Parse it with the `re` module only (it is available without importing). "
-    "Do not import or use bs4, BeautifulSoup, html.parser, lxml, or any third-party HTML library. "
-    "If you embed the HTML in a Python string literal, use triple-single-quoted strings '''...''' "
-    'rather than triple-double quotes """...""" — HTML often contains characters that break '
-    "double-quoted triple-quoted literals. "
-    "When using re.search, check the match is not None before calling .group(); if there is no "
-    "match, widen the pattern or inspect the HTML."
+    "Do not invent page content or numeric results without calling the tools."
 )
 
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, then use execute_python "
-    "on the fetched HTML (not a made-up snippet) to extract the text inside the first "
-    "<title>...</title> and report how many words that title contains (split on whitespace). "
-    "End with a one-sentence summary that includes the word count."
+    "Using the tools: fetch https://www.google.com with fetch_webpage, report how many "
+    "words its title contains, then use evaluate_expression to compute that count squared. "
+    "End with a one-sentence summary that includes both numbers."
 )
 
 
@@ -51,7 +45,7 @@ def _build_agent(model: str) -> Agent:
         name="Tool demo",
         instructions=DEFAULT_SYSTEM,
         model=model,
-        tools=[fetch_webpage, execute_python],
+        tools=[fetch_webpage, evaluate_expression],
     )
 
 
@@ -89,8 +83,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     log.info("Using model: %s", model)
 
     try:
-        text = asyncio.run(
+        # Partial mode: only the tool bodies run in the sandbox. `pysandboxes.run()`
+        # is the asynchronous entry point -- it arms the profile *and* binds the
+        # sandbox loop, which `async with sandboxes(...)` alone does not do.
+        text = pysandboxes.run(
             run_agent_async(args.task, max_turns=args.max_turns, model=model),
+            config_path=CONFIG,
         )
     except Exception as e:
         log.error("Agent failed: %s", e, exc_info=True)
