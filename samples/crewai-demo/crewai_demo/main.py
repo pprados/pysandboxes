@@ -3,29 +3,28 @@
 import argparse
 import logging
 import os
+from pathlib import Path
 from typing import Sequence
 
 from crewai import LLM, Agent, Crew, Task
 from dotenv import load_dotenv
+from pysandboxes import sandboxes
 
-from crewai_demo.tools import execute_python, fetch_webpage
+from crewai_demo.tools import evaluate_expression, fetch_webpage
+
+CONFIG = Path(__file__).parent.parent / ".py-sandboxes"
 
 DEFAULT_SYSTEM_GOAL = (
     "You must use the provided tools for any live webpage content or any computation. "
-    "Do not invent HTML, titles, or numeric results without calling the tools. "
-    "When you call execute_python, pass the exact text returned by fetch_webpage as your HTML "
-    "string (assign it to a variable and parse that). "
-    "When using re.search, check the match is not None before calling .group(); if there is no "
-    "match, widen the pattern or inspect the HTML."
+    "Do not invent page content or numeric results without calling the tools."
 )
 
 DEFAULT_BACKSTORY = "You are a careful assistant that follows tool-use rules and reports accurate results."
 
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, then use execute_python "
-    "on the fetched HTML (not a made-up snippet) to extract the text inside the first "
-    "<title>...</title> and report how many words that title contains (split on whitespace). "
-    "End with a one-sentence summary that includes the word count."
+    "Using the tools: fetch https://www.google.com with fetch_webpage, report how many "
+    "words its title contains, then use evaluate_expression to compute that count squared. "
+    "End with a one-sentence summary that includes both numbers."
 )
 
 
@@ -77,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     _configure_logging(args.verbose)
 
-    tools = [fetch_webpage, execute_python]
+    tools = [fetch_webpage, evaluate_expression]
     llm = build_llm()
 
     agent = Agent(
@@ -94,8 +93,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     task = Task(
         description=args.task,
         expected_output=(
-            "A clear answer that reflects real fetch_webpage HTML and execute_python results, "
-            "including the title word count."
+            "A clear answer that reflects the real fetch_webpage content and the "
+            "evaluate_expression result, including both numbers."
         ),
         agent=agent,
     )
@@ -107,7 +106,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     try:
-        result = crew.kickoff()
+        # Partial mode: only the tool bodies run in the sandbox. The context
+        # manager has to wrap the kickoff that *calls* them -- @sandbox needs a
+        # running daemon at call time, and the crew is where the calls happen.
+        with sandboxes(sandboxes_config=CONFIG):
+            result = crew.kickoff()
     except Exception as e:
         logging.getLogger(__name__).error("Crew failed: %s", e, exc_info=True)
         return 1
