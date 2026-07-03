@@ -162,11 +162,7 @@ def test_claude_evaluate_expression(
         process = _start_server(mcp_server_config)
         python_executable = which("python")
         assert python_executable is not None
-        start_client = (
-            ["-m", "pysandboxes.python_sb"]
-            +
-            ["-m", "mcp_simple_chatbot.main"]
-        )
+        start_client = ["-m", "pysandboxes.python_sb"] + ["-m", "mcp_simple_chatbot.main"]
         cmd: list[str] = [
             python_executable,
             "-u",
@@ -182,8 +178,7 @@ def test_claude_evaluate_expression(
         assert my_ip is not None
         result = run(
             cmd,
-            env=os.environ.copy()
-            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},
+            env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},
             timeout=timeout,
             input="",
             capture_output=True,  # To debug, deactivate capture_output
@@ -233,8 +228,7 @@ def test_claude_fetch_webpage(
         assert my_ip is not None
         result = run(
             cmd,
-            env=os.environ.copy()
-            | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},
+            env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},
             timeout=timeout,
             capture_output=True,  # To debug, deactivate capture_output
             input="",

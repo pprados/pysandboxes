@@ -1,61 +1,81 @@
-# PySandboxes Configuration File for LangGraph Demo
-# ===================================================
-# This configuration restricts network access to the web_fetcher tool,
-# allowing only example.com and denying all other domains.
-
-#######################################################################################
-# PYTHON SANDBOX ACTIVATION
-# ==========================
 py-sandbox=true
-
-#######################################################################################
-# OS-LEVEL SANDBOX PROVIDERS
-# ===========================
 os-sandbox=${OS_SANDBOX:-subprocess}
 
-#######################################################################################
-# NETWORK ACCESS CONTROL
-# =======================
-# Default: ALL network connections are DENIED unless explicitly ALLOWED.
-# This configuration only allows connections to example.com.
+net=ALLOW|TCP|www.google.com|443|OUT
 
-# Allow HTTPS to example.com (443/tcp)
-net=ALLOW|tcp|example.com|443|OUT
+# Add rules (2026/09/10 at 07:22)
+env=CONDA_HOME=${CONDA_HOME}
+env=HOME=${HOME}
+env=LANGUAGE=${LANGUAGE}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=PYENV_ROOT=${PYENV_ROOT}
+env=PYTHONUSERBASE=${PYTHONUSERBASE}
+env=TEMP=${TEMP}
+env=TMP=${TMP}
 
-# Allow HTTP to example.com (80/tcp)
-net=ALLOW|tcp|example.com|80|OUT
+# ⚠ Dangerous!
+python-import=atexit, importlib, inspect, subprocess
 
-# Explicitly deny access to other domains (security by default-deny model)
-# These rules are implicit, but listed here for clarity.
-#
-# Connections to any IP/hostname not explicitly allowed will be denied.
-# This includes:
-# - Private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-# - Public internet (0.0.0.0/0 except example.com)
-# - Localhost (127.0.0.1, ::1)
+# Standard Python
+python-import=__future__, _decimal, _hashlib, _markupbase, _multibytecodec
+python-import=_multiprocessing, _queue, _socket
+python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, array, ast
+python-import=asyncio, base64, binascii, calendar, codecs, collections, colorsys
+python-import=concurrent, configparser, contextlib, contextvars, copy, copyreg
+python-import=dataclasses, datetime, decimal, email, encodings, enum, errno, fnmatch
+python-import=fractions, functools, gettext, hashlib, heapq, hmac, html, http, io
+python-import=ipaddress, itertools, json, keyword, locale, logging, math, mimetypes
+python-import=multiprocessing, numbers, operator, os, pathlib, pickle, platform
+python-import=pprint, queue, random, re, reprlib, secrets, select, selectors, shlex
+python-import=shutil, signal, socket, socketserver, ssl, stat, stringprep, struct
+python-import=sysconfig, tempfile, textwrap, threading, time, traceback, types
+python-import=typing, unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
 
-#######################################################################################
-# PYTHON IMPORTS CONTROL
-# =======================
-# Allow necessary modules for web fetching functionality.
+# External modules (Are you sure about the origin?)
+python-import=annotated_doc
+python-import=annotated_types
+python-import=anyio
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=email_validator
+python-import=fastapi
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=idna
+python-import=jsonpatch
+python-import=jsonpointer
+python-import=langchain_core
+python-import=langgraph_simple_chatbot
+python-import=langsmith
+python-import=markdownify
+python-import=orjson
+python-import=packaging
+python-import=pydantic
+python-import=pydantic_core
+python-import=pygments
+python-import=python_multipart
+python-import=requests
+python-import=requests_toolbelt
+python-import=six
+python-import=sniffio
+python-import=soupsieve
+python-import=starlette
+python-import=tenacity
+python-import=typing_extensions
+python-import=typing_inspection
+python-import=urllib3
+python-import=uvicorn
+python-import=zstandard
 
-python-import=_io, abc, ast, asyncio, base64, codecs, collections
-python-import=contextlib, dataclasses, enum, functools, gzip, hashlib
-python-import=io, itertools, json, logging, operator, re, ssl
-python-import=string, struct, textwrap, time, typing, urllib, uuid
-python-import=urllib3, h11, httpcore, httpx, markdownify
+expose-ro=~/workspace/pysandboxes
 
-#######################################################################################
-# FILE SYSTEM ACCESS
-# ===================
-# Minimal file system access needed for the tool.
-# Allows reading only necessary system files and denies sensitive paths.
+net=ALLOW|TCP|ip6-localhost|0|IN
+net=ALLOW|TCP|ip6-loopback|0|IN
 
-#######################################################################################
-# ENVIRONMENT VARIABLES
-# =====================
-# By default, sandbox processes have NO access to environment variables.
-# Uncomment below to allow specific variables if needed.
-
-# env=USER=sandbox
-# env=TEMP=${TEMP:-${TMP}}
+# threads: concurrency primitives
+python-api=ALLOW:threading.Thread.start
+python-api=ALLOW:threading._start_joinable_thread

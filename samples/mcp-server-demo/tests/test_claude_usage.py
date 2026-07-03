@@ -64,9 +64,7 @@ requires_claude_cli = pytest.mark.skipif(
 )
 
 
-def _init_mcp_server(
-    protocol: str, os_sandbox: str, pysandboxes_mode: str
-) -> Popen | None:
+def _init_mcp_server(protocol: str, os_sandbox: str, pysandboxes_mode: str) -> Popen | None:
     process: Popen | None = None
     logger.info(f"init claude with {protocol=}, {os_sandbox=}, {pysandboxes_mode=}")
     run(
@@ -80,8 +78,7 @@ def _init_mcp_server(
         if pysandboxes_mode == "complete":
             # Start the MCP server with python-sb
             run(
-                "claude mcp add mcp_demo -- "
-                "uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio",
+                "claude mcp add mcp_demo -- " "uv run -m pysandboxes.python_sb -m mcp_server.main -t stdio",
                 capture_output=True,
                 text=True,
                 check=True,
