@@ -15,9 +15,7 @@ from dotenv import load_dotenv
 from fastmcp import Client
 from pysandboxes.tools import resolve_env_variables
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -136,21 +134,14 @@ class ChatSession:
         try:
             client = self.client
             action = _extract_first_json(llm_response)
-            if (
-                action
-                and isinstance(action, dict)
-                and "tool" in action
-                and "arguments" in action
-            ):
+            if action and isinstance(action, dict) and "tool" in action and "arguments" in action:
                 logger.info(f"Executing tool: {action['tool']}")
                 logger.info(f"With arguments: {action['arguments']}")
 
                 tools = await client.list_tools()
                 if any(tool.name == action["tool"] for tool in tools):
                     try:
-                        result = await client.call_tool(
-                            action["tool"], action["arguments"]
-                        )
+                        result = await client.call_tool(action["tool"], action["arguments"])
                         return f"Tool execution result: {'  '.join([x.text for x in result.content])}"
                     except Exception as e:
                         error_msg = f"Error executing tool: {str(e)}"
@@ -215,9 +206,7 @@ class ChatSession:
         all_resource_templates = await self.client.list_resource_templates()
         tools_description = "\n".join(
             [
-                f"Tool: {tool.name}\n"
-                f"Description: {tool.description}\n"
-                f"Arguments: {tool.inputSchema}"
+                f"Tool: {tool.name}\n" f"Description: {tool.description}\n" f"Arguments: {tool.inputSchema}"
                 for tool in all_tools
             ]
         )
@@ -239,17 +228,13 @@ class ChatSession:
                 for res in all_resource_templates
             ]
         )
-        system_message = (
-            "You are a helpful assistant with access to tools " "and resources.\n\n"
-        )
+        system_message = "You are a helpful assistant with access to tools " "and resources.\n\n"
         if tools_description:
             system_message += f"Available tools:\n{tools_description}\n\n"
         if resources_list:
             system_message += f"Available resources:\n{resources_list}\n\n"
         if resource_templates_list:
-            system_message += (
-                f"Available resource templates:\n{resource_templates_list}\n\n"
-            )
+            system_message += f"Available resource templates:\n{resource_templates_list}\n\n"
         system_message += (
             "Choose the appropriate tool or resource based on the "
             "user's question. "
@@ -290,9 +275,7 @@ async def run(args: argparse.Namespace) -> None:
             if w_command:
                 mcp_server["command"] = w_command
             else:
-                logger.debug(
-                    "Impossible to find the command %s", repr(mcp_server["command"])
-                )
+                logger.debug("Impossible to find the command %s", repr(mcp_server["command"]))
 
     logging.getLogger("mcp").setLevel(logging.WARNING)
     client = Client(server_config, roots=[str(Path("./resources").resolve().as_uri())])
@@ -302,9 +285,7 @@ async def run(args: argparse.Namespace) -> None:
         chat_session = ChatSession(client, llm_client)
         if args.print:
             logger.info("Invoke ")
-            final_response = await chat_session.invoke_llm(
-                await chat_session.initialize(), args.print
-            )
+            final_response = await chat_session.invoke_llm(await chat_session.initialize(), args.print)
             print(final_response)
         else:
             await chat_session.start()

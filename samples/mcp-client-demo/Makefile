@@ -18,8 +18,10 @@ tests:
 ######################
 
 # Define a variable for Python and notebook files.
-PYTHON_FILES=.
-lint format: PYTHON_FILES=.
+# Not `.`: the package has no __init__.py, so scanning the directory makes mypy
+# see mcp_simple_chatbot/main.py under two module names and refuse to continue.
+PYTHON_FILES=mcp_simple_chatbot tests
+lint format: PYTHON_FILES=mcp_simple_chatbot tests
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint lint_diff:

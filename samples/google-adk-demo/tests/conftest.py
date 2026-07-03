@@ -1,18 +1,13 @@
-"""Pytest configuration and fixtures for google-adk-demo tests."""
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+"""Pytest configuration for google-adk-demo tests.
 
+Sets the working directory the profiles are resolved from. The tests arm the
+sandbox themselves, per test, so that each one states which profile it runs
+under instead of inheriting it from a fixture.
+"""
+
+import os
 from pathlib import Path
 
-import pytest
-from pysandboxes import sandboxes
-
-
-@pytest.fixture
-def sandbox_context():
-    """Fixture that provides a sandbox context for tests.
-
-    This fixture sets up the sandbox daemon for tests that need it.
-    It configures the sandbox using the .py-sandboxes file in the project root.
-    """
-    config_path = Path(__file__).parent.parent / ".py-sandboxes"
-    with sandboxes(sandboxes_config=config_path):
-        yield
+os.chdir(Path(__file__).parent.parent)

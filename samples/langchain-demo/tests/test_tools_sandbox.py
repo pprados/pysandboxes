@@ -45,9 +45,7 @@ DENIED_URL = "https://example.com/"
 # Reaches Popen through the subclass tree, which an emptied __builtins__ does
 # not hide. The tool is a plain eval() on purpose: whatever stops this is the
 # sandbox, not a parser.
-POPEN_ESCAPE = (
-    "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
-)
+POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
 
 
 def armed_kwargs() -> dict[str, object]:
@@ -132,18 +130,16 @@ def test_the_wrappers_report_the_rule_to_the_model() -> None:
 def test_the_profile_is_a_whitelist(profile: Path) -> None:
     """Guard the two ways this demonstration has silently died before."""
     active = [
-        line.strip()
-        for line in profile.read_text().splitlines()
-        if line.strip() and not line.strip().startswith("#")
+        line.strip() for line in profile.read_text().splitlines() if line.strip() and not line.strip().startswith("#")
     ]
 
     assert "python-import=*" not in active, "a wildcard import rule voids the whitelist"
-    assert not [line for line in active if line.startswith("python-api=ALLOW:process-exec")], (
-        "allowing process-exec would void scenario C"
-    )
-    assert not [line for line in active if line.startswith("learn=")], (
-        "a learn= rule left behind records instead of denying"
-    )
+    assert not [
+        line for line in active if line.startswith("python-api=ALLOW:process-exec")
+    ], "allowing process-exec would void scenario C"
+    assert not [
+        line for line in active if line.startswith("learn=")
+    ], "a learn= rule left behind records instead of denying"
 
 
 COMPLETE_MODE_SCRIPT = f"""

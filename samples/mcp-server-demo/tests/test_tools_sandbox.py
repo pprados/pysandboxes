@@ -129,9 +129,9 @@ def test_the_profile_is_a_whitelist(profile: Path) -> None:
     active = [line for line in rules if line and not line.startswith("#")]
 
     assert "python-import=*" not in active, "a wildcard import rule voids the whitelist"
-    assert not [line for line in active if line.startswith("python-api=ALLOW:process-exec")], (
-        "allowing process-exec would void scenario C"
-    )
-    assert not [line for line in active if line.startswith("learn=")], (
-        "a profile left in learning mode records instead of denying"
-    )
+    assert not [
+        line for line in active if line.startswith("python-api=ALLOW:process-exec")
+    ], "allowing process-exec would void scenario C"
+    assert not [
+        line for line in active if line.startswith("learn=")
+    ], "a profile left in learning mode records instead of denying"

@@ -29,9 +29,7 @@ CONFIG = "mcp_server/.py-sandboxes-complete"
 
 ALLOWED_URL = "https://www.google.com/"
 DENIED_URL = "https://example.com/"
-POPEN_ESCAPE = (
-    "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
-)
+POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
 
 
 @pytest.fixture

@@ -6,21 +6,23 @@ import os
 from typing import Annotated, Sequence, TypedDict
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from .tools import calculator, web_fetcher
+from .tools import evaluate_expression, fetch_webpage
 
 
 class AgentState(TypedDict):
     """State definition for the agent graph."""
+
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
 
 def create_agent(model_name: str = "gpt-4o-mini", temperature: float = 0) -> CompiledStateGraph:
     """
-    Create a LangGraph agent with calculator and web fetcher tools.
+    Create a LangGraph agent with the fetch and expression tools.
 
     Args:
         model_name: The OpenAI model to use
@@ -29,7 +31,7 @@ def create_agent(model_name: str = "gpt-4o-mini", temperature: float = 0) -> Com
     Returns:
         A compiled LangGraph agent
     """
-    tools = [calculator, web_fetcher]
+    tools = [fetch_webpage, evaluate_expression]
 
     kwargs = {"model": model_name, "temperature": temperature}
     if base_url := os.environ.get("OPENAI_BASE_URL"):
@@ -57,11 +59,12 @@ def create_agent(model_name: str = "gpt-4o-mini", temperature: float = 0) -> Com
                 content=(
                     "You are a helpful AI assistant with access to tools. "
                     "You can:\n"
-                    "1. Calculate mathematical expressions using the "
-                    "calculator tool\n"
+                    "1. Evaluate mathematical expressions using the "
+                    "evaluate_expression tool\n"
                     "2. Fetch and convert web pages to markdown using the "
-                    "web_fetcher tool\n\n"
-                    "Use these tools when appropriate to help the user."
+                    "fetch_webpage tool\n\n"
+                    "You must use them for any live page content or any "
+                    "computation; do not answer from memory alone."
                 )
             )
             messages = [system_message] + list(messages)
@@ -97,8 +100,6 @@ async def chat_with_agent(agent, message: str) -> str:
     Returns:
         The agent's response as a string
     """
-    result = await agent.ainvoke(
-        {"messages": [HumanMessage(content=message)]}
-    )
+    result = await agent.ainvoke({"messages": [HumanMessage(content=message)]})
 
     return result["messages"][-1].content

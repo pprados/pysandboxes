@@ -228,9 +228,7 @@ def main() -> int:
         "--py-sandbox",
         dest="py_sandbox",
         type=str,
-        default=os.environ.get(
-            "PY_SANDBOX", "True"
-        ),  # Use None as default value for clear checking
+        default=os.environ.get("PY_SANDBOX", "True"),  # Use None as default value for clear checking
         help="Choice to activate the py-sandbox.",
     )
     parser.add_argument(
@@ -248,9 +246,7 @@ def main() -> int:
     kwargs = {}
     if args.learn:
         kwargs = {"learn": args.learn}
-    logger.info(
-        f"Start mcp_server with {args.transport} {args.config_path} {args.py_sandbox} {args.os_sandbox}"
-    )
+    logger.info(f"Start mcp_server with {args.transport} {args.config_path} {args.py_sandbox} {args.os_sandbox}")
     return run_mcp_server(
         py_sandbox=args.py_sandbox,
         os_sandbox=args.os_sandbox,
