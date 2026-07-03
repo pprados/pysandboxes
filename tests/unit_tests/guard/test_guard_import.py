@@ -177,7 +177,11 @@ def test_packaged_resources_stay_readable_while_the_guard_is_armed() -> None:
 
     from pysandboxes.guard_import import GuardLoader
 
-    assert isinstance(sys.modules["pysandboxes"].__spec__.loader, GuardLoader), "guard not armed"
+    spec = sys.modules["pysandboxes"].__spec__
+    assert spec is not None
+    assert isinstance(spec.loader, GuardLoader), "guard not armed"
 
     template = importlib.resources.files("pysandboxes") / "templates" / "bwrap.template"
-    assert template.resolve().is_file()
+    # `resolve()` is the point of the test: a degraded Traversable wrapper does not
+    # have it, which is exactly the regression guarded here.
+    assert Path(str(template)).resolve().is_file()
