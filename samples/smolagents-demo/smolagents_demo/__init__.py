@@ -1,1 +1,1 @@
-"""Smolagents demo: ToolCallingAgent with fetch_webpage and execute_python."""
+"""Smolagents demo: ToolCallingAgent with fetch_webpage and evaluate_expression."""

@@ -95,7 +95,7 @@ sample-tests:
 	(cd samples/mcp-server-demo && make tests)
 	(cd samples/openai-agents-sdk-demo && make tests)
 	(cd samples/pydantic-ai-demo && make tests)
-	# (cd samples/smolagents-demo && make tests)
+	(cd samples/smolagents-demo && make tests)
 	# (cd samples/strands-agents-demo && make tests)
 
 
