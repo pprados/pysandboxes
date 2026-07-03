@@ -18,10 +18,7 @@ dependencies = [
     "pysandboxes",
     "markdownify>=1.2.0",
     # Native + LiteLLM-backed providers (see README). Extras match PyPI optional deps.
-    # No `anthropic` extra: it pins anthropic<0.74, which cannot coexist with the
-    # anthropic>=0.99 pysandboxes declares. Claude models stay reachable through
-    # the litellm extra.
-    "crewai[aws,azure-ai-inference,bedrock,google-genai,litellm]>=1.11",
+    "crewai[anthropic,aws,azure-ai-inference,bedrock,google-genai,litellm]>=1.11",
     "httpx>=0.28",
     "python-dotenv>=1.0",
 ]

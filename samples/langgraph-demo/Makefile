@@ -15,7 +15,7 @@ test: tests
 
 ## Start the interactive chat (Ctrl-D or /quit to leave)
 run:
-	set -a && if [ -f .env ]; then source .env; fi && uv run agno-demo
+	set -a && if [ -f .env ]; then source .env; fi && uv run langgraph-chat chat
 
 ## Relearn both profiles, one per mode. Read learn.py first: learning only ever
 ## adds, it must never run on untrusted code, and it cannot produce the `net=` rules.
@@ -25,7 +25,7 @@ learn:
 		--pysandboxes-config=.py-sandboxes-complete \
 		--learn=.py-sandboxes-complete learn.py
 
-lint format: PYTHON_FILES=agno_demo tests
+lint format: PYTHON_FILES=langgraph_simple_chatbot tests
 lint:
 	uvx mypy $(PYTHON_FILES)
 	uvx black $(PYTHON_FILES) --check
@@ -93,3 +93,6 @@ _uv-init:
 
 ## Install deps with uv
 init: _uv-init
+
+## Alias for run, kept from this sample's earlier Makefile
+chat: run

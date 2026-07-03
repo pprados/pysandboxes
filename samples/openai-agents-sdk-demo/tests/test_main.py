@@ -28,7 +28,7 @@ def test_main_success(monkeypatch: pytest.MonkeyPatch) -> None:
         return "ok"
 
     monkeypatch.setattr(main_mod, "run_agent_async", fake_run)
-    rc = main_mod.main([])
+    rc = main_mod.main(["--task", "do something"])
     assert rc == 0
 
 
@@ -40,5 +40,5 @@ def test_main_failure(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError("x")
 
     monkeypatch.setattr(main_mod, "run_agent_async", boom)
-    rc = main_mod.main([])
+    rc = main_mod.main(["--task", "do something"])
     assert rc == 1

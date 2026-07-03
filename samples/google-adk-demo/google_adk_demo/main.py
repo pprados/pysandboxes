@@ -1,6 +1,7 @@
 """CLI: load model from env, build ADK ``LlmAgent``, run tool-calling loop via Runner."""
 
 import argparse
+import asyncio
 import logging
 import os
 import sys
@@ -9,10 +10,11 @@ from typing import Sequence
 
 from dotenv import load_dotenv
 from google.adk.agents import LlmAgent
+from google.adk.runners import Runner
 from pysandboxes import sandboxes
 
 from google_adk_demo.model_builder import build_model_from_env
-from google_adk_demo.run import run_agent_once
+from google_adk_demo.run import build_runner, run_agent_once, run_agent_turn
 from google_adk_demo.tools import evaluate_expression, fetch_webpage
 
 CONFIG = Path(__file__).parent.parent / ".py-sandboxes"
@@ -27,6 +29,11 @@ DEFAULT_USER_TASK = (
     "words its title contains, then use evaluate_expression to compute that count squared. "
     "End with a one-sentence summary that includes both numbers."
 )
+
+DEFAULT_HINT = f"""Google ADK agent, tools confined by the sandbox. /quit or Ctrl-D to leave.
+Try: {DEFAULT_USER_TASK}
+Then ask for a host the profile does not allow, or for an expression that tries to
+escape -- the tool answers with the rule that refused it."""
 
 AGENT_NAME = "demo_agent"
 
@@ -65,8 +72,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Google ADK tool-calling agent demo (console).")
     p.add_argument(
         "--task",
-        default=os.environ.get("AGENT_TASK", DEFAULT_USER_TASK),
-        help="User task (must require tools; default uses https://www.google.com )",
+        default=os.environ.get("AGENT_TASK"),
+        help="Run a single task and exit. Omitted: start an interactive chat.",
     )
     p.add_argument(
         "--max-iterations",
@@ -78,12 +85,62 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return p.parse_args(list(argv) if argv is not None else None)
 
 
+def _read_user_turn() -> str | None:
+    """Read one chat line. ``None`` ends the conversation."""
+    try:
+        line = input("you> ").strip()
+    except EOFError:
+        print()
+        return None
+    return None if line in ("/quit", "/exit") else line
+
+
+async def _run_chat(agent: LlmAgent, *, max_llm_calls: int) -> None:
+    runner: Runner = build_runner(agent)
+    # The Runner (and its ``async with``) wraps the whole conversation, opened once:
+    # ADK's dispatch is async, so this is the natural place to hold it open, and
+    # reusing user_id/session_id across turns is what makes the session -- ADK's own
+    # history, not a hand-rolled list -- carry the conversation from turn to turn.
+    async with runner:
+        while True:
+            line = await asyncio.to_thread(_read_user_turn)
+            if line is None:
+                return
+            if not line:
+                continue
+            try:
+                text = await run_agent_turn(runner, line, max_llm_calls=max_llm_calls)
+            except Exception as e:
+                # A refused tool is reported by the tool itself, inside the
+                # conversation. Only a broken turn lands here, and it must not
+                # end the chat.
+                print(f"bot> turn failed: {e}", file=sys.stderr)
+                continue
+            print(f"bot> {text or '(empty assistant content)'}\n")
+
+
+def chat(agent: LlmAgent, *, max_llm_calls: int) -> int:
+    print(f"{DEFAULT_HINT}\n")
+    with sandboxes(sandboxes_config=CONFIG):
+        asyncio.run(_run_chat(agent, max_llm_calls=max_llm_calls))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv()
     args = parse_args(argv)
     _configure_logging(args.verbose)
 
-    agent = build_root_agent()
+    try:
+        agent = build_root_agent()
+    except Exception as e:
+        print(f"Cannot build the chat model: {e}", file=sys.stderr)
+        print("Set CHAT_MODEL and the provider's API key (see README, or .env).", file=sys.stderr)
+        return 2
+
+    if args.task is None:
+        return chat(agent, max_llm_calls=max(1, args.max_iterations))
+
     model_label = (os.environ.get("CHAT_MODEL") or "gemini-2.0-flash").strip()
     print(
         f"Running agent (CHAT_MODEL={model_label!r}). Several LLM/tool steps may take a minute; use -v for INFO logs.",

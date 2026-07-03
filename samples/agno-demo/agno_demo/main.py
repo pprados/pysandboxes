@@ -3,10 +3,12 @@
 import argparse
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Sequence
 
 from agno.agent import Agent
+from agno.db.in_memory import InMemoryDb
 from dotenv import load_dotenv
 from pysandboxes import sandboxes
 
@@ -24,6 +26,11 @@ DEFAULT_USER_TASK = (
     "words its title contains, then use evaluate_expression to compute that count squared. "
     "End with a one-sentence summary that includes both numbers."
 )
+
+DEFAULT_HINT = f"""Agno agent, tools confined by the sandbox. /quit or Ctrl-D to leave.
+Try: {DEFAULT_USER_TASK}
+Then ask for a host the profile does not allow, or for an expression that tries to
+escape -- the tool answers with the rule that refused it."""
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -51,8 +58,14 @@ def build_agent(
     *,
     model_spec: str,
     max_tool_calls: int,
+    db: InMemoryDb | None = None,
+    add_history_to_context: bool = False,
 ) -> Agent:
-    """Agent with tools; ``search_knowledge`` disabled so only our tools are offered."""
+    """Agent with tools; ``search_knowledge`` disabled so only our tools are offered.
+
+    ``db`` and ``add_history_to_context`` are only set for the chat path: without a
+    db, Agno never persists a session, so history across ``run()`` calls needs both.
+    """
     return Agent(
         model=model_spec,
         tools=[fetch_webpage, evaluate_expression],
@@ -60,6 +73,8 @@ def build_agent(
         search_knowledge=False,
         tool_call_limit=max_tool_calls,
         markdown=False,
+        db=db,
+        add_history_to_context=add_history_to_context,
     )
 
 
@@ -67,8 +82,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Agno tool-calling agent demo (console).")
     p.add_argument(
         "--task",
-        default=os.environ.get("AGENT_TASK", DEFAULT_USER_TASK),
-        help="User task (must require tools; default uses https://www.google.com )",
+        default=os.environ.get("AGENT_TASK"),
+        help="Run a single task and exit. Omitted: start an interactive chat.",
     )
     p.add_argument(
         "--max-tool-calls",
@@ -80,6 +95,50 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return p.parse_args(list(argv) if argv is not None else None)
 
 
+def _answer(run_output: object) -> str:
+    content = getattr(run_output, "content", None)
+    text = (content if isinstance(content, str) else str(content or "")).strip()
+    return text or "(empty assistant content)"
+
+
+def _read_user_turn() -> str | None:
+    """Read one chat line. ``None`` ends the conversation."""
+    try:
+        line = input("you> ").strip()
+    except EOFError:
+        print()
+        return None
+    return None if line in ("/quit", "/exit") else line
+
+
+def chat(agent: Agent) -> int:
+    """Hold a conversation, carrying Agno's own session history across turns.
+
+    The sandbox is entered once, around the whole conversation. It has to stay
+    armed for every turn: `@sandbox` needs a running daemon at call time, and a
+    context manager opened per turn would pay the daemon's startup on each one.
+    """
+    print(f"{DEFAULT_HINT}\n")
+    with sandboxes(sandboxes_config=CONFIG):
+        while True:
+            line = _read_user_turn()
+            if line is None:
+                return 0
+            if not line:
+                continue
+            try:
+                # The agent's own session (add_history_to_context=True, backed by
+                # its db) carries the history a turn leaves behind into the next.
+                run_output = agent.run(line)
+            except Exception as e:
+                # A refused tool is reported by the tool itself, inside the
+                # conversation. Only a broken turn lands here, and it must not
+                # end the chat.
+                print(f"bot> turn failed: {e}", file=sys.stderr)
+                continue
+            print(f"bot> {_answer(run_output)}\n")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv()
     args = parse_args(argv)
@@ -88,7 +147,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     raw = os.environ.get("CHAT_MODEL", "openai:gpt-4o-mini")
     model_spec = normalize_chat_model_spec(raw)
 
-    agent = build_agent(model_spec=model_spec, max_tool_calls=args.max_tool_calls)
+    try:
+        if args.task is None:
+            agent = build_agent(
+                model_spec=model_spec,
+                max_tool_calls=args.max_tool_calls,
+                db=InMemoryDb(),
+                add_history_to_context=True,
+            )
+        else:
+            agent = build_agent(model_spec=model_spec, max_tool_calls=args.max_tool_calls)
+    except Exception as e:
+        print(f"Cannot build the chat model: {e}", file=sys.stderr)
+        print("Set CHAT_MODEL and the provider's API key (see README, or .env).", file=sys.stderr)
+        return 2
+
+    if args.task is None:
+        return chat(agent)
+
     try:
         # Partial mode: only the tool bodies run in the sandbox. The context
         # manager has to wrap the run that *calls* them -- @sandbox needs a
@@ -99,9 +175,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.getLogger(__name__).error("Agent failed: %s", e, exc_info=True)
         return 1
 
-    content = getattr(run_output, "content", None)
-    text = (content if isinstance(content, str) else str(content or "")).strip()
-    print(text or "(empty assistant content)")
+    print(_answer(run_output))
     return 0
 
 

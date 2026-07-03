@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
+.PHONY: all format lint run learn test tests test_watch integration_tests docker_tests help extended_tests
 
 UV_GROUP?=--group dev --group test
 
@@ -21,6 +21,10 @@ tests:
 # Not `.`: the package has no __init__.py, so scanning the directory makes mypy
 # see mcp_simple_chatbot/main.py under two module names and refuse to continue.
 PYTHON_FILES=mcp_simple_chatbot tests
+## Start the interactive chat (Ctrl-D or /quit to leave)
+run:
+	set -a && if [ -f .env ]; then source .env; fi && uv run mcp-simple-chatbot
+
 lint format: PYTHON_FILES=mcp_simple_chatbot tests
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 

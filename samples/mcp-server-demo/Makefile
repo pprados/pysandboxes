@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
+.PHONY: all format lint run learn test tests test_watch integration_tests docker_tests help extended_tests
 
 UV=uv
 UV_GROUP?=--group dev --group test
@@ -20,6 +20,20 @@ tests:
 
 # Define a variable for Python and notebook files.
 PYTHON_FILES=.
+## Start the MCP server in partial mode over http, on port 8000. This sample has
+## no chat of its own: the tools live here, the conversation lives in
+## ../mcp-client-demo, whose `make run` drives this server.
+run:
+	uv run -m mcp_server.main -t http
+
+## Relearn both profiles, one per mode. Read learn.py first: learning only ever
+## adds, it must never run on untrusted code, and it cannot produce the `net=` rules.
+learn:
+	uv run python learn.py
+	uv run python -m pysandboxes.python_sb \
+		--pysandboxes-config=mcp_server/.py-sandboxes-complete \
+		--learn=mcp_server/.py-sandboxes-complete learn.py
+
 lint format: PYTHON_FILES=.
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
