@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests help clean init lock validate
+.PHONY: all format lint run learn test tests help clean init lock validate
 
 UV_GROUP?=--group dev --group test
 
@@ -12,6 +12,18 @@ tests:
 	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v $(TEST_FILE)
 
 test: tests
+
+## Start the interactive chat (Ctrl-D or /quit to leave)
+run:
+	set -a && if [ -f .env ]; then source .env; fi && uv run autogen-demo
+
+## Relearn both profiles, one per mode. Read learn.py first: learning only ever
+## adds, it must never run on untrusted code, and it cannot produce the `net=` rules.
+learn:
+	uv run python learn.py
+	uv run python -m pysandboxes.python_sb \
+		--pysandboxes-config=.py-sandboxes-complete \
+		--learn=.py-sandboxes-complete learn.py
 
 lint format: PYTHON_FILES=autogen_demo tests
 lint:

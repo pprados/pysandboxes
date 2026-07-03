@@ -21,7 +21,6 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "anthropic>=0.99.0",
     "httpcore (>=1.0.9)",
     "fastapi (>=0.115.0)",
     "uvicorn (>=0.34.0)",
@@ -114,9 +113,9 @@ lint = [
 
 [tool.codespell]
 # Generated trees, caches and virtualenvs: scanning .venv alone took minutes.
-# audits/ and wiki/proxy.md are written in French; codespell only knows
+# audits/ and TODO.md are written in French; codespell only knows
 # English, so every French word would be reported as a typo.
-skip = '*/.git,*/.venv,*/node_modules,*/.mypy_cache,*/.pytest_cache,*/.ruff_cache,*/dist,*/.ia_backup,*/graphify-out,*/.agents,*/_bmad,*/wiki/bmad,*/PPR,*/audits,*/wiki/proxy.md,*.pdf,*.svg,*.yaml,*.ipynb,*.lock,*.min.js,*.css,package-lock.json'
+skip = '*/.git,*/.venv,*/node_modules,*/.mypy_cache,*/.pytest_cache,*/.ruff_cache,*/dist,*/.ia_backup,*/graphify-out,*/.agents,*/_bmad,*/wiki/bmad,*/PPR,*/audits,*/TODO.md,*.pdf,*.svg,*.yaml,*.ipynb,*.lock,*.min.js,*.css,package-lock.json'
 # Ignore latin etc
 ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
 #ignore-words-list = ''

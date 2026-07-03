@@ -170,7 +170,6 @@ run.sh
 .local.py-sandboxes*
 .devpi/
 etudes/
-samples/langgraph-demo/
 tmp*/
 tst_wasm/
 #reports/
@@ -234,3 +233,8 @@ graphify-out/
 /audits/
 /lat.md/
 /tmp/
+
+# the agent workspaces: plans and specs are versioned, working workspaces are not
+/the agent workspaces/*
+!/the plans directory/
+!/the design-specs directory/

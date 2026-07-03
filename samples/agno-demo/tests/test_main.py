@@ -27,7 +27,7 @@ def test_build_agent_sets_tool_limit() -> None:
 
 def test_parse_args_defaults() -> None:
     ns = parse_args([])
-    assert "google.com" in ns.task
+    assert ns.task is None
     assert ns.max_tool_calls >= 1
 
 

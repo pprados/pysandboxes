@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests help clean init lock validate
+.PHONY: all format lint run learn test tests help clean init lock validate
 
 UV_GROUP?=--group dev --group test
 
@@ -12,6 +12,24 @@ tests:
 	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v $(TEST_FILE)
 
 test: tests
+
+## Start the interactive chat (Ctrl-D or /quit to leave)
+run:
+	set -a && if [ -f .env ]; then source .env; fi && uv run crewai-demo
+
+## Relearn both profiles, one per mode. Guarded: this sample's env allowlist was
+## filtered by hand, and learning only ever adds -- an unguarded relearn would
+## restore every variable litellm probes for. Read learn.py, then pass FORCE=1.
+learn:
+ifneq ($(FORCE),1)
+	@echo "Refusing: this would restore the env rules filtered by hand." >&2
+	@echo "Re-run with: make learn FORCE=1" >&2
+	@false
+endif
+	uv run python learn.py
+	uv run python -m pysandboxes.python_sb \
+		--pysandboxes-config=.py-sandboxes-complete \
+		--learn=.py-sandboxes-complete learn.py
 
 lint format: PYTHON_FILES=crewai_demo tests
 lint:
