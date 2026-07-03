@@ -15,6 +15,8 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
+    "pysandboxes",
+    "markdownify>=1.2.0",
     # Strands: core + extras matching documented first-party providers (LiteLLM covers many more via CHAT_MODEL).
     "strands-agents[litellm,anthropic,gemini,mistral,llamaapi]>=1.0",
     "ollama>=0.4.8",
