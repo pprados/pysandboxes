@@ -1,11 +1,7 @@
-# Profile for the PARTIAL mode: only the tool bodies enter the sandbox.
-# The complete mode has its own profile, `.py-sandboxes-complete`, deliberately
-# separate -- sharing one file would grant each mode the other's privileges for
-# nothing, which is the opposite of what the partial mode is for. Relearn both
-# with `learn.py`; see its docstring.
-#
-# The `net=` rule is not learned: which hosts a tool may reach is the author's
-# decision, not an observation.
+# Profile for the COMPLETE mode: the whole process runs under `python-sb`, so
+# this profile has to allow the framework's own dispatch too. The partial mode
+# has its own profile, `.py-sandboxes`, deliberately separate. Relearn both with
+# `learn.py`; see its docstring.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
@@ -14,7 +10,6 @@ net=ALLOW|TCP|www.google.com|443|OUT
 # Add rules (2026/09/10 at 07:36)
 env=CONDA_HOME=${CONDA_HOME}
 env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
 env=PWD=${PWD}
 env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
 env=PYENV_ROOT=${PYENV_ROOT}
@@ -30,21 +25,20 @@ python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
 python-import=_codecs_kr, _codecs_tw, _compression, _elementtree, _hashlib
 python-import=_markupbase, _multibytecodec, _multiprocessing, _posixshmem, _queue
 python-import=_sysconfigdata__linux_x86_64-linux-gnu, _thread, _zoneinfo, abc, array
-python-import=ast, asyncio, base64, binascii, bisect, calendar, codecs, collections
-python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
-python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, errno
-python-import=fnmatch, fractions, functools, getpass, gettext, gzip, hashlib, heapq
-python-import=hmac, html, http, io, ipaddress, itertools, json, keyword, locale
-python-import=logging, math, mimetypes, multiprocessing, numbers, operator, os
-python-import=pathlib, pickle, platform, posixpath, pprint, queue, random, re
-python-import=reprlib, runpy, secrets, select, selectors, shlex, shutil, signal
-python-import=socket, socketserver, ssl, stat, string, stringprep, struct, sysconfig
-python-import=tempfile, termios, textwrap, threading, time, traceback, types, typing
-python-import=unicodedata, urllib, uuid, weakref, xml, zipfile, zlib, zoneinfo
+python-import=ast, base64, binascii, bisect, calendar, codecs, collections, colorsys
+python-import=concurrent, configparser, contextlib, contextvars, copy, copyreg
+python-import=dataclasses, datetime, decimal, email, encodings, enum, errno, fnmatch
+python-import=fractions, functools, getpass, gettext, gzip, hashlib, heapq, hmac
+python-import=html, http, io, ipaddress, itertools, json, logging, math, mimetypes
+python-import=multiprocessing, numbers, operator, os, pathlib, pickle, platform
+python-import=posixpath, pprint, queue, random, re, reprlib, runpy, secrets, select
+python-import=selectors, shlex, shutil, signal, socket, ssl, stat, string
+python-import=stringprep, struct, sysconfig, tempfile, termios, textwrap, threading
+python-import=time, traceback, types, typing, unicodedata, urllib, uuid, weakref
+python-import=xml, zipfile, zlib, zoneinfo
 
 # External modules (Are you sure about the origin?)
 python-import=81d243bd2c585b0f4821__mypyc
-python-import=annotated_doc
 python-import=annotated_types
 python-import=anyio
 python-import=attr
@@ -57,8 +51,6 @@ python-import=charset_normalizer
 python-import=click
 python-import=dateutil
 python-import=docstring_parser
-python-import=email_validator
-python-import=fastapi
 python-import=h11
 python-import=httpcore
 python-import=httpx
@@ -74,7 +66,6 @@ python-import=pydantic
 python-import=pydantic_core
 python-import=pyexpat
 python-import=pygments
-python-import=python_multipart
 python-import=referencing
 python-import=rich
 python-import=rpds
@@ -82,15 +73,12 @@ python-import=s3transfer
 python-import=six
 python-import=sniffio
 python-import=soupsieve
-python-import=starlette
 python-import=strands
 python-import=strands_agents_demo
 python-import=typing_extensions
 python-import=typing_inspection
 python-import=urllib3
-python-import=uvicorn
 python-import=watchdog
-python-import=websockets
 python-import=wrapt
 python-import=yaml
 python-import=zipp

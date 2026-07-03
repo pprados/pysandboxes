@@ -1,8 +1,26 @@
 # Strands Agents demo (`strands-agents-demo`)
 
-Console demo of the [Strands Agents](https://strandsagents.com/) SDK: an `Agent` runs the built-in event loop (model → tool calls → tool results → model …) with two tools, **`fetch_webpage`** (HTTP GET via httpx) and **`execute_python`** (restricted `exec` in a demo namespace — **not** an OS sandbox).
+Console demo of the [Strands Agents](https://strandsagents.com/) SDK: an `Agent` runs the built-in event loop (model → tool calls → tool results → model …) with two tools, **`fetch_webpage`** and **`evaluate_expression`**.
 
-The default user task **requires** both tools: fetch `https://www.google.com`, then compute on the returned HTML with `execute_python`. Tool calls are chosen by the model via Strands’ `@tool` registration — the CLI does not invoke the tools directly.
+The default user task **requires** both tools: fetch `https://www.google.com`, report how many words its title contains, then compute that count squared. Tool calls are chosen by the model via Strands’ `@tool` registration — the CLI does not invoke the tools directly.
+
+## What the sandbox does here
+
+Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
+given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__`—which is
+known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`. That
+is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
+filter can take the credit.
+
+Two profiles, one per mode, each learned in its own by `learn.py`:
+
+| Profile | Mode | What is confined |
+|---------|------|------------------|
+| `.py-sandboxes` | partial | the tool bodies only (`with sandboxes(...)` around the agent call) |
+| `.py-sandboxes-complete` | complete | the whole process, launched with `python -m pysandboxes.python_sb` |
+
+They are deliberately separate: sharing one file would grant each mode the other's privileges
+for nothing, which is the opposite of what the partial mode is for.
 
 ## Requirements
 
@@ -66,4 +84,6 @@ From the repo root (same as other samples):
 
 ## Security note
 
-`execute_python` is a **demo** helper for trusted local runs. Do not expose it to untrusted users without a real isolation layer (e.g. pysandboxes OS sandbox), which this sample does **not** integrate.
+The expression tool is a plain `eval()`. What confines it is **pysandboxes**, armed from the
+profiles above -- not any check inside the tool. Never run learning mode on untrusted code, and
+look hard at any `ALLOW:process-exec` rule a learned profile contains before keeping it.
