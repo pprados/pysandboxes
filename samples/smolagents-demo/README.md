@@ -1,12 +1,26 @@
 # Smolagents demo (`smolagents-demo`)
 
-Console demo using Hugging Face [**smolagents**](https://huggingface.co/docs/smolagents/index): a **`ToolCallingAgent`** (JSON tool calls) with **`fetch_webpage`** and **`execute_python`**, backed by **`LiteLLMModel`** so you can point at many providers via [LiteLLM](https://docs.litellm.ai/).
+Console demo using Hugging Face [**smolagents**](https://huggingface.co/docs/smolagents/index): a **`ToolCallingAgent`** (JSON tool calls) with **`fetch_webpage`** and **`evaluate_expression`**, backed by **`LiteLLMModel`** so you can point at many providers via [LiteLLM](https://docs.litellm.ai/).
 
-The default task **requires** both tools: it loads `https://www.google.com`, then runs Python on the HTML (for example to count words in the `<title>`). The model must not answer from memory alone.
+The default task **requires** both tools: it loads `https://www.google.com`, counts the words in its title, then computes that count squared. The model must not answer from memory alone.
 
-## Security note
+## What the sandbox does here
 
-`execute_python` uses a **restricted** namespace for demonstration only. It is **not** an OS-level sandbox. Do not expose this demo to untrusted users or secrets.
+Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
+given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__`—which is
+known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`. That
+is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
+filter can take the credit.
+
+Two profiles, one per mode, each learned in its own by `learn.py`:
+
+| Profile | Mode | What is confined |
+|---------|------|------------------|
+| `.py-sandboxes` | partial | the tool bodies only (`with sandboxes(...)` around `agent.run()`) |
+| `.py-sandboxes-complete` | complete | the whole process, launched with `python -m pysandboxes.python_sb` |
+
+They are deliberately separate: sharing one file would grant each mode the other's privileges
+for nothing, which is the opposite of what the partial mode is for.
 
 ## Prerequisites
 
@@ -75,7 +89,8 @@ make validate
 
 | Path | Role |
 |------|------|
-| `smolagents_demo/tools.py` | `fetch_webpage`, `execute_python` (`@tool`) |
+| `smolagents_demo/tools.py` | `fetch_webpage`, `evaluate_expression` (`@tool`), each `@sandbox`ed behind a wrapper |
+| `learn.py` | relearns either profile, in its own mode |
 | `smolagents_demo/model_builder.py` | `CHAT_MODEL` → `LiteLLMModel` |
 | `smolagents_demo/main.py` | CLI, `ToolCallingAgent`, default prompts |
 

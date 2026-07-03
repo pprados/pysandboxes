@@ -4,29 +4,28 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from dotenv import load_dotenv
+from pysandboxes import sandboxes
 from smolagents import ToolCallingAgent
 from smolagents.monitoring import LogLevel
 
 from smolagents_demo.model_builder import build_model_from_env
-from smolagents_demo.tools import execute_python, fetch_webpage
+from smolagents_demo.tools import evaluate_expression, fetch_webpage
+
+CONFIG = Path(__file__).parent.parent / ".py-sandboxes"
 
 DEFAULT_SYSTEM = (
     "You must use the provided tools for any live webpage content or any computation. "
-    "Do not invent HTML, titles, or numeric results without calling the tools. "
-    "When you call execute_python, pass the exact text returned by fetch_webpage as your HTML "
-    "string (assign it to a variable and parse that). "
-    "When using re.search, check the match is not None before calling .group(); if there is no "
-    "match, widen the pattern or inspect the HTML."
+    "Do not invent page content or numeric results without calling the tools."
 )
 
 DEFAULT_USER_TASK = (
-    "Using the tools: fetch https://www.google.com with fetch_webpage, then use execute_python "
-    "on the fetched HTML (not a made-up snippet) to extract the text inside the first "
-    "<title>...</title> and report how many words that title contains (split on whitespace). "
-    "End with a one-sentence summary that includes the word count."
+    "Using the tools: fetch https://www.google.com with fetch_webpage, report how many "
+    "words its title contains, then use evaluate_expression to compute that count squared. "
+    "End with a one-sentence summary that includes both numbers."
 )
 
 
@@ -40,7 +39,7 @@ def build_agent(*, max_steps: int, verbose: bool) -> ToolCallingAgent:
     model = build_model_from_env()
     verbosity = LogLevel.DEBUG if verbose else LogLevel.ERROR
     return ToolCallingAgent(
-        tools=[fetch_webpage, execute_python],
+        tools=[fetch_webpage, evaluate_expression],
         model=model,
         instructions=DEFAULT_SYSTEM,
         max_steps=max_steps,
@@ -79,7 +78,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         flush=True,
     )
     try:
-        final = agent.run(args.task, max_steps=max(1, args.max_iterations))
+        # Partial mode: only the tool bodies run in the sandbox. The context
+        # manager has to wrap the run that *calls* them -- @sandbox needs a
+        # running daemon at call time, and agent.run() is where the calls happen.
+        with sandboxes(sandboxes_config=CONFIG):
+            final = agent.run(args.task, max_steps=max(1, args.max_iterations))
     except Exception as e:
         logging.getLogger(__name__).error("Agent failed: %s", e, exc_info=True)
         return 1

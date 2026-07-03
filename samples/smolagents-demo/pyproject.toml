@@ -15,6 +15,8 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
+    "pysandboxes",
+    "markdownify>=1.2.0",
     "smolagents[litellm,openai]>=1.20",
     "httpx>=0.28",
     "python-dotenv>=1.0",
