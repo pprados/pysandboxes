@@ -8,9 +8,8 @@ import click
 import pysandboxes
 from dotenv import load_dotenv
 
-from .agent import create_agent, chat_with_agent
+from .agent import chat_with_agent, create_agent
 from .console import run_console_chat
-
 
 load_dotenv()
 
@@ -46,7 +45,7 @@ def chat(model: str, temperature: float) -> None:
 def ask(message: tuple[str, ...], model: str, temperature: float) -> None:
     """Ask a single question and get a response."""
 
-    async def run_ask():
+    async def run_ask() -> None:
         agent = create_agent(model_name=model, temperature=temperature)
         question = " ".join(message)
         response = await chat_with_agent(agent, question)
