@@ -4,11 +4,12 @@
 
 import os
 from typing import Annotated, Sequence, TypedDict
+
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
-from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from .tools import evaluate_expression, fetch_webpage
@@ -89,7 +90,7 @@ def create_agent(model_name: str = "gpt-4o-mini", temperature: float = 0) -> Com
     return workflow.compile()
 
 
-async def chat_with_agent(agent, message: str) -> str:
+async def chat_with_agent(agent: CompiledStateGraph, message: str) -> str:
     """
     Send a message to the agent and get the response.
 

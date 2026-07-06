@@ -12,8 +12,8 @@ denied host was fetched. A test suite that disables what it is meant to verify
 cannot fail.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add the project root to sys.path for imports
