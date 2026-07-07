@@ -1,8 +1,10 @@
 """CLI: configurable LLM via env, CrewAI agent with tools and task kickoff."""
 
 import argparse
+import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -26,6 +28,14 @@ DEFAULT_USER_TASK = (
     "words its title contains, then use evaluate_expression to compute that count squared. "
     "End with a one-sentence summary that includes both numbers."
 )
+
+DEFAULT_HINT = f"""CrewAI crew, tools confined by the sandbox. /quit or Ctrl-D to leave.
+Try: {DEFAULT_USER_TASK}
+Then ask for a host the profile does not allow, or for an expression that tries to
+escape -- the tool answers with the rule that refused it."""
+
+# A single task whose description is re-interpolated on every kickoff (see chat() below).
+CHAT_TASK_DESCRIPTION = f"{DEFAULT_SYSTEM_GOAL} Complete the user's latest request fully.\n\nUser: {{user_turn}}"
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -58,8 +68,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="CrewAI tool-using agent demo (console).")
     p.add_argument(
         "--task",
-        default=os.environ.get("AGENT_TASK", DEFAULT_USER_TASK),
-        help="User task (must require tools; default uses https://www.google.com )",
+        default=os.environ.get("AGENT_TASK"),
+        help="Run a single task and exit. Omitted: start an interactive chat.",
     )
     p.add_argument(
         "--max-iterations",
@@ -71,24 +81,94 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return p.parse_args(list(argv) if argv is not None else None)
 
 
+def _read_user_turn() -> str | None:
+    """Read one chat line. ``None`` ends the conversation."""
+    try:
+        line = input("you> ").strip()
+    except EOFError:
+        print()
+        return None
+    return None if line in ("/quit", "/exit") else line
+
+
+def chat(agent: Agent, *, verbose: bool) -> int:
+    """Hold a conversation, carrying history through CrewAI's own chat inputs.
+
+    LangChain's agent takes a mutable list of ``BaseMessage`` objects that *is*
+    the running conversation -- each call appends to it in place. ``Crew.kickoff()``
+    has no such parameter: every call rebuilds the task from its (static)
+    description, so the transcript has to be re-injected explicitly. CrewAI's own
+    ``crewai chat`` CLI (crewai/cli/crew_chat.py) solves this the same way: it
+    keeps a plain ``{"role", "content"}`` message list and passes it back in on
+    every kickoff via ``inputs["crew_chat_messages"]`` --
+    ``Task.interpolate_inputs_and_add_conversation_history`` recognizes that key
+    and appends the transcript to the task description itself. Reusing one Task
+    is safe because that method re-interpolates from the *original* description
+    every time, so the transcript is never appended twice.
+
+    The sandbox is entered once, around the whole conversation, for the same
+    reason as the one-shot path below: ``@sandbox`` needs a running daemon at
+    call time, and a context manager opened per turn would pay the daemon's
+    startup on each one.
+    """
+    task = Task(
+        description=CHAT_TASK_DESCRIPTION,
+        expected_output="A direct answer to the user's latest message.",
+        agent=agent,
+    )
+    crew = Crew(agents=[agent], tasks=[task], verbose=verbose)
+    messages: list[dict[str, str]] = []
+    print(f"{DEFAULT_HINT}\n")
+    with sandboxes(sandboxes_config=CONFIG):
+        while True:
+            line = _read_user_turn()
+            if line is None:
+                return 0
+            if not line:
+                continue
+            inputs: dict[str, str] = {"user_turn": line}
+            if messages:
+                # Omitted on the first turn: an empty transcript is still
+                # truthy as JSON ("[]"), which would make CrewAI append its
+                # "review the conversation history" instruction for nothing.
+                inputs["crew_chat_messages"] = json.dumps(messages)
+            try:
+                result = crew.kickoff(inputs=inputs)
+            except Exception as e:
+                print(f"bot> turn failed: {e}", file=sys.stderr)
+                continue
+            raw = getattr(result, "raw", None)
+            answer = str(raw if raw is not None else result).strip()
+            messages.append({"role": "user", "content": line})
+            messages.append({"role": "assistant", "content": answer})
+            print(f"bot> {answer}\n")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv()
     args = parse_args(argv)
     _configure_logging(args.verbose)
 
     tools = [fetch_webpage, evaluate_expression]
-    llm = build_llm()
+    try:
+        llm = build_llm()
+        agent = Agent(
+            role="Tool-using analyst",
+            goal=f"{DEFAULT_SYSTEM_GOAL} Complete the user task fully.",
+            backstory=DEFAULT_BACKSTORY,
+            tools=tools,
+            llm=llm,
+            verbose=args.verbose,
+            allow_delegation=False,
+            max_iter=args.max_iterations,
+        )
+    except Exception as e:
+        print(f"Cannot build the chat model: {e}", file=sys.stderr)
+        print("Set CHAT_MODEL and the provider's API key (see README, or .env).", file=sys.stderr)
+        return 2
 
-    agent = Agent(
-        role="Tool-using analyst",
-        goal=f"{DEFAULT_SYSTEM_GOAL} Complete the user task fully.",
-        backstory=DEFAULT_BACKSTORY,
-        tools=tools,
-        llm=llm,
-        verbose=args.verbose,
-        allow_delegation=False,
-        max_iter=args.max_iterations,
-    )
+    if args.task is None:
+        return chat(agent, verbose=args.verbose)
 
     task = Task(
         description=args.task,
