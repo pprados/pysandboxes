@@ -574,9 +574,58 @@ my-script = "my_module:main_sb"
 
 ## Samples
 
-You can find some samples for major framework:
+Twelve samples live under [`samples/`](samples/). They all demonstrate the **same** scenario,
+so that what changes from one to the next is only the framework's own way of declaring and
+dispatching a tool. A chat agent is given exactly two tools:
 
-- MCP Client/Server
+- **`fetch_webpage`** fetches a URL and returns it as markdown — pysandboxes controls which
+  hosts it may reach;
+- **`evaluate_expression`** receives a "python like" expression and computes it with a plain
+  `eval()` — pysandboxes confines the malicious code that arrives through the argument.
+
+Neither tool is written defensively, and there is deliberately no expression filter: whatever
+refuses a host or an escape is pysandboxes, and no applicative filter can take the credit.
+
+Each sample carries **two profiles**, one per mode — `.py-sandboxes` confines only the tool
+bodies, `.py-sandboxes-complete` confines the whole process under `python-sb` — and each is
+learned in its own mode.
+
+**MCP**
+
+| Sample | What it shows |
+|--------|---------------|
+| [mcp-server-demo](samples/mcp-server-demo/README.md) | a FastMCP server, isolated to a greater or lesser extent, over `stdio` or `http` |
+| [mcp-client-demo](samples/mcp-client-demo/README.md) | an MCP chat client against that server, with four sandboxing scenarios |
+
+**Agent frameworks**, each integrating the tools its own way
+
+| Sample | Framework |
+|--------|-----------|
+| [agno-demo](samples/agno-demo/README.md) | [Agno](https://www.agno.com/) |
+| [autogen-demo](samples/autogen-demo/README.md) | [AutoGen AgentChat](https://microsoft.github.io/autogen/) |
+| [crewai-demo](samples/crewai-demo/README.md) | [CrewAI](https://www.crewai.com/) |
+| [google-adk-demo](samples/google-adk-demo/README.md) | [Google ADK](https://google.github.io/adk-docs/) |
+| [langchain-demo](samples/langchain-demo/README.md) | [LangChain](https://www.langchain.com/) |
+| [langgraph-demo](samples/langgraph-demo/README.md) | [LangGraph](https://langchain-ai.github.io/langgraph/) |
+| [openai-agents-sdk-demo](samples/openai-agents-sdk-demo/README.md) | [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) |
+| [pydantic-ai-demo](samples/pydantic-ai-demo/README.md) | [Pydantic AI](https://ai.pydantic.dev/) |
+| [smolagents-demo](samples/smolagents-demo/README.md) | [smolagents](https://huggingface.co/docs/smolagents) |
+| [strands-agents-demo](samples/strands-agents-demo/README.md) | [Strands Agents](https://strandsagents.com/) |
+
+Every sample is self-contained — its own `uv` environment, its own `Makefile`, its own
+documentation:
+
+```bash
+cd samples/langchain-demo
+make init      # uv sync
+make run       # interactive chat with the framework's agent
+make tests     # the sample's own suite
+make learn     # relearn both profiles, one per mode
+```
+
+Ask the chat for a host the profile does not allow, or for an expression that tries to escape:
+the tool answers with the rule that refused it. From the repository root, `make sample-tests`
+runs every sample's suite.
 
 See [here for more information](wiki/samples.md)
 
