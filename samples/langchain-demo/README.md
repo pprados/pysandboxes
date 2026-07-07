@@ -1,12 +1,27 @@
 # LangChain demo (`langchain-demo`)
 
-Console **agent loop** for LangChain 1.x: a chat model with **`fetch_webpage`** and **`execute_python`** bound via `bind_tools`, iterating until the model stops requesting tools or a **maximum iteration** count is reached.
+Console **agent loop** for LangChain 1.x: a chat model with **`fetch_webpage`** and **`evaluate_expression`** bound via `bind_tools`, iterating until the model stops requesting tools or a **maximum iteration** count is reached. This sample is the reference shape the other framework samples follow.
 
-The default task **requires** both tools: it loads `https://www.google.com`, then runs Python on the HTML (for example to measure words in the `<title>`). The model must not answer from memory alone.
+The default task **requires** both tools: it loads `https://www.google.com`, then computes an expression. The model must not answer from memory alone.
 
-## Security note
+## What the sandbox does here
 
-`execute_python` uses a **restricted** namespace for demonstration only. It is **not** an OS-level sandbox. Do not point this demo at untrusted users or secrets.
+Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
+given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__` -- which
+is known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`.
+That is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
+filter can take the credit. There is no expression filter here, not even an optional one --
+as soon as one exists, the reader can no longer tell who blocked what.
+
+Two profiles, one per mode, each learned in its own by `learn.py`:
+
+| Profile | Mode | What is confined |
+|---------|------|------------------|
+| `.py-sandboxes` | partial | the tool bodies only (`with sandboxes(...)` around the agent loop) |
+| `.py-sandboxes-complete` | complete | the whole process, launched with `python -m pysandboxes.python_sb` |
+
+They are deliberately separate: sharing one file would grant each mode the other's
+privileges for nothing, which is the opposite of what the partial mode is for.
 
 ## Prerequisites
 
@@ -41,19 +56,46 @@ Default if unset: `openai:gpt-4o-mini`.
 
 ## Run
 
+`make run` drops you into an interactive chat with the agent. The sandbox is entered
+once, around the whole conversation: `@sandbox` needs a running daemon at call time, and a
+context manager opened per turn would pay the daemon's startup on every one. History is
+LangChain's own message list, which `run_agent_loop` appends to as it goes.
+
 ```bash
-# Optional: export CHAT_MODEL and provider keys
+make run
+# or, without make:
 set -a && source .env && set +a
 langchain-demo
-# or
-python -m langchain_demo
+```
+
+Leave with `/quit` or Ctrl-D. Ask for a host the profile does not allow, or for an
+expression that tries to escape: the tool answers with the rule that refused it.
+
+Passing `--task` runs a single task and exits instead:
+
+```bash
+langchain-demo --task "compute 2*(3+4) with evaluate_expression"
 ```
 
 Options:
 
-- `--task` — override the user message (should still force tool use).
-- `--max-iterations` — cap (default 12).
+- `--task` — run one task and exit. Omitted: interactive chat.
+- `--max-iterations` — cap on model+tool rounds (default 12).
 - `-v` / `--verbose` — log agent turns and tool invocations.
+
+## Relearn the profiles
+
+```bash
+make learn
+```
+
+It learns each mode in its own mode, into its own file. Read `learn.py` first: learning
+only ever **adds**, it writes only when it observed something the profile did not already
+allow, it must **never** run on untrusted code, and it cannot produce the `net=` rules --
+which hosts a tool may reach is the author's decision, not an observation. Any
+`python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being kept.
+
+To shrink a profile, trim it by hand down to its header and its `net=` rules, then relearn.
 
 ## Tests
 
@@ -74,9 +116,10 @@ make validate
 
 | Path | Role |
 |------|------|
-| `langchain_demo/tools.py` | `fetch_webpage`, `execute_python` (`@tool`) |
+| `langchain_demo/tools.py` | `fetch_webpage`, `evaluate_expression` (`@sandbox` + `@tool`) |
 | `langchain_demo/chain.py` | `run_agent_loop` (`bind_tools` + `ToolMessage` loop) |
-| `langchain_demo/main.py` | CLI, `init_chat_model`, default prompts |
+| `langchain_demo/main.py` | CLI, interactive `chat()`, `init_chat_model`, default prompts |
+| `learn.py` | relearns both profiles, one per mode |
 
 ## `pyproject.toml` and LLM packages
 

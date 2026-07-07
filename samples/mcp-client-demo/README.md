@@ -128,6 +128,19 @@ Use the parameter `CONFIG='-c stdio_sandboxes_partial.json'`
 
 ### Run the client
 
+`make run` starts the chat against `servers_config.json`, which is a symlink to one of the
+configurations below -- point it at another one to change the scenario:
+
+```bash
+make run
+# which is:
+uv run mcp-simple-chatbot
+```
+
+Leave with `quit`. This sample has no `make learn` of its own: the tools live in the MCP
+server, and so do the profiles. Relearn them with `make learn` in
+[`../mcp-server-demo`](../mcp-server-demo/README.md).
+
 The client itself may or may not be in a sandbox. The configuration must allow it to invoke the server and the LLM API.
 
 #### Without sandboxes
@@ -148,7 +161,7 @@ In this scenario, sandboxes are completely disabled for the client.
 
 Start with
 ```bash
-uv run -m mcp_sample_chatbot.main ${CONFIG}
+uv run -m mcp_simple_chatbot.main -c ${CONFIG}
 ```
 
 #### Inside a sandboxes
@@ -182,7 +195,7 @@ The MCP server must be launched with `--os-sandbox=subprocess` so that there is 
 
 Start with
 ```bash
-uv run -m pysandboxes.python_sb -m mcp_sample_chatbot.main ${CONFIG}
+uv run -m pysandboxes.python_sb -m mcp_simple_chatbot.main -c ${CONFIG}
 ```
 
 
