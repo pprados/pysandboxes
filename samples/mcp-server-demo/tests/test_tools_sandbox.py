@@ -9,7 +9,7 @@ inner function, which is what the server ends up invoking.
 Scenario A, the negative control, runs in a **separate process**: a baseline
 profile leaves ``is_in_sandbox()`` true behind it, so an armed block running
 afterwards in the same process short-circuits and silently reproduces the
-baseline. Cheking both profiles in one process is how a blocking test becomes
+baseline. Checking both profiles in one process is how a blocking test becomes
 incapable of failing.
 
 Scenarios B and C run armed, against the real network. No mock: a mocked
