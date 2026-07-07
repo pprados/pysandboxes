@@ -1,177 +1,127 @@
-# LangGraph Demo
+# LangGraph demo (`langgraph-demo`)
 
-A demonstration chatbot built with LangGraph featuring two tools:
-- **Calculator**: Evaluates mathematical expressions using Python's `eval()`
-- **Web Fetcher**: Fetches web pages and converts them to markdown
+Console chatbot built with **[LangGraph](https://langchain-ai.github.io/langgraph/)**: a
+`StateGraph` that alternates between the model and a `ToolNode`, with **`fetch_webpage`** and
+**`evaluate_expression`** as its two tools.
 
-## Features
+The default task **requires** both tools: it loads `https://www.google.com`, then computes an
+expression. The model must not answer from memory alone.
 
-- Interactive console chat interface
-- Command-line interface (CLI) for quick queries
-- Standalone tool commands for calculator and web fetcher
-- Full test coverage with pytest
-- Type hints and mypy support
+## What the sandbox does here
 
-## Installation
+Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
+given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__` -- which
+is known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`.
+That is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
+filter can take the credit. There is no expression filter here, not even an optional one --
+as soon as one exists, the reader can no longer tell who blocked what. In particular the tool
+exposes **no math namespace**: `sqrt(144)` raises `NameError`, and that is the intended
+answer. An applicative feature layer around `eval()` is exactly what makes a reader unsure who
+blocked what.
+
+Two profiles, one per mode, each learned in its own by `learn.py`:
+
+| Profile | Mode | What is confined |
+|---------|------|------------------|
+| `.py-sandboxes` | partial | the tool bodies only (`pysandboxes.run()` around the graph) |
+| `.py-sandboxes-complete` | complete | the whole process, launched with `python -m pysandboxes.python_sb` |
+
+They are deliberately separate: sharing one file would grant each mode the other's privileges
+for nothing, which is the opposite of what the partial mode is for.
+
+## Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+- An OpenAI API key (this sample uses `langchain-openai` directly)
+
+## Setup
 
 ```bash
-# Install dependencies
-make install
-
-# Or manually with uv
-uv pip install -e ".[dev]"
+cd samples/langgraph-demo
+cp env.example .env   # optional: edit OPENAI_API_KEY
+make init
 ```
 
-## Configuration
+`OPENAI_BASE_URL` is honoured if set, so an OpenAI-compatible endpoint works too.
 
-Create a `.env` file in the project root with your OpenAI API key:
+## Run
 
-```
-OPENAI_API_KEY=your-api-key-here
-```
-
-## Usage
-
-### Interactive Chat
-
-Start an interactive chat session:
+`make run` drops you into an interactive chat. The sandbox is entered once, around the whole
+conversation: `@sandbox` needs a running daemon at call time, and a context manager opened per
+turn would pay the daemon's startup on every one. History is carried by the graph itself --
+each turn sends the accumulated messages into `ainvoke` and keeps what the graph returns,
+which is LangGraph's own idiom.
 
 ```bash
-make chat
-# or
+make run
+# or, without make:
 langgraph-chat chat
 ```
 
-### CLI Commands
+Leave with `/quit` or Ctrl-D. Ask for a host the profile does not allow, or for an expression
+that tries to escape: the tool answers with the rule that refused it.
 
-Ask a single question:
-
-```bash
-langgraph-chat ask "What is the square root of 144?"
-```
-
-Calculate an expression:
+The CLI is a click group, so `langgraph-chat` alone only prints help. Its other subcommands
+run a single thing and exit, each inside the sandbox:
 
 ```bash
-langgraph-chat calc "2**10"
+langgraph-chat ask "fetch https://www.google.com and count the words in its title"
+langgraph-chat calc "2*(3+4)"
+langgraph-chat fetch "https://www.google.com"
 ```
 
-Fetch a web page:
+Options: `--model` (default `gpt-4o-mini`) and `--temperature` on `chat` and `ask`.
+
+## Relearn the profiles
 
 ```bash
-langgraph-chat fetch "https://example.com"
+make learn
 ```
 
-### CLI Options
+It learns each mode in its own mode, into its own file. Read `learn.py` first: learning only
+ever **adds**, it writes only when it observed something the profile did not already allow, it
+must **never** run on untrusted code, and it cannot produce the `net=` rules -- which hosts a
+tool may reach is the author's decision, not an observation. Any
+`python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being kept.
+
+To shrink a profile, trim it by hand down to its header and its `net=` rules, then relearn.
+
+## Tests
+
+No network or real API keys required in CI.
+
+From `samples/langgraph-demo`, use **`make tests`** or **`uv run pytest`** so dependencies
+resolve from this project's environment.
 
 ```bash
-langgraph-chat chat --model gpt-4o --temperature 0.7
-langgraph-chat ask --model gpt-4o "Your question here"
+make init
+make validate   # lint + tests
 ```
 
-## Development
+`tests/test_tools_sandbox.py` carries the corpus's standard suite: a negative control proving
+the escape succeeds *without* the sandbox, an allowed host reached, a host outside the rules
+refused and read back through `sandbox_denials()`, the expression tool still computing, the
+escape confined, the wrapper naming the rule to the model, a whitelist guard run over **both**
+profiles, and the same calls confined again in complete mode under `python-sb`.
 
-### Run Tests
+## Layout
 
-```bash
-make test
-```
+| Path | Role |
+|------|------|
+| `langgraph_simple_chatbot/tools.py` | `fetch_webpage`, `evaluate_expression` (`@sandbox` + `@tool`) |
+| `langgraph_simple_chatbot/agent.py` | the `StateGraph`: model node, `ToolNode`, conditional edge |
+| `langgraph_simple_chatbot/console.py` | the interactive chat loop |
+| `langgraph_simple_chatbot/cli.py` | click group; each subcommand opens the sandbox |
+| `learn.py` | relearns both profiles, one per mode |
 
-### Linting
+## Why the tools are split in two
 
-```bash
-make lint
-```
-
-### Format Code
-
-```bash
-make format
-```
-
-### Clean Build Artifacts
-
-```bash
-make clean
-```
-
-## Project Structure
-
-```
-langgraph-demo/
-├── langgraph_demo/
-│   ├── __init__.py       # Package initialization
-│   ├── tools.py          # Calculator and web fetcher tools
-│   ├── agent.py          # LangGraph agent implementation
-│   ├── console.py        # Interactive console chat
-│   └── cli.py            # Command-line interface
-├── tests/
-│   ├── __init__.py
-│   ├── test_tools.py     # Tests for tools
-│   ├── test_agent.py     # Tests for agent
-│   └── test_cli.py       # Tests for CLI
-├── pyproject.toml        # Project configuration
-├── Makefile              # Build and development tasks
-└── README.md             # This file
-```
-
-## Tools Description
-
-### Calculator Tool
-
-The calculator tool evaluates mathematical expressions safely:
-
-- Supports basic arithmetic: `+`, `-`, `*`, `/`, `**`, `%`
-- Math module functions: `sqrt()`, `sin()`, `cos()`, `log()`, etc.
-- Built-in functions: `abs()`, `round()`, `min()`, `max()`, `sum()`
-- Sandboxed execution with restricted builtins
-
-Example:
-```python
-calculator("sqrt(144) + 2**3")  # Returns: "20.0"
-```
-
-### Web Fetcher Tool
-
-The web fetcher tool retrieves web pages and converts them to markdown:
-
-- Follows redirects automatically
-- Converts HTML to clean markdown
-- Removes scripts and styles
-- Custom user agent for compatibility
-
-Example:
-```python
-await web_fetcher("https://example.com")  # Returns markdown content
-```
-
-## Examples
-
-### Chat Session Example
-
-```
-You: What is 2 to the power of 16?
-Assistant: The result is 65536.
-
-You: Fetch the content from https://www.python.org
-Assistant: I've fetched the Python website. Here's the content in markdown...
-
-You: quit
-Goodbye!
-```
-
-### CLI Examples
-
-```bash
-# Quick calculation
-langgraph-chat calc "15 * 23 + 100"
-
-# Ask the agent
-langgraph-chat ask "What is the factorial of 5?"
-
-# Fetch and convert a webpage
-langgraph-chat fetch "https://docs.python.org"
-```
+The sandbox function bridge resolves its target by name, `module:qualname`, and re-imports it
+inside the sandbox. A framework decorator replaces the function with an object, which is not
+importable that way. So `@sandbox` goes on a module-level `_`-prefixed coroutine and `@tool`
+on a thin wrapper that calls it. The wrapper also converts errors: `@sandbox` re-raises, while
+a tool has to report to the model as text, naming the rule that refused the call.
 
 ## License
 

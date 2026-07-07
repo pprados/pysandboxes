@@ -139,9 +139,14 @@ flowchart TD
 To start the MCP server:
 ```bash
 cd path/to/mcp-server
-uv run -m pysandboxes.python_sb -m mcp_server.main -t http
+make run
+# which is:
+uv run -m mcp_server.main -t http
 ```
-and add the parameter in the client.
+`main.py` opens `with sandboxes(...)` itself, so it needs no wrapper here: adding
+`python-sb` in front is precisely what turns this into the complete mode above.
+
+Then add the parameter in the client.
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
 claude mcp remove mcp_demo
@@ -187,9 +192,14 @@ flowchart TD
 To start the MCP server:
 ```bash
 cd path/to/mcp-server
-uv run -m pysandboxes.python_sb -m mcp_server.main -t http
+make run
+# which is:
+uv run -m mcp_server.main -t http
 ```
-and add the parameter in the client.
+`main.py` opens `with sandboxes(...)` itself, so it needs no wrapper here: adding
+`python-sb` in front is precisely what turns this into the complete mode above.
+
+Then add the parameter in the client.
 For example, for [claude-code](https://claude.com/product/claude-code), invoke:
 ```bash
 claude mcp remove mcp_demo
@@ -234,6 +244,33 @@ Access to @myresource://readme.md and summarize there
 ```
 
 ---
+## Relearn the profiles
+
+```bash
+make learn
+```
+
+It learns each mode in its own mode, into its own file: `mcp_server/.py-sandboxes` for the
+partial mode, `mcp_server/.py-sandboxes-complete` for the complete one. Sharing one file would
+grant each mode the other's privileges for nothing, which is the opposite of what the partial
+mode is for.
+
+Read `learn.py` first. Learning only ever **adds**, and it writes only when it observed
+something the profile did not already allow -- a run that needs nothing new leaves the file
+alone and prints nothing. It must **never** run on untrusted code, and any
+`python-api=ALLOW:process-exec` it produces deserves a hard look before being kept.
+
+Two things it cannot produce, and that the profiles carry by hand:
+
+- the `net=` rules -- which hosts a tool may reach is the author's decision, not an
+  observation;
+- the `net=...|IN` transport ports of the partial mode (the sandbox/parent channel, see
+  `--sandbox-port`, and the server's own port when the transport is http).
+
+The tools are driven through FastMCP's in-memory client, not over stdio: a stdio client kills
+the server with SIGTERM, the dump happens at clean daemon shutdown, and the rules are then
+never written.
+
 ## Client
 For the client, consult the specific documentation. For example, [here](../mcp-client/README.md) or use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
 
