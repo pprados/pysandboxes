@@ -55,19 +55,46 @@ Default if unset: `openai:gpt-4o-mini`.
 
 ## Run
 
+`make run` drops you into an interactive chat with the agent. The sandbox is entered
+once, around the whole conversation: `@sandbox` needs a running daemon at call time, and a
+context manager opened per turn would pay the daemon's startup on every one. History is passed as `message_history=` and read back with `result.all_messages()`, which is Pydantic AI's own mechanism.
+
 ```bash
-# Optional: export CHAT_MODEL and provider keys
+make run
+# or, without make:
 set -a && source .env && set +a
 pydantic-ai-demo
-# or
-python -m pydantic_ai_demo
+```
+
+Leave with `/quit` or Ctrl-D. Ask for a host the profile does not allow, or for an
+expression that tries to escape: the tool answers with the rule that refused it.
+
+Passing `--task` runs a single task and exits instead:
+
+```bash
+pydantic-ai-demo --task "compute 2*(3+4) with evaluate_expression"
 ```
 
 Options:
 
-- `--task` — override the user message (should still force tool use).
+- `--task` — run one task and exit. Omitted: interactive chat.
 - `--max-iterations` — cap on **model requests** (maps to `UsageLimits.request_limit`; default 15).
 - `-v` / `--verbose` — set logging to INFO.
+
+## Relearn the profiles
+
+```bash
+make learn
+```
+
+It learns each mode in its own mode, into its own file. Read `learn.py` first: learning
+only ever **adds**, it writes only when it observed something the profile did not already
+allow, it must **never** run on untrusted code, and it cannot produce the `net=` rules --
+which hosts a tool may reach is the author's decision, not an observation. Any
+`python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being
+kept.
+
+To shrink a profile, trim it by hand down to its header and its `net=` rules, then relearn.
 
 ## Tests
 

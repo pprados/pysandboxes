@@ -59,18 +59,46 @@ Consult [LiteLLM providers](https://docs.litellm.ai/docs/providers) for env var 
 
 ## Run
 
+`make run` drops you into an interactive chat with the agent. The sandbox is entered
+once, around the whole conversation: `@sandbox` needs a running daemon at call time, and a
+context manager opened per turn would pay the daemon's startup on every one. History is the ADK session: the same `user_id`/`session_id` is reused across turns, and the `Runner` is held open for the whole conversation.
+
 ```bash
-# Uses .env if present (see make init)
+make run
+# or, without make:
+set -a && source .env && set +a
 google-adk-demo
-# or
-uv run google-adk-demo
+```
+
+Leave with `/quit` or Ctrl-D. Ask for a host the profile does not allow, or for an
+expression that tries to escape: the tool answers with the rule that refused it.
+
+Passing `--task` runs a single task and exits instead:
+
+```bash
+google-adk-demo --task "compute 2*(3+4) with evaluate_expression"
 ```
 
 Options:
 
-- `--task "..."` — override the user message (keep it tool-dependent for a meaningful demo).
+- `--task` — run one task and exit. Omitted: interactive chat.
 - `--max-iterations N` — maps to ADK `RunConfig.max_llm_calls` (default `12`).
 - `-v` — INFO logging (including tool call names).
+
+## Relearn the profiles
+
+```bash
+make learn
+```
+
+It learns each mode in its own mode, into its own file. Read `learn.py` first: learning
+only ever **adds**, it writes only when it observed something the profile did not already
+allow, it must **never** run on untrusted code, and it cannot produce the `net=` rules --
+which hosts a tool may reach is the author's decision, not an observation. Any
+`python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being
+kept.
+
+To shrink a profile, trim it by hand down to its header and its `net=` rules, then relearn.
 
 ## Tests
 
