@@ -57,19 +57,47 @@ Other backends (Azure OpenAI, Semantic Kernel adapters, etc.) are supported by *
 
 ## Run
 
+`make run` drops you into an interactive chat with the agent. The sandbox is entered
+once, around the whole conversation: `@sandbox` needs a running daemon at call time, and a
+context manager opened per turn would pay the daemon's startup on every one. History is the `AssistantAgent`'s own model context: one agent instance serves the whole conversation and carries its state from `run()` to `run()`.
+
 ```bash
-# Uses CHAT_MODEL and provider keys from the environment
+make run
+# or, without make:
+set -a && source .env && set +a
 autogen-demo
-
-# Custom task (must still require tool use)
-autogen-demo --task "Fetch https://www.google.com ..."
-
-# Verbose: stream AgentChat console output
-autogen-demo -v
-
-# Tool rounds (maps to AssistantAgent `max_tool_iterations`)
-autogen-demo --max-tool-iterations 15
 ```
+
+Leave with `/quit` or Ctrl-D. Ask for a host the profile does not allow, or for an
+expression that tries to escape: the tool answers with the rule that refused it.
+
+Passing `--task` runs a single task and exits instead:
+
+```bash
+autogen-demo --task "compute 2*(3+4) with evaluate_expression"
+```
+
+Options:
+
+- `--task` — run one task and exit. Omitted: interactive chat.
+- `--max-tool-iterations` — cap on tool rounds, maps to `AssistantAgent`'s own limit.
+- `-v` / `--verbose` — stream AgentChat console output.
+
+
+## Relearn the profiles
+
+```bash
+make learn
+```
+
+It learns each mode in its own mode, into its own file. Read `learn.py` first: learning
+only ever **adds**, it writes only when it observed something the profile did not already
+allow, it must **never** run on untrusted code, and it cannot produce the `net=` rules --
+which hosts a tool may reach is the author's decision, not an observation. Any
+`python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being
+kept.
+
+To shrink a profile, trim it by hand down to its header and its `net=` rules, then relearn.
 
 ## Tests
 

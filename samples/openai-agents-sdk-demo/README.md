@@ -53,16 +53,47 @@ Tracing to the OpenAI dashboard is **disabled** when `OPENAI_API_KEY` is unset (
 
 ## Run
 
+`make run` drops you into an interactive chat with the agent. The sandbox is entered
+once, around the whole conversation: `@sandbox` needs a running daemon at call time, and a
+context manager opened per turn would pay the daemon's startup on every one. History is `result.to_input_list()`, which replays a run as input items for the next one -- the SDK's own mechanism.
+
 ```bash
-# Uses CHAT_MODEL and OPENAI_API_KEY from the environment (or .env)
+make run
+# or, without make:
+set -a && source .env && set +a
 openai-agents-sdk-demo
-
-# Or
-uv run openai-agents-sdk-demo -- -v
-
-# Custom task / turn cap
-uv run openai-agents-sdk-demo -- --task "Your tool-only task mentioning https://www.google.com" --max-turns 15
 ```
+
+Leave with `/quit` or Ctrl-D. Ask for a host the profile does not allow, or for an
+expression that tries to escape: the tool answers with the rule that refused it.
+
+Passing `--task` runs a single task and exits instead:
+
+```bash
+openai-agents-sdk-demo --task "compute 2*(3+4) with evaluate_expression"
+```
+
+Options:
+
+- `--task` — run one task and exit. Omitted: interactive chat.
+- `--max-turns` — cap on agent turns, passed to `Runner.run`.
+- `-v` / `--verbose` — log at INFO level.
+
+
+## Relearn the profiles
+
+```bash
+make learn
+```
+
+It learns each mode in its own mode, into its own file. Read `learn.py` first: learning
+only ever **adds**, it writes only when it observed something the profile did not already
+allow, it must **never** run on untrusted code, and it cannot produce the `net=` rules --
+which hosts a tool may reach is the author's decision, not an observation. Any
+`python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being
+kept.
+
+To shrink a profile, trim it by hand down to its header and its `net=` rules, then relearn.
 
 ## Tests
 
