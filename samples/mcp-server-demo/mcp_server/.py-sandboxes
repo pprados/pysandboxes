@@ -110,6 +110,11 @@ env=TEMP=${TEMP}
 env=TERM=${TERM}
 env=TMP=${TMP}
 
+# Add rules (2026/09/10 at 09:44)
+env=ANDROID_DATA=${ANDROID_DATA}
+env=FASTMCP_ENV_FILE=${FASTMCP_ENV_FILE}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
 # </learning_guard_envs>
 
 #######################################################################################
@@ -144,6 +149,9 @@ env=TMP=${TMP}
 
 # Add rules (2026/09/09 at 17:53)
 expose-ro=~/workspace/pysandboxes
+
+# Add rules (2026/09/10 at 09:44)
+expose-ro=/etc
 
 # </learning_guard_files>
 
@@ -234,7 +242,7 @@ python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, e
 python-import=fnmatch, fractions, functools, getpass, gettext, hashlib, heapq, hmac
 python-import=html, http, io, ipaddress, itertools, json, keyword, linecache, locale
 python-import=logging, marshal, math, mimetypes, multiprocessing, numbers, operator
-python-import=os, pathlib, pickle, platform, pprint, queue, random, re, reprlib
+python-import=os, pathlib, pickle, platform, posixpath, pprint, queue, random, re, reprlib
 python-import=secrets, select, selectors, shlex, shutil, signal, socket
 python-import=socketserver, ssl, stat, string, stringprep, struct, sysconfig
 python-import=tempfile, termios, textwrap, threading, time, traceback, types, typing
@@ -242,6 +250,8 @@ python-import=unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
 
 # External modules (Are you sure about the origin?)
 python-import=aiofiles
+python-import=annotated_doc
+python-import=platformdirs
 python-import=annotated_types
 python-import=anyio
 python-import=attr
@@ -285,6 +295,21 @@ python-import=starlette
 python-import=typing_extensions
 python-import=typing_inspection
 python-import=uvicorn
+
+# Add rules (2026/09/10 at 09:44)
+# Standard Python
+python-import=_codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp, _codecs_kr
+python-import=_codecs_tw, bisect, fcntl
+
+# External modules (Are you sure about the origin?)
+python-import=griffe
+python-import=httpx2
+python-import=mcp_types
+python-import=opentelemetry
+python-import=packaging
+python-import=uncalled_for
+python-import=watchfiles
+python-import=websockets
 
 # </learning_guard_import>
 

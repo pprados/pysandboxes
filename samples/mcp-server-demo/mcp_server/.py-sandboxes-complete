@@ -96,3 +96,29 @@ expose-ro=~/workspace/pysandboxes
 # threads: concurrency primitives
 python-api=ALLOW:threading.Thread.start
 python-api=ALLOW:threading._start_joinable_thread
+
+# Add rules (2026/09/10 at 09:44)
+env=ANDROID_DATA=${ANDROID_DATA}
+env=FASTMCP_ENV_FILE=${FASTMCP_ENV_FILE}
+env=SPHINX_BUILD=${SPHINX_BUILD}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# Standard Python
+python-import=_codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp, _codecs_kr
+python-import=_codecs_tw, _imp, bisect, fcntl, posixpath
+
+# External modules (Are you sure about the origin?)
+python-import=beartype
+python-import=cachetools
+python-import=griffe
+python-import=httpx2
+python-import=jwt
+python-import=key_value
+python-import=mcp_types
+python-import=opentelemetry
+python-import=packaging
+python-import=platformdirs
+python-import=uncalled_for
+python-import=watchfiles
+
+expose-ro=/etc
