@@ -41,6 +41,7 @@ import logging
 import os
 import socket
 import sys
+import time
 from enum import Enum, IntEnum
 from ipaddress import (
     IPv4Address,
@@ -226,6 +227,50 @@ def _addr_infos_from_ips(ips: Iterable[IPv4Address | IPv6Address]) -> list[AddrI
     return infos
 
 
+_TRANSIENT_GAI_ERRNOS = frozenset(
+    code
+    for code in (
+        getattr(socket, "EAI_AGAIN", None),
+        getattr(socket, "EAI_SYSTEM", None),
+    )
+    if code is not None
+)
+
+_RESOLVE_RETRY_DELAYS = (0.2, 0.4)
+
+
+def _is_transient_gai_error(error: socket.gaierror) -> bool:
+    """Whether a resolution failure is worth retrying while parsing a configuration.
+
+    A name that does not exist (`EAI_NONAME`, `EAI_FAIL`, `EAI_NODATA`) is the rule
+    author's mistake and must surface at once. A resolver momentarily unreachable --
+    one still starting up in a container, or answering under load -- reports
+    `EAI_AGAIN` or `EAI_SYSTEM`, and the same name resolves a fraction of a second
+    later. An error carrying no errno is treated as a real fault: better to surface
+    it than to retry blindly.
+    """
+    return error.errno in _TRANSIENT_GAI_ERRNOS
+
+
+def _resolve_with_retry(host: str) -> list[AddrInfoType]:
+    """Resolve a hostname for a `net=` rule, retrying a transient resolver failure.
+
+    `net=` rules are resolved when the configuration is parsed, so a resolver hiccup
+    at startup would otherwise become a `ConfigSyntaxError` about an invalid network
+    specification. The budget is deliberately small: parsing must not hang waiting
+    for a resolver that is down.
+    """
+    for delay in _RESOLVE_RETRY_DELAYS:
+        try:
+            return cast(list[AddrInfoType], socket.getaddrinfo(host=host, port=0))
+        except socket.gaierror as e:
+            if not _is_transient_gai_error(e):
+                raise
+            pysandboxes_logger.debug("Transient DNS failure for %r (%s), retrying in %ss.", host, e, delay)
+            time.sleep(delay)
+    return cast(list[AddrInfoType], socket.getaddrinfo(host=host, port=0))
+
+
 def _yield_networks_from_string(
     input_str: str, pin_dns: InternalDNS
 ) -> Generator[IPv4Network | IPv6Network, None, None]:
@@ -257,7 +302,7 @@ def _yield_networks_from_string(
                 yield ip_network(ip, strict=False)
         else:
             all_adresss = set()
-            addr_info = cast(list[AddrInfoType], socket.getaddrinfo(host=input_str, port=0))
+            addr_info = _resolve_with_retry(input_str)
             # Remove duplicate
             pin_dns[input_str] = addr_info
             for result in addr_info:
@@ -427,17 +472,24 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
     try:
         r = list(_for_each_networks())
         return r
-    except socket.gaierror:
-        errors.append(
-            (
+    except socket.gaierror as e:
+        if _is_transient_gai_error(e):
+            # The retries are exhausted. The rule may well be correct: say so, so
+            # the reader looks at the resolver and not at the profile.
+            message = (
+                f"{format_ruleref(rule)}: "
+                f"In {rule.rule!r}, "
+                f"the name resolution failed temporarily ({e}). "
+                f"Check the resolver, not the rule."
+            )
+        else:
+            message = (
                 f"{format_ruleref(rule)}: "
                 f"In {rule.rule!r}, "
                 f"invalid network specification. "
-                f"That does not resolve to any network.",
-                rule.path,
-                rule.ln,
+                f"That does not resolve to any network."
             )
-        )
+        errors.append((message, rule.path, rule.ln))
         return None
 
 
