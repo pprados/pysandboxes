@@ -85,3 +85,17 @@ python-import=typing_inspection
 python-import=uvicorn
 
 expose-ro=~/workspace/pysandboxes
+
+# Add rules (2026/09/10 at 09:47)
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# Standard Python
+python-import=_cffi_backend, _decimal, _socket, fcntl, grp, keyword, posixpath, pwd
+python-import=string, tarfile
+
+# External modules (Are you sure about the origin?)
+python-import=aiohttp
+python-import=cryptography
+python-import=httpx2
+python-import=mcp_types
+python-import=opentelemetry
