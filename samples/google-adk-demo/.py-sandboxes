@@ -74,3 +74,10 @@ python-import=uvicorn
 python-import=websockets
 
 expose-ro=~/workspace/pysandboxes
+
+# Add rules (2026/09/10 at 09:58)
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# Standard Python
+python-import=_decimal, _socket
+

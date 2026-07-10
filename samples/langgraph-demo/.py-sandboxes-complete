@@ -71,3 +71,21 @@ net=ALLOW|TCP|ip6-loopback|0|IN
 # threads: concurrency primitives
 python-api=ALLOW:threading.Thread.start
 python-api=ALLOW:threading._start_joinable_thread
+
+# Add rules (2026/09/10 at 10:01)
+env=PSUTIL_DEBUG=${PSUTIL_DEBUG}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# Standard Python
+python-import=_codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp, _codecs_kr
+python-import=_codecs_tw, argparse, bisect, fcntl, glob, pwd, resource, secrets
+python-import=shlex, shutil, xml
+
+# External modules (Are you sure about the origin?)
+python-import=distro
+python-import=httpx2
+python-import=opentelemetry
+python-import=psutil
+python-import=uuid_utils
+python-import=xxhash
+

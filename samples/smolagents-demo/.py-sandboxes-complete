@@ -170,3 +170,21 @@ expose-ro=~/workspace/pysandboxes
 
 net=ALLOW|TCP|ip6-localhost|0|IN
 net=ALLOW|TCP|ip6-loopback|0|IN
+
+# Add rules (2026/09/10 at 10:02)
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# ⚠ Dangerous!
+python-import=ctypes
+
+# Standard Python
+python-import=_decimal, _socket, tty
+
+
+expose-ro=/proc/sys/kernel/random
+expose-rw=${TMP}
+
+# introspection: can be used to undo the patches
+# filelock (pulled by huggingface-hub) installs an audit hook to detect unsafe
+# forks. Granted as the named function, never as the whole category.
+python-api=ALLOW:sys.addaudithook

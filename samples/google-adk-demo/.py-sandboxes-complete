@@ -52,3 +52,10 @@ python-import=soupsieve
 python-import=typing_extensions
 
 expose-ro=.
+
+# Add rules (2026/09/10 at 09:59)
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# Standard Python
+python-import=_socket, keyword, uuid
+
