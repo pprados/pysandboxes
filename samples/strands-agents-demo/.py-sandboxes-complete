@@ -90,3 +90,14 @@ net=ALLOW|TCP|ip6-loopback|0|IN
 
 # ⚠ native: native code and arbitrary memory access
 python-api=ALLOW:ctypes.CDLL
+
+# Add rules (2026/09/10 at 10:06)
+env=PSUTIL_DEBUG=${PSUTIL_DEBUG}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# Standard Python
+python-import=_decimal, _socket, glob, keyword, pwd, resource
+
+# External modules (Are you sure about the origin?)
+python-import=psutil
+

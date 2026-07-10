@@ -104,6 +104,10 @@ env=PYTHONUSERBASE=${PYTHONUSERBASE}
 env=TEMP=${TEMP}
 env=TMP=${TMP}
 
+# Add rules (2026/09/10 at 09:59)
+env=PSUTIL_DEBUG=${PSUTIL_DEBUG}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
 # </learning_guard_envs>
 
 #######################################################################################
@@ -138,6 +142,8 @@ env=TMP=${TMP}
 
 # Add rules (2026/09/10 at 06:41)
 expose-ro=~/workspace/pysandboxes
+
+# Add rules (2026/09/10 at 09:59)
 
 # </learning_guard_files>
 
@@ -270,6 +276,19 @@ python-import=urllib3
 python-import=uuid_utils
 python-import=xxhash
 python-import=zstandard
+
+# Add rules (2026/09/10 at 09:59)
+# Standard Python
+python-import=_decimal, _socket, argparse, fcntl, glob, pwd, resource, secrets
+python-import=shlex, shutil
+
+# External modules (Are you sure about the origin?)
+python-import=aiohttp
+python-import=distro
+python-import=httpx2
+python-import=httpx_aiohttp
+python-import=opentelemetry
+python-import=psutil
 
 # </learning_guard_import>
 
