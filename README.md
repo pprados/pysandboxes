@@ -1,12 +1,85 @@
 # PY-SANDBOXES
 
-![Sandboxes](py-sandboxes-small.png)
+![Sandboxes](https://raw.githubusercontent.com/pprados/pysandboxes/master/py-sandboxes-small.png)
+
+[![PyPI version](https://img.shields.io/pypi/v/pysandboxes.svg)](https://pypi.org/project/pysandboxes/)
+[![Python versions](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://pypi.org/project/pysandboxes/)
+[![Status](https://img.shields.io/pypi/status/pysandboxes.svg)](https://pypi.org/project/pysandboxes/)
+[![License](https://img.shields.io/pypi/l/pysandboxes.svg)](https://github.com/pprados/pysandboxes/blob/master/LICENSE.txt)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL-lightgrey.svg)](#platform-support)
 
 > Protect Python programs without their knowledge.
 
 [Home Page](https://www.github.com/pprados/pysandboxes/)
 
-> If you would like to participate in the beta tests, please check out [this](wiki/beta_test.md)
+> **Beta.** The project is published and usable, but the public API and the format of the
+> `.py-sandboxes` configuration file may still change. Bug reports and feedback are welcome.
+
+# Quick start
+
+Run any module in a sandbox, without installing anything and without touching a single line of your
+code:
+
+```bash
+uvx python-sb -m my_module
+```
+
+The first run has no rules yet, so it starts in **learning mode**: use your application normally, and
+a `.py-sandboxes` file is written when it stops, populated with the network, disk, module and
+environment accesses it actually needed. Review that file, then every later run is restricted to that
+whitelist.
+
+Or install it:
+
+```bash
+pip install pysandboxes
+python-sb -m my_module
+```
+
+That is the whole integration for *complete mode*. To sandbox only part of an application, see
+[partial mode](#apply-the-sandbox-to-a-part-of-the-application-partial-mode).
+
+# What it protects against, and what it does not
+
+**Py-Sandboxes** is built for one threat model: *your own application, or the code an LLM makes it
+run, doing more than it should*. It offers two layers, with deliberately different strengths:
+
+- The **Python layer** (*py-sandbox*) is a guardrail and a readability layer. It catches
+  LLM-generated code that goes off the rails, and it states in a single file exactly what your
+  application is allowed to touch. It is **not** a boundary against a determined attacker: `ctypes`,
+  compiled extensions or direct syscalls can work around API interception.
+- The **OS layer** (*os-sandbox*: landlock, bwrap, firejail, unshare, qemu) is the real security
+  boundary. It is enforced by the kernel, so it also holds against compiled code.
+
+The two layers feed each other. Writing an OS-level policy by hand is the tedious part of any
+sandboxing effort: you have to know, up front, every directory, host, port and variable the process
+will legitimately need. The Python layer answers exactly that question, because it observes those
+accesses through the standard APIs while your application runs. The `.py-sandboxes` file produced by
+learning mode is therefore not only the Python whitelist, it is also the inventory used to configure
+the OS layer, from the same declarations and without a second round of trial and error.
+
+Nest them: the Python layer for precision and legibility, the OS layer for enforcement. See
+[OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox) for the per-technology matrix.
+
+This is **not** a defense against a malicious third-party dependency that you installed yourself.
+
+# Platform support
+
+For now, **Linux and WSL only**. Every OS-level backend (landlock, bwrap, firejail, unshare) is a
+Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
+
+# Cost and compatibility
+
+The performance impact is negligible, and nothing breaks as long as the privilege is granted. Once an
+access is authorized in `.py-sandboxes`, the call behaves exactly as it would outside the sandbox: the
+interception adds a whitelist check, not a re-implementation. What is *not* authorized raises an
+explicit error, which is the whole point.
+
+Compiled extensions are a special case: since the Python layer cannot intercept them, they are
+neither slowed down nor restricted by it. A database driver written in C keeps working as before, and
+that is exactly the gap the OS layer is there to close.
+
+---
 
 Modern programming often relies on code generation or API invocation by language models (LLMs).
 However, these models can be manipulated to execute malicious commands.
@@ -18,13 +91,17 @@ Indeed, it is not easy to control the code that an LLM will execute. It can gene
 
 Furthermore, developers are increasingly using AI to improve code. Without rigorous verification, the generated code can open up security vulnerabilities.
 
-It's time to control, as much as possible, the allowed capabilities for your application.
+**It's time to control, as much as possible, the allowed capabilities for your application.**
 
 ---
 
 # Table of Contents
 
 - [Table of Contents](#table-of-contents)
+- [Quick start](#quick-start)
+- [What it protects against, and what it does not](#what-it-protects-against-and-what-it-does-not)
+- [Platform support](#platform-support)
+- [Cost and compatibility](#cost-and-compatibility)
 - [Principle](#principle)
 - [Usage](#usage)
   - [Apply the sandbox to the entire application  (complete mode)](#apply-the-sandbox-to-the-entire-application--complete-mode)
@@ -37,6 +114,7 @@ It's time to control, as much as possible, the allowed capabilities for your app
 - [Security Filters](#security-filters)
   - [Manage config file locations](#manage-config-file-locations)
 - [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
+- [Paranoia level](#paranoia-level)
 - [Integration in a module](#integration-in-a-module)
   - [Samples](#samples)
   - [FAQ](#faq)
@@ -52,7 +130,7 @@ The **Py-Sandboxes** project proposes to add multiple layers of security to limi
 
 For example, an MCP server that exposes a service to view a WEB page can be abused to request it to view a page on `localhost`, an address on the intranet, a swagger documentation, or `file:///` to read local files.
 Code generated by an LLM can generate a specially crafted regular expression invocation to cause a denial-of-service or an infinite loop.
-You can find some demo [here](samples/mcp-server-demo/README.md).
+You can find some demo [here](https://github.com/pprados/pysandboxes/blob/master/samples/mcp-server-demo/README.md).
 
 Among these risks, some can be reduced if a part of the application code is executed in one or more dedicated sandboxes.
 
@@ -84,15 +162,7 @@ A learning mechanism allows for continuous improvement of security rules and rap
 
 # Usage
 
-To install the component:
-
-Download last release from `https://github.com/pprados/pysandboxes/releases`
-
-```bash
- pip install pysandboxes
-```
-
-or
+Installation is covered in [Quick start](#quick-start). To track the development version instead:
 
 ```bash
 pip install git+https://github.com/pprados/pysandboxes.git
@@ -131,16 +201,18 @@ style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
 style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
-This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
+This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`uvx python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
 
 ```shell
-python-sb --learn -m my_module
+uvx python-sb --learn -m my_module
 ```
+
+> Note: if you install the module with `pip install pysandboxes`, you can use `python-sb -m ...`.
 
 You can use it in interactive mode and continue to use the help shortcut.
 
 ```shell
-> python-sb
+> uvx python-sb
 SANDBOXES Python 3.13.5 | packaged by Anaconda, Inc. | [GCC 11.2.0] on linux
 **APIs are LIMITED according to the rules in '.py-sandboxes'**
 Type "help", "copyright", "credits" or "license" for more information.
@@ -163,10 +235,10 @@ If *IPython* is installed, it's used. All the standard python parameters are ava
 
 It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
 
-> For more information on using sandboxes with MCP, see [here](wiki/mcp.md).
+> For more information on using sandboxes with MCP, see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/mcp.md).
 
-During the first launch, noting that there is no `.pysandboxes` parameter file, the application starts in learning mode. Use your application in all its capacities, so that the solution learns network and disk usage, imported modules, usage of environment variables, etc.
-When the application is stopped, a `.pysandboxes` file is created in the current directory. It has been populated with all the learned rules. **We invite you to review this file to make any necessary adjustments.**
+During the first launch, noting that there is no `.py-sandboxes` parameter file, the application starts in learning mode. Use your application in all its capacities, so that the solution learns network and disk usage, imported modules, usage of environment variables, etc.
+When the application is stopped, a `.py-sandboxes` file is created in the current directory. It has been populated with all the learned rules. **We invite you to review this file to make any necessary adjustments.**
 
 From now on, during subsequent launches, the application runs by limiting the application's capabilities to the previously learned whitelist.
 
@@ -201,7 +273,9 @@ flowchart LR
 
 [uvx](https://docs.astral.sh/uv/guides/tools/) is a solution for running a Python tool without installing it in the project. A temporary environment is created for the duration of the tool's execution.
 
-Uvx can start some tools like `python-sb`. However, since `python-sb` does not match the project name, you must proceed as follows:
+The `python-sb` command is published on PyPI as its own package, which simply depends on the latest
+`pysandboxes` and launches it. So uvx can run it directly, with nothing to install and no `--from` to
+spell out:
 
 ```bash
 uvx python-sb --help
@@ -378,15 +452,15 @@ What are the security filters offered by **Py-Sandboxes**?
 
 - **Environment variable control**: The environment variables visible in the sandbox are limited. Mapping rules allow easily forwarding sets of variables from the outside to the inside of the sandbox (e.g., `env=*_API_KEY=${*_API_KEY}`).
 - **Network access control**: It is possible to control the direction, IP addresses, domain names, and ports available to the sandbox.
-- **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `.*`).
+- **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `ignore=.*`).
 - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
 - **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
 
-Consult the [parameter file](pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
+Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
 
 ## Manage config file locations
 
-By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./py-sandboxes` file is used. This can be modified before the program is launched.
+By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./.py-sandboxes` file is used. This can be modified before the program is launched.
 If you package your application in a Wheel, place your parameters within your module.
 
 To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
@@ -432,15 +506,24 @@ We offer several implementations to encapsulate the Python sandbox:
 | Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
 |-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
 | subprocess                                                      |                                            | • no complementary security                                                  |                                                                                                                                          |
-| [bwrap](https://github.com/containers/bubblewrap)               | [here](wiki/bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [firejail](https://github.com/netblue30/firejail)               | [here](wiki/firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](wiki/unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
-| [landlock](https://landlock.io/)                                | [here](wiki/landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
-| [qemu](https://www.qemu.org/)                            | [here](wiki/qemu.md)                       | • Total emularion of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else une the emulation.                                                                  |
+| [bwrap](https://github.com/containers/bubblewrap)               | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
+| [firejail](https://github.com/netblue30/firejail)               | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
+| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
+| [landlock](https://landlock.io/)                                | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
+| [qemu](https://www.qemu.org/)                            | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
 
 *Other implementations will be added soon*
 
-The features of each technology are proposed:
+How to read the matrix below. The `none` column is the baseline: plain Python, no sandbox at all.
+The `py-sandbox` column is the Python layer on its own. Every other column lists what that OS
+technology enforces **on its own** too, whereas in practice you nest it *around* the py-sandbox
+instead of replacing it.
+
+So a ❌ means "*this technology does not deal with that concern*", never "*that concern is left
+unprotected*". Choosing landlock, for instance, does not stop the Python guards from filtering
+`import` or sensitive API calls: landlock simply has no notion of Python, and in exchange it covers
+what the Python layer cannot reach, namely compiled code and direct syscalls. Read each OS column as
+what you *add* on top of the Python layer, and the union of the two as your actual protection.
 
 | Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       |
 |--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|
@@ -463,19 +546,37 @@ The features of each technology are proposed:
 | • Docker / Podman        |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
 | • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         |
 | **Kubernetes**           |      |            |           |           |           |        |                  |
-| • kube                   |  ✅   |     ✅      |     ?     |     ❌     |     ❌     |     ❌  |        ✅         |
-| • SYS_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌  |        ❌         |
-| • NET_ADMIN              |  ✅   |     ✅      |     ?     |     ✅     |     ✅     |     ❌  |        ❌         |
+| • kube                   |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
+| • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
+| • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
 | **Extra**                |      |            |           |           |           |        |                  |
-| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |     ✅  |        ?         |
-| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ?     |   ✅    |        ✅         |
-| • Delais                 | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        |
+| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  |        ✅         |
+| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    |        ✅         |
+| • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        |
 
 `ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the
 path disappear (`FileNotFoundError`), **unshare** has the OS refuse it, and **bwrap** and
 **qemu** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path
 but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays
 readable there.
+
+**landlock** under Kubernetes needs no capability at all, which is why its three Kubernetes rows are
+identical: unlike **unshare** and **bwrap**, it never asks the pod for `SYS_ADMIN` or `NET_ADMIN`, it
+restricts itself from the inside. Its single requirement sits elsewhere, on the *node*: the kernel
+must expose Landlock (5.13+ for filesystem rules, 6.7+ for network rules), and the ABI seen inside the
+pod is the node's, not the image's. On a managed cluster, where the node kernel is not yours to
+choose, verify it before relying on it.
+
+On the **Extra** rows, **bwrap** is `❌` twice, for two different reasons. It has no
+resource-limit option at all, and the `bwrap.<option>=` passthrough can only forward flags
+bubblewrap already understands. Seccomp it *does* expose, but only as `--seccomp FD` /
+`--add-seccomp-fd FD`, which expect a file descriptor carrying a compiled BPF program; a textual
+configuration line cannot provision one, so the feature is out of reach here rather than missing
+from the tool.
+
+For **qemu**, the resource that is bounded is memory: `qemu.memory` caps guest RAM (2048 MiB by
+default). The vCPU count is not exposed, and unlike `bwrap.*`, unknown `qemu.*` keys are not
+forwarded to the command line, only the documented ones are read.
 
 A `❌` in the **py-sandbox** column is a deliberate posture, not a gap: with
 `py-sandbox=False` (or `--py-sandbox=False`) the Python layer is switched off on purpose, so
@@ -486,9 +587,9 @@ Python layer on otherwise.
 
 
 
->> During the learning phase, `os-sandbox` is forced to `subprocess`.
+> During the learning phase, `os-sandbox` is forced to `subprocess`.
 
->> Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
+> Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
 To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file, or set the environment variable `OS_SANDBOX`.
 
@@ -574,7 +675,7 @@ my-script = "my_module:main_sb"
 
 ## Samples
 
-Twelve samples live under [`samples/`](samples/). They all demonstrate the **same** scenario,
+Twelve samples live under [`samples/`](https://github.com/pprados/pysandboxes/tree/master/samples/). They all demonstrate the **same** scenario,
 so that what changes from one to the next is only the framework's own way of declaring and
 dispatching a tool. A chat agent is given exactly two tools:
 
@@ -594,23 +695,23 @@ learned in its own mode.
 
 | Sample | What it shows |
 |--------|---------------|
-| [mcp-server-demo](samples/mcp-server-demo/README.md) | a FastMCP server, isolated to a greater or lesser extent, over `stdio` or `http` |
-| [mcp-client-demo](samples/mcp-client-demo/README.md) | an MCP chat client against that server, with four sandboxing scenarios |
+| [mcp-server-demo](https://github.com/pprados/pysandboxes/blob/master/samples/mcp-server-demo/README.md) | a FastMCP server, isolated to a greater or lesser extent, over `stdio` or `http` |
+| [mcp-client-demo](https://github.com/pprados/pysandboxes/blob/master/samples/mcp-client-demo/README.md) | an MCP chat client against that server, with four sandboxing scenarios |
 
 **Agent frameworks**, each integrating the tools its own way
 
 | Sample | Framework |
 |--------|-----------|
-| [agno-demo](samples/agno-demo/README.md) | [Agno](https://www.agno.com/) |
-| [autogen-demo](samples/autogen-demo/README.md) | [AutoGen AgentChat](https://microsoft.github.io/autogen/) |
-| [crewai-demo](samples/crewai-demo/README.md) | [CrewAI](https://www.crewai.com/) |
-| [google-adk-demo](samples/google-adk-demo/README.md) | [Google ADK](https://google.github.io/adk-docs/) |
-| [langchain-demo](samples/langchain-demo/README.md) | [LangChain](https://www.langchain.com/) |
-| [langgraph-demo](samples/langgraph-demo/README.md) | [LangGraph](https://langchain-ai.github.io/langgraph/) |
-| [openai-agents-sdk-demo](samples/openai-agents-sdk-demo/README.md) | [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) |
-| [pydantic-ai-demo](samples/pydantic-ai-demo/README.md) | [Pydantic AI](https://ai.pydantic.dev/) |
-| [smolagents-demo](samples/smolagents-demo/README.md) | [smolagents](https://huggingface.co/docs/smolagents) |
-| [strands-agents-demo](samples/strands-agents-demo/README.md) | [Strands Agents](https://strandsagents.com/) |
+| [agno-demo](https://github.com/pprados/pysandboxes/blob/master/samples/agno-demo/README.md) | [Agno](https://www.agno.com/) |
+| [autogen-demo](https://github.com/pprados/pysandboxes/blob/master/samples/autogen-demo/README.md) | [AutoGen AgentChat](https://microsoft.github.io/autogen/) |
+| [crewai-demo](https://github.com/pprados/pysandboxes/blob/master/samples/crewai-demo/README.md) | [CrewAI](https://www.crewai.com/) |
+| [google-adk-demo](https://github.com/pprados/pysandboxes/blob/master/samples/google-adk-demo/README.md) | [Google ADK](https://google.github.io/adk-docs/) |
+| [langchain-demo](https://github.com/pprados/pysandboxes/blob/master/samples/langchain-demo/README.md) | [LangChain](https://www.langchain.com/) |
+| [langgraph-demo](https://github.com/pprados/pysandboxes/blob/master/samples/langgraph-demo/README.md) | [LangGraph](https://langchain-ai.github.io/langgraph/) |
+| [openai-agents-sdk-demo](https://github.com/pprados/pysandboxes/blob/master/samples/openai-agents-sdk-demo/README.md) | [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) |
+| [pydantic-ai-demo](https://github.com/pprados/pysandboxes/blob/master/samples/pydantic-ai-demo/README.md) | [Pydantic AI](https://ai.pydantic.dev/) |
+| [smolagents-demo](https://github.com/pprados/pysandboxes/blob/master/samples/smolagents-demo/README.md) | [smolagents](https://huggingface.co/docs/smolagents) |
+| [strands-agents-demo](https://github.com/pprados/pysandboxes/blob/master/samples/strands-agents-demo/README.md) | [Strands Agents](https://strandsagents.com/) |
 
 Every sample is self-contained — its own `uv` environment, its own `Makefile`, its own
 documentation:
@@ -627,35 +728,35 @@ Ask the chat for a host the profile does not allow, or for an expression that tr
 the tool answers with the rule that refused it. From the repository root, `make sample-tests`
 runs every sample's suite.
 
-See [here for more information](wiki/samples.md)
+See [here for more information](https://github.com/pprados/pysandboxes/blob/master/wiki/samples.md)
 
 ---
 
 ## FAQ
 
-see [here](wiki/faq.md)
+see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/faq.md)
 
 ---
 
 ## Implementation
 
-see [here](wiki/implementation.md)
+see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/implementation.md)
 
 ## What are the weaknesses of py-sandbox?
 
-See [here](wiki/weaknesses.md)
+See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/weaknesses.md)
 
 ---
 
 # Roadmap
 
-See [here](wiki/roadmap.md)
+See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/roadmap.md)
 
 ---
 
 # Appendix
 
-1. Connection to Databases: See [here](wiki/database.md)
+1. Connection to Databases: See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/database.md)
 
 ## Related CVEs
 

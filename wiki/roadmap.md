@@ -26,12 +26,12 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [X] None
     - [X] sub process
     - [ ] sub interpreter
-    - [X] langlock
+    - [X] landlock
   - [ ] Sandbox utilities
     - [X] firejail
     - [X] unshare
     - [X] bwrap
-    - [ ] Proxy (voir proxy.md)
+    - [ ] Proxy (SOCKS/HTTP over a bound Unix socket + socat, see TODO.md)
   - [ ] Container
     - [X] Docker (--privileged with unshare)
     - [X] podman (--privileged with unshare)
@@ -72,6 +72,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [/] [Smolagent](https://huggingface.co/docs/smolagents/index)
   - [/] [Strandsagents](https://strandsagents.com)
   - [/] [langchain](https://www.langchain.com/)
+  - [/] [langgraph](https://langchain-ai.github.io/langgraph/)
 - [ ] Features
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id
@@ -80,7 +81,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] DevContainer
 
 ## Guard some critical methods
-A registry of 102 sensitive functions, in six categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`), is denied by default, independently of the import rights granted by `python-import=`.
+A registry of 103 sensitive functions, in six categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`), is denied by default, independently of the import rights granted by `python-import=`.
 
 - Configured with `python-api=ALLOW:<category>|<function>` and `python-api=DENY:<category>|<function>`, resolved by specificity: a function rule beats its category, and `DENY` wins at equal specificity.
 - Learning mode records what an application really calls and generates the matching lines.

@@ -22,10 +22,10 @@ optional one: as soon as one exists, the reader can no longer tell who blocked w
 
 Each sample can be run two ways, and carries **one profile per mode**:
 
-| Profile | Mode | What is confined | How it is launched |
-|---------|------|------------------|--------------------|
+| Profile | Mode | What is confined | How it is launched                                                           |
+|---------|------|------------------|------------------------------------------------------------------------------|
 | `.py-sandboxes` | partial | the tool bodies only | the application opens `with sandboxes(...)` or `pysandboxes.run(...)` itself |
-| `.py-sandboxes-complete` | complete | the whole process | `python -m pysandboxes.python_sb` in front of the application |
+| `.py-sandboxes-complete` | complete | the whole process | `python-sb` in front of the application             |
 
 The two files are deliberately separate. Sharing one would grant each mode the other's
 privileges for nothing, which is the opposite of what the partial mode is for. Each is learned

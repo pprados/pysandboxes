@@ -22,6 +22,8 @@ Another difficulty can arise if the DNS server uses a "Round-robin" strategy. Th
 
 To solve this, when **Py-sandboxes** resolves the domain name, it will *pin* the resolution in the sandbox. It will communicate this resolution, so that subsequent requests in the sandbox always return these same authorized values. The Python code will resolve the domain name, always with 1.2.3.4 and 1.2.3.5. Thus, the Python code is properly limited to these addresses and continues to work.
 
+A last difficulty is that this resolution happens when the configuration is *parsed*, before anything runs. A resolver that answers late — one still starting up in a container, or answering under load — would therefore turn a perfectly valid profile into a fatal configuration error claiming the rule does not resolve to any network. **Py-sandboxes** retries a *transient* failure (`EAI_AGAIN`, `EAI_SYSTEM`) twice, 0.2s then 0.4s, and does **not** retry a name that does not exist (`EAI_NONAME`, `EAI_FAIL`, `EAI_NODATA`): that one is the rule author's mistake and must surface at once. The budget is deliberately small, so that parsing never hangs on a resolver that is down; when it is exhausted, the error message names the resolver rather than the rule.
+
 # How to handle IP address changes
 Your program can work without problems until the IP addresses change. If the previous addresses no longer work, the program will fail to communicate with the server. In this situation, there are several possible strategies.
 
@@ -69,7 +71,7 @@ generate_rules() {
     else
         echo "$IPV4_RANGES" | while read IP_RANGE; do
             # Add rule: Allow TCP traffic destined to the IP range on allowed ports.
-            echo "net=ALLOW|tcp|$IP_RANGE|$ALLOWED_PORTS|IN"
+            echo "net=ALLOW|tcp|$IP_RANGE|$ALLOWED_PORTS|OUT"
         done
     fi
 }

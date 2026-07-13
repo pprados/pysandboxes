@@ -17,7 +17,7 @@ In this scenario, the entire MCP server is encapsulated within the sandbox. Simp
 On the first run, if you want to associate a specific configuration file, use the `--learn` parameter as follows:
 
 ```
-python-sb --learn=demo_mcp/.pysandboxes -m demo_mcp.calc sse
+python-sb --learn=demo_mcp/.py-sandboxes -m demo_mcp.calc sse
 ```
 
 After using the server to exercise all its *normal* functionalities, interrupt the process (*Ctrl-C* or `kill -2 <pid>`) to generate the rules learned during its operation.
@@ -30,7 +30,7 @@ To isolate a tool in the sandbox, start to launch the sandbox
 
 ```python
 with sandboxes(
-    config_path="demo_mcp/.py-sandboxes",
+    sandboxes_config="demo_mcp/.py-sandboxes",
 ):
     mcp.run(transport=transport)
 ```
