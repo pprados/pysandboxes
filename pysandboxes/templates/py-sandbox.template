@@ -84,6 +84,7 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 # API access (high security risk):
 #env=*_API_KEY=${*_API_KEY}
+#env=*_BASE_URL=${*_BASE_URL}
 #unenv=OPENAI_API_KEY
 
 # Generated rules from learning mode:
