@@ -1,5 +1,10 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration-tests docker_tests help extended_tests build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean minikube-ready minikube-build-images init sync-rules
+.PHONY: all format format_diff lint lint_diff claude-lint test tests coverage \
+	unit-tests integration-tests container-tests sample-tests all-tests gh-tests \
+	spell_check spell_fix clean extra-clean help \
+	api_docs_build api_docs_clean api_docs_linkcheck \
+	build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
+	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init
 
 UV_GROUP?=--group dev --group test --group lint
 
@@ -17,35 +22,25 @@ all: help
 fix-vs-code: .vscode/launch.json
 
 
-.PHONY: fix-gemini
-.gemini/commands/*: .ia/commands/*.md scripts/update_gemini_cmd.py
-	uv run ./scripts/update_gemini_cmd.py
-
-fix-gemini: .gemini/commands/*
-
-
 ###############
 # TEMPLATE COMPRESSION
 ###############
 
-# Generic rule: convert *.template.md/.mdc to *.md with caveman ultra compression via API
+# Generic rule: convert *.template.md to *.md with caveman ultra compression via API
 %.md: %.template.md
-	@uv run python3 scripts/compress_template.py $< $@
-
-%.md: %.template.mdc
 	@uv run python3 scripts/compress_template.py $< $@
 
 ## Compress AGENTS.md from template
 AGENTS.md: AGENTS.template.md
 
-# Compress all .ai/rules/*.md from templates (.template.md and .template.mdc)
-.ai/rules/%.md: .ai/rules/%.template.md
-.ai/rules/%.md: .ai/rules/%.template.mdc
-
-# Compress all templates (AGENTS + rules)
-.NOTPARALLEL: compress-templates
+# Compress all templates. Each compression is an API call, so they must not run
+# concurrently: the templates are listed in a single recipe rather than as
+# parallel prerequisites (make 4.3 ignores .NOTPARALLEL's arguments and would
+# serialize the whole Makefile).
+TEMPLATES = $(patsubst %.template.md,%.md,$(wildcard *.template.md))
 .PHONY: compress-templates
-compress-templates: AGENTS.md $(patsubst .ai/rules/%.template.md,.ai/rules/%.md,$(wildcard .ai/rules/*.template.md)) $(patsubst .ai/rules/%.template.mdc,.ai/rules/%.md,$(wildcard .ai/rules/*.template.mdc))
+compress-templates:
+	@for target in $(TEMPLATES); do $(MAKE) --no-print-directory $$target || exit 1; done
 
 ## Make unit test
 unit-tests:
@@ -80,27 +75,37 @@ integration-tests:
 coverage:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-report=term --cov-report=html
 
-## Make integration tests
-sample-tests:
-	# Uncomment a sample only once it satisfies the acceptance criteria of
-	# the samples design spec
-	# Order of treatment: mcp-server-demo, then mcp-client-demo, then the frameworks.
-	(cd samples/agno-demo && make tests)
-	(cd samples/autogen-demo && make tests)
-	(cd samples/crewai-demo && make tests)
-	(cd samples/google-adk-demo && make tests)
-	(cd samples/langchain-demo && make tests)
-	(cd samples/langgraph-demo && make tests)
-	(cd samples/mcp-client-demo && make tests)
-	(cd samples/mcp-server-demo && make tests)
-	(cd samples/openai-agents-sdk-demo && make tests)
-	(cd samples/pydantic-ai-demo && make tests)
-	(cd samples/smolagents-demo && make tests)
-	(cd samples/strands-agents-demo && make tests)
+# Uncomment a sample only once it satisfies the acceptance criteria of
+# the samples design spec
+# Order of treatment: mcp-server-demo, then mcp-client-demo, then the frameworks.
+SAMPLES = \
+	agno \
+	autogen \
+	crewai \
+	google-adk \
+	langchain \
+	langgraph \
+	mcp-client \
+	mcp-server \
+	openai-agents-sdk \
+	pydantic-ai \
+	smolagents \
+	strands-agents
+
+# One target per sample, so `make -jN sample-tests` runs the suites
+# concurrently. Each sample has its own pyproject.toml, uv.lock and venv, and
+# $(MAKE) shares the jobserver, so -jN stays a global budget.
+# The per-sample targets must not be declared .PHONY: make skips the implicit
+# rule search for phony targets, which would leave this pattern rule unused.
+sample-tests-%:
+	$(MAKE) -C samples/$*-demo tests
+
+## Make the samples' own test suites
+sample-tests: $(addprefix sample-tests-,$(SAMPLES))
 
 
 ## Make github tests locally
-gh-tests: format lint
+gh-tests: lint
 	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
 	gh act push
 	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi
@@ -111,30 +116,38 @@ all-tests: unit-tests integration-tests container-tests sample-tests
 ## Run all the tests (alias of all-tests)
 test tests: all-tests
 
-test_watch:
-	unset VIRTUAL_ENV && uv run ptw --now . -- tests/unit_tests
-
-
 ########################
 # LINTING AND FORMATTING
 ########################
 
 # Define a variable for Python and notebook files.
 PYTHON_FILES=pysandboxes/ tests/
-lint_diff format_diff: PYTHON_FILES=$(shell git diff --name-only --diff-filter=d develop | grep -E '\.py$$|\.ipynb$$')
+lint_diff format_diff: PYTHON_FILES=$(shell git diff --name-only --diff-filter=d develop -- '*.py' '*.ipynb')
 
-lint lint_diff: format
-	unset VIRTUAL_ENV && uv run mypy $(PYTHON_FILES)
-	uvx pyright $(PYTHON_FILES)
-	uvx black --check $(PYTHON_FILES)
-	uvx ruff check $(PYTHON_FILES)
+# lint only checks: it must never rewrite the sources, otherwise `black --check`
+# would always pass. Run `make format` to fix what lint reports.
+# The *_diff variants get an empty file list when the branch has no Python
+# change, so the guard keeps the tools from running on the whole tree.
+lint lint_diff:
+	@FILES="$(PYTHON_FILES)"; \
+	if [ -z "$$FILES" ]; then echo "lint: no Python file to check."; else \
+		set -e -x; \
+		unset VIRTUAL_ENV; uv run mypy $$FILES; \
+		uvx pyright $$FILES; \
+		uvx black --check $$FILES; \
+		uvx ruff check $$FILES; \
+	fi
 
 claude-lint: lint
 	claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'
 
 format format_diff:
-	uvx black $(PYTHON_FILES)
-	uvx ruff check --select I --fix $(PYTHON_FILES)
+	@FILES="$(PYTHON_FILES)"; \
+	if [ -z "$$FILES" ]; then echo "format: no Python file to format."; else \
+		set -e -x; \
+		uvx black $$FILES; \
+		uvx ruff check --select I --fix $$FILES; \
+	fi
 
 spell_check:
 	uvx codespell --toml pyproject.toml
@@ -146,36 +159,34 @@ extra-clean:
 	@rm -f .zshrc .bashrc .profile .zprofile .bash_profile .gitconfig .ripgreprc .git/config.lock .gitmodules || true
 
 # Clean the environment
-clean: docs_clean api_docs_clean extra-clean
+clean: api_docs_clean extra-clean
 	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \; || true
 	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
 
-docs_build:
-	docs/.local_build.sh
+# pdoc imports the package to introspect it, so it runs inside the project
+# environment (`--with` adds pdoc itself without touching pyproject.toml).
+# The public API reaches the caller through a module-level __getattr__ (lazy
+# loading), so the __all__ names are absent from pysandboxes.__dict__ -- the
+# only place pdoc looks. Reading each name once binds it in the module before
+# pdoc introspects, so the API is documented instead of being reported as an
+# unresolvable submodule.
+## Generate the API documentation from the docstrings into docs/api/
+api_docs_build:
+	unset VIRTUAL_ENV && uv run --with pdoc python -c \
+	  'import pysandboxes as p; [setattr(p, n, getattr(p, n)) for n in p.__all__]; from pdoc.__main__ import cli; cli()' \
+	  pysandboxes --docformat google -o docs/api
 
-docs_clean:
-	rm -rf docs/_dist
+api_docs_clean:
+	rm -rf docs/api
 
-docs_linkcheck:
-	unset VIRTUAL_ENV && uv run linkchecker docs/_dist/docs_skeleton/ --ignore-url node_modules
-
-api_docs_build:  # FIXME
-#	unset VIRTUAL_ENV && uv run python docs/api_reference/create_api_rst.py
-#	cd docs/api_reference && uv run make html
-
-api_docs_clean:  # FIXME
-#	rm -f docs/api_reference/api_reference.rst
-#	cd docs/api_reference && uv run make clean
-
-
-api_docs_linkcheck:
-	unset VIRTUAL_ENV && uv run linkchecker docs/api_reference/_build/html/index.html
+api_docs_linkcheck: api_docs_build
+	uvx linkchecker docs/api/index.html
 
 ######
 # HELP
 ######
 
-.DEFAULT: help
+.DEFAULT_GOAL := help
 ## Print all majors target
 help:
 	@echo "$(bold)Available rules:$(normal)"
@@ -348,8 +359,12 @@ build-images: Dockerfile .make-dist \
 	.make-build-image-bwrap \
 	.make-build-image-qemu
 
+# The sentinels record a build against the *previous* daemon, so they are dropped first:
+# otherwise switching to minikube's daemon would leave every image unbuilt.
 ## Build all provider images into the current Docker daemon (use after: eval $(minikube docker-env))
-build-image-docker: build-images
+build-image-docker:
+	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
+	@$(MAKE) build-images
 
 ## Same as build-images (podman then docker in each recipe); named for symmetry with build-image-docker
 build-image-podman: build-images
@@ -364,35 +379,48 @@ build-image-clean:
 
 # ---------------------------------------------------------------------------------------
 # Snippet to test publishing a distribution to test.pypi.org.
-.PHONY: test-twine
+# uv publish is not interactive: it reads the API token from UV_PUBLISH_TOKEN
+# (set it in the shell or in .env), unlike twine which used to prompt.
+define _check-publish-token
+	@set -a && if [ -f .env ]; then source .env; fi && \
+	if [ -z "$$UV_PUBLISH_TOKEN" ]; then \
+		echo "UV_PUBLISH_TOKEN is not set: export the $(1) API token before publishing."; \
+		exit 1; \
+	fi
+endef
+
+.PHONY: test-publish
 ## Publish distribution on test.pypi.org
-test-twine: .make-dist
+test-publish: .make-dist
 ifeq ($(OFFLINE),True)
-	@echo -e "$(red)Can not test-twine in offline mode$(normal)"
+	@echo "Can not test-publish in offline mode"
 else
-	@$(VALIDATE_VENV)
-	rm -f dist/*.asc
-	twine upload --sign --repository-url https://test.pypi.org/legacy/ \
-		$(shell find dist -type f \( -name "*.whl" -or -name '*.gz' \) -and ! -iname "*dev*" )
+	$(call _check-publish-token,test.pypi.org)
+	@rm -f dist/*.asc
+	set -a && if [ -f .env ]; then source .env; fi && \
+	uv publish --publish-url https://test.pypi.org/legacy/
 endif
 
 # ---------------------------------------------------------------------------------------
 # Snippet to publish the release to pypi.org.
+# clean removes dist/ and the .make-* sentinels, so the distribution is rebuilt
+# from the recipe instead of being a prerequisite: as a prerequisite it would
+# race with clean under `make -j`.
 .PHONY: release
 ## Publish distribution on pypi.org
-release: validate all-tests clean .make-dist
+release: validate all-tests
 ifeq ($(OFFLINE),True)
-	@echo -e "$(red)Can not release in offline mode$(normal)"
+	@echo "Can not release in offline mode"
 else
-	@$(VALIDATE_VENV)
+	$(call _check-publish-token,pypi.org)
+	$(MAKE) clean
+	$(MAKE) dist
 	[[ $$( find dist -name "*.dev*" | wc -l ) == 0 ]] || \
-		( echo -e "$(red)Add a tag version in GIT before release$(normal)" \
+		( echo "Add a tag version in GIT before release" \
 		; exit 1 )
 	rm -f dist/*.asc
-	echo "Enter Pypi password"
-	twine upload  \
-		$(shell find dist -type f \( -name "*.whl" -or -name '*.gz' \) -and ! -iname "*dev*" )
-
+	set -a && if [ -f .env ]; then source .env; fi && \
+	uv publish
 endif
 
 uv.lock: pyproject.toml
@@ -402,10 +430,12 @@ uv.lock: pyproject.toml
 
 
 ## Refresh lock
-lock: $(LOCK)
+lock: uv.lock
 
+# format is not a prerequisite: it rewrites the sources, which would make the
+# `black --check` inside lint pass unconditionally.
 ## Validate the code
-validate: uv.lock format lint spell_check unit-tests
+validate: uv.lock lint spell_check unit-tests
 
 
 _uv-init:
@@ -456,7 +486,7 @@ devpi-web:
 	xdg-open $(PIP_INDEX_URL)
 
 devpi-install-devpi:
-	 uv pip install -i $(REPO) .
+	 uv pip install -i $(PIP_INDEX_URL) .
 
 devpi-deploy:
 	uv build
@@ -469,14 +499,6 @@ inspector:
 github-push-test:
 	gh act push
 
-## Import Packmind packages (if packmind-cli is available and packmind.json exists)
-packmind-import:
-	@if command -v packmind-cli >/dev/null 2>&1 && [ -f packmind.json ]; then \
-		packmind-cli install --recursive ; \
-	else \
-		true; \
-	fi
-
 init: _uv-init
 #	@pre-commit install
 	gh extension install https://github.com/nektos/gh-act
@@ -486,7 +508,7 @@ init: _uv-init
 
 ### DEBUG ###
 
-.PHONY: get-new-version publish-patch publish-minor prepare-future-changelog
+.PHONY: get-new-version publish-patch publish-minor
 
 ## Helper target to calculate next version
 get-new-version:
@@ -640,6 +662,3 @@ publish-minor:
 	git commit -m "Preparing future changelog" ; \
 	echo "=== MINOR draft release $$RELEASE_TITLE workflow completed successfully ==="
 
-## Synchronize rules from .ai/rules to editor directories
-sync-rules:
-	@python3 scripts/sync_rules.py
