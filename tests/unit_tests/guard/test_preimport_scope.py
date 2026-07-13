@@ -12,22 +12,30 @@ framework bump invalidated it: it described the transport, not the tools.
 across the eviction. The tempting shortcut is to also keep everything the
 import pulled in, which would fix the profiles in one line. It must not be
 taken: importing fastapi alone brings ``subprocess``, ``ctypes``, ``_socket``
-and ``pickle`` into ``sys.modules``, a module found there never reaches the
-import guard again, and the exemption would hand user code exactly the names
-the profiles mark ``# Dangerous!``.
+and ``pickle`` into ``sys.modules``, registered names go into ``keep`` and so
+never reach the import guard again, and the exemption would hand user code
+exactly the names the profiles mark ``# Dangerous!``.
 
 These tests pin the narrow behaviour, so the shortcut cannot be introduced
 later without a red test.
 
 Pre-importing the transport stack was tried and reverted. It does shrink the
 partial profiles -- 31 fewer modules on langchain-demo, measured by emptying
-the learned rules and relearning -- but it breaks the error path: the modules
-fastapi drags in are already in ``sys.modules`` while learning observes, so
-they are never recorded, the eviction then drops them, and a later re-import on
-the error path is denied. It cost three integration tests in
-``test_exception_crosses_armed_profile.py``. Fixing it properly needs the guard
-to separate "resident in sys.modules" from "allowed", which Python's import
-machinery does not offer for free.
+the learned rules and relearning -- but it makes the learned profile
+incomplete, and not only for imports. A pre-import runs before arming, hence
+outside learning's observation window: every file and every environment name it
+reads goes unrecorded. Relearning langchain-demo on both sides shows the
+pre-imported profile losing ``expose-ro=.``, ``env=LANGUAGE`` and
+``env=PYTHONUSERBASE``, after which ``sample.py`` fails its
+``config_path.exists()`` assertion. It cost three integration tests in
+``test_exception_crosses_armed_profile.py``.
+
+The guard does distinguish "resident" from "allowed": eviction moves modules to
+``_pending_modules``, ``GuardLoader`` reinjects them without re-executing code,
+and ``_is_import_allowed`` still runs. What is missing to exempt the transport
+alone is a *requester* criterion -- "was loaded before arming" says nothing
+about who is asking now -- and learning arms with the guards by design, so no
+pre-import can be both invisible to the rules and visible to learning.
 """
 
 import sys
