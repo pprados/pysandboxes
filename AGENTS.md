@@ -56,6 +56,22 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - Include mechanism for configuration composition
 - Learning mode for automatic rule discovery
 
+## Agent workspaces plans and specs
+
+Plans and design specs live under `the agent workspaces/`, not `docs/`. This overrides
+the default paths hardcoded in the the agent workspaces skills:
+
+- `the plan writer` writes to `the plans directory`,
+  not `the plans directory/`.
+- `brainstorming` writes its design doc to
+  `the design-specs directory`, not
+  `the design-specs directory/`.
+- `the subagent workflow` reads plans from `the plans directory/`; its own
+  workspace already lives at `the agent workspace/<plan-basename>/`.
+
+`plans/` and `specs/` are versioned; every other `the agent workspaces/` subdirectory
+(`sdd/`, `brainstorm/`) is ignored — see the rules at the end of `.gitignore`.
+
 ## Key Design Patterns
 
 - **Decorator Pattern**: Use `@sandbox` to mark functions for sandbox execution

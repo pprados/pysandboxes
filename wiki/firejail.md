@@ -67,7 +67,7 @@ To restrict system calls, use an allow-list or block-list:
 To discover which syscalls your application uses, you can run:
 
 ```bash
-uv run extract_strace.sh <command to start your application>
+scripts/extract_strace.sh <command to start your application>
 ```
 
 Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`), separated by commas and without spaces.

@@ -106,13 +106,13 @@ To disable only one rule family, use the generic acceptance settings.
 - `env=*=${*}`
 - `expose-rw=/,/`
 - `net=ALLOW|*|*|*|*`
-- `import=*`
+- `python-import=*`
 - `python-api=ALLOW:*`
 
 Or
 - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
 - Use the `learn=.py-sandboxes` parameter. This activates learning for all launches. As soon as an alert should be triggered, it is replaced by the addition of a new rule at the end of the execution.
-- Use the special `os-provider=none` to deactivate all the `@sandbox` annotations. The stack trace show the direct call of the functions.
+- Use the special `os-sandbox=none` to deactivate all the `@sandbox` annotations. The stack trace show the direct call of the functions.
 
 ## How to package the project
 The `.py-sandboxes` file must be adjusted for the execution environment. Use environment variables to be able to reuse it in different contexts.
