@@ -69,8 +69,9 @@ the default paths hardcoded in the the agent workspaces skills:
 - `the subagent workflow` reads plans from `the plans directory/`; its own
   workspace already lives at `the agent workspace/<plan-basename>/`.
 
-`plans/` and `specs/` are versioned; every other `the agent workspaces/` subdirectory
-(`sdd/`, `brainstorm/`) is ignored — see the rules at the end of `.gitignore`.
+Nothing under `the agent workspaces/` is versioned — plans, specs and working
+workspaces alike stay local to the clone. See the rules at the end of
+`.gitignore`.
 
 ## Key Design Patterns
 

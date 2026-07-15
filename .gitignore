@@ -1,13 +1,15 @@
-### Python template
-# Byte-compiled / optimized / DLL files
+# ---------------------------------------------------------------------------
+# Python bytecode and native extensions
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
+cython_debug/
 
-# Distribution / packaging
+# ---------------------------------------------------------------------------
+# Build, packaging and distribution
+# ---------------------------------------------------------------------------
 .Python
 build/
 develop-eggs/
@@ -26,12 +28,6 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-.make-*
-
-
-CLAUDE.local.md
-PPR*
-.py-sandboxes
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -39,29 +35,84 @@ PPR*
 *.manifest
 *.spec
 
+# PyBuilder
+.pybuilder/
+target/
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
-htmlcov/
+# Makefile stamps (make dist, make build-image-*)
+.make-*
+
+# Local devpi index
+.devpi/
+
+# ---------------------------------------------------------------------------
+# Dependency lock files
+# ---------------------------------------------------------------------------
+.pdm.toml
+
+# ---------------------------------------------------------------------------
+# Environments and interpreter selection
+# ---------------------------------------------------------------------------
+.env
+.venv*/
+env/
+venv*/
+ENV/
+env.bak/
+venv.bak/
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# ---------------------------------------------------------------------------
+# Tests, coverage and benchmarks
+# ---------------------------------------------------------------------------
+.pytest_cache/
 .tox/
 .nox/
+.hypothesis/
+.cache
 .coverage
 .coverage.*
-.cache
-nosetests.xml
 coverage.xml
+nosetests.xml
+htmlcov/
+cover/
 *.cover
 *.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
 
-# Translations
-*.mo
-*.pot
+# ---------------------------------------------------------------------------
+# Type checkers and linters
+# ---------------------------------------------------------------------------
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache
 
+# ---------------------------------------------------------------------------
+# Documentation
+# ---------------------------------------------------------------------------
+# Sphinx documentation
+docs/_build/
+
+# ---------------------------------------------------------------------------
+# Notebooks
+# ---------------------------------------------------------------------------
+# Jupyter Notebook
+.ipynb_checkpoints
+# IPython
+profile_default/
+ipython_config.py
+
+# ---------------------------------------------------------------------------
+# Web / task framework leftovers (kept from the upstream Python template)
+# ---------------------------------------------------------------------------
 # Django stuff:
 *.log
 local_settings.py
@@ -75,50 +126,6 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/#use-with-ide
-.pdm.toml
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
 # Celery stuff
 celerybeat-schedule
 celerybeat.pid
@@ -126,65 +133,35 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
-.env
-.venv*/
-env/
-venv*/
-ENV/
-env.bak/
-venv.bak/
+# Translations
+*.mo
+*.pot
 
+# ---------------------------------------------------------------------------
+# IDE and editor settings
+# ---------------------------------------------------------------------------
+# PyCharm
+#.idea/
 # Spyder project settings
 .spyderproject
 .spyproject
-
 # Rope project settings
 .ropeproject
 
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#.idea/
-
-.ruff_cache
-.pysandboxes
-
-netfilter*.net
-run.sh
-.local.py-sandboxes*
-.devpi/
-etudes/
-tmp*/
-tst_wasm/
-#reports/
-
-#.container-use/
-# https://oraios.github.io/serena
-#.serena/
-
-
-# IA
+# ---------------------------------------------------------------------------
+# AI assistants and agent tooling
+# ---------------------------------------------------------------------------
 #.auto-claude/
 #.gemini/
 #.ia/
 #.opencode/
 .claude/
+CLAUDE.local.md
+AGENTS.md
+.cursor/rules/openmemory.mdc
+_bmad/
+.ia/skills.new/bmad-*
+.ia/skills.new/packmind-*
 
 # https://docs.entire.io/introduction
 # Capture IA session in git
@@ -194,31 +171,38 @@ tst_wasm/
 # Serena provides essential semantic code retrieval and editing tools
 #.serena/
 
+#.container-use/
 #.planning/
 #.ia_backup/
 
-# OpenMemory - IDE/Assistant specific rules
-#.cursor/rules/openmemory.mdc
-#AGENTS.md
-.cursor/rules/openmemory.mdc
-AGENTS.md
-_bmad/
-.ia/skills.new/bmad-*
-.ia/skills.new/packmind-*
 # CocoIndex Code (ccc)
 /.cocoindex_code/
 
-graphify-out/manifest.json    # mtime-based, breaks after git clone
-graphify-out/cost.json        # local only
-# graphify-out/cache/         # optional: commit for speed, skip to keep repo small
+# graphify knowledge graph (manifest.json is mtime-based and breaks after a
+# clone, cost.json is local only, cache/ could be committed for speed)
 graphify-out/
 
+# ---------------------------------------------------------------------------
+# Project specific (pysandboxes)
+# ---------------------------------------------------------------------------
+.py-sandboxes
+.local.py-sandboxes*
+.pysandboxes
+netfilter*.net
+run.sh
+tmp*/
+etudes/
+tst_wasm/
+PPR*
+/_tasks/
 
+# ---------------------------------------------------------------------------
 # Read-only stubs (0 byte, mode 444) dropped in the working directory by the
 # Claude Code Bash sandbox on every sandboxed command, to hold a read-only bind
 # mount over each path. They are not produced by the test suite: the full
 # integration run over all six OS-sandbox providers creates none of them, while
 # a bare `true` inside the sandbox creates all nine.
+# ---------------------------------------------------------------------------
 /.bashrc
 /.zshrc
 /.profile
@@ -234,7 +218,10 @@ graphify-out/
 /lat.md/
 /tmp/
 
+# ---------------------------------------------------------------------------
 # the agent workspaces: plans and specs are versioned, working workspaces are not
-/the agent workspaces/*
-!/the plans directory/
-!/the design-specs directory/
+# (the `*` glob is load-bearing: git cannot re-include a path below an
+# excluded directory, so this must stay a single-level exclusion)
+# ---------------------------------------------------------------------------
+the agent workspaces/*
+_tasks/*
