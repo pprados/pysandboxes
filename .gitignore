@@ -101,6 +101,9 @@ dmypy.json
 # Sphinx documentation
 docs/_build/
 
+# pdoc output, regenerated from the docstrings by `make api_docs_build`
+docs/api/
+
 # ---------------------------------------------------------------------------
 # Notebooks
 # ---------------------------------------------------------------------------
@@ -212,16 +215,15 @@ PPR*
 /.gitmodules
 /.ripgreprc
 /.mcp.json
-/.tgrep/
+**/.tgrep/*
 /openwiki/
 /audits/
 /lat.md/
 /tmp/
 
 # ---------------------------------------------------------------------------
-# the agent workspaces: plans and specs are versioned, working workspaces are not
-# (the `*` glob is load-bearing: git cannot re-include a path below an
-# excluded directory, so this must stay a single-level exclusion)
+# the agent workspaces: nothing is versioned -- plans, specs and working workspaces
+# alike are local to the clone
 # ---------------------------------------------------------------------------
 the agent workspaces/*
 _tasks/*
