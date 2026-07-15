@@ -369,6 +369,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             all_rules: Security rules configuration.
             envs: Environment variables.
             pipe_path: Path to named pipe for configuration.
+            temp: Run-time directory shared with the sandbox, holding the
+                config pipe and the other files exchanged with it.
 
         Returns:
             List of command line arguments.
@@ -543,6 +545,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         Args:
             all_rules: Security rules configuration.
             args: Command line arguments for subprocess.
+            extra_envs: Environment variables added to the subprocess on top
+                of the ones the rules already allow.
             pipe_path: Path to named pipe for configuration.
             port: Network port for communication.
             log_level: Logging level.
@@ -726,6 +730,8 @@ class SubProcessDaemon(BaseSubProcessDaemon):
         Args:
             envs: Environment variables.
             all_rules: Current security rules.
+            temp: Run-time directory shared with the sandbox. Accepted for the
+                `BaseDaemon` signature; a plain subprocess translates nothing.
 
         Returns:
             Unchanged security rules.

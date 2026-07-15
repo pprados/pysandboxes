@@ -344,6 +344,8 @@ class SSEServerDaemon(BaseSSESandbox):
         Args:
             envs: Environment variables.
             all_rules: Current security rules.
+            temp: Run-time directory shared with the sandbox. Accepted for the
+                `BaseDaemon` signature; the rebuilt rules do not use it.
 
         Returns:
             Updated security rules for server context.

@@ -98,7 +98,7 @@ class PickleImportBlocker:
         Args:
             fullname: Full name of the module being imported.
             path: Search path (unused).
-            target: Target module (unused).
+            _target: Target module for a reload (unused).
 
         Returns:
             None to allow normal import, or raises to block.

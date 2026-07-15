@@ -144,7 +144,7 @@ class sandboxes:
 
         With custom configuration:
         ```python
-        with sandboxes(pysandboxes_config="custom.conf", graceful_shutdown=True):
+        with sandboxes(sandboxes_config="custom.conf", graceful_shutdown=True):
             result = some_function()
         ```
 
@@ -372,10 +372,38 @@ def run(
     graceful_shutdown: bool = True,
     **kwargs: dict[str, Any],
 ) -> Any:
-    """
-    Run the main coroutine in a new event loop, with the sandbox
-    It's similar to `asyncio.run()`, but with the sandbox.
-    The parameters are the same as `asyncio.run()`.
+    """Run a coroutine in a new event loop, with the sandbox started around it.
+
+    Plays the role `asyncio.run()` plays for plain code: it owns the loop for
+    the duration of the call. The sandbox is armed before ``main`` is scheduled
+    and shut down once it returns, so the coroutine never observes an
+    unprotected interpreter. The keyword arguments are those of `sandboxes`,
+    not those of `asyncio.run()`.
+
+    Args:
+        main: The coroutine to run. A coroutine object is expected, not the
+            function that produces one.
+        init_fn: Function called during daemon initialization in the sandbox
+            process.
+        config_path: Path to the configuration file or directory.
+        envs: Environment variables to make available in the sandbox.
+        python_args: Additional arguments for the Python interpreter.
+        graceful_shutdown: Whether to shut down gracefully on exit.
+        **kwargs: Additional security rules, passed on to `sandboxes`.
+
+    Returns:
+        Whatever ``main`` returns.
+
+    Raises:
+        ValueError: If ``main`` is not a coroutine.
+
+    Examples:
+        ```python
+        async def job():
+            return 42
+
+        run(job())
+        ```
     """
 
     async def _run() -> Any:

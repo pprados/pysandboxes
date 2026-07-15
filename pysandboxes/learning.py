@@ -178,7 +178,7 @@ def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
     """Manage backup files for configuration updates.
 
     Args:
-        _learning_path: Path to the learning configuration file.
+        learning_path: Path to the learning configuration file.
 
     Returns:
         Tuple of (current_path, backup_path).
