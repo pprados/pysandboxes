@@ -119,7 +119,8 @@ class AllowList(MutableSet[str]):
         """Add directory path to whitelist with prefix optimization.
 
         Args:
-            directory: Directory path to add.
+            value: Directory path to add. Named after `MutableSet.add`, whose
+                signature this overrides.
         """
         # Ensure the path ends with a separator to simplify prefix checks.
         if not value.endswith("/"):
@@ -146,7 +147,8 @@ class AllowList(MutableSet[str]):
         """Remove directory path from whitelist.
 
         Args:
-            directory: Directory path to remove.
+            value: Directory path to remove. Named after `MutableSet.discard`,
+                whose signature this overrides.
         """
         # Ensure the path ends with a separator for consistency.
         if not value.endswith("/"):
@@ -302,6 +304,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         Args:
             all_rules: Current security rules.
             envs: Environment variables.
+            temp: Run-time directory shared with the sandbox, holding the
+                config pipe and the generated netfilter files.
 
         Returns:
             Updated security rules for firejail context.
@@ -337,6 +341,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             all_rules: Security rules to translate.
             envs: Environment variables.
             pipe_path: Path to configuration pipe.
+            temp: Run-time directory shared with the sandbox, where the
+                netfilter files are written and which firejail must whitelist.
 
         Returns:
             Tuple of (firejail_args, updated_rules).
@@ -602,6 +608,8 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             all_rules: Security rules configuration.
             envs: Environment variables.
             pipe_path: Path to configuration pipe.
+            temp: Run-time directory shared with the sandbox, passed on to the
+                subprocess command builder.
 
         Returns:
             Complete command line arguments including firejail and subprocess args.

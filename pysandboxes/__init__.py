@@ -10,6 +10,7 @@ The main API consists of:
 - @sandbox decorator for function-level sandboxing
 - sandboxes() context manager for process-level sandboxing
 - run() function for running coroutines in sandboxes
+- is_in_sandbox() to tell the sandboxed process from the calling one
 - Learning mode for automatic security rule generation
 
 Example:
@@ -74,6 +75,8 @@ _cli = {
 __all__ = [
     "sandboxes",
     "sandbox",
+    "run",
+    "is_in_sandbox",
     "SandBoxError",
     "ConfigSyntaxError",
     "RuleFileNotFoundError",

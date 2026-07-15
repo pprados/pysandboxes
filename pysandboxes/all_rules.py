@@ -27,14 +27,23 @@ class AllRules(NamedTuple):
     throughout the system.
 
     Attributes:
+        root_path: Directory the configuration was read from. Relative paths
+            in the rules, and the files pulled in by an include, resolve
+            against it.
         config: Raw configuration lines from config file.
         envs: Environment variables available in sandbox.
         os_sandbox: OS-level sandbox provider name.
+        os_sandbox_params: Provider-specific settings, as parsed by the
+            provider named by ``os_sandbox``.
         use_py_sandbox: Whether Python-level sandboxing is enabled.
+        port: Local port the sandbox is reached on. ``-1`` asks for a free
+            port to be picked at startup.
         learning_path: Path where learning mode rules are saved.
         learn: Whether learning mode is active.
         envs_rules: Environment variable access rules.
         socket_rules: Network access rules.
+        pin_dns: Host names resolved once and pinned to their addresses, so a
+            later lookup cannot redirect an allowed name elsewhere.
         file_rules: File system access rules.
         import_rules: Python import rules.
         api_rules: Sensitive API call rules.

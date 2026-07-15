@@ -67,33 +67,61 @@ class ConfigSyntaxError(SandBoxError):
 
 
 class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
-    """Exception raised when a file access is denied by sandbox rules."""
+    """Raised when a path is not exposed to the sandbox, or is hidden from it.
 
-    pass
+    Two rules end here: no `expose-ro=` or `expose-rw=` covers the path, or an
+    `ignore=` rule hides it deliberately. ``errno`` is set to ``ENOENT`` so
+    code that only knows how to handle a missing file keeps working -- the
+    sandbox says "not there" rather than "not allowed", which is also what
+    keeps the file system layout from leaking.
+
+    Expose the path with `expose-ro=<path>`, or `expose-rw=<path>` if the code
+    also writes to it.
+    """
 
 
 class RulePermissionError(PermissionError, SandBoxError):
-    """Exception raised when a permission is denied by sandbox rules."""
+    """Raised when the sandbox writes to a path it may only read.
 
-    pass
+    The path is exposed, so it is visible and readable, but the rule covering
+    it grants no write access. Distinct from `RuleFileNotFoundError`, which
+    means the path is not exposed at all.
+
+    Replace the `expose-ro=<path>` rule with `expose-rw=<path>`.
+    """
 
 
 class RuleSocketConnectionRefusedError(ConnectionRefusedError, SandBoxError):
-    """Exception raised when a network connection is denied by sandbox rules."""
+    """Raised when a network connection is not allowed to the sandbox.
 
-    pass
+    Covers every stage the socket guard checks -- name resolution, connect,
+    and the address family itself -- so a refusal reaches the caller as an
+    ordinary refused connection.
+
+    Allow the destination with `net=<host>:<port>`.
+    """
 
 
 class RuleModuleNotFoundError(ModuleNotFoundError, SandBoxError):
-    """Exception raised when a module import is denied by sandbox rules."""
+    """Raised when an import is not allowed to the sandbox.
 
-    pass
+    Every import is refused unless a rule names the module, so this reaches
+    the caller as a plain missing module. It says nothing about whether the
+    module is installed.
+
+    Allow it with `python-import=ALLOW:<module>`.
+    """
 
 
 class RuleAttributeError(AttributeError, SandBoxError):
-    """Exception raised when an attribute access is denied by sandbox rules."""
+    """Refusal to write an attribute the framework protects on its own modules.
 
-    pass
+    Reserved for the self-protection guard: the guards run inside the process
+    they protect, so rewriting one of their module attributes would disarm the
+    sandbox from inside. That guard is not active today -- `guard_self`
+    installs nothing -- so nothing raises this at present. It stays public
+    because a caller catching `SandBoxError` must keep working once it does.
+    """
 
 
 class RuleApiPermissionError(PermissionError, SandBoxError):

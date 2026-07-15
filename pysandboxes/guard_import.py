@@ -207,7 +207,10 @@ class GuardLoader(Loader):
         """Initialize the guard loader.
 
         Args:
+            fullname: Full name of the module the loader stands in for.
             original_spec: The original module specification to wrap.
+            module: Already-built module to reuse, when the import does not
+                have to create one.
         """
         # Store the _original spec and loader
         self.fullname = fullname

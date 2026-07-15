@@ -278,6 +278,8 @@ def _yield_networks_from_string(
 
     Args:
         input_str: Network specification (CIDR notation or hostname).
+        pin_dns: Resolution cache, filled in as names are resolved so a later
+            lookup cannot be answered with a different address.
 
     Yields:
         Network objects for the input string.
@@ -318,6 +320,9 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
     Args:
         rule: Configuration line containing net= rule.
         errors: List to collect parsing errors.
+        pin_dns: Resolution cache, filled in while the rule's host names are
+            resolved so a later lookup cannot be answered with a different
+            address.
 
     Returns:
         List of parsed socket rules, or None if parsing failed.
