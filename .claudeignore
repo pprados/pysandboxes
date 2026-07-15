@@ -1,7 +1,10 @@
+# ---------------------------------------------------------------------------
+# Agent tooling workspaces (visible to git, kept out of the agent context)
+# A commented entry means the path is deliberately readable.
+# ---------------------------------------------------------------------------
 .agent/
 #.auto-claude/
 #.claude/
-.devpi/
 .entire/
 .gemini/
 #.ia/
@@ -9,9 +12,17 @@
 .planning/
 .serena/
 .specify/
-.vscode/
 
+# ---------------------------------------------------------------------------
+# IDE settings and generated documentation
+# ---------------------------------------------------------------------------
+.vscode/
+docs/
+
+# ---------------------------------------------------------------------------
+# Build and scratch artifacts (also in .gitignore, belt and braces)
+# ---------------------------------------------------------------------------
+.devpi/
+dist/
 tmp/
 PPR/
-dist/
-docs/
