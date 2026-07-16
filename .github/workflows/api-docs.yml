@@ -1,0 +1,79 @@
+name: API Documentation
+
+# Publishes the API reference from master only: master receives a merge at
+# publication time, so the public pages describe a released API rather than
+# whatever develop happens to hold. workflow_dispatch republishes on demand.
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publication at a time, and never cancel one midway: a cancelled deploy
+# leaves the site on its previous version, not half-written.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y make build-essential
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install Python development headers
+      run: sudo apt-get install -y python3-dev
+
+    - name: Install uv
+      shell: bash
+      run: |
+        UV_VERSION="0.8.17"
+        UV_BIN_DIR="$RUNNER_TEMP/uv_bin"
+        mkdir -p "$UV_BIN_DIR"
+
+        # Download binary Linux/x86_64
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
+
+        echo "$UV_BIN_DIR" >> $GITHUB_PATH
+
+    - name: Check installation of uv
+      run: uv --version
+
+    - name: Install dependencies
+      run: uv sync
+
+    # pdoc imports the package, so the dependencies must be installed first.
+    - name: Build the API documentation
+      run: make api_docs_build
+
+    - uses: actions/configure-pages@v5
+
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs/api
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4
