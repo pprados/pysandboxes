@@ -8,9 +8,16 @@ outcome -- repeating a list key unions its values, and ``DENY:`` wins wherever
 it appears -- so an ``include`` cannot be defeated by placement.
 """
 
+import ast
+import difflib
 import logging
 import re
+from datetime import date, datetime, time, timedelta
 from typing import NamedTuple
+
+from .immutable_dict import ImmutableDict
+from .main_logger import ErrorMsg, format_ruleref
+from .sb_types import ConfigLine, ConfigLines
 
 logger = logging.getLogger(__name__)
 
@@ -156,3 +163,239 @@ def parse_scalar(key: str, value: str) -> int | float | str:
                 return int(float(raw[: -len(suffix)]) * factor)
         return int(raw)
     return int(raw)
+
+
+SYNTAX_GROUPS: dict[str, tuple[str, ...]] = {
+    "arith": ("BinOp", "UnaryOp"),
+    "compare": ("Compare", "BoolOp"),
+    "conditional": ("If", "IfExp"),
+    "loop": ("For", "While", "Break", "Continue"),
+    "comprehension": ("ListComp", "SetComp", "DictComp", "GeneratorExp", "comprehension"),
+    "assign": ("Assign", "AugAssign", "AnnAssign", "NamedExpr"),
+    "func": ("FunctionDef", "Return", "arguments", "arg", "Lambda"),
+    "async": ("AsyncFunctionDef", "Await", "AsyncFor", "AsyncWith"),
+    "class": ("ClassDef",),
+    "exception": ("Try", "TryStar", "Raise", "ExceptHandler"),
+    "context": ("With", "withitem"),
+    "import": ("Import", "ImportFrom", "alias"),
+    "subscript": ("Subscript", "Slice", "Starred"),
+    "fstring": ("JoinedStr", "FormattedValue"),
+    "yield": ("Yield", "YieldFrom"),
+}
+
+CORE_NODES = frozenset(
+    {
+        "Module",
+        "Expression",
+        "Interactive",
+        "Constant",
+        "Name",
+        "Load",
+        "Store",
+        "Del",
+        "Tuple",
+        "List",
+        "Dict",
+        "Set",
+        "Expr",
+    }
+)
+
+
+def _public(*types: type) -> frozenset[str]:
+    """Return the public attribute names of the given types."""
+    return frozenset(name for tp in types for name in dir(tp) if not name.startswith("_"))
+
+
+# Computed from the stdlib rather than hardcoded, so the groups follow the
+# running interpreter. str-methods drops format and format_map on purpose:
+# both resolve attributes in C from the contents of the string, so no
+# Attribute node exists to validate or rewrite (spec 4bis.a).
+ATTRIBUTE_GROUPS: dict[str, frozenset[str]] = {
+    "str-methods": _public(str) - {"format", "format_map"},
+    "list-methods": _public(list),
+    "dict-methods": _public(dict),
+    "set-methods": _public(set),
+    "tuple-methods": _public(tuple),
+    "num-methods": _public(int, float),
+    "bytes-methods": _public(bytes),
+    "date-methods": _public(date, time, datetime, timedelta),
+}
+
+_BLIND_ATTRIBUTES = ("format", "format_map")
+
+LIST_KEYS: dict[str, str] = {
+    "eval-syntax": "syntax",
+    "eval-call": "call",
+    "eval-attribute": "attribute",
+    "eval-import": "imports",
+    "eval-magic": "magic",
+}
+
+_GROUPS_OF_KEY: dict[str, dict[str, frozenset[str]]] = {
+    "eval-syntax": {name: frozenset(nodes) for name, nodes in SYNTAX_GROUPS.items()},
+    "eval-attribute": ATTRIBUTE_GROUPS,
+}
+
+_PATTERNS_FORBIDDEN = ("eval-syntax",)
+
+EvalProfiles = ImmutableDict[str, EvalRules]
+"""Profiles by name, with `""` for the default profile."""
+
+
+def compile_pattern(pattern: str) -> re.Pattern[str]:
+    """Compile a list-key glob, anchored on both ends.
+
+    `*` is the only metacharacter, exactly as in `guard_envs`: the call sites
+    use `match()`, which anchors the start only, so without the trailing anchor
+    `get*` would also grant `forget_me`.
+    """
+    return re.compile(re.escape(pattern).replace("\\*", ".*") + r"\Z")
+
+
+def _add_error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
+    errors.append((f"{format_ruleref(rule)}: In {rule.rule!r}, {detail}", rule.path, rule.ln))
+
+
+def _suggest(token: str, known: list[str]) -> str:
+    """Return `, closest known token is 'x'` when one is close enough."""
+    close = difflib.get_close_matches(token, known, n=1)
+    return f", closest known token is {close[0]!r}" if close else ""
+
+
+def _warn_pattern_width(key: str, pattern: str, expansion: frozenset[str]) -> None:
+    """Warn when a pattern's fixed part is too short to be read at a glance."""
+    fixed = pattern.replace("*", "")
+    if len(fixed) >= 3:
+        return
+    matcher = compile_pattern(pattern)
+    matched = sorted(name for name in expansion if matcher.match(name))
+    logger.warning(
+        "%s=%s expands to %d names on this interpreter%s — narrow the pattern or add a DENY",
+        key,
+        pattern,
+        len(matched),
+        f", including {matched[0]!r}" if matched else "",
+    )
+
+
+class _Accumulator:
+    """Mutable per-profile accumulation, frozen into `EvalRules` at the end."""
+
+    def __init__(self) -> None:
+        self.allow: dict[str, set[str]] = {field: set() for field in LIST_KEYS.values()}
+        self.allow_patterns: dict[str, list[re.Pattern[str]]] = {field: [] for field in LIST_KEYS.values()}
+        self.deny: dict[str, set[str]] = {field: set() for field in LIST_KEYS.values()}
+        self.deny_patterns: dict[str, list[re.Pattern[str]]] = {field: [] for field in LIST_KEYS.values()}
+        self.scalars: dict[str, int | float | str] = {}
+        self.seen_scalar: dict[str, ConfigLine] = {}
+
+    def names(self, field: str) -> NameSet:
+        return NameSet(
+            allow=frozenset(self.allow[field]),
+            allow_patterns=tuple(self.allow_patterns[field]),
+            deny=frozenset(self.deny[field]),
+            deny_patterns=tuple(self.deny_patterns[field]),
+        )
+
+    def build(self) -> EvalRules:
+        syntax = self.names("syntax")
+        syntax = syntax._replace(allow=syntax.allow | CORE_NODES)
+        scalars = {key[len(EVAL_PREFIX) :].replace("-", "_"): value for key, value in self.scalars.items()}
+        return DEFAULT_RULES._replace(
+            declared=True,
+            syntax=syntax,
+            call=self.names("call"),
+            attribute=self.names("attribute"),
+            imports=self.names("imports"),
+            magic=self.names("magic"),
+            # Each key reaches its own field, so the value type varies per key.
+            # `parse_scalar` is what guarantees the match; it is not expressible here.
+            **scalars,  # type: ignore[arg-type]
+        )
+
+
+def _parse_list_value(
+    key: str,
+    field: str,
+    value: str,
+    rule: ConfigLine,
+    acc: _Accumulator,
+    errors: list[ErrorMsg],
+) -> None:
+    """Accumulate one list-key line into `acc`."""
+    deny = value.startswith("DENY:")
+    targets = value[len("DENY:") :] if deny else value
+    groups = _GROUPS_OF_KEY.get(key, {})
+    known = sorted(groups) + (sorted(node for node in dir(ast) if node[:1].isupper()) if key == "eval-syntax" else [])
+    for raw in targets.split(","):
+        token = raw.strip()
+        if not token:
+            _add_error(errors, rule, "empty target.")
+            return
+        if "*" in token:
+            if key in _PATTERNS_FORBIDDEN:
+                _add_error(errors, rule, f"a pattern is not accepted on {key}: the vocabulary is finite.")
+                return
+            _warn_pattern_width(key, token, frozenset().union(*groups.values()) if groups else frozenset())
+            (acc.deny_patterns if deny else acc.allow_patterns)[field].append(compile_pattern(token))
+            continue
+        if token in groups:
+            (acc.deny if deny else acc.allow)[field].update(groups[token])
+            continue
+        if key == "eval-syntax" and not hasattr(ast, token):
+            _add_error(errors, rule, f"unknown syntax token {token!r}{_suggest(token, known)}.")
+            return
+        if key == "eval-attribute" and token in _BLIND_ATTRIBUTES and not deny:
+            logger.warning(
+                "eval-attribute=%s reopens an attribute the guard is structurally blind to "
+                "(design spec 4bis.a): the name is resolved in C from the contents of the string, "
+                "so no Attribute node exists to rewrite",
+                token,
+            )
+        (acc.deny if deny else acc.allow)[field].add(token)
+
+
+def parse_rules(
+    config: ConfigLines,
+    errors: list[ErrorMsg],
+) -> tuple[EvalProfiles, ConfigLines]:
+    """Consume `eval-*` lines and return the other lines.
+
+    Args:
+        config: All remaining configuration lines.
+        errors: Accumulator the caller raises on.
+
+    Returns:
+        The profiles by name -- `""` being the default one -- and the lines
+        this parser did not consume.
+    """
+    accumulators: dict[str, _Accumulator] = {}
+    others: ConfigLines = []
+    for rule in config:
+        if not rule.rule.startswith(EVAL_PREFIX):
+            others.append(rule)
+            continue
+        key_part, _, value = rule.rule.partition("=")
+        key, _, profile = key_part.strip().partition(":")
+        value = value.strip()
+        acc = accumulators.setdefault(profile, _Accumulator())
+        if key in LIST_KEYS:
+            _parse_list_value(key, LIST_KEYS[key], value, rule, acc, errors)
+        elif key in SCALAR_KEYS:
+            if key in acc.seen_scalar:
+                _add_error(
+                    errors,
+                    rule,
+                    f"{key} is set twice in this profile "
+                    f"(already at line {acc.seen_scalar[key].ln}): a scalar is not a set.",
+                )
+                continue
+            acc.seen_scalar[key] = rule
+            try:
+                acc.scalars[key] = parse_scalar(key, value)
+            except ValueError as err:
+                _add_error(errors, rule, str(err))
+        else:
+            _add_error(errors, rule, f"unknown key {key!r}{_suggest(key, sorted(LIST_KEYS) + list(SCALAR_KEYS))}.")
+    return ImmutableDict({name: acc.build() for name, acc in accumulators.items()}), others
