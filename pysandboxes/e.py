@@ -156,6 +156,104 @@ class RuleApiPermissionError(PermissionError, SandBoxError):
         return self.__class__, (self.qualname, self.category)
 
 
+class EvalSyntaxRejected(SandBoxError, SyntaxError):
+    """Raised when a dynamically evaluated source violates the eval rules.
+
+    Carries the full violation list rather than the first refusal: a model
+    correcting its own output converges in one round only if it is told
+    everything at once.
+
+    Deriving from `SyntaxError` as well as `SandBoxError` is deliberate and
+    verified free of instance lay-out conflict: editors and tracebacks already
+    know how to render `lineno`, `offset` and `text`.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        violations: list[str],
+        *,
+        lineno: int = 0,
+        offset: int = 0,
+        text: str = "",
+    ) -> None:
+        """Initialize the exception with the full report.
+
+        Args:
+            message: Headline naming how many rules were violated and where.
+            violations: One rendered block per violation, in source order.
+            lineno: Line of the first violation, for `SyntaxError` consumers.
+            offset: Column of the first violation.
+            text: Source line the first violation sits on.
+        """
+        super().__init__(message + "\n\n" + "\n".join(violations))
+        self.violations = violations
+        self.lineno = lineno
+        self.offset = offset
+        self.text = text
+
+    def __reduce__(self) -> tuple[type, tuple[str, list[str]]]:
+        """Rebuild the exception from its own attributes across the transport."""
+        return self.__class__, (str(self).split("\n\n", maxsplit=1)[0], self.violations)
+
+
+class EvalInterrupted(BaseException):
+    """Raised inside evaluated code when a budget or the timeout is exhausted.
+
+    The one exception of the framework that stays outside the `SandBoxError`
+    hierarchy, and the exclusion is load-bearing: `SandBoxError` derives from
+    `RuntimeError`, so a bare `except Exception:` inside the evaluated source
+    -- reachable as soon as `eval-syntax=exception` opens `Try` -- would
+    swallow its own interruption. Deriving from `BaseException` alone keeps the
+    interruption uncatchable from inside.
+
+    Consequence for callers: `except SandBoxError:` does not catch a timeout.
+    """
+
+    def __init__(self, reason: str) -> None:
+        """Initialize the interruption with the exhausted budget.
+
+        Args:
+            reason: The rule and value that ran out, e.g. `eval-timeout=5s`.
+        """
+        super().__init__(f"evaluation interrupted: {reason}")
+        self.reason = reason
+
+    def __reduce__(self) -> tuple[type, tuple[str]]:
+        """Rebuild the interruption from its own attributes."""
+        return self.__class__, (self.reason,)
+
+
+class RuleEvalPermissionError(PermissionError, SandBoxError):
+    """Raised when a runtime guard refuses an attribute or an allocation."""
+
+    def __init__(self, target: str, rule_key: str) -> None:
+        """Initialize the exception with the refused name and its rule key.
+
+        Args:
+            target: Attribute name, or a description of the refused operation.
+            rule_key: Configuration key that would allow it, e.g. `eval-magic`.
+        """
+        super().__init__(f"{target!r} is denied by the eval guard.\nAdd `{rule_key}={target}` to allow it.")
+        self.target = target
+        self.rule_key = rule_key
+
+    def __reduce__(self) -> tuple[type, tuple[str, str]]:
+        """Rebuild the exception from its own attributes across the transport."""
+        return self.__class__, (self.target, self.rule_key)
+
+
+class SandboxContextWarning(Warning):
+    """A caller-supplied eval context carries a module or a capability.
+
+    Emitted on `warnings.warn` rather than logged, so the host project decides:
+    promote with `-W error::SandboxContextWarning`, silence per module with
+    `filterwarnings`, or assert on it with `pytest.warns`. That choice belongs
+    to the application, which is what knows whether passing `os` was
+    deliberate.
+    """
+
+
 _DENIALS_ATTRIBUTE = "__pysandboxes_denials__"
 
 
