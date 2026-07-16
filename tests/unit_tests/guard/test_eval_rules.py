@@ -3,7 +3,9 @@
 """The eval-* rule grammar and the exceptions the guard raises."""
 
 import pickle
+import random
 import re
+from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
@@ -14,7 +16,29 @@ from pysandboxes.e import (
     SandBoxError,
     SandboxContextWarning,
 )
-from pysandboxes.eval_rules import DEFAULT_RULES, EMPTY_NAMES, NameSet, parse_scalar
+from pysandboxes.eval_rules import (
+    ATTRIBUTE_GROUPS,
+    CORE_NODES,
+    DEFAULT_RULES,
+    EMPTY_NAMES,
+    SYNTAX_GROUPS,
+    NameSet,
+    parse_rules,
+    parse_scalar,
+)
+from pysandboxes.main_logger import ErrorMsg
+from pysandboxes.sb_types import ConfigLine, ConfigLines
+
+
+def _lines(*rules: str) -> ConfigLines:
+    return [ConfigLine(rule, Path("profile"), n) for n, rule in enumerate(rules)]
+
+
+def _parse(*rules: str) -> tuple[dict[str, object], list[ErrorMsg]]:
+    errors: list[ErrorMsg] = []
+    profiles, others = parse_rules(_lines(*rules), errors)
+    assert not others, others
+    return dict(profiles), errors
 
 
 def test_eval_syntax_rejected_is_a_syntax_error_and_a_sandbox_error() -> None:
@@ -132,3 +156,182 @@ def test_deny_wins_over_an_explicit_allow() -> None:
         deny_patterns=(),
     )
     assert not names.allows("open")
+
+
+def test_no_eval_key_leaves_the_profile_undeclared() -> None:
+    errors: list[ErrorMsg] = []
+    profiles, others = parse_rules(_lines("py-sandbox=true"), errors)
+    assert not errors
+    assert len(others) == 1
+    assert not profiles
+
+
+def test_a_group_expands_to_its_nodes() -> None:
+    profiles, errors = _parse("eval-syntax=loop")
+    assert not errors
+    rules = profiles[""]
+    for node in ("For", "While", "Break", "Continue"):
+        assert rules.syntax.allows(node)  # type: ignore[attr-defined]
+    assert not rules.syntax.allows("ListComp")  # type: ignore[attr-defined]
+
+
+def test_an_exact_node_name_is_accepted_beside_a_group() -> None:
+    profiles, errors = _parse("eval-syntax=arith, Lambda")
+    assert not errors
+    rules = profiles[""]
+    assert rules.syntax.allows("BinOp")  # type: ignore[attr-defined]
+    assert rules.syntax.allows("Lambda")  # type: ignore[attr-defined]
+
+
+def test_the_minimal_core_is_always_allowed() -> None:
+    profiles, _ = _parse("eval-syntax=arith")
+    rules = profiles[""]
+    for node in CORE_NODES:
+        assert rules.syntax.allows(node)  # type: ignore[attr-defined]
+
+
+def test_an_unknown_token_is_an_error_naming_the_closest_one() -> None:
+    errors: list[ErrorMsg] = []
+    parse_rules(_lines("eval-syntax=lop"), errors)
+    assert len(errors) == 1
+    assert "lop" in errors[0][0]
+    assert "loop" in errors[0][0]
+
+
+def test_repeating_a_key_unions_its_values() -> None:
+    profiles, errors = _parse("eval-call=len", "eval-call=range")
+    assert not errors
+    rules = profiles[""]
+    assert rules.call.allows("len")  # type: ignore[attr-defined]
+    assert rules.call.allows("range")  # type: ignore[attr-defined]
+
+
+def test_rule_order_carries_no_meaning() -> None:
+    rules = [
+        "eval-syntax=arith",
+        "eval-call=len, range",
+        "eval-call=DENY:range",
+        "eval-attribute=get*",
+        "eval-timeout=2s",
+    ]
+    reference, _ = _parse(*rules)
+    for _ in range(5):
+        shuffled = rules[:]
+        random.shuffle(shuffled)
+        other, _ = _parse(*shuffled)
+        assert other[""] == reference[""]
+
+
+def test_deny_wins_from_any_position() -> None:
+    before, _ = _parse("eval-call=DENY:range", "eval-call=len, range")
+    after, _ = _parse("eval-call=len, range", "eval-call=DENY:range")
+    assert not before[""].call.allows("range")  # type: ignore[attr-defined]
+    assert not after[""].call.allows("range")  # type: ignore[attr-defined]
+
+
+def test_a_pattern_grants_every_matching_name() -> None:
+    profiles, errors = _parse("eval-attribute=get*, is*")
+    assert not errors
+    rules = profiles[""]
+    assert rules.attribute.allows("get_name")  # type: ignore[attr-defined]
+    assert rules.attribute.allows("isdigit")  # type: ignore[attr-defined]
+    assert not rules.attribute.allows("split")  # type: ignore[attr-defined]
+
+
+def test_a_pattern_is_anchored_on_both_ends() -> None:
+    profiles, _ = _parse("eval-attribute=get*")
+    assert not profiles[""].attribute.allows("forget_me")  # type: ignore[attr-defined]
+
+
+def test_a_pattern_on_eval_syntax_is_an_error() -> None:
+    errors: list[ErrorMsg] = []
+    parse_rules(_lines("eval-syntax=Bin*"), errors)
+    assert len(errors) == 1
+    assert "pattern" in errors[0][0].lower()
+
+
+def test_a_wide_pattern_warns_with_its_expansion(caplog: pytest.LogCaptureFixture) -> None:
+    errors: list[ErrorMsg] = []
+    with caplog.at_level("WARNING"):
+        parse_rules(_lines("eval-attribute=ge*"), errors)
+    assert not errors
+    assert any("expands to" in record.getMessage() for record in caplog.records)
+
+
+def test_a_bare_star_warns() -> None:
+    errors: list[ErrorMsg] = []
+    profiles, _ = parse_rules(_lines("eval-attribute=*"), errors)
+    assert not errors
+    assert profiles[""].attribute.allows("anything")  # type: ignore[union-attr]
+
+
+def test_str_methods_excludes_format_and_format_map() -> None:
+    assert "split" in ATTRIBUTE_GROUPS["str-methods"]
+    assert "format" not in ATTRIBUTE_GROUPS["str-methods"]
+    assert "format_map" not in ATTRIBUTE_GROUPS["str-methods"]
+
+
+def test_granting_format_by_name_warns(caplog: pytest.LogCaptureFixture) -> None:
+    errors: list[ErrorMsg] = []
+    with caplog.at_level("WARNING"):
+        profiles, _ = parse_rules(_lines("eval-attribute=format"), errors)
+    assert not errors
+    assert profiles[""].attribute.allows("format")  # type: ignore[union-attr]
+    assert any("4bis.a" in record.getMessage() for record in caplog.records)
+
+
+def test_attribute_groups_follow_the_running_interpreter() -> None:
+    assert ATTRIBUTE_GROUPS["list-methods"] == frozenset(n for n in dir(list) if not n.startswith("_"))
+
+
+def test_a_profile_is_independent_of_the_default() -> None:
+    profiles, errors = _parse(
+        "eval-syntax=arith, compare, loop",
+        "eval-timeout=5s",
+        "eval-syntax:llm=arith",
+        "eval-timeout:llm=2s",
+    )
+    assert not errors
+    assert profiles["llm"].syntax.allows("BinOp")  # type: ignore[attr-defined]
+    assert not profiles["llm"].syntax.allows("While")  # type: ignore[attr-defined]
+    assert profiles["llm"].timeout == 2.0  # type: ignore[attr-defined]
+    assert profiles[""].timeout == 5.0  # type: ignore[attr-defined]
+
+
+def test_a_profile_gets_the_scalar_defaults_it_does_not_set() -> None:
+    profiles, _ = _parse("eval-syntax:llm=arith")
+    assert profiles["llm"].max_nodes == 5_000  # type: ignore[attr-defined]
+
+
+def test_a_repeated_scalar_key_is_a_configuration_error() -> None:
+    errors: list[ErrorMsg] = []
+    parse_rules(_lines("eval-timeout=2s", "eval-timeout=5s"), errors)
+    assert len(errors) == 1
+    assert "eval-timeout" in errors[0][0]
+
+
+def test_a_repeated_scalar_key_in_another_profile_is_not_an_error() -> None:
+    errors: list[ErrorMsg] = []
+    parse_rules(_lines("eval-timeout=2s", "eval-timeout:llm=5s"), errors)
+    assert not errors
+
+
+def test_an_unknown_eval_key_is_an_error() -> None:
+    errors: list[ErrorMsg] = []
+    parse_rules(_lines("eval-maximum-nodes=10"), errors)
+    assert len(errors) == 1
+    assert "eval-maximum-nodes" in errors[0][0]
+
+
+def test_an_import_pattern_is_accepted() -> None:
+    profiles, errors = _parse("eval-import=json.*")
+    assert not errors
+    assert profiles[""].imports.allows("json.decoder")  # type: ignore[attr-defined]
+
+
+def test_syntax_groups_only_name_real_ast_nodes() -> None:
+    import ast
+
+    for nodes in SYNTAX_GROUPS.values():
+        for node in nodes:
+            assert hasattr(ast, node), node
