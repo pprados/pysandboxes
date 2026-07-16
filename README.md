@@ -112,6 +112,7 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
     - [Executing a function in the sandbox (partial mode)](#executing-a-function-in-the-sandbox-partial-mode)
     - [How the partial mode work?](#how-the-partial-mode-work)
 - [Security Filters](#security-filters)
+  - [Dynamically evaluated code](#dynamically-evaluated-code)
   - [Manage config file locations](#manage-config-file-locations)
 - [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
 - [Paranoia level](#paranoia-level)
@@ -148,9 +149,9 @@ Like [TypeScript Deno](https://docs.deno.com/runtime/fundamentals/security/#perm
 - [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
 - [X] **Token Theft**: Accessible files and environment variables are filtered.
 - [X] **Remote Access**: Network and code actions are limited.
-- [X] **Malicious Execution**: The invocation of sensitive APIs like `eval()` or `exec()` precisely defines valid Python syntax and a whitelist of Python modules.
-- [ ] **Denial of Service**: A timeout can be added, up to killing the process if it cannot be stopped otherwise (**not yet implemented**).
-- [ ] **Malicious syntax**: The syntax of python code may be filtered (**not yet implemented**)
+- [ ] **Malicious Execution**: `eval()`, `exec()` and `compile()` are refused unless the profile declares the sub-language they may run, via the [`eval-*` rules](wiki/eval.md) (**not yet implemented**).
+- [ ] **Denial of Service**: An evaluated string runs under an iteration budget, a recursion bound, an allocation ceiling and a timeout the caller can recover from (`eval-timeout=`, `eval-max-iterations=`) (**not yet implemented**).
+- [ ] **Malicious syntax**: The syntax of a dynamically evaluated string is filtered against a declared whitelist of constructs (`eval-syntax=`) (**not yet implemented**)
 
 ---
 
@@ -455,8 +456,14 @@ What are the security filters offered by **Py-Sandboxes**?
 - **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `ignore=.*`).
 - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
 - **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
+- **Dynamically evaluated code control** (*not yet implemented*): a string handed to `eval()`, `exec()` or `compile()` — which is exactly the shape of a model's answer — is refused unless the profile declares the sub-language it may use. The declared source is then parsed, checked, rewritten so attribute walks and resource exhaustion are refused while it runs, and executed under a timeout the caller can recover from. See [the `eval-*` rules](https://github.com/pprados/pysandboxes/blob/master/wiki/eval.md).
 
 Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
+
+## Dynamically evaluated code
+
+Every rule of the `eval-*` family is described key by key, with a valid and an
+invalid example for each, [here](wiki/eval.md).
 
 ## Manage config file locations
 
@@ -535,6 +542,7 @@ what you *add* on top of the Python layer, and the union of the two as your actu
 | expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
 | python-api=*             |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
+| eval-*                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
 | **Network**              |      |            |           |           |           |        |                  |
 | • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
@@ -580,7 +588,7 @@ forwarded to the command line, only the documented ones are read.
 
 A `❌` in the **py-sandbox** column is a deliberate posture, not a gap: with
 `py-sandbox=False` (or `--py-sandbox=False`) the Python layer is switched off on purpose, so
-`python-api=`, `import=`, the Python-code guard and, on **landlock**, `ignore=` stop being
+`python-api=`, `eval-*`, `import=`, the Python-code guard and, on **landlock**, `ignore=` stop being
 enforced. Only the OS layer of the chosen technology remains. Use it when the sandboxed code
 is trusted not to attack the interpreter itself and you want the OS boundary alone; keep the
 Python layer on otherwise.
