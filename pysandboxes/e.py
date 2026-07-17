@@ -227,20 +227,27 @@ class EvalInterrupted(BaseException):
 class RuleEvalPermissionError(PermissionError, SandBoxError):
     """Raised when a runtime guard refuses an attribute or an allocation."""
 
-    def __init__(self, target: str, rule_key: str) -> None:
+    def __init__(self, target: str, rule_key: str, hint: str | None = None) -> None:
         """Initialize the exception with the refused name and its rule key.
 
         Args:
             target: Attribute name, or a description of the refused operation.
             rule_key: Configuration key that would allow it, e.g. `eval-magic`.
+            hint: Replaces the "add this rule" sentence. Set it whenever no
+                configuration can lift the refusal, so a message from a
+                security guard never tells the reader to add a key that will
+                not work -- which reads as a broken guard rather than as a
+                deliberate, non-overridable denial.
         """
-        super().__init__(f"{target!r} is denied by the eval guard.\nAdd `{rule_key}={target}` to allow it.")
+        remedy = hint or f"Add `{rule_key}={target}` to allow it."
+        super().__init__(f"{target!r} is denied by the eval guard.\n{remedy}")
         self.target = target
         self.rule_key = rule_key
+        self.hint = hint
 
-    def __reduce__(self) -> tuple[type, tuple[str, str]]:
+    def __reduce__(self) -> tuple[type, tuple[str, str, str | None]]:
         """Rebuild the exception from its own attributes across the transport."""
-        return self.__class__, (self.target, self.rule_key)
+        return self.__class__, (self.target, self.rule_key, self.hint)
 
 
 _DENIALS_ATTRIBUTE = "__pysandboxes_denials__"
