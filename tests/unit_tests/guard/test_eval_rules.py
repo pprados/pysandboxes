@@ -91,6 +91,21 @@ def test_rule_eval_permission_error_survives_the_transport() -> None:
     err = pickle.loads(pickle.dumps(RuleEvalPermissionError("split", "eval-attribute")))
     assert err.target == "split"
     assert err.rule_key == "eval-attribute"
+    assert err.hint is None
+
+
+def test_a_hint_replaces_the_rule_to_add() -> None:
+    """A refusal no configuration can lift must not name a key to add.
+
+    Frame capture is the one implicit DENY of the design, so telling the
+    reader to add `eval-attribute=gi_frame` would send them after a rule that
+    changes nothing -- which reads as a broken guard, not as a deliberate
+    denial.
+    """
+    err = RuleEvalPermissionError("gi_frame", "eval-attribute", "Frame capture is always refused.")
+    assert "Add `eval-attribute=gi_frame`" not in str(err)
+    assert "Frame capture is always refused." in str(err)
+    assert pickle.loads(pickle.dumps(err)).hint == "Frame capture is always refused."
 
 
 def test_parse_scalar_accepts_digit_separators() -> None:
