@@ -198,6 +198,11 @@ CORE_NODES = frozenset(
         "Dict",
         "Set",
         "Expr",
+        # `pass` carries no capability and is the only body a class, a try or a
+        # with block can be given without opening something else. No eval-syntax
+        # group names it, so leaving it out of the core would refuse
+        # `class C: pass` under every possible configuration.
+        "Pass",
     }
 )
 
