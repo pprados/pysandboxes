@@ -183,6 +183,13 @@ def test_an_exact_node_name_is_accepted_beside_a_group() -> None:
     assert rules.syntax.allows("Lambda")  # type: ignore[attr-defined]
 
 
+def test_pass_is_in_the_core_so_a_class_or_try_body_can_exist() -> None:
+    """No eval-syntax group names Pass, so the core is the only place it can
+    come from. Without it, `class C: pass` is refused under every possible
+    configuration, including one granting eval-syntax=class."""
+    assert "Pass" in CORE_NODES
+
+
 def test_the_minimal_core_is_always_allowed() -> None:
     profiles, _ = _parse("eval-syntax=arith")
     rules = profiles[""]
