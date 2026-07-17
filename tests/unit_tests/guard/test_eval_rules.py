@@ -6,6 +6,7 @@ import pickle
 import random
 import re
 from pathlib import Path
+from typing import cast
 
 import pytest  # type: ignore[import-untyped]
 
@@ -21,6 +22,8 @@ from pysandboxes.eval_rules import (
     DEFAULT_RULES,
     EMPTY_NAMES,
     SYNTAX_GROUPS,
+    EvalProfiles,
+    EvalRules,
     NameSet,
     parse_rules,
     parse_scalar,
@@ -33,11 +36,22 @@ def _lines(*rules: str) -> ConfigLines:
     return [ConfigLine(rule, Path("profile"), n) for n, rule in enumerate(rules)]
 
 
-def _parse(*rules: str) -> tuple[dict[str, object], list[ErrorMsg]]:
+def _profile(profiles: EvalProfiles, name: str = "") -> EvalRules:
+    """Read one profile as an `EvalRules`.
+
+    `ImmutableDict` subclasses `tuple[tuple[K, ...], tuple[V, ...]]`, so mypy
+    resolves an indexing expression through `tuple.__getitem__` and rejects
+    every attribute read on the result. The cast lives here, once, instead of
+    as a `type: ignore` on each of the forty assertions below.
+    """
+    return cast(EvalRules, profiles[name])
+
+
+def _parse(*rules: str) -> tuple[dict[str, EvalRules], list[ErrorMsg]]:
     errors: list[ErrorMsg] = []
     profiles, others = parse_rules(_lines(*rules), errors)
     assert not others, others
-    return dict(profiles), errors
+    return {name: _profile(profiles, name) for name in profiles}, errors
 
 
 def test_eval_syntax_rejected_is_a_syntax_error_and_a_sandbox_error() -> None:
@@ -166,16 +180,16 @@ def test_a_group_expands_to_its_nodes() -> None:
     assert not errors
     rules = profiles[""]
     for node in ("For", "While", "Break", "Continue"):
-        assert rules.syntax.allows(node)  # type: ignore[attr-defined]
-    assert not rules.syntax.allows("ListComp")  # type: ignore[attr-defined]
+        assert rules.syntax.allows(node)
+    assert not rules.syntax.allows("ListComp")
 
 
 def test_an_exact_node_name_is_accepted_beside_a_group() -> None:
     profiles, errors = _parse("eval-syntax=arith, Lambda")
     assert not errors
     rules = profiles[""]
-    assert rules.syntax.allows("BinOp")  # type: ignore[attr-defined]
-    assert rules.syntax.allows("Lambda")  # type: ignore[attr-defined]
+    assert rules.syntax.allows("BinOp")
+    assert rules.syntax.allows("Lambda")
 
 
 def test_pass_is_in_the_core_so_a_class_or_try_body_can_exist() -> None:
@@ -189,7 +203,7 @@ def test_the_minimal_core_is_always_allowed() -> None:
     profiles, _ = _parse("eval-syntax=arith")
     rules = profiles[""]
     for node in CORE_NODES:
-        assert rules.syntax.allows(node)  # type: ignore[attr-defined]
+        assert rules.syntax.allows(node)
 
 
 def test_an_unknown_token_is_an_error_naming_the_closest_one() -> None:
@@ -204,8 +218,8 @@ def test_repeating_a_key_unions_its_values() -> None:
     profiles, errors = _parse("eval-call=len", "eval-call=range")
     assert not errors
     rules = profiles[""]
-    assert rules.call.allows("len")  # type: ignore[attr-defined]
-    assert rules.call.allows("range")  # type: ignore[attr-defined]
+    assert rules.call.allows("len")
+    assert rules.call.allows("range")
 
 
 def test_rule_order_carries_no_meaning() -> None:
@@ -227,22 +241,22 @@ def test_rule_order_carries_no_meaning() -> None:
 def test_deny_wins_from_any_position() -> None:
     before, _ = _parse("eval-call=DENY:range", "eval-call=len, range")
     after, _ = _parse("eval-call=len, range", "eval-call=DENY:range")
-    assert not before[""].call.allows("range")  # type: ignore[attr-defined]
-    assert not after[""].call.allows("range")  # type: ignore[attr-defined]
+    assert not before[""].call.allows("range")
+    assert not after[""].call.allows("range")
 
 
 def test_a_pattern_grants_every_matching_name() -> None:
     profiles, errors = _parse("eval-attribute=get*, is*")
     assert not errors
     rules = profiles[""]
-    assert rules.attribute.allows("get_name")  # type: ignore[attr-defined]
-    assert rules.attribute.allows("isdigit")  # type: ignore[attr-defined]
-    assert not rules.attribute.allows("split")  # type: ignore[attr-defined]
+    assert rules.attribute.allows("get_name")
+    assert rules.attribute.allows("isdigit")
+    assert not rules.attribute.allows("split")
 
 
 def test_a_pattern_is_anchored_on_both_ends() -> None:
     profiles, _ = _parse("eval-attribute=get*")
-    assert not profiles[""].attribute.allows("forget_me")  # type: ignore[attr-defined]
+    assert not profiles[""].attribute.allows("forget_me")
 
 
 def test_a_pattern_on_eval_syntax_is_an_error() -> None:
@@ -264,7 +278,7 @@ def test_a_bare_star_warns() -> None:
     errors: list[ErrorMsg] = []
     profiles, _ = parse_rules(_lines("eval-attribute=*"), errors)
     assert not errors
-    assert profiles[""].attribute.allows("anything")  # type: ignore[union-attr]
+    assert _profile(profiles).attribute.allows("anything")
 
 
 def test_str_methods_excludes_format_and_format_map() -> None:
@@ -278,7 +292,7 @@ def test_granting_format_by_name_warns(caplog: pytest.LogCaptureFixture) -> None
     with caplog.at_level("WARNING"):
         profiles, _ = parse_rules(_lines("eval-attribute=format"), errors)
     assert not errors
-    assert profiles[""].attribute.allows("format")  # type: ignore[union-attr]
+    assert _profile(profiles).attribute.allows("format")
     assert any("4bis.a" in record.getMessage() for record in caplog.records)
 
 
@@ -294,15 +308,15 @@ def test_a_profile_is_independent_of_the_default() -> None:
         "eval-timeout:llm=2s",
     )
     assert not errors
-    assert profiles["llm"].syntax.allows("BinOp")  # type: ignore[attr-defined]
-    assert not profiles["llm"].syntax.allows("While")  # type: ignore[attr-defined]
-    assert profiles["llm"].timeout == 2.0  # type: ignore[attr-defined]
-    assert profiles[""].timeout == 5.0  # type: ignore[attr-defined]
+    assert profiles["llm"].syntax.allows("BinOp")
+    assert not profiles["llm"].syntax.allows("While")
+    assert profiles["llm"].timeout == 2.0
+    assert profiles[""].timeout == 5.0
 
 
 def test_a_profile_gets_the_scalar_defaults_it_does_not_set() -> None:
     profiles, _ = _parse("eval-syntax:llm=arith")
-    assert profiles["llm"].max_nodes == 5_000  # type: ignore[attr-defined]
+    assert profiles["llm"].max_nodes == 5_000
 
 
 def test_a_repeated_scalar_key_is_a_configuration_error() -> None:
@@ -328,7 +342,7 @@ def test_an_unknown_eval_key_is_an_error() -> None:
 def test_an_import_pattern_is_accepted() -> None:
     profiles, errors = _parse("eval-import=json.*")
     assert not errors
-    assert profiles[""].imports.allows("json.decoder")  # type: ignore[attr-defined]
+    assert profiles[""].imports.allows("json.decoder")
 
 
 def test_syntax_groups_only_name_real_ast_nodes() -> None:

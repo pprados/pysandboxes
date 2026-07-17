@@ -9,7 +9,9 @@ def test_convert_extra_rules() -> None:
 
 def test_parse_config_collects_the_eval_profiles() -> None:
     from pathlib import Path
+    from typing import cast
 
+    from pysandboxes.eval_rules import EvalRules
     from pysandboxes.py_sandbox import parse_config
     from pysandboxes.sb_types import ConfigLine
 
@@ -19,8 +21,12 @@ def test_parse_config_collects_the_eval_profiles() -> None:
         ConfigLine("eval-timeout:llm=2s", Path("profile"), 2),
     ]
     all_rules = parse_config(config, Path("profile"), envs={})
-    assert all_rules.eval_rules[""].syntax.allows("BinOp")  # type: ignore[union-attr]
-    assert all_rules.eval_rules["llm"].timeout == 2.0  # type: ignore[union-attr]
+    # ImmutableDict subclasses tuple, so mypy reads an indexing expression
+    # through tuple.__getitem__. One cast per profile beats one ignore per read.
+    default = cast(EvalRules, all_rules.eval_rules[""])
+    llm = cast(EvalRules, all_rules.eval_rules["llm"])
+    assert default.syntax.allows("BinOp")
+    assert llm.timeout == 2.0
 
 
 def test_parse_config_without_eval_keys_leaves_the_profiles_empty() -> None:
