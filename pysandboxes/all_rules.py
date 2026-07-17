@@ -10,6 +10,7 @@ configuration object.
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from pysandboxes.eval_rules import EvalProfiles
 from pysandboxes.guard_api import ApiRules
 from pysandboxes.guard_envs import EnvsRules
 from pysandboxes.guard_files import FilesRules
@@ -47,6 +48,7 @@ class AllRules(NamedTuple):
         file_rules: File system access rules.
         import_rules: Python import rules.
         api_rules: Sensitive API call rules.
+        eval_rules: Dynamically evaluated code rules, by profile name.
     """
 
     root_path: Path
@@ -64,6 +66,7 @@ class AllRules(NamedTuple):
     file_rules: FilesRules
     import_rules: ImportRules
     api_rules: ApiRules = ()
+    eval_rules: EvalProfiles = ImmutableDict({})
 
 
 EmptyRules = AllRules(
@@ -82,4 +85,5 @@ EmptyRules = AllRules(
     file_rules=(),
     import_rules=(),
     api_rules=(),
+    eval_rules=ImmutableDict({}),
 )

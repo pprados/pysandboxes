@@ -22,6 +22,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import (
+    eval_rules as eval_rules_module,
+)
+from . import (
     guard_api,
     guard_envs,
     guard_files,
@@ -270,6 +273,7 @@ def parse_config(
     files_rules, others = guard_files.parse_rules(others, errors)
     api_rules, others = guard_api.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
+    eval_profiles, others = eval_rules_module.parse_rules(others, errors)
 
     # 2. If some line are ignored
     if others:
@@ -307,6 +311,7 @@ def parse_config(
         file_rules=files_rules,
         import_rules=import_rules,
         api_rules=api_rules,
+        eval_rules=eval_profiles,
     )
 
 
