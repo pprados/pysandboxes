@@ -243,17 +243,6 @@ class RuleEvalPermissionError(PermissionError, SandBoxError):
         return self.__class__, (self.target, self.rule_key)
 
 
-class SandboxContextWarning(Warning):
-    """A caller-supplied eval context carries a module or a capability.
-
-    Emitted on `warnings.warn` rather than logged, so the host project decides:
-    promote with `-W error::SandboxContextWarning`, silence per module with
-    `filterwarnings`, or assert on it with `pytest.warns`. That choice belongs
-    to the application, which is what knows whether passing `os` was
-    deliberate.
-    """
-
-
 _DENIALS_ATTRIBUTE = "__pysandboxes_denials__"
 
 

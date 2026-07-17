@@ -14,7 +14,6 @@ from pysandboxes.e import (
     EvalSyntaxRejected,
     RuleEvalPermissionError,
     SandBoxError,
-    SandboxContextWarning,
 )
 from pysandboxes.eval_rules import (
     ATTRIBUTE_GROUPS,
@@ -78,10 +77,6 @@ def test_rule_eval_permission_error_survives_the_transport() -> None:
     err = pickle.loads(pickle.dumps(RuleEvalPermissionError("split", "eval-attribute")))
     assert err.target == "split"
     assert err.rule_key == "eval-attribute"
-
-
-def test_sandbox_context_warning_is_a_warning() -> None:
-    assert issubclass(SandboxContextWarning, Warning)
 
 
 def test_parse_scalar_accepts_digit_separators() -> None:
