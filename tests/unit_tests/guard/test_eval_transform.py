@@ -12,6 +12,7 @@ from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected
 from pysandboxes.eval_rules import DEFAULT_RULES, SYNTAX_GROUPS, NameSet
 from pysandboxes.eval_runtime import HELPERS, EvalState, pop_state, push_state
 from pysandboxes.eval_transform import (
+    _WARNED_MODULES,
     RESERVED_PREFIX,
     Violation,
     inject,
@@ -105,6 +106,20 @@ def test_an_import_outside_the_rule_is_refused() -> None:
     violations = _check("import os", syntax=_syntax("import"))
     assert len(violations) == 1
     assert "eval-import=os" in violations[0].remedy
+
+
+def test_a_dangerous_import_is_flagged_with_the_same_list_as_guard_import() -> None:
+    """One list, read from the package, never a second copy kept in step by hand.
+
+    A module `guard_import` prints under `# ⚠ Dangerous!` and `eval-import`
+    passes over in silence reads as an oversight, so the two must not drift.
+    """
+    from pysandboxes.guard_import import resources as import_resources
+
+    blacklist = set(import_resources.read_text("pysandboxes", "modules_blacklist.txt").split())
+    assert _WARNED_MODULES == blacklist
+    violations = _check("import subprocess", syntax=_syntax("import"))
+    assert [v for v in violations if v.warning]
 
 
 def test_a_declared_import_passes() -> None:
