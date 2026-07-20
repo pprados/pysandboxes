@@ -15,6 +15,7 @@ where the validator looks. The barriers are the bounded namespace and
 
 import ast
 import logging
+from importlib import resources
 from typing import NamedTuple
 
 from .e import EvalSyntaxRejected
@@ -40,7 +41,12 @@ _WARNED_REMEDY: dict[str, str] = {
     "eval-import": "a module exposes everything it imports in turn",
 }
 
-_WARNED_MODULES = frozenset({"os", "sys", "subprocess", "importlib", "ctypes", "socket", "builtins", "shutil"})
+# The same list `guard_import` classifies as `# ⚠ Dangerous!` in learning mode,
+# read rather than restated: two hand-maintained copies drift, and a module
+# warned about by one guard and passed over in silence by the other reads as an
+# oversight. Loaded at import time, before arming, so the read is never charged
+# to the user's own `python-import` rules.
+_WARNED_MODULES = frozenset(resources.read_text(__package__ or "pysandboxes", "modules_blacklist.txt").split())
 
 
 class Violation(NamedTuple):
@@ -144,7 +150,11 @@ class _Validator(ast.NodeVisitor):
                 node,
                 f"import {module!r} is not allowed",
                 f"eval-import={module}",
-                f"{root} exposes the process environment" if root in _WARNED_MODULES else "",
+                (
+                    f"{root} is one of the modules python-import itself flags as dangerous"
+                    if root in _WARNED_MODULES
+                    else ""
+                ),
             )
 
     def visit_Import(self, node: ast.Import) -> None:
