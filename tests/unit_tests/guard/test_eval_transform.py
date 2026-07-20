@@ -3,14 +3,18 @@
 """Phase 1 validation and phase 2 injection."""
 
 import ast
+from types import CodeType
+from typing import cast
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.e import EvalSyntaxRejected
+from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected
 from pysandboxes.eval_rules import DEFAULT_RULES, SYNTAX_GROUPS, NameSet
+from pysandboxes.eval_runtime import HELPERS, EvalState, pop_state, push_state
 from pysandboxes.eval_transform import (
     RESERVED_PREFIX,
     Violation,
+    inject,
     raise_if_rejected,
     render_report,
     validate,
@@ -212,3 +216,101 @@ def test_the_exception_carries_one_block_per_violation() -> None:
 
 def test_raise_if_rejected_is_a_no_op_without_violations() -> None:
     raise_if_rejected("<eval>", "1", [])
+
+
+def _compile(source: str) -> CodeType:
+    """Inject and compile. `inject` is typed on `ast.AST`, which `compile`
+    cannot narrow on its own; the cast states what `ast.parse` already knows."""
+    return compile(cast(ast.Module, inject(ast.parse(source))), "<eval:test>", "exec")
+
+
+def _run(source: str, **names: object) -> object:
+    """Validate nothing, inject, and execute against the helpers."""
+    namespace: dict[str, object] = {"__builtins__": {}, **HELPERS, **names}
+    exec(_compile(source), namespace)  # noqa: S102
+    return namespace.get("result")
+
+
+def test_an_attribute_read_becomes_a_guard_call() -> None:
+    tree = inject(ast.parse("x.attr"))
+    dumped = ast.dump(tree)
+    assert "__sb_getattr__" in dumped
+    assert "attr" in dumped
+
+
+def test_a_power_becomes_a_guarded_binop() -> None:
+    assert "__sb_binop__" in ast.dump(inject(ast.parse("a ** b")))
+
+
+def test_a_subtraction_is_left_alone() -> None:
+    assert "__sb_binop__" not in ast.dump(inject(ast.parse("a - b")))
+
+
+def test_a_loop_body_gains_a_tick() -> None:
+    assert "__sb_tick__" in ast.dump(inject(ast.parse("for i in ():\n    pass")))
+
+
+def test_a_while_body_gains_a_tick() -> None:
+    assert "__sb_tick__" in ast.dump(inject(ast.parse("while x:\n    pass")))
+
+
+def test_a_comprehension_iterable_is_wrapped() -> None:
+    assert "__sb_iter__" in ast.dump(inject(ast.parse("[i for i in ()]")))
+
+
+def test_a_function_body_is_bracketed_by_enter_and_leave() -> None:
+    dumped = ast.dump(inject(ast.parse("def f():\n    return 1")))
+    assert "__sb_enter__" in dumped
+    assert "__sb_leave__" in dumped
+
+
+def test_line_and_column_numbers_survive_the_rewrite() -> None:
+    source = "x = 1\ny = a.attr\n"
+    tree = inject(ast.parse(source))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    assert calls
+    assert all(node.lineno == 2 for node in calls)
+
+
+def test_a_traceback_from_evaluated_code_points_at_the_user_source() -> None:
+    code = _compile("def f():\n    raise ValueError('boom')\nf()\n")
+    namespace: dict[str, object] = {"__builtins__": {"ValueError": ValueError}, **HELPERS}
+    push_state(EvalState(DEFAULT_RULES._replace(max_call_depth=10)))
+    try:
+        with pytest.raises(ValueError) as caught:
+            exec(code, namespace)  # noqa: S102
+    finally:
+        pop_state()
+    frames = [f for f in caught.traceback if f.path == "<eval:test>"]
+    assert any(frame.lineno + 1 == 2 for frame in frames)
+
+
+def test_injected_nodes_are_absent_from_the_validators_view() -> None:
+    """Phase 1 runs on the input tree; the helper calls it would refuse."""
+    source = "x.attr"
+    tree = ast.parse(source)
+    rules = DEFAULT_RULES._replace(declared=True, syntax=_syntax(), attribute=_names("attr"))
+    assert not validate(tree, rules)
+    injected = inject(ast.parse(source))
+    assert validate(injected, rules), "the injected tree must not be re-validatable"
+
+
+def test_the_transform_preserves_semantics_on_a_benign_corpus() -> None:
+    push_state(EvalState(DEFAULT_RULES._replace(attribute=_names("append", "upper"), max_call_depth=10)))
+    try:
+        assert _run("result = 2 ** 8") == 256
+        assert _run("result = [i * 2 for i in (1, 2, 3)]") == [2, 4, 6]
+        assert _run("result = 'ab'.upper()") == "AB"
+        assert _run("acc = []\nfor i in (1, 2):\n    acc.append(i)\nresult = acc") == [1, 2]
+        assert _run("def f(n):\n    return n + 1\nresult = f(41)") == 42
+    finally:
+        pop_state()
+
+
+def test_recursion_is_bounded_at_runtime() -> None:
+    push_state(EvalState(DEFAULT_RULES._replace(max_call_depth=5)))
+    try:
+        with pytest.raises(EvalInterrupted, match="eval-max-call-depth=5"):
+            _run("def f(n):\n    return f(n + 1)\nresult = f(0)")
+    finally:
+        pop_state()

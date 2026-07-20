@@ -226,3 +226,98 @@ def raise_if_rejected(source_ref: str, source: str, violations: list[Violation])
         offset=first.col,
         text=lines[first.lineno - 1] if 0 < first.lineno <= len(lines) else "",
     )
+
+
+_GUARDED_BINOPS: dict[type, str] = {ast.Pow: "**", ast.Mult: "*", ast.Add: "+"}
+
+
+def _call(name: str, args: list[ast.expr]) -> ast.Call:
+    """Build a call on one of the `__sb_` helpers."""
+    return ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=args, keywords=[])
+
+
+def _tick() -> ast.Expr:
+    return ast.Expr(value=_call("__sb_tick__", []))
+
+
+class _Injector(ast.NodeTransformer):
+    """Rewrite the accepted tree into one that enforces at runtime.
+
+    Only reads are rewritten: `Attribute` in `Store` or `Del` context was
+    already refused by phase 1, so a fourth helper would have nothing to do.
+    """
+
+    def visit_Attribute(self, node: ast.Attribute) -> ast.AST:
+        self.generic_visit(node)
+        if not isinstance(node.ctx, ast.Load):
+            return node
+        return ast.copy_location(
+            _call("__sb_getattr__", [node.value, ast.Constant(value=node.attr)]),
+            node,
+        )
+
+    def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
+        self.generic_visit(node)
+        symbol = _GUARDED_BINOPS.get(type(node.op))
+        if symbol is None:
+            return node
+        return ast.copy_location(
+            _call("__sb_binop__", [ast.Constant(value=symbol), node.left, node.right]),
+            node,
+        )
+
+    def visit_For(self, node: ast.For) -> ast.AST:
+        self.generic_visit(node)
+        node.body = [_tick()] + node.body
+        return node
+
+    def visit_AsyncFor(self, node: ast.AsyncFor) -> ast.AST:
+        self.generic_visit(node)
+        node.body = [_tick()] + node.body
+        return node
+
+    def visit_While(self, node: ast.While) -> ast.AST:
+        self.generic_visit(node)
+        node.body = [_tick()] + node.body
+        return node
+
+    def visit_comprehension(self, node: ast.comprehension) -> ast.AST:
+        self.generic_visit(node)
+        node.iter = ast.copy_location(_call("__sb_iter__", [node.iter]), node.iter)
+        return node
+
+    def _bracket(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.AST:
+        self.generic_visit(node)
+        node.body = [
+            ast.Expr(value=_call("__sb_enter__", [])),
+            ast.Try(
+                body=node.body,
+                handlers=[],
+                orelse=[],
+                finalbody=[ast.Expr(value=_call("__sb_leave__", []))],
+            ),
+        ]
+        return node
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+        return self._bracket(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
+        return self._bracket(node)
+
+
+def inject(tree: ast.AST) -> ast.AST:
+    """Rewrite an accepted tree so the remaining risks are enforced at runtime.
+
+    Line and column numbers keep pointing at the user's source, so a traceback
+    from inside the evaluated code stays readable.
+
+    Args:
+        tree: The tree phase 1 accepted. Rewritten in place.
+
+    Returns:
+        The same tree, with helper calls injected and locations fixed.
+    """
+    transformed = _Injector().visit(tree)
+    ast.fix_missing_locations(transformed)
+    return transformed
