@@ -41,12 +41,20 @@ _WARNED_REMEDY: dict[str, str] = {
     "eval-import": "a module exposes everything it imports in turn",
 }
 
-# The same list `guard_import` classifies as `# ⚠ Dangerous!` in learning mode,
-# read rather than restated: two hand-maintained copies drift, and a module
-# warned about by one guard and passed over in silence by the other reads as an
-# oversight. Loaded at import time, before arming, so the read is never charged
-# to the user's own `python-import` rules.
-_WARNED_MODULES = frozenset(resources.read_text(__package__ or "pysandboxes", "modules_blacklist.txt").split())
+# Modules an evaluated fragment has no legitimate reason to reach, on top of
+# whatever `guard_import` already flags. The threshold is not the same on both
+# sides and must not be aligned: a whole application imports `os` as a matter
+# of course, while a sub-language computing over supplied data never needs it.
+# So `eval-import` warns about strictly more than `python-import`, never less.
+_EVAL_WARNED_MODULES = frozenset({"os", "sys", "socket", "builtins", "shutil"})
+
+# Read rather than restated, so the shared half cannot drift: a module printed
+# under `# ⚠ Dangerous!` by one guard and passed over in silence by the other
+# reads as an oversight. Loaded at import time, before arming, so the read is
+# never charged to the user's own `python-import` rules.
+_WARNED_MODULES = (
+    frozenset(resources.read_text(__package__ or "pysandboxes", "modules_blacklist.txt").split()) | _EVAL_WARNED_MODULES
+)
 
 
 class Violation(NamedTuple):
@@ -150,11 +158,7 @@ class _Validator(ast.NodeVisitor):
                 node,
                 f"import {module!r} is not allowed",
                 f"eval-import={module}",
-                (
-                    f"{root} is one of the modules python-import itself flags as dangerous"
-                    if root in _WARNED_MODULES
-                    else ""
-                ),
+                f"{root} opens a route to the host process or its frames" if root in _WARNED_MODULES else "",
             )
 
     def visit_Import(self, node: ast.Import) -> None:
