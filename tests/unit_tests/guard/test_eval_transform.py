@@ -108,18 +108,34 @@ def test_an_import_outside_the_rule_is_refused() -> None:
     assert "eval-import=os" in violations[0].remedy
 
 
-def test_a_dangerous_import_is_flagged_with_the_same_list_as_guard_import() -> None:
-    """One list, read from the package, never a second copy kept in step by hand.
+def test_eval_warns_about_every_module_guard_import_warns_about() -> None:
+    """The shared half is read, never restated, so it cannot drift.
 
-    A module `guard_import` prints under `# ⚠ Dangerous!` and `eval-import`
-    passes over in silence reads as an oversight, so the two must not drift.
+    A module `guard_import` prints under `# ⚠ Dangerous!` while `eval-import`
+    passes over it in silence reads as an oversight.
     """
-    from pysandboxes.guard_import import resources as import_resources
+    from importlib import resources
 
-    blacklist = set(import_resources.read_text("pysandboxes", "modules_blacklist.txt").split())
-    assert _WARNED_MODULES == blacklist
-    violations = _check("import subprocess", syntax=_syntax("import"))
-    assert [v for v in violations if v.warning]
+    blacklist = set(resources.read_text("pysandboxes", "modules_blacklist.txt").split())
+    assert blacklist <= _WARNED_MODULES
+    assert [v for v in _check("import subprocess", syntax=_syntax("import")) if v.warning]
+
+
+def test_eval_warns_about_more_than_guard_import_does() -> None:
+    """Inclusion, not equality: the threshold differs on the two sides.
+
+    A whole application imports `os` as a matter of course and `guard_import`
+    classifies it as standard; a fragment computing over supplied data has no
+    such reason, so the warning must survive here even though the shared list
+    does not carry it.
+    """
+    from importlib import resources
+
+    blacklist = set(resources.read_text("pysandboxes", "modules_blacklist.txt").split())
+    assert {"os", "sys", "socket", "builtins", "shutil"} <= _WARNED_MODULES
+    assert not {"os", "sys"} & blacklist, "guard_import now flags these; drop them from the eval-only set"
+    for module in ("os", "sys", "socket"):
+        assert [v for v in _check(f"import {module}", syntax=_syntax("import")) if v.warning], module
 
 
 def test_a_declared_import_passes() -> None:
