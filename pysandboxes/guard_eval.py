@@ -52,10 +52,14 @@ CAPABILITY_BUILTINS = frozenset(
 STRONG_MODULES = frozenset({"os", "subprocess", "importlib", "ctypes", "socket", "posix", "nt", "_socket"})
 """Modules whose callables hand over the host.
 
-The implementation modules are named alongside the ones a reader would write:
-a C function reached as `os.listdir` reports `posix` (`nt` on Windows) as its
-`__module__`, and `socket.socket` reports `_socket`, so matching only the
-facade would grade the real capability as weak.
+Implementation modules are named alongside the facades a reader would write,
+because `__module__` reports where a callable was defined, not where it is
+reached. Measured on this interpreter: `os.listdir` and `os.system` report
+`posix`, so `os` alone would grade them weak. `subprocess`, `importlib`,
+`ctypes` and `socket` all report their facade and need no such twin. `nt` is
+the Windows counterpart of `posix`, untested here. `_socket` is listed
+because `_socket.socket` is a distinct object from `socket.socket` and
+reports `_socket`; the facade class itself reports `socket`.
 """
 
 # Matched on the name alone, deliberately, after two narrower tests failed:

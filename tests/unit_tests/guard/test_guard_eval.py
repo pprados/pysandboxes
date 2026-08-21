@@ -106,6 +106,8 @@ def test_a_module_is_a_strong_finding() -> None:
 
 
 def test_a_capability_builtin_is_a_strong_finding() -> None:
+    """A six-name sample. `test_every_capability_builtin_is_graded_strong` is
+    the one that binds: a sample this size passed while `open` was weak."""
     import builtins
 
     for name in ("getattr", "open", "eval", "type", "vars", "dir"):
@@ -142,12 +144,33 @@ def test_a_callable_from_a_strong_module_is_a_strong_finding() -> None:
 
 
 def test_a_c_implemented_callable_is_graded_by_its_real_module() -> None:
-    """`os.listdir.__module__` is `posix`, not `os`; `socket.socket` reports
-    `_socket`. Grading the facade alone would let the real capability through."""
-    import socket
+    """`__module__` names where a callable was defined, not where it is reached.
+
+    `os.listdir` reports `posix`, so listing the `os` facade alone would grade
+    the real capability weak. `_socket.socket` is a distinct object from
+    `socket.socket` and reports `_socket`.
+    """
+    import _socket
 
     assert os.listdir.__module__ in STRONG_MODULES
-    assert classify_context_value(socket.socket) == "strong"
+    assert classify_context_value(os.listdir) == "strong"
+    assert classify_context_value(os.system) == "strong"
+    assert classify_context_value(_socket.socket) == "strong"
+
+
+def test_the_facade_modules_need_no_implementation_twin() -> None:
+    """Measured, not assumed: only `os` delegates to a differently-named module.
+
+    This is the check that would catch a future CPython moving one of these
+    into a private module, which is how `os.listdir` slipped through as weak.
+    """
+    import ctypes
+    import importlib
+    import socket
+    import subprocess
+
+    for callable_under_test in (subprocess.run, importlib.import_module, ctypes.CDLL, socket.socket):
+        assert classify_context_value(callable_under_test) == "strong", callable_under_test
 
 
 def test_an_ordinary_callable_is_a_weak_finding() -> None:
