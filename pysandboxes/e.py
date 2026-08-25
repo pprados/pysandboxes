@@ -186,7 +186,15 @@ class EvalSyntaxRejected(SandBoxError, SyntaxError):
             offset: Column of the first violation.
             text: Source line the first violation sits on.
         """
-        super().__init__(message + "\n\n" + "\n".join(violations))
+        report = message + "\n\n" + "\n".join(violations)
+        super().__init__(report)
+        # `msg` is assigned explicitly because `super().__init__` never reaches
+        # `SyntaxError.__init__`: the MRO runs through `RuntimeError`, whose
+        # initializer is `BaseException`'s and only fills `args`. `msg` would
+        # stay None, and `SyntaxError.__str__` -- which is the `__str__` this
+        # class inherits -- would render the whole report as "None (line N)",
+        # hiding from `str(err)` the very violations the class exists to carry.
+        self.msg = report
         self.violations = violations
         self.lineno = lineno
         self.offset = offset
