@@ -2,10 +2,14 @@
 # License: Apache V2
 """Namespace construction, graded warnings, execution and learning."""
 
+import builtins
 import logging
 import os
+import pathlib
+import sysconfig
 import time
-from typing import Any, Iterator
+import types
+from typing import Any, Callable, Iterator
 
 import pytest  # type: ignore[import-untyped]
 
@@ -25,11 +29,24 @@ from pysandboxes.guard_eval import (
     resolve_profile,
     warn_about_context,
 )
+from pysandboxes.guard_api import SENSITIVE_API, _deactivate_guard_api
+from pysandboxes.guard_api import activate_guard as activate_api
+from pysandboxes.guard_api import arm as arm_api
+from pysandboxes.guard_api import parse_rules as parse_api_rules
+from pysandboxes.guard_eval import is_ambient, patch_rules
 from pysandboxes.immutable_dict import ImmutableDict
+from pysandboxes.sb_types import ConfigLine
 
 
 def _names(*allowed: str) -> NameSet:
     return NameSet(allow=frozenset(allowed), allow_patterns=(), deny=frozenset(), deny_patterns=())
+
+
+def _frame_with(filename: str) -> types.FrameType:
+    """Build a real frame whose code object carries `filename`."""
+    namespace: dict[str, object] = {}
+    exec(compile("def probe():\n    import sys\n    return sys._getframe()", filename, "exec"), namespace)  # noqa: S102
+    return namespace["probe"]()  # type: ignore[operator,no-any-return]
 
 
 @pytest.fixture(autouse=True)
@@ -413,3 +430,148 @@ def test_the_source_ref_carries_the_profile_name() -> None:
 
 def test_the_tag_prefix_is_what_compile_stamps() -> None:
     assert TAG_PREFIX == "<eval:"
+
+
+def _patched() -> dict[str, Callable[..., Any]]:
+    """Apply the guard_eval patch table to a throwaway namespace.
+
+    Typed as callables rather than `object`, so the calls below need no
+    `# type: ignore[operator]`: the table's values are what `patch_rules`
+    already declares them to be.
+    """
+    return {name: factory(getattr(builtins, name.split(".")[1])) for name, factory in patch_rules(False).items()}
+
+
+def test_dynamic_code_holds_exactly_three_names() -> None:
+    assert SENSITIVE_API["dynamic-code"] == ("builtins.eval", "builtins.exec", "builtins.compile")
+
+
+def test_dynamic_code_is_an_accepted_python_api_target() -> None:
+    errors: list[object] = []
+    rules, others = parse_api_rules(
+        [ConfigLine("python-api=ALLOW:dynamic-code", pathlib.Path("p"), 0)],
+        errors,  # type: ignore[arg-type]
+    )
+    assert not errors
+    assert rules and rules[0].target == "dynamic-code"
+
+
+def test_guard_api_does_not_patch_the_three_builtins() -> None:
+    from pysandboxes.guard_api import patch_rules as api_patch_rules
+
+    table = api_patch_rules(False)
+    assert not [key for key in table if key.startswith("builtins.")]
+
+
+def test_guard_eval_patches_exactly_the_three_builtins() -> None:
+    assert set(patch_rules(False)) == {"builtins.eval", "builtins.exec", "builtins.compile"}
+
+
+def test_an_unarmed_call_reaches_the_raw_builtin() -> None:
+    _deactivate_guard_api()
+    patched_eval = _patched()["builtins.eval"]
+    assert patched_eval("1 + 1") == 2
+
+
+def test_an_unarmed_bare_eval_still_sees_the_callers_locals() -> None:
+    """The wrapper is a frame between eval and its caller; it must not show."""
+    _deactivate_guard_api()
+    patched_eval = _patched()["builtins.eval"]
+    local_value = 41  # noqa: F841 - read by the evaluated source, which is the point
+    assert patched_eval("local_value + 1") == 42
+
+
+def test_an_armed_call_without_any_eval_key_is_refused() -> None:
+    from pysandboxes.e import RuleApiPermissionError
+
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    activate_guard(ImmutableDict({}))
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        with pytest.raises(RuleApiPermissionError, match="dynamic-code"):
+            patched_eval("1 + 1")
+    finally:
+        _deactivate_guard_api()
+
+
+def test_allow_dynamic_code_beats_a_declared_profile() -> None:
+    _deactivate_guard_api()
+    errors: list[object] = []
+    rules, _ = parse_api_rules(
+        [ConfigLine("python-api=ALLOW:dynamic-code", pathlib.Path("p"), 0)],
+        errors,  # type: ignore[arg-type]
+    )
+    activate_api(rules)
+    arm_api()
+    _activate(syntax=_syntax(), namespace="closed")
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        assert patched_eval("1 + 1") == 2
+    finally:
+        _deactivate_guard_api()
+
+
+def test_a_declared_profile_guards_an_armed_call() -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        assert patched_eval("40 + 2", {"__builtins__": {}}, {}) == 42
+        with pytest.raises(EvalSyntaxRejected):
+            patched_eval("[x for x in ()]", {"__builtins__": {}}, {})
+    finally:
+        _deactivate_guard_api()
+
+
+def test_a_stdlib_caller_is_ambient() -> None:
+    stdlib = pathlib.Path(sysconfig.get_paths()["stdlib"]) / "dataclasses.py"
+    assert is_ambient(_frame_with(str(stdlib)))
+
+
+def test_a_frozen_caller_is_ambient() -> None:
+    assert is_ambient(_frame_with("<frozen importlib._bootstrap>"))
+
+
+def test_a_site_packages_caller_is_ambient() -> None:
+    assert is_ambient(_frame_with("/x/.venv/lib/python3.13/site-packages/typing_inspection/a.py"))
+
+
+def test_the_guards_own_tag_is_never_ambient() -> None:
+    """Evaluated code must not re-enter unguarded."""
+    assert not is_ambient(_frame_with("<eval:llm>"))
+
+
+def test_application_source_is_not_ambient() -> None:
+    assert not is_ambient(_frame_with(str(pathlib.Path.cwd() / "samples" / "x" / "tools.py")))
+
+
+def test_the_sample_tools_are_not_ambient() -> None:
+    """Editable installs keep their real path, so the Task 14 sites stay guarded."""
+    path = pathlib.Path("samples/langchain-demo/langchain_demo/tools.py").resolve()
+    assert not is_ambient(_frame_with(str(path)))
+
+
+def test_dataclasses_still_works_under_an_armed_declared_profile() -> None:
+    """D5: the stdlib generates code with exec; refusing it refuses most programs."""
+    import dataclasses
+
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    saved = builtins.exec
+    builtins.exec = _patched()["builtins.exec"]  # type: ignore[assignment]
+    try:
+
+        @dataclasses.dataclass
+        class Point:
+            x: int = 0
+
+        assert Point(x=1).x == 1
+    finally:
+        builtins.exec = saved  # type: ignore[assignment]
+        _deactivate_guard_api()

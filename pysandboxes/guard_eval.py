@@ -23,19 +23,24 @@ not "restore" them:
 
 import ast
 import builtins
+import functools
 import logging
 import os
 import sys
+import sysconfig
 import threading
 import types
-from typing import Any, NoReturn, cast
+from pathlib import Path
+from typing import Any, Callable, NoReturn, cast
 
-from .e import EvalInterrupted
+from . import guard_api
+from .e import EvalInterrupted, RuleApiPermissionError
 from .eval_rules import EvalProfiles, EvalRules
 from .eval_runtime import HELPERS, EvalState, pop_state, push_state
 from .eval_transform import inject, raise_if_rejected, validate
 from .immutable_dict import ImmutableDict
 from .learning import is_learning_mode
+from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
 
@@ -454,6 +459,191 @@ def guarded_eval(
     source_ref = f"{TAG_PREFIX}{profile or 'default'}>"
     namespace = build_namespace(rules, caller_globals=None, names=names, from_wrapper=True)
     return run_guarded(source, rules, mode=mode, namespace=namespace, source_ref=source_ref)
+
+
+_STDLIB_ROOTS = tuple(
+    str(Path(path).resolve())
+    for path in (sysconfig.get_paths().get("stdlib"), sysconfig.get_paths().get("platstdlib"))
+    if path
+)
+_VENDOR_SEGMENTS = ("site-packages", "dist-packages")
+
+
+def is_ambient(frame: types.FrameType) -> bool:
+    """Return whether this call is the runtime generating its own code.
+
+    Measured on 3.13 for a single `pydantic.BaseModel` definition: 655
+    `compile` from `typing`, 116 `exec` from `importlib._bootstrap`, 50 from
+    `dataclasses`, 29 from `typing_inspection`, 18 `eval` from `collections`.
+    Routing those through phase 1 refuses them -- `dataclasses.__create_fn__`
+    builds a `FunctionDef` -- and refusing the `importlib` ones means no
+    module can be imported at all. Library code generation is therefore
+    exempt, and only the application's own call sites are guarded.
+
+    The discriminator is the caller's code object filename rather than its
+    module name: `__name__` is reachable from evaluated code, so
+    `eval(src, {"__name__": "dataclasses"})` would spoof a name-based
+    allowlist. A filename can only be chosen through `compile()`, which is
+    itself guarded and absent from the namespace under `closed`.
+
+    Args:
+        frame: The frame of the caller reaching a patched builtin.
+
+    Returns:
+        Whether the call comes from library or runtime code.
+    """
+    filename = frame.f_code.co_filename
+    if filename.startswith(TAG_PREFIX):
+        return False
+    if filename.startswith("<"):
+        return True
+    resolved = str(Path(filename).resolve())
+    if _STDLIB_ROOTS and resolved.startswith(_STDLIB_ROOTS):
+        return True
+    return any(segment in Path(resolved).parts for segment in _VENDOR_SEGMENTS)
+
+
+def _source_ref(frame: types.FrameType, profile: str) -> str:
+    """Return the `<eval:...>` filename `compile` stamps for this call."""
+    del frame
+    return f"{TAG_PREFIX}{profile or 'default'}>"
+
+
+def _call_site(frame: types.FrameType) -> str:
+    """Return `file.py:line` for the application frame making the call."""
+    return f"{Path(frame.f_code.co_filename).name}:{frame.f_lineno}"
+
+
+def _guarded_source(source: Any, qualname: str) -> str:
+    """Return the source string, or refuse a code object the guard did not make.
+
+    A code object cannot be validated after the fact. Guarded `compile` stamps
+    its output with the `<eval:` filename, and only that stamp is accepted
+    here.
+
+    Args:
+        source: What the caller passed as the first argument.
+        qualname: The patched builtin, for the refusal message.
+
+    Returns:
+        The source text, or `""` for a code object the guard itself produced.
+
+    Raises:
+        RuleApiPermissionError: A code object of unknown provenance.
+    """
+    if isinstance(source, str):
+        return source
+    if isinstance(source, (bytes, bytearray)):
+        return source.decode("utf-8", errors="replace")
+    if getattr(source, "co_filename", "").startswith(TAG_PREFIX):
+        return ""
+    raise RuleApiPermissionError(f"{qualname} on a code object the guard did not produce", "python-api=ALLOW")
+
+
+def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Callable[..., Any]:
+    """Wrap `builtins.eval` or `builtins.exec`.
+
+    Precedence, written once, here, and nowhere else:
+    unarmed, then ambient, then `python-api=ALLOW:dynamic-code`, then a
+    declared profile, then refusal.
+
+    Args:
+        func: The original builtin.
+        qualname: Its dotted name, for refusals and `is_allowed`.
+        mode: `"eval"` or `"exec"`.
+
+    Returns:
+        The replacement callable.
+    """
+    if getattr(func, "__pysandbox_eval__", False):
+        return func
+
+    @functools.wraps(func)
+    def wrapper(
+        source: Any,
+        globals_: dict[str, Any] | None = None,
+        locals_: Any = None,
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        frame = sys._getframe(1)
+        # eval() with no globals resolves in the frame of *its* caller, which
+        # once wrapped is this wrapper. Reconstruct before delegating.
+        raw_globals = globals_ if globals_ is not None else frame.f_globals
+        raw_locals = locals_ if locals_ is not None else (frame.f_locals if globals_ is None else raw_globals)
+        if not guard_api.is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
+            return func(source, raw_globals, raw_locals, *args, **kwargs)
+        rules = _profiles.get("")
+        if rules is None or not rules.declared:
+            raise RuleApiPermissionError(qualname, "dynamic-code")
+        if rules.namespace == "caller":
+            # Honouring the caller's namespace means honouring CPython's
+            # injection, which means not rewriting: injected __sb_getattr__
+            # calls into a namespace without the helpers would raise
+            # NameError on the first attribute read. The debugging escape
+            # hatch is therefore a straight passthrough.
+            return func(source, raw_globals, raw_locals, *args, **kwargs)
+        text = _guarded_source(source, qualname)
+        if not text:
+            return func(source, raw_globals, raw_locals, *args, **kwargs)
+        if globals_ is not None and rules.namespace == "adaptive":
+            warn_about_context(globals_, _call_site(frame))
+        namespace = build_namespace(rules, caller_globals=globals_, names=None, from_wrapper=False)
+        return run_guarded(text, rules, mode=mode, namespace=namespace, source_ref=_source_ref(frame, ""))
+
+    wrapper.__pysandbox_eval__ = True  # type: ignore[attr-defined]
+    return wrapper
+
+
+def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap `builtins.compile`, stamping guarded output with the `<eval:` tag.
+
+    Args:
+        func: The original builtin.
+
+    Returns:
+        The replacement callable.
+    """
+    if getattr(func, "__pysandbox_eval__", False):
+        return func
+
+    @functools.wraps(func)
+    def wrapper(source: Any, filename: Any = "<string>", mode: Any = "exec", /, *args: Any, **kwargs: Any) -> Any:
+        frame = sys._getframe(1)
+        if not guard_api.is_armed() or is_ambient(frame) or guard_api.is_allowed("builtins.compile"):
+            return func(source, filename, mode, *args, **kwargs)
+        rules = _profiles.get("")
+        if rules is None or not rules.declared:
+            raise RuleApiPermissionError("builtins.compile", "dynamic-code")
+        if rules.namespace == "caller":
+            return func(source, filename, mode, *args, **kwargs)
+        text = _guarded_source(source, "builtins.compile")
+        ref = _source_ref(frame, "")
+        tree = ast.parse(text, filename=ref, mode=mode if mode in ("eval", "exec") else "exec")
+        raise_if_rejected(ref, text, validate(tree, rules))
+        return func(cast("ast.Module | ast.Expression", inject(tree)), ref, mode, *args, **kwargs)
+
+    wrapper.__pysandbox_eval__ = True  # type: ignore[attr-defined]
+    return wrapper
+
+
+def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
+    """Return the patch table for the three dynamic-code builtins.
+
+    Args:
+        learn: Accepted for symmetry with the other guards; the decision is a
+            rule lookup made at call time, not at patch time.
+
+    Returns:
+        The patch table, keyed by dotted name.
+    """
+    del learn
+    return {
+        "builtins.eval": _f(_wrap_eval_like, qualname="builtins.eval", mode="eval"),
+        "builtins.exec": _f(_wrap_eval_like, qualname="builtins.exec", mode="exec"),
+        "builtins.compile": _f(_wrap_compile),
+    }
 
 
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:

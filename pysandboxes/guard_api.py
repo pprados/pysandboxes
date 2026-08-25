@@ -182,6 +182,17 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "gc.get_referrers",
         "faulthandler.enable",
     ),
+    # Registered so python-api=ALLOW:dynamic-code stays an expressible escape
+    # hatch, but patched by guard_eval rather than here: the guarded path
+    # parses, validates and rewrites the source instead of answering a binary
+    # allow/deny. Three names, not the six of the design spec: __import__ is
+    # guard_import's, and code.compile_command / InteractiveInterpreter
+    # .runsource reach these three anyway.
+    "dynamic-code": (
+        "builtins.eval",
+        "builtins.exec",
+        "builtins.compile",
+    ),
 }
 
 CATEGORIES: frozenset[str] = frozenset(SENSITIVE_API)
@@ -408,7 +419,7 @@ def is_armed() -> bool:
     return _armed
 
 
-_WARN_CATEGORIES = ("process-exec", "privileges", "native")
+_WARN_CATEGORIES = ("process-exec", "privileges", "native", "dynamic-code")
 
 _CATEGORY_HELP: dict[str, str] = {
     "process-exec": "runs code outside the patched interpreter",
@@ -417,6 +428,7 @@ _CATEGORY_HELP: dict[str, str] = {
     "threads": "concurrency primitives",
     "native": "native code and arbitrary memory access",
     "introspection": "can be used to undo the patches",
+    "dynamic-code": "runs code built at runtime from a string, unguarded",
 }
 
 
@@ -487,6 +499,12 @@ _PATCH_TARGET: dict[str, str] = {
     "ctypes.CDLL": "ctypes.CDLL.__init__",
 }
 
+# guard_eval patches these three itself: the guarded path parses and rewrites
+# the source, which a binary allow/deny cannot express. Deliberately NOT
+# folded into _not_applicable(): that set is also subtracted in
+# generate_rules(), and learning must keep emitting a dynamic-code line.
+_OWNED_ELSEWHERE = frozenset(SENSITIVE_API["dynamic-code"])
+
 
 def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
     """Return the patch table for every registered function.
@@ -504,7 +522,7 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
             category=category,
         )
         for qualname, category in _CATEGORY_OF.items()
-        if qualname not in skip
+        if qualname not in skip and qualname not in _OWNED_ELSEWHERE
     }
 
 
