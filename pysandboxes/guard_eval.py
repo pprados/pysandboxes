@@ -35,11 +35,11 @@ from typing import Any, Callable, NoReturn, cast
 
 from . import guard_api
 from .e import EvalInterrupted, RuleApiPermissionError
-from .eval_rules import EvalProfiles, EvalRules
+from .eval_rules import EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
 from .eval_runtime import HELPERS, EvalState, pop_state, push_state
-from .eval_transform import inject, raise_if_rejected, validate
+from .eval_transform import inject, learn_targets, raise_if_rejected, validate
 from .immutable_dict import ImmutableDict
-from .learning import is_learning_mode
+from .learning import add_learning_rule, is_learning_mode
 from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
@@ -391,8 +391,8 @@ def run_guarded(
     state = EvalState(rules, learn=learn)
     violations = validate(tree, rules)
     if learn:
-        for violation in violations:
-            logger.debug("guard_eval learn: %s", violation.message)
+        for key, name in learn_targets(violations):
+            add_learning_rule(LearnEvalRule(key, name))
     else:
         raise_if_rejected(source_ref, source, violations)
     # `inject` is typed `ast.AST` because it transforms any node; what comes
@@ -422,6 +422,13 @@ def run_guarded(
         raise EvalInterrupted(f"eval-timeout={rules.timeout}s exhausted, and the worker did not stop")
     if "error" in box:
         _reraise_from_worker(box["error"])
+    if learn:
+        # Recorded after the run, not during validation: these are names the
+        # source reached at runtime, which no static pass can enumerate.
+        for name in state.attributes:
+            add_learning_rule(LearnEvalRule("eval-attribute", name))
+        for name in state.magic:
+            add_learning_rule(LearnEvalRule("eval-magic", name))
     return box.get("result")
 
 
@@ -589,6 +596,7 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
             return func(source, raw_globals, raw_locals, *args, **kwargs)
         if globals_ is not None and rules.namespace == "adaptive":
             warn_about_context(globals_, _call_site(frame))
+            add_learning_rule(LearnEvalContext(_call_site(frame)))
         namespace = build_namespace(rules, caller_globals=globals_, names=None, from_wrapper=False)
         return run_guarded(text, rules, mode=mode, namespace=namespace, source_ref=_source_ref(frame, ""))
 

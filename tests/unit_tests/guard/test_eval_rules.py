@@ -22,6 +22,9 @@ from pysandboxes.eval_rules import (
     DEFAULT_RULES,
     EMPTY_NAMES,
     SYNTAX_GROUPS,
+    LearnEvalContext,
+    LearnEvalRule,
+    generate_rules,
     EvalProfiles,
     EvalRules,
     NameSet,
@@ -366,3 +369,82 @@ def test_syntax_groups_only_name_real_ast_nodes() -> None:
     for nodes in SYNTAX_GROUPS.values():
         for node in nodes:
             assert hasattr(ast, node), node
+
+
+def test_learning_emits_nothing_when_nothing_was_observed() -> None:
+    assert generate_rules(set()) == []
+
+
+def test_learning_emits_the_observed_names() -> None:
+    observed = {
+        LearnEvalRule("eval-call", "len"),
+        LearnEvalRule("eval-call", "range"),
+        LearnEvalRule("eval-magic", "__name__"),
+    }
+    lines = generate_rules(observed)
+    assert "eval-call=len, range" in lines
+    # startswith, not equality: the runtime-observed keys carry a trailing
+    # warning comment on the same line.
+    assert any(line.startswith("eval-magic=__name__") for line in lines)
+
+
+def test_learning_condenses_a_group_only_when_it_is_complete() -> None:
+    complete = {LearnEvalRule("eval-syntax", node) for node in SYNTAX_GROUPS["loop"]}
+    assert "eval-syntax=loop" in generate_rules(complete)
+
+
+def test_learning_never_grants_more_than_it_saw() -> None:
+    partial = {LearnEvalRule("eval-syntax", "For"), LearnEvalRule("eval-syntax", "Break")}
+    lines = generate_rules(partial)
+    assert "eval-syntax=Break, For" in lines
+    assert "eval-syntax=loop" not in lines
+
+
+def test_learning_never_emits_a_pattern() -> None:
+    observed = {LearnEvalRule("eval-attribute", name) for name in ("get_a", "get_b", "get_c")}
+    lines = generate_rules(observed)
+    assert all("*" not in line for line in lines)
+    assert any(line.startswith("eval-attribute=get_a, get_b, get_c") for line in lines)
+
+
+def test_learning_marks_runtime_observed_attributes() -> None:
+    lines = generate_rules({LearnEvalRule("eval-attribute", "split")})
+    assert any("runtime-observed" in line for line in lines)
+
+
+def test_a_honoured_caller_context_suppresses_the_eval_call_line() -> None:
+    """Spec 10: a learned rule set is a sample, a caller context is intent."""
+    observed = {
+        LearnEvalRule("eval-syntax", "BinOp"),
+        LearnEvalRule("eval-call", "len"),
+        LearnEvalContext("tools.py:66"),
+    }
+    lines = generate_rules(observed)
+    assert not [line for line in lines if line.startswith("eval-call=")]
+    assert any("eval-call not emitted" in line for line in lines)
+    assert any("tools.py:66" in line for line in lines)
+    assert any("eval-namespace=closed" in line for line in lines)
+    assert "eval-syntax=BinOp" in lines
+
+
+def test_without_a_caller_context_the_eval_call_line_is_emitted() -> None:
+    lines = generate_rules({LearnEvalRule("eval-call", "len")})
+    assert "eval-call=len" in lines
+
+
+def test_the_template_carries_the_learning_block() -> None:
+    from importlib import resources
+
+    with resources.as_file(resources.files("pysandboxes.templates") / "py-sandbox.template") as path:
+        text = path.read_text()
+    assert "# <learning_guard_eval>" in text
+    assert "# </learning_guard_eval>" in text
+
+
+def test_learning_is_wired_into_the_replaces_table() -> None:
+    import inspect
+
+    from pysandboxes import learning
+
+    source = inspect.getsource(learning.generate_config_from_learning)
+    assert "learning_guard_eval" in source

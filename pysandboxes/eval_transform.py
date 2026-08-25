@@ -335,3 +335,29 @@ def inject(tree: ast.AST) -> ast.AST:
     transformed = _Injector().visit(tree)
     ast.fix_missing_locations(transformed)
     return transformed
+
+
+def learn_targets(violations: list[Violation]) -> list[tuple[str, str]]:
+    """Turn refusals into `(key, name)` pairs learning can emit.
+
+    `Violation.remedy` is by contract either `<key>=<value>`, optionally
+    followed by two spaces and a parenthetical, or a prose sentence with no
+    `=` at all -- the reserved-prefix and attribute-store refusals, which no
+    rule can grant. Only the five list keys are kept, so an
+    `eval-max-nodes=...` remedy is never mistaken for a rule.
+
+    Args:
+        violations: What `validate` returned.
+
+    Returns:
+        One `(key, name)` pair per refusal a list key could grant.
+    """
+    from .eval_rules import LIST_KEYS
+
+    targets: list[tuple[str, str]] = []
+    for violation in violations:
+        head = violation.remedy.split("  ", maxsplit=1)[0].strip()
+        key, sep, name = head.partition("=")
+        if sep and key in LIST_KEYS and name:
+            targets.append((key, name))
+    return targets
