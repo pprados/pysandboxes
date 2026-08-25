@@ -226,6 +226,29 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # </learning_guard_api>
 
 #######################################################################################
+# DYNAMICALLY EVALUATED CODE (eval-*)
+# ===================================
+# eval(), exec() and compile() run a string the program built at runtime, which
+# is exactly the shape of a model's answer. Without a single eval-* key the
+# three are refused; with at least one, the source is parsed, checked against
+# the sub-language these keys describe, and rewritten so the remaining risks
+# are enforced while it runs.
+#
+# Deny-all as everywhere else: `1 + 1` needs eval-syntax=arith, `len(x)` needs
+# eval-call=len, `"a".split()` needs eval-attribute=split. A calculator tool
+# handling model output wants:
+#
+#   eval-namespace=closed
+#   eval-syntax=arith, compare
+#   eval-timeout=2s
+#
+# The escape hatch, for code that must keep the old unguarded behaviour, is
+# python-api=ALLOW:dynamic-code -- and it is exactly as wide as it sounds.
+# <learning_guard_eval>
+
+# </learning_guard_eval>
+
+#######################################################################################
 # OS PROVIDER PARAMETERS (os-sandbox=…)
 # ======================================
 # Lines below apply only when os-sandbox matches that provider. Syntax is always

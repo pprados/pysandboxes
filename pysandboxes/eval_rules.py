@@ -13,7 +13,7 @@ import difflib
 import logging
 import re
 from datetime import date, datetime, time, timedelta
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from .immutable_dict import ImmutableDict
 from .main_logger import ErrorMsg, format_ruleref
@@ -404,3 +404,93 @@ def parse_rules(
         else:
             _add_error(errors, rule, f"unknown key {key!r}{_suggest(key, sorted(LIST_KEYS) + list(SCALAR_KEYS))}.")
     return ImmutableDict({name: acc.build() for name, acc in accumulators.items()}), others
+
+
+class LearnEvalRule(NamedTuple):
+    """One construct the evaluated code needed, observed in learning mode.
+
+    Attributes:
+        key: The list key that would grant it, e.g. `eval-call`.
+        name: The exact token, never a pattern.
+    """
+
+    key: str
+    name: str
+
+
+class LearnEvalContext(NamedTuple):
+    """A call site whose own context was honoured by `eval-namespace=adaptive`.
+
+    Attributes:
+        call_site: Where the application called `eval`, e.g. `tools.py:66`.
+    """
+
+    call_site: str
+
+
+_RUNTIME_OBSERVED = ("eval-attribute", "eval-magic")
+
+_EMIT_ORDER = ("eval-syntax", "eval-import", "eval-call", "eval-attribute", "eval-magic")
+
+
+def _condense_syntax(names: set[str]) -> list[str]:
+    """Replace a group's nodes by the group name, only when all were seen.
+
+    Learning must never grant more than it observed: a partially exercised
+    group stays spelled out node by node.
+
+    Args:
+        names: The AST node names observed.
+
+    Returns:
+        Group names for the groups fully covered, then the leftover nodes.
+    """
+    remaining = set(names)
+    tokens: list[str] = []
+    for group, nodes in SYNTAX_GROUPS.items():
+        if set(nodes) <= remaining:
+            tokens.append(group)
+            remaining -= set(nodes)
+    return sorted(tokens) + sorted(remaining)
+
+
+def generate_rules(learn: set[Any]) -> list[str]:
+    """Emit the `eval-*` lines for what the evaluated code actually needed.
+
+    Never a pattern: generalising from a sample is precisely what learning
+    must not do.
+
+    Args:
+        learn: The learning set, holding `LearnEvalRule` and
+            `LearnEvalContext` entries among the other guards'.
+
+    Returns:
+        The lines for the `<learning_guard_eval>` block, empty when nothing
+        was observed.
+    """
+    observed: dict[str, set[str]] = {}
+    sites: set[str] = set()
+    for entry in learn:
+        if isinstance(entry, LearnEvalRule):
+            observed.setdefault(entry.key, set()).add(entry.name)
+        elif isinstance(entry, LearnEvalContext):
+            sites.add(entry.call_site)
+    if not observed and not sites:
+        return []
+    lines: list[str] = []
+    for key in _EMIT_ORDER:
+        names = observed.get(key)
+        if key == "eval-call" and sites:
+            # The namespace came from the call site, so eval-call was never
+            # consulted: emitting it would produce rules that are at once
+            # unused and misleading -- a reader would take them for the
+            # reachable surface.
+            lines.append("# eval-call not emitted: the namespace came from the call site")
+            lines.append(f"#   ({', '.join(sorted(sites))}). Set eval-namespace=closed to declare it here.")
+            continue
+        if not names:
+            continue
+        tokens = _condense_syntax(names) if key == "eval-syntax" else sorted(names)
+        suffix = "                    # ⚠ runtime-observed" if key in _RUNTIME_OBSERVED else ""
+        lines.append(f"{key}={', '.join(tokens)}{suffix}")
+    return lines
