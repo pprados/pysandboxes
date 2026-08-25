@@ -4,19 +4,28 @@
 
 import logging
 import os
+import time
 from typing import Any, Iterator
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.eval_rules import DEFAULT_RULES, NameSet
+from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, SandBoxError
+from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, NameSet
 from pysandboxes.guard_eval import (
     CAPABILITY_BUILTINS,
     STRONG_MODULES,
+    TAG_PREFIX,
+    _deactivate_guard_eval,
     _reset_context_warnings,
+    activate_guard,
     build_namespace,
     classify_context_value,
+    guarded_eval,
+    leaked_threads,
+    resolve_profile,
     warn_about_context,
 )
+from pysandboxes.immutable_dict import ImmutableDict
 
 
 def _names(*allowed: str) -> NameSet:
@@ -252,3 +261,155 @@ def test_builtins_is_never_itself_reported(caplog: pytest.LogCaptureFixture) -> 
     with caplog.at_level("WARNING", logger="pysandboxes.guard_eval"):
         warn_about_context({"__builtins__": {}}, "tools.py:66")
     assert not caplog.records
+
+
+def _syntax(*groups: str) -> NameSet:
+    nodes = set(CORE_NODES)
+    for group in groups:
+        nodes.update(SYNTAX_GROUPS[group])
+    return NameSet(allow=frozenset(nodes), allow_patterns=(), deny=frozenset(), deny_patterns=())
+
+
+def _activate(**kwargs: object) -> None:
+    rules = DEFAULT_RULES._replace(declared=True, **kwargs)  # type: ignore[arg-type]
+    activate_guard(ImmutableDict({"": rules}))
+
+
+@pytest.fixture(autouse=True)
+def _clean_guard() -> Iterator[None]:
+    yield
+    _deactivate_guard_eval()
+
+
+def test_a_calculator_profile_evaluates_arithmetic() -> None:
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    assert guarded_eval("40 + 2") == 42
+
+
+def test_a_refused_construct_raises_with_the_full_report() -> None:
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    with pytest.raises(EvalSyntaxRejected) as caught:
+        guarded_eval("[x for x in ()]")
+    assert "eval-syntax=comprehension" in str(caught.value)
+
+
+def test_a_native_syntax_error_propagates_as_itself() -> None:
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    with pytest.raises(SyntaxError) as caught:
+        guarded_eval("1 +")
+    assert not isinstance(caught.value, EvalSyntaxRejected)
+
+
+def test_names_are_merged_into_the_namespace() -> None:
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    assert guarded_eval("data + 1", names={"data": 41}) == 42
+
+
+def test_an_unknown_profile_is_an_error_not_a_silent_fallback() -> None:
+    _activate(syntax=_syntax("arith"))
+    with pytest.raises(ValueError, match="llm"):
+        resolve_profile("llm")
+
+
+def test_a_known_profile_resolves() -> None:
+    activate_guard(
+        ImmutableDict(
+            {
+                "": DEFAULT_RULES._replace(declared=True, timeout=5.0),
+                "llm": DEFAULT_RULES._replace(declared=True, timeout=2.0),
+            }
+        )
+    )
+    assert resolve_profile("llm").timeout == 2.0
+
+
+def test_a_timeout_interrupts_the_evaluation() -> None:
+    _activate(syntax=_syntax("loop"), namespace="closed", timeout=0.3, max_iterations=10**9)
+    started = time.monotonic()
+    with pytest.raises(EvalInterrupted, match="eval-timeout"):
+        guarded_eval("while True:\n    pass", mode="exec")
+    assert time.monotonic() - started < 3.0
+
+
+def test_a_timeout_actually_kills_the_worker_thread() -> None:
+    """A thread-local flag would leave the worker spinning forever (D4)."""
+    _activate(syntax=_syntax("loop"), namespace="closed", timeout=0.3, max_iterations=10**9)
+    before = leaked_threads()
+    with pytest.raises(EvalInterrupted):
+        guarded_eval("while True:\n    pass", mode="exec")
+    time.sleep(0.5)
+    assert leaked_threads() == before
+
+
+def test_the_iteration_budget_interrupts_a_loop() -> None:
+    _activate(syntax=_syntax("loop"), namespace="closed", max_iterations=100, timeout=30.0)
+    with pytest.raises(EvalInterrupted, match="eval-max-iterations=100"):
+        guarded_eval("while True:\n    pass", mode="exec")
+
+
+def test_an_interruption_is_not_catchable_from_inside() -> None:
+    """EvalInterrupted derives from BaseException only, on purpose."""
+    _activate(
+        syntax=_syntax("loop", "exception"),
+        namespace="closed",
+        max_iterations=50,
+        timeout=30.0,
+    )
+    source = "while True:\n    try:\n        pass\n    except Exception:\n        pass"
+    with pytest.raises(EvalInterrupted):
+        guarded_eval(source, mode="exec")
+
+
+def test_except_sandbox_error_does_not_catch_a_timeout() -> None:
+    _activate(syntax=_syntax("loop"), namespace="closed", max_iterations=10, timeout=30.0)
+    with pytest.raises(EvalInterrupted):
+        try:
+            guarded_eval("while True:\n    pass", mode="exec")
+        except SandBoxError:  # pragma: no cover - must not fire
+            pytest.fail("SandBoxError caught an EvalInterrupted")
+
+
+def test_an_exception_from_inside_reaches_the_caller() -> None:
+    _activate(syntax=_syntax("arith"), namespace="closed", call=_names("int"))
+    with pytest.raises(ValueError):
+        guarded_eval("int('zz')")
+
+
+def test_the_worker_frame_is_absent_from_the_traceback() -> None:
+    """The call looks synchronous, so its traceback must read that way.
+
+    The exception is raised in another thread and carries that thread's
+    traceback across. Without the elision, `_worker` -- a frame the caller
+    never wrote -- sits between the caller and the evaluated line.
+
+    The assertion matches the rendered frame line, `, in _worker\\n`, and not
+    the bare name: a traceback also renders the frames of this test and of
+    `_reraise_from_worker`, both of which contain `_worker` as a substring, so
+    a substring check would fail while the elision worked.
+    """
+    import traceback as traceback_module
+
+    _activate(syntax=_syntax("arith"), namespace="closed", call=_names("int"))
+    with pytest.raises(ValueError) as caught:
+        guarded_eval("int('zz')")
+    rendered = "".join(traceback_module.format_tb(caught.value.__traceback__))
+    assert ", in _worker\n" not in rendered
+    assert "<eval:" in rendered
+
+
+def test_a_timeout_points_at_the_line_that_was_running() -> None:
+    """EvalInterrupted crosses the same boundary as any other exception."""
+    _activate(syntax=_syntax("loop"), namespace="closed", timeout=0.3, max_iterations=10**9)
+    with pytest.raises(EvalInterrupted) as caught:
+        guarded_eval("while True:\n    pass", mode="exec")
+    assert caught.value.__traceback__ is not None
+
+
+def test_the_source_ref_carries_the_profile_name() -> None:
+    activate_guard(ImmutableDict({"llm": DEFAULT_RULES._replace(declared=True, syntax=_syntax())}))
+    with pytest.raises(EvalSyntaxRejected, match=r"<eval:llm>"):
+        guarded_eval("1 + 1", profile="llm")
+
+
+def test_the_tag_prefix_is_what_compile_stamps() -> None:
+    assert TAG_PREFIX == "<eval:"

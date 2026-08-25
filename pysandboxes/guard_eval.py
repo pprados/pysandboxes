@@ -21,13 +21,21 @@ not "restore" them:
   is the debugging escape hatch and does honour injection, warned at load.
 """
 
+import ast
 import builtins
 import logging
+import os
+import sys
+import threading
 import types
-from typing import Any
+from typing import Any, NoReturn, cast
 
-from .eval_rules import EvalRules
-from .eval_runtime import HELPERS
+from .e import EvalInterrupted
+from .eval_rules import EvalProfiles, EvalRules
+from .eval_runtime import HELPERS, EvalState, pop_state, push_state
+from .eval_transform import inject, raise_if_rejected, validate
+from .immutable_dict import ImmutableDict
+from .learning import is_learning_mode
 
 logger = logging.getLogger(__name__)
 
@@ -222,3 +230,237 @@ def build_namespace(
     if names:
         namespace.update(names)
     return namespace
+
+
+TAG_PREFIX = "<eval:"
+"""Filename prefix guarded `compile` stamps, and guarded `exec` requires."""
+
+_JOIN_GRACE = 0.5
+"""Seconds given to a worker to notice its flag before it is called leaked."""
+
+_profiles: EvalProfiles = ImmutableDict({})
+_leaked: int = 0
+_leak_lock = threading.Lock()
+
+
+def activate_guard(profiles: EvalProfiles, *, learn: bool = False) -> None:
+    """Install the parsed profiles, just like the other guards.
+
+    Args:
+        profiles: The parsed `eval-*` profiles, keyed by profile name.
+        learn: Accepted for symmetry with the other guards' signatures but not
+            stored: `learning.is_learning_mode()` is the single source of
+            truth, the same one `add_learning_rule` consults. A local copy that
+            drifted from it would make `run_guarded` record instead of refuse
+            while `add_learning_rule` silently dropped everything.
+    """
+    global _profiles
+    del learn
+    _profiles = profiles
+    logger.debug("guard_eval: %d profile(s)", len(profiles))
+
+
+def leaked_threads() -> int:
+    """Return how many uncooperative workers are still burning CPU."""
+    return _leaked
+
+
+def resolve_profile(profile: str) -> EvalRules:
+    """Return the rules for `profile`.
+
+    Args:
+        profile: The profile name, `""` for the default one.
+
+    Returns:
+        The resolved rules.
+
+    Raises:
+        ValueError: The profile is named in the call but absent from the
+            configuration. A silent fallback to the default would hand model
+            output the wider rule set the call site was trying to avoid.
+    """
+    rules = _profiles.get(profile)
+    if rules is None:
+        raise ValueError(f"unknown eval profile {profile!r}, configured: {sorted(_profiles) or ['(none)']}")
+    return rules
+
+
+def _worker(code: Any, mode: str, namespace: dict[str, Any], state: EvalState, box: dict[str, Any]) -> None:
+    """Run the compiled code on the worker thread, relaying its outcome."""
+    push_state(state)
+    try:
+        if mode == "eval":
+            box["result"] = eval(code, namespace)  # noqa: S307 - guarded source, bounded namespace
+        else:
+            exec(code, namespace)  # noqa: S102 - guarded source, bounded namespace
+    except BaseException as err:  # noqa: BLE001 - relayed verbatim to the caller
+        box["error"] = err
+    finally:
+        pop_state()
+
+
+def _reraise_from_worker(err: BaseException) -> NoReturn:
+    """Re-raise a worker's exception so the traceback reads as one thread.
+
+    Annotated `NoReturn`, not `None`: mypy accepts either here, but `NoReturn`
+    states that the call in `run_guarded` is terminal, so a reader does not
+    have to check whether execution can fall through to the `return` below it.
+
+    The exception crosses a thread boundary carrying the worker's own
+    traceback, whose first entry is `_worker` -- an implementation frame the
+    caller has no use for and did not write. Dropping that one entry leaves the
+    evaluated source as the innermost frame, which is what a caller expects
+    from a call that looks synchronous.
+
+    What deliberately stays: this frame and the `run_guarded` frame the raise
+    adds, because both belong to the calling thread's own stack, and the
+    `<eval:...>` frames,
+    because they are the point of the whole design -- `compile` stamped that
+    name so a traceback from evaluated code names the profile it ran under.
+
+    `EvalInterrupted` travels the same path, so a timeout also points at the
+    line the source was executing when the watchdog fired.
+
+    Args:
+        err: The exception the worker caught.
+
+    Raises:
+        BaseException: `err` itself, with the `_worker` frame elided.
+    """
+    traceback = err.__traceback__
+    raise err.with_traceback(traceback.tb_next if traceback is not None and traceback.tb_next else traceback)
+
+
+def _interrupt(state: EvalState, timeout: float) -> None:
+    """Flip the shared state from the watchdog thread.
+
+    `EvalState` is a plain object, never a `threading.local()` belonging to
+    the worker: the watchdog must be able to write it, and a thread-local
+    would fail silently -- the caller would get its exception while the worker
+    ran forever.
+
+    Args:
+        state: The budget object the worker's helpers read on every tick.
+        timeout: The elapsed budget, named in the refusal message.
+    """
+    state.interrupted = True
+    state.reason = f"eval-timeout={timeout}s"
+
+
+def run_guarded(
+    source: str,
+    rules: EvalRules,
+    *,
+    mode: str,
+    namespace: dict[str, Any],
+    source_ref: str,
+) -> Any:
+    """Validate, rewrite, and run `source` under the profile's budgets.
+
+    Args:
+        source: The evaluated source.
+        rules: The resolved profile.
+        mode: `"eval"` or `"exec"`.
+        namespace: What `build_namespace` returned.
+        source_ref: How the source is named in tracebacks.
+
+    Returns:
+        The value of the expression for `"eval"`, None for `"exec"`.
+
+    Raises:
+        SyntaxError: The source does not parse; propagated as CPython raised it.
+        EvalSyntaxRejected: The source leaves the sub-language.
+        EvalInterrupted: A budget or the timeout ran out.
+        Exception: Whatever the evaluated code itself raised.
+    """
+    # `global` is a function-scope directive: reading `_leaked` before
+    # declaring it is a SyntaxError, so the declaration comes first.
+    global _leaked
+    learn = is_learning_mode()
+    if _leaked >= rules.max_leaked_threads:
+        raise EvalInterrupted(
+            f"eval-max-leaked-threads={rules.max_leaked_threads} reached: "
+            "earlier evaluations blocked in a C call and are still running"
+        )
+    tree = ast.parse(source, filename=source_ref, mode=mode)
+    state = EvalState(rules, learn=learn)
+    violations = validate(tree, rules)
+    if learn:
+        for violation in violations:
+            logger.debug("guard_eval learn: %s", violation.message)
+    else:
+        raise_if_rejected(source_ref, source, violations)
+    # `inject` is typed `ast.AST` because it transforms any node; what comes
+    # back here is whatever `ast.parse` built for `mode` -- a `Module` for
+    # "exec", an `Expression` for "eval" -- and `compile` accepts either.
+    code = compile(cast("ast.Module | ast.Expression", inject(tree)), source_ref, mode)
+    box: dict[str, Any] = {}
+    worker = threading.Thread(
+        target=_worker,
+        args=(code, mode, namespace, state, box),
+        name=f"guard_eval{source_ref}",
+        daemon=True,
+    )
+    watchdog = threading.Timer(rules.timeout, _interrupt, args=(state, rules.timeout))
+    watchdog.start()
+    worker.start()
+    worker.join(rules.timeout + _JOIN_GRACE)
+    watchdog.cancel()
+    if worker.is_alive():
+        # A blocking C call never returns to a tick. The caller gets its
+        # exception; the thread keeps burning CPU, cumulatively across calls.
+        # The real guarantee is the OS layer, where a timeout is a process
+        # kill. Documented as a limit, not presented as covered.
+        with _leak_lock:
+            _leaked += 1
+        logger.warning("guard_eval: %s did not stop; %d leaked thread(s)", source_ref, _leaked)
+        raise EvalInterrupted(f"eval-timeout={rules.timeout}s exhausted, and the worker did not stop")
+    if "error" in box:
+        _reraise_from_worker(box["error"])
+    return box.get("result")
+
+
+def guarded_eval(
+    source: str,
+    *,
+    profile: str = "",
+    names: dict[str, Any] | None = None,
+    mode: str = "eval",
+) -> Any:
+    """Evaluate `source` under a declared sub-language.
+
+    Choosing this entry point over the patched builtin is itself the statement
+    of intent, which is why `eval-namespace` does not apply to it: `names` is
+    wrapper-supplied data merged into a namespace built from `eval-call`,
+    never used in place of one.
+
+    Args:
+        source: The code to evaluate.
+        profile: Which `eval-*` profile to apply, `""` for the default one.
+        names: Data bound into the namespace.
+        mode: `"eval"` for an expression, `"exec"` for statements.
+
+    Returns:
+        The value of the expression, or None in `"exec"` mode.
+
+    Raises:
+        ValueError: `profile` is not configured.
+        EvalSyntaxRejected: The source leaves the sub-language.
+        EvalInterrupted: A budget or the timeout ran out. Note that this does
+            **not** derive from `SandBoxError`, so `except SandBoxError:` will
+            not catch it.
+    """
+    rules = resolve_profile(profile)
+    source_ref = f"{TAG_PREFIX}{profile or 'default'}>"
+    namespace = build_namespace(rules, caller_globals=None, names=names, from_wrapper=True)
+    return run_guarded(source, rules, mode=mode, namespace=namespace, source_ref=source_ref)
+
+
+if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+
+    def _deactivate_guard_eval() -> None:
+        """Reset the guard between tests."""
+        global _profiles, _leaked
+        _profiles = ImmutableDict({})
+        _leaked = 0
+        _reset_context_warnings()
