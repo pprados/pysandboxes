@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 import code
+import contextlib
 import importlib
 import importlib.util
 import logging
@@ -11,7 +12,7 @@ import sys
 import traceback
 from pathlib import Path
 from types import FrameType, ModuleType
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, Iterator, List, Set
 
 from pysandboxes.learning import (
     generate_config_from_learning,
@@ -27,6 +28,45 @@ from ..guard_api import arm, is_allowed
 from ..main_logger import config_log
 
 logger = logging.getLogger(__name__)
+
+# Captured at import time, which main_sandbox.py performs before
+# activate_sandboxes(), so these are the unpatched builtins. This is the
+# framework's own exemption from the dynamic-code category: running the user's
+# script IS python-sb's job, and requiring every profile to grant
+# `python-api=ALLOW:dynamic-code` so the framework can start would be a defect
+# by omission, not a safeguard. The exemption is by call site, never by
+# disabling the category.
+#
+# The ambient exemption does not cover this: in a development checkout this
+# file is neither under the stdlib nor under site-packages, so it is guarded
+# like any application file.
+_RAW_EXEC = exec
+_RAW_EVAL = eval
+_RAW_COMPILE = compile
+
+
+@contextlib.contextmanager
+def raw_builtins() -> Iterator[None]:
+    """Restore the unpatched eval/exec/compile for the duration of the block.
+
+    The interactive console executes what the developer types, through
+    IPython's run_cell or code.interact, both of which reach builtins.compile
+    and builtins.exec. A REPL is unguarded code execution by definition, so
+    this grants no privilege the prompt did not already have, while the file,
+    socket, import and environment rules still hold.
+
+    Yields:
+        None, with the three builtins restored for the block.
+    """
+    import builtins
+
+    saved = {name: getattr(builtins, name) for name in ("eval", "exec", "compile")}
+    builtins.eval, builtins.exec, builtins.compile = _RAW_EVAL, _RAW_EXEC, _RAW_COMPILE
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(builtins, name, value)
 
 
 def _debug_log() -> None:
@@ -122,83 +162,84 @@ def _python_interactive(
     prefix = "\u26a0 "
     banner_shown = False
 
-    try:
-        # IPython starts a history-saving thread, and prompt_toolkit a
-        # stdout-proxy thread on every prompt, so it cannot run without the
-        # "threads" door. Refuse up front rather than let it fail halfway
-        # through initialisation. Learning mode still tries it, so the rules
-        # get recorded.
-        _door, _category = "threading.Thread.start", "threads"
-        if not is_learning_mode() and not is_allowed(_door):
-            raise RuleApiPermissionError(_door, _category)
-
-        # Try to import and use IPython for a better REPL experience
-        # Hack for IPython
-        sys.modules["__main__"] = ModuleType(name="__main__")
-
-        import IPython
-        from traitlets.config import get_config  # type: ignore
-
-        c = get_config()
-
-        # Update the prompt
-        from IPython.terminal.prompts import Prompts
-
-        class CustomPrompts(Prompts):
-            def in_prompt_tokens(self) -> List[Any]:
-                result = super().in_prompt_tokens()
-                full_prompt = prefix + result[2][1]
-                result[2] = result[2][0], full_prompt
-                self.shell.prompt_length = len(full_prompt)
-                return result
-
-        c.TerminalInteractiveShell.prompts_class = CustomPrompts
-
-        c.TerminalIPythonApp.display_banner = False
-        # c.InteractiveShellApp.exit_msg=exit_msg
-        if ban:
-            print(banner)
-            banner_shown = True
-        print(
-            f"IPython {getattr(IPython, '__version__', 'unknown')} -- An enhanced Interactive Python. "
-            f"Type '?' for help."
-        )
-        IPython.start_ipython(  # type: ignore[attr-defined]
-            argv=[],
-            user_ns=None,
-            config=c,
-        )
-    except (ImportError, SandBoxError) as err:
-        if isinstance(err, ImportError):
-            traceback.print_exc()
-        else:
-            # IPython needs more than the plain REPL: threads for its history
-            # saver and the prompt_toolkit stdout proxy, and a writable profile
-            # directory. A rule refusal there is a configuration choice, not a
-            # crash: name the door and keep the REPL that does not need it.
-            print(f"{err}\nFalling back to the standard Python REPL.", file=sys.stderr)
-        # Fallback to the standard Python REPL if IPython is not installed
-        # Create a banner for the standard REPL
-        if hasattr(sys, "ps1"):
-            sys.ps1 = prefix + getattr(sys, "ps1")  # noqa: B009
-        else:
-            sys.ps1 = prefix + ">>> "
-
-        # Start the standard interactive console
+    with raw_builtins():
         try:
-            extra: dict[str, Any] = {}
-            if sys.version_info[:2] >= (3, 13):
-                extra = {"local_exit": True}
-            code.interact(
-                banner=banner if ban and not banner_shown else "",
-                exitmsg=exit_msg,
-                # When self.local_exit is True, we overwrite the builtins so
-                # exit() and quit() only raises SystemExit and we can catch that
-                # to only exit the interactive shell
-                **extra,
+            # IPython starts a history-saving thread, and prompt_toolkit a
+            # stdout-proxy thread on every prompt, so it cannot run without the
+            # "threads" door. Refuse up front rather than let it fail halfway
+            # through initialisation. Learning mode still tries it, so the rules
+            # get recorded.
+            _door, _category = "threading.Thread.start", "threads"
+            if not is_learning_mode() and not is_allowed(_door):
+                raise RuleApiPermissionError(_door, _category)
+
+            # Try to import and use IPython for a better REPL experience
+            # Hack for IPython
+            sys.modules["__main__"] = ModuleType(name="__main__")
+
+            import IPython
+            from traitlets.config import get_config  # type: ignore
+
+            c = get_config()
+
+            # Update the prompt
+            from IPython.terminal.prompts import Prompts
+
+            class CustomPrompts(Prompts):
+                def in_prompt_tokens(self) -> List[Any]:
+                    result = super().in_prompt_tokens()
+                    full_prompt = prefix + result[2][1]
+                    result[2] = result[2][0], full_prompt
+                    self.shell.prompt_length = len(full_prompt)
+                    return result
+
+            c.TerminalInteractiveShell.prompts_class = CustomPrompts
+
+            c.TerminalIPythonApp.display_banner = False
+            # c.InteractiveShellApp.exit_msg=exit_msg
+            if ban:
+                print(banner)
+                banner_shown = True
+            print(
+                f"IPython {getattr(IPython, '__version__', 'unknown')} -- An enhanced Interactive Python. "
+                f"Type '?' for help."
             )
-        except SystemExit:
-            pass  # Ignore and continue
+            IPython.start_ipython(  # type: ignore[attr-defined]
+                argv=[],
+                user_ns=None,
+                config=c,
+            )
+        except (ImportError, SandBoxError) as err:
+            if isinstance(err, ImportError):
+                traceback.print_exc()
+            else:
+                # IPython needs more than the plain REPL: threads for its history
+                # saver and the prompt_toolkit stdout proxy, and a writable profile
+                # directory. A rule refusal there is a configuration choice, not a
+                # crash: name the door and keep the REPL that does not need it.
+                print(f"{err}\nFalling back to the standard Python REPL.", file=sys.stderr)
+            # Fallback to the standard Python REPL if IPython is not installed
+            # Create a banner for the standard REPL
+            if hasattr(sys, "ps1"):
+                sys.ps1 = prefix + getattr(sys, "ps1")  # noqa: B009
+            else:
+                sys.ps1 = prefix + ">>> "
+
+            # Start the standard interactive console
+            try:
+                extra: dict[str, Any] = {}
+                if sys.version_info[:2] >= (3, 13):
+                    extra = {"local_exit": True}
+                code.interact(
+                    banner=banner if ban and not banner_shown else "",
+                    exitmsg=exit_msg,
+                    # When self.local_exit is True, we overwrite the builtins so
+                    # exit() and quit() only raises SystemExit and we can catch that
+                    # to only exit the interactive shell
+                    **extra,
+                )
+            except SystemExit:
+                pass  # Ignore and continue
     return 0
 
 
@@ -219,7 +260,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
         script_body = script.read_text()
         sys.argv = [str(script)] + args
         # Runs the user script by design; the OS sandbox isolates it.
-        exec(script_body)
+        _RAW_EXEC(script_body)
         if sys.flags.inspect:
             return _python_interactive(all_rules=all_rules, ban=False)
         return 0
@@ -236,7 +277,7 @@ def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> i
     arm()
     sys.argv = args
     # Runs the user script by design; the OS sandbox isolates it.
-    exec(script_body)
+    _RAW_EXEC(script_body)
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)
     return 0
