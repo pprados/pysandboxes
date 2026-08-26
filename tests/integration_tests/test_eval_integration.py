@@ -143,16 +143,12 @@ def test_a_timeout_is_recoverable_by_the_caller(tmp_path: Path) -> None:
 def test_the_learning_round_trip_produces_a_replayable_profile(tmp_path: Path) -> None:
     """learn -> write -> replay passes."""
     profile = tmp_path / ".py-sandboxes"
-    profile.write_text(
-        textwrap.dedent(
-            f"""
+    profile.write_text(textwrap.dedent(f"""
             py-sandbox=true
             os-sandbox=subprocess
             python-import=*
             learn={profile}
-            """
-        )
-    )
+            """))
     script = tmp_path / "script.py"
     script.write_text("print(eval('sum([i * 2 for i in range(3)])'))")
     first = subprocess.run(
