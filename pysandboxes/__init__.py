@@ -40,7 +40,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .e import (
         ConfigSyntaxError,  # noqa: F401
+        EvalInterrupted,  # noqa: F401
+        EvalSyntaxRejected,  # noqa: F401
         RuleApiPermissionError,  # noqa: F401
+        RuleEvalPermissionError,  # noqa: F401
         RuleAttributeError,  # noqa: F401
         RuleFileNotFoundError,  # noqa: F401
         RuleModuleNotFoundError,  # noqa: F401
@@ -50,9 +53,13 @@ if TYPE_CHECKING:
         SandBoxProtocolError,  # noqa: F401
         sandbox_denials,  # noqa: F401
     )
+    from .guard_eval import guarded_eval  # noqa: F401
     from .sandboxes_api import is_in_sandbox, run, sandbox, sandboxes  # noqa: F401
 
 _api = {"sandboxes", "sandbox", "run", "is_in_sandbox"}
+# guarded_eval lives in guard_eval, not in sandboxes_api, so the lazy proxy
+# needs a third module group rather than an addition to _api.
+_eval = {"guarded_eval"}
 _exception = {
     "SandBoxError",
     "SandBoxProtocolError",
@@ -64,6 +71,9 @@ _exception = {
     "RuleModuleNotFoundError",
     "RuleAttributeError",
     "RuleApiPermissionError",
+    "EvalSyntaxRejected",
+    "EvalInterrupted",
+    "RuleEvalPermissionError",
 }
 
 _cli = {
@@ -87,6 +97,10 @@ __all__ = [
     "RuleApiPermissionError",
     "SandBoxProtocolError",
     "sandbox_denials",
+    "guarded_eval",
+    "EvalSyntaxRejected",
+    "EvalInterrupted",
+    "RuleEvalPermissionError",
 ]
 
 
@@ -121,7 +135,12 @@ class LazySandboxesProxy:
 
             module_api = importlib.import_module(".sandboxes_api", package=__name__)
             module_exception = importlib.import_module(".e", package=__name__)
-            self.modules = {api: module_api for api in _api} | {api: module_exception for api in _exception}
+            module_guard_eval = importlib.import_module(".guard_eval", package=__name__)
+            self.modules = (
+                {api: module_api for api in _api}
+                | {api: module_exception for api in _exception}
+                | {api: module_guard_eval for api in _eval}
+            )
         if name in self.modules:
             return getattr(self.modules[name], name)
         else:
