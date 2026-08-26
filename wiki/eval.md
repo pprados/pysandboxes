@@ -1,11 +1,5 @@
 # Dynamically evaluated code — the `eval-*` rules
 
-> **Status: specified, not yet implemented.** The rules described here are the
-> agreed design for the `dynamic-code` guard. They do not exist in the shipped
-> package yet. Until they do, `eval()`, `exec()` and `compile()` are *not*
-> intercepted, and a string handed to them runs with the full rights of the
-> sandboxed process.
-
 `py-sandboxes` guards imports, files, sockets, environment variables and a
 registry of sensitive functions. None of those layers looks at code that
 arrives as a **string** at runtime.

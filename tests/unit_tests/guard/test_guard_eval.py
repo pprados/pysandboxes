@@ -536,6 +536,13 @@ def test_a_frozen_caller_is_ambient() -> None:
     assert is_ambient(_frame_with("<frozen importlib._bootstrap>"))
 
 
+def test_a_string_caller_is_not_ambient() -> None:
+    """`python-sb script.py` and `python-sb -c` both stamp the user's code
+    `<string>`, so exempting every angle-bracket name exempts the application
+    itself -- which the integration suite caught as eval running unguarded."""
+    assert not is_ambient(_frame_with("<string>"))
+
+
 def test_a_site_packages_caller_is_ambient() -> None:
     assert is_ambient(_frame_with("/x/.venv/lib/python3.13/site-packages/typing_inspection/a.py"))
 

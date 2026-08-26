@@ -19,6 +19,35 @@ not "restore" them:
   honoured in any mode, and its own table then gives `eval-namespace=caller`
   as honouring it. The bold sentence governs `adaptive` and `closed`; `caller`
   is the debugging escape hatch and does honour injection, warned at load.
+
+What this guard does not cover, stated so no one reads more into it:
+
+- Blocking C calls. Catastrophic backtracking in `re`, a large integer
+  operation that slipped past `__sb_binop__`, a native library: none returns
+  to a tick, so `join(timeout)` hands the caller its `EvalInterrupted` while
+  the thread keeps burning CPU. Mitigated by the leak counter, guaranteed
+  only by the OS layer, where a timeout is a process kill.
+- Memory outside the rewritten operators. `eval-max-alloc` bounds `+`, `*`
+  and `**`, not the process.
+- CPython bugs. A segfault or an interpreter escape is out of reach of any
+  AST-level guard.
+- Side effects of allowed calls. If `eval-call` grants a function that opens
+  files, the file rules apply, but this guard adds nothing.
+- Timing and side channels.
+- `str.format` and `format_map`. The attribute is resolved in C from the
+  contents of the string, so no `Attribute` node exists to validate or
+  rewrite. Handled by curating them out of `str-methods`, which is a
+  mitigation and not a fix: granting `format` by name reopens it, with a
+  warning.
+- Audit from the configuration alone, under `eval-namespace=adaptive`: the
+  reachable surface is the configuration *plus* what each call site passes.
+  `eval-namespace=closed` restores the property, at the cost of declaring
+  every name.
+- Code generation by a third-party library outside `site-packages` -- a
+  vendored `attrs`, a source checkout on PYTHONPATH. The ambient exemption is
+  path-based, so such a library is guarded like application code and its
+  generated `FunctionDef` will be refused. `python-api=ALLOW:dynamic-code` is
+  the escape hatch.
 """
 
 import ast
@@ -493,6 +522,14 @@ def is_ambient(frame: types.FrameType) -> bool:
     allowlist. A filename can only be chosen through `compile()`, which is
     itself guarded and absent from the namespace under `closed`.
 
+    Only `<frozen ...>` is exempt among the angle-bracket names, not every
+    name starting with `<`. `python-sb script.py` and `python-sb -c` both run
+    the user's code through `exec`, which stamps it `<string>`: exempting that
+    would exempt the application itself, which is the one thing this guard
+    exists to cover. The stdlib's own generators are reached by the path rule
+    below instead -- `dataclasses` builds its `__init__` with `<string>` too,
+    but the frame calling `exec` is `dataclasses.py`.
+
     Args:
         frame: The frame of the caller reaching a patched builtin.
 
@@ -502,7 +539,7 @@ def is_ambient(frame: types.FrameType) -> bool:
     filename = frame.f_code.co_filename
     if filename.startswith(TAG_PREFIX):
         return False
-    if filename.startswith("<"):
+    if filename.startswith("<frozen "):
         return True
     resolved = str(Path(filename).resolve())
     if _STDLIB_ROOTS and resolved.startswith(_STDLIB_ROOTS):
