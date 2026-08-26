@@ -1,6 +1,9 @@
+import random
+import re
+import time
 from typing import List
 
-from pysandboxes.tools import _remove_comment, resolve_env_variables
+from pysandboxes.tools import GlobPattern, _remove_comment, resolve_env_variables
 
 
 def test_remove_comment_basic() -> None:
@@ -81,3 +84,56 @@ def test_resolve_env_variables() -> None:
         )
         == "[val_c]"
     )
+
+
+def _legacy_compile(glob: str) -> "re.Pattern[str]":
+    """The regex translation `GlobPattern` replaced, kept as the equivalence oracle."""
+    return re.compile(re.escape(glob).replace("\\*", ".*") + r"\Z")
+
+
+def test_glob_pattern_semantics() -> None:
+    """`*` spans any run of non-newline characters, and the match covers the whole subject."""
+    cases: List[tuple[str, str, bool]] = [
+        ("getattr", "getattr", True),
+        ("getattr", "getattr_more", False),
+        ("get*", "getattr", True),
+        ("get*", "forget_me", False),  # anchored on the start
+        ("*_KEY", "API_KEY", True),
+        ("*_API_KEY", "ANY_API_KEY_AND_MORE", False),  # anchored on the end
+        ("*", "", True),
+        ("", "", True),
+        ("", "a", False),
+        ("a*b*c", "axxbyyc", True),
+        ("a*b*c", "axxbyy", False),
+        ("a.c", "a.c", True),
+        ("a.c", "abc", False),  # regex metacharacters stay literal
+        ("a+c", "a+c", True),
+        ("*", "a\nb", False),  # `*` does not cross a newline
+        ("a*", "a\n", False),
+    ]
+    for glob, subject, expected in cases:
+        assert GlobPattern(glob).match(subject) is expected, f"{glob!r} vs {subject!r}"
+
+
+def test_glob_pattern_matches_legacy_regex() -> None:
+    """Pin the language: identical verdicts to the regex translation, newlines included."""
+    rng = random.Random(987654321)
+    for _ in range(20000):
+        glob = "".join(rng.choice("ab*\n*") for _ in range(rng.randint(0, 8)))
+        subject = "".join(rng.choice("ab\n") for _ in range(rng.randint(0, 8)))
+        assert GlobPattern(glob).match(subject) is bool(
+            _legacy_compile(glob).match(subject)
+        ), f"glob={glob!r} subject={subject!r}"
+
+
+def test_glob_pattern_does_not_backtrack() -> None:
+    """The shape that made the regex translation explode must stay linear.
+
+    `_legacy_compile("*a*a*a*a*a*a*Z*")` needs more than five seconds on this
+    subject: it explores every way to split the run of `a` between the groups.
+    """
+    glob = "*a" * 6 + "*Z*"
+    subject = "a" * 101 + "!"
+    started = time.monotonic()
+    assert GlobPattern(glob).match(subject) is False
+    assert time.monotonic() - started < 1.0

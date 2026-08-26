@@ -445,3 +445,12 @@ python-import=psutil
 # ============================================================
 # No provider-specific profile keys (no subprocess.* / none.*). Configure env, file, net,
 # and import rules only; subprocess is the default isolated Python process provider.
+
+# The calculator tool evaluates a string the model produced. `closed` rather
+# than the adaptive default: the caller already passes {"__builtins__": {}},
+# so the resulting namespace is identical, and a profile handling model output
+# should declare its surface here rather than at the call site.
+eval-namespace=closed
+eval-syntax=arith, compare
+eval-max-iterations=100_000
+eval-timeout=2s

@@ -54,14 +54,15 @@ def _fetch_webpage(url: str) -> str:
 def _evaluate_expression(expression: str) -> float:
     """Evaluate a mathematical expression and return the result.
 
-    A plain eval() with an emptied ``__builtins__``, which is the naive
-    hardening and is known not to hold: ``().__class__.__base__.__subclasses__()``
-    still reaches Popen. That is the point. No expression is filtered here, so
-    whatever blocks the escape is the sandbox and nothing else.
+    The emptied ``__builtins__`` on its own is the naive hardening and does not
+    hold: ``().__class__.__base__.__subclasses__()`` still reaches Popen. What
+    holds is the eval-* profile in ``.py-sandboxes``: the expression is parsed,
+    checked against ``eval-syntax=arith, compare``, and rewritten so attribute
+    walks are refused while it runs. No expression is filtered here.
     """
     assert is_in_sandbox()
     logger.info("Evaluating: %s", expression)
-    result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307
+    result = eval(expression, {"__builtins__": {}}, {})
     logger.info("Result: %s", result)
     return float(result)
 

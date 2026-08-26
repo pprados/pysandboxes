@@ -4,7 +4,6 @@
 
 import pickle
 import random
-import re
 from pathlib import Path
 from typing import cast
 
@@ -33,6 +32,7 @@ from pysandboxes.eval_rules import (
 )
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
+from pysandboxes.tools import GlobPattern
 
 
 def _lines(*rules: str) -> ConfigLines:
@@ -167,7 +167,7 @@ def test_an_empty_name_set_allows_nothing() -> None:
 def test_deny_wins_over_an_allow_pattern() -> None:
     names = NameSet(
         allow=frozenset(),
-        allow_patterns=(re.compile(r"get.*\Z"),),
+        allow_patterns=(GlobPattern("get*"),),
         deny=frozenset({"get_secret"}),
         deny_patterns=(),
     )
