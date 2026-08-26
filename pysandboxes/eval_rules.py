@@ -11,13 +11,13 @@ it appears -- so an ``include`` cannot be defeated by placement.
 import ast
 import difflib
 import logging
-import re
 from datetime import date, datetime, time, timedelta
 from typing import Any, NamedTuple
 
 from .immutable_dict import ImmutableDict
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
+from .tools import GlobPattern
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,9 @@ class NameSet(NamedTuple):
     """
 
     allow: frozenset[str]
-    allow_patterns: tuple[re.Pattern[str], ...]
+    allow_patterns: tuple[GlobPattern, ...]
     deny: frozenset[str]
-    deny_patterns: tuple[re.Pattern[str], ...]
+    deny_patterns: tuple[GlobPattern, ...]
 
     def allows(self, name: str) -> bool:
         """Return whether `name` is granted.
@@ -248,14 +248,15 @@ EvalProfiles = ImmutableDict[str, EvalRules]
 """Profiles by name, with `""` for the default profile."""
 
 
-def compile_pattern(pattern: str) -> re.Pattern[str]:
+def compile_pattern(pattern: str) -> GlobPattern:
     """Compile a list-key glob, anchored on both ends.
 
-    `*` is the only metacharacter, exactly as in `guard_envs`: the call sites
-    use `match()`, which anchors the start only, so without the trailing anchor
-    `get*` would also grant `forget_me`.
+    `*` is the only metacharacter, exactly as in `guard_envs`. `GlobPattern`
+    matches over the whole subject, so `get*` grants `getattr` and not
+    `forget_me`; the previous regex needed a trailing `\\Z` to say the same,
+    because `re.match()` anchors the start only.
     """
-    return re.compile(re.escape(pattern).replace("\\*", ".*") + r"\Z")
+    return GlobPattern(pattern)
 
 
 def _add_error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
@@ -289,9 +290,9 @@ class _Accumulator:
 
     def __init__(self) -> None:
         self.allow: dict[str, set[str]] = {field: set() for field in LIST_KEYS.values()}
-        self.allow_patterns: dict[str, list[re.Pattern[str]]] = {field: [] for field in LIST_KEYS.values()}
+        self.allow_patterns: dict[str, list[GlobPattern]] = {field: [] for field in LIST_KEYS.values()}
         self.deny: dict[str, set[str]] = {field: set() for field in LIST_KEYS.values()}
-        self.deny_patterns: dict[str, list[re.Pattern[str]]] = {field: [] for field in LIST_KEYS.values()}
+        self.deny_patterns: dict[str, list[GlobPattern]] = {field: [] for field in LIST_KEYS.values()}
         self.scalars: dict[str, int | float | str] = {}
         self.seen_scalar: dict[str, ConfigLine] = {}
 
