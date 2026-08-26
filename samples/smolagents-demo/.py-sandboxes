@@ -104,3 +104,12 @@ expose-rw=${TMP}
 # filelock (pulled by huggingface-hub) installs an audit hook to detect unsafe
 # forks. Granted as the named function, never as the whole category.
 python-api=ALLOW:sys.addaudithook
+
+# The calculator tool evaluates a string the model produced. `closed` rather
+# than the adaptive default: the caller already passes {"__builtins__": {}},
+# so the resulting namespace is identical, and a profile handling model output
+# should declare its surface here rather than at the call site.
+eval-namespace=closed
+eval-syntax=arith, compare
+eval-max-iterations=100_000
+eval-timeout=2s

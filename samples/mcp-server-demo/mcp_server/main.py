@@ -111,11 +111,16 @@ async def fetch_webpage(url: str) -> str:
 # Define the calculator tool
 @sandbox
 async def _evaluate_expression(expression: str) -> float:
-    """Evaluates a mathematical expression and returns the result."""
+    """Evaluate a mathematical expression and return the result.
+
+    The emptied ``__builtins__`` on its own is the naive hardening and does not
+    hold: ``().__class__.__base__.__subclasses__()`` still reaches Popen. What
+    holds is the eval-* profile in ``.py-sandboxes``: the expression is parsed,
+    checked against ``eval-syntax=arith, compare``, and rewritten so attribute
+    walks are refused while it runs. No expression is filtered here.
+    """
     assert is_in_sandbox()
     try:
-        # Warning: eval() is unsafe for untrusted input;
-        # use a proper parser in production
         logger.info(f"Calculated : {expression}")
 
         result = eval(

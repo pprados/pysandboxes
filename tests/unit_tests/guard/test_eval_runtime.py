@@ -22,6 +22,7 @@ from pysandboxes.eval_runtime import (
     pop_state,
     push_state,
 )
+from pysandboxes.tools import GlobPattern
 
 
 def _names(*allowed: str) -> NameSet:
@@ -100,7 +101,7 @@ def test_getattr_allows_a_declared_dunder(state: EvalState) -> None:
 
 def test_frame_capture_survives_a_wide_attribute_rule() -> None:
     """Family 3 of spec 7 is an implicit DENY no configuration can override."""
-    wide = NameSet(allow=frozenset(), allow_patterns=(re.compile(r".*\Z"),), deny=frozenset(), deny_patterns=())
+    wide = NameSet(allow=frozenset(), allow_patterns=(GlobPattern("*"),), deny=frozenset(), deny_patterns=())
     push_state(EvalState(DEFAULT_RULES._replace(attribute=wide, magic=wide)))
     try:
         for name in ("gi_frame", "f_globals", "cr_frame", "tb_frame"):
