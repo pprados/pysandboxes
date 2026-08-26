@@ -64,7 +64,8 @@ from typing import Any, Callable, NoReturn, cast
 
 from . import guard_api
 from .e import EvalInterrupted, RuleApiPermissionError
-from .eval_rules import EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
+from .guard_api import LearnApiRule
+from .eval_rules import DEFAULT_RULES, EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
 from .eval_runtime import HELPERS, EvalState, pop_state, push_state
 from .eval_transform import inject, learn_targets, raise_if_rejected, validate
 from .immutable_dict import ImmutableDict
@@ -269,6 +270,55 @@ def build_namespace(
 TAG_PREFIX = "<eval:"
 """Filename prefix guarded `compile` stamps, and guarded `exec` requires."""
 
+# Captured at import time, before activate_sandboxes installs the patches, so
+# these are the unpatched builtins. The guard runs its own source through
+# compile/eval/exec, and in a development checkout this file sits outside both
+# the stdlib and site-packages, so the ambient exemption does not cover it:
+# without the capture the guard hands its own rewritten AST to its own patched
+# compile, which refuses it as "a code object the guard did not produce".
+_RAW_COMPILE = compile
+_RAW_EVAL = eval
+_RAW_EXEC = exec
+
+# Same reasoning for the watchdog. Running the source in a watched thread is
+# this guard's implementation detail, and guard_api denies
+# threading.Thread.start without `python-api=ALLOW:threads`. Charging that to
+# the caller would mean an application had to open threading for all of its
+# own code just to obtain an eval timeout -- a wider grant than the feature
+# it pays for.
+_RAW_THREAD_START = threading.Thread.start
+_RAW_THREAD_PRIMITIVES = {
+    name: getattr(threading, name)
+    for name in ("_start_joinable_thread", "_start_new_thread")
+    if hasattr(threading, name)
+}
+
+
+def _start_unguarded(thread: threading.Thread) -> None:
+    """Start one of the guard's own threads without charging the user's rules.
+
+    Capturing `Thread.start` alone is not enough: its body resolves
+    `_start_joinable_thread` as a module global of `threading`, and that name
+    is patched too. The captured primitives are swapped back for the duration
+    of the call and restored immediately after.
+
+    The window is the start call itself. The worker it launches runs evaluated
+    source, which cannot reach `threading`: the namespace is built from
+    `eval-call` and carries no import machinery.
+
+    Args:
+        thread: The worker or the watchdog.
+    """
+    patched = {name: getattr(threading, name) for name in _RAW_THREAD_PRIMITIVES}
+    for name, raw in _RAW_THREAD_PRIMITIVES.items():
+        setattr(threading, name, raw)
+    try:
+        _RAW_THREAD_START(thread)
+    finally:
+        for name, value in patched.items():
+            setattr(threading, name, value)
+
+
 _JOIN_GRACE = 0.5
 """Seconds given to a worker to notice its flag before it is called leaked."""
 
@@ -324,9 +374,9 @@ def _worker(code: Any, mode: str, namespace: dict[str, Any], state: EvalState, b
     push_state(state)
     try:
         if mode == "eval":
-            box["result"] = eval(code, namespace)  # noqa: S307 - guarded source, bounded namespace
+            box["result"] = _RAW_EVAL(code, namespace)
         else:
-            exec(code, namespace)  # noqa: S102 - guarded source, bounded namespace
+            _RAW_EXEC(code, namespace)
     except BaseException as err:  # noqa: BLE001 - relayed verbatim to the caller
         box["error"] = err
     finally:
@@ -427,7 +477,7 @@ def run_guarded(
     # `inject` is typed `ast.AST` because it transforms any node; what comes
     # back here is whatever `ast.parse` built for `mode` -- a `Module` for
     # "exec", an `Expression` for "eval" -- and `compile` accepts either.
-    code = compile(cast("ast.Module | ast.Expression", inject(tree)), source_ref, mode)
+    code = _RAW_COMPILE(cast("ast.Module | ast.Expression", inject(tree)), source_ref, mode)
     box: dict[str, Any] = {}
     worker = threading.Thread(
         target=_worker,
@@ -436,8 +486,8 @@ def run_guarded(
         daemon=True,
     )
     watchdog = threading.Timer(rules.timeout, _interrupt, args=(state, rules.timeout))
-    watchdog.start()
-    worker.start()
+    _start_unguarded(watchdog)
+    _start_unguarded(worker)
     worker.join(rules.timeout + _JOIN_GRACE)
     watchdog.cancel()
     if worker.is_alive():
@@ -584,6 +634,31 @@ def _guarded_source(source: Any, qualname: str) -> str:
     raise RuleApiPermissionError(f"{qualname} on a code object the guard did not produce", "python-api=ALLOW")
 
 
+def _learn_from(source: Any, qualname: str, mode: str, rules: EvalRules | None) -> None:
+    """Record what an unguarded call would have needed, without refusing it.
+
+    Args:
+        source: What the caller passed to the patched builtin.
+        qualname: The builtin reached, recorded so `generate_rules` emits the
+            `dynamic-code` line beside the `eval-*` ones.
+        mode: `"eval"` or `"exec"`.
+        rules: The declared profile, or None when the configuration has no
+            `eval-*` key at all.
+    """
+    add_learning_rule(LearnApiRule(qualname))
+    if not isinstance(source, (str, bytes, bytearray)):
+        # A code object carries no syntax to validate.
+        return
+    text = source if isinstance(source, str) else source.decode("utf-8", errors="replace")
+    try:
+        tree = ast.parse(text, mode=mode if mode in ("eval", "exec") else "exec")
+    except SyntaxError:
+        # The application's own problem, and it is about to raise it itself.
+        return
+    for key, name in learn_targets(validate(tree, rules or DEFAULT_RULES)):
+        add_learning_rule(LearnEvalRule(key, name))
+
+
 def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Callable[..., Any]:
     """Wrap `builtins.eval` or `builtins.exec`.
 
@@ -619,6 +694,15 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
         if not guard_api.is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
             return func(source, raw_globals, raw_locals, *args, **kwargs)
         rules = _profiles.get("")
+        if is_learning_mode():
+            # Learning observes, it never blocks: refusing here would stop the
+            # application on its first eval and there would be nothing left to
+            # learn from. The source is validated against the profile in force
+            # -- deny-all when none is declared, which is what makes every
+            # construct show up as a rule to propose -- and then runs through
+            # the raw builtin so the run reaches its end.
+            _learn_from(source, qualname, mode, rules)
+            return func(source, raw_globals, raw_locals, *args, **kwargs)
         if rules is None or not rules.declared:
             raise RuleApiPermissionError(qualname, "dynamic-code")
         if rules.namespace == "caller":
