@@ -47,6 +47,7 @@ def generate_config_from_learning() -> None:
     if not is_learning_mode():
         return
     with _lock_generate:
+        from .eval_rules import generate_rules as eval_generate_rules
         from .guard_api import generate_rules as api_generate_rules
         from .guard_envs import generate_rules as env_generate_rules
         from .guard_files import generate_rules as file_generate_rules
@@ -74,6 +75,13 @@ def generate_config_from_learning() -> None:
             all_api_rules = "\n".join(api_rules)
         else:
             all_api_rules = ""
+
+        # Manage dynamically evaluated code rules
+        eval_rules = eval_generate_rules(learning)
+        if eval_rules:
+            all_eval_rules = "\n".join(eval_rules)
+        else:
+            all_eval_rules = ""
 
         # Manage envs rules
         env_rules = env_generate_rules()
@@ -110,6 +118,7 @@ def generate_config_from_learning() -> None:
             "learning_guard_files": all_file_rules,
             "learning_guard_socket": all_socket_rules,
             "learning_guard_api": all_api_rules,
+            "learning_guard_eval": all_eval_rules,
         }
 
         header = f"# Add rules ({datetime.now().strftime('%Y/%m/%d at %H:%M')})"

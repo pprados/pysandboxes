@@ -156,6 +156,108 @@ class RuleApiPermissionError(PermissionError, SandBoxError):
         return self.__class__, (self.qualname, self.category)
 
 
+class EvalSyntaxRejected(SandBoxError, SyntaxError):
+    """Raised when a dynamically evaluated source violates the eval rules.
+
+    Carries the full violation list rather than the first refusal: a model
+    correcting its own output converges in one round only if it is told
+    everything at once.
+
+    Deriving from `SyntaxError` as well as `SandBoxError` is deliberate and
+    verified free of instance lay-out conflict: editors and tracebacks already
+    know how to render `lineno`, `offset` and `text`.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        violations: list[str],
+        *,
+        lineno: int = 0,
+        offset: int = 0,
+        text: str = "",
+    ) -> None:
+        """Initialize the exception with the full report.
+
+        Args:
+            message: Headline naming how many rules were violated and where.
+            violations: One rendered block per violation, in source order.
+            lineno: Line of the first violation, for `SyntaxError` consumers.
+            offset: Column of the first violation.
+            text: Source line the first violation sits on.
+        """
+        report = message + "\n\n" + "\n".join(violations)
+        super().__init__(report)
+        # `msg` is assigned explicitly because `super().__init__` never reaches
+        # `SyntaxError.__init__`: the MRO runs through `RuntimeError`, whose
+        # initializer is `BaseException`'s and only fills `args`. `msg` would
+        # stay None, and `SyntaxError.__str__` -- which is the `__str__` this
+        # class inherits -- would render the whole report as "None (line N)",
+        # hiding from `str(err)` the very violations the class exists to carry.
+        self.msg = report
+        self.violations = violations
+        self.lineno = lineno
+        self.offset = offset
+        self.text = text
+
+    def __reduce__(self) -> tuple[type, tuple[str, list[str]]]:
+        """Rebuild the exception from its own attributes across the transport."""
+        return self.__class__, (str(self).split("\n\n", maxsplit=1)[0], self.violations)
+
+
+class EvalInterrupted(BaseException):
+    """Raised inside evaluated code when a budget or the timeout is exhausted.
+
+    The one exception of the framework that stays outside the `SandBoxError`
+    hierarchy, and the exclusion is load-bearing: `SandBoxError` derives from
+    `RuntimeError`, so a bare `except Exception:` inside the evaluated source
+    -- reachable as soon as `eval-syntax=exception` opens `Try` -- would
+    swallow its own interruption. Deriving from `BaseException` alone keeps the
+    interruption uncatchable from inside.
+
+    Consequence for callers: `except SandBoxError:` does not catch a timeout.
+    """
+
+    def __init__(self, reason: str) -> None:
+        """Initialize the interruption with the exhausted budget.
+
+        Args:
+            reason: The rule and value that ran out, e.g. `eval-timeout=5s`.
+        """
+        super().__init__(f"evaluation interrupted: {reason}")
+        self.reason = reason
+
+    def __reduce__(self) -> tuple[type, tuple[str]]:
+        """Rebuild the interruption from its own attributes."""
+        return self.__class__, (self.reason,)
+
+
+class RuleEvalPermissionError(PermissionError, SandBoxError):
+    """Raised when a runtime guard refuses an attribute or an allocation."""
+
+    def __init__(self, target: str, rule_key: str, hint: str | None = None) -> None:
+        """Initialize the exception with the refused name and its rule key.
+
+        Args:
+            target: Attribute name, or a description of the refused operation.
+            rule_key: Configuration key that would allow it, e.g. `eval-magic`.
+            hint: Replaces the "add this rule" sentence. Set it whenever no
+                configuration can lift the refusal, so a message from a
+                security guard never tells the reader to add a key that will
+                not work -- which reads as a broken guard rather than as a
+                deliberate, non-overridable denial.
+        """
+        remedy = hint or f"Add `{rule_key}={target}` to allow it."
+        super().__init__(f"{target!r} is denied by the eval guard.\n{remedy}")
+        self.target = target
+        self.rule_key = rule_key
+        self.hint = hint
+
+    def __reduce__(self) -> tuple[type, tuple[str, str, str | None]]:
+        """Rebuild the exception from its own attributes across the transport."""
+        return self.__class__, (self.target, self.rule_key, self.hint)
+
+
 _DENIALS_ATTRIBUTE = "__pysandboxes_denials__"
 
 

@@ -99,7 +99,7 @@ def test_the_expression_tool_still_computes() -> None:
 
 
 def test_scenario_c_the_malicious_expression_is_confined() -> None:
-    """The escape of scenario A reaches Popen and is refused there, by the API guard.
+    """The escape of scenario A is refused by the eval layer, before Popen.
 
     Not by the import guard: python-import=subprocess cannot be removed, since
     httpx and pydantic-ai load it themselves.
@@ -110,7 +110,12 @@ def test_scenario_c_the_malicious_expression_is_confined() -> None:
 
     denials = sandbox_denials(caught.value)
     assert denials, f"no denial reported, only {caught.value!r}"
-    assert any("process-exec" in denial for denial in denials), denials
+    # The eval layer refuses this before it can reach Popen: the profile
+    # declares eval-syntax=arith, compare, and the payload needs a
+    # comprehension, a subscript and four dunders. process-exec stays the
+    # backstop for a profile that grants python-api=ALLOW:dynamic-code.
+    assert any("EvalSyntaxRejected" in denial for denial in denials), denials
+    assert any("eval-syntax=comprehension" in denial for denial in denials), denials
 
 
 def test_the_wrappers_report_the_rule_to_the_model() -> None:
@@ -127,7 +132,7 @@ def test_the_wrappers_report_the_rule_to_the_model() -> None:
 
     assert "refused by the sandbox" in refused_fetch, refused_fetch
     assert "DENIED" in refused_fetch, refused_fetch
-    assert "process-exec" in refused_eval, refused_eval
+    assert "EvalSyntaxRejected" in refused_eval, refused_eval
     assert allowed_eval == "14.0", allowed_eval
 
 
@@ -179,5 +184,5 @@ def test_scenario_d_the_complete_mode_confines_the_same_calls() -> None:
     )
 
     assert "SANE 14.0" in result.stdout, result.stdout + result.stderr
-    assert "process-exec" in result.stdout, result.stdout + result.stderr
+    assert "EvalSyntaxRejected" in result.stdout, result.stdout + result.stderr
     assert "refused by the sandbox" in result.stdout, result.stdout + result.stderr

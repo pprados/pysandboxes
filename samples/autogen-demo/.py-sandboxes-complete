@@ -54,3 +54,12 @@ expose-ro=.
 # threads: concurrency primitives
 python-api=ALLOW:threading.Thread.start
 python-api=ALLOW:threading._start_joinable_thread
+
+# The calculator tool evaluates a string the model produced. `closed` rather
+# than the adaptive default: the caller already passes {"__builtins__": {}},
+# so the resulting namespace is identical, and a profile handling model output
+# should declare its surface here rather than at the call site.
+eval-namespace=closed
+eval-syntax=arith, compare
+eval-max-iterations=100_000
+eval-timeout=2s
