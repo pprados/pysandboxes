@@ -314,17 +314,36 @@ def test_patch_table_covers_every_applicable_entry() -> None:
     entry absent from an imported module would raise at startup. A
     registry name redirected by _PATCH_TARGET is checked against its
     patch target, since that is the table's actual key.
+
+    Two exclusion sets, for two different reasons: _not_applicable()
+    drops what this interpreter has no entry for, and _OWNED_ELSEWHERE
+    drops what guard_eval patches instead.
     """
-    from pysandboxes.guard_api import _PATCH_TARGET, _not_applicable
+    from pysandboxes.guard_api import _OWNED_ELSEWHERE, _PATCH_TARGET, _not_applicable
 
     table = patch_rules(learn=False)
-    skip = _not_applicable()
+    skip = _not_applicable() | _OWNED_ELSEWHERE
     for qualname in all_qualnames():
         target = _PATCH_TARGET.get(qualname, qualname)
         if qualname in skip:
             assert target not in table, qualname
         else:
             assert target in table, qualname
+
+
+def test_learning_still_emits_the_category_guard_eval_owns() -> None:
+    """_OWNED_ELSEWHERE must not be folded into _not_applicable().
+
+    The latter is also subtracted in generate_rules, so collapsing the two
+    would silently stop learning mode from ever proposing a dynamic-code
+    line -- an application that calls eval would be handed a rule file that
+    does not mention it.
+    """
+    from pysandboxes.guard_api import _OWNED_ELSEWHERE, _not_applicable
+
+    assert not _not_applicable() & _OWNED_ELSEWHERE
+    lines = generate_rules({LearnApiRule("builtins.eval")})
+    assert any("dynamic-code" in line for line in lines)
 
 
 def test_class_entries_keep_their_class_identity(

@@ -19,6 +19,7 @@ from typing import (
     Awaitable,
     Callable,
     Iterator,
+    NamedTuple,
     cast,
 )
 
@@ -377,3 +378,51 @@ def patch_factory(func: Callable[..., Any], **kwargs: Any) -> Callable[..., Any]
         return wrapper2
 
     return wrapper()
+
+
+class GlobPattern(NamedTuple):
+    r"""A ``*``-only glob, anchored on both ends, matched in linear time.
+
+    Replaces the ``re.escape(glob).replace("\*", ".*") + r"\Z"`` translation the
+    list keys used to compile. That regex backtracks combinatorially as soon as a
+    literal placed after several ``*`` cannot match: ``*a*a*a*a*a*a*Z*`` against a
+    100-character subject of ``a`` explores every way to split the subject between
+    the groups, and does not return. Config lines reach that shape through
+    ``${VAR}`` substitution, so the glob is not always what the config author
+    typed.
+
+    The two-pointer scan decides the same language in ``O(len(subject) *
+    len(glob))``, with no recursion and no backtracking stack.
+    """
+
+    glob: str
+
+    def match(self, subject: str) -> bool:
+        """Return whether `subject` matches the glob over its whole length.
+
+        ``*`` stands for any run of characters other than a newline, which is what
+        ``.`` did under the previous regex: widening it here would grant a name the
+        whitelist used to refuse.
+        """
+        glob = self.glob
+        subject_at = glob_at = 0
+        star_at = -1
+        retry_at = 0
+        while subject_at < len(subject):
+            if glob_at < len(glob) and glob[glob_at] == "*":
+                star_at, retry_at = glob_at, subject_at
+                glob_at += 1
+            elif glob_at < len(glob) and glob[glob_at] == subject[subject_at]:
+                glob_at += 1
+                subject_at += 1
+            elif star_at != -1:
+                if subject[retry_at] == "\n":
+                    return False
+                retry_at += 1
+                subject_at = retry_at
+                glob_at = star_at + 1
+            else:
+                return False
+        while glob_at < len(glob) and glob[glob_at] == "*":
+            glob_at += 1
+        return glob_at == len(glob)

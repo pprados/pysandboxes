@@ -113,3 +113,12 @@ python-import=_decimal, _socket, glob, pwd, resource
 # External modules (Are you sure about the origin?)
 python-import=psutil
 
+
+# The calculator tool evaluates a string the model produced. `closed` rather
+# than the adaptive default: the caller already passes {"__builtins__": {}},
+# so the resulting namespace is identical, and a profile handling model output
+# should declare its surface here rather than at the call site.
+eval-namespace=closed
+eval-syntax=arith, compare
+eval-max-iterations=100_000
+eval-timeout=2s

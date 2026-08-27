@@ -22,8 +22,12 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import (
+    eval_rules as eval_rules_module,
+)
+from . import (
     guard_api,
     guard_envs,
+    guard_eval,
     guard_files,
     guard_import,
     guard_provider,
@@ -270,6 +274,7 @@ def parse_config(
     files_rules, others = guard_files.parse_rules(others, errors)
     api_rules, others = guard_api.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
+    eval_profiles, others = eval_rules_module.parse_rules(others, errors)
 
     # 2. If some line are ignored
     if others:
@@ -307,6 +312,7 @@ def parse_config(
         file_rules=files_rules,
         import_rules=import_rules,
         api_rules=api_rules,
+        eval_rules=eval_profiles,
     )
 
 
@@ -352,6 +358,7 @@ def activate_sandboxes(
         import_patch_rules = guard_import.patch_rules(all_rules.learn)
         self_patch_rules = guard_self.patch_rules(all_rules.learn)
         api_patch_rules = guard_api.patch_rules(all_rules.learn)
+        eval_patch_rules = guard_eval.patch_rules(all_rules.learn)
         guard_import.activate_guard_import(
             {
                 **file_patch_rules,
@@ -360,6 +367,7 @@ def activate_sandboxes(
                 **import_patch_rules,
                 **self_patch_rules,
                 **api_patch_rules,
+                **eval_patch_rules,
             },
             all_rules.import_rules,
         )
@@ -368,5 +376,6 @@ def activate_sandboxes(
         guard_socket.activate_guard(all_rules.socket_rules)
         guard_files.activate_guard(all_rules.file_rules)
         guard_api.activate_guard(all_rules.api_rules)
+        guard_eval.activate_guard(all_rules.eval_rules, learn=all_rules.learn)
         set_learning_path(all_rules.learning_path)
         guard_self.activate_guard()

@@ -14,7 +14,6 @@ import functools
 import inspect
 import logging
 import os
-import re
 import sys
 import threading
 from types import FrameType
@@ -23,7 +22,7 @@ from weakref import WeakKeyDictionary
 
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
-from .tools import Environ, resolve_env_variables
+from .tools import Environ, GlobPattern, resolve_env_variables
 from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
@@ -33,12 +32,12 @@ class EnvRule(NamedTuple):
     """Internal representation of an environment variable rule.
 
     Attributes:
-        pattern: Compiled regex pattern to match variable names.
+        pattern: Compiled glob matching variable names.
         ignore: Whether this is an ignore rule (blocks access).
         config: Configuration line where this rule was defined.
     """
 
-    pattern: re.Pattern[str]
+    pattern: GlobPattern
     ignore: bool
     config: ConfigLine
 
@@ -50,14 +49,15 @@ EnvsRules = tuple[EnvRule, ...]
 _rules: EnvsRules = cast(EnvsRules, ())
 
 
-def _compile_key_pattern(key_pattern: str) -> re.Pattern[str]:
+def _compile_key_pattern(key_pattern: str) -> GlobPattern:
     """Compile an environment key pattern, anchored on both ends.
 
-    ``*`` is the only wildcard. The call sites use ``match()``, which anchors
-    the start only, so without the trailing anchor ``*_API_KEY`` would also
-    forward ``ANY_API_KEY_AND_MORE``.
+    ``*`` is the only wildcard. `GlobPattern` matches over the whole key, so
+    ``*_API_KEY`` does not forward ``ANY_API_KEY_AND_MORE``; the previous regex
+    needed a trailing ``\\Z`` to say the same, because ``re.match()`` anchors the
+    start only.
     """
-    return re.compile(re.escape(key_pattern).replace("\\*", ".*") + r"\Z")
+    return GlobPattern(key_pattern)
 
 
 def parse_rules(

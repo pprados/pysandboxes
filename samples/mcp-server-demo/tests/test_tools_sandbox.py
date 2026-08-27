@@ -119,7 +119,12 @@ async def test_scenario_c_the_malicious_expression_is_confined() -> None:
 
     denials = sandbox_denials(caught.value)
     assert denials, f"no denial reported, only {caught.value!r}"
-    assert any("process-exec" in denial for denial in denials), denials
+    # The eval layer refuses this before it can reach Popen: the profile
+    # declares eval-syntax=arith, compare, and the payload needs a
+    # comprehension, a subscript and four dunders. process-exec stays the
+    # backstop for a profile that grants python-api=ALLOW:dynamic-code.
+    assert any("EvalSyntaxRejected" in denial for denial in denials), denials
+    assert any("eval-syntax=comprehension" in denial for denial in denials), denials
 
 
 @pytest.mark.parametrize("profile", [CONFIG, CONFIG_COMPLETE], ids=["partial", "complete"])
