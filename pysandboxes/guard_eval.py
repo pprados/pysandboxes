@@ -70,6 +70,7 @@ from .eval_runtime import HELPERS, EvalState, pop_state, push_state
 from .eval_transform import inject, learn_targets, raise_if_rejected, validate
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
+from .lifecycle import is_armed
 from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
@@ -691,7 +692,7 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
         # once wrapped is this wrapper. Reconstruct before delegating.
         raw_globals = globals_ if globals_ is not None else frame.f_globals
         raw_locals = locals_ if locals_ is not None else (frame.f_locals if globals_ is None else raw_globals)
-        if not guard_api.is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
+        if not is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
             return func(source, raw_globals, raw_locals, *args, **kwargs)
         rules = _profiles.get("")
         if is_learning_mode():
@@ -740,7 +741,7 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(source: Any, filename: Any = "<string>", mode: Any = "exec", /, *args: Any, **kwargs: Any) -> Any:
         frame = sys._getframe(1)
-        if not guard_api.is_armed() or is_ambient(frame) or guard_api.is_allowed("builtins.compile"):
+        if not is_armed() or is_ambient(frame) or guard_api.is_allowed("builtins.compile"):
             return func(source, filename, mode, *args, **kwargs)
         rules = _profiles.get("")
         if rules is None or not rules.declared:

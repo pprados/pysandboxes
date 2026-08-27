@@ -17,13 +17,12 @@ from pysandboxes.guard_api import (
     LearnApiRule,
     activate_guard,
     all_qualnames,
-    arm,
     generate_rules,
     is_allowed,
-    is_armed,
     parse_rules,
     patch_rules,
 )
+from pysandboxes.lifecycle import arm, is_armed
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
 
@@ -229,9 +228,9 @@ def _reset_guard() -> None:
     so a test that calls arm() must reset it itself, or _armed would
     stay True to the end of the session.
     """
-    from pysandboxes.guard_api import _deactivate_guard_api
+    from pysandboxes.lifecycle import _reset_for_tests
 
-    _deactivate_guard_api()
+    _reset_for_tests()
 
 
 def test_disarmed_lets_everything_through() -> None:

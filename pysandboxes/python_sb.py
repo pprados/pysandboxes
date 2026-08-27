@@ -120,8 +120,13 @@ def main() -> int:
         print("Python", ".".join(map(str, sys.version_info[0:3])))
         sys.exit(0)
     if isinstance(_daemon, NoneDaemon):
+        from .lifecycle import enter
         from .remote.python_in_sb import python_in_sb
 
+        # enter() without install(): the `none` provider is the documented
+        # no-op of the README guard table. The flag says "this process is the
+        # sandboxed one", which stays true even though no guard is patched in.
+        enter()
         return python_in_sb(all_rules, python_cmd)
     os_provider = cast(BaseSubProcessDaemon, _daemon)
     _run_prefix = (

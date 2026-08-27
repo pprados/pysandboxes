@@ -20,11 +20,11 @@ from pysandboxes.learning import (
     set_learning_mode,
     set_learning_path,
 )
-from pysandboxes.tools import set_is_in_sandbox
 
 from ..all_rules import AllRules
 from ..e import RuleApiPermissionError, SandBoxError
-from ..guard_api import arm, is_allowed
+from ..guard_api import is_allowed
+from ..lifecycle import arm
 from ..main_logger import config_log
 
 logger = logging.getLogger(__name__)
@@ -115,11 +115,24 @@ def _register_signals_handlers() -> None:
         signal.signal(signal.Signals(s), signal_handler)
 
 
+def _before_user_code() -> None:
+    """The single arming point of the ``python-sb`` entry point.
+
+    Registers the signal handlers first, so a SIGTERM arriving during user
+    code still saves the learned rules, then arms. Not hoisted into
+    :func:`python_in_sb` itself: the ``-m`` branch resolves the module spec
+    before running it, and arming beforehand would charge that lookup to the
+    user's ``python-import`` rules.
+    """
+    _register_signals_handlers()
+    arm()
+
+
 def _python_interactive(
     all_rules: AllRules,
     ban: bool,
 ) -> int:
-    arm()
+    _before_user_code()
     exit_msg = None
     term = os.environ.get("TERM")
     if sys.stdout.isatty() and (
@@ -244,9 +257,7 @@ def _python_interactive(
 
 
 def _python_module(all_rules: AllRules, mod_name: str) -> int:
-    _register_signals_handlers()
-    arm()
-
+    _before_user_code()
     runpy.run_module(mod_name, run_name="__main__")
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)
@@ -255,8 +266,7 @@ def _python_module(all_rules: AllRules, mod_name: str) -> int:
 
 def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
     try:
-        _register_signals_handlers()
-        arm()
+        _before_user_code()
         script_body = script.read_text()
         sys.argv = [str(script)] + args
         # Runs the user script by design; the OS sandbox isolates it.
@@ -273,8 +283,7 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
 
 
 def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> int:
-    _register_signals_handlers()
-    arm()
+    _before_user_code()
     sys.argv = args
     # Runs the user script by design; the OS sandbox isolates it.
     _RAW_EXEC(script_body)
@@ -312,15 +321,9 @@ def python_in_sb(
     python_cmd: List[str],
 ) -> int:
     try:
-        set_is_in_sandbox(True)
-
         set_learning_path(all_rules.learning_path)  # TODO: may be duplicate of main_sandbox
         set_learning_mode(all_rules.learn)
         if not len(python_cmd):
-            # The other branches register the handlers in their own helper, which
-            # _python_interactive does not do. Register here, before its arm(),
-            # so a SIGTERM during the REPL still saves the learned rules.
-            _register_signals_handlers()
             _python_interactive(all_rules, True)
         elif python_cmd[0] == "-m":
             # Case: Execute a module

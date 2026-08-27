@@ -30,7 +30,7 @@ from typing import Any, AsyncGenerator
 from uvicorn import Server
 
 from ..all_rules import AllRules
-from ..guard_api import arm
+from ..lifecycle import arm
 from ..immutable_dict import ImmutableDict
 from ..private_loop import get_sandbox_loop
 from ..sb_types import Args, Envs
@@ -104,8 +104,6 @@ async def sandbox_daemon(
     global _active_requests
     try:
         _active_requests += 1
-        arm()
-
         module_name, function_name = function_id.split(":", 1)
         # set_is_in_sandbox(True)
         try:
@@ -432,6 +430,13 @@ class SSEServerDaemon(BaseSSESandbox):
             self._accept_incoming = True
             self.stopped = False
             logger.debug("Uvicorn started")
+            # Arm once the server is up, not on every incoming call: init_fn
+            # and the uvicorn setup are framework code and must run disarmed.
+            # What follows is the serve loop and the calls it dispatches, which
+            # the previous per-request arm() already ran armed from the second
+            # request on; the only behaviour that changes is a daemon serving
+            # no request at all, which now serves and shuts down armed.
+            arm()
         finally:
             loop.slow_callback_duration = initial_threshold
 

@@ -200,8 +200,6 @@ async def run_server(process_config: DaemonParameters) -> int:
     """
     import importlib
 
-    from ..tools import set_is_in_sandbox
-
     _qemu_show_boot_console_guest_trace(process_config, "run_server: start")
     from pysandboxes.main_logger import pysandboxes_logger
 
@@ -210,14 +208,15 @@ async def run_server(process_config: DaemonParameters) -> int:
     init_fn: Any = None
     if process_config.init_fn:
         module_name, function_name = str(process_config.init_fn).split(":", 1)
-        set_is_in_sandbox(True)
+        # No enter()/leave() around this import: run_server() is only reached
+        # from main(), which entered the sandbox before activating the guards,
+        # so bracketing it here changed nothing.
         try:
             # Init_fn declared by the trusted parent
             module = importlib.import_module(module_name)
         except ImportError:
             pysandboxes_logger.error("Impossible to import the module %s", repr(module_name))
             sys.exit(-1)
-        set_is_in_sandbox(False)  # Learn the import during the import
         assert hasattr(module, function_name)
         init_fn = getattr(module, function_name)
 

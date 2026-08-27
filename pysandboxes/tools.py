@@ -23,6 +23,9 @@ from typing import (
     cast,
 )
 
+from .lifecycle import enter as _lc_enter
+from .lifecycle import is_in_sandbox as _lc_is_in_sandbox
+from .lifecycle import leave as _lc_leave
 from .sb_types import ConfigLine, ConfigLines, Envs
 
 Environ = dict[str, str] | os._Environ[str]  # type: ignore
@@ -215,17 +218,13 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 # %% -----------------------
 
-_is_in_sandbox: int = 0
-
-
 def is_in_sandbox() -> bool:
     """Check if currently executing inside a sandbox.
 
     Returns:
         True if inside sandbox, False otherwise.
     """
-    global _is_in_sandbox
-    return _is_in_sandbox > 0
+    return _lc_is_in_sandbox()
 
 
 def set_is_in_sandbox(value: bool) -> None:
@@ -234,12 +233,10 @@ def set_is_in_sandbox(value: bool) -> None:
     Args:
         value: True to enter sandbox context, False to exit.
     """
-    global _is_in_sandbox
     if value:
-        _is_in_sandbox += 1
+        _lc_enter()
     else:
-        _is_in_sandbox -= 1
-        assert _is_in_sandbox >= 0
+        _lc_leave()
 
 
 def find_config_for_module(module: str, config_name: str) -> Path | None:

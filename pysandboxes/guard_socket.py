@@ -183,10 +183,15 @@ _all_networks = ["0.0.0.0/0", "::1/0"]
 
 _rules: SocketRules = cast(SocketRules, ())
 # An empty rule set is a legitimate deny-all whitelist, so it cannot double as
-# "not armed": the two states must be told apart by their own flag. False means
-# the guard lets everything through, and only the pytest-only disarm below ever
-# returns it to False -- production arms once and stays armed.
-_armed: bool = False
+# "no rules loaded": the two states must be told apart by their own flag. False
+# means the guard lets everything through, and only the pytest-only disarm below
+# ever returns it to False -- production loads once and keeps them.
+#
+# This flag belongs to the *install* phase, not to the *arm* phase owned by
+# lifecycle: this guard enforces as soon as its rules are loaded, whereas
+# guard_api waits for user code. Naming both "_armed" made two different phases
+# look like one.
+_rules_loaded: bool = False
 
 
 # Loopback names resolvable only through /etc/hosts. That file is not
@@ -1019,7 +1024,7 @@ def _resolve_wildcard_host(self: Any, address: tuple[str, int]) -> tuple[str, in
 
 
 def _check_address(self: Any, address: tuple[str, int], conn_direction: Direction) -> None:
-    if not _armed:
+    if not _rules_loaded:
         return
     _check_address_with_rules(_rules, Kind(self.type), _resolve_wildcard_host(self, address), conn_direction)
 
@@ -1244,11 +1249,11 @@ def activate_guard(rules: SocketRules) -> None:
     Raises:
         RuntimeError: If guard is already activated.
     """
-    global _rules, _armed
-    if _armed:
+    global _rules, _rules_loaded
+    if _rules_loaded:
         raise RuntimeError("Guard_socket already activated.")
     _rules = rules
-    _armed = True
+    _rules_loaded = True
 
 
 def apply_pin_dns_resolution(socket_module: Any) -> None:
@@ -1418,6 +1423,6 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
         an inactive one: the socket wrappers stay installed for the rest of the
         process and refuse every connection a later test makes.
         """
-        global _rules, _armed
+        global _rules, _rules_loaded
         _rules = ()
-        _armed = False
+        _rules_loaded = False
