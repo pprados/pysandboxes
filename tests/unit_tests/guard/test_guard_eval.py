@@ -31,7 +31,7 @@ from pysandboxes.guard_eval import (
 )
 from pysandboxes.guard_api import SENSITIVE_API, _deactivate_guard_api
 from pysandboxes.guard_api import activate_guard as activate_api
-from pysandboxes.guard_api import arm as arm_api
+from pysandboxes.lifecycle import arm as arm_api
 from pysandboxes.guard_api import parse_rules as parse_api_rules
 from pysandboxes.guard_eval import is_ambient, patch_rules
 from pysandboxes.immutable_dict import ImmutableDict

@@ -15,6 +15,7 @@ import sys
 from typing import Any, Callable, NamedTuple
 
 from .e import RuleApiPermissionError
+from .lifecycle import is_armed as _lc_is_armed
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
@@ -353,7 +354,6 @@ def parse_rules(
 
 
 _allowed: ImmutableDict[str, bool] = ImmutableDict({})
-_armed: bool = False
 
 
 def activate_guard(rules: ApiRules) -> None:
@@ -399,24 +399,6 @@ class LearnApiRule(NamedTuple):
     """One sensitive call observed in learning mode."""
 
     qualname: str
-
-
-def arm() -> None:
-    """Start enforcing, just before user code takes over.
-
-    Framework code runs while the guard is disarmed, so it needs no
-    exemption and no escape hatch. Idempotent: every entry point may
-    call it.
-    """
-    global _armed
-    if not _armed:
-        logger.debug("guard_api: armed")
-    _armed = True
-
-
-def is_armed() -> bool:
-    """Return whether the guard is enforcing."""
-    return _armed
 
 
 _WARN_CATEGORIES = ("process-exec", "privileges", "native", "dynamic-code")
@@ -470,7 +452,7 @@ def _wrap_guarded(func: Callable[..., Any], *, qualname: str, category: str) -> 
 
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        if not _armed:
+        if not _lc_is_armed():
             return func(*args, **kwargs)
         if is_learning_mode():
             if not is_allowed(qualname):
@@ -529,7 +511,10 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_api() -> None:
-        """Reset the guard between tests."""
-        global _allowed, _armed
+        """Reset the guard between tests.
+
+        The armed flag is not reset here: it belongs to :mod:`.lifecycle`,
+        which resets it in ``_reset_for_tests()``.
+        """
+        global _allowed
         _allowed = ImmutableDict({})
-        _armed = False

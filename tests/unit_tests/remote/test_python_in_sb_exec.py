@@ -7,7 +7,8 @@ from typing import Iterator
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.guard_api import _deactivate_guard_api, activate_guard, arm
+from pysandboxes.guard_api import _deactivate_guard_api, activate_guard
+from pysandboxes.lifecycle import arm
 from pysandboxes.guard_eval import _deactivate_guard_eval, patch_rules
 from pysandboxes.remote import python_in_sb
 
