@@ -2,8 +2,9 @@
 # License: Apache V2
 """The `__sb_*` helpers, each in isolation."""
 
+import logging
 import re
-from typing import Iterator
+from typing import Any, Iterator
 
 import pytest  # type: ignore[import-untyped]
 
@@ -19,6 +20,7 @@ from pysandboxes.eval_runtime import (
     __sb_iter__,
     __sb_leave__,
     __sb_tick__,
+    _reset_regex_warnings,
     pop_state,
     push_state,
 )
@@ -165,6 +167,55 @@ def test_binop_refuses_a_huge_power_before_computing(state: EvalState) -> None:
 def test_binop_refuses_a_sequence_repetition_over_the_budget(state: EvalState) -> None:
     with pytest.raises(RuleEvalPermissionError, match="eval-max-alloc"):
         __sb_binop__("*", [0], 10**10)
+
+
+@pytest.fixture
+def regex_state() -> Iterator[EvalState]:
+    rules = DEFAULT_RULES._replace(attribute=_names("match", "IGNORECASE"), magic=_names())
+    st = EvalState(rules)
+    push_state(st)
+    _reset_regex_warnings()
+    yield st
+    pop_state()
+    _reset_regex_warnings()
+
+
+def test_reaching_the_stdlib_engine_is_reported(regex_state: EvalState, caplog: Any) -> None:
+    """A finding, not a refusal: the read succeeds, and the message names the linear engine."""
+    caplog.set_level(logging.WARNING, logger="pysandboxes.eval_runtime")
+    assert __sb_getattr__(re, "match") is re.match
+    assert len(caplog.records) == 1
+    assert "re2" in caplog.records[0].getMessage()
+
+
+def test_a_compiled_pattern_is_reported_too(regex_state: EvalState, caplog: Any) -> None:
+    """A pattern the host compiled and passed in never crosses `re`, but its method does."""
+    caplog.set_level(logging.WARNING, logger="pysandboxes.eval_runtime")
+    __sb_getattr__(re.compile(r"a+"), "match")
+    assert len(caplog.records) == 1
+
+
+def test_a_substituted_engine_is_silent(regex_state: EvalState, caplog: Any) -> None:
+    """Identity, not the name: whoever followed the advice stops being told to follow it."""
+    caplog.set_level(logging.WARNING, logger="pysandboxes.eval_runtime")
+    linear = type("FakeRe2", (), {"match": staticmethod(lambda s: None)})()
+    __sb_getattr__(linear, "match")
+    assert caplog.records == []
+
+
+def test_a_non_engine_attribute_is_silent(regex_state: EvalState, caplog: Any) -> None:
+    """Reading a flag starts no engine."""
+    caplog.set_level(logging.WARNING, logger="pysandboxes.eval_runtime")
+    __sb_getattr__(re, "IGNORECASE")
+    assert caplog.records == []
+
+
+def test_the_report_fires_once_per_attribute(regex_state: EvalState, caplog: Any) -> None:
+    """A match inside a loop must not flood the log it is meant to be read in."""
+    caplog.set_level(logging.WARNING, logger="pysandboxes.eval_runtime")
+    for _ in range(5):
+        __sb_getattr__(re, "match")
+    assert len(caplog.records) == 1
 
 
 def test_binop_refuses_a_sequence_repetition_written_the_other_way(state: EvalState) -> None:

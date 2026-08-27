@@ -15,6 +15,7 @@ puts evaluated code inside class bodies.
 
 import logging
 import operator
+import re
 import threading
 from typing import Any, Callable, Iterator
 
@@ -200,7 +201,56 @@ def __sb_getattr__(obj: Any, name: str) -> Any:
             state.attributes.add(name)
             if not state.learn:
                 raise RuleEvalPermissionError(name, "eval-attribute")
+    _warn_about_regex(obj, name)
     return getattr(obj, name)
+
+
+_REGEX_ENGINE_ATTRS = frozenset(
+    {"compile", "match", "search", "fullmatch", "findall", "finditer", "split", "sub", "subn"}
+)
+"""Attributes of `re` and of a compiled pattern that start the matching engine."""
+
+_warned_regex: set[str] = set()
+
+
+def _reset_regex_warnings() -> None:
+    """Clear the deduplication set. Test hook only."""
+    _warned_regex.clear()
+
+
+def _warn_about_regex(obj: Any, name: str) -> None:
+    """Report one reach into the backtracking engine, once per attribute name.
+
+    A finding, never a refusal: whether a pattern needs `re` is the application's
+    call, and this guard cannot make it. What it can do is say that the budget
+    the profile declares does not apply here.
+
+    `__sb_tick__` bounds the evaluated code by polling a flag the rewrite injects
+    at loop bodies. A match is one opaque C call: it charges no tick, and it does
+    not release the GIL. So `(a+)+` on a 28-character subject runs for seconds
+    with the watchdog unable to observe anything, `run_guarded` gives up on the
+    join, and the worker keeps the whole interpreter -- the host application
+    included -- while it finishes. Measured growth is a factor of four per two
+    added characters, so bounding the subject is not a fix either.
+
+    Identity, not the name: a caller who followed the advice and passed a linear
+    engine under the name `re` must stop being told to follow it.
+    """
+    if name not in _REGEX_ENGINE_ATTRS:
+        return
+    if obj is not re and not isinstance(obj, re.Pattern):
+        return
+    if name in _warned_regex:
+        return
+    _warned_regex.add(name)
+    logger.warning(
+        "eval() reached re.%s, whose engine backtracks: a pattern such as (a+)+ runs past"
+        " eval-timeout and holds the GIL, because a match charges no tick.\n"
+        "    prefer a linear engine, injected by the application:"
+        ' eval(expr, {"re": re2})   (pip install google-re2)\n'
+        "    re2 refuses lookaround and backreferences, which is the price of the guarantee",
+        name,
+    )
 
 
 def _refuse_alloc(detail: str) -> None:
