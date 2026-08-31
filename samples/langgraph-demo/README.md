@@ -15,9 +15,15 @@ is known not to hold, since `().__class__.__base__.__subclasses__()` still reach
 That is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
 filter can take the credit. There is no expression filter here, not even an optional one --
 as soon as one exists, the reader can no longer tell who blocked what. In particular the tool
-exposes **no math namespace**: `sqrt(144)` raises `NameError`, and that is the intended
-answer. An applicative feature layer around `eval()` is exactly what makes a reader unsure who
-blocked what.
+exposes **no math namespace**: `foo + 1` raises `NameError`, and that is the intended answer.
+An applicative feature layer around `eval()` is exactly what makes a reader unsure who blocked
+what.
+
+`sqrt(144)` answers differently, and the difference is the whole demonstration: the profile
+declares `eval-syntax=arith, compare`, which admits no call at all, so the expression is
+refused while it is parsed and rewritten -- before Python has to know whether `sqrt` names
+anything. The `NameError` shows the application is plain; the refusal shows what pysandboxes
+adds on top of it.
 
 Two profiles, one per mode, each learned in its own by `learn.py`:
 

@@ -100,4 +100,8 @@ async def test_the_malicious_expression_is_confined_under_python_sb(
         answer = await _call(client, "evaluate_expression", expression=POPEN_ESCAPE)
 
     assert answer.startswith("ERROR"), answer
-    assert "process-exec" in answer, answer
+    # The eval layer refuses this before it can reach Popen: the profile
+    # declares eval-syntax=arith, compare, and the payload needs a
+    # comprehension, a subscript and four dunders. process-exec stays the
+    # backstop for a profile that grants python-api=ALLOW:dynamic-code.
+    assert "EvalSyntaxRejected" in answer, answer

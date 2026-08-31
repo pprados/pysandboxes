@@ -28,14 +28,30 @@ class TestCLI:
         assert result.exit_code == 0
         assert "4" in result.output
 
-    def test_calc_refuses_a_name_the_tool_does_not_define(self) -> None:
-        """The tool is a plain eval() with an emptied __builtins__.
+    def test_calc_refuses_a_call_before_resolving_any_name(self) -> None:
+        """The eval guard rejects the call, ahead of the interpreter.
 
-        No math namespace is injected any more: an applicative feature layer
-        around eval() is exactly what makes a reader unsure who blocked what.
-        `sqrt` is therefore simply undefined, and the tool reports it.
+        The profile declares ``eval-syntax=arith, compare``, which admits no
+        call at all. `sqrt(16)` is therefore refused while the expression is
+        parsed and rewritten, before Python ever has to know whether `sqrt`
+        names anything. The refusal, not a NameError, is the point: it is what
+        the sandbox contributes over a plain eval().
         """
         result = self.runner.invoke(calc, ["sqrt(16)"])
+        assert result.exit_code == 0
+        assert "not allowed" in result.output
+        assert "refused by the sandbox" in result.output
+
+    def test_calc_reports_a_name_the_tool_does_not_define(self) -> None:
+        """The applicative layer is still a plain eval() with no namespace.
+
+        No math namespace is injected: an applicative feature layer around
+        eval() is exactly what makes a reader unsure who blocked what. A bare
+        name is simply undefined, and the tool reports it. Written without a
+        call on purpose, so this stays a NameError whatever the eval profile
+        allows.
+        """
+        result = self.runner.invoke(calc, ["foo + 1"])
         assert result.exit_code == 0
         assert "NameError" in result.output
 

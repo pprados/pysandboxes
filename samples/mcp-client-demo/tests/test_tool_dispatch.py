@@ -121,11 +121,17 @@ async def test_a_host_outside_the_rules_is_refused_through_the_client(
 async def test_the_malicious_expression_is_confined_through_the_client(
     chat: tuple[Client, str],
 ) -> None:
-    """A model asking for the escape gets a refusal, whatever the server profile."""
+    """A model asking for the escape gets a refusal, whatever the server profile.
+
+    The eval layer refuses it before it can reach Popen: both server profiles
+    declare eval-syntax=arith, compare, and the payload needs a comprehension,
+    a subscript and four dunders. process-exec stays the backstop for a profile
+    that grants python-api=ALLOW:dynamic-code.
+    """
     client, mode = chat
     async with client:
         session = ChatSession(client, llm_client=None)  # type: ignore[arg-type]
         answer = await session.process_llm_response(_tool_call("evaluate_expression", expression=POPEN_ESCAPE))
 
     assert "Error executing tool" in answer, f"[{mode}] {answer}"
-    assert "process-exec" in answer, f"[{mode}] {answer}"
+    assert "EvalSyntaxRejected" in answer, f"[{mode}] {answer}"
