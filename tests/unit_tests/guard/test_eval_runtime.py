@@ -244,11 +244,12 @@ def test_iter_is_interruptible(state: EvalState) -> None:
         list(__sb_iter__(forever()))
 
 
-def test_helpers_exposes_exactly_the_six_names() -> None:
+def test_helpers_exposes_exactly_the_seven_names() -> None:
     assert set(HELPERS) == {
         "__sb_tick__",
         "__sb_enter__",
         "__sb_leave__",
+        "__sb_func__",
         "__sb_getattr__",
         "__sb_binop__",
         "__sb_iter__",

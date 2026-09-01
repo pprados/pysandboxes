@@ -319,6 +319,13 @@ class _Injector(ast.NodeTransformer):
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
         return self._bracket(node)
 
+    def visit_Lambda(self, node: ast.Lambda) -> ast.AST:
+        # A lambda body is one expression, so the enter/leave brackets a
+        # FunctionDef gets inline cannot be injected here: the lambda object is
+        # wrapped instead, so its calls charge a frame like any other function.
+        self.generic_visit(node)
+        return ast.copy_location(_call("__sb_func__", [node]), node)
+
 
 def inject(tree: ast.AST) -> ast.AST:
     """Rewrite an accepted tree so the remaining risks are enforced at runtime.

@@ -66,7 +66,7 @@ from . import guard_api
 from .e import EvalInterrupted, RuleApiPermissionError
 from .guard_api import LearnApiRule
 from .eval_rules import DEFAULT_RULES, EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
-from .eval_runtime import HELPERS, EvalState, pop_state, push_state
+from .eval_runtime import GUARDED_BUILTINS, HELPERS, EvalState, pop_state, push_state
 from .eval_transform import inject, learn_targets, raise_if_rejected, validate
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
@@ -215,10 +215,10 @@ def _builtins_from(rules: EvalRules) -> dict[str, Any]:
     allowed = {}
     for name in dir(builtins):
         if rules.call.allows(name):
-            allowed[name] = getattr(builtins, name)
+            allowed[name] = GUARDED_BUILTINS.get(name) or getattr(builtins, name)
     for name in rules.call.allow:
         if name not in allowed and hasattr(builtins, name):
-            allowed[name] = getattr(builtins, name)
+            allowed[name] = GUARDED_BUILTINS.get(name) or getattr(builtins, name)
     return allowed
 
 
