@@ -14,10 +14,20 @@ def _run(profile: str, script: str, tmp_path: Path) -> "subprocess.CompletedProc
     """Run `script` under python-sb with `profile`.
 
     The profile is passed with --pysandboxes-config and carries
-    os-sandbox=subprocess, matching test_guard_api_arming. os-sandbox=subprocess
-    leaves the Python layer inactive -- neither builtins.open nor
-    builtins.eval is patched -- so a guard test written against it asserts
-    nothing about the guard.
+    os-sandbox=subprocess, matching test_guard_api_arming. What arms the Python
+    layer is py-sandbox=true, not the OS backend: under
+    os-sandbox=subprocess both builtins.eval and io.open are patched, which
+    test_the_patched_eval_reaches_the_sandboxed_process asserts. So a guard test
+    written against this profile does exercise the guard.
+
+    A fresh process rather than an in-process arming, because the unit tests
+    reach the guard by another door: they call guarded_eval() directly, and
+    activate_guard() only installs the profiles. Nothing there replaces
+    builtins.eval. Only a real arming patches the builtin, and it patches it
+    for the whole process -- under pytest that would outlive the test. So what
+    is asserted here is what only a process can show: the patch being
+    installed at startup, the exit code, the refusal on stderr, a learned
+    profile written out and replayed by a second process.
     """
     target = tmp_path / "script.py"
     target.write_text(textwrap.dedent(script))
@@ -216,6 +226,56 @@ def test_the_learning_round_trip_produces_a_replayable_profile(tmp_path: Path) -
     )
     assert second.returncode == 0, second.stderr
     assert "6" in second.stdout
+
+
+def test_a_sandbox_decorated_function_is_guarded_when_it_evals(tmp_path: Path) -> None:
+    """The `@sandbox` annotation is how an agent tool is written; the guard holds inside it.
+
+    The samples all take that shape: a tool the model calls evaluates an
+    expression the model produced. Asserting the guard only on a bare `eval()`
+    in the script body says nothing about the decorated path, where the call
+    goes through the `@sandbox` wrapper before reaching the patched builtin.
+
+    `subprocess` is imported first so Popen is loaded, as it is in a real
+    process: what refuses the escape then has to be the eval layer, not a class
+    that happens to be absent from the subclass tree.
+    """
+    done = _run(
+        """
+        py-sandbox=true
+        os-sandbox=subprocess
+        python-import=*
+        eval-namespace=closed
+        eval-syntax=arith, compare
+        eval-timeout=2s
+        """,
+        """
+        import subprocess
+
+        from pysandboxes import sandbox, sandbox_denials
+
+        ESCAPE = (
+            "[c for c in ().__class__.__base__.__subclasses__() "
+            "if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
+        )
+
+        @sandbox
+        def evaluate(expression: str) -> float:
+            return float(eval(expression, {'__builtins__': {}}, {}))
+
+        print('SANE', evaluate('2*(3+4)'))
+        try:
+            evaluate(ESCAPE)
+            print('ESCAPED')
+        except BaseException as err:
+            print('REFUSED', type(err).__name__, sandbox_denials(err))
+        """,
+        tmp_path,
+    )
+    assert done.returncode == 0, done.stderr
+    assert "SANE 14.0" in done.stdout, done.stdout
+    assert "REFUSED EvalSyntaxRejected" in done.stdout, done.stdout
+    assert "eval-syntax=comprehension" in done.stdout, done.stdout
 
 
 @pytest.mark.parametrize("flag", ["-c"])

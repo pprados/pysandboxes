@@ -13,9 +13,11 @@ inside a class body but leaves `__name__` alone, and `eval-syntax=class`
 puts evaluated code inside class bodies.
 """
 
+import _string  # pyright: ignore[reportMissingImports]  # C module; provides formatter_field_name_split
 import logging
 import operator
 import re
+import string
 import threading
 from typing import Any, Callable, Iterator
 
@@ -174,18 +176,50 @@ def __sb_leave__() -> None:
     state.depth = max(0, state.depth - 1)
 
 
-def __sb_getattr__(obj: Any, name: str) -> Any:
-    """Return `obj.name` when the rules allow that name.
+def __sb_func__(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Bracket a lambda's every call with `__sb_enter__`/`__sb_leave__`.
 
-    Args:
-        obj: The object the source wrote to the left of the dot.
-        name: The attribute name, as written.
+    A `FunctionDef` body is rewritten with an inline enter/try/finally-leave;
+    a lambda body is a single expression that admits no statement, so the
+    lambda object is wrapped instead. Without this, lambda recursion consumes
+    no call frame and is bounded only by CPython's `RecursionError`, which the
+    evaluated code can catch once `eval-syntax=exception` is granted.
+    """
 
-    Returns:
-        The attribute value.
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        __sb_enter__()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            __sb_leave__()
+
+    return wrapper
+
+
+def _attr_allowed(name: str) -> bool:
+    """Return whether `name` would pass the attribute rules, silently.
+
+    A pure predicate for `dir()` filtering: it neither records an observation
+    for learning nor raises. `_check_attr` is the enforcing counterpart.
+    """
+    if name in FRAME_CAPTURE:
+        return False
+    rules = current_state().rules
+    if name.startswith("__") and name.endswith("__"):
+        return rules.magic.allows(name)
+    return rules.attribute.allows(name)
+
+
+def _check_attr(name: str) -> None:
+    """Enforce the attribute rules for `name`, recording it in learning mode.
+
+    The single gate every attribute read passes through, whatever its syntax:
+    the injected `__sb_getattr__`, the `getattr`/`vars`/`hasattr` builtin
+    shims, and the `str.format` field walk all call it, so a name can no
+    longer reach the object through a path the dotted form would refuse.
 
     Raises:
-        RuleEvalPermissionError: The name is a frame-capture attribute, an
+        RuleEvalPermissionError: `name` is a frame-capture attribute, an
             undeclared dunder, or an undeclared ordinary name.
     """
     if name in FRAME_CAPTURE:
@@ -196,13 +230,190 @@ def __sb_getattr__(obj: Any, name: str) -> Any:
             state.magic.add(name)
             if not state.learn:
                 raise RuleEvalPermissionError(name, "eval-magic")
-    else:
-        if not state.rules.attribute.allows(name):
-            state.attributes.add(name)
-            if not state.learn:
-                raise RuleEvalPermissionError(name, "eval-attribute")
+    elif not state.rules.attribute.allows(name):
+        state.attributes.add(name)
+        if not state.learn:
+            raise RuleEvalPermissionError(name, "eval-attribute")
+
+
+_FORMAT_METHODS = frozenset({"format", "format_map"})
+
+
+def _validate_format_template(template: str) -> None:
+    """Run every attribute access a format template performs past `_check_attr`.
+
+    `str.format` resolves `{0.__class__}` in C from the contents of the
+    string, so no `Attribute` node exists for phase 1 or `__sb_getattr__` to
+    see. The template is known here -- it is the string the method is bound to
+    -- so each field's attribute accesses are validated before the C call.
+    Index access (`{0[0]}`) is data and left alone; nested spec fields
+    (`{0:{1.__class__}}`) are walked in turn.
+
+    Raises:
+        RuleEvalPermissionError: A field reaches a refused attribute.
+    """
+    for _literal, field, spec, _conversion in string.Formatter().parse(template):
+        if field is not None:
+            _first, rest = _string.formatter_field_name_split(field)
+            for is_attribute, value in rest:
+                if is_attribute:
+                    _check_attr(value)
+        if spec and "{" in spec:
+            _validate_format_template(spec)
+
+
+def _guarded_format(template: str, name: str) -> Callable[..., str]:
+    """Return a bound `str.format`/`format_map` that validates its template."""
+
+    def bound(*args: Any, **kwargs: Any) -> str:
+        _validate_format_template(template)
+        return getattr(template, name)(*args, **kwargs)  # type: ignore[no-any-return]
+
+    return bound
+
+
+def _guarded_format_unbound(cls: type, name: str) -> Callable[..., str]:
+    """Return an unbound `str.format`/`format_map` that validates arg zero.
+
+    `str.format(template, ...)` and `type('').format(...)` reach the method
+    through the class, not an instance, so the template is the first positional
+    argument rather than the bound object. Without this the instance guard was
+    a side door away: `str.format('{0.__class__}', ())` walked the type
+    hierarchy untouched.
+    """
+
+    def unbound(template: Any = "", *args: Any, **kwargs: Any) -> str:
+        if isinstance(template, str):
+            _validate_format_template(template)
+        return getattr(cls, name)(template, *args, **kwargs)  # type: ignore[no-any-return]
+
+    return unbound
+
+
+def __sb_getattr__(obj: Any, name: str) -> Any:
+    """Return `obj.name` when the rules allow that name.
+
+    Args:
+        obj: The object the source wrote to the left of the dot.
+        name: The attribute name, as written.
+
+    Returns:
+        The attribute value, or a validating wrapper for `str.format`.
+
+    Raises:
+        RuleEvalPermissionError: The name is a frame-capture attribute, an
+            undeclared dunder, or an undeclared ordinary name.
+    """
+    _check_attr(name)
+    if name in _FORMAT_METHODS:
+        if isinstance(obj, str):
+            return _guarded_format(obj, name)
+        if isinstance(obj, type) and issubclass(obj, str):
+            return _guarded_format_unbound(obj, name)
     _warn_about_regex(obj, name)
     return getattr(obj, name)
+
+
+_MISSING = object()
+
+
+def __sb_b_getattr__(obj: Any, name: str, *default: Any) -> Any:
+    """Guarded `getattr`: the builtin routed through `__sb_getattr__`.
+
+    The raw builtin reads any attribute in C, so binding it unguarded reopened
+    `eval-magic`, `eval-attribute` and the frame-capture DENY by name. The
+    three-argument default is honoured only after the name itself is allowed.
+    """
+    try:
+        return __sb_getattr__(obj, name)
+    except AttributeError:
+        if default:
+            return default[0]
+        raise
+
+
+def __sb_b_hasattr__(obj: Any, name: str) -> bool:
+    """Guarded `hasattr`: probing existence still passes the attribute rules."""
+    try:
+        __sb_getattr__(obj, name)
+        return True
+    except AttributeError:
+        return False
+
+
+def __sb_b_vars__(obj: Any = _MISSING) -> Any:
+    """Guarded `vars`: `__dict__` handed raw is the whole attribute surface.
+
+    Routed through `__sb_getattr__(obj, "__dict__")`, so it is gated by
+    `eval-magic=__dict__`. The no-argument form returns the caller's locals --
+    here the evaluation frame -- and is refused outright.
+    """
+    if obj is _MISSING:
+        raise RuleEvalPermissionError("vars", "eval-call", "vars() with no argument exposes the evaluation frame")
+    return __sb_getattr__(obj, "__dict__")
+
+
+def __sb_b_setattr__(*_args: Any, **_kwargs: Any) -> Any:
+    """Guarded `setattr`: attribute store is refused, as it is for the dot."""
+    raise RuleEvalPermissionError("setattr", "eval-attribute", "the sub-language does not mutate attributes")
+
+
+def __sb_b_delattr__(*_args: Any, **_kwargs: Any) -> Any:
+    """Guarded `delattr`: attribute delete is refused, as it is for the dot."""
+    raise RuleEvalPermissionError("delattr", "eval-attribute", "the sub-language does not delete attributes")
+
+
+def __sb_b_breakpoint__(*_args: Any, **_kwargs: Any) -> Any:
+    """Guarded `breakpoint`: the debugger reaches the host and is refused."""
+    raise RuleEvalPermissionError("breakpoint", "eval-call", "the debugger is not reachable from the sub-language")
+
+
+def __sb_b_globals__() -> Any:
+    """Guarded `globals`: the evaluation namespace is not handed back."""
+    raise RuleEvalPermissionError("globals", "eval-call", "the evaluation namespace is not exposed")
+
+
+def __sb_b_dir__(obj: Any = _MISSING) -> list[str]:
+    """Guarded `dir`: the no-argument form is refused, the rest is filtered.
+
+    `dir()` with no argument lists the evaluation frame's names; `dir(obj)` is
+    trimmed to the attributes the rules would let through, so it never becomes
+    a catalogue of the refused surface.
+    """
+    if obj is _MISSING:
+        raise RuleEvalPermissionError("dir", "eval-call", "dir() with no argument exposes the evaluation frame")
+    return [name for name in dir(obj) if _attr_allowed(name)]
+
+
+def __sb_b_type__(*args: Any) -> Any:
+    """Guarded `type`: the one-argument query is kept, the class factory is not.
+
+    `type(x)` returns a class whose own attributes stay gated by
+    `__sb_getattr__`; `type(name, bases, dict)` builds a new class and is
+    refused.
+    """
+    if len(args) == 1:
+        return type(args[0])
+    raise RuleEvalPermissionError("type", "eval-call", "the three-argument class factory is refused")
+
+
+GUARDED_BUILTINS: dict[str, Callable[..., Any]] = {
+    "getattr": __sb_b_getattr__,
+    "hasattr": __sb_b_hasattr__,
+    "vars": __sb_b_vars__,
+    "setattr": __sb_b_setattr__,
+    "delattr": __sb_b_delattr__,
+    "breakpoint": __sb_b_breakpoint__,
+    "globals": __sb_b_globals__,
+    "dir": __sb_b_dir__,
+    "type": __sb_b_type__,
+}
+"""Builtins bound under their own name but replaced by a guarded shim.
+
+`eval-call` grants the name; the namespace binds the shim, so the sensitive
+builtin can no longer be the side door the bounded namespace closed. `open`,
+`eval`, `exec`, `compile` and `__import__` are absent on purpose: each is
+already covered by its own guard (files, this guard re-entered, imports)."""
 
 
 _REGEX_ENGINE_ATTRS = frozenset(
@@ -308,6 +519,7 @@ HELPERS: dict[str, Any] = {
     "__sb_tick__": __sb_tick__,
     "__sb_enter__": __sb_enter__,
     "__sb_leave__": __sb_leave__,
+    "__sb_func__": __sb_func__,
     "__sb_getattr__": __sb_getattr__,
     "__sb_binop__": __sb_binop__,
     "__sb_iter__": __sb_iter__,

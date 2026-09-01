@@ -9,6 +9,7 @@ it appears -- so an ``include`` cannot be defeated by placement.
 """
 
 import ast
+import builtins
 import difflib
 import logging
 from datetime import date, datetime, time, timedelta
@@ -229,6 +230,18 @@ ATTRIBUTE_GROUPS: dict[str, frozenset[str]] = {
 
 _BLIND_ATTRIBUTES = ("format", "format_map")
 
+# Builtins that hand back, by name, a door the bounded namespace had shut.
+# `getattr`, `vars`, `setattr`, `delattr`, `type`, `dir`, `globals` and
+# `breakpoint` are neutralised by a guarded shim; `open`, `eval`, `exec`,
+# `compile` and `__import__` reach their own guard. Either way, granting one is
+# a real widening a reader should see reported.
+_SENSITIVE_CALL = frozenset(
+    {
+        "getattr", "setattr", "delattr", "vars", "hasattr", "dir", "globals",
+        "type", "breakpoint", "open", "eval", "exec", "compile", "__import__",
+    }
+)  # fmt: skip
+
 LIST_KEYS: dict[str, str] = {
     "eval-syntax": "syntax",
     "eval-call": "call",
@@ -359,6 +372,16 @@ def _parse_list_value(
                 "so no Attribute node exists to rewrite",
                 token,
             )
+        if key == "eval-call" and not deny and hasattr(builtins, token):
+            if token in _SENSITIVE_CALL:
+                logger.warning(
+                    "eval-call=%s grants a sensitive builtin: it is neutralised by a guarded shim or "
+                    "reaches its own guard, but it widens the reachable surface — grant it only if the "
+                    "sub-language truly needs it",
+                    token,
+                )
+            else:
+                logger.warning("eval-call=%s adds the builtin %r to the namespace", token, token)
         (acc.deny if deny else acc.allow)[field].add(token)
 
 
