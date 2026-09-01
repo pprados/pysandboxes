@@ -41,6 +41,33 @@ and to surface them in learning mode — not to contain hostile bytecode. That i
 the OS sandbox's job ([firejail](firejail.md), [bwrap](bwrap.md),
 [unshare](unshare.md), [qemu](qemu.md), [landlock](landlock.md)).
 
+### The design target: wayward LLM-generated code
+
+Naming the reader this layer is built for decides what is worth building, so it
+is stated here rather than left to be inferred from the matrix.
+
+**The target is code an LLM produced while solving the wrong problem, not an
+adversary.** Such code reaches for `open`, `requests.get` or `subprocess` in the
+open, and stops at the first refusal; the layer exists to make that refusal
+happen, to name the rule that caused it, and to record it in learning mode.
+
+Code written to break out is explicitly **out of scope**, and not for lack of
+effort: it needs none of the paths listed in
+[section 6](#6-disarm-the-guard-or-reach-an-original). One `ctypes` call, or one
+C extension, leaves every Python-level guard untouched and intact. Hardening
+this layer against that reader would buy nothing the layer does not already
+concede on the line above.
+
+Two consequences, both deliberate:
+
+- **No C extension holding the arming flag, and no PEP 578 audit hook** are
+  planned. Either would close one row of section 6 while the rows below it stay
+  open, and neither survives a reader who can call native code anyway.
+- The residual entries in section 6 are **documented, not scheduled**. What the
+  layer does owe its target is that an accidental disarming be *loud* rather
+  than silent — that is [`guard_self`'s](#guards-that-are-inert-by-design) job,
+  not a C one.
+
 ---
 
 ## Table of contents
@@ -137,7 +164,10 @@ only the *decision* uses the resolved path.
 | Attack | Layer (`file:line`) | Status |
 |---|---|---|
 | Walk `object().__subclasses__()` to the guard modules and reset their state | nothing blocks the class-hierarchy walk | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_subclasses`, xfail-pinned; reaches `guard_import` and sets `_rules=()`) |
-| Reset the `_armed` flag through that same walk | `_armed` is a plain module global (`guard_api.py:356`) | **Open — reasoned** (same class as above; [weaknesses.md](weaknesses.md) names it explicitly) |
+| Reset the `_armed` flag through that same walk | `_armed` is a plain module global (`lifecycle.py:36`), re-read on every `is_armed()` | **Open — reasoned** (same class as above; [weaknesses.md](weaknesses.md) names it explicitly) |
+| Rebind the call-site alias instead of the flag: `guard_api._lc_is_armed = lambda: False` | `guard_api.py:18` binds the function by value, so the alias is a second, independent switch (`guard_api.py:455`) | **Open — reasoned** |
+| Reach the unguarded original through `__wrapped__` | `guard_wraps.guard_wraps()` replaces `functools.wraps` in the five guards: it restores `__signature__`, then drops the back-reference | **Closed** (the guarded callable no longer carries `__wrapped__`; `test_guard_escape_fixes.py` had been using that very door for its own setup) |
+| Reach the original through the wrapper's own closure cell (`__closure__[i].cell_contents`) or `gc.get_referents` | a Python wrapper necessarily holds a reference to what it wraps; hiding the name does not hide the object | **Open — by construction** |
 | Obfuscated name construction (`'__sub'+'classes__'`, `chr()` chains, hex-decoded `__import__`) | static name scanning is a courtesy, not a barrier — runtime-built names are never seen | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_obfuscated_strings`) |
 
 These are the defining limits of a patch-based layer, not defects to be fixed
@@ -193,6 +223,22 @@ discovered vulnerability — do not report them as escapes, and do not "fix" the
   (`_global_patch_in_sys_module` returns the module unchanged, `guard_self.py:64`,
   with a `TODO`). This is why objective 5's `sys.meta_path` removal and
   objective 6's `__subclasses__` walk stay open.
+
+  That `TODO` marks a dead end, not unfinished work, and the distinction is
+  worth recording so the chantier is not reopened. `GuardModule` *copies* the
+  original's `__dict__` (`guard_self.py:43`) instead of proxying it, so two
+  things follow. The copy diverges: wrap `lifecycle`, call `arm()`, and the
+  guarded module still reports `_armed is False` while the process is armed —
+  a phantom state, which is a correctness defect before it is a security one.
+  And the module's own functions keep `__globals__` bound to the original dict,
+  so `module.is_armed.__globals__["_armed"] = False` disarms in one line, past
+  the guarded `__setattr__`. That second part is not fixable in Python:
+  `LOAD_GLOBAL` requires a real `dict` and bypasses any subclass that guards
+  `__setitem__`. A module global cannot be made unwritable. Protecting the
+  arming state would mean moving it out of module globals entirely — into an
+  object with a guarded `__setattr__` — which buys nothing against the
+  [design target](#the-design-target-wayward-llm-generated-code): disarming is
+  a deliberate act, and wayward code calls `open`, it does not reset flags.
 - **`guard_pickle`** — never referenced in `py_sandbox.activate_sandboxes`
   (the wired set is env/file/socket/import/self/api/eval, `py_sandbox.py:353-368`).
   `pickle.loads` therefore runs its opcodes unguarded. Pinned as
