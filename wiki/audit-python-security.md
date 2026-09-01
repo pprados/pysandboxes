@@ -8,7 +8,7 @@ documents, objective by objective, what hostile code can and cannot reach once
 a profile is armed, which layer stops each attempt, and — crucially — the
 residual limits the layer does **not** claim to cover.
 
-It is the companion of [the `eval-*` assessment](eval-security.md), which covers
+It is the companion of [the `eval-*` assessment](audit-eval-security.md), which covers
 the dynamic-code sub-language, and of [weaknesses](weaknesses.md), which lists
 the limits of the package in prose. This page turns those prose limits into a
 structured, test-pinned matrix and adds the enforcement point (`file:line`) for
@@ -22,7 +22,7 @@ every row. Read [implementation](implementation.md) first if you need to know
 The two reports do **not** share a threat model, and conflating them would be a
 false guarantee.
 
-- In the [`eval-*` report](eval-security.md) the attacker controls a **source
+- In the [`eval-*` report](audit-eval-security.md) the attacker controls a **source
   string** evaluated inside a **bounded namespace**. There the report can
   honestly say "every attribute read passes through `_check_attr`": the
   attacker never holds a real object reference the guard did not hand out.
@@ -208,7 +208,7 @@ visibility; the OS sandbox is the barrier.
 ## Residual limits — denial of service
 
 Exhausting CPU, memory or file descriptors is out of scope for this layer, by
-the same reasoning as the [`eval-*` report](eval-security.md): a patch on a
+the same reasoning as the [`eval-*` report](audit-eval-security.md): a patch on a
 Python function cannot bound native resource use. The OS sandbox (cgroups,
 `ulimit`, the VM providers) owns denial of service.
 
