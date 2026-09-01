@@ -87,9 +87,9 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
     - [How the partial mode work?](#how-the-partial-mode-work)
 - [Security Filters](#security-filters)
   - [Dynamically evaluated code](#dynamically-evaluated-code)
-  - [Manage config file locations](#manage-config-file-locations)
 - [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
 - [Paranoia level](#paranoia-level)
+- [Manage config file locations](#manage-config-file-locations)
 - [Integration in a module](#integration-in-a-module)
   - [Samples](#samples)
   - [FAQ](#faq)
@@ -454,32 +454,6 @@ style DynamicCode fill:#6e4a2c,stroke:#2f2617,stroke-width:4px,stroke-dasharray:
 
 Every rule of the `eval-*` family is described key by key, with a valid and an invalid example for each, [here](wiki/eval.md). For a red-team view — attack by attack, what a hostile string can and cannot reach and which layer stops it — see the [security assessment of the `eval-*` guard](wiki/audit-eval-security.md).
 
-## Manage config file locations
-
-By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./.py-sandboxes` file is used. This can be modified before the program is launched. If you package your application in a Wheel, place your parameters within your module.
-
-To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
-
-By default, you'll find this:
-
-```text
-include "./.local.py-sandboxes"  # May be added to .gitignore
-include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
-include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
-```
-
-The goal is to be able to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`).
-
-Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
-
-By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is simply ignored.
-
-With **python-sb**, a special parameter can be used to select the configuration.
-
-```bash
-python-sb --pysandboxes-config=./.py-sandboxes -m ...
-```
-
 ---
 
 # OS-sandbox vs Py-sandbox
@@ -591,6 +565,34 @@ Depending on your level of paranoia, you can choose a suitable approach.
 |    17    | python-sb        | qemu           |    Yes     |      no      |
 |    18    | with sandboxes() | qemu           |    Yes     |      no      |       
 
+
+# Manage config file locations
+
+By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./.py-sandboxes` file is used. This can be modified before the program is launched. If you package your application in a Wheel, place your parameters within your module.
+
+To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
+
+By default, you'll find this:
+
+```text
+include "./.local.py-sandboxes"  # May be added to .gitignore
+include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
+include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
+```
+
+The goal is to be able to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`).
+
+Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
+
+By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is simply ignored.
+
+With **python-sb**, a special parameter can be used to select the configuration.
+
+```bash
+python-sb --pysandboxes-config=./.py-sandboxes -m ...
+```
+
+---
 
 # Integration in a module
 
