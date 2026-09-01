@@ -427,7 +427,7 @@ What are the security filters offered by **Py-Sandboxes**?
 - **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
 - **Dynamically evaluated code control**: a string handed to `eval()`, `exec()` or `compile()` — which is exactly the shape of a model's answer — is refused unless the profile declares the sub-language it may use. The declared source is then parsed, checked, rewritten so attribute walks and resource exhaustion are refused while it runs, and executed under a timeout the caller can recover from. See [the `eval-*` rules](https://github.com/pprados/pysandboxes/blob/master/wiki/eval.md).
 
-Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
+Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandboxes.template) generated during the first execution for more details.
 
 For a red-team view of these filters — attack by attack, what hostile code can and cannot reach once a profile is armed, which layer stops each attempt and what the layer does not claim to cover — see the [security assessment of the Python layer](wiki/audit-python-security.md).
 

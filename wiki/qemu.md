@@ -249,5 +249,5 @@ qemu.virtfs=auto
 qemu.virtfs_security_model=mapped-xattr
 ```
 
-See also the commented block **QEMU (os-sandbox=qemu)** in `pysandboxes/templates/py-sandbox.template`.
+See also the commented block **QEMU (os-sandbox=qemu)** in `pysandboxes/templates/py-sandboxes.template`.
 

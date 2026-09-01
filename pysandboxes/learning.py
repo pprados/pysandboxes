@@ -131,7 +131,7 @@ def generate_config_from_learning() -> None:
         else:
             # Load template
             with resources.as_file(
-                resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates") / "py-sandbox.template"
+                resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates") / "py-sandboxes.template"
             ) as resource_path:
                 all_lines = resource_path.read_text().split("\n")
 

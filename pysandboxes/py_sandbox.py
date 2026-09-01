@@ -167,7 +167,7 @@ def load_and_parse_config(
         # Activate the learn mode
         # Load the template, and add learn mode
         with resources.as_file(
-            resources.files(pysb_module_name + ".templates") / "py-sandbox.template"
+            resources.files(pysb_module_name + ".templates") / "py-sandboxes.template"
         ) as resource_path:
             config = extra_lines + _read_config_and_remove_comments(resource_path)
     else:
