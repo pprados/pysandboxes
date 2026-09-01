@@ -53,7 +53,8 @@ py-sandbox=true
 #
 # Available providers:
 # - subprocess: Isolates code in separate Python process (default, safest)
-# - firejail: Advanced Linux sandboxing with syscall filtering, network isolation
+# - firejail, unshare, bwrap, qemu, etc: Advanced Linux sandboxing with syscall filtering,
+#   network isolation
 # - none: Disables @sandbox decorator (for testing/debugging only)
 #
 # Note: Some providers may not work in containers without additional privileges.
@@ -244,6 +245,7 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 #
 # The escape hatch, for code that must keep the old unguarded behaviour, is
 # python-api=ALLOW:dynamic-code -- and it is exactly as wide as it sounds.
+# For more information, read wiki/eval.md.
 # <learning_guard_eval>
 
 # </learning_guard_eval>
@@ -253,7 +255,7 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # ======================================
 # Lines below apply only when os-sandbox matches that provider. Syntax is always
 # <provider>.<key>=<value>; the runtime stores keys without the "<provider>." prefix.
-# See wiki/qemu.md, wiki/bwrap.md, wiki/unshare.md, wiki/firejail.md.
+# See wiki/qemu.md, wiki/bwrap.md, wiki/unshare.md, wiki/firejail.md, etc.
 
 #######################################################################################
 # QEMU (os-sandbox=qemu)

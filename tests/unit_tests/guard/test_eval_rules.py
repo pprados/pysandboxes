@@ -435,7 +435,7 @@ def test_without_a_caller_context_the_eval_call_line_is_emitted() -> None:
 def test_the_template_carries_the_learning_block() -> None:
     from importlib import resources
 
-    with resources.as_file(resources.files("pysandboxes.templates") / "py-sandbox.template") as path:
+    with resources.as_file(resources.files("pysandboxes.templates") / "py-sandboxes.template") as path:
         text = path.read_text()
     assert "# <learning_guard_eval>" in text
     assert "# </learning_guard_eval>" in text
