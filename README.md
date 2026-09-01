@@ -12,8 +12,6 @@
 
 [Home Page](https://www.github.com/pprados/pysandboxes/)
 
-> **Beta.** The project is published and usable, but the public API and the format of the `.py-sandboxes` configuration file may still change. Bug reports and feedback are welcome.
-
 # Quick start
 
 Run any module in a sandbox, without installing anything and without touching a single line of your code:
@@ -431,6 +429,8 @@ What are the security filters offered by **Py-Sandboxes**?
 
 Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandbox.template) generated during the first execution for more details.
 
+For a red-team view of these filters — attack by attack, what hostile code can and cannot reach once a profile is armed, which layer stops each attempt and what the layer does not claim to cover — see the [security assessment of the Python layer](wiki/python-security.md).
+
 ## Dynamically evaluated code
 
 The two diagrams above show two nested boundaries: the OS sandbox and, inside it, the Python sandbox. A string handed to `eval()`, `exec()` or `compile()` adds a third one. Unlike the first two, it is not a process boundary: the source is parsed, checked against the `eval-*` rules and rewritten inside the very process that calls `eval()`, which is why it is drawn with a dashed border.
@@ -452,7 +452,7 @@ style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 style DynamicCode fill:#6e4a2c,stroke:#2f2617,stroke-width:4px,stroke-dasharray:6 4,color:#ffffff
 ```
 
-Every rule of the `eval-*` family is described key by key, with a valid and an invalid example for each, [here](wiki/eval.md).
+Every rule of the `eval-*` family is described key by key, with a valid and an invalid example for each, [here](wiki/eval.md). For a red-team view — attack by attack, what a hostile string can and cannot reach and which layer stops it — see the [security assessment of the `eval-*` guard](wiki/eval-security.md).
 
 ## Manage config file locations
 

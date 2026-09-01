@@ -412,8 +412,8 @@ this guard exists to address, so the break is the point. Pass what the
 expression needs instead: `eval(e, {"SECRET": SECRET}, {})`, which `adaptive`
 honours untouched.
 
-Each graded name in a supplied context emits a `SandboxContextWarning`, once
-per call site:
+Each graded name in a supplied context emits one log record on the
+`pysandboxes.guard_eval` logger, once per call site:
 
 | What is passed | Level |
 |---|---|
@@ -424,14 +424,15 @@ per call site:
 | scalars and containers of scalars | none |
 
 ```
-SandboxContextWarning: eval() context provides module 'os' at tools.py:66
+WARNING pysandboxes.guard_eval: eval() context provides module 'os' at tools.py:66
     the evaluated code can reach everything it exposes
     acknowledge with: eval-call=os        (or use eval-namespace=closed)
 ```
 
-It is a `warnings.warn`, not a log line, so your project decides: promote with
-`-W error::SandboxContextWarning`, silence per module with `filterwarnings`,
-or assert on it with `pytest.warns`.
+It is a `logger.warning`, not a `warnings.warn`: every guard in the package
+reports on the module logger, so your existing logging configuration sees this
+finding too. Your project decides what to do with it -- route or silence the
+`pysandboxes.guard_eval` logger, or assert on it with `caplog`.
 
 ```ini
 # Valid — the recommended setting for a tool handling model output
@@ -848,7 +849,7 @@ eval-timeout:frame=10s
 Three things worth knowing before shipping this one:
 
 - **Pass the object, never the module.** `names={"pd": pandas}` under
-  `adaptive` raises a strong `SandboxContextWarning`, and rightly:
+  `adaptive` logs a strong finding, and rightly:
   `pd.read_csv` reaches the filesystem. Under `closed` the module simply is
   not there.
 - **`DENY:` earns its keep here.** The allow list is long enough that an
