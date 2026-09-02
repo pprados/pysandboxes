@@ -1,5 +1,6 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
+import builtins
 import code
 import contextlib
 import importlib
@@ -264,13 +265,35 @@ def _python_module(all_rules: AllRules, mod_name: str) -> int:
     return 0
 
 
+def _main_globals(file: str | None) -> dict:
+    """The namespace CPython gives to ``__main__``.
+
+    One mapping, used as both globals and locals: ``exec(source)`` with no
+    explicit namespace takes the caller's ``globals()`` and ``locals()``, which
+    here are two different dicts. The script's own assignments would land in
+    the caller's locals while the functions it defines capture this module's
+    globals, so a script function reading a script global raised ``NameError``.
+    """
+    namespace = {
+        "__name__": "__main__",
+        "__builtins__": builtins,
+        "__doc__": None,
+        "__package__": None,
+        "__spec__": None,
+    }
+    if file is not None:
+        namespace["__file__"] = file
+    return namespace
+
+
 def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
     try:
         _before_user_code()
         script_body = script.read_text()
         sys.argv = [str(script)] + args
         # Runs the user script by design; the OS sandbox isolates it.
-        _RAW_EXEC(script_body)
+        # Compiled against the real path so a traceback names the user's file.
+        _RAW_EXEC(_RAW_COMPILE(script_body, str(script), "exec"), _main_globals(str(script)))
         if sys.flags.inspect:
             return _python_interactive(all_rules=all_rules, ban=False)
         return 0
@@ -286,7 +309,8 @@ def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> i
     _before_user_code()
     sys.argv = args
     # Runs the user script by design; the OS sandbox isolates it.
-    _RAW_EXEC(script_body)
+    # No __file__: CPython does not set one for ``python -c`` either.
+    _RAW_EXEC(_RAW_COMPILE(script_body, "<string>", "exec"), _main_globals(None))
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)
     return 0
