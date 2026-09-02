@@ -69,6 +69,7 @@ from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref, pysandboxes_logger
 from .sb_types import ConfigLine, ConfigLines
+from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -895,7 +896,7 @@ def _get_family(ip: str) -> int:
 
 # %%
 def _wrap_socket_gethostbyname(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: dict[str, Any]) -> Any:
         if isinstance(name, str) and name in _pin_dns:
             for addr_info in _pin_dns[name]:
@@ -930,7 +931,7 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
 
 
 def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: dict[str, Any]) -> Any:
         if isinstance(name, str) and name in _pin_dns:
             addr_info = _pin_dns[name]
@@ -958,7 +959,7 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
 
 
 def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         host: bytes | str | None,
         port: bytes | str | int | None,
@@ -1046,7 +1047,7 @@ def _socket_add_learning_rule(
 
 
 def _wrap_socket_bind(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> None:
         if (
             isinstance(address, tuple)
@@ -1089,7 +1090,7 @@ def _wrap_socket_bind(func: Callable) -> Callable:
 
 
 def _wrap_socket_connect(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> None:
         if (
             isinstance(address, tuple)
@@ -1131,7 +1132,7 @@ def _wrap_socket_connect(func: Callable) -> Callable:
 
 
 def _wrap_socket_connect_ex(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(self: Any, address: Adresse_Type) -> int:
         if (
             isinstance(address, tuple)
@@ -1171,7 +1172,7 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
 
 
 def _wrap_socket_sendto(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(self: Any, data: ReadableBuffer, address: _Address, /) -> int:
         if (
             isinstance(address, tuple)

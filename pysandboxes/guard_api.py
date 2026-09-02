@@ -8,7 +8,6 @@ calls to a finite registry of sensitive functions, independently of
 ``python-import=``, and records attempted calls in learning mode.
 """
 
-import functools
 import logging
 import os
 import sys
@@ -21,6 +20,7 @@ from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 from .tools import patch_factory as _f
+from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -450,7 +450,7 @@ def _wrap_guarded(func: Callable[..., Any], *, qualname: str, category: str) -> 
     if getattr(func, "__pysandbox_api__", False):
         return func
 
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if not _lc_is_armed():
             return func(*args, **kwargs)
