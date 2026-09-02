@@ -65,8 +65,9 @@ Two consequences, both deliberate:
   open, and neither survives a reader who can call native code anyway.
 - The residual entries in section 6 are **documented, not scheduled**. What the
   layer does owe its target is that an accidental disarming be *loud* rather
-  than silent — that is [`guard_self`'s](#guards-that-are-inert-by-design) job,
-  not a C one.
+  than silent. That was `guard_self`'s intended job; the module could not do it
+  and was removed, so the debt now falls on moving the guards' state out of
+  module globals -- see [below](#guards-that-are-inert-by-design).
 
 ---
 
@@ -94,16 +95,18 @@ Every row is marked **demonstrated** (pinned by an executed test) or
 
 ## Two enforcement states: disarmed and armed
 
-Nothing is enforced until `guard_api.arm()` flips a module global
-(`guard_api.py:356`, set in `arm()` at `guard_api.py:404`, read by
-`is_armed()` at `guard_api.py:417`). Framework code runs disarmed; user code
-runs armed. `guard_socket` keeps its own `_armed` flag (`guard_socket.py:189`),
-checked in `_check_address` (`guard_socket.py:1021`).
+Nothing is enforced until `lifecycle.arm()` flips a module global
+(`_armed`, `lifecycle.py:36`, set in `arm()` at `:64`, read by `is_armed()` at
+`:74`). Framework code runs disarmed; user code runs armed. Since b13a066
+`lifecycle` is the single owner of that state: `guard_api.arm()` is gone, and
+`guard_socket`'s flag, which never meant the same thing, is now named
+`_rules_loaded`.
 
 The wrappers short-circuit when disarmed — `guard_api`'s control point returns
-the raw function if `not _armed` (`guard_api.py:473`). This is by design, but it
-also means the arming flag is a single point whose reset disarms everything;
-see [objective 6](#6-disarm-the-guard-or-reach-an-original).
+the raw function if `not _lc_is_armed()` (`guard_api.py:455`). This is by
+design, but it also means the arming flag is a single point whose reset
+disarms everything; see
+[objective 6](#6-disarm-the-guard-or-reach-an-original).
 
 ---
 
@@ -157,7 +160,7 @@ only the *decision* uses the resolved path.
 | `import` a module outside `python-import=` | `GuardFinder.find_spec` denies via `_is_import_allowed` → `raise RuleModuleNotFoundError` (`guard_import.py:445-462`); finder inserted at `sys.meta_path[0]` (`guard_import.py:524`) | **Blocked — demonstrated** (`test_guard_import.py`, `test_guard_escape_fixes.py::test_find_spec_denies_a_module_outside_the_rules`) |
 | Empty rule set treated as "no filter" | empty `_rules` is deny-all, wildcard `("*",)` is allow-all (`_is_import_allowed`, `guard_import.py:129`) | **Blocked — demonstrated** (`test_no_import_rule_denies_every_module`, `test_wildcard_import_rule_allows_every_module`) |
 | Reach a module already in `sys.modules` (e.g. `os`, pre-imported by the framework) | `find_spec` is not consulted for a cached module — but its **sensitive functions** are still denied by objective 3 | **Reasoned**: import rights and call rights are deliberately distinct (`guard_api.py` docstring); a reachable `os` module is not a reachable `os.system` |
-| Remove `GuardFinder` from `sys.meta_path` | nothing guards `sys.meta_path` (`guard_self` is inert, below) | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_meta_path`, xfail-pinned) |
+| Remove `GuardFinder` from `sys.meta_path` | nothing guards `sys.meta_path` (`guard_self` was removed, see below) | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_meta_path`, xfail-pinned) |
 
 ### 6. Disarm the guard or reach an original
 
@@ -214,31 +217,27 @@ and **writes its own permissions into the whitelist** the next run trusts.
 
 ## Guards that are inert by design
 
-Two guard modules exist but do nothing today. This is a deliberate state, not a
-discovered vulnerability — do not report them as escapes, and do not "fix" them.
+One guard module exists but does nothing today, and one was removed. Neither is
+a discovered vulnerability -- do not report them as escapes.
 
-- **`guard_self`** — `patch_rules()` returns `{}` and `activate_guard()` is
-  `pass` (`guard_self.py:70-73`). The `GuardModule` scaffolding meant to protect
-  `sys.meta_path`/`sys.modules` is present but unwired
-  (`_global_patch_in_sys_module` returns the module unchanged, `guard_self.py:64`,
-  with a `TODO`). This is why objective 5's `sys.meta_path` removal and
-  objective 6's `__subclasses__` walk stay open.
+- **`guard_self` (removed)** -- the module held a `GuardModule` class meant to
+  protect `sys.meta_path`/`sys.modules` by replacing a module object with one
+  whose `__setattr__` refuses named attributes. It never worked, and could not:
+  `GuardModule` *copied* the original's `__dict__` instead of proxying it, so
+  the copy diverged from the live module (wrap `lifecycle`, call `arm()`, and
+  the guarded copy still reported `_armed` False), and the module's own
+  functions kept `__globals__` bound to the original dict, so
+  `module.is_armed.__globals__["_armed"] = False` walked straight past the
+  guarded `__setattr__`. That second half is not fixable in Python at all:
+  `LOAD_GLOBAL` requires a real `dict` and ignores a subclass guarding
+  `__setitem__`. A module global cannot be made unwritable, so the scaffolding
+  was deleted rather than left to look like unfinished work.
 
-  That `TODO` marks a dead end, not unfinished work, and the distinction is
-  worth recording so the chantier is not reopened. `GuardModule` *copies* the
-  original's `__dict__` (`guard_self.py:43`) instead of proxying it, so two
-  things follow. The copy diverges: wrap `lifecycle`, call `arm()`, and the
-  guarded module still reports `_armed is False` while the process is armed —
-  a phantom state, which is a correctness defect before it is a security one.
-  And the module's own functions keep `__globals__` bound to the original dict,
-  so `module.is_armed.__globals__["_armed"] = False` disarms in one line, past
-  the guarded `__setattr__`. That second part is not fixable in Python:
-  `LOAD_GLOBAL` requires a real `dict` and bypasses any subclass that guards
-  `__setitem__`. A module global cannot be made unwritable. Protecting the
-  arming state would mean moving it out of module globals entirely — into an
-  object with a guarded `__setattr__` — which buys nothing against the
-  [design target](#the-design-target-wayward-llm-generated-code): disarming is
-  a deliberate act, and wayward code calls `open`, it does not reset flags.
+  Closing objective 6's `__subclasses__` walk therefore needs the guards' state
+  to leave module globals for an object with a guarded `__setattr__` -- not a
+  guarded module. `RuleAttributeError` stays exported: it has no raiser today,
+  but it is public API and the escape tests name it.
+
 - **`guard_pickle`** — never referenced in `py_sandbox.activate_sandboxes`
   (the wired set is env/file/socket/import/self/api/eval, `py_sandbox.py:353-368`).
   `pickle.loads` therefore runs its opcodes unguarded. Pinned as

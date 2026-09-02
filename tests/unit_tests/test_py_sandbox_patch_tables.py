@@ -24,19 +24,17 @@ from pysandboxes import (
     guard_envs,
     guard_files,
     guard_import,
-    guard_self,
     guard_socket,
 )
 
 
 def test_patch_table_keys_are_pairwise_disjoint() -> None:
-    """No two of the six patch tables share a key."""
+    """No two of the five patch tables share a key."""
     tables = {
         "guard_envs": guard_envs.patch_rules(learn=False),
         "guard_files": guard_files.patch_rules(learn=False),
         "guard_socket": guard_socket.patch_rules(learn=False),
         "guard_import": guard_import.patch_rules(learn=False),
-        "guard_self": guard_self.patch_rules(learn=False),
         "guard_api": guard_api.patch_rules(learn=False),
     }
     pairs = itertools.combinations(tables.items(), 2)
