@@ -8,7 +8,6 @@ Each test pins a bypass that used to work:
 - an AF_UNIX socket path exempted from every rule.
 """
 
-import posix
 from pathlib import Path
 from typing import Iterator
 
@@ -38,6 +37,12 @@ def exposed_dir(tmp_path: Path) -> Iterator[Path]:
     allowed = tmp_path / "allowed"
     allowed.mkdir()
     (tmp_path / "secret.txt").write_text("classified\n")
+    # Both symlinks are created here, before the guards are installed, because
+    # a test must not need an unguarded door to build its own fixture. Earlier
+    # versions reached for one -- first `os.symlink.__wrapped__`, then
+    # `posix.symlink` -- and each had to be rewritten as that door closed.
+    (allowed / "absolute.txt").symlink_to(tmp_path / "secret.txt")
+    (allowed / "relative.txt").symlink_to("../secret.txt")
     activate_guard_files_rules(
         [
             ConfigLine(f"expose-rw={allowed}", Path(), 0),
@@ -56,27 +61,11 @@ def import_rules() -> Iterator[None]:
     guard_import._rules = saved
 
 
-def _make_symlink(target: str, link: Path) -> None:
-    """Create a symlink with the unpatched ``os.symlink``.
-
-    Whether the guard patches are installed depends on which tests ran
-    before, so go around them: these tests check the authorization
-    decision, not the creation path.
-
-    ``posix.symlink`` is that way in: the patch table names ``os.symlink``
-    (``guard_files.py:1480``) and leaves the ``posix`` module alone, so the
-    attribute there is still the original object. The guarded callable no
-    longer carries a ``__wrapped__`` back-reference (see ``guard_wraps``).
-    """
-    posix.symlink(target, str(link))
-
-
 @pytest.mark.parametrize("target", ["absolute", "relative"])
 def test_symlink_leaving_the_exposed_dir_is_denied(exposed_dir: Path, target: str) -> None:
     """A link inside the scope must not authorize its outside target."""
     secret = exposed_dir.parent / "secret.txt"
     link = exposed_dir / f"{target}.txt"
-    _make_symlink(str(secret) if target == "absolute" else "../secret.txt", link)
 
     # The target itself is out of scope...
     assert _apply_dest_to_src_rules(str(secret), write=False) == (None, None)

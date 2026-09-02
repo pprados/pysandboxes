@@ -31,7 +31,6 @@ from . import (
     guard_files,
     guard_import,
     guard_provider,
-    guard_self,
     guard_socket,
 )
 from .all_rules import AllRules
@@ -356,7 +355,6 @@ def activate_sandboxes(
         file_patch_rules = guard_files.patch_rules(all_rules.learn)
         socket_patch_rules = guard_socket.patch_rules(all_rules.learn)
         import_patch_rules = guard_import.patch_rules(all_rules.learn)
-        self_patch_rules = guard_self.patch_rules(all_rules.learn)
         api_patch_rules = guard_api.patch_rules(all_rules.learn)
         eval_patch_rules = guard_eval.patch_rules(all_rules.learn)
         guard_import.activate_guard_import(
@@ -365,7 +363,6 @@ def activate_sandboxes(
                 **socket_patch_rules,
                 **env_patch_rules,
                 **import_patch_rules,
-                **self_patch_rules,
                 **api_patch_rules,
                 **eval_patch_rules,
             },
@@ -378,4 +375,3 @@ def activate_sandboxes(
         guard_api.activate_guard(all_rules.api_rules)
         guard_eval.activate_guard(all_rules.eval_rules, learn=all_rules.learn)
         set_learning_path(all_rules.learning_path)
-        guard_self.activate_guard()
