@@ -10,7 +10,6 @@ The guard supports pattern matching, variable substitution, and learning mode
 for automatic rule generation based on observed environment variable usage.
 """
 
-import functools
 import inspect
 import logging
 import os
@@ -24,6 +23,7 @@ from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import Environ, GlobPattern, resolve_env_variables
 from .tools import patch_factory as _f
+from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +331,7 @@ def activate_guard(rules: EnvsRules) -> None:
 
 
 def _wrap_os_putenv(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(name: str | bytes, value: str) -> None:
         assert isinstance(os.environ, LearnEnviron)
         if isinstance(name, bytes):
@@ -345,7 +345,7 @@ def _wrap_os_putenv(func: Callable) -> Callable:
 
 
 def _wrap_os_getenv(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(key: str | bytes, default: str | None = None) -> str:
         assert isinstance(os.environ, LearnEnviron)
         if isinstance(key, bytes):
@@ -359,7 +359,7 @@ def _wrap_os_getenv(func: Callable) -> Callable:
 
 
 def _wrap_os_unsetenv(func: Callable) -> Callable:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(name: str) -> None:
         assert isinstance(os.environ, LearnEnviron)
         if isinstance(name, bytes):

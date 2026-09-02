@@ -12,7 +12,6 @@ directory scanning to enforce security rules defined in the configuration.
 
 import contextvars
 import fnmatch
-import functools
 import io
 import logging
 import os
@@ -42,6 +41,7 @@ from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 from .tools import follow_links_executable
 from .tools import patch_factory as _f
+from .guard_wraps import guard_wraps
 
 if io or os:
     pass
@@ -556,7 +556,7 @@ def _raise_access(file: str) -> NoReturn:
 
 
 def _wrap_buitins_open(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         file: str | None,
         mode: str = "r",
@@ -609,7 +609,7 @@ def _wrap_buitins_open(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_filename(func: Callable[..., Any], *, write: bool, learn: bool = True) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         *args: Any,
@@ -681,7 +681,7 @@ def _body_two_filenames(
 def _wrap_two_filenames(
     func: Callable[..., Any], *, in_write: bool = False, out_write: bool = True
 ) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         src: str | bytes | os.PathLike[str] | os.PathLike[bytes],
         dest: str | bytes | os.PathLike[str] | os.PathLike[bytes],
@@ -696,7 +696,7 @@ def _wrap_two_filenames(
 def _wrap_shutil_copytree(
     func: Callable[..., Any],
 ) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         src: str | bytes | os.PathLike[str] | os.PathLike[bytes],
         dest: str | bytes | os.PathLike[str] | os.PathLike[bytes],
@@ -733,7 +733,7 @@ def _wrap_shutil_copytree(
 
 
 def _wrap_os_stat(func: Callable[..., Any], *, write: bool) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         *,
@@ -764,7 +764,7 @@ def _wrap_os_stat(func: Callable[..., Any], *, write: bool) -> Callable[..., Any
 
 
 def _wrap_os_path_samefile(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         f1: str | bytes | os.PathLike[str] | os.PathLike[bytes],
         f2: str | bytes | os.PathLike[str] | os.PathLike[bytes],
@@ -794,7 +794,7 @@ def _wrap_os_path_samefile(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_os_chdir(func: Callable[..., Any], *, write: bool) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
     ) -> None:
@@ -828,7 +828,7 @@ def _wrap_os_chdir(func: Callable[..., Any], *, write: bool) -> Callable[..., An
 
 
 def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         self: Any,
         pattern: str,
@@ -900,7 +900,7 @@ def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
 
 # %% os wrapper
 def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         flags: int,
@@ -937,7 +937,7 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_os_access(func: Callable[..., Any], *, write: bool) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         mode: int,
@@ -992,7 +992,7 @@ def _wrap_os_access(func: Callable[..., Any], *, write: bool) -> Callable[..., A
 
 
 def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper() -> str:
         # Detect call from posixpath
         dir: str = func()
@@ -1018,7 +1018,7 @@ def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_os_getcwdb(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper() -> bytes:
         # Detect call from posixpath
         dir: bytes = func()
@@ -1045,7 +1045,7 @@ def _wrap_os_getcwdb(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         path: str | os.PathLike[str] | os.PathLike[bytes] | bytes | int | None = None,
     ) -> list[str]:
@@ -1085,7 +1085,7 @@ def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]
 
 
 def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
         *,
@@ -1116,7 +1116,7 @@ def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         src: StrOrBytesPath,
         dst: StrOrBytesPath,
@@ -1174,7 +1174,7 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_os_unlink(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
         if dir_fd is not None:
             return func(path=path, dir_fd=dir_fd)
@@ -1196,7 +1196,7 @@ def _wrap_os_unlink(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_os_rmdir(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
         if dir_fd is not None:
             return func(path=path, dir_fd=dir_fd)
@@ -1319,7 +1319,7 @@ def _wrap_os_scandir(func: Callable[..., Any]) -> Callable[..., Any]:
     Wrap os.scandir to handle exceptions and return an iterator or None.
     """
 
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | None = None,
     ) -> Iterator[os.DirEntry[str]]:
@@ -1339,7 +1339,7 @@ def _wrap_os_scandir(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _wrap_io_open(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         mode: str | None = "r",

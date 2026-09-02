@@ -8,7 +8,7 @@ Each test pins a bypass that used to work:
 - an AF_UNIX socket path exempted from every rule.
 """
 
-import os
+import posix
 from pathlib import Path
 from typing import Iterator
 
@@ -62,9 +62,13 @@ def _make_symlink(target: str, link: Path) -> None:
     Whether the guard patches are installed depends on which tests ran
     before, so go around them: these tests check the authorization
     decision, not the creation path.
+
+    ``posix.symlink`` is that way in: the patch table names ``os.symlink``
+    (``guard_files.py:1480``) and leaves the ``posix`` module alone, so the
+    attribute there is still the original object. The guarded callable no
+    longer carries a ``__wrapped__`` back-reference (see ``guard_wraps``).
     """
-    real_symlink = getattr(os.symlink, "__wrapped__", os.symlink)
-    real_symlink(target, str(link))
+    posix.symlink(target, str(link))
 
 
 @pytest.mark.parametrize("target", ["absolute", "relative"])

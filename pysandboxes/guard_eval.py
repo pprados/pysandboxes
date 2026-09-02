@@ -52,7 +52,6 @@ What this guard does not cover, stated so no one reads more into it:
 
 import ast
 import builtins
-import functools
 import logging
 import os
 import sys
@@ -72,6 +71,7 @@ from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .lifecycle import is_armed
 from .tools import patch_factory as _f
+from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -678,7 +678,7 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
     if getattr(func, "__pysandbox_eval__", False):
         return func
 
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(
         source: Any,
         globals_: dict[str, Any] | None = None,
@@ -738,7 +738,7 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
     if getattr(func, "__pysandbox_eval__", False):
         return func
 
-    @functools.wraps(func)
+    @guard_wraps(func)
     def wrapper(source: Any, filename: Any = "<string>", mode: Any = "exec", /, *args: Any, **kwargs: Any) -> Any:
         frame = sys._getframe(1)
         if not is_armed() or is_ambient(frame) or guard_api.is_allowed("builtins.compile"):
