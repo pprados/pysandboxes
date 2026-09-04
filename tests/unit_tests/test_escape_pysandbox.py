@@ -59,14 +59,15 @@ def test_escape_with_meta_path() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="pickle.loads() escape not blocked: guard_pickle is never wired " "into the sandbox pipeline",
+    reason="pickle.loads() escape not blocked: no Python-level guard covers the pickle opcodes",
 )
 def test_escape_with_pickle_allowed() -> None:
     # VULNERABLE (default): Pickle is ALLOWED by default (_activate_guard_import_for_tests)
     # This test demonstrates pickle.loads() bypasses ALL import guards.
     # The payload calls os.system() through the pickle opcodes, so unpickling it
-    # must raise instead of running it. Today nothing stops it, hence the xfail;
-    # once guard_pickle is active this passes and strict=True reports the XPASS.
+    # must raise instead of running it. Today nothing stops it, hence the xfail.
+    # Containing hostile in-process bytecode is the OS sandbox's role; see
+    # wiki/audit-python-security.md for why a Python-level pickle guard was dropped.
     malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_ALLOWED'\ntRp1\n."
 
     with pytest.raises((ImportError, pickle.UnpicklingError)):

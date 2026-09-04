@@ -238,14 +238,31 @@ a discovered vulnerability -- do not report them as escapes.
   guarded module. `RuleAttributeError` stays exported: it has no raiser today,
   but it is public API and the escape tests name it.
 
-- **`guard_pickle`** — never referenced in `py_sandbox.activate_sandboxes`
-  (the wired set is env/file/socket/import/self/api/eval, `py_sandbox.py:353-368`).
-  `pickle.loads` therefore runs its opcodes unguarded. Pinned as
-  `test_escape_pysandbox.py::test_escape_with_pickle_allowed` (xfail) and
-  `::test_escape_with_pickle_blocked` (xfail — removal from `sys.modules` does
-  **not** help, because `_pickle` keeps its own C references).
+- **`guard_pickle`** — **deleted**. It implemented a global import blocker plus a
+  `pickle.loads` patch, and neither did anything: `activate_import_guard()` was
+  never called, `find_spec` never fires for a module already in `sys.modules`,
+  and `pickle.loads is _pickle.loads` is `True`, so the patch is bypassed by one
+  `import _pickle` — and covered neither `pickle.load` nor `pickle.Unpickler`.
+  `pickle.loads` therefore runs its opcodes unguarded, exactly as before the
+  deletion. Pinned as `test_escape_pysandbox.py::test_escape_with_pickle_allowed`
+  (xfail) and `::test_escape_with_pickle_blocked` (xfail — removal from
+  `sys.modules` does **not** help, because `_pickle` keeps its own C references).
 
-Both match the package's stated position: the Python layer raises cost and adds
+  Blocking pickle for in-process hostile bytecode was never the achievable goal:
+  code that already runs arbitrary Python reaches `os.system` by a hundred other
+  routes, and the OS sandbox is the barrier for that class.
+
+  The deletion does not close the deserialization risk — it moves the record of
+  it to where the risk actually lives. The one site in this package that
+  unpickles data it does not control is `remote/tools.py::from_b85`, reached from
+  `remote/base_sse_daemon.py:57` (`_rebuild_remote_exception`) and `:137` (the
+  result branch). Both run in the **trusted parent**, on a payload produced by the
+  **sandboxed child**: a crafted result or exception payload is arbitrary code
+  execution in the host process, outside the sandbox. `remote/tools.py` carries
+  the matching comment. Closing it means restricting the unpickler at that call
+  site, where the expected payload shape is known — not a global guard.
+
+These match the package's stated position: the Python layer raises cost and adds
 visibility; the OS sandbox is the barrier.
 
 ---
