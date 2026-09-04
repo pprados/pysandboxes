@@ -15,15 +15,24 @@
 
 ### Added
 - Control of sensitive API calls, independent of import rights: an
-  import right is not a call right. A registry of 102 sensitive
-  functions in six categories (`process-exec`, `process-control`,
-  `privileges`, `threads`, `native`, `introspection`) is denied by
+  import right is not a call right. A registry of 110 sensitive
+  functions in eight categories (`process-exec`, `process-control`,
+  `privileges`, `threads`, `native`, `introspection`, `dynamic-code`,
+  `deserialization`) is denied by
   default, and permissions are granted with
   `python-api=ALLOW:<category>|<function>` (and `DENY:`), resolved by
   specificity. Learning mode records what an application really calls
   and generates the lines.
 - `posix.chroot` is now guarded by the file layer with the same path
   check as `os.chroot`, which was previously unguarded.
+- `pickle.loads` and `pickle.load`, with their `_pickle` twins, join the
+  API registry under a new `deserialization` category: a pickle stream
+  names a callable and calls it, so it reaches `os.system` without an
+  import and without a source string the `eval-*` layer could parse.
+  `pickle.Unpickler` stays unguarded and is documented as such -- it is
+  an immutable C type, so neither `__init__` nor `load` can be patched,
+  and rebinding the module name to a function would break the
+  subclassing a restricted unpickler needs.
 
 ### Fixed
 - `python-sb` honours `TMPDIR` for its host-side run directory instead

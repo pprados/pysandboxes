@@ -2,6 +2,9 @@
 # License: Apache V2
 """Behaviour of the guard_api layer."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
@@ -489,3 +492,103 @@ def test_generated_lines_parse_back_without_error() -> None:
 def test_category_help_covers_every_category() -> None:
     """A missing entry would raise at learning time, not at import time."""
     assert set(_CATEGORY_HELP) == CATEGORIES
+
+
+def test_armed_denies_pickle_loads() -> None:
+    """A pickle stream names a callable and calls it: no source to parse."""
+    activate_guard(())
+    wrapped = _guarded("pickle.loads")
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            wrapped(b"")
+        assert exc.value.qualname == "pickle.loads"
+        assert exc.value.category == "deserialization"
+    finally:
+        _reset_guard()
+
+
+def test_armed_denies_the_pickle_c_twin() -> None:
+    """`pickle.loads is _pickle.loads`, so a table naming only one is walked
+    around with a single `import _pickle`."""
+    activate_guard(())
+    wrapped = _guarded("_pickle.loads")
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            wrapped(b"")
+        assert exc.value.qualname == "_pickle.loads"
+    finally:
+        _reset_guard()
+
+
+def test_the_file_variant_is_registered_too() -> None:
+    """`pickle.load(fp)` runs the same opcodes as `loads`."""
+    for qualname in ("pickle.load", "_pickle.load"):
+        assert qualname in SENSITIVE_API["deserialization"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Unpickler is an immutable C type: neither __init__ nor load can be "
+    "patched, and rebinding the module name to a function would break the "
+    "subclassing a restricted unpickler needs",
+)
+def test_the_unpickler_route_is_guarded() -> None:
+    """`Unpickler(fp).load()` reaches the opcodes without touching `loads`.
+
+    The payload is deliberately harmless: what this pins is that the guard
+    does not fire on the route, not what a hostile stream would do with it.
+    """
+    import io
+    import pickle as pickle_module
+
+    activate_guard(())
+    try:
+        arm()
+        benign = pickle_module.dumps({"harmless": 1})
+        with pytest.raises(RuleApiPermissionError):
+            pickle_module.Unpickler(io.BytesIO(benign)).load()
+    finally:
+        _reset_guard()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="probe script assumes posix")
+def test_pickle_loads_and_its_twin_are_refused_end_to_end(tmp_path: Path) -> None:
+    """The point of the registration, under a real `python-sb` start.
+
+    Run out of process: the patches are posted by the import hook, so a table
+    inspection would prove nothing about what an interpreter actually does.
+    """
+    work = tmp_path / "work"
+    work.mkdir()
+    repo = Path(__file__).resolve().parents[3]
+    (work / ".py-sandboxes").write_text(
+        "py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n" f"expose-rw={work}\nexpose-ro={repo}\n"
+    )
+    (work / "probe.py").write_text(
+        "import pickle\n"
+        "import _pickle\n"
+        "from pysandboxes.e import SandBoxError\n"
+        "blob = pickle.dumps({'harmless': 1})\n"
+        "for tag, call in ((\"pickle.loads\", lambda: pickle.loads(blob)),\n"
+        "                  (\"_pickle.loads\", lambda: _pickle.loads(blob))):\n"
+        "    try:\n"
+        "        call()\n"
+        "        print(tag, 'ALLOWED')\n"
+        "    except SandBoxError:\n"
+        "        print(tag, 'GUARD')\n"
+        "    except BaseException as exc:\n"
+        "        print(tag, 'OTHER', type(exc).__name__)\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pysandboxes.python_sb", "probe.py"],
+        capture_output=True,
+        text=True,
+        cwd=work,
+        env={**os.environ, "TMPDIR": str(work)},
+    )
+
+    assert "pickle.loads GUARD" in result.stdout, result.stdout + result.stderr
+    assert "_pickle.loads GUARD" in result.stdout, result.stdout + result.stderr

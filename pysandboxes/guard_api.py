@@ -194,6 +194,29 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "builtins.exec",
         "builtins.compile",
     ),
+    # A pickle stream is a program: its opcodes name a callable and call it, so
+    # ``pickle.loads(b"cos\nsystem\n...")`` reaches ``os.system`` without
+    # importing anything and without a source string guard_eval could parse.
+    # Kept out of "dynamic-code", which _OWNED_ELSEWHERE hands to guard_eval
+    # whole: an entry added there would never be patched at all.
+    #
+    # The ``_pickle`` twins are registered for the reason the os/posix twins
+    # are: ``pickle.loads is _pickle.loads`` holds until one of them is
+    # patched, so a table naming only ``pickle.*`` is walked around with one
+    # ``import _pickle``.
+    #
+    # Residual gap, documented rather than fixed, like ctypes.pythonapi:
+    # ``pickle.Unpickler`` is ``_pickle.Unpickler``, an immutable C type, so
+    # neither its ``__init__`` nor its ``load`` can be patched -- and rebinding
+    # the module name to a function would break subclassing, which is how a
+    # restricted unpickler is written. ``Unpickler(fp).load()`` therefore stays
+    # reachable; pinned as an xfail in tests/unit_tests/guard/test_guard_api.py.
+    "deserialization": (
+        "pickle.loads",
+        "pickle.load",
+        "_pickle.loads",
+        "_pickle.load",
+    ),
 }
 
 CATEGORIES: frozenset[str] = frozenset(SENSITIVE_API)
@@ -211,7 +234,12 @@ _FROM_313 = frozenset(
     }
 )
 
-OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313
+# The C accelerator is not part of the language: an interpreter built without
+# it, or a non-CPython one, exposes pickle's pure-Python implementation and no
+# `_pickle` module at all. The twins are then absent rather than mistyped.
+_NO_C_PICKLE = frozenset({"_pickle.loads", "_pickle.load"})
+
+OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313 | _NO_C_PICKLE
 """Entries whose absence is legitimate on some version or platform.
 
 The integrity test fails on a missing entry unless it is listed here, so
@@ -401,7 +429,13 @@ class LearnApiRule(NamedTuple):
     qualname: str
 
 
-_WARN_CATEGORIES = ("process-exec", "privileges", "native", "dynamic-code")
+_WARN_CATEGORIES = (
+    "process-exec",
+    "privileges",
+    "native",
+    "dynamic-code",
+    "deserialization",
+)
 
 _CATEGORY_HELP: dict[str, str] = {
     "process-exec": "runs code outside the patched interpreter",
@@ -411,6 +445,7 @@ _CATEGORY_HELP: dict[str, str] = {
     "native": "native code and arbitrary memory access",
     "introspection": "can be used to undo the patches",
     "dynamic-code": "runs code built at runtime from a string, unguarded",
+    "deserialization": "runs the callables a byte stream names, unguarded",
 }
 
 
