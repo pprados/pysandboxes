@@ -14,6 +14,7 @@ import contextvars
 import fnmatch
 import io
 import logging
+import importlib
 import os
 import sys
 from collections import OrderedDict
@@ -1457,8 +1458,9 @@ _default_rules: dict[str, Callable[..., Any]] = {
     "os.open": _f(_wrap_os_open),
     "os.access": _f(_wrap_os_access, write=False),
     "os.chmod": _f(_wrap_filename, write=True),
+    # `posix.chroot` was the one twin spelled out here; `_twin_rules` now
+    # mirrors every entry below, so the hand-written line is redundant.
     "os.chroot": _f(_wrap_filename, write=False),
-    "posix.chroot": _f(_wrap_filename, write=False),
     "os.link": _f(_wrap_two_filenames),
     "os.listdir": _f(_wrap_os_listdir),
     "os.mkdir": _f(_wrap_filename, write=False),
@@ -1621,7 +1623,45 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
             "os.chown": _f(_wrap_filename, write=True),
             "os.lchown": _f(_wrap_filename, write=True),
         }
+    rules |= _twin_rules(rules)
     return rules
+
+
+def _twin_rules(os_rules: dict[str, Callable[..., Any]]) -> dict[str, Callable[..., Any]]:
+    """Mirror every ``os.*`` rule onto the module `os` actually re-exports.
+
+    `os` does not implement these calls: it re-exports them from `posix`
+    (Linux, macOS and every other POSIX platform) or `nt` (Windows), by
+    identity -- ``os.open is posix.open`` holds until something patches one of
+    them. Patching only `os.open` therefore leaves the original one
+    ``import posix`` away, which is not a hostile manoeuvre: `posix` is
+    documented, importable, and what `os` itself uses.
+
+    Measured on Linux before writing this: with the twins absent, ``open()``
+    on a path outside the exposed directory raised RuleFileNotFoundError while
+    ``posix.open()`` on the same path went all the way to the kernel.
+
+    The `nt` rows are shipped unexercised -- no Windows machine ran them. They
+    cost nothing where they do not apply: an absent module never reaches
+    `activate_guard_import`, which only walks what `sys.modules` holds.
+    """
+    twin_name = "nt" if sys.platform == "win32" else "posix"
+    try:
+        twin = importlib.import_module(twin_name)
+    except ImportError:  # pragma: no cover - `posix` is always there on POSIX
+        return {}
+
+    twins: dict[str, Callable[..., Any]] = {}
+    for key, factory in os_rules.items():
+        if not key.startswith("os."):
+            continue
+        attribute = key[len("os.") :]
+        # Mirror only what the twin actually provides: `os` implements a few of
+        # these itself (`os.walk`), and a rule on a name the module does not
+        # have would post a patch on nothing.
+        if hasattr(twin, attribute):
+            twins[f"{twin_name}.{attribute}"] = factory
+    return twins
 
 
 # %%
