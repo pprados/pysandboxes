@@ -238,29 +238,47 @@ a discovered vulnerability -- do not report them as escapes.
   guarded module. `RuleAttributeError` stays exported: it has no raiser today,
   but it is public API and the escape tests name it.
 
-- **`guard_pickle`** — **deleted**. It implemented a global import blocker plus a
-  `pickle.loads` patch, and neither did anything: `activate_import_guard()` was
-  never called, `find_spec` never fires for a module already in `sys.modules`,
-  and `pickle.loads is _pickle.loads` is `True`, so the patch is bypassed by one
+- **`guard_pickle`** — **deleted**, and its subject moved to `guard_api`. The
+  module implemented a global import blocker plus a `pickle.loads` patch, and
+  neither did anything: `activate_import_guard()` was never called, `find_spec`
+  never fires for a module already in `sys.modules`, and
+  `pickle.loads is _pickle.loads` is `True`, so the patch was bypassed by one
   `import _pickle` — and covered neither `pickle.load` nor `pickle.Unpickler`.
-  `pickle.loads` therefore runs its opcodes unguarded, exactly as before the
-  deletion. Pinned as `test_escape_pysandbox.py::test_escape_with_pickle_allowed`
-  (xfail) and `::test_escape_with_pickle_blocked` (xfail — removal from
-  `sys.modules` does **not** help, because `_pickle` keeps its own C references).
 
-  Blocking pickle for in-process hostile bytecode was never the achievable goal:
-  code that already runs arbitrary Python reaches `os.system` by a hundred other
-  routes, and the OS sandbox is the barrier for that class.
+  `pickle.loads`, `pickle.load` and their `_pickle` twins are now registry
+  entries under the `deserialization` category, denied by default like every
+  other sensitive call and grantable with `python-api=ALLOW:deserialization`
+  (warned at load, as `dynamic-code` is). A pickle stream is a program: its
+  opcodes name a callable and call it, which reaches `os.system` without an
+  import and without a source string the `eval-*` layer could parse. Pinned
+  end to end by
+  `test_guard_api.py::test_pickle_loads_and_its_twin_are_refused_end_to_end`.
 
-  The deletion does not close the deserialization risk — it moves the record of
-  it to where the risk actually lives. The one site in this package that
-  unpickles data it does not control is `remote/tools.py::from_b85`, reached from
+  What that buys, and what it does not: like the rest of this layer, it denies
+  the call from cooperative code and gives learning-mode visibility. It is not
+  a barrier against hostile bytecode, which reaches `os.system` by a hundred
+  other routes; the OS sandbox is the barrier for that class. The two escape
+  tests stay `xfail` because they exercise the import guard alone, without
+  `guard_api` armed.
+
+  Residual gap, documented rather than fixed, like `ctypes.pythonapi`:
+  `pickle.Unpickler` **is** `_pickle.Unpickler`, an immutable C type, so
+  neither its `__init__` nor its `load` can be patched, and rebinding the
+  module name to a function would break the subclassing a restricted unpickler
+  needs. `Unpickler(fp).load()` therefore stays reachable, pinned as
+  `test_guard_api.py::test_the_unpickler_route_is_guarded` (xfail).
+
+  Separately, and still open: the one site in this package that unpickles data
+  it does not control is `remote/tools.py::from_b85`, reached from
   `remote/base_sse_daemon.py:57` (`_rebuild_remote_exception`) and `:137` (the
-  result branch). Both run in the **trusted parent**, on a payload produced by the
-  **sandboxed child**: a crafted result or exception payload is arbitrary code
-  execution in the host process, outside the sandbox. `remote/tools.py` carries
-  the matching comment. Closing it means restricting the unpickler at that call
-  site, where the expected payload shape is known — not a global guard.
+  result branch). Both run in the **trusted parent**, on a payload produced by
+  the **sandboxed child**: a crafted result or exception payload is arbitrary
+  code execution in the host process, outside the sandbox. The transport binds
+  `pickle.dumps`/`pickle.loads` at import precisely so the registry entry above
+  does not charge the framework's own serialization to the user's profile —
+  which also means the registry does **not** cover this call. Closing it means
+  restricting the unpickler at that call site, where the expected payload shape
+  is known, not a global guard.
 
 These match the package's stated position: the Python layer raises cost and adds
 visibility; the OS sandbox is the barrier.

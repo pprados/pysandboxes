@@ -334,3 +334,25 @@ class TestSerializationFunctions:
         assert isinstance(deserialized["tuple"], tuple)
         assert isinstance(deserialized["set"], set)
         assert isinstance(deserialized["bytes"], bytes)
+
+
+def test_the_transport_survives_arming() -> None:
+    """``pickle.loads`` is a guard_api target, and the transport is not user code.
+
+    ``to_b85``/``from_b85`` bind the originals at import, so a profile that
+    never mentions pickle keeps a working result and exception path. Resolving
+    ``pickle.loads`` as a module attribute at call time would break it.
+    """
+    from pysandboxes.guard_api import activate_guard, patch_rules
+    from pysandboxes.lifecycle import _reset_for_tests, arm
+
+    activate_guard(())
+    guarded = patch_rules(learn=False)["pickle.loads"](pickle.loads)
+    original = pickle.loads
+    pickle.loads = guarded  # type: ignore[assignment]
+    try:
+        arm()
+        assert from_b85(to_b85({"a": 1})) == {"a": 1}
+    finally:
+        pickle.loads = original  # type: ignore[assignment]
+        _reset_for_tests()

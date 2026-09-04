@@ -295,6 +295,19 @@ def set_pdeathsig() -> None:
         logging.warning("prctl not available (not Linux or libc not found).")
 
 
+# Bound here, at import, because `pickle.loads` is a guard_api target: resolving
+# it as a module attribute at call time would hand the SSE transport the guarded
+# wrapper, and the framework's own serialization would then be charged to the
+# user's `python-api=` rules -- a profile that never mentions pickle would break
+# its own result and exception path. Binding the name before any patch is posted
+# captures the original, with no caller check to arrange one's way around.
+#
+# This does not make the transport safe: `from_b85` still unpickles a payload
+# the sandboxed child produced. See wiki/audit-python-security.md.
+_pickle_dumps = pickle.dumps
+_pickle_loads = pickle.loads
+
+
 def to_b85(obj: Any) -> str:
     """Serialize object to base85-encoded string.
 
@@ -306,10 +319,10 @@ def to_b85(obj: Any) -> str:
     """
     result = base64.b85encode(
         # serialization only
-        pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+        _pickle_dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
     ).decode("ascii")
     # Round-trip check on locally built data
-    assert pickle.loads(base64.b85decode(result.encode("ascii"))) == obj
+    assert _pickle_loads(base64.b85decode(result.encode("ascii"))) == obj
     return result
 
 
@@ -323,7 +336,7 @@ def from_b85(b85: str) -> Any:
         Deserialized object.
     """
     # IPC transport; child->parent results are untrusted (open issue)
-    return pickle.loads(
+    return _pickle_loads(
         base64.b85decode(b85.encode("ascii")),
     )
 
