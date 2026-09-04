@@ -464,6 +464,32 @@ def test_optional_entries_do_not_block_category_line() -> None:
     assert "python-api=ALLOW:threads" in lines
 
 
+def test_learning_emits_a_parseable_line_for_deserialization() -> None:
+    """A recorded `pickle.loads` call must generate a line that parses back.
+
+    `deserialization` is in _WARN_CATEGORIES, so it matters which shape comes
+    out: one observed function must stay a function line, not collapse into a
+    category line that would silently grant the other three.
+    """
+    activate_guard(())
+    lines = generate_rules({LearnApiRule("pickle.loads")})
+    directives = [ln for ln in lines if not ln.startswith("#")]
+    assert "python-api=ALLOW:pickle.loads" in directives
+    assert "python-api=ALLOW:deserialization" not in directives
+    _, errors = _parse(*directives)
+    assert not errors, errors
+
+
+def test_the_whole_deserialization_category_collapses_to_one_line() -> None:
+    """All four observed: the category line replaces the function lines."""
+    activate_guard(())
+    learned = {LearnApiRule(q) for q in SENSITIVE_API["deserialization"]}
+    lines = generate_rules(learned)
+    assert "python-api=ALLOW:deserialization" in lines
+    for qualname in SENSITIVE_API["deserialization"]:
+        assert f"python-api=ALLOW:{qualname}" not in lines
+
+
 def test_category_completed_by_already_allowed_functions() -> None:
     """The union of allowed and learned decides, not the learned set."""
     already = SENSITIVE_API["introspection"][:-1]
