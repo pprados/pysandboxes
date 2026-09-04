@@ -93,13 +93,11 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
         from .guard_eval import _deactivate_guard_eval
         from .guard_files import _deactivate_guard_files
         from .guard_import import _deactivate_guard_import
-        from .guard_pickle import _deactivate_guard_pickle
         from .guard_socket import _deactivate_guard_sockets
 
         _deactivate_guard_files()
         _deactivate_guard_sockets()
         _deactivate_guard_import()
-        _deactivate_guard_pickle()
         _deactivate_guard_api()
         _deactivate_guard_envs()
         _deactivate_guard_eval()
