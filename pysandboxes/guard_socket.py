@@ -1276,6 +1276,15 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "socket.getaddrinfo": _wrap_socket_getaddrinfo,
         "_socket.socket": _guarded_socket_class,
+        # socket.py does `from _socket import *`, so the resolution calls are
+        # the posix relationship: `socket.gethostbyname is _socket.gethostbyname`
+        # is one object under two names, and a rule on the socket name alone is
+        # one `import _socket` away from being walked around. getaddrinfo is the
+        # other shape -- socket.py redefines it in Python, which leaves the raw C
+        # _socket.getaddrinfo unguarded rather than aliased. Both need the twin.
+        "_socket.gethostbyname": _wrap_socket_gethostbyname,
+        "_socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
+        "_socket.getaddrinfo": _wrap_socket_getaddrinfo,
     }
     return rules
 
