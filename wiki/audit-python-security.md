@@ -11,7 +11,7 @@ residual limits the layer does **not** claim to cover.
 It is the companion of [the `eval-*` assessment](audit-eval-security.md), which covers
 the dynamic-code sub-language, and of [weaknesses](weaknesses.md), which lists
 the limits of the package in prose. This page turns those prose limits into a
-structured, test-pinned matrix and adds the enforcement point (`file:line`) for
+structured, test-pinned matrix and names the enforcing function or class for
 every row. Read [implementation](implementation.md) first if you need to know
 *how* the patching works before reasoning about *what it stops*.
 
@@ -96,14 +96,14 @@ Every row is marked **demonstrated** (pinned by an executed test) or
 ## Two enforcement states: disarmed and armed
 
 Nothing is enforced until `lifecycle.arm()` flips a module global
-(`_armed`, `lifecycle.py:36`, set in `arm()` at `:64`, read by `is_armed()` at
-`:74`). Framework code runs disarmed; user code runs armed. Since b13a066
+(`_armed`, set in `lifecycle.arm()`, read by `lifecycle.is_armed()`).
+Framework code runs disarmed; user code runs armed. Since b13a066
 `lifecycle` is the single owner of that state: `guard_api.arm()` is gone, and
 `guard_socket`'s flag, which never meant the same thing, is now named
 `_rules_loaded`.
 
 The wrappers short-circuit when disarmed — `guard_api`'s control point returns
-the raw function if `not _lc_is_armed()` (`guard_api.py:455`). This is by
+the raw function if `not _lc_is_armed()` (`guard_api._wrap_guarded`). This is by
 design, but it also means the arming flag is a single point whose reset
 disarms everything; see
 [objective 6](#6-disarm-the-guard-or-reach-an-original).
@@ -114,26 +114,27 @@ disarms everything; see
 
 ### 1. Read or write a file outside the whitelist
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
-| Read/write a path outside `expose-ro`/`expose-rw` | decision on the canonical path in `_apply_dest_to_src_rules`, `guard_files.py:490` → `startswith` match `:496` → `raise RulePermissionError` `:505` | **Blocked — demonstrated**: `test_guard_escape_fixes.py::test_symlink_leaving_the_exposed_dir_is_denied` asserts the out-of-scope secret resolves to `(None, None)` |
-| Symlink inside the scope pointing outside it | decision taken on `_safe_realpath`-resolved path, not the raw one (`guard_files.py:487-490`) | **Blocked — demonstrated** (`test_symlink_leaving_the_exposed_dir_is_denied[absolute,relative]`) |
-| Create a symlink whose target is out of scope | `_wrap_os_symlink` validates the target (`guard_files.py`, `os.symlink` in the patch table `:1468`) | **Blocked — demonstrated** (`test_creating_a_symlink_out_of_scope_is_refused`) |
+| Read/write a path outside `expose-ro`/`expose-rw` | decision on the canonical path in `guard_files._apply_dest_to_src_rules`: `startswith` match against each `FSExposeRule` → `raise RulePermissionError` | **Blocked — demonstrated**: `test_guard_escape_fixes.py::test_symlink_leaving_the_exposed_dir_is_denied` asserts the out-of-scope secret resolves to `(None, None)` |
+| Symlink inside the scope pointing outside it | decision taken on the `guard_files._safe_realpath`-resolved path, not the raw one | **Blocked — demonstrated** (`test_symlink_leaving_the_exposed_dir_is_denied[absolute,relative]`) |
+| Create a symlink whose target is out of scope | `guard_files._wrap_os_symlink` validates the target (`os.symlink` in the guard's patch table) | **Blocked — demonstrated** (`test_creating_a_symlink_out_of_scope_is_refused`) |
 | Reach the original `io.open` via its closure cell | wrapper keeps a reference to the original (patch-factory closure) | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_closure` asserts the original is reachable) |
 
 The canonicalization is itself re-entrant-safe: `_safe_realpath` calls
 `os.lstat`/`os.readlink`, which are patched, so a `_canonicalizing` context var
-suppresses the inner re-check (`guard_files.py:145`, guard at `:477`). The path
+suppresses the inner re-check — it is read at the head of
+`_apply_dest_to_src_rules`. The path
 *returned* to the syscall stays unresolved, so link semantics are preserved;
 only the *decision* uses the resolved path.
 
 ### 2. Open a socket or exfiltrate
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
-| `connect()`/`bind()` to a host outside `net=` | `_check_address` → `_check_address_with_rules` on the patched `socket.socket` (`guard_socket.py:1021-1023`) | **Blocked — demonstrated** (`test_guard_socket.py::test_connect_enforces_the_rules`, `::test_no_rules_denied_connection`) |
+| `connect()`/`bind()` to a host outside `net=` | `guard_socket._check_address` → `_check_address_with_rules` on the patched `socket.socket` | **Blocked — demonstrated** (`test_guard_socket.py::test_connect_enforces_the_rules`, `::test_no_rules_denied_connection`) |
 | AF_UNIX socket path exempted from the rules | `_check_unix_socket` applies the file rules to the socket path | **Blocked — demonstrated** (`test_guard_escape_fixes.py::test_unix_socket_out_of_scope_is_denied`) |
-| `bind(("", port))` wildcard host slips the rule | `_resolve_wildcard_host` rewrites `""` to `0.0.0.0`/`::` before the check (`guard_socket.py:1007`) | **Blocked — reasoned** |
+| `bind(("", port))` wildcard host slips the rule | `guard_socket._resolve_wildcard_host` rewrites `""` to `0.0.0.0`/`::` before the check | **Blocked — reasoned** |
 | `import _socket` and build the C base class directly | `socket.socket` is a Python *subclass* of the C `_socket.socket` and does not redefine `connect`, so patching the subclass left the base class untouched. The rule now replaces the class the C module publishes with a guarded subclass of it (`guard_socket.py`, `_guarded_socket_class`) | **Blocked — demonstrated** (`test_guard_socket_twin.py::test_connect_through_the_c_class_is_refused` refuses the connection under `python-sb`). Measured open before the fix: `socket.socket()` to TEST-NET-1 refused, `_socket.socket()` to the same address went out |
 | Resolve a name through `_socket` instead of `socket` | `socket.py` does `from _socket import *`, so `socket.gethostbyname is _socket.gethostbyname` — the `posix` relationship. `getaddrinfo` differs: `socket.py` redefines it, leaving the raw C one a separate unnamed function. Both C names now carry the socket wrapper | **Blocked — demonstrated at the table** (`::test_every_guarded_resolution_call_has_its_c_twin`; removing a twin fails it). The end-to-end check compares the two names rather than asserting a refusal: with no resolver the call dies of `gaierror` before the guard is consulted |
 | `gethostbyaddr`, `getnameinfo` | shared with `_socket` by the same star-import, but **no rule guards them under either name** | **Open — demonstrated** (absent from `patch_rules`); reverse lookup is not covered by the DNS rules |
@@ -142,37 +143,37 @@ only the *decision* uses the resolved path.
 
 ### 3. Execute a process or native code
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
-| `os.system`, `os.exec*`, `os.fork`, `subprocess.Popen/run/...` | denied by the sensitive-function registry, independently of import rights: `SENSITIVE_API` (`guard_api.py:26`), wrapped at `_wrap_guarded` (`guard_api.py:466`), `raise RuleApiPermissionError` (`guard_api.py:480`) | **Blocked — demonstrated** (`test_guard_api.py`, `test_guard_os.py`) |
-| `subprocess.Popen` / `ctypes.CDLL` patched as classes | patched on `__init__`, not the class object, to keep `isinstance`/subclassing (`_PATCH_TARGET`, `guard_api.py:497`) | **Blocked — demonstrated** (`test_guard_api.py::test_class_entry_denies_and_allows_construction`) |
-| `ctypes.pythonapi` native calls | it is a `PyDLL` **instance** built at import time — no `__init__` runs, so it is never wrapped (documented at `guard_api.py:494`) | **Open — reasoned** (matches [weaknesses.md](weaknesses.md); OS layer's job) |
-| Reach an original sensitive function via `__wrapped__` | `_wrap_guarded` uses `functools.wraps` (`guard_api.py:471`), which sets `__wrapped__` to the original | **Open — demonstrated**: the project's own test helper reaches the original this way — `getattr(os.symlink, "__wrapped__", os.symlink)` (`test_guard_escape_fixes.py:62`) |
+| `os.system`, `os.exec*`, `os.fork`, `subprocess.Popen/run/...` | denied by the sensitive-function registry, independently of import rights: `guard_api.SENSITIVE_API`, wrapped at `guard_api._wrap_guarded`, which raises `RuleApiPermissionError` | **Blocked — demonstrated** (`test_guard_api.py`, `test_guard_os.py`) |
+| `subprocess.Popen` / `ctypes.CDLL` patched as classes | patched on `__init__`, not the class object, to keep `isinstance`/subclassing (`guard_api._PATCH_TARGET`) | **Blocked — demonstrated** (`test_guard_api.py::test_class_entry_denies_and_allows_construction`) |
+| `ctypes.pythonapi` native calls | it is a `PyDLL` **instance** built at import time — no `__init__` runs, so it is never wrapped (documented in `guard_api`, next to the registry) | **Open — reasoned** (matches [weaknesses.md](weaknesses.md); OS layer's job) |
+| Reach an original sensitive function via `__wrapped__` | `_wrap_guarded` decorates with `guard_wraps.guard_wraps`, which drops the back-reference | **Closed** — see [objective 6](#6-disarm-the-guard-or-reach-an-original) for the evidence; the wrapper's closure cell still holds the original |
 
 ### 4. Read a secret
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
-| Read an env var outside `env=` | `os.environ` filtered to the whitelist at parse time; learning wrapper `LearnEnviron` (`guard_envs.py:133`) | **Blocked — demonstrated** (`test_guard_env.py::test_unknown_variable_leaves_the_key_absent`, `test_learn_environ.py`) |
+| Read an env var outside `env=` | `os.environ` filtered to the whitelist at parse time; learning wrapper `guard_envs.LearnEnviron` | **Blocked — demonstrated** (`test_guard_env.py::test_unknown_variable_leaves_the_key_absent`, `test_learn_environ.py`) |
 | Read the parent's env via `/proc/$PPID/environ` | a file read — subject to the file rules (objective 1) if `/proc` is out of scope; **not** otherwise | **Reasoned**; the real barrier is the OS sandbox hiding `/proc` (noted in [weaknesses.md](weaknesses.md)) |
 | Read process memory / another module's globals | any function's `__globals__` exposes its module namespace | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_globals_introspection`, xfail-pinned as still open) |
 
 ### 5. Import a forbidden module
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
-| `import` a module outside `python-import=` | `GuardFinder.find_spec` denies via `_is_import_allowed` → `raise RuleModuleNotFoundError` (`guard_import.py:445-462`); finder inserted at `sys.meta_path[0]` (`guard_import.py:524`) | **Blocked — demonstrated** (`test_guard_import.py`, `test_guard_escape_fixes.py::test_find_spec_denies_a_module_outside_the_rules`) |
-| Empty rule set treated as "no filter" | empty `_rules` is deny-all, wildcard `("*",)` is allow-all (`_is_import_allowed`, `guard_import.py:129`) | **Blocked — demonstrated** (`test_no_import_rule_denies_every_module`, `test_wildcard_import_rule_allows_every_module`) |
+| `import` a module outside `python-import=` | `guard_import.GuardFinder.find_spec` denies via `_is_import_allowed` → `raise RuleModuleNotFoundError`; the finder is inserted at `sys.meta_path[0]` when the rules are activated | **Blocked — demonstrated** (`test_guard_import.py`, `test_guard_escape_fixes.py::test_find_spec_denies_a_module_outside_the_rules`) |
+| Empty rule set treated as "no filter" | empty `_rules` is deny-all, wildcard `("*",)` is allow-all (`guard_import._is_import_allowed`) | **Blocked — demonstrated** (`test_no_import_rule_denies_every_module`, `test_wildcard_import_rule_allows_every_module`) |
 | Reach a module already in `sys.modules` (e.g. `os`, pre-imported by the framework) | `find_spec` is not consulted for a cached module — but its **sensitive functions** are still denied by objective 3 | **Reasoned**: import rights and call rights are deliberately distinct (`guard_api.py` docstring); a reachable `os` module is not a reachable `os.system` |
 | Remove `GuardFinder` from `sys.meta_path` | nothing guards `sys.meta_path` (`guard_self` was removed, see below) | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_meta_path`, xfail-pinned) |
 
 ### 6. Disarm the guard or reach an original
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
 | Walk `object().__subclasses__()` to the guard modules and reset their state | nothing blocks the class-hierarchy walk | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_subclasses`, xfail-pinned; reaches `guard_import` and sets `_rules=()`) |
-| Reset the `_armed` flag through that same walk | `_armed` is a plain module global (`lifecycle.py:36`), re-read on every `is_armed()` | **Open — reasoned** (same class as above; [weaknesses.md](weaknesses.md) names it explicitly) |
-| Rebind the call-site alias instead of the flag: `guard_api._lc_is_armed = lambda: False` | `guard_api.py:18` binds the function by value, so the alias is a second, independent switch (`guard_api.py:455`) | **Open — reasoned** |
+| Reset the `_armed` flag through that same walk | `_armed` is a plain module global of `lifecycle`, re-read on every `is_armed()` | **Open — reasoned** (same class as above; [weaknesses.md](weaknesses.md) names it explicitly) |
+| Rebind the call-site alias instead of the flag: `guard_api._lc_is_armed = lambda: False` | `guard_api` imports `is_armed` under the name `_lc_is_armed`, binding the function by value, so the alias is a second, independent switch read by every wrapper | **Open — reasoned** |
 | Reach the unguarded original through `__wrapped__` | `guard_wraps.guard_wraps()` replaces `functools.wraps` in the five guards: it restores `__signature__`, then drops the back-reference | **Closed** (the guarded callable no longer carries `__wrapped__`; `test_guard_escape_fixes.py` had been using that very door for its own setup) |
 | Reach the original through the wrapper's own closure cell (`__closure__[i].cell_contents`) or `gc.get_referents` | a Python wrapper necessarily holds a reference to what it wraps; hiding the name does not hide the object | **Open — by construction** |
 | Obfuscated name construction (`'__sub'+'classes__'`, `chr()` chains, hex-decoded `__import__`) | static name scanning is a courtesy, not a barrier — runtime-built names are never seen | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_obfuscated_strings`) |
@@ -182,19 +183,19 @@ in it. They are why the OS sandbox exists.
 
 ### 7. Mutate the rules
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
-| Overwrite a decision dict in place | rules stored in `ImmutableDict`, a `tuple` subclass with no mutating API (`immutable_dict.py:44`); `_allowed` is one (`guard_api.py:355`) | **Blocked — demonstrated** (`test_immatuable_dict.py`) — for *direct* mutation |
+| Overwrite a decision dict in place | rules stored in `immutable_dict.ImmutableDict`, a `tuple` subclass with no mutating API; `guard_api._allowed` is one | **Blocked — demonstrated** (`test_immatuable_dict.py`) — for *direct* mutation |
 | Rebind the module global that holds the `ImmutableDict` | the binding itself is a plain global, reachable via objective 6 | **Open — reasoned**: immutability protects the container, not the name that points at it |
 
 ### 8. Attack the IPC channel
 
 The main process talks to the sandboxed child over SSE on localhost.
 
-| Attack | Layer (`file:line`) | Status |
+| Attack | Layer | Status |
 |---|---|---|
-| Call the SSE endpoint without the token | Bearer-token check, request refused on mismatch (`remote/sse_server_daemon.py:211`) | **Blocked — reasoned** (token is a per-run UUID; `python_sb.py:114`) |
-| Reach the endpoint from another local process | bound to `localhost` with a random free port (`find_free_port`, e.g. `unshare_sse_daemon.py:535`) + the token above | **Reasoned**: raises cost; a co-resident process that can read the port and token is not stopped by this layer ([weaknesses.md](weaknesses.md)) |
+| Call the SSE endpoint without the token | Bearer-token check, request refused on mismatch (`remote/sse_server_daemon`) | **Blocked — reasoned** (token is a per-run UUID minted in `python_sb`) |
+| Reach the endpoint from another local process | bound to `localhost` with a random free port (`remote/client_subprocess_sse_daemon.find_free_port`) + the token above | **Reasoned**: raises cost; a co-resident process that can read the port and token is not stopped by this layer ([weaknesses.md](weaknesses.md)) |
 
 ### 9. Poison learning mode
 
@@ -203,19 +204,19 @@ the project's design, so it is stated in full.
 
 In learning mode the verified guards do **not** enforce: they record the
 attempt and then let the real operation proceed — the sensitive-call wrapper
-calls the real function anyway (`guard_api.py:473-478`), and the file and
-import guards record instead of raising (`guard_files.py:498-505`,
-`guard_import.py:445-447`). Every observed file, socket, import, env and call is
-serialized verbatim into the next run's profile
-(`learning.generate_config_from_learning`, `learning.py:38`), with **no
+calls the real function anyway (`guard_api._wrap_guarded`), and the file and
+import guards record instead of raising (`guard_files._apply_dest_to_src_rules`,
+`guard_import.GuardFinder.find_spec`). Every observed file, socket, import, env
+and call is serialized verbatim into the next run's profile
+(`learning.generate_config_from_learning`), with **no
 validation** of whether the behavior was legitimate.
 
 Consequence: hostile code run under learning mode both **executes unguarded**
 and **writes its own permissions into the whitelist** the next run trusts.
 
-| Layer (`file:line`) | Status |
+| Layer | Status |
 |---|---|
-| The only barrier is human review: the generated file prints *"Check and update this file to validate the rules"* (`learning.py:179`), and every sample profile warns *"Never use learning mode with untrusted code"* | **Open by design — demonstrated** that rules are written without validation (`test_learning.py::TestGenerateConfigFromLearning`); the safeguard is operational, not enforced by any layer |
+| The only barrier is human review: the generated file prints *"Check and update this file to validate the rules"*, and every sample profile warns *"Never use learning mode with untrusted code"* | **Open by design — demonstrated** that rules are written without validation (`test_learning.py::TestGenerateConfigFromLearning`); the safeguard is operational, not enforced by any layer |
 
 ---
 
@@ -274,8 +275,8 @@ a discovered vulnerability -- do not report them as escapes.
 
   Separately, and still open: the one site in this package that unpickles data
   it does not control is `remote/tools.py::from_b85`, reached from
-  `remote/base_sse_daemon.py:57` (`_rebuild_remote_exception`) and `:137` (the
-  result branch). Both run in the **trusted parent**, on a payload produced by
+  `remote/base_sse_daemon._rebuild_remote_exception` and the result branch of
+  the same module's event dispatch. Both run in the **trusted parent**, on a payload produced by
   the **sandboxed child**: a crafted result or exception payload is arbitrary
   code execution in the host process, outside the sandbox. The transport binds
   `pickle.dumps`/`pickle.loads` at import precisely so the registry entry above
@@ -314,14 +315,16 @@ uv run pytest tests/unit_tests/guard/test_guard_api.py \
 ```
 
 At the time of writing this run reports **14 passed, 6 xfailed** for the escape
-files and **219 passed, 1 skipped** for the guard corpus. The six `xfail`
-entries are the open escapes in objectives 5, 6 and the pickle row; they are
+files and **190 passed, 1 skipped, 1 xfailed** for the guard corpus. The six
+`xfail` entries of the escape files are the open escapes in objectives 5 and 6;
+the corpus `xfail` is `test_guard_api.py::test_the_unpickler_route_is_guarded`,
+which records that `pickle.Unpickler` is an immutable C type. All are
 `strict=True`, so if any is ever closed, the XPASS fails the suite and this page
 must change with it.
 
 Bottom line: the Python layer denies every sensitive operation from
 cooperative code and pins each denial to a test; against hostile bytecode it
 raises cost and provides learning-mode visibility, while the class-hierarchy
-walk, `__wrapped__`/closure originals, `sys.meta_path`, `ctypes.pythonapi`,
+walk, the wrappers' closure originals, `sys.meta_path`, `ctypes.pythonapi`,
 `pickle`, and the arming flag remain reachable by design. Containing those is
 the OS sandbox's role, stated plainly rather than papered over.
