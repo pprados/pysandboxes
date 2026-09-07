@@ -5,7 +5,6 @@ Here are some vulnerabilities:
 
   - Each function or method patch must keep a link to the original method. An advanced introspection analysis can find it and invoke it outside of the security rules.
   - All classes are available via `object().__subclasses__()` and therefore also all modules. By analyzing this, it is possible to find the rules and modify them.
-  - The variable `sys.meta_path` may be updated to remove the sandbox loader.
   - Any compiled code can have access to the entire Python memory and therefore find all secrets. A vulnerability in a Python library using compiled code can be exploited.
   - A child process, if it has the rights to read `/proc/${PPID}/environ`, can search for tokens there. **OS-sandboxes** generally prohibit this.
   - A direct network connection to the sandbox it's possible. A secret token, a random port and a limitation of localhost network are used.
@@ -17,5 +16,3 @@ The sensitive functions that used to be reachable as soon as their module was im
   - Enforcement only starts once `arm()` has been called, and that flag can be reset the same way the rules above can be found and modified: through `object().__subclasses__()`. This is not a new class of weakness, just the existing one applied to one more flag.
 
 None of this makes patching complete against hostile code: arbitrary Python can always call native code. The layer raises the cost of a sensitive call from non-hostile code, and makes such calls visible in learning mode. The OS-sandboxes remain the real barrier.
-
-We invite you to try out these approaches, without looking at the sources if you are gamers. This will teach you the ins and outs of Python. If you find any new vulnerabilities, we would be happy to hear about them. Note that the code is still hardened.

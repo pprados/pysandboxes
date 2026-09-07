@@ -39,8 +39,7 @@ def exposed_dir(tmp_path: Path) -> Iterator[Path]:
     (tmp_path / "secret.txt").write_text("classified\n")
     # Both symlinks are created here, before the guards are installed, because
     # a test must not need an unguarded door to build its own fixture. Earlier
-    # versions reached for one -- first `os.symlink.__wrapped__`, then
-    # `posix.symlink` -- and each had to be rewritten as that door closed.
+    # versions did, and each had to be rewritten as that door closed.
     (allowed / "absolute.txt").symlink_to(tmp_path / "secret.txt")
     (allowed / "relative.txt").symlink_to("../secret.txt")
     activate_guard_files_rules(
