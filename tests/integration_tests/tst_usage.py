@@ -428,16 +428,20 @@ def _test_files() -> int:
         learning_mode = os.environ["OS_SANDBOX"].lower() == "none"
     if not learning_mode:
         # Check access refused
+        # The probe sits at the repository root: the parent must exist and be
+        # writable by the OS, or a broken guard would be reported as an OSError
+        # instead of a denial. Its name is gitignored, so a guard failure
+        # leaves no file the working tree would carry.
         try:
-            with io.open("hack.py", "w"):
+            with io.open("denied-write.probe", "w"):
                 pass
             if learning_mode:
                 logger.error(f"{KO} Must be stopped by pysandbox")
                 rc = 1
         except SandBoxError:
-            logger.info(f"{OK} Write to hack.py is stopped")
+            logger.info(f"{OK} Write to denied-write.probe is stopped")
         except OSError:
-            logger.info(f"{OK} Write to hack.py is stopped by OS")
+            logger.info(f"{OK} Write to denied-write.probe is stopped by OS")
 
         try:
             with tempfile.TemporaryFile(mode="w+") as _:

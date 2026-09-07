@@ -18,9 +18,16 @@ def test_escape_with_closure() -> None:
     assert original_open.__module__ in ["_io", "io"], "Not the _original io.open"
 
 
-@pytest.mark.xfail(strict=True, reason="escape via __subclasses__ not yet blocked")
+@pytest.mark.xfail(
+    strict=True,
+    reason="escape via __subclasses__: open by construction, out of scope for the wayward-LLM "
+    "target (wiki/audit-python-security.md#the-design-target-wayward-llm-generated-code) -- "
+    "documented, not scheduled",
+)
 def test_escape_with_subclasses() -> None:
-    # TODO Try to block the __subclasses__ access
+    # Walking the class hierarchy to reach a guard module and reset its state takes an
+    # intent the target reader does not have. Kept strict so that closing it anywhere
+    # else breaks here, forcing the audit page to be updated.
     def find_all_subclasses(cls: type) -> Set[type]:
         all_subclasses: Set[type] = set()
         direct_subclasses: Tuple[type, ...] = type.__subclasses__(cls)  # type: ignore[assignment]
@@ -49,8 +56,15 @@ def test_escape_with_subclasses() -> None:
         import_module._rules = ()  # type: ignore[attr-defined]
 
 
-@pytest.mark.xfail(strict=True, reason="TODO: block sys.meta_path escape in guard_import")
+@pytest.mark.xfail(
+    strict=True,
+    reason="sys.meta_path escape: open by construction, out of scope for the wayward-LLM "
+    "target (wiki/audit-python-security.md#the-design-target-wayward-llm-generated-code) -- "
+    "documented, not scheduled since guard_self was removed",
+)
 def test_escape_with_meta_path() -> None:
+    # Unhooking GuardFinder is a deliberate act, not something code solving the wrong
+    # problem does by accident.
 
     with pytest.raises(RuleAttributeError):
         new_list = list(sys.meta_path)[1:]
@@ -59,13 +73,15 @@ def test_escape_with_meta_path() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="pickle.loads() escape not blocked: no Python-level guard covers the pickle opcodes",
+    reason="guard_api is not armed here, and no Python-level guard covers the pickle opcodes "
+    "themselves: armed, pickle.loads is denied (test_guard_api.py::test_armed_denies_pickle_loads)",
 )
 def test_escape_with_pickle_allowed() -> None:
-    # VULNERABLE (default): Pickle is ALLOWED by default (_activate_guard_import_for_tests)
-    # This test demonstrates pickle.loads() bypasses ALL import guards.
+    # This test exercises the import guard alone, with guard_api disarmed, and demonstrates
+    # that pickle.loads() bypasses ALL import guards.
     # The payload calls os.system() through the pickle opcodes, so unpickling it
-    # must raise instead of running it. Today nothing stops it, hence the xfail.
+    # must raise instead of running it. Nothing in the import layer stops it, hence the xfail;
+    # the denial armed comes from the guard_api "deserialization" category, not from here.
     # Containing hostile in-process bytecode is the OS sandbox's role; see
     # wiki/audit-python-security.md for why a Python-level pickle guard was dropped.
     malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_ALLOWED'\ntRp1\n."
@@ -105,12 +121,22 @@ def test_escape_with_pickle_blocked() -> None:
         pickle.loads(malicious_pickle)  # type: ignore[arg-type]
 
 
-@pytest.mark.xfail(strict=True, reason="escape via __globals__ introspection not yet blocked")
+@pytest.mark.xfail(
+    strict=True,
+    reason="__globals__ is the dict CPython resolves module-level names through, so it "
+    "cannot be taken away: open by construction, out of scope for the wayward-LLM target "
+    "(wiki/audit-python-security.md#the-design-target-wayward-llm-generated-code)",
+)
 def test_escape_with_globals_introspection() -> None:
     # __globals__ trick: any function object exposes its definition module's namespace
     # via __globals__, allowing access to all module-level imports/objects.
     # Attack chain: get a built-in function → inspect its __globals__ → access os
     # Example: a generator's gi_frame exposes function.__globals__
+    #
+    # Nothing here can be plugged: that dict *is* how CPython resolves every global name
+    # and every closure in the process, so it cannot be withheld without breaking the
+    # interpreter. The two reads below are precisely the ones that can never raise, which
+    # is why each sits inside pytest.raises and the test is xfail rather than passing.
 
     # Strategy 1: via any method reference
     # object.__init__.__globals__ would expose builtins (if not restricted)
@@ -134,8 +160,25 @@ def test_escape_with_globals_introspection() -> None:
             _ = gen.gi_frame.f_globals
 
 
-@pytest.mark.xfail(strict=True, reason="escape via obfuscated string access not yet blocked")
+@pytest.mark.xfail(
+    strict=True,
+    reason="this layer does no static name scanning, so runtime-built names are never seen: "
+    "records a defense never claimed rather than an unfixed hole. Out of scope for the "
+    "wayward-LLM target, which has no reason to obfuscate",
+)
 def test_escape_with_obfuscated_strings() -> None:
+    # What this pins is comparative, not a pysandboxes defect: it is why this layer is
+    # not built on name matching in the first place.
+    #
+    # The eval sub-language *does* stop these, and for the opposite reason: it decides at
+    # run time, not on the source. __sb_getattr__ and the getattr/vars/hasattr shims hand
+    # _check_attr the *value* of the name (eval_runtime.py:213, 293, 321), so
+    # '__sub' + 'classes__' arrives there as "__subclasses__" and is refused like the
+    # dotted form -- see
+    # test_eval_security_corpus.py::test_a_name_built_by_concatenation_dies_on_the_namespace.
+    # That guard only covers code routed through guarded_eval; arbitrary bytecode in the
+    # host interpreter, which is what this file exercises, never passes through it.
+    #
     # Obfuscation bypass: AST-based filters (RestrictedPython, Basilisk) scan for
     # obvious patterns like "__import__", "eval", "exec", "__subclasses__".
     # But Python's dynamic nature allows obfuscating these:

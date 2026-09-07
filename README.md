@@ -47,7 +47,7 @@ This is **not** a defense against a malicious third-party dependency that you in
 
 # Platform support
 
-For now, **Linux and WSL only**. Every OS-level backend (landlock, bwrap, firejail, unshare) is a Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
+For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock, bwrap, firejail, unshare) is a Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
 
 # Cost and compatibility
 
