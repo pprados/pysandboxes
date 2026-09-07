@@ -6,8 +6,8 @@
 convention, but they are only resolvable through ``/etc/hosts``, and
 that file is not guaranteed to carry them: Docker Desktop rewrites it
 without the standard IPv6 block, and a minimal container image may ship
-none of the entries. An unresolvable name in a ``net=`` rule is a fatal
-config error, so a profile written against these names became invalid
+none of the entries. An unresolvable name silently grants nothing, so a
+profile written against these names lost the access it meant to open
 depending on the host it ran on.
 
 The fallback keeps the names in the profile rather than forcing IP
@@ -69,8 +69,13 @@ def test_fallback_covers_stream_and_datagram() -> None:
         assert socket.SOCK_DGRAM in kinds
 
 
-def test_unknown_name_still_fails() -> None:
-    """The fallback is loopback-only: other names must still error out."""
-    errors, _ = _parse_without_resolver("net=ALLOW|TCP|nonexistent.example.com|80|OUT")
-    assert errors
-    assert "does not resolve" in errors[0][0]
+def test_unknown_name_is_not_covered_by_the_fallback() -> None:
+    """The fallback is loopback-only: other names must gain nothing from it.
+
+    An unresolvable ``ALLOW`` is dropped rather than fatal, so the proof that
+    the fallback stayed loopback-only is the absence of a pinned address, not
+    a config error.
+    """
+    errors, pin_dns = _parse_without_resolver("net=ALLOW|TCP|nonexistent.example.com|80|OUT")
+    assert not errors
+    assert "nonexistent.example.com" not in pin_dns
