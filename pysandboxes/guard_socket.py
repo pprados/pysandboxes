@@ -487,20 +487,23 @@ def _parse_rule(rule: ConfigLine, errors: list[tuple[str, Path, int]], pin_dns: 
         if _is_transient_gai_error(e):
             # The retries are exhausted. The rule may well be correct: say so, so
             # the reader looks at the resolver and not at the profile.
-            message = (
-                f"{format_ruleref(rule)}: "
-                f"In {rule.rule!r}, "
-                f"the name resolution failed temporarily ({e}). "
-                f"Check the resolver, not the rule."
-            )
+            reason = f"the name resolution failed temporarily ({e}). Check the resolver, not the rule."
         else:
-            message = (
-                f"{format_ruleref(rule)}: "
-                f"In {rule.rule!r}, "
-                f"invalid network specification. "
-                f"That does not resolve to any network."
+            reason = "invalid network specification. That does not resolve to any network."
+        if action == Action.ALLOW.name:
+            # An ALLOW grants, so a name that resolves to nothing grants nothing:
+            # dropping the rule leaves the implicit default policy in charge and a
+            # host with no resolver still starts. A DENY is the mirror image --
+            # dropping one lifts a restriction its author wrote on purpose -- so it
+            # stays fatal, which refuses to start rather than run unrestricted.
+            pysandboxes_logger.warning(
+                "%s: In %r, %s Rule ignored: it allows nothing.",
+                format_ruleref(rule),
+                rule.rule,
+                reason,
             )
-        errors.append((message, rule.path, rule.ln))
+            return []
+        errors.append((f"{format_ruleref(rule)}: In {rule.rule!r}, {reason}", rule.path, rule.ln))
         return None
 
 
@@ -521,7 +524,14 @@ def parse_rules(rules: ConfigLines, errors: list[ErrorMsg]) -> tuple[SocketRules
         parsed_rules = _parse_rule(rule, errors, dns)
         if parsed_rules:
             socket_rules.extend(parsed_rules)
-        elif parsed_rules is not None:
+        elif parsed_rules is not None and not rule.rule.startswith("net="):
+            # An empty result means two different things. From a line this guard
+            # does not own it means "not mine", and the line goes on to the next
+            # parser -- reaching the end unclaimed is what makes it an invalid
+            # rule. From a net= line it means the rule was understood and yielded
+            # no network, which is a rule that matches nothing, not an unknown
+            # directive: claim it here or a tolerated ALLOW is reported as a
+            # syntax error instead of being ignored.
             ignore_rules.append(rule)
 
     # Remove duplicates and sort for consistency
