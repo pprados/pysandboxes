@@ -162,6 +162,7 @@ extra-clean:
 clean: api_docs_clean extra-clean
 	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \; || true
 	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
+	@rm -f denied-write.probe || true
 
 # pdoc imports the package to introspect it, so it runs inside the project
 # environment (`--with` adds pdoc itself without touching pyproject.toml).

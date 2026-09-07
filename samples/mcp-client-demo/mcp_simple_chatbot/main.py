@@ -38,9 +38,9 @@ class Configuration:
         """Get the LLM API key from environment."""
         import os
 
-        api_key = os.getenv("API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("API_KEY not found in environment variables")
+            raise ValueError("OPENAI_API_KEY not found in environment variables")
         return api_key
 
     @staticmethod
@@ -84,7 +84,8 @@ class LLMClient:
 
     def get_response(self, messages: List[Dict[str, str]]) -> str:
         """Get a response from the LLM."""
-        url = os.environ["API_URL"]
+        base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        url = f"{base_url}/chat/completions"
 
         headers = {
             "Content-Type": "application/json",
@@ -92,7 +93,7 @@ class LLMClient:
         }
         payload = {
             "messages": messages,
-            "model": os.environ["MODEL"],
+            "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
             "temperature": 0.7,
             "max_tokens": 4096,
             "top_p": 1,
@@ -101,7 +102,8 @@ class LLMClient:
         }
 
         try:
-            with httpx.Client() as client:
+            # httpx defaults to 5s, which a summarisation call routinely exceeds.
+            with httpx.Client(timeout=30.0) as client:
                 response = client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
                 data = response.json()

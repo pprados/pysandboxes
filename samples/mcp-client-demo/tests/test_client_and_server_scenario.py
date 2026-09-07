@@ -27,13 +27,13 @@ all_mcp_server_config: list[str] = [
     "http",
 ]
 
-# End-to-end through a live model: two tests over four server configurations and
-# two providers, each spending tokens, and each depending on the model choosing
-# to call the tool under test. Useful by hand, useless as a gate -- what the
-# sample must guarantee is checked without a model in test_tool_dispatch.py.
+# End-to-end through a live model: two tests over four server configurations,
+# each spending tokens and each depending on the model choosing to call the
+# tool under test. Gated on OPENAI_API_KEY alone -- set it in .env, which the
+# Makefile sources before pytest.
 requires_llm = pytest.mark.skipif(
-    not os.environ.get("RUN_LLM_TESTS"),
-    reason="drives a live model and spends tokens; set RUN_LLM_TESTS=1",
+    not os.environ.get("OPENAI_API_KEY"),
+    reason="Set OPENAI_API_KEY",
 )
 
 
@@ -143,8 +143,6 @@ def _start_server(mcp_server_config: str) -> Popen | None:
 
 
 @requires_llm
-@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
-@pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_evaluate_expression(
@@ -197,8 +195,6 @@ def test_claude_evaluate_expression(
 
 
 @requires_llm
-@pytest.mark.skipif(not os.environ.get("API_URL"), reason="Set API_URL")
-@pytest.mark.skipif(not os.environ.get("API_KEY"), reason="Set API_KEY")
 @pytest.mark.parametrize("mcp_server_config", all_mcp_server_config)
 @pytest.mark.parametrize("mcp_client_os_sandbox", all_mcp_client_os_sandbox)
 def test_claude_fetch_webpage(

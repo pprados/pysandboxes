@@ -23,7 +23,7 @@ Create a `.env` file in the root directory and add your API key:
 OPENAI_API_KEY=your_api_key_here
 ```
 
-> **Note:** The current implementation is configured to use the [Groq API endpoint](`https://api.groq.com/openai/v1/chat/completions`) with the `llama-3.2-90b-vision-preview` model or OpenAI. If you plan to use a different LLM provider, you\'ll need to modify the `LLMClient` class in `main.py` to use the appropriate endpoint URL and model parameters and the `.env` file.
+> **Note:** `OPENAI_API_KEY` is the only required variable. The implementation targets the OpenAI chat completions endpoint with the `gpt-4o-mini` model. Set `OPENAI_BASE_URL` and `OPENAI_MODEL` in the `.env` file to use another OpenAI-compatible provider. Note that the sandbox only allows the hosts listed in the `net=` rules of `.py-sandboxes`.
 
 ### Configure servers
 

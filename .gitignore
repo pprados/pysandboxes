@@ -193,6 +193,8 @@ graphify-out/
 .pysandboxes
 netfilter*.net
 run.sh
+# Write probe of tst_usage: only ever created if a guard fails to deny it
+/denied-write.probe
 tmp*/
 etudes/
 tst_wasm/

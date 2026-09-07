@@ -4,16 +4,21 @@ include ".py-sandboxes.pycharm"
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
-env=MODEL=${MODEL}
-env=API_URL=${API_URL}
-env=API_KEY=${API_KEY}
+env=OPENAI_MODEL=${OPENAI_MODEL}
+env=OPENAI_BASE_URL=${OPENAI_BASE_URL}
+env=OPENAI_API_KEY=${OPENAI_API_KEY}
 env=HOME=${HOME}
 env=PATH=${PATH}
 env=LANGUAGE=${LANGUAGE}
 env=MY_IP=${MY_IP:-127.0.0.1}
 
 # ⚠ Dangerous!
+# An MCP client on a stdio transport starts its servers itself: the spawn is the
+# transport. Granted call by call, not by category.
 python-import=subprocess
+python-api=ALLOW:subprocess.Popen
+python-api=ALLOW:threading.Thread.start
+python-api=ALLOW:threading._start_joinable_thread
 
 # Standard Python
 python-import=__future__, __main__, _cffi_backend, _decimal, _hashlib, _io, _socket
@@ -84,7 +89,6 @@ python-import=webcolors
 
 python-import=*
 
-net=ALLOW|TCP|api.x.ai|443|OUT
 net=ALLOW|TCP|api.openai.com|443|OUT
 net=ALLOW|TCP|www.google.com|80|OUT
 
