@@ -1223,6 +1223,44 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
     return wrapper
 
 
+def _guarded_socket_class(original: Any) -> type:
+    """Publish a guarded subclass where the C module published the raw class.
+
+    socket.socket subclasses _socket.socket and does not redefine connect, so
+    patching the subclass leaves the base class method untouched: an instance
+    built by `_socket.socket(...)` never consults the guard. The C type is
+    immutable, so what can be replaced is the name the module publishes, and
+    that is the route an attacker has to take.
+
+    Handing back socket.socket itself recurses: socket.py line 233 calls
+    `_socket.socket.__init__(self, ...)`, which would then be its own. That one
+    call site is the only thing socket.py reaches through this name, so the
+    subclass defines a Python __init__ forwarding to the original -- a plain
+    function, so the unbound call from socket.py works whatever self is.
+
+    The original class stays reachable through __mro__; this closes the named
+    route, not the type graph.
+    """
+
+    class _GuardedSocket(original):  # type: ignore[misc,valid-type]
+        # Keep the identity of the class being replaced. guard_eval grades a
+        # callable by __module__, and a class defined here would report
+        # pysandboxes.guard_socket, fall out of STRONG_MODULES, and be handed
+        # to eval contexts that refuse the real one.
+        __module__ = original.__module__
+        __qualname__ = original.__qualname__
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            original.__init__(self, *args, **kwargs)
+
+        bind = _wrap_socket_bind(original.bind)
+        connect = _wrap_socket_connect(original.connect)
+        connect_ex = _wrap_socket_connect_ex(original.connect_ex)
+        sendto = _wrap_socket_sendto(original.sendto)
+
+    return _GuardedSocket
+
+
 def patch_rules(learn: bool) -> dict[str, Callable]:
     """Provide socket patching rules for guard activation.
 
@@ -1237,6 +1275,7 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         "socket.gethostbyname": _wrap_socket_gethostbyname,
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "socket.getaddrinfo": _wrap_socket_getaddrinfo,
+        "_socket.socket": _guarded_socket_class,
     }
     return rules
 
