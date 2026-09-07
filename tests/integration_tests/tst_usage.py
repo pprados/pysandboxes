@@ -1,5 +1,4 @@
 import asyncio
-import concurrent.futures
 import io
 import logging
 import os
@@ -7,11 +6,10 @@ import signal
 import sys
 import tempfile
 import threading
-from collections.abc import Callable
 from pathlib import Path
 from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM, gaierror
 from types import FrameType
-from typing import Any, List, Mapping, TypeVar, cast
+from typing import Any, List, Mapping, cast
 
 from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
 from pysandboxes.config import DEBUG
@@ -24,26 +22,6 @@ OK: str = "\u2705\ufe0f "
 KO: str = "\u274c\ufe0f "
 
 RANGETEST = 1
-
-# Cap blocking gethostbyname/getaddrinfo (NSS can hang minutes in nested QEMU / bad DNS).
-_DNS_THREAD_TIMEOUT_S = 12.0
-
-_R = TypeVar("_R")
-
-
-def _network_dns_result(
-    fn: Callable[[], _R],
-    *,
-    timeout_s: float = _DNS_THREAD_TIMEOUT_S,
-) -> _R:
-    """Run a blocking DNS resolution call with a wall-clock timeout."""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(fn)
-        try:
-            return fut.result(timeout=timeout_s)
-        except concurrent.futures.TimeoutError as e:
-            raise OSError(f"DNS call timed out after {timeout_s}s") from e
-
 
 def init_log_level(use_rich: bool = True) -> None:
     handlers: list[logging.Handler] = []
@@ -235,9 +213,9 @@ def _test_network() -> int:
     # Learn a direct connection to google
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            remote_ip = _network_dns_result(lambda: socket.gethostbyname("www.google.com"))
-            _network_dns_result(lambda: socket.gethostbyname_ex("www.google.com"))
-            _network_dns_result(lambda: socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC))
+            remote_ip = socket.gethostbyname("www.google.com")
+            socket.gethostbyname_ex("www.google.com")
+            socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
             sock.settimeout(timeout)
             sock.connect((remote_ip, 80))
             logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
@@ -361,7 +339,7 @@ def _test_network() -> int:
     if not learning_mode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                remote_ip = _network_dns_result(lambda: socket.gethostbyname("www.github.com"))
+                remote_ip = socket.gethostbyname("www.github.com")
                 sock.settimeout(timeout)
                 sock.connect((remote_ip, 80))
             if learning_mode:

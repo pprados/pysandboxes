@@ -8,17 +8,14 @@ env=My_ENV=${My_ENV}
 
 python-import=*
 
-# tst_usage caps blocking NSS lookups with a worker thread
-# (_network_dns_result): NSS can hang for minutes in nested QEMU.
-# One call crosses several guarded doors. The private start primitive
-# is spelled _start_new_thread up to 3.12 and _start_joinable_thread
-# from 3.13; both are listed so the profile stays portable, and the
-# guard patches only the applicable one.
-python-api=ALLOW:threading.Thread.start,threading._start_new_thread,threading._start_joinable_thread
-
 expose-rw=./tmp
 expose-ro=.
 expose-ro=/etc
+# Imports resolved *inside* the sandbox read the interpreter's library tree, and
+# guard_files has no stdlib exemption. On the host `expose-ro=.` happens to cover
+# it (the venv sits in the project); in a container the interpreter is elsewhere,
+# so a deferred `import requests` dies as ModuleNotFoundError. Spell it out.
+expose-ro=/usr/local/lib
 # expose-ro=/run,/run
 
 
