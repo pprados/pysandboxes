@@ -95,3 +95,82 @@ def test_connect_through_the_c_class_is_refused(tmp_path: Path) -> None:
     )
 
     assert "GUARD" in result.stdout, result.stdout + result.stderr
+
+
+def test_every_guarded_resolution_call_has_its_c_twin() -> None:
+    """socket.py does `from _socket import *`; the socket name is an alias.
+
+    `socket.gethostbyname is _socket.gethostbyname` is one object under two
+    names, the posix relationship. getaddrinfo is the other shape: socket.py
+    redefines it in Python, so the raw C one is a separate, unguarded function
+    rather than an alias. Either way the C name needs the same wrapper.
+    """
+    import _socket
+
+    rules = patch_rules(learn=False)
+    plain = [key for key in rules if key.startswith("socket.") and "." not in key[len("socket.") :]]
+
+    for key in plain:
+        name = key[len("socket.") :]
+        if not hasattr(_socket, name):
+            continue
+        assert f"_socket.{name}" in rules, f"{key} is reachable unguarded as _socket.{name}"
+        assert rules[f"_socket.{name}"] is rules[key]
+
+
+def test_resolution_through_the_c_module_behaves_like_the_guarded_name(tmp_path: Path) -> None:
+    """End to end: the C name must not be a softer path than the socket one.
+
+    Asserting GUARD outright would only pass where DNS resolves; with no
+    resolver the call dies of gaierror before the guard is consulted, which
+    says nothing either way. What holds in both environments is that the two
+    names produce the same outcome -- a difference is the bypass.
+
+    Stated plainly: on a machine without DNS both names die of gaierror, so
+    this passes with or without the twin rule. It is the table test above that
+    catches a missing twin here; this one catches a divergence where the
+    resolver answers.
+    """
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / ".py-sandboxes").write_text(
+        "py-sandbox=true\n"
+        "os-sandbox=subprocess\n"
+        "python-import=*\n"
+        f"expose-rw={work}\n"
+        f"expose-ro={Path.cwd()}\n"
+        "net=ALLOW|TCP|127.0.0.1|9999|OUT\n"
+    )
+    (work / "probe.py").write_text(
+        "import socket\n"
+        "import _socket\n"
+        "from pysandboxes.e import SandBoxError\n"
+        "def outcome(call):\n"
+        "    try:\n"
+        "        call()\n"
+        "        return 'ALLOWED'\n"
+        "    except SandBoxError:\n"
+        "        return 'GUARD'\n"
+        "    except BaseException as exc:\n"
+        "        return 'OTHER ' + type(exc).__name__\n"
+        'for name, args in (("gethostbyname", ("example.com",)),\n'
+        '                   ("getaddrinfo", ("example.com", 80))):\n'
+        "    guarded = outcome(lambda: getattr(socket, name)(*args))\n"
+        "    raw = outcome(lambda: getattr(_socket, name)(*args))\n"
+        "    print(name, guarded, '|', raw)\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pysandboxes.python_sb", "probe.py"],
+        capture_output=True,
+        text=True,
+        cwd=work,
+        env={**os.environ, "TMPDIR": str(work)},
+    )
+
+    lines = [line for line in result.stdout.splitlines() if " | " in line]
+    assert len(lines) == 2, result.stdout + result.stderr
+    for line in lines:
+        name, rest = line.split(" ", 1)
+        guarded, raw = (part.strip() for part in rest.split("|"))
+        assert guarded == raw, f"{name}: socket gives {guarded!r}, _socket gives {raw!r}"
