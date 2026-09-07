@@ -8,21 +8,19 @@ provider. Success is determined by the exit code of the launched process (0 = su
 
 import logging
 import os
-import platform
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from pysandboxes.remote.landlock_daemon import landlock_user_available
-from pysandboxes.remote.tools import unshare_user_namespace_available, which_command
-
 from ._env import (
+    ALL_OS_SANDBOX,
     NO_DEFAULT_ROUTE_REASON,
     NO_PROFILE_DNS_REASON,
     default_route_available,
     profile_hosts_resolvable,
+    provider_skip_reason,
 )
 from .tst_usage import SECRET_ENV
 
@@ -35,15 +33,9 @@ PYTHON_SB_ARGS = "--pysandboxes-config=tests/integration_tests/py-sandbox-test.p
 
 # All OS sandbox providers to test (no container); skip conditions applied per provider.
 # A provider whose binary is missing skips itself, see _skip_reason, so this list
-# stays portable.
-all_os_sandbox: list[str] = [
-    "subprocess",
-    "qemu",
-    "unshare",
-    "firejail",
-    "landlock",
-    "bwrap",
-]
+# stays portable. Shared with test_guards_with_providers, so both suites cover the
+# same set and neither drifts.
+all_os_sandbox: list[str] = list(ALL_OS_SANDBOX)
 
 
 def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
@@ -77,24 +69,17 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
 
 
 def _skip_reason(os_sandbox: str) -> str | None:
-    """Return skip reason for provider if unavailable, else None."""
+    """Return skip reason for provider if unavailable, else None.
+
+    The two checks here belong to *this* scenario -- ``tst_usage`` drives the network
+    through the profile's ``net=`` rules -- while the backend's own availability is
+    shared with the other per-provider suites.
+    """
     if not profile_hosts_resolvable():
         return NO_PROFILE_DNS_REASON
     if os_sandbox in ("firejail", "unshare") and not default_route_available():
         return NO_DEFAULT_ROUTE_REASON
-    if os_sandbox == "firejail" and not which_command("firejail"):
-        return "firejail not installed"
-    if os_sandbox == "unshare" and not unshare_user_namespace_available():
-        return "unshare/slirp4netns missing or user namespaces not permitted"
-    if os_sandbox == "landlock" and not landlock_user_available():
-        return "Landlock not available (kernel < 5.13 or not Linux)"
-    if os_sandbox == "bwrap" and not which_command("bwrap"):
-        return "bwrap not installed"
-    if os_sandbox == "qemu":
-        arch = platform.machine()
-        if not which_command(f"qemu-system-{arch}") and not which_command("qemu-system-x86_64"):
-            return "QEMU not installed"
-    return None
+    return provider_skip_reason(os_sandbox)
 
 
 @pytest.mark.parametrize("os_sandbox", all_os_sandbox)
