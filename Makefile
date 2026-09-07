@@ -360,12 +360,18 @@ build-images: Dockerfile .make-dist \
 	.make-build-image-bwrap \
 	.make-build-image-qemu
 
-# The sentinels record a build against the *previous* daemon, so they are dropped first:
-# otherwise switching to minikube's daemon would leave every image unbuilt.
+IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
+
+# The sentinels say "built", never "built *where*", so they are dropped on both sides:
+# before, because they record a build against the previous daemon and would leave every
+# image unbuilt here; after, because they would otherwise credit this daemon's images to
+# the next local build, which would skip it and run the tests against images that only
+# exist in minikube.
 ## Build all provider images into the current Docker daemon (use after: eval $(minikube docker-env))
 build-image-docker:
-	@rm -f .make-build-image-base .make-build-image-landlock .make-build-image-unshare .make-build-image-bwrap .make-build-image-qemu
+	@rm -f $(IMAGE_STAMPS)
 	@$(MAKE) build-images
+	@rm -f $(IMAGE_STAMPS)
 
 ## Same as build-images (podman then docker in each recipe); named for symmetry with build-image-docker
 build-image-podman: build-images
