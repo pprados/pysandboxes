@@ -29,6 +29,8 @@ spec:
       volumeMounts:
         - name: code-local
           mountPath: /app  # Path inside the pod
+        - name: scratch-tmp
+          mountPath: /app/tmp  # expose-rw=./tmp in the profile; see the volume below
         - name: dev-net-tun
           mountPath: /dev/net/tun  # Required by slirp4netns
   volumes:
@@ -36,6 +38,12 @@ spec:
       hostPath:
         path: /mnt/pysandboxes
         type: Directory
+    # /app is a 9p mount (minikube mount) that rejects chmod and maps the pod's writes
+    # to nobody, so the profile's expose-rw=./tmp cannot be honoured on it. Docker gets
+    # a writable tmp via chmod in _run_container_test; here an emptyDir shadows the 9p
+    # subdirectory with a genuinely writable one. Nothing in tmp/ needs to reach the host.
+    - name: scratch-tmp
+      emptyDir: {}
     - name: dev-net-tun
       hostPath:
         path: /dev/net/tun
