@@ -201,8 +201,14 @@
 # Disable root access
 --noroot
 
-# Disable X11
---x11=none
+# Disable X11. Not --x11=none: firejail aborts on that option unless the sandbox
+# owns a network namespace, and one is only created for profiles carrying net=
+# rules. The lines below block the same files and variables with no such
+# requirement. firejail_sse_daemon adds --x11=none back, which additionally
+# closes the abstract X11 socket, whenever it has created that namespace.
+--blacklist=/tmp/.X11-unix
+--env=DISPLAY=
+--env=XAUTHORITY=
 # X11 backends
 # --x11
 # --x11=xephyr

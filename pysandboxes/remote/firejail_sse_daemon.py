@@ -541,6 +541,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                         raise ValueError("Impossible to detect the default network interface")
                     args.append(f"--net={bridge}")
 
+                # The sandbox now owns a network namespace, so firejail accepts
+                # --x11=none, which also closes the abstract X11 socket that the
+                # template's blacklist cannot reach.
+                args.append("--x11=none")
+
                 if pipe_path:  # Update rules?
                     net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
 
