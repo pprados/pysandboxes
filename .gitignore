@@ -199,7 +199,9 @@ tmp*/
 etudes/
 tst_wasm/
 PPR*
-/_tasks/
+# Ignore the contents, not the directory: git does not descend into an ignored
+# directory, so the !_tasks/lessons.md exception below would never be reached.
+/_tasks/*
 
 # ---------------------------------------------------------------------------
 # Read-only stubs (0 byte, mode 444) dropped in the working directory by the
@@ -229,3 +231,6 @@ PPR*
 # ---------------------------------------------------------------------------
 the agent workspaces/*
 _tasks/*
+# lessons.md is the one versioned exception: it carries repo-level rules, not
+# session workspace. Must stay last, after every _tasks pattern above.
+!_tasks/lessons.md
