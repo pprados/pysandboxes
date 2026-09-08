@@ -163,6 +163,80 @@ fail. Five of the six partial-mode rows actually run.
 Kubernetes rows need minikube and the per-backend images
 (`make minikube-ready`, `make minikube-build-images`); they skip otherwise.
 
+## D. Counting the scenarios
+
+A single product over every axis would be wrong twice over: one row of
+`tst_usage` arms three families at once, and a `py_sandbox=false` row cannot arm
+the three Python-level families at all. The count is therefore a sum over
+conditions, expressed in *cells* — one cell is a (Python version, backend, guard
+family, condition) tuple — rather than in pytest rows.
+
+| Symbol | Meaning | Value | Source |
+|---|---|---|---|
+| `V_host` | Python versions the host grid runs | 1 (4 claimed) | `test.yml` and `integration.yml` pin `3.13`; `requires-python = ">=3.11,<3.15"` |
+| `V_ctn` | Python versions the container grid runs | 1 | `_image_name()` returns `:latest`; `ARG PYTHON_VERSION` is a build knob, not a test axis |
+| `P_host` | backends on the host | 6 | `ALL_OS_SANDBOX` in `tests/integration_tests/_env.py` |
+| `P_ctn` | backends in containers, `none` excluded | 4 | `all_os_sandbox_provider` minus `none` |
+| `G` | armable guard families | 6 | section A; `guard_provider` is excluded — it parses configuration, it does not guard a call |
+| `G_os` | families still enforced without the Python layer | 3 | files, socket, envs — empirically, the 24 `py_sandbox=false` container rows run `tst_usage` and pass, which is what makes those three OS-enforced rather than guard-enforced |
+| `M` | host modes | 2 | complete, partial (`test_partial_mode_hides_the_parent_environment`) |
+| `R` | container runtimes | 3 | docker, podman, kubernetes |
+| `K` | privilege conditions | 2 | `privileged` {true, false} |
+
+**What full coverage would demand**
+
+```
+N_ideal = V_host x P_host x M x G                    (host)
+        + V_ctn  x P_ctn  x R x K x (G + G_os)       (containers)
+
+        = 1 x 6 x 2 x 6   +   1 x 4 x 3 x 2 x (6 + 3)
+        = 72 + 216
+        = 288
+```
+
+The `(G + G_os)` term is the `py_sandbox` axis written honestly. The
+`py_sandbox=true` half of the container grid can arm all six families; the
+`py_sandbox=false` half removes the Python layer, so it can only arm the three
+the OS enforces on its own. The 72 cells that difference removes are not a gap —
+they are inapplicable, and counting them would inflate the denominator.
+
+**What the suites cover**
+
+```
+N_covered = P_host x 3   (tst_usage on the host: files, socket, envs)      =  18
+          + P_host x 3   (test_guards_with_providers: eval, api, import)   =  18
+          + P_host x 1   (partial mode: environment variables only)        =   6
+          + 48 x 3       (every real-backend container row runs tst_usage) = 144
+          = 186
+```
+
+**What actually executes** — subtract the `xfail(run=False)` cells: the qemu
+partial-mode row (1 cell) and the twelve unprivileged `unshare`/`bwrap`
+container rows (12 x 3 = 36 cells).
+
+```
+N_run = 186 - 37 = 149
+```
+
+| | Cells | Of 288 |
+|---|---|---|
+| Declared | 186 | 65 % |
+| Executed | 149 | 52 % |
+
+Row counts, to cross-check against the sections above: 48 host rows and 60
+container rows, 48 of them on a real backend. Both are reproducible with
+`pytest --collect-only -q`. Unit tests sit outside this grid entirely — 1019
+collected, none parametrized by backend or container condition — so they scale
+with the Python version alone.
+
+Two facts fall out of the arithmetic that the tables above do not show. Partial
+mode arms one family of six: the mode is parametrized over every backend, but
+the only assertion is about environment variables. And both `V` coefficients are
+1 against a `requires-python` that claims four interpreters — raising `V_host`
+means uncommenting one line in `test.yml` and `integration.yml`, while raising
+`V_ctn` means building and tagging the per-version images, since the grid asks
+for `:latest`.
+
 ## Gaps
 
 - **No container row arms `guard_eval`, `guard_api` or `guard_import`.** The
@@ -181,5 +255,11 @@ Kubernetes rows need minikube and the per-backend images
   carries an explicit `# TODO: test with split mode`. It is covered on the host
   by `test_partial_mode_hides_the_parent_environment`.
 - **Twelve unprivileged `unshare`/`bwrap` container rows never run.**
+- **Partial mode arms one guard family of six.** The mode is parametrized over
+  every backend, but the only assertion is about environment variables — see
+  section D.
+- **The grid runs one interpreter against a four-version support claim.**
+  `requires-python = ">=3.11,<3.15"`, while `test.yml` and `integration.yml` pin
+  `3.13` and the container grid asks for `:latest` — see section D.
 - `call_llm()` in `tst_usage.py` is defined but never invoked — dead code, not a
   provider test.
