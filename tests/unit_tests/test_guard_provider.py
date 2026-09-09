@@ -46,7 +46,7 @@ def test_parse_rules_defaults_no_config_exists(mocker: MagicMock) -> None:
     rules: list[ConfigLine] = []
     errors: list[ErrorMsg] = []
 
-    port, provider, use_py_sandbox, learning_path, learn, other_rules = parse_rules(config_path_mock, rules, errors)
+    port, provider, use_py_sandbox, learning_path, learn, _, other_rules = parse_rules(config_path_mock, rules, errors)
 
     assert port == -1
     assert provider == "subprocess"
@@ -73,7 +73,7 @@ def test_parse_rules_defaults_config_exists(mocker: MagicMock) -> None:
     rules: list[ConfigLine] = []
     errors: list[ErrorMsg] = []
 
-    port, provider, use_py_sandbox, learning_path, learn, other_rules = parse_rules(config_path_mock, rules, errors)
+    port, provider, use_py_sandbox, learning_path, learn, _, other_rules = parse_rules(config_path_mock, rules, errors)
 
     assert port == -1
     assert provider == "subprocess"
@@ -97,7 +97,7 @@ def test_os_sandbox_valid(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("os-sandbox=subprocess", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    _, provider, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    _, provider, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert provider == "subprocess"
     assert errors == []
 
@@ -115,7 +115,7 @@ def test_os_sandbox_bwrap_valid(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("os-sandbox=bwrap", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    _, provider, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    _, provider, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert provider == "bwrap"
     assert errors == []
 
@@ -133,7 +133,7 @@ def test_os_sandbox_invalid(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("os-sandbox=invalid", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    _, provider, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    _, provider, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert provider == "error"
     assert len(errors) == 1
     assert "Invalid os-sandbox 'invalid'" in errors[0][0]
@@ -152,7 +152,7 @@ def test_py_sandbox_false(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("py-sandbox=false", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    _, _, use_py_sandbox, _, learn, _ = parse_rules(config_path_mock, rules, errors)
+    _, _, use_py_sandbox, _, learn, _, _ = parse_rules(config_path_mock, rules, errors)
     assert use_py_sandbox is False
     assert learn is False
     assert errors == []
@@ -171,7 +171,7 @@ def test_py_sandbox_invalid(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("py-sandbox=invalid", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    _, provider, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    _, provider, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert provider == "error"
     assert len(errors) == 1
     assert "Invalid value 'invalid' for py-sandbox" in errors[0][0]
@@ -190,7 +190,7 @@ def test_port_valid(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("port=8080", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    port, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    port, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert port == 8080
     assert not errors
 
@@ -208,7 +208,7 @@ def test_port_invalid(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("port=abc", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    port, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    port, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert port == -1
     assert len(errors) == 1
     assert "Port must be a positive value" in errors[0][0]
@@ -227,7 +227,7 @@ def test_port_negative(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("port=-100", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    port, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    port, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert port == -1
     assert len(errors) == 1
     assert "Port must be a positive value" in errors[0][0]
@@ -249,7 +249,7 @@ def test_learn_path(mocker: MagicMock) -> None:
     rules = [ConfigLine("learn=new_config.conf", rule_path_mock, 1)]
     errors: list[ErrorMsg] = []
 
-    _, _, _, learning_path, learn, _ = parse_rules(config_path_mock, rules, errors)
+    _, _, _, learning_path, learn, _, _ = parse_rules(config_path_mock, rules, errors)
 
     assert str(learning_path) == str(Path("/tmp") / "new_config.conf")
     assert learn is True
@@ -269,7 +269,7 @@ def test_learn_invalid_value(mocker: MagicMock) -> None:
 
     rules = [ConfigLine("learn=true", cli_path_mock, 1)]
     errors: list[ErrorMsg] = []
-    _, provider, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    _, provider, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert provider == "error"
     assert len(errors) == 1
     assert "Invalid value 'true' for 'learn'" in errors[0][0]
@@ -293,7 +293,7 @@ def test_multiple_rules(mocker: MagicMock) -> None:
         ConfigLine("unrelated=rule", cli_path_mock, 4),
     ]
     errors: list[ErrorMsg] = []
-    port, provider, use_py_sandbox, _, _, other_rules = parse_rules(config_path_mock, rules, errors)
+    port, provider, use_py_sandbox, _, _, _, other_rules = parse_rules(config_path_mock, rules, errors)
     assert port == 9999
     assert provider == "subprocess"
     assert use_py_sandbox is True
@@ -320,7 +320,7 @@ def test_multiple_values_error(mocker: MagicMock) -> None:
         ConfigLine("port=9090", another_path_mock, 1),
     ]
     errors: list[ErrorMsg] = []
-    _, provider, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    _, provider, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert provider == "error"
     assert len(errors) == 1
     assert "Multiple port parameters" in errors[0][0]
@@ -344,6 +344,6 @@ def test_command_line_priority(mocker: MagicMock) -> None:
         ConfigLine("port=9090", cli_path_mock, 1),  # This one should be picked
     ]
     errors: list[ErrorMsg] = []
-    port, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
+    port, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert port == 9090
     assert not errors

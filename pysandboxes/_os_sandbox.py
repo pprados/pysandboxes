@@ -152,6 +152,10 @@ async def async_start_daemon(
         try:
             token = str(uuid.uuid4())
             os_provider: BaseDaemon = providers_factory[all_rules.os_sandbox](token, python_args=python_args)
+            from .remote.base_sse_daemon import BaseSSESandbox
+
+            if isinstance(os_provider, BaseSSESandbox):
+                os_provider._result_guard = all_rules.remote_result_guard
             await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
             _current_daemon = os_provider
             assert os_provider.is_started

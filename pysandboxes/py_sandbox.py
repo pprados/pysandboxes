@@ -254,6 +254,7 @@ def parse_config(
         use_py_sandbox,
         learning_path,
         learn,
+        remote_result_guard,
         others,
     ) = guard_provider.parse_rules(config_path, others, errors)
 
@@ -305,6 +306,7 @@ def parse_config(
         port=port,
         learning_path=learning_path,
         learn=learn,
+        remote_result_guard=remote_result_guard,
         envs_rules=envs_rules,
         socket_rules=socket_rules,
         pin_dns=pin_dns,

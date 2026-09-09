@@ -16,13 +16,14 @@ def parse_rules(
     config_path: Path,
     rules: ConfigLines,
     errors: List[ErrorMsg],
-) -> Tuple[int, str, bool, Path, bool, ConfigLines]:
+) -> Tuple[int, str, bool, Path, bool, bool, ConfigLines]:
     from ._os_sandbox import providers_factory
 
     port = -1
     other_rules: ConfigLines = []
     parameters_multi_values: dict[str, set[Tuple[Any, ConfigLine]]] = defaultdict(set)
     use_py_sandbox = True
+    remote_result_guard = True
     learning_path = None
 
     for rule in rules:
@@ -53,6 +54,22 @@ def parse_rules(
                     )
                 )
             parameters_multi_values["py-sandbox"].add((use_py_sandbox, rule))
+        elif rule.rule.startswith("remote-result-guard="):
+            value = rule.rule.split("=", 1)[1].strip().lower()
+            if value in ("", "true", "1", "on"):
+                remote_result_guard = True
+            elif value in ("false", "none", "0", "off"):
+                remote_result_guard = False
+            else:
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: "
+                        f"Invalid value {value!r} for remote-result-guard. Use true or false.",
+                        rule.path,
+                        rule.ln,
+                    )
+                )
+            parameters_multi_values["remote-result-guard"].add((remote_result_guard, rule))
         elif rule.rule.startswith("port="):
             value = rule.rule.split("=", 1)[1].strip()
             try:
@@ -139,6 +156,7 @@ def parse_rules(
     use_py_sandbox = parameters_prioritize_single_value.get("py-sandbox", [True])[0]
     learning_path = parameters_prioritize_single_value.get("learning_path", [config_path])[0]
     learn: bool = cast(bool, parameters_prioritize_single_value.get("learn", [False])[0])
+    remote_result_guard = parameters_prioritize_single_value.get("remote-result-guard", [True])[0]
     if learning_path is None:
         learning_path = config_path
 
@@ -150,8 +168,8 @@ def parse_rules(
         learn = True
 
     if errors:
-        return port, "error", use_py_sandbox, learning_path, learn, other_rules
-    return port, provider, use_py_sandbox, learning_path, learn, other_rules
+        return port, "error", use_py_sandbox, learning_path, learn, remote_result_guard, other_rules
+    return port, provider, use_py_sandbox, learning_path, learn, remote_result_guard, other_rules
 
 
-# Tuple[int, str, bool, Path, bool, ConfigLines]:
+# Tuple[int, str, bool, Path, bool, bool, ConfigLines]:

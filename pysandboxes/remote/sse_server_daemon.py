@@ -358,6 +358,7 @@ class SSEServerDaemon(BaseSSESandbox):
             port=all_rules.port,
             learning_path=all_rules.learning_path,
             learn=all_rules.learn,
+            remote_result_guard=all_rules.remote_result_guard,
             envs_rules=(),
             socket_rules=all_rules.socket_rules,
             pin_dns=all_rules.pin_dns,

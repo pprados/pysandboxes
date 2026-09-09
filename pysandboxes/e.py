@@ -6,6 +6,8 @@ This module centralizes all exception types to provide better stack traces
 and consistent error handling throughout the framework.
 """
 
+from pickle import UnpicklingError
+
 
 class SandBoxError(RuntimeError):
     """Base exception class for all sandbox-related errors."""
@@ -256,6 +258,20 @@ class RuleEvalPermissionError(PermissionError, SandBoxError):
     def __reduce__(self) -> tuple[type, tuple[str, str, str | None]]:
         """Rebuild the exception from its own attributes across the transport."""
         return self.__class__, (self.target, self.rule_key, self.hint)
+
+
+class RestrictedUnpicklingError(UnpicklingError, SandBoxError):
+    """Raised when the SSE transport refuses to deserialize a child->parent payload.
+
+    The result and exception channels carry data the sandboxed child produced,
+    so the parent unpickles them through a restricted unpickler: an opcode
+    outside the allowlist, a resolved callable the site's predicate refuses, an
+    import the stream would trigger, or a size budget can each raise this. It
+    derives from `UnpicklingError` so a caller treating it as a pickle failure
+    still catches it, and from `SandBoxError` so `except SandBoxError` does too.
+
+    See wiki/audit-python-security.md.
+    """
 
 
 _DENIALS_ATTRIBUTE = "__pysandboxes_denials__"
