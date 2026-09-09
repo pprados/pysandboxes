@@ -276,7 +276,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	  	-t python-sb:subprocess \
 	  	-t python-sb:landlock \
 	  	-t python-sb:latest \
-	  	-f Dockerfile .; \
+	  	-f Dockerfile . || exit 1; \
 	done; \
 	touch .make-build-image-base
 
@@ -289,13 +289,13 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	  	-t python-sb-landlock:$(PYTHON_VERSION) \
 	  	-t python-sb-landlock:latest \
 	  	-t python-sb-landlock:landlock \
-	  	-f Dockerfile-landlock .; \
+	  	-f Dockerfile-landlock . || exit 1; \
 	done; \
 	touch .make-build-image-landlock
 
 
 .make-build-image-unshare: .make-build-image-base Dockerfile-unshare
-	for CONTAINER_CMD in podman docker; do \
+	@for CONTAINER_CMD in podman docker; do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
@@ -303,7 +303,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	  	-t python-sb-unshare:$(PYTHON_VERSION) \
 	  	-t python-sb-unshare:latest \
 	  	-t python-sb-unshare:unshare \
-	  	-f Dockerfile-unshare .; \
+	  	-f Dockerfile-unshare . || exit 1; \
 	done; \
 	touch .make-build-image-unshare
 
@@ -316,7 +316,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	  	-t python-sb-bwrap:$(PYTHON_VERSION) \
 	  	-t python-sb-bwrap:latest \
 	  	-t python-sb-bwrap:bwrap \
-	  	-f Dockerfile-bwrap .; \
+	  	-f Dockerfile-bwrap . || exit 1; \
 	done; \
 	touch .make-build-image-bwrap
 
@@ -330,7 +330,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	  	-t python-sb-qemu:$(PYTHON_VERSION) \
 	  	-t python-sb-qemu:latest \
 	  	-t python-sb-qemu:qemu \
-	  	-f Dockerfile-qemu .; \
+	  	-f Dockerfile-qemu . || exit 1; \
 	done; \
 	touch .make-build-image-qemu
 
