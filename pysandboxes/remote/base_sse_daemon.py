@@ -8,7 +8,7 @@ import sys
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, cast
 
 import aiohttp
 import tblib
@@ -22,7 +22,14 @@ from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
 from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL
-from .tools import exception_predicate, from_b85_restricted, result_predicate, to_b85
+from .tools import (
+    descriptor_predicate,
+    exception_predicate,
+    from_b85_restricted,
+    rebuild_from_descriptor,
+    result_predicate,
+    to_b85,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,16 +53,19 @@ def _get_rpc_params(
     return params
 
 
-def _rebuild_remote_exception(payload: str) -> BaseException:
-    """Rebuild an exception raised inside the sandbox, with its remote traceback.
+def _attach_remote_traceback(exception: BaseException, serial_traceback: Any) -> BaseException:
+    """Attach the sandbox frames to an exception rebuilt on the parent side.
 
     Args:
-        payload: The base85 payload carrying the pickled (exception, traceback).
+        exception: The exception rebuilt from either transport form.
+        serial_traceback: What the stream carried alongside it.
 
     Returns:
         The exception, with the sandbox frames attached.
+
+    Raises:
+        RestrictedUnpicklingError: If the traceback does not have tblib's shape.
     """
-    exception, serial_traceback = from_b85_restricted(payload, exception_predicate)
     # The restricted unpickler admits tblib.Traceback by class; guard its shape
     # before as_traceback(), which rebuilds frame objects from child-controlled
     # attributes.
@@ -68,6 +78,55 @@ def _rebuild_remote_exception(payload: str) -> BaseException:
             break
         traceback = traceback.tb_next
     return exception.with_traceback(traceback)
+
+
+def _rebuild_remote_exception(payload: str, fallback_payload: str | None) -> BaseException:
+    """Rebuild an exception raised inside the sandbox, with its remote traceback.
+
+    Tries the rich form first, where the exception object crosses whole. Its
+    state routinely holds objects the guard cannot admit -- an `httpx.Request`,
+    a `Path`, an application object -- and refusing them would lose the sandbox
+    refusal itself, so a refusal falls back to the descriptor form, which
+    carries primitives only. The attributes of the original exception are lost
+    on that path; the class, the message and the denials are not.
+
+    Args:
+        payload: The base85 payload carrying the pickled (exception, traceback).
+            Empty when the child could not pickle the exception at all.
+        fallback_payload: The base85 payload carrying the (descriptor,
+            traceback) pair, or None from a child that does not send one.
+
+    Returns:
+        The exception, with the sandbox frames attached.
+
+    Raises:
+        RestrictedUnpicklingError: If the guard refuses the rich form and no
+            usable fallback accompanies it.
+    """
+    if payload:
+        try:
+            exception, serial_traceback = from_b85_restricted(payload, exception_predicate)
+            return _attach_remote_traceback(exception, serial_traceback)
+        except RestrictedUnpicklingError:
+            if fallback_payload is None:
+                raise
+            logger.debug("the rich exception form was refused; falling back to its descriptor.")
+    elif fallback_payload is None:
+        raise RestrictedUnpicklingError("the sandbox sent neither an exception nor a descriptor.")
+    descriptor, serial_traceback = from_b85_restricted(cast(str, fallback_payload), descriptor_predicate)
+    if not (isinstance(descriptor, tuple) and len(descriptor) == 4):
+        raise RestrictedUnpicklingError("transport exception descriptor has an unexpected shape.")
+    module, qualname, message, denials = descriptor
+    if not (
+        isinstance(module, str)
+        and isinstance(qualname, str)
+        and isinstance(message, str)
+        and isinstance(denials, list)
+        and all(isinstance(denial, str) for denial in denials)
+    ):
+        raise RestrictedUnpicklingError("transport exception descriptor has an unexpected shape.")
+    exception = rebuild_from_descriptor(descriptor, SandBoxProtocolError)
+    return _attach_remote_traceback(exception, serial_traceback)
 
 
 class BaseSSESandbox(BaseDaemon):
@@ -154,7 +213,10 @@ class BaseSSESandbox(BaseDaemon):
                             # may itself raise ConnectionRefusedError (every
                             # network denial does), which the retry clause below
                             # would otherwise mistake for a transport failure.
-                            raised = _rebuild_remote_exception(msg["exception"])
+                            raised = _rebuild_remote_exception(
+                                msg["exception"],
+                                msg.get("exception_fallback"),
+                            )
                             break
                         if "error" in msg:
                             # The sandbox could not transport its own exception.

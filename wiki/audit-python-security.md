@@ -258,7 +258,12 @@ as escapes.
   `_socket.socket`), plus a shape check on `tblib.Traceback` before
   `as_traceback()`. The result guard is toggled by `remote-result-guard`
   (default on) and, being fail-open, raises the cost of a gadget on return values
-  rather than closing the class; the exception guard is fail-closed. The
+  rather than closing the class; the exception guard is fail-closed. Because an
+  exception's state routinely holds a type that guard refuses (`httpx.Request`,
+  a `Path`, an application object), the child also sends a descriptor of the
+  exception — class, message, denials, all primitives — and the parent falls back
+  to it when the rich form is refused, rather than losing the refusal itself. An
+  exception crossing that way arrives without its attributes. The
   transport binds `pickle.dumps`/`pickle.loads` at import so the framework's own
   serialization is not charged to the user's profile, and the registry does
   **not** cover this call. See

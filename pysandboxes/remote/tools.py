@@ -36,7 +36,7 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import Any, cast
 
-from ..e import RestrictedUnpicklingError
+from ..e import RestrictedUnpicklingError, set_sandbox_denials
 
 logger = logging.getLogger(__name__)
 
@@ -623,6 +623,82 @@ def result_predicate(module: str, name: str, obj: Any) -> bool:
     if module == "builtins" and name in _DENIED_BUILTINS:
         return False
     return True
+
+
+def descriptor_predicate(module: str, name: str, obj: Any) -> bool:
+    """Accept only tblib's own types (fallback exception channel).
+
+    The fallback payload is built from `str` and `list[str]` plus the
+    traceback. Those reach the unpickler through direct opcodes, never through
+    `find_class`, so tblib is the only global a well-formed descriptor carries.
+    """
+    return module == "tblib" or module.startswith("tblib.")
+
+
+def describe_exception(exception: BaseException, denials: list[str]) -> tuple[str, str, str, list[str]]:
+    """Reduce an exception to primitives, for the fallback channel (child side).
+
+    The rich form pickles the exception object, which drags its whole state
+    along -- an `httpx.Request`, a `Path`, an application object. The guard on
+    the parent refuses those, so the refusal itself would be lost. This form
+    carries no object at all.
+
+    Args:
+        exception: The exception leaving the sandbox.
+        denials: The sandbox denials recorded on it, as `sandbox_denials`
+            returns them.
+
+    Returns:
+        `(module, qualname, message, denials)`, all primitives.
+    """
+    cls = type(exception)
+    return (cls.__module__, cls.__qualname__, str(exception), list(denials))
+
+
+def rebuild_from_descriptor(
+    descriptor: tuple[str, str, str, list[str]],
+    fallback_class: type[BaseException],
+) -> BaseException:
+    """Rebuild an exception from its primitives (parent side).
+
+    Resolves the class the way `find_class` does -- from `sys.modules` only,
+    never importing -- and instantiates it through `__new__`, since an
+    exception's `__init__` signature is its own business and replaying it with
+    one argument fails on any class that takes more. When the class cannot be
+    resolved, or is not an `Exception` subclass, `fallback_class` stands in so
+    the refusal still reaches the caller.
+
+    Args:
+        descriptor: What `describe_exception` produced.
+        fallback_class: Exception class used when resolution fails.
+
+    Returns:
+        An exception of the original class when it could be resolved, else of
+        `fallback_class`, carrying the message and the denials.
+    """
+    module, qualname, message, denials = descriptor
+    cls: Any = sys.modules.get(module)
+    try:
+        for part in qualname.split("."):
+            cls = getattr(cls, part)
+    except (AttributeError, TypeError):
+        cls = None
+    # `Exception`, not `BaseException`, to match exception_predicate: the
+    # fallback must not let the child forge a SystemExit or KeyboardInterrupt
+    # that the rich form would have refused.
+    if not (isinstance(cls, type) and issubclass(cls, Exception)):
+        cls = fallback_class
+        message = f"{module}.{qualname}: {message}"
+    try:
+        exception = cls.__new__(cls)
+        exception.args = (message,)
+    except Exception:
+        # A class with a demanding __new__ (some OSError subclasses) or a
+        # read-only args: the message still has to reach the caller.
+        exception = fallback_class(f"{module}.{qualname}: {message}")
+    if denials:
+        set_sandbox_denials(exception, denials)
+    return exception
 
 
 def from_b85_restricted(
