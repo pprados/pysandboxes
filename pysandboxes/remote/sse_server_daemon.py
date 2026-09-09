@@ -30,6 +30,7 @@ from typing import Any, AsyncGenerator
 from uvicorn import Server
 
 from ..all_rules import AllRules
+from ..e import sandbox_denials
 from ..lifecycle import arm
 from ..immutable_dict import ImmutableDict
 from ..private_loop import get_sandbox_loop
@@ -46,7 +47,7 @@ from .parameters import (
     TIMEOUT_FOR_STOP_DAEMON,
     TIMEOUT_GRACEFUL_SHUTDOWN,
 )
-from .tools import from_b85, to_b85
+from .tools import describe_exception, from_b85, to_b85
 
 logger = logging.getLogger(__name__)
 
@@ -153,11 +154,31 @@ async def sandbox_daemon(
             result["result"] = to_b85(result["result"])
         if "exception" in result:
             logger.debug("(%s) ... raise %s", session_id, repr(result["exception"]))
-            traceback.print_exception(result["exception"][0])
-            result["exception"] = base64.b85encode(
+            exception, serial_traceback = result["exception"]
+            traceback.print_exception(exception)
+            # Two forms of the same exception. The parent tries the rich one
+            # under the transport guard and falls back to the descriptor when
+            # the guard refuses it -- an exception's state routinely holds
+            # objects the guard cannot admit (httpx.Request, Path, application
+            # objects), and losing the refusal itself would be worse than
+            # losing those attributes.
+            result["exception_fallback"] = base64.b85encode(
                 # serialization only
-                pickle.dumps(result["exception"], protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dumps(
+                    (describe_exception(exception, sandbox_denials(exception)), serial_traceback),
+                    protocol=pickle.HIGHEST_PROTOCOL,
+                )
             ).decode("utf-8")
+            try:
+                result["exception"] = base64.b85encode(
+                    # serialization only
+                    pickle.dumps(result["exception"], protocol=pickle.HIGHEST_PROTOCOL)
+                ).decode("utf-8")
+            except Exception as exc:  # pragma: no cover - depends on the payload
+                # An unpicklable member of the exception's state used to sink
+                # the whole reply; the descriptor still carries the refusal.
+                logger.debug("(%s) ... exception not picklable: %s", session_id, exc)
+                result["exception"] = ""
         yield _sse_msg(json.dumps(result))
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)

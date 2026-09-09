@@ -19,11 +19,14 @@ import subprocess
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.e import RestrictedUnpicklingError
+from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
+    describe_exception,
+    descriptor_predicate,
     exception_predicate,
     from_b85_restricted,
+    rebuild_from_descriptor,
     result_predicate,
     to_b85,
 )
@@ -194,7 +197,152 @@ class TestTblibShapeGuard:
 
         payload = _hostile((ValueError("x"), "not a traceback"))
         with pytest.raises(RestrictedUnpicklingError):
-            _rebuild_remote_exception(payload)
+            _rebuild_remote_exception(payload, None)
+
+
+class _StatefulError(Exception):
+    """Exception whose state holds an object the exception predicate refuses."""
+
+    def __init__(self, message: str, path: pathlib.Path) -> None:
+        super().__init__(message)
+        self.path = path
+
+    def __reduce__(self) -> tuple:
+        return (self.__class__, (str(self), self.path))
+
+
+def _both_forms(exc: BaseException, denials: list[str] | None = None) -> tuple[str, str]:
+    """Serialize an exception the way the server does: rich form and descriptor."""
+    import tblib
+
+    try:
+        raise exc
+    except BaseException as caught:  # noqa: BLE001
+        tb = tblib.Traceback(caught.__traceback__)
+        rich = _hostile((caught, tb))
+        fallback = _hostile((describe_exception(caught, denials or []), tb))
+    return rich, fallback
+
+
+class TestDescriptorFallback:
+    """The rich form is tried first; a refusal falls back to the descriptor.
+
+    An exception's state routinely holds objects the predicate refuses, and
+    losing the sandbox refusal matters more than losing those attributes.
+    """
+
+    def test_refused_rich_form_falls_back_to_the_descriptor(self) -> None:
+        from pysandboxes.remote.base_sse_daemon import _rebuild_remote_exception
+
+        rich, fallback = _both_forms(
+            _StatefulError("refused", pathlib.Path("/tmp/x")),
+            ["RulePermissionError: denied"],
+        )
+        # Without the fallback the refusal itself is what reaches the caller.
+        with pytest.raises(RestrictedUnpicklingError):
+            _rebuild_remote_exception(rich, None)
+
+        rebuilt = _rebuild_remote_exception(rich, fallback)
+
+        assert type(rebuilt) is _StatefulError
+        assert str(rebuilt) == "refused"
+        assert sandbox_denials(rebuilt) == ["RulePermissionError: denied"]
+        assert not hasattr(rebuilt, "path"), "the descriptor form carries no state"
+
+    def test_an_admissible_rich_form_keeps_its_state(self) -> None:
+        from pysandboxes.remote.base_sse_daemon import _rebuild_remote_exception
+
+        rich, fallback = _both_forms(ValueError("plain"))
+
+        rebuilt = _rebuild_remote_exception(rich, fallback)
+
+        assert type(rebuilt) is ValueError
+        assert str(rebuilt) == "plain"
+
+    def test_an_unpicklable_exception_still_reports_its_refusal(self) -> None:
+        """The child sends "" when it cannot pickle the exception at all."""
+        from pysandboxes.remote.base_sse_daemon import _rebuild_remote_exception
+
+        _, fallback = _both_forms(ValueError("lost"), ["RuleFileNotFoundError: denied"])
+
+        rebuilt = _rebuild_remote_exception("", fallback)
+
+        assert type(rebuilt) is ValueError
+        assert sandbox_denials(rebuilt) == ["RuleFileNotFoundError: denied"]
+
+    def test_neither_form_is_a_refusal(self) -> None:
+        from pysandboxes.remote.base_sse_daemon import _rebuild_remote_exception
+
+        with pytest.raises(RestrictedUnpicklingError):
+            _rebuild_remote_exception("", None)
+
+    def test_an_unknown_class_degrades_instead_of_failing(self) -> None:
+        """A class the parent never loaded must not swallow the refusal."""
+        descriptor = ("no_such_module", "NoSuchError", "boom", ["RulePermissionError: denied"])
+
+        rebuilt = rebuild_from_descriptor(descriptor, SandBoxProtocolError)
+
+        assert type(rebuilt) is SandBoxProtocolError
+        assert "no_such_module.NoSuchError" in str(rebuilt)
+        assert sandbox_denials(rebuilt) == ["RulePermissionError: denied"]
+
+    def test_a_non_exception_class_is_not_instantiated(self) -> None:
+        """Resolving to dict must not let the stream build an arbitrary object."""
+        descriptor = ("builtins", "dict", "boom", [])
+
+        rebuilt = rebuild_from_descriptor(descriptor, SandBoxProtocolError)
+
+        assert type(rebuilt) is SandBoxProtocolError
+
+    @pytest.mark.parametrize("name", ["SystemExit", "KeyboardInterrupt"])
+    def test_the_fallback_refuses_what_the_rich_form_refuses(self, name: str) -> None:
+        """Both paths key on Exception, so BaseException-only classes stay out.
+
+        Otherwise the descriptor would be a way to forge the very classes
+        exception_predicate excludes from the gadget set.
+        """
+        descriptor = ("builtins", name, "boom", [])
+
+        rebuilt = rebuild_from_descriptor(descriptor, SandBoxProtocolError)
+
+        assert type(rebuilt) is SandBoxProtocolError
+        assert name in str(rebuilt)
+
+    @pytest.mark.parametrize(
+        "descriptor",
+        [
+            ("too", "few"),
+            ("mod", "name", "msg", "denials must be a list"),
+            ("mod", "name", 42, []),
+            ("mod", "name", "msg", [1, 2]),
+        ],
+        ids=["wrong-arity", "denials-not-a-list", "message-not-a-str", "denial-not-a-str"],
+    )
+    def test_a_malformed_descriptor_is_refused(self, descriptor: tuple) -> None:
+        """The descriptor is child-controlled, so its shape is checked."""
+        import tblib
+
+        from pysandboxes.remote.base_sse_daemon import _rebuild_remote_exception
+
+        try:
+            raise ValueError("x")
+        except ValueError as caught:
+            payload = _hostile((descriptor, tblib.Traceback(caught.__traceback__)))
+
+        with pytest.raises(RestrictedUnpicklingError):
+            _rebuild_remote_exception("", payload)
+
+    def test_the_descriptor_predicate_refuses_a_gadget(self) -> None:
+        """The fallback payload carries primitives, so only tblib may resolve."""
+
+        class Evil:
+            def __reduce__(self) -> tuple:
+                import os
+
+                return (os.system, ("echo pwned",))
+
+        with pytest.raises(RestrictedUnpicklingError):
+            from_b85_restricted(_hostile(Evil()), descriptor_predicate)
 
 
 class TestSwitch:

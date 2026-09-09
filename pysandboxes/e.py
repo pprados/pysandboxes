@@ -298,7 +298,21 @@ def attach_sandbox_denials(exception: BaseException) -> None:
     """
     denials = [f"{type(e).__name__}: {e}" for e in _walk_chain(exception) if isinstance(e, SandBoxError)]
     if denials:
-        setattr(exception, _DENIALS_ATTRIBUTE, denials)
+        set_sandbox_denials(exception, denials)
+
+
+def set_sandbox_denials(exception: BaseException, denials: list[str]) -> None:
+    """Record ``denials`` on ``exception`` verbatim.
+
+    Used when the denials are already known rather than walked out of a chain:
+    the transport carries them as strings, and the exception the parent rebuilds
+    has no chain left to walk.
+
+    Args:
+        exception: The exception to annotate.
+        denials: One entry per denial, as :func:`sandbox_denials` returns them.
+    """
+    setattr(exception, _DENIALS_ATTRIBUTE, list(denials))
 
 
 def sandbox_denials(exception: BaseException) -> list[str]:

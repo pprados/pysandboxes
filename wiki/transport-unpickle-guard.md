@@ -128,6 +128,56 @@ set), `tblib`'s own types, or a base data class. Everything else is refused.
 contents. Its `as_traceback()` rebuilds frame objects from child-controlled
 attributes, so the object's shape is checked before that call.
 
+### 5. The descriptor fallback: keeping the refusal
+
+Unpickling an exception drags its whole state along, and an exception's state
+routinely holds objects this predicate cannot admit. `httpx.ConnectError` carries
+the `httpx.Request` it failed on; a `FileNotFoundError` raised by application
+code may carry a `pathlib.Path`; an application exception may carry an
+application object. Admitting those would mean admitting essentially any type,
+which is the fail-open posture this channel exists to avoid.
+
+Refusing them outright is worse, though: the caller then sees
+`RestrictedUnpicklingError` where it should see *which rule refused the call*,
+and a sandbox that cannot report its own refusal has lost its point.
+
+So the child sends the exception **twice**:
+
+- the **rich form**, the pickled `(exception, traceback)` pair, as before;
+- the **descriptor form**, `(module, qualname, message, denials)` — strings and
+  a list of strings — plus the same traceback.
+
+The parent tries the rich form under the predicate above. If the guard refuses
+it, the parent falls back to the descriptor, resolves the class from
+`sys.modules` exactly as `find_class` does (never importing), and instantiates it
+through `__new__` — an exception's `__init__` signature is its own business, and
+replaying it with a single argument fails on any class taking more.
+
+The descriptor payload carries primitives only, so its predicate admits `tblib`
+and nothing else.
+
+**What a caller keeps and loses on the fallback path:**
+
+```python
+try:
+    fetch_webpage(url)
+except httpx.ConnectError as e:  # the class is preserved
+    str(e)                       # the message is preserved
+    sandbox_denials(e)           # the denials are preserved
+    e.__traceback__              # the sandbox frames are preserved
+    e.request.url                # AttributeError: the state is NOT preserved
+```
+
+The attributes survive whenever the rich form is admissible, which covers an
+exception carrying no state, or state made only of the base data classes. They
+are lost exactly when the guard would otherwise have refused the exception
+entirely.
+
+Two failures stop being fatal along the way. An exception the child cannot
+pickle at all no longer sinks the reply, and a class the parent never imported
+no longer raises: the refusal is reported through `SandBoxProtocolError`,
+prefixed with the original `module.qualname`, rather than being lost.
+
 ## The `remote-result-guard` profile key
 
 The result-channel denylist is the one **risky** layer (fail-open, and it can in
@@ -162,7 +212,13 @@ two ends stay compatible across container backends). Supported range: CPython
 - The result denylist is fail-open and not exhaustive; an unlisted dangerous
   module passes. See layer 3.
 - An exception whose `__reduce__` rebuilds through a *function* (rather than a
-  class) is refused on the exception channel; this shape is not supported.
+  class) is refused on the exception channel; the descriptor fallback still
+  delivers its class, message and denials, without its state.
+- An exception that crosses on the fallback path arrives without its attributes.
+  See layer 5.
+- `__cause__` and `__context__` do not survive the transport, on either path.
+  That is plain pickle behaviour and predates this guard; `sandbox_denials`
+  exists because of it.
 - This guard protects the parent's deserialization only. Arbitrary Python in the
   child can still reach native code by other routes; the OS-level sandbox remains
   the real barrier. See [weaknesses](weaknesses.md).
