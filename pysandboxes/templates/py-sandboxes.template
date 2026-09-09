@@ -46,6 +46,22 @@ include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 py-sandbox=true
 
 #######################################################################################
+# TRANSPORT RESULT GUARD
+# ======================
+# The parent deserializes what the sandboxed child returns over the local SSE
+# transport. Because a returned object's reconstruction can run arbitrary code in
+# the parent (outside the sandbox), that channel is filtered by a restricted
+# unpickler. On the result channel the guard is a denylist of dangerous gadgets
+# (fail-open): it lets legitimate return values through and refuses obvious
+# escapes. Set to false only if a legitimate return value is wrongly rejected.
+#
+# Disabling this affects ONLY the result denylist. The opcode prescan, the
+# anti-DoS budgets, and the exception-channel guard stay active regardless.
+# See wiki/transport-unpickle-guard.md.
+
+remote-result-guard=true
+
+#######################################################################################
 # OS-LEVEL SANDBOX PROVIDERS
 # ===========================
 # Python-level sandboxing alone cannot prevent all escapes (native code, syscalls).

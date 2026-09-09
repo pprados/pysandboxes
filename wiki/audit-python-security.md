@@ -65,9 +65,7 @@ Two consequences, both deliberate:
   open, and neither survives a reader who can call native code anyway.
 - The residual entries in section 6 are **documented, not scheduled**. What the
   layer does owe its target is that an accidental disarming be *loud* rather
-  than silent. That was `guard_self`'s intended job; the module could not do it
-  and was removed, so the debt now falls on moving the guards' state out of
-  module globals -- see [below](#guards-that-are-inert-by-design).
+  than silent.
 
 ---
 
@@ -97,10 +95,10 @@ Every row is marked **demonstrated** (pinned by an executed test) or
 
 Nothing is enforced until `lifecycle.arm()` flips a module global
 (`_armed`, set in `lifecycle.arm()`, read by `lifecycle.is_armed()`).
-Framework code runs disarmed; user code runs armed. Since b13a066
-`lifecycle` is the single owner of that state: `guard_api.arm()` is gone, and
-`guard_socket`'s flag, which never meant the same thing, is now named
-`_rules_loaded`.
+Framework code runs disarmed; user code runs armed. `lifecycle` is the single
+owner of that state: `guard_api` reads it through the `_lc_is_armed` alias (see
+[objective 6](#6-disarm-the-guard-or-reach-an-original)), and `guard_socket`'s
+`_rules_loaded` flag tracks a different concept.
 
 The wrappers short-circuit when disarmed — `guard_api`'s control point returns
 the raw function if `not _lc_is_armed()` (`guard_api._wrap_guarded`). This is by
@@ -135,8 +133,8 @@ only the *decision* uses the resolved path.
 | `connect()`/`bind()` to a host outside `net=` | `guard_socket._check_address` → `_check_address_with_rules` on the patched `socket.socket` | **Blocked — demonstrated** (`test_guard_socket.py::test_connect_enforces_the_rules`, `::test_no_rules_denied_connection`) |
 | AF_UNIX socket path exempted from the rules | `_check_unix_socket` applies the file rules to the socket path | **Blocked — demonstrated** (`test_guard_escape_fixes.py::test_unix_socket_out_of_scope_is_denied`) |
 | `bind(("", port))` wildcard host slips the rule | `guard_socket._resolve_wildcard_host` rewrites `""` to `0.0.0.0`/`::` before the check | **Blocked — reasoned** |
-| `import _socket` and build the C base class directly | `socket.socket` is a Python *subclass* of the C `_socket.socket` and does not redefine `connect`, so patching the subclass left the base class untouched. The rule now replaces the class the C module publishes with a guarded subclass of it (`guard_socket.py`, `_guarded_socket_class`) | **Blocked — demonstrated** (`test_guard_socket_twin.py::test_connect_through_the_c_class_is_refused` refuses the connection under `python-sb`). Measured open before the fix: `socket.socket()` to TEST-NET-1 refused, `_socket.socket()` to the same address went out |
-| Resolve a name through `_socket` instead of `socket` | `socket.py` does `from _socket import *`, so `socket.gethostbyname is _socket.gethostbyname` — the `posix` relationship. `getaddrinfo` differs: `socket.py` redefines it, leaving the raw C one a separate unnamed function. Both C names now carry the socket wrapper | **Blocked — demonstrated at the table** (`::test_every_guarded_resolution_call_has_its_c_twin`; removing a twin fails it). The end-to-end check compares the two names rather than asserting a refusal: with no resolver the call dies of `gaierror` before the guard is consulted |
+| `import _socket` and build the C base class directly | `socket.socket` is a Python *subclass* of the C `_socket.socket` and does not redefine `connect`, so patching the subclass alone would leave the base class reachable; the rule replaces the class the C module publishes with a guarded subclass of it (`guard_socket.py`, `_guarded_socket_class`) | **Blocked — demonstrated** (`test_guard_socket_twin.py::test_connect_through_the_c_class_is_refused` refuses the connection under `python-sb`) |
+| Resolve a name through `_socket` instead of `socket` | `socket.py` does `from _socket import *`, so `socket.gethostbyname is _socket.gethostbyname` — the `posix` relationship. `getaddrinfo` differs: `socket.py` redefines it, leaving the raw C one a separate unnamed function. Both C names carry the socket wrapper | **Blocked — demonstrated at the table** (`::test_every_guarded_resolution_call_has_its_c_twin`; removing a twin fails it). The end-to-end check compares the two names rather than asserting a refusal: with no resolver the call dies of `gaierror` before the guard is consulted |
 | `gethostbyaddr`, `getnameinfo` | shared with `_socket` by the same star-import, but **no rule guards them under either name** | **Open — demonstrated** (absent from `patch_rules`); reverse lookup is not covered by the DNS rules |
 | Reach the original class through the type graph (`socket.socket.__mro__[1]`) | none — attribute patching replaces names, not the inheritance chain | **Open — by construction**, same shape as the closure cell in §1. Out of scope for the [wayward-LLM target](#the-design-target-wayward-llm-generated-code) |
 | Lower-level fd handoff (`socket.fromfd`, `socketpair`, an fd inherited from the parent) | not in the socket patch table — no `_check_address` on an fd the process already holds | **Open — reasoned**; contained only by the OS network namespace ([unshare](unshare.md)/[netfilter](dns.md)) |
@@ -156,7 +154,7 @@ only the *decision* uses the resolved path.
 |---|---|---|
 | Read an env var outside `env=` | `os.environ` filtered to the whitelist at parse time; learning wrapper `guard_envs.LearnEnviron` | **Blocked — demonstrated** (`test_guard_env.py::test_unknown_variable_leaves_the_key_absent`, `test_learn_environ.py`) |
 | Read the parent's env via `/proc/$PPID/environ` | a file read — subject to the file rules (objective 1) if `/proc` is out of scope; **not** otherwise | **Reasoned**; the real barrier is the OS sandbox hiding `/proc` (noted in [weaknesses.md](weaknesses.md)) |
-| Read process memory / another module's globals | any function's `__globals__` exposes its module namespace | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_globals_introspection`, xfail-pinned as still open) |
+| Read process memory / another module's globals | any function's `__globals__` exposes its module namespace | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_globals_introspection`, xfail-pinned as open) |
 
 ### 5. Import a forbidden module
 
@@ -165,7 +163,6 @@ only the *decision* uses the resolved path.
 | `import` a module outside `python-import=` | `guard_import.GuardFinder.find_spec` denies via `_is_import_allowed` → `raise RuleModuleNotFoundError`; the finder is inserted at `sys.meta_path[0]` when the rules are activated | **Blocked — demonstrated** (`test_guard_import.py`, `test_guard_escape_fixes.py::test_find_spec_denies_a_module_outside_the_rules`) |
 | Empty rule set treated as "no filter" | empty `_rules` is deny-all, wildcard `("*",)` is allow-all (`guard_import._is_import_allowed`) | **Blocked — demonstrated** (`test_no_import_rule_denies_every_module`, `test_wildcard_import_rule_allows_every_module`) |
 | Reach a module already in `sys.modules` (e.g. `os`, pre-imported by the framework) | `find_spec` is not consulted for a cached module — but its **sensitive functions** are still denied by objective 3 | **Reasoned**: import rights and call rights are deliberately distinct (`guard_api.py` docstring); a reachable `os` module is not a reachable `os.system` |
-| Remove `GuardFinder` from `sys.meta_path` | nothing guards `sys.meta_path` (`guard_self` was removed, see below) | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_meta_path`, xfail-pinned) |
 
 ### 6. Disarm the guard or reach an original
 
@@ -174,7 +171,7 @@ only the *decision* uses the resolved path.
 | Walk `object().__subclasses__()` to the guard modules and reset their state | nothing blocks the class-hierarchy walk | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_subclasses`, xfail-pinned; reaches `guard_import` and sets `_rules=()`) |
 | Reset the `_armed` flag through that same walk | `_armed` is a plain module global of `lifecycle`, re-read on every `is_armed()` | **Open — reasoned** (same class as above; [weaknesses.md](weaknesses.md) names it explicitly) |
 | Rebind the call-site alias instead of the flag: `guard_api._lc_is_armed = lambda: False` | `guard_api` imports `is_armed` under the name `_lc_is_armed`, binding the function by value, so the alias is a second, independent switch read by every wrapper | **Open — reasoned** |
-| Reach the unguarded original through `__wrapped__` | `guard_wraps.guard_wraps()` replaces `functools.wraps` in the five guards: it restores `__signature__`, then drops the back-reference | **Closed** (the guarded callable no longer carries `__wrapped__`; `test_guard_escape_fixes.py` had been using that very door for its own setup) |
+| Reach the unguarded original through `__wrapped__` | `guard_wraps.guard_wraps()` replaces `functools.wraps` in the five guards: it restores `__signature__`, then drops the back-reference | **Closed** (the guarded callable does not carry `__wrapped__`; `test_guard_escape_fixes.py`) |
 | Reach the original through the wrapper's own closure cell (`__closure__[i].cell_contents`) or `gc.get_referents` | a Python wrapper necessarily holds a reference to what it wraps; hiding the name does not hide the object | **Open — by construction** |
 | Obfuscated name construction (`'__sub'+'classes__'`, `chr()` chains, hex-decoded `__import__`) | static name scanning is a courtesy, not a barrier — runtime-built names are never seen | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_obfuscated_strings`) |
 
@@ -222,68 +219,51 @@ and **writes its own permissions into the whitelist** the next run trusts.
 
 ## Guards that are inert by design
 
-One guard module exists but does nothing today, and one was removed. Neither is
-a discovered vulnerability -- do not report them as escapes.
+One guard module does nothing today, and one subject — pickle — is covered only
+in part, by design. Neither is a discovered vulnerability -- do not report them
+as escapes.
 
-- **`guard_self` (removed)** -- the module held a `GuardModule` class meant to
-  protect `sys.meta_path`/`sys.modules` by replacing a module object with one
-  whose `__setattr__` refuses named attributes. It never worked, and could not:
-  `GuardModule` *copied* the original's `__dict__` instead of proxying it, so
-  the copy diverged from the live module (wrap `lifecycle`, call `arm()`, and
-  the guarded copy still reported `_armed` False), and the module's own
-  functions kept `__globals__` bound to the original dict, so
-  `module.is_armed.__globals__["_armed"] = False` walked straight past the
-  guarded `__setattr__`. That second half is not fixable in Python at all:
-  `LOAD_GLOBAL` requires a real `dict` and ignores a subclass guarding
-  `__setitem__`. A module global cannot be made unwritable, so the scaffolding
-  was deleted rather than left to look like unfinished work.
+- **Pickle deserialization is covered only in part, by design.**
+  `pickle.Unpickler` **is** `_pickle.Unpickler`, an immutable C type, so neither
+  its `__init__` nor its `load` can be patched, and rebinding the module name to
+  a function would break the subclassing a restricted unpickler needs — the same
+  shape as `ctypes.pythonapi`. `Unpickler(fp).load()` therefore stays reachable,
+  pinned as `test_guard_api.py::test_the_unpickler_route_is_guarded` (xfail).
 
-  Closing objective 6's `__subclasses__` walk therefore needs the guards' state
-  to leave module globals for an object with a guarded `__setattr__` -- not a
-  guarded module. `RuleAttributeError` stays exported: it has no raiser today,
-  but it is public API and the escape tests name it.
-
-- **`guard_pickle`** — **deleted**, and its subject moved to `guard_api`. The
-  module implemented a global import blocker plus a `pickle.loads` patch, and
-  neither did anything: `activate_import_guard()` was never called, `find_spec`
-  never fires for a module already in `sys.modules`, and
-  `pickle.loads is _pickle.loads` is `True`, so the patch was bypassed by one
-  `import _pickle` — and covered neither `pickle.load` nor `pickle.Unpickler`.
-
-  `pickle.loads`, `pickle.load` and their `_pickle` twins are now registry
-  entries under the `deserialization` category, denied by default like every
-  other sensitive call and grantable with `python-api=ALLOW:deserialization`
-  (warned at load, as `dynamic-code` is). A pickle stream is a program: its
-  opcodes name a callable and call it, which reaches `os.system` without an
-  import and without a source string the `eval-*` layer could parse. Pinned
-  end to end by
+  What *is* covered runs through `guard_api`: `pickle.loads`, `pickle.load` and
+  their `_pickle` twins are registry entries under the `deserialization`
+  category, denied by default like every other sensitive call and grantable with
+  `python-api=ALLOW:deserialization` (warned at load, as `dynamic-code` is). A
+  pickle stream is a program: its opcodes name a callable and call it, which
+  reaches `os.system` without an import and without a source string the `eval-*`
+  layer could parse. Pinned end to end by
   `test_guard_api.py::test_pickle_loads_and_its_twin_are_refused_end_to_end`.
 
-  What that buys, and what it does not: like the rest of this layer, it denies
-  the call from cooperative code and gives learning-mode visibility. It is not
-  a barrier against hostile bytecode, which reaches `os.system` by a hundred
-  other routes; the OS sandbox is the barrier for that class. The two escape
-  tests stay `xfail` because they exercise the import guard alone, without
-  `guard_api` armed.
+  Like the rest of this layer, that denies the call from cooperative code and
+  gives learning-mode visibility. It is not a barrier against hostile bytecode,
+  which reaches `os.system` by a hundred other routes; the OS sandbox is the
+  barrier for that class. The two pickle escape tests stay `xfail` because they
+  exercise the import guard alone, without `guard_api` armed.
 
-  Residual gap, documented rather than fixed, like `ctypes.pythonapi`:
-  `pickle.Unpickler` **is** `_pickle.Unpickler`, an immutable C type, so
-  neither its `__init__` nor its `load` can be patched, and rebinding the
-  module name to a function would break the subclassing a restricted unpickler
-  needs. `Unpickler(fp).load()` therefore stays reachable, pinned as
-  `test_guard_api.py::test_the_unpickler_route_is_guarded` (xfail).
-
-  Separately, and still open: the one site in this package that unpickles data
-  it does not control is `remote/tools.py::from_b85`, reached from
-  `remote/base_sse_daemon._rebuild_remote_exception` and the result branch of
-  the same module's event dispatch. Both run in the **trusted parent**, on a payload produced by
-  the **sandboxed child**: a crafted result or exception payload is arbitrary
-  code execution in the host process, outside the sandbox. The transport binds
-  `pickle.dumps`/`pickle.loads` at import precisely so the registry entry above
-  does not charge the framework's own serialization to the user's profile —
-  which also means the registry does **not** cover this call. Closing it means
-  restricting the unpickler at that call site, where the expected payload shape
-  is known, not a global guard.
+  The only untrusted data this package unpickles is the child's result and
+  exception payloads, rebuilt in the **trusted parent** by
+  `remote/base_sse_daemon._rebuild_remote_exception` and the result branch of the
+  same module's event dispatch. A crafted payload would be arbitrary code
+  execution in the host process, outside the sandbox, so both child->parent sites
+  go through `remote/tools.py::from_b85_restricted`: an opcode prescan (allowlist
+  by family plus anti-DoS budgets), then a `find_class` that triggers no import
+  from the stream and vets each global — the exception channel fail-closed
+  (Exception subclasses, `tblib`, base data types), the result channel a
+  fail-open denylist of dangerous gadgets keyed by every C-twin (`posix.system`,
+  `_socket.socket`), plus a shape check on `tblib.Traceback` before
+  `as_traceback()`. The result guard is toggled by `remote-result-guard`
+  (default on) and, being fail-open, raises the cost of a gadget on return values
+  rather than closing the class; the exception guard is fail-closed. The
+  transport binds `pickle.dumps`/`pickle.loads` at import so the framework's own
+  serialization is not charged to the user's profile, and the registry does
+  **not** cover this call. See
+  [transport-unpickle-guard.md](transport-unpickle-guard.md). `parent->child`
+  (args/kwargs) stays on the raw `from_b85`: there the trust runs the other way.
 
 These match the package's stated position: the Python layer raises cost and adds
 visibility; the OS sandbox is the barrier.
