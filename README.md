@@ -524,6 +524,8 @@ For **qemu**, the resource that is bounded is memory: `qemu.memory` caps guest R
 
 A `❌` in the **py-sandbox** column is a deliberate posture, not a gap: with `py-sandbox=False` (or `--py-sandbox=False`) the Python layer is switched off on purpose, so `python-api=`, `eval-*`, `import=`, the Python-code guard and, on **landlock**, `ignore=` stop being enforced. Only the OS layer of the chosen technology remains. Use it when the sandboxed code is trusted not to attack the interpreter itself and you want the OS boundary alone; keep the Python layer on otherwise.
 
+The parent deserializes what the sandboxed child returns over the local SSE transport. Reconstructing a returned object can run arbitrary code in the parent, outside the sandbox, so that channel is filtered by a restricted unpickler. On the result channel the guard is a fail-open denylist of dangerous gadgets, on by default; turn it off with `remote-result-guard=false` only if a legitimate return value is wrongly rejected. It affects only the result denylist: the opcode prescan, the anti-DoS budgets, and the exception-channel guard stay on regardless. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/transport-unpickle-guard.md).
+
 
 
 > During the learning phase, `os-sandbox` is forced to `subprocess`.
