@@ -14,11 +14,15 @@ Key utilities:
 """
 
 import base64
+import datetime
+import decimal
 import errno as errno_mod
+import io
 import ipaddress
 import logging
 import os
 import pickle
+import pickletools
 import platform
 import re
 import shutil
@@ -29,7 +33,10 @@ import textwrap
 from ctypes import cdll
 from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any, cast
+
+from ..e import RestrictedUnpicklingError
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +314,12 @@ def set_pdeathsig() -> None:
 _pickle_dumps = pickle.dumps
 _pickle_loads = pickle.loads
 
+# CPYTHON-COMPAT: pin the wire protocol to a constant, not pickle.HIGHEST_PROTOCOL.
+# The two ends may run different interpreters (container backends), and the opcode
+# allowlist below is defined for this protocol. Inert while HIGHEST_PROTOCOL == 5
+# (CPython 3.11-3.14); revisit if a future version raises it to 6.
+_PICKLE_PROTOCOL = 5
+
 
 def to_b85(obj: Any) -> str:
     """Serialize object to base85-encoded string.
@@ -319,7 +332,7 @@ def to_b85(obj: Any) -> str:
     """
     result = base64.b85encode(
         # serialization only
-        _pickle_dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+        _pickle_dumps(obj, protocol=_PICKLE_PROTOCOL)
     ).decode("ascii")
     # Round-trip check on locally built data
     assert _pickle_loads(base64.b85decode(result.encode("ascii"))) == obj
@@ -339,6 +352,306 @@ def from_b85(b85: str) -> Any:
     return _pickle_loads(
         base64.b85decode(b85.encode("ascii")),
     )
+
+
+# --- Restricted unpickler for the untrusted child->parent SSE channel --------
+#
+# `from_b85` above stays raw for the trusted parent->child direction (args and
+# kwargs the parent sends the child). The two child->parent sites in
+# base_sse_daemon.py go through
+# `from_b85_restricted`, because the child produced that payload and the parent
+# is trusted.
+
+# CPYTHON-COMPAT: opcode alphabet enumerated by family for protocol 5
+# (CPython 3.11-3.14). The corpus test in tests reasserts every opcode a
+# representative sample emits stays in this set, so a CPython bump reddens CI
+# instead of silently breaking the transport.
+_ALLOWED_OPCODES = frozenset(
+    {
+        "PROTO",
+        "FRAME",
+        "STOP",
+        "MEMOIZE",
+        "BINPUT",
+        "LONG_BINPUT",
+        "BINGET",
+        "LONG_BINGET",
+        "NONE",
+        "NEWTRUE",
+        "NEWFALSE",
+        "BININT",
+        "BININT1",
+        "BININT2",
+        "LONG1",
+        "LONG4",
+        "BINFLOAT",
+        "SHORT_BINUNICODE",
+        "BINUNICODE",
+        "BINUNICODE8",
+        "SHORT_BINBYTES",
+        "BINBYTES",
+        "BINBYTES8",
+        "BYTEARRAY8",
+        "EMPTY_LIST",
+        "APPEND",
+        "APPENDS",
+        "EMPTY_DICT",
+        "SETITEM",
+        "SETITEMS",
+        "EMPTY_TUPLE",
+        "TUPLE1",
+        "TUPLE2",
+        "TUPLE3",
+        "TUPLE",
+        "EMPTY_SET",
+        "ADDITEMS",
+        "FROZENSET",
+        "MARK",
+        "STACK_GLOBAL",
+        "REDUCE",
+        "BUILD",
+        "NEWOBJ",
+        "NEWOBJ_EX",
+    }
+)
+
+# Anti-DoS budgets: generous guard-rails, not tight limits. A legitimate result
+# may be large; these only bound the pathological shapes the predicate cannot
+# see (memo bombs, opcode floods) that would expand in the parent's RAM.
+_MAX_OPCODES = 5_000_000
+_MAX_MEMO = 2_000_000
+_MAX_BYTES = 128 * 1024 * 1024
+_MAX_MARK_DEPTH = 256
+
+# Opcodes that consume one MARK, used to track MARK nesting depth.
+_MARK_CONSUMERS = frozenset({"TUPLE", "SETITEMS", "APPENDS", "ADDITEMS", "FROZENSET"})
+
+# Base data classes that reach find_class via STACK_GLOBAL (plain int/str/list/
+# dict/... use direct opcodes and never hit find_class). Allowed on the
+# exception channel, where an exception's state may carry one of these.
+_BASE_DATA_CLASSES = frozenset(
+    {
+        datetime.datetime,
+        datetime.date,
+        datetime.time,
+        datetime.timedelta,
+        datetime.timezone,
+        decimal.Decimal,
+        complex,
+    }
+)
+
+# CPYTHON-COMPAT: denylist keyed by every alias / C-twin that can appear as
+# __module__ in the stream. `os.system` arrives as `posix.system` (Linux) or
+# `nt.system` (Windows); `socket.socket` can arrive as `_socket.socket`. A
+# denylist by import name would miss the proven gadget. Fail-open by nature: a
+# module not listed here passes -- this is the "risky" layer the profile switch
+# disables. The denylist is not exhaustive; an unlisted module passes.
+_DENIED_MODULE_ROOTS = frozenset(
+    {
+        "posix",
+        "nt",
+        "os",
+        "subprocess",
+        "pty",
+        "sys",
+        "importlib",
+        "runpy",
+        "socket",
+        "_socket",
+        "_thread",
+        "threading",
+        "ctypes",
+        "_ctypes",
+        "mmap",
+        "operator",
+        "functools",
+        "pdb",
+        "platform",
+        "webbrowser",
+        "code",
+        "codeop",
+        "timeit",
+    }
+)
+_DENIED_BUILTINS = frozenset(
+    {
+        "eval",
+        "exec",
+        "compile",
+        "__import__",
+        "__build_class__",
+        "getattr",
+        "setattr",
+        "delattr",
+        "globals",
+        "vars",
+        "breakpoint",
+        "open",
+        "input",
+        "memoryview",
+        "type",
+    }
+)
+
+
+def _prescan(data: bytes) -> None:
+    """Reject a pickle stream on opcode alphabet or size before any execution.
+
+    `pickletools.genops` parses without executing (no `__reduce__` runs). This
+    does NOT inventory `(module, name)`: under memo/BINGET indirection a
+    stack-simulating scan diverges from the C unpickler, so names are left to
+    `find_class`. This layer closes only what `find_class` cannot see -- opcodes
+    that bypass it (EXT*, proto-0 GLOBAL/INST/OBJ) and size bombs.
+
+    Args:
+        data: The raw (base85-decoded) pickle bytes.
+
+    Raises:
+        RestrictedUnpicklingError: On a forbidden opcode, a budget overrun, or
+            an unparsable stream.
+    """
+    if len(data) > _MAX_BYTES:
+        raise RestrictedUnpicklingError(f"payload of {len(data)} bytes exceeds the {_MAX_BYTES}-byte transport budget.")
+    n_op = 0
+    n_memo = 0
+    mark_depth = 0
+    try:
+        for opcode, _arg, _pos in pickletools.genops(data):
+            n_op += 1
+            if n_op > _MAX_OPCODES:
+                raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_OPCODES}-opcode transport budget.")
+            name = opcode.name
+            if name not in _ALLOWED_OPCODES:
+                raise RestrictedUnpicklingError(f"opcode {name!r} is not allowed on the sandbox transport.")
+            if name == "MARK":
+                mark_depth += 1
+                if mark_depth > _MAX_MARK_DEPTH:
+                    raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_MARK_DEPTH}-deep MARK budget.")
+            elif name in _MARK_CONSUMERS and mark_depth > 0:
+                mark_depth -= 1
+            elif name in ("MEMOIZE", "BINPUT", "LONG_BINPUT"):
+                n_memo += 1
+                if n_memo > _MAX_MEMO:
+                    raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_MEMO}-entry memo budget.")
+    except RestrictedUnpicklingError:
+        raise
+    except Exception as exc:
+        # A malformed or truncated stream makes genops raise: refuse, don't crash.
+        raise RestrictedUnpicklingError(f"unparsable pickle stream: {exc}") from exc
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    """Unpickler that resolves every global through an injected predicate."""
+
+    def __init__(self, data: bytes, predicate: Callable[[str, str, Any], bool]) -> None:
+        """Bind the stream and the per-site predicate.
+
+        Args:
+            data: The raw (base85-decoded) pickle bytes, already prescanned.
+            predicate: `(module, name, resolved_obj) -> bool`; a false return
+                refuses the global.
+        """
+        super().__init__(io.BytesIO(data))
+        self._predicate = predicate
+
+    def find_class(self, module: str, name: str) -> Any:
+        """Resolve a global only if already loaded and accepted by the predicate.
+
+        Args:
+            module: The module name carried by the stream.
+            name: The (possibly dotted) qualified name carried by the stream.
+
+        Returns:
+            The resolved class or callable.
+
+        Raises:
+            RestrictedUnpicklingError: If the module is not loaded, the name
+                cannot be resolved, or the predicate refuses it.
+        """
+        # CPYTHON-COMPAT: never import from the stream -- only modules already
+        # loaded in the trusted parent. `os`/`posix` are usually loaded, so this
+        # does not block them; the predicate does.
+        mod = sys.modules.get(module)
+        if mod is None:
+            # All module used by the server must be pre-loader in the client.
+            raise RestrictedUnpicklingError(
+                f"module {module!r} is not loaded in the client; the transport refuses to import it."
+            )
+        # CPYTHON-COMPAT: resolve the dotted qualname in-house (protocol >= 4
+        # STACK_GLOBAL carries `Outer.Inner`). `pickle._getattribute` is private
+        # and its signature/return have changed across versions.
+        obj: Any = mod
+        try:
+            for part in name.split("."):
+                obj = getattr(obj, part)
+        except AttributeError as exc:
+            raise RestrictedUnpicklingError(f"{module}.{name} could not be resolved on the transport.") from exc
+        if not self._predicate(module, name, obj):
+            raise RestrictedUnpicklingError(f"{module}.{name} is refused by the sandbox transport guard.")
+        return obj
+
+
+def _is_base_data_class(obj: Any) -> bool:
+    """True for a base data class that legitimately reaches find_class."""
+    return obj in _BASE_DATA_CLASSES
+
+
+def exception_predicate(module: str, name: str, obj: Any) -> bool:
+    """Accept an exception class, tblib's own types, or a base data class.
+
+    Used on the exception channel. Keys on `Exception`, not `BaseException`,
+    so `SystemExit`/`KeyboardInterrupt` stay out of the gadget set.
+    """
+    if isinstance(obj, type) and issubclass(obj, Exception):
+        return True
+    if module == "tblib" or module.startswith("tblib."):
+        return True
+    return _is_base_data_class(obj)
+
+
+def result_predicate(module: str, name: str, obj: Any) -> bool:
+    """Deny a known dangerous gadget; allow the rest (result channel).
+
+    Fail-open by design: only the modules/builtins enumerated as dangerous are
+    refused, so legitimate results (pathlib, uuid, numpy, app types) pass. This
+    is the layer the profile switch disables.
+    """
+    root = module.split(".")[0]
+    if root in _DENIED_MODULE_ROOTS:
+        return False
+    if module == "builtins" and name in _DENIED_BUILTINS:
+        return False
+    return True
+
+
+def from_b85_restricted(
+    b85: str,
+    predicate: Callable[[str, str, Any], bool] | None,
+) -> Any:
+    """Deserialize an untrusted child->parent payload under transport guards.
+
+    Always runs `_prescan` (opcode allowlist + budgets), which the profile
+    switch never disables. When `predicate` is None the name-level guard is off
+    (the result switch turned it off) and a standard load runs after the
+    prescan; otherwise every global resolves only through `predicate`.
+
+    Args:
+        b85: Base85-encoded payload produced by the sandboxed child.
+        predicate: `(module, name, obj) -> bool` gating each global, or None to
+            run a standard load after the prescan.
+
+    Returns:
+        The deserialized object.
+
+    Raises:
+        RestrictedUnpicklingError: On a refused opcode, budget, or global.
+    """
+    data = base64.b85decode(b85.encode("ascii"))
+    _prescan(data)
+    if predicate is None:
+        return _pickle_loads(data)
+    return _RestrictedUnpickler(data, predicate).load()
 
 
 def _get_default_interface_via_ip() -> str | None:

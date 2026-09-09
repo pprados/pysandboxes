@@ -11,17 +11,18 @@ from pathlib import Path
 from typing import Any, Callable, Dict
 
 import aiohttp
+import tblib
 from aiohttp import ClientConnectorError, ClientPayloadError
 from aiohttp_sse_client import client as sse_client
 
 from ..all_rules import AllRules
 from ..base_daemon import BaseDaemon
-from ..e import SandBoxProtocolError
+from ..e import RestrictedUnpicklingError, SandBoxProtocolError
 from ..private_loop import get_sandbox_loop, sandbox_loop
 from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
 from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL
-from .tools import from_b85, to_b85
+from .tools import exception_predicate, from_b85_restricted, result_predicate, to_b85
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,12 @@ def _rebuild_remote_exception(payload: str) -> BaseException:
     Returns:
         The exception, with the sandbox frames attached.
     """
-    exception, serial_traceback = from_b85(payload)
+    exception, serial_traceback = from_b85_restricted(payload, exception_predicate)
+    # The restricted unpickler admits tblib.Traceback by class; guard its shape
+    # before as_traceback(), which rebuilds frame objects from child-controlled
+    # attributes.
+    if not isinstance(serial_traceback, tblib.Traceback):
+        raise RestrictedUnpicklingError("transport traceback has an unexpected shape.")
     traceback = serial_traceback.as_traceback()
     # Drop the transport frames, which say nothing about the denial itself.
     for _ in range(3):
@@ -65,7 +71,7 @@ def _rebuild_remote_exception(payload: str) -> BaseException:
 
 
 class BaseSSESandbox(BaseDaemon):
-    __slots__ = ("port", "host", "max_connect_retry")
+    __slots__ = ("port", "host", "max_connect_retry", "_result_guard")
 
     def __init__(
         self,
@@ -75,6 +81,9 @@ class BaseSSESandbox(BaseDaemon):
         **kwargs: Dict[str, Any],
     ) -> None:
         super().__init__(token)
+        # Result-channel guard. Default on; start_daemon posts the
+        # profile's `remote-result-guard` value once all_rules are parsed.
+        self._result_guard = True
         self.port = 0
         # IP literal, not "localhost": aiohttp resolves with
         # AI_ADDRCONFIG, which fails an IPv4 lookup when only 'lo'
@@ -134,7 +143,12 @@ class BaseSSESandbox(BaseDaemon):
                     async for event in event_source:
                         msg = json.loads(event.data)
                         if "result" in msg:
-                            return from_b85(msg["result"])
+                            # Result channel: the denylist guard is fail-open and
+                            # switchable; None disables only it (prescan stays).
+                            return from_b85_restricted(
+                                msg["result"],
+                                result_predicate if self._result_guard else None,
+                            )
                         if "exception" in msg:
                             # Raised after the try block: the sandboxed function
                             # may itself raise ConnectionRefusedError (every
