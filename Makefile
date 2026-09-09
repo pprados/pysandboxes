@@ -3,7 +3,7 @@ SHELL=/bin/bash
 	unit-tests integration-tests container-tests sample-tests all-tests gh-tests \
 	spell_check spell_fix clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
-	build-image build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
+	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init
 
 UV_GROUP?=--group dev --group test --group lint
@@ -58,7 +58,7 @@ minikube-build-images:
 	fi
 
 ## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed). Use OS_SANDBOX (default: unshare).
-container-tests: build-image
+container-tests: build-images
 	$(MAKE) minikube-ready
 	$(MAKE) minikube-build-images
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && OS_SANDBOX=$${OS_SANDBOX:-unshare} uv run pytest -v tests/containers_tests/
@@ -348,9 +348,6 @@ build-image-bwrap: .make-build-image-bwrap
 
 ## Build qemu image (FROM python-sb): python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
 build-image-qemu: .make-build-image-qemu
-
-## Build all sandbox images (base + every provider); same as build-images
-build-image: build-images
 
 ## Build all provider images (and base first); see dependency graph above (e.g. minikube: eval $(minikube docker-env) && make build-image-docker)
 build-images: Dockerfile .make-dist \
