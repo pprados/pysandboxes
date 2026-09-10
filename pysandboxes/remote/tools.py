@@ -420,8 +420,30 @@ _ALLOWED_OPCODES = frozenset(
 # see (memo bombs, opcode floods) that would expand in the parent's RAM.
 _MAX_OPCODES = 5_000_000
 _MAX_MEMO = 2_000_000
-_MAX_BYTES = 128 * 1024 * 1024
 _MAX_MARK_DEPTH = 256
+
+# The payload travels as one SSE line, and aiohttp caps a line at
+# 8 * ClientSession(read_bufsize=...), i.e. 8 * 65536 = 512 KiB on the default.
+# Measured end to end: a line of 524240 bytes crosses, 524242 raises
+# aiohttp LineTooLong -- so the real ceiling is the HTTP reader, not this
+# budget. It used to read 128 MiB, two orders of magnitude above what the
+# transport can carry, which made it a number that described nothing.
+#
+# Derivation, in the direction the wire imposes:
+#   line   <= 8 * read_bufsize                       = 524288
+#   line    = b85(pickle) + SSE/JSON envelope + captured stdout/stderr
+#   b85(n)  = ceil(n / 4) * 5                        = 1.25 * n
+#   n      <= (524288 - envelope) / 1.25             = 419392 with no output
+# 384 KiB encodes to 491520 bytes, leaving 32 KiB of the line for the envelope
+# and for whatever the sandboxed function printed. Above that the reader would
+# refuse the line before this prescan ever sees it.
+#
+# CPYTHON-COMPAT-ADJACENT: keyed to an aiohttp default, not to CPython. Raising
+# read_bufsize on the ClientSession in base_sse_daemon.py is what would let this
+# budget grow; a test pins the relation so a change on either side reddens CI.
+_SSE_LINE_LIMIT = 8 * 65536
+_B85_EXPANSION = 1.25
+_MAX_BYTES = 384 * 1024
 
 # Opcodes that consume one MARK, used to track MARK nesting depth.
 _MARK_CONSUMERS = frozenset({"TUPLE", "SETITEMS", "APPENDS", "ADDITEMS", "FROZENSET"})
@@ -512,7 +534,10 @@ def _prescan(data: bytes) -> None:
             an unparsable stream.
     """
     if len(data) > _MAX_BYTES:
-        raise RestrictedUnpicklingError(f"payload of {len(data)} bytes exceeds the {_MAX_BYTES}-byte transport budget.")
+        raise RestrictedUnpicklingError(
+            f"payload of {len(data)} bytes exceeds the {_MAX_BYTES}-byte transport budget; "
+            "the SSE line that carries it would not fit the HTTP reader."
+        )
     n_op = 0
     n_memo = 0
     mark_depth = 0

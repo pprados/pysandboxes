@@ -12,16 +12,21 @@ import copyreg
 import datetime
 import decimal
 import functools
+import inspect
+import math
 import operator
 import pathlib
 import pickle
 import subprocess
 
+import aiohttp
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
+    _MAX_BYTES,
+    _SSE_LINE_LIMIT,
     describe_exception,
     descriptor_predicate,
     exception_predicate,
@@ -343,6 +348,33 @@ class TestDescriptorFallback:
 
         with pytest.raises(RestrictedUnpicklingError):
             from_b85_restricted(_hostile(Evil()), descriptor_predicate)
+
+
+class TestPayloadBudget:
+    """The byte budget is derived from what the SSE line can actually carry."""
+
+    def test_the_budget_fits_the_sse_line(self) -> None:
+        """A payload at the budget must still encode to a line aiohttp accepts.
+
+        The ceiling is the HTTP reader, not this budget: aiohttp caps a line at
+        8 * read_bufsize. If either side moves, this reddens instead of failing
+        in production as an opaque LineTooLong.
+        """
+        encoded = math.ceil(_MAX_BYTES / 4) * 5
+
+        assert encoded < _SSE_LINE_LIMIT, "a payload at the budget would not fit the SSE line"
+        # Room left on the line for the JSON envelope and captured stdout/stderr.
+        assert _SSE_LINE_LIMIT - encoded >= 32 * 1024
+
+    def test_the_budget_matches_the_client_read_buffer(self) -> None:
+        """_SSE_LINE_LIMIT tracks the ClientSession default the transport uses."""
+        default_read_bufsize = inspect.signature(aiohttp.ClientSession.__init__).parameters["read_bufsize"].default
+
+        assert _SSE_LINE_LIMIT == 8 * default_read_bufsize
+
+    def test_an_oversized_payload_is_refused_by_the_prescan(self) -> None:
+        with pytest.raises(RestrictedUnpicklingError, match="transport budget"):
+            from_b85_restricted(_hostile(b"x" * (_MAX_BYTES + 1)), result_predicate)
 
 
 class TestSwitch:

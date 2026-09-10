@@ -71,6 +71,33 @@ parses without running it (no `__reduce__` is called). Two checks:
   entries, the byte size, and the `MARK` nesting depth. A memo bomb passes the
   class check but is caught here.
 
+#### The byte budget, and the ceiling that really applies
+
+The byte budget is not a free choice. The payload travels as a single SSE line,
+and aiohttp refuses a line longer than `8 * ClientSession(read_bufsize=...)` —
+512 KiB on the default buffer. Measured end to end: a line of 524240 bytes
+crosses, 524242 raises `aiohttp.http_exceptions.LineTooLong`.
+
+That reader is the ceiling, and it applies **before** this prescan: the refusal
+happens while the response is being read, so an oversized result never reaches
+the guard at all. The budget is therefore derived from it rather than chosen:
+
+```
+line    <= 8 * read_bufsize                = 524288
+line     = b85(pickle) + envelope + stdout/stderr
+b85(n)   = ceil(n / 4) * 5                 = 1.25 * n
+n       <= (524288 - envelope) / 1.25      = 419392 with no captured output
+```
+
+`_MAX_BYTES` is 384 KiB, which encodes to 491520 bytes and leaves 32 KiB of the
+line for the JSON envelope and for whatever the sandboxed function printed. It
+previously read 128 MiB, two orders of magnitude above anything the transport
+can carry, which made it a number that described nothing.
+
+A unit test pins `_SSE_LINE_LIMIT` against aiohttp's own default, so raising the
+buffer on the `ClientSession` — the only way to lift the ceiling — reddens CI
+instead of leaving the two sides silently inconsistent.
+
 The prescan deliberately does **not** try to inventory the `(module, name)`
 pairs the stream references. Under memo/`BINGET` indirection a stack-simulating
 scan diverges from what the C unpickler actually resolves (it would see a memo
