@@ -80,7 +80,13 @@ crosses, 524242 raises `aiohttp.http_exceptions.LineTooLong`.
 
 That reader is the ceiling, and it applies **before** this prescan: the refusal
 happens while the response is being read, so an oversized result never reaches
-the guard at all. The budget is therefore derived from it rather than chosen:
+the guard at all. The child therefore checks the assembled line itself, before
+sending it (`check_sse_line`), and the caller gets a refusal naming the size and
+the limit instead of a `LineTooLong` naming nothing. The whole line is measured,
+since the reply also carries the exception forms and whatever the sandboxed
+function printed, all sharing one budget.
+
+The budget is derived from that ceiling rather than chosen:
 
 ```
 line    <= 8 * read_bufsize                = 524288

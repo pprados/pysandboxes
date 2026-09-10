@@ -47,7 +47,7 @@ from .parameters import (
     TIMEOUT_FOR_STOP_DAEMON,
     TIMEOUT_GRACEFUL_SHUTDOWN,
 )
-from .tools import describe_exception, from_b85, to_b85
+from .tools import check_sse_line, describe_exception, from_b85, to_b85
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,12 @@ async def sandbox_daemon(
                 # the whole reply; the descriptor still carries the refusal.
                 logger.debug("(%s) ... exception not picklable: %s", session_id, exc)
                 result["exception"] = ""
-        yield _sse_msg(json.dumps(result))
+        # Checked before sending: an oversized line dies in the parent's HTTP
+        # reader, naming nothing. Raising here reaches the caller as a refusal
+        # that says what was too big (the except clause below carries it).
+        reply = _sse_msg(json.dumps(result))
+        check_sse_line(reply)
+        yield reply
     except CancelledError:
         logger.info("(%s) ... cancelled", session_id)
         yield _sse_msg(json.dumps({"session_id": session_id, "cancelled": True}))
