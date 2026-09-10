@@ -8,10 +8,12 @@ and the profile switch.
 """
 
 import base64
+import collections
 import copyreg
 import dataclasses
 import datetime
 import decimal
+import enum
 import functools
 import inspect
 import math
@@ -19,6 +21,7 @@ import operator
 import pathlib
 import pickle
 import subprocess
+import uuid
 
 import aiohttp
 import pytest  # type: ignore[import-untyped]
@@ -108,6 +111,132 @@ class TestResultChannel:
     )
     def test_legit_results_roundtrip(self, value: object) -> None:
         assert from_b85_restricted(to_b85(value), result_predicate) == value
+
+
+class _Severity(enum.Enum):
+    LOW = 1
+    HIGH = 2
+
+
+_Point = collections.namedtuple("_Point", "x y")
+
+
+@dataclasses.dataclass
+class _Measure:
+    label: str
+    amount: decimal.Decimal
+    at: datetime.datetime
+    window: datetime.timedelta
+
+
+@dataclasses.dataclass
+class _Report:
+    """Application object spanning the container and scalar types a result uses."""
+
+    name: str
+    severity: _Severity
+    path: pathlib.Path
+    ident: uuid.UUID
+    measures: list[_Measure]
+    index: dict[str, _Measure]
+    tags: frozenset
+    seen: set
+    point: _Point
+    blob: bytes
+    raw: bytearray
+    ratio: complex
+    big: int
+    history: collections.deque
+    counts: collections.Counter
+    ordered: collections.OrderedDict
+    children: list = dataclasses.field(default_factory=list)
+
+
+def _build_report(depth: int = 2, width: int = 3) -> _Report:
+    measure = _Measure(
+        label="latency",
+        amount=decimal.Decimal("12.345"),
+        at=datetime.datetime(2026, 9, 16, 10, 30, tzinfo=datetime.timezone.utc),
+        window=datetime.timedelta(seconds=90),
+    )
+    report = _Report(
+        name=f"level-{depth}",
+        severity=_Severity.HIGH,
+        path=pathlib.Path("/tmp/report.json"),
+        ident=uuid.UUID("12345678-1234-5678-1234-567812345678"),
+        # The same instance repeated: pickle memoizes it, so the round trip has
+        # to preserve sharing, not merely equality.
+        measures=[measure] * width,
+        index={"latency": measure},
+        tags=frozenset({"a", "b"}),
+        seen={1, 2, 3},
+        point=_Point(1.5, 2.5),
+        blob=b"\x00\xff" * 10,
+        raw=bytearray(b"raw"),
+        ratio=complex(1, 2),
+        big=2**500,
+        history=collections.deque(["first", "second"]),
+        counts=collections.Counter("abracadabra"),
+        ordered=collections.OrderedDict(a=1, b=2),
+    )
+    if depth > 0:
+        report.children.append(_build_report(depth - 1, width))
+    return report
+
+
+class TestComplexResults:
+    """The result channel carries more than the scalars the samples return.
+
+    The samples' own tools return `float` and `str` only, so nothing there
+    exercises the denylist against a real application object, nor the memo.
+    """
+
+    def test_a_deep_application_object_is_not_mistaken_for_a_gadget(self) -> None:
+        report = _build_report()
+
+        restored = from_b85_restricted(to_b85(report), result_predicate)
+
+        assert restored == report
+        assert restored.severity is _Severity.HIGH
+        assert restored.big == 2**500
+        assert restored.counts["a"] == 5
+        assert restored.point.x == 1.5
+
+    @pytest.mark.parametrize("depth", [2, 20, 100], ids=["shallow", "deep", "very-deep"])
+    def test_nesting_survives(self, depth: int) -> None:
+        restored = from_b85_restricted(to_b85(_build_report(depth=depth)), result_predicate)
+
+        walked = 0
+        node = restored
+        while node.children:
+            node = node.children[0]
+            walked += 1
+        assert walked == depth
+
+    def test_a_wide_container_survives(self) -> None:
+        reports = [_build_report(depth=0) for _ in range(500)]
+
+        restored = from_b85_restricted(to_b85(reports), result_predicate)
+
+        assert len(restored) == 500
+        assert all(isinstance(r, _Report) for r in restored)
+
+    def test_shared_references_stay_shared(self) -> None:
+        """Identity through the memo, not just equality: the guard must not break it."""
+        measure = _Measure("m", decimal.Decimal("1"), datetime.datetime(2026, 1, 1), datetime.timedelta(0))
+        payload = {"a": measure, "b": measure, "list": [measure, measure]}
+
+        restored = from_b85_restricted(to_b85(payload), result_predicate)
+
+        assert restored["a"] is restored["b"]
+        assert restored["list"][0] is restored["a"]
+        assert restored["list"][0] is restored["list"][1]
+
+    def test_repeated_instances_inside_one_object_stay_shared(self) -> None:
+        restored = from_b85_restricted(to_b85(_build_report(depth=0)), result_predicate)
+
+        assert restored.measures[0] is restored.measures[1]
+        assert restored.index["latency"] is restored.measures[0]
 
 
 class TestPrescan:
@@ -217,6 +346,17 @@ class _StatefulError(Exception):
         return (self.__class__, (str(self), self.path))
 
 
+class _ReportError(Exception):
+    """Exception whose state holds a deep application object."""
+
+    def __init__(self, message: str, report: "_Report") -> None:
+        super().__init__(message)
+        self.report = report
+
+    def __reduce__(self) -> tuple:
+        return (self.__class__, (str(self), self.report))
+
+
 def _both_forms(exc: BaseException, denials: list[str] | None = None) -> tuple[str, str]:
     """Serialize an exception the way the server does: rich form and descriptor."""
     import tblib
@@ -254,6 +394,22 @@ class TestDescriptorFallback:
         assert str(rebuilt) == "refused"
         assert sandbox_denials(rebuilt) == ["RulePermissionError: denied"]
         assert not hasattr(rebuilt, "path"), "the descriptor form carries no state"
+
+    def test_a_deep_application_state_also_falls_back(self) -> None:
+        """The refused state is an application object, not just a stdlib type."""
+        from pysandboxes.remote.base_sse_daemon import _rebuild_remote_exception
+
+        rich, fallback = _both_forms(
+            _ReportError("deep state", _build_report(depth=20)),
+            ["RuleApiPermissionError: denied"],
+        )
+
+        rebuilt = _rebuild_remote_exception(rich, fallback)
+
+        assert type(rebuilt) is _ReportError
+        assert str(rebuilt) == "deep state"
+        assert sandbox_denials(rebuilt) == ["RuleApiPermissionError: denied"]
+        assert not hasattr(rebuilt, "report")
 
     def test_an_admissible_rich_form_keeps_its_state(self) -> None:
         from pysandboxes.remote.base_sse_daemon import _rebuild_remote_exception
