@@ -36,7 +36,7 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import Any, cast
 
-from ..e import RestrictedUnpicklingError, set_sandbox_denials
+from ..e import RestrictedUnpicklingError, SandBoxProtocolError, set_sandbox_denials
 
 logger = logging.getLogger(__name__)
 
@@ -330,13 +330,19 @@ def to_b85(obj: Any) -> str:
     Returns:
         Base85-encoded serialized object string.
     """
-    result = base64.b85encode(
+    # No round-trip assertion here. It used to reload the payload and compare it
+    # with `==`, which rejects every object without a custom `__eq__` (the
+    # comparison falls back to identity) and raises RecursionError on a cycle
+    # whose `__eq__` recurses -- both surfacing to the caller as the opaque
+    # "No result received from the sandbox". It could not check the property
+    # that matters either: whether the *parent* can reload this. The child
+    # always reloads what it just wrote, having every module already imported.
+    # What is worth checking before sending is the size, which the daemon does
+    # on the assembled SSE line (see `check_sse_line`).
+    return base64.b85encode(
         # serialization only
         _pickle_dumps(obj, protocol=_PICKLE_PROTOCOL)
     ).decode("ascii")
-    # Round-trip check on locally built data
-    assert _pickle_loads(base64.b85decode(result.encode("ascii"))) == obj
-    return result
 
 
 def from_b85(b85: str) -> Any:
@@ -515,6 +521,31 @@ _DENIED_BUILTINS = frozenset(
         "type",
     }
 )
+
+
+def check_sse_line(line: str) -> None:
+    """Refuse a reply line the parent's HTTP reader would not accept.
+
+    Called on the child side, before the line goes out. The reader refuses an
+    oversized line while reading the response, so the parent-side prescan never
+    sees the payload and the caller gets an opaque `LineTooLong` naming nothing.
+    Checking here turns that into a refusal that says which side was too big.
+
+    The whole line is measured, not just the result: a reply also carries the
+    exception forms and whatever the sandboxed function wrote to stdout/stderr,
+    and they share the same budget.
+
+    Args:
+        line: The formatted SSE message, envelope included.
+
+    Raises:
+        SandBoxProtocolError: If the line exceeds what the reader accepts.
+    """
+    if len(line) > _SSE_LINE_LIMIT:
+        raise SandBoxProtocolError(
+            f"the reply is {len(line)} bytes, above the {_SSE_LINE_LIMIT}-byte limit of the transport "
+            f"(a result of at most {_MAX_BYTES} pickled bytes, plus what the function printed)."
+        )
 
 
 def _prescan(data: bytes) -> None:

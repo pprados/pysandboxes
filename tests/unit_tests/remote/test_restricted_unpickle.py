@@ -9,6 +9,7 @@ and the profile switch.
 
 import base64
 import copyreg
+import dataclasses
 import datetime
 import decimal
 import functools
@@ -27,6 +28,7 @@ from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
     _MAX_BYTES,
     _SSE_LINE_LIMIT,
+    check_sse_line,
     describe_exception,
     descriptor_predicate,
     exception_predicate,
@@ -45,11 +47,10 @@ class _Outer:
 
 
 def _hostile(obj: object) -> str:
-    """Serialize a payload the way the child does, bypassing to_b85's assert.
+    """Serialize a payload the way the child does.
 
-    ``to_b85`` asserts a round-trip equals the original, which a hostile object
-    (or an exception, lacking ``__eq__``) breaks. The real server pickles the
-    exception directly (sse_server_daemon.py), so tests do the same.
+    The real server pickles the exception directly (sse_server_daemon.py)
+    rather than going through ``to_b85``, so tests do the same.
     """
     return base64.b85encode(pickle.dumps(obj, protocol=5)).decode("ascii")
 
@@ -375,6 +376,48 @@ class TestPayloadBudget:
     def test_an_oversized_payload_is_refused_by_the_prescan(self) -> None:
         with pytest.raises(RestrictedUnpicklingError, match="transport budget"):
             from_b85_restricted(_hostile(b"x" * (_MAX_BYTES + 1)), result_predicate)
+
+    def test_the_child_refuses_an_oversized_line_before_sending_it(self) -> None:
+        """Checked on the child side: the parent's reader would name nothing."""
+        with pytest.raises(SandBoxProtocolError, match="limit of the transport"):
+            check_sse_line("x" * (_SSE_LINE_LIMIT + 1))
+
+    def test_a_line_within_the_limit_passes(self) -> None:
+        check_sse_line("x" * _SSE_LINE_LIMIT)
+
+
+class _Plain:
+    """Ordinary class: no __eq__, so instances compare by identity."""
+
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+@dataclasses.dataclass
+class _Node:
+    """Dataclass, hence a generated __eq__ that recurses through `peer`."""
+
+    name: str
+    peer: object = None
+
+
+class TestSerializationWithoutRoundTripAssert:
+    """to_b85 no longer reloads and compares, which rejected valid objects."""
+
+    def test_an_object_without_eq_is_serializable(self) -> None:
+        """`==` fell back to identity, so every ordinary instance was refused."""
+        restored = from_b85_restricted(to_b85(_Plain(1)), result_predicate)
+
+        assert restored.value == 1
+
+    def test_a_self_referencing_object_is_serializable(self) -> None:
+        """A cycle whose __eq__ recurses used to raise RecursionError."""
+        node = _Node("n")
+        node.peer = node
+
+        restored = from_b85_restricted(to_b85(node), result_predicate)
+
+        assert restored.peer is restored
 
 
 class TestSwitch:
