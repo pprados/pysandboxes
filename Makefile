@@ -30,7 +30,7 @@ fix-vs-code: .vscode/launch.json
 %.md: %.template.md
 	@uv run python3 scripts/compress_template.py $< $@
 
-## Compress AGENTS.md from template
+# Compress AGENTS.md from template
 AGENTS.md: AGENTS.template.md
 
 # Compress all templates. Each compression is an API call, so they must not run
@@ -51,7 +51,7 @@ unit-tests:
 minikube-ready:
 	@command -v minikube >/dev/null 2>&1 && (minikube status >/dev/null 2>&1 || (minikube start && kubectl wait --for=condition=Ready nodes --all --timeout=120s 2>/dev/null && (kubectl wait --for=condition=Ready pod -l k8s-app=kube-dns -n kube-system --timeout=120s 2>/dev/null || true))) || true
 
-## Build all provider images into minikube's Docker (no-op if minikube is missing or not running).
+# Build all provider images into minikube's Docker (no-op if minikube is missing or not running).
 minikube-build-images:
 	@if command -v minikube >/dev/null 2>&1 && minikube status >/dev/null 2>&1; then \
 	  eval $$(minikube docker-env) && $(MAKE) build-image-docker; \
@@ -118,9 +118,6 @@ gh-tests: lint
 
 ## Make all tests
 all-tests: unit-tests integration-tests container-tests sample-tests
-
-## Run all the tests (alias of all-tests)
-test tests: all-tests
 
 ########################
 # LINTING AND FORMATTING
@@ -340,19 +337,19 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	done; \
 	touch .make-build-image-qemu
 
-## Build base image python-sb (Python + wheel); required by all provider images below
+# Build base image python-sb (Python + wheel); required by all provider images below
 build-image-base: .make-build-image-base
 
-## Build landlock image (FROM python-sb): python-sb-landlock:$(PYTHON_VERSION), python-sb-landlock:latest
+# Build landlock image (FROM python-sb): python-sb-landlock:$(PYTHON_VERSION), python-sb-landlock:latest
 build-image-landlock: .make-build-image-landlock
 
-## Build unshare image (FROM python-sb): python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest
+# Build unshare image (FROM python-sb): python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest
 build-image-unshare: .make-build-image-unshare
 
-## Build bwrap image (FROM python-sb): python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest
+# Build bwrap image (FROM python-sb): python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest
 build-image-bwrap: .make-build-image-bwrap
 
-## Build qemu image (FROM python-sb): python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
+# Build qemu image (FROM python-sb): python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
 build-image-qemu: .make-build-image-qemu
 
 ## Build all provider images (and base first); see dependency graph above (e.g. minikube: eval $(minikube docker-env) && make build-image-docker)
@@ -370,13 +367,13 @@ IMAGE_STAMPS := .make-build-image-base .make-build-image-landlock .make-build-im
 # image unbuilt here; after, because they would otherwise credit this daemon's images to
 # the next local build, which would skip it and run the tests against images that only
 # exist in minikube.
-## Build all provider images into the current Docker daemon (use after: eval $(minikube docker-env))
+# Build all provider images into the current Docker daemon (use after: eval $(minikube docker-env))
 build-image-docker:
 	@rm -f $(IMAGE_STAMPS)
 	@$(MAKE) build-images
 	@rm -f $(IMAGE_STAMPS)
 
-## Same as build-images (podman then docker in each recipe); named for symmetry with build-image-docker
+# Same as build-images (podman then docker in each recipe); named for symmetry with build-image-docker
 build-image-podman: build-images
 
 ## Prune build caches and force full rebuild of all variants
@@ -520,7 +517,7 @@ init: _uv-init
 
 .PHONY: get-new-version publish-patch publish-minor
 
-## Helper target to calculate next version
+# Helper target to calculate next version
 get-new-version:
 	@CURRENT_VERSION=$$(python -c "import importlib.metadata; print(importlib.metadata.version('pysandboxes'))"); \
 	MAJOR=$$(echo $$CURRENT_VERSION | cut -d. -f1); \
