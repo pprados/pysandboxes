@@ -1,0 +1,60 @@
+name: Sample Tests
+
+# Runs the samples' own suites at publication time. They are heavy -- twelve
+# projects, each with its own pyproject.toml, uv.lock and venv -- so they are
+# tied to a version tag rather than to every push. workflow_dispatch reruns
+# them on demand.
+#
+# No secret is needed: pydantic-ai drives TestModel behind a placeholder key,
+# openai-agents-sdk is mocked, and the suites that would reach a real model
+# (mcp-client, mcp-server) skip themselves when OPENAI_API_KEY / RUN_CLAUDE_TESTS
+# are unset. The test_tools_sandbox.py suites do use the real network, which a
+# hosted runner provides.
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y make build-essential
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install Python development headers
+      run: sudo apt-get install -y python3-dev
+
+    - name: Install uv
+      shell: bash
+      run: |
+        UV_VERSION="0.8.17"
+        UV_BIN_DIR="$RUNNER_TEMP/uv_bin"
+        mkdir -p "$UV_BIN_DIR"
+
+        # Download binary Linux/x86_64
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
+
+        echo "$UV_BIN_DIR" >> $GITHUB_PATH
+
+    - name: Check installation of uv
+      run: uv --version
+
+    # The SAMPLES list lives in the root Makefile, so a sample commented out
+    # there disappears here too. Sequential on purpose: these suites arm real
+    # sandboxes, and an armed sandbox left behind by one suite changes what the
+    # next one measures. `make -jN sample-tests` works locally, but a tag-time
+    # job can absorb the wall clock in exchange for isolation.
+    - name: Run the samples' test suites
+      run: make sample-tests
