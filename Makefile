@@ -101,7 +101,13 @@ sample-tests-%:
 	$(MAKE) -C samples/$*-demo tests
 
 ## Make the samples' own test suites
-sample-tests: $(addprefix sample-tests-,$(SAMPLES))
+# Run every sample even when one fails, and still exit non-zero if any did:
+# stopping at the first failure hides the state of the samples behind it, and
+# a run of twelve suites is worth reporting in full. `-k` is what gives both
+# halves of that -- keep going, then fail -- and it inherits the jobserver, so
+# `make -jN sample-tests` stays parallel.
+sample-tests:
+	@$(MAKE) -k $(addprefix sample-tests-,$(SAMPLES))
 
 
 ## Make github tests locally
