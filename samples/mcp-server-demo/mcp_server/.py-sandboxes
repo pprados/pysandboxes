@@ -257,7 +257,9 @@ python-import=anyio
 python-import=attr
 python-import=attrs
 python-import=authlib
+python-import=beartype
 python-import=bs4
+python-import=cachetools
 python-import=certifi
 python-import=charset_normalizer
 python-import=click
@@ -275,6 +277,7 @@ python-import=httpx_sse
 python-import=idna
 python-import=jsonschema
 python-import=jsonschema_specifications
+python-import=key_value
 python-import=markdownify
 python-import=mcp
 python-import=mcp_server
@@ -299,7 +302,7 @@ python-import=uvicorn
 # Add rules (2026/09/10 at 09:44)
 # Standard Python
 python-import=_codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp, _codecs_kr
-python-import=_codecs_tw, bisect, fcntl
+python-import=_codecs_tw, _imp, bisect, fcntl
 
 # External modules (Are you sure about the origin?)
 python-import=griffe

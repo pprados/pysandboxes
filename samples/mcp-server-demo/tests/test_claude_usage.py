@@ -182,7 +182,10 @@ def test_claude_fetch_webpage(protocol: str, os_sandbox: str, mode: str) -> None
             "--allowedTools",
             "mcp__mcp_demo__fetch_webpage",
             "-p",
-            "get and summarize the page http://www.google.com",
+            # The assertion below matches English wording, so pin the language:
+            # the model otherwise answers in whatever the ambient configuration
+            # asks for, and a French summary fails a test about the sandbox.
+            "get and summarize the page http://www.google.com. Answer in English.",
         )
         result = run(
             cmd,
