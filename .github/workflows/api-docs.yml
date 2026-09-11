@@ -61,6 +61,15 @@ jobs:
     - name: Build the API documentation
       run: make api_docs_build
 
+    # Reports dead links without gating the publication: a broken link is worth
+    # knowing about, not worth blocking a release deploy over. Read the step log
+    # to see what it found. The target checks internal links only -- add
+    # --check-extern in the Makefile to also follow third-party URLs, which
+    # would make this step depend on their availability.
+    - name: Check the documentation links
+      run: make api_docs_linkcheck
+      continue-on-error: true
+
     - uses: actions/configure-pages@v5
 
     - uses: actions/upload-pages-artifact@v3

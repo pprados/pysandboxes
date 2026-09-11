@@ -1,0 +1,78 @@
+name: Container Tests
+
+# Runs the docker, podman and kubernetes suites at publication time. They build
+# five provider images from dist/ and start a minikube cluster, so they are tied
+# to a version tag rather than to every push. workflow_dispatch reruns them on
+# demand.
+#
+# A hosted runner exposes no /dev/kvm, so the qemu rows of the matrix boot their
+# VM under TCG emulation. is_kvm_available() in pysandboxes/remote/qemu_image.py
+# already drops -enable-kvm in that case, so they run correctly -- just slowly,
+# which is what the generous timeout below is for.
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+jobs:
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y make build-essential
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install Python development headers
+      run: sudo apt-get install -y python3-dev
+
+    # The podman rows skip themselves when the binary is missing, which would
+    # silently halve the runtime coverage.
+    - name: Install podman
+      run: sudo apt-get install -y podman
+
+    # test_containers.py invokes `kubectl` as a command, not `minikube kubectl`,
+    # so it needs its own binary. Both downloads follow the vendors' documented
+    # "latest stable" URLs rather than a pinned release.
+    - name: Install minikube and kubectl
+      run: |
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        rm minikube-linux-amd64
+
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo install kubectl /usr/local/bin/kubectl
+        rm kubectl
+
+    - name: Install uv
+      shell: bash
+      run: |
+        UV_VERSION="0.8.17"
+        UV_BIN_DIR="$RUNNER_TEMP/uv_bin"
+        mkdir -p "$UV_BIN_DIR"
+
+        # Download binary Linux/x86_64
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s --
+
+        echo "$UV_BIN_DIR" >> $GITHUB_PATH
+
+    - name: Check installation of uv
+      run: uv --version
+
+    - name: Install dependencies
+      run: uv sync --group test
+
+    # container-tests depends on build-images, which depends on .make-dist, so
+    # make builds the wheel and the five provider images on its own. It then
+    # starts minikube and rebuilds the images inside its Docker daemon.
+    - name: Run container tests
+      run: make container-tests
