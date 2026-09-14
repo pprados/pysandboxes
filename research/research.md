@@ -1,8 +1,35 @@
-# Confining Python by Observation: Inferred Least-Privilege Profiles Compiled to Heterogeneous Isolation Backends
+# Confining Python by Observation
 
-*A conceptual paper. `py-sandboxes` is one implementation of what follows; this
-document is written so that a second, independent implementation could be built
-from it without reading that code.*
+### Inferred Least-Privilege Profiles Compiled to Heterogeneous Isolation Backends
+
+**Philippe PRADOS** — [github@prados.fr](mailto:github@prados.fr)
+
+**Version 1.0** — September 2026
+
+---
+
+**Reference implementation.** The design described here is implemented and
+released as `py-sandboxes` (Apache-2.0):
+
+> **Repository** — <https://github.com/pprados/pysandboxes>
+
+> **Package** — <https://pypi.org/project/pysandboxes/>
+
+**Scope of this paper.** This is a *conceptual* paper. It states the threat
+model, the layering argument, the policy model and the compilation strategy at a
+level that would let a second, independent implementation be built from it
+without reading the reference code. Implementation specifics are deliberately
+left to the repository's own documentation, and are cited rather than reproduced.
+
+**Keywords** — sandboxing; least privilege; policy inference; dynamic analysis;
+Python; LLM code execution; agent security; Landlock; namespaces; seccomp.
+
+**License.** This paper is licensed under
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+(CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/) —
+see [`LICENSE`](https://github.com/pprados/pysandboxes/blob/master/research/LICENSE)
+in this directory. The *software* it describes is separately licensed under
+Apache-2.0.
 
 ---
 
@@ -13,6 +40,10 @@ from it without reading that code.*
   - [1.1 The threat that changed](#11-the-threat-that-changed)
   - [1.2 The threat model, stated precisely](#12-the-threat-model-stated-precisely)
   - [1.3 What is explicitly out of scope](#13-what-is-explicitly-out-of-scope)
+  - [1.4 The two scenarios that motivate this work](#14-the-two-scenarios-that-motivate-this-work)
+    - [Scenario A — the model's answer is executed directly](#scenario-a--the-models-answer-is-executed-directly)
+    - [Scenario B — the augmented developer](#scenario-b--the-augmented-developer)
+    - [What the two scenarios share, and where they differ](#what-the-two-scenarios-share-and-where-they-differ)
 - [2. Prior art](#2-prior-art)
   - [2.1 In-interpreter confinement, and its recorded failure](#21-in-interpreter-confinement-and-its-recorded-failure)
   - [2.2 Observability without confinement](#22-observability-without-confinement)
@@ -55,7 +86,10 @@ from it without reading that code.*
   - [9.5 Limits of the OS layer](#95-limits-of-the-os-layer)
 - [10. Open design tensions](#10-open-design-tensions)
 - [11. A reimplementation checklist](#11-a-reimplementation-checklist)
-- [12. Evaluation: what would falsify the claims](#12-evaluation-what-would-falsify-the-claims)
+- [12. Validation, and what would falsify these claims](#12-validation-and-what-would-falsify-these-claims)
+  - [12.1 What the implementation establishes](#121-what-the-implementation-establishes)
+  - [12.2 What is not measured](#122-what-is-not-measured)
+  - [12.3 Falsification conditions](#123-falsification-conditions)
 - [References](#references)
 - [Relationship to the implementation](#relationship-to-the-implementation)
 
@@ -179,6 +213,141 @@ Stating this is not modesty; an undocumented limit is a false guarantee.
 - **Denial of service at the interpreter layer.** Bounding CPU, memory and file
   descriptors requires a resource controller, not a function patch. See
   [§9.3](#93-denial-of-service).
+
+---
+
+### 1.4 The two scenarios that motivate this work
+
+The threat of [§1.2](#12-the-threat-model-stated-precisely) reaches an
+application through two quite different routes. They are worth separating,
+because they differ in *what the generated artefact is*, *when it is confined*,
+*who writes the profile*, and *which rung of
+[§4.1](#41-the-five-rungs) they land on*. A design that serves only one of them
+solves half the problem.
+
+```mermaid
+%% caption: The two routes by which model-generated code reaches an application
+flowchart TB
+    M["Language model"]
+    M -- "A · answers with a string" --> S["expression / snippet<br/>arrives at eval, exec, compile"]
+    M -- "B · answers with a feature" --> F["source file<br/>reviewed, committed, imported"]
+    S --> RA["Rung 1<br/><b>runtime</b>, milliseconds<br/>confined by the declared sub-language"]
+    F --> RB["Rung 2-3<br/><b>build time onward</b>, permanent<br/>confined by the application profile"]
+```
+
+#### Scenario A — the model's answer is executed directly
+
+A tool receives a question, asks a model for an expression or a short program,
+and evaluates it:
+
+```python
+@tool
+def evaluate_expression(expression: str) -> str:
+    return str(eval(expression))          # the model wrote `expression`
+```
+
+This is the shape of a calculator tool, of an analytics agent that writes a
+pandas one-liner, of an MCP server exposing symbolic mathematics, and of every
+"code interpreter" feature. The application author writes the *tool*; the model
+writes what the tool runs.
+
+Four properties follow, and together they determine the answer:
+
+- **The artefact is a string**, and it exists only at runtime. No review is
+  possible, by anyone, because the artefact did not exist when the code was
+  written and will not exist a second later.
+- **It arrives at a known, narrow door** — `eval`, `exec`, `compile`. That is
+  the one thing working in the defender's favour, and it is what makes a
+  *sub-language* enforceable at all.
+- **The needed capability is small and knowable in advance.** A calculator tool
+  needs arithmetic and comparison; it does not need `import`, attribute access,
+  or the filesystem. The author knows this when writing the tool, long before
+  any model answers.
+- **The prompt is attacker-controlled in practice.** Whatever reaches the model
+  — a web page, a document, a ticket — reaches the expression.
+
+So scenario A is answered at **rung 1**, by the dynamic-code layer of
+[§4.3](#43-rung-1--the-dynamic-code-layer), and the profile is written **once,
+by the tool author, before deployment**. It describes a *language*, not an
+application. This is the only scenario where the confinement can be genuinely
+tight, because the legitimate need is genuinely tiny — and it is also the only
+one where nothing below the interpreter can help, since by the time a kernel
+sees anything the string is already bytecode.
+
+#### Scenario B — the augmented developer
+
+A developer asks an assistant for a feature. The assistant writes a module, the
+developer reads it with more or less attention, and it is committed. From then on
+it is ordinary application code: imported, executed, shipped.
+
+```python
+# added by an assistant, in response to "add a retry with backoff"
+import requests, os, subprocess          # two of these were not asked for
+```
+
+The properties are almost the inverse of scenario A:
+
+- **The artefact is a module**, not a string. By the time it runs it is bytecode
+  indistinguishable from hand-written code, so the dynamic-code layer never sees
+  it. This is **rung 2**, and rung 3 as soon as a dependency is compiled.
+- **Its lifetime is permanent.** A capability quietly acquired in one commit is
+  still there a year later, and is never re-examined.
+- **Review is possible but empirically partial.** The failure is not that
+  developers do not read generated code; it is that a diff shows *what the code
+  says* and not *what the process can now reach*. An added import three lines
+  into a 200-line diff does not read as "this component may now execute
+  processes".
+- **The legitimate need is large and not knowable in advance** — the whole
+  application's real surface, which is precisely what
+  [§6.1](#61-why-inference-rather-than-declaration) argues nobody can write down.
+
+So scenario B is answered at **rungs 2–3**, by the interpreter layer and the
+kernel backends, and the profile is **inferred from the application's own
+behaviour** ([§6](#6-policy-inference)) rather than authored.
+
+**The consequence worth stating, because it is not obvious.** In scenario B the
+profile stops being only a runtime control and becomes a **review artefact**: a
+declarative, diffable statement of what the application may touch. When an
+assistant adds a capability, the change surfaces as a line in a file whose entire
+purpose is to list capabilities — not as an import buried in a diff. A reviewer
+who would not notice `import subprocess` will notice
+`python-api=ALLOW:process-exec` appearing in a file that previously did not
+contain it, because that file has no other content competing for attention.
+
+That is the sense in which the profile acts as a **regression test on
+privilege**: the build fails, or the rule must be added deliberately, the first
+time generated code reaches for something the application never needed before.
+Nothing about this depends on the code having been written by a model; it is
+simply that model-assisted development makes capability drift fast enough to
+matter.
+
+#### What the two scenarios share, and where they differ
+
+| | **A — executed answer** | **B — augmented developer** |
+|---|---|---|
+| Artefact | a source string | a committed module |
+| Exists at | runtime only | build time onward |
+| Lifetime | milliseconds | permanent |
+| Rung ([§4.1](#41-the-five-rungs)) | 1 | 2–3 |
+| Enforcing layer | the declared sub-language | interpreter layer + kernel backend |
+| Profile written by | the tool author, up front | inference from real behaviour |
+| Profile describes | a language | an application |
+| Legitimate need | tiny, knowable in advance | large, not knowable in advance |
+| Review opportunity | none | the profile diff |
+
+What they share is the reason this paper treats them together: in both, **the
+capability granted has drifted away from the capability intended**, and in
+neither does the code itself announce the drift. What differs is everything about
+how the drift is caught — which is why the design needs both a sub-language for
+strings and an inferred profile for processes, and why an implementation that
+offers only one of them will leave its users exposed on the other.
+
+A third, common configuration is simply both at once: an assistant writes the
+tool (scenario B) and a model supplies the expressions that tool evaluates
+(scenario A). The layers nest exactly as
+[§4.2](#42-why-the-layers-nest-and-do-not-substitute) describes, with the
+dynamic-code rules confining the string inside a process that the inferred
+profile already confines.
 
 ---
 
@@ -395,8 +564,28 @@ static analysis over-approximates — it assumes more behaviours than actually
 occur — whereas dynamic analysis observes real executions and establishes a
 *lower bound* [[MINING-SANDBOXES]]. It also states the caveat honestly:
 *sandboxing needs policy, dynamic analysis needs executions, and testing cannot
-guarantee the absence of malicious behaviour.* Follow-up work (Confine, and
-subsequent container-debloating benchmarks) refined the same loop.
+guarantee the absence of malicious behaviour.*
+
+**Confine** (Ghavamnia, Palit, Benameur, Polychronakis; RAID 2020) answered the
+same problem from the opposite direction: rather than observing executions, it
+statically analyses the containerised application and its dependencies to derive
+a *superset* of required syscalls, and emits the corresponding seccomp policy.
+Its motivation is precisely the weakness of the dynamic approach — a training
+workload does not exhaustively capture rare runtime conditions, so an
+observation-derived policy is unsuitable as a generic solution. Evaluated over
+150 public Docker images, it disabled 145 or more syscalls for over half of them
+[[CONFINE]].
+
+The two directions have since been combined. *Shrinking the Kernel Attack
+Surface Through Static and Dynamic Syscall Limitation* (Zhan et al., 2025) states
+the trade-off in one sentence — dynamic tracking cannot obtain the full syscall
+list, while static analysis yields an over-approximated one — and builds a hybrid
+[[SYSCALL-LIMIT]].
+
+That sentence is the same dilemma this paper faces one layer up, and
+[§6.4](#64-the-soundness-gap-stated) resolves it differently: not by making the
+analysis complete, but by arranging that an access the analysis *missed* is
+denied rather than allowed.
 
 **Positioning.** Everything above learns at the **syscall** layer. That choice
 determines both its strength and its ceiling:
@@ -439,6 +628,38 @@ the present design aims at:
 - **The boundary is a network hop.** That buys strong isolation and costs
   latency, a dependency on an external service, and a non-trivial story for
   getting credentials and application state across.
+
+**The agent-security literature, and why it sits beside rather than above this
+work.** A substantial 2024–2025 line of research attacks the same overall
+problem from the *orchestration* side. It is worth reading alongside this paper,
+because the two are complementary and neither subsumes the other.
+
+- **CaMeL** (Debenedetti et al., 2025) builds a protective layer that extracts
+  the control and data flows from the *trusted* query, so that untrusted data
+  retrieved by the model can never influence program flow, and adds capabilities
+  to prevent exfiltration over unauthorised channels [[CAMEL]].
+- **Design Patterns for Securing LLM Agents against Prompt Injections**
+  (Beurer-Kellner et al., 2025) proposes principled patterns with provable
+  resistance to prompt injection, and analyses their trade-offs against agent
+  utility [[AGENT-PATTERNS]].
+- **IsolateGPT** (Wu, Roesner, Kohno, Zhang, Iqbal; 2024) observes that LLM app
+  ecosystems resemble early computing platforms with insufficient isolation
+  between apps and the system, and proposes an execution isolation architecture
+  [[ISOLATEGPT]].
+- **AgentDojo** (Debenedetti et al., 2024) and **ToolEmu** (Ruan et al., 2023)
+  supply the evaluation side: an extensible environment for attacks and defences
+  over untrusted tool output, and an LM-emulated sandbox for surfacing long-tail
+  risks without implementing every tool [[AGENTDOJO]] [[TOOLEMU]].
+
+The division of labour is clean, and stating it prevents a category error.
+That literature governs **what the agent is allowed to decide** — which data may
+influence control flow, which tool may be called, whether a plan is safe. This
+paper governs **what the resulting process is allowed to touch**, and assumes the
+decision has already gone wrong. An agent whose orchestration is perfectly
+secured still runs its tool bodies as ordinary code with ambient authority; an
+agent confined by a profile still benefits from not being hijacked in the first
+place. Neither layer makes the other unnecessary, and the evaluation frameworks
+above are the natural place to measure whether the combination holds.
 
 ### 2.7 What the prior art leaves open
 
@@ -493,7 +714,7 @@ Adoption failure — not mechanism weakness — is what the prior art in
 [§2.5](#25-policy-synthesis-by-observation) most consistently ran into; whether
 that generalises is an empirical question, and the adoption of sandboxing across
 open-source ecosystems has been studied directly [[SANDBOX-ADOPTION]]. The
-present paper does not measure it ([§12](#12-evaluation-what-would-falsify-the-claims)).
+present paper does not measure it ([§12](#12-validation-and-what-would-falsify-these-claims)).
 
 ---
 
@@ -503,6 +724,32 @@ present paper does not measure it ([§12](#12-evaluation-what-would-falsify-the-
 
 Order the adversary by what they can *emit*, not by intent. Each rung strictly
 contains the one before it.
+
+```mermaid
+%% caption: Each rung of attacker capability, and the last layer able to see it
+flowchart LR
+    subgraph ladder["Attacker capability — each rung contains the previous"]
+        direction TB
+        R1["Rung 1<br/>source string"]
+        R2["Rung 2<br/>Python bytecode"]
+        R3["Rung 3<br/>native code"]
+        R4["Rung 4<br/>raw syscall"]
+        R5["Rung 5<br/>kernel compromise"]
+        R1 --> R2 --> R3 --> R4 --> R5
+    end
+    subgraph layers["The LAST layer able to see it"]
+        direction TB
+        L1["eval-* sub-language"]
+        L2["Python API layer"]
+        L3["OS layer<br/>kernel-enforced"]
+        L5["Separate kernel<br/>VM / microVM"]
+    end
+    R1 --> L1
+    R2 --> L2
+    R3 --> L3
+    R4 --> L3
+    R5 --> L5
+```
 
 | Rung | Attacker can emit | Example |
 |---:|---|---|
@@ -550,6 +797,24 @@ no notion of a Python module; seccomp cannot read a path argument
 ([§2.4](#24-kernel-enforced-isolation)). So the kernel layer cannot replace the
 interpreter layer either — the substitution fails in both directions.
 
+```mermaid
+%% caption: The three layers nest; none of them substitutes for another
+flowchart TB
+    subgraph OS["<b>OS layer</b> — kernel-enforced · the real boundary · rungs 3-4"]
+        subgraph PY["<b>Python layer</b> — legibility, inference, friction · rung 2"]
+            subgraph EV["<b>eval-* layer</b> — declared sub-language · rung 1"]
+                SRC["source string<br/>produced by the model"]
+            end
+            BC["application bytecode<br/>import · sensitive calls"]
+        end
+        NAT["native code · raw syscalls<br/><i>invisible to everything above</i>"]
+    end
+
+style OS fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style PY fill:#aa7c52,stroke:#2f2617,stroke-width:4px
+style EV fill:#6e4a2c,stroke:#2f2617,stroke-width:4px,stroke-dasharray:6 4,color:#ffffff
+```
+
 Hence: **nest, never substitute**. The practical reading of any per-backend
 capability matrix follows from this. A ❌ against a kernel backend for "import"
 does not mean imports are unprotected; it means *that technology has no notion of
@@ -580,6 +845,18 @@ is parsed, validated against a declared subset of Python, rewritten so that
 residual risks are checked *during* execution rather than only before it, and run
 under explicit resource budgets and a wall-clock timeout the caller can recover
 from.
+
+```mermaid
+%% caption: How a source string is admitted, rewritten, and bounded at run time
+flowchart LR
+    S["source string"] --> P["parse to AST"]
+    P --> V{"validate against the<br/>declared sub-language"}
+    V -- "node, call or attribute<br/>not allowed" --> X["<b>refused</b><br/>the rule is named"]
+    V -- accepted --> RW["rewrite:<br/>inject the runtime checks<br/>a static pass cannot make"]
+    RW --> RUN["execute under<br/>budgets + timeout"]
+    RUN -- "budget or timeout exceeded" --> X2["<b>interrupted</b><br/>uncatchable by the source"]
+    RUN --> OK["result"]
+```
 
 **Deny-all with a non-negotiable minimal core.** The accepted language is a
 whitelist, and the default is *nothing beyond a minimal core*: the parse root,
@@ -708,7 +985,15 @@ Five design properties of such a registry, each earned:
   Because `os` does `from posix import *`, `os.system` *is* `posix.system`.
   Registering only the ergonomic spelling leaves the other as a bypass. The same
   applies to the `pickle` / `_pickle` pair, and generally to any stdlib module
-  that re-exports from an accelerator.
+  that re-exports from an accelerator. The same reasoning governs a second,
+  distinct site: the transport's return channel, where the trusted parent
+  deserializes what the untrusted child sent back. Reconstructing a returned
+  object can run arbitrary code in the parent, outside the sandbox, so that
+  channel is read through a restricted unpickler whose gadget denylist is keyed
+  by every alias a stream can carry (`posix.system`, `_socket.socket`), not the
+  ergonomic spelling. That guard is a denylist (fail-open) on the result path,
+  because a return value may legitimately be any application or library type;
+  the exception path, whose shape is known, is fail-closed.
 - **Some functions belong to another guard instead.** `chroot` is better handled
   by the filesystem layer with a path check than by the registry with a binary
   allow/deny. Overlapping guards should be resolved by choosing the one that can
@@ -751,10 +1036,13 @@ covered in [§7.4](#74-provider-selection-a-decision-procedure). Conceptually:
 - **Rungs 3–4** (native code, raw syscalls) are covered by anything the kernel
   enforces: Landlock, namespaces, seccomp. The interpreter is no longer in the
   loop, which is exactly the point.
-- **Rung 5** (kernel compromise) requires a *different kernel* — a microVM or a
-  full VM. Nothing that shares the host kernel can address it, including gVisor,
-  which reduces the exposed syscall surface without removing the shared-kernel
-  assumption ([§2.4](#24-kernel-enforced-isolation)).
+- **Rung 5** (kernel compromise) requires a *different kernel* — a full VM, or a
+  microVM where one is available. Nothing that shares the host kernel can address
+  it, including gVisor, which reduces the exposed syscall surface without
+  removing the shared-kernel assumption ([§2.4](#24-kernel-enforced-isolation)).
+  Both gVisor and the microVM runtimes are named here as *technology classes*;
+  neither is an available backend
+  ([§7.5](#75-providers-worth-adding-and-what-each-would-buy)).
 
 One asymmetry deserves emphasis, because it drives
 [§7.4](#74-provider-selection-a-decision-procedure): **the strength of a backend
@@ -903,6 +1191,17 @@ Four phases, and the third is the one that is usually skipped and should not be:
    `~/.aws/credentials`" gets caught.
 4. **Enforce.** Later runs use the reviewed profile, now blocking.
 
+```mermaid
+%% caption: The four phases of policy inference, and the loop that closes it
+flowchart LR
+    A["<b>1 · Observe</b><br/>guards installed,<br/>non-blocking<br/><i>weakest backend only</i>"]
+    B["<b>2 · Generalise</b><br/>observations → rules<br/><i>too specific breaks,<br/>too general over-grants</i>"]
+    C["<b>3 · Review</b><br/><b>human</b><br/><i>not automatable</i>"]
+    D["<b>4 · Enforce</b><br/>blocking,<br/>kernel backend"]
+    A --> B --> C --> D
+    D -- "refusal names the rule<br/>· re-enter with the delta" --> A
+```
+
 Three operational properties:
 
 - **Learning must run with the *weakest* backend.** A kernel backend would block
@@ -998,6 +1297,19 @@ The profile is mechanism-independent. The backends are not. Compilation must:
   the interpreter layer, or by refusing the combination outright;
 - **preserve** the operator's intent when the two layers disagree about the same
   resource.
+
+```mermaid
+%% caption: One profile, compiled to several enforcement backends
+flowchart TB
+    OBS["application run<br/>(observation — §6)"] --> PROF["<b>one declarative profile</b><br/><i>resource terms, not mechanism terms</i>"]
+    PROF --> PYL["<b>Python layer</b><br/>python-import · python-api · eval-*<br/><i>no kernel analogue — stays here</i>"]
+    PROF --> COMP{"<b>compilation</b><br/>translate · reconcile · preserve"}
+    COMP --> B1["subprocess"]
+    COMP --> B2["landlock"]
+    COMP --> B3["unshare<br/>bwrap<br/>firejail"]
+    COMP --> B4["qemu"]
+    COMP -. "rule the backend<br/>cannot express" .-> REF["rely on the Python layer<br/><b>and say so</b>, or refuse —<br/>never drop silently"]
+```
 
 Two general principles:
 
@@ -1095,10 +1407,12 @@ Not a ranking. Five axes, and the choice is usually forced by the first two.
    *Yes* → continue.
 
 2. **Must rung 5 (kernel compromise) be covered?**
-   *Yes* → a **VM or microVM**. This is the only class that answers it
+   *Yes* → a **separate guest kernel**. This is the only class that answers it
    ([§4.5](#45-rungs-35--the-kernel-layer)). Budget for an order-of-magnitude
    worse startup and per-instance memory. Accept it when the workload is genuinely
-   adversarial or multi-tenant.
+   adversarial or multi-tenant. The implemented form of this is a **full VM**;
+   the microVM runtimes that would make it cheaper are candidates only, not
+   available ([§7.5](#75-providers-worth-adding-and-what-each-would-buy)).
    *No* → continue.
 
 3. **Does the policy need filesystem *views* — masking, bind-mounting, a
@@ -1128,11 +1442,23 @@ the argument for a profile that outlives the decision.
 
 ### 7.5 Providers worth adding, and what each would buy
 
-Candidates, evaluated on the axes above. **None of the following is
-implemented**; the properties are predicted from published characteristics, not
-measured here.
+> **Nothing in this section is implemented, and nothing in it was evaluated.**
+> These are *candidates under consideration*. Every property below is inferred
+> from the vendors' and the literature's published characteristics — no
+> measurement, benchmark or integration of gVisor, Firecracker, Kata,
+> WebAssembly, sub-interpreters, an egress proxy or a platform sandbox was
+> carried out for this paper. The table states what each *would* be expected to
+> buy and cost, so that the decision procedure in
+> [§7.4](#74-provider-selection-a-decision-procedure) can be extended; it is a
+> design argument, not a result.
+>
+> The backends that *are* implemented and exercised are the ones named in
+> [§7.4](#74-provider-selection-a-decision-procedure): a plain subprocess,
+> in-process self-restriction, namespace tooling, and a VM.
 
-| Candidate | Axis it improves | What it would buy | Cost / open question |
+Read each row as a hypothesis, in the conditional:
+
+| Candidate (none implemented) | Axis it would improve | What it would be expected to buy | Cost / open question |
 |---|---|---|---|
 | **gVisor** | C (partial) | Syscall-surface reduction via a user-space kernel, without hardware virtualisation; ~50–100 ms class startup [[ISOLATION-CMP]] | Shared-kernel assumption remains, so **not** rung 5; syscall-compatibility gaps with native extensions |
 | **Firecracker / Kata** | C (full) | A dedicated guest kernel with KVM-enforced boundaries; the honest answer to rung 5 [[ISOLATION-CMP]] | Requires nested virtualisation to run inside a cloud VM; tens of MB per instance; needs orchestration Kata already provides and raw Firecracker does not |
@@ -1225,6 +1551,26 @@ it at data produced by the thing one is confining. The direction of trust across
 the IPC boundary is *opposite* to the direction of data flow on the return path,
 and a design that does not notice this has a hole precisely where it believes it
 has a wall.
+
+```mermaid
+%% caption: Across the IPC boundary, data flows outward while trust flows inward
+flowchart LR
+    subgraph T["<b>Trusted parent</b> — holds the credentials"]
+        P["caller"]
+    end
+    subgraph U["<b>Confined child</b> — untrusted by premise"]
+        C["@sandbox function"]
+    end
+    P -- "1 · call + arguments<br/><i>trusted → untrusted: expected</i>" --> C
+    C -- "2 · result / exception payload<br/><b>untrusted → trusted: the hole</b>" --> P
+
+style T fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style U fill:#aa7c52,stroke:#2f2617,stroke-width:4px
+```
+
+Arrow 2 is the one that matters. The data flows outward, but the *trust* flows
+inward: a rich deserialiser applied to arrow 2 turns a crafted payload from the
+confined child into code execution in the parent — outside the sandbox entirely.
 
 Two observations for a reimplementation:
 
@@ -1466,10 +1812,123 @@ first backend let pass.
 
 ---
 
-## 12. Evaluation: what would falsify the claims
+## 12. Validation, and what would falsify these claims
 
-Stating the falsification conditions is what makes the claims of
-[§3](#3-contribution) more than assertions.
+The design is not only described here: it is implemented, and the
+implementation's test suite is the **proof-of-concept validation** of the
+architecture. This section separates what that validation establishes
+([§12.1](#121-what-the-implementation-establishes)) from what it does not
+([§12.2](#122-what-is-not-measured)), and then states the conditions under which
+each claim of [§3](#3-contribution) would be refuted
+([§12.3](#123-falsification-conditions)).
+
+### 12.1 What the implementation establishes
+
+The reference implementation is exercised by a suite comprising, at the time of
+writing, **748 unit tests across 60 files**, **52 integration tests across 18
+files**, a container-level suite, and **14 self-contained sample applications**
+each carrying its own tests and its own learned profiles. Four results follow
+from it, and they are the sense in which the concept is validated.
+
+**1. The architecture runs.** The layering of
+[§4](#4-the-ladder-of-attacker-capability) is not a paper design. The
+dynamic-code layer, the interpreter layer and the kernel layer compose in one
+process tree, on real applications, at negligible latency for every backend but
+the VM.
+
+**2. One profile, many backends — the strongest single result.** This is the
+direct test of *claim 3*. The integration suite parametrises its guard tests over
+the full backend set — `subprocess`, `qemu`, `unshare`, `firejail`, `landlock`,
+`bwrap` — and asserts the **same** expected behaviour for each. The container
+suite then parametrises over Docker, Podman and Kubernetes, crossed with the
+backend and with the privileged/unprivileged axis. A profile that produced
+different enforcement per backend would fail these tests; it does not. The
+claim that the profile outlives the choice of backend is therefore demonstrated
+across six backends and three container contexts, not argued.
+
+**3. The escape corpora are pinned, including the failures.** The
+dynamic-code attack matrix carries 37 cases, split into **29 payloads that must
+be refused** and **8 that must run** — because a sandbox that refuses legitimate
+work is also broken. Separately, the interpreter-layer escape corpus pins the
+*known-open* escapes of [§9.1](#91-limits-of-the-interpreter-layer) as expected
+failures. This is the methodologically important part: the limits this paper
+claims are not prose, they are **executed assertions**, and a limit that silently
+closed or a guard that silently opened would change a test result. Each blocked
+escape asserts *which layer* caught it, so the layering argument of
+[§4.2](#42-why-the-layers-nest-and-do-not-substitute) is itself under test.
+
+**4. Inference produces profiles that work.** Every sample's profile is *learned*
+by the loop of [§6.2](#62-the-inference-loop), in both granularities of
+[§8.1](#81-two-granularities), and the samples then run against those learned
+profiles across agent frameworks nobody involved in the design wrote. That the
+loop terminates on real third-party code — rather than on a benchmark chosen to
+suit it — is the practical evidence for *claim 2*.
+
+Taken together: the concept is validated in the engineering sense — it works, on
+real applications, across backends, with its limits pinned. What follows is what
+that does **not** establish.
+
+**Reproducing it.** The four results above correspond to executable suites, run
+from the repository root:
+
+```bash
+make unit-tests           # guards, registry, eval sub-language, escape corpora
+make integration-tests    # cross-backend guard behaviour, arming, remote execution
+make container-tests      # Docker / Podman / Kubernetes matrix (needs images + minikube)
+make sample-tests         # each sample's own suite, against its learned profiles
+make all-tests            # all four
+```
+
+The specific files behind each claim:
+
+| Result | Where it is asserted |
+|---|---|
+| Cross-backend equivalence (claim 3) | [`tests/integration_tests/test_guards_with_providers.py`](https://github.com/pprados/pysandboxes/blob/master/tests/integration_tests/test_guards_with_providers.py) |
+| Container / privilege matrix | [`tests/containers_tests/test_containers.py`](https://github.com/pprados/pysandboxes/blob/master/tests/containers_tests/test_containers.py) |
+| Dynamic-code attack matrix (29 refused + 8 allowed) | [`tests/unit_tests/guard/test_eval_attack_matrix.py`](https://github.com/pprados/pysandboxes/blob/master/tests/unit_tests/guard/test_eval_attack_matrix.py) |
+| Escape corpus, blocked and known-open | [`tests/unit_tests/test_escape_pysandbox.py`](https://github.com/pprados/pysandboxes/blob/master/tests/unit_tests/test_escape_pysandbox.py), [`tests/unit_tests/guard/test_guard_escape_fixes.py`](https://github.com/pprados/pysandboxes/blob/master/tests/unit_tests/guard/test_guard_escape_fixes.py) |
+| Arming semantics ([§4.4](#44-rung-2--the-interpreter-layer)) | [`tests/integration_tests/test_guard_api_arming.py`](https://github.com/pprados/pysandboxes/blob/master/tests/integration_tests/test_guard_api_arming.py) |
+| Learned profiles on third-party frameworks | [`samples/`](https://github.com/pprados/pysandboxes/tree/master/samples) |
+
+### 12.2 What is not measured
+
+No *quantitative* evaluation was performed. Specifically, this paper reports no
+coverage study, no precision measurement, no comparative benchmark and no
+human-subjects result. The tests demonstrate that the architecture behaves as
+specified; they do not measure how *good* the inferred policies are, which is a
+different question and the one a reviewer should press on.
+
+Three quantities are missing, and each is a place the design could be weaker than
+it looks:
+
+- **Inference coverage.** For a corpus of real applications, what fraction of a
+  hand-written correct profile does the loop recover from a representative run?
+  The gap is the under-approximation of [§6.4](#64-the-soundness-gap-stated),
+  and it is currently argued rather than measured.
+- **Inference precision.** How much does a generated profile over-grant relative
+  to a hand-written one? The generalisation heuristics of
+  [§6.3](#63-generalisation-is-the-hard-part) are the variable, and an
+  over-granting heuristic would undermine the least-privilege claim without
+  failing a single test.
+- **Reviewability.** Given a generated profile containing a deliberately planted
+  over-grant — an exposed credentials directory, an unexpected host — do
+  reviewers actually find it? This is the claim that distinguishes API-layer from
+  syscall-layer synthesis ([§2.5](#25-policy-synthesis-by-observation)), it is
+  the one most load-bearing for the paper's contribution, and it is a
+  human-subjects question that no test suite can answer.
+
+**A shared benchmark would settle more than argument.** The container-debloating
+literature converged on comparable metrics — syscalls eliminated, CVEs
+neutralised, correctness preserved [[MINING-SANDBOXES]]. The equivalent here
+would be *rules inferred vs. rules required*, *over-grant rate*, *escape-corpus
+containment per layer*, and *startup cost per backend*. The third of those is
+already partly instrumented by the escape corpora above; the first two are not.
+This remains the paper's main limitation.
+
+### 12.3 Falsification conditions
+
+Stating these is what makes the claims of [§3](#3-contribution) more than
+assertions.
 
 **Claim 1 (layering by attacker capability)** is falsified if a single layer can
 be shown to cover two non-adjacent rungs — for instance an interpreter-level
@@ -1477,34 +1936,24 @@ mechanism that genuinely contains native code. It is *supported* by the
 recurring failure of exactly that attempt in
 [§2.1](#21-in-interpreter-confinement-and-its-recorded-failure).
 
-**Claim 2 (inference produces reviewable, dual-use profiles)** is testable
-directly, and should be tested this way:
+**Claim 2 (inference produces reviewable, dual-use profiles)** is *partially
+supported*: the samples of [§12.1](#121-what-the-implementation-establishes) show
+the loop terminating on third-party code and producing profiles that then
+enforce. It would be falsified by either of the two unmeasured quantities of
+[§12.2](#122-what-is-not-measured) coming out badly — a coverage rate so low that
+the loop never converges without manual authoring, or an over-grant rate high
+enough that the inferred profile is not meaningfully least-privilege. The
+reviewability sub-claim is untested in either direction.
 
-- *Coverage.* For a corpus of real applications, what fraction of a hand-written
-  correct profile does inference recover from a representative run? The gap is
-  the under-approximation of [§6.4](#64-the-soundness-gap-stated), measured
-  rather than asserted.
-- *Precision.* How much does the generated profile over-grant relative to the
-  hand-written one? Generalisation heuristics
-  ([§6.3](#63-generalisation-is-the-hard-part)) are the variable.
-- *Reviewability.* Given a generated profile containing a deliberately planted
-  over-grant — an exposed credentials directory, an unexpected host — do
-  reviewers find it? This is the claim that distinguishes API-layer from
-  syscall-layer synthesis ([§2.5](#25-policy-synthesis-by-observation)), and it
-  is a human-subjects question, not a benchmark.
-
-**Claim 3 (profile portability)** is falsified if, in practice, moving between
-backends routinely requires editing the profile rather than changing one
-selection line. The honest metric is the count of rules that must change per
-backend switch, across a corpus — with [§7.2](#72-impedance-mismatches-worth-naming)
-predicting that filesystem-hiding rules will dominate the failures.
-
-**A shared benchmark would settle more than argument.** The container-debloating
-literature converged on comparable metrics — syscalls eliminated, CVEs
-neutralised, correctness preserved [[MINING-SANDBOXES]]. The equivalent here
-would be: *rules inferred vs. rules required*, *over-grant rate*, *escape-corpus
-containment per layer*, and *startup cost per backend*. None of these is
-measured in this paper, which is the paper's main limitation.
+**Claim 3 (profile portability)** is the best supported: the same profile is
+asserted to produce the same enforcement across six backends and three container
+contexts ([§12.1](#121-what-the-implementation-establishes)). It would be
+falsified if, outside that suite, moving between backends routinely required
+editing the profile rather than changing one selection line. The honest metric is
+the count of rules that must change per backend switch, across a wider corpus —
+with [§7.2](#72-impedance-mismatches-worth-naming) predicting that
+filesystem-hiding rules would dominate the failures, since that is where the
+backends genuinely disagree.
 
 ---
 
@@ -1600,6 +2049,13 @@ source. All predate December 2025.
 - [MINING-SANDBOXES] Z. Wan, D. Lo, X. Xia, L. Cai, S. Li, *Mining Sandboxes for
   Linux Containers*, ICST 2017, pp. 92–102. arXiv:1712.05493.
   <https://arxiv.org/abs/1712.05493>
+- [CONFINE] S. Ghavamnia, T. Palit, A. Benameur, M. Polychronakis, *Confine:
+  Automated System Call Policy Generation for Container Attack Surface
+  Reduction*, RAID 2020, pp. 443–458.
+  <https://www.usenix.org/conference/raid2020/presentation/ghavanmnia>
+- [SYSCALL-LIMIT] D. Zhan, Z. Yu, X. Yu, H. Zhang, L. Ye, *Shrinking the Kernel
+  Attack Surface Through Static and Dynamic Syscall Limitation*, arXiv:2510.03720
+  (October 2025). <https://arxiv.org/abs/2510.03720>
 
 **LLM-era execution**
 
@@ -1610,6 +2066,24 @@ source. All predate December 2025.
   `LocalPythonExecutor` is "not a security boundary"; E2B, Modal, Docker and
   WebAssembly backends.
   <https://huggingface.co/docs/smolagents/en/tutorials/secure_code_execution>
+- [CAMEL] E. Debenedetti, I. Shumailov, T. Fan, J. Hayes, N. Carlini,
+  D. Fabian, C. Kern, C. Shi, A. Terzis, F. Tramèr, *Defeating Prompt Injections
+  by Design*, arXiv:2503.18813 (March 2025).
+  <https://arxiv.org/abs/2503.18813>
+- [AGENT-PATTERNS] L. Beurer-Kellner, B. Buesser, A.-M. Creţu, E. Debenedetti,
+  et al., *Design Patterns for Securing LLM Agents against Prompt Injections*,
+  arXiv:2506.08837 (June 2025). <https://arxiv.org/abs/2506.08837>
+- [ISOLATEGPT] Y. Wu, F. Roesner, T. Kohno, N. Zhang, U. Iqbal, *IsolateGPT: An
+  Execution Isolation Architecture for LLM-Based Agentic Systems*,
+  arXiv:2403.04960 (March 2024; NDSS 2025).
+  <https://arxiv.org/abs/2403.04960>
+- [AGENTDOJO] E. Debenedetti, J. Zhang, M. Balunović, L. Beurer-Kellner,
+  M. Fischer, F. Tramèr, *AgentDojo: A Dynamic Environment to Evaluate Prompt
+  Injection Attacks and Defenses for LLM Agents*, arXiv:2406.13352 (June 2024;
+  NeurIPS 2024 Datasets & Benchmarks). <https://arxiv.org/abs/2406.13352>
+- [TOOLEMU] Y. Ruan, H. Dong, A. Wang, S. Pitis, et al., *Identifying the Risks
+  of LM Agents with an LM-Emulated Sandbox*, arXiv:2309.15817 (September 2023;
+  ICLR 2024). <https://arxiv.org/abs/2309.15817>
 - [CVE-LIST] Execution-surface CVEs in agent frameworks, as catalogued in this
   project's README: CVE-2023-46229, CVE-2023-32786, CVE-2024-28088,
   CVE-2024-7774, CVE-2024-3571, CVE-2024-3095, CVE-2024-2057, CVE-2025-2828,
@@ -1619,19 +2093,21 @@ source. All predate December 2025.
 
 ## Relationship to the implementation
 
-This paper is the conceptual layer. The corresponding implementation artefacts in
-this repository, for a reader who wants the concrete form of any section:
+This paper is the conceptual layer. The reference implementation,
+`py-sandboxes`, lives at <https://github.com/pprados/pysandboxes> under
+Apache-2.0. For a reader who wants the concrete form of any section, the
+corresponding documentation in that repository is:
 
 | Section | Implementation documentation |
 |---|---|
-| [§4.3](#43-rung-1--the-dynamic-code-layer) dynamic-code layer | [`eval.md`](eval.md) — every rule key with valid and invalid examples |
-| [§9.2](#92-limits-of-the-dynamic-code-layer) its limits | [`audit-eval-security.md`](audit-eval-security.md) — attack matrix |
-| [§4.4](#44-rung-2--the-interpreter-layer) interpreter layer | [`implementation.md`](implementation.md) |
-| [§9.1](#91-limits-of-the-interpreter-layer) its limits | [`audit-python-security.md`](audit-python-security.md), [`weaknesses.md`](weaknesses.md) |
-| [§7](#7-compiling-one-profile-to-many-backends) backends | [`landlock.md`](landlock.md), [`unshare.md`](unshare.md), [`bwrap.md`](bwrap.md), [`firejail.md`](firejail.md), [`qemu.md`](qemu.md) |
-| [§7.3](#73-the-dnsnetfilter-contradiction) DNS pinning | [`dns.md`](dns.md) |
-| [§7.5](#75-providers-worth-adding-and-what-each-would-buy) candidates | [`roadmap.md`](roadmap.md) |
-| [§8.1](#81-two-granularities) granularities | [`../README.md`](../README.md), [`samples.md`](samples.md) |
+| [§4.3](#43-rung-1--the-dynamic-code-layer) dynamic-code layer | [`eval.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/eval.md) — every rule key with valid and invalid examples |
+| [§9.2](#92-limits-of-the-dynamic-code-layer) its limits | [`audit-eval-security.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/audit-eval-security.md) — attack matrix |
+| [§4.4](#44-rung-2--the-interpreter-layer) interpreter layer | [`implementation.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/implementation.md) |
+| [§9.1](#91-limits-of-the-interpreter-layer) its limits | [`audit-python-security.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/audit-python-security.md), [`weaknesses.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/weaknesses.md) |
+| [§7](#7-compiling-one-profile-to-many-backends) backends | [`landlock.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/landlock.md), [`unshare.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/unshare.md), [`bwrap.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/bwrap.md), [`firejail.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/firejail.md), [`qemu.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/qemu.md) |
+| [§7.3](#73-the-dnsnetfilter-contradiction) DNS pinning | [`dns.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/dns.md) |
+| [§7.5](#75-providers-worth-adding-and-what-each-would-buy) candidates | [`roadmap.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/roadmap.md) |
+| [§8.1](#81-two-granularities) granularities | [`../README.md`](https://github.com/pprados/pysandboxes/blob/master/README.md), [`samples.md`](https://github.com/pprados/pysandboxes/blob/master/wiki/samples.md) |
 
 Where this paper and the implementation documentation disagree on a figure, the
 implementation documentation may be stale: the registry described in
