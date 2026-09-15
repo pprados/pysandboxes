@@ -559,7 +559,7 @@ def _raise_access(file: str) -> NoReturn:
 def _wrap_buitins_open(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(
-        file: str | None,
+        file: str | int | None,
         mode: str = "r",
         buffering: int = -1,
         encoding: str | None = None,
@@ -568,6 +568,22 @@ def _wrap_buitins_open(func: Callable[..., Any]) -> Callable[..., Any]:
         closefd: bool = True,
         opener: Callable[..., Any] | None = None,
     ) -> Any:
+        if isinstance(file, int):
+            # A descriptor names no path, so there is nothing for the rules to match:
+            # the call that opened it went through the guard already. Rewriting it as a
+            # path would also break `closefd=False`, which open() only accepts on a
+            # descriptor -- `open(2, "w", closefd=False)` died on "Cannot use
+            # closefd=False with file name". Same passthrough as _wrap_filename.
+            return func(
+                file,
+                mode=mode,
+                buffering=buffering,
+                encoding=encoding,
+                errors=errors,
+                newline=newline,
+                closefd=closefd,
+                opener=opener,
+            )
         if isinstance(file, _DirEntry):
             file = str(file)
 

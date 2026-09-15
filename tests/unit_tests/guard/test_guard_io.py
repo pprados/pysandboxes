@@ -248,6 +248,32 @@ def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
             f.write("sample")
 
 
+def test_io_open_accepts_a_file_descriptor(files: Dict[str, Path]) -> None:
+    """A descriptor is not a path, and the guard must not read it as one.
+
+    ``open()`` takes either, and on a descriptor it also takes ``closefd=False``. The
+    guard used to send the integer through the path rules, which handed the real
+    ``open()`` a *name* and raised ``ValueError: Cannot use closefd=False with file
+    name`` -- a call that has nothing to do with any rule, refused by the guard.
+    """
+    rules = [ConfigLine(f"expose-rw={files['path']}", Path(), 0)]
+    activate_guard_files_rules(rules)
+    target_path = files["bind_dest"] / "from-fd.txt"
+
+    import io
+    import os  # noqa: F811
+
+    # ``open`` and not ``io.open``: the builtin is the one the guard wraps with the
+    # path rules, and it is the one a program calls.
+    with io.open(target_path, "w") as by_path:
+        with open(by_path.fileno(), "w", closefd=False) as by_fd:
+            by_fd.write("sample")
+
+    with io.open(target_path) as f:
+        assert f.read() == "sample"
+    os.remove(str(target_path))
+
+
 def test_io_open_visible_and_invisible_files(files: Dict[str, Path]) -> None:
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
