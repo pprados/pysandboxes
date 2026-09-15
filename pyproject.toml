@@ -175,6 +175,7 @@ addopts = "--strict-markers --strict-config --durations=5 -vv"
 markers = [
     "requires: mark tests as requiring a specific library",
     "scheduled: mark tests to run in scheduled testing",
-    "compile: mark placeholder test used to compile integration tests without running them"
+    "compile: mark placeholder test used to compile integration tests without running them",
+    "slow: mark tests whose cost is measured in minutes (deselect with -m 'not slow')"
 ]
 asyncio_mode = "auto"

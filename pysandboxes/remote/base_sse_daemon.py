@@ -72,6 +72,10 @@ def _attach_remote_traceback(exception: BaseException, serial_traceback: Any) ->
     if not isinstance(serial_traceback, tblib.Traceback):
         raise RestrictedUnpicklingError("transport traceback has an unexpected shape.")
     traceback = serial_traceback.as_traceback()
+    if traceback is None:
+        # tblib rebuilds nothing from an empty frame list. The exception still has to
+        # reach the caller: a denial without frames beats no denial at all.
+        return exception
     # Drop the transport frames, which say nothing about the denial itself.
     for _ in range(3):
         if traceback.tb_next is None:

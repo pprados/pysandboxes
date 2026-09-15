@@ -14,10 +14,17 @@ wrong place.
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest  # type: ignore[import-untyped]
 
+from pysandboxes.all_rules import AllRules
 from pysandboxes.remote.python_in_sb import _python_command, _python_script
+
+# Both entry points read all_rules on one branch only -- the interactive prompt, under
+# ``sys.flags.inspect`` -- which a test run never takes. Passing a real AllRules would
+# mean building one to have it ignored.
+_UNUSED_RULES = cast(AllRules, ())
 
 _SCRIPT = """\
 CONST = 42
@@ -38,7 +45,7 @@ def test_a_function_sees_its_module_globals(tmp_path: Path, capsys: pytest.Captu
     script = tmp_path / "witness.py"
     script.write_text(_SCRIPT)
 
-    assert _python_script((), script, []) == 0
+    assert _python_script(_UNUSED_RULES, script, []) == 0
 
     assert "__name__: __main__" in capsys.readouterr().out
 
@@ -48,7 +55,7 @@ def test_the_script_is_named_main_and_knows_its_file(tmp_path: Path, capsys: pyt
     script = tmp_path / "witness.py"
     script.write_text(_SCRIPT)
 
-    _python_script((), script, [])
+    _python_script(_UNUSED_RULES, script, [])
 
     out = capsys.readouterr().out
     assert "__name__: __main__" in out
@@ -57,7 +64,7 @@ def test_the_script_is_named_main_and_knows_its_file(tmp_path: Path, capsys: pyt
 
 def test_dash_c_also_gets_a_single_namespace(capsys: pytest.CaptureFixture) -> None:
     """``python-sb -c`` runs through ``_python_command`` and has the same bug."""
-    assert _python_command((), "C = 1\ndef f():\n    return C\nassert f() == 1\n", []) == 0
+    assert _python_command(_UNUSED_RULES, "C = 1\ndef f():\n    return C\nassert f() == 1\n", []) == 0
 
 
 def test_a_traceback_names_the_script_not_string(tmp_path: Path) -> None:

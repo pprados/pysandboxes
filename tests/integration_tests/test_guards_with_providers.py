@@ -24,12 +24,12 @@ Profiles are written per test and carry no ``net=`` rule, unlike the shared
 with whether a guard is armed, and requiring it would skip this whole file on a
 host without DNS.
 
-Five backends were verified when this file was written -- subprocess, unshare,
-firejail, landlock, bwrap. The QEMU rows were not: on a host with no ``/dev/kvm``
-they exit 1 with an empty stderr, before any guard runs. The same profile and the
-same script pass on the other five, so this is the VM failing to come up rather
-than the guard, but the cause was not established. A red QEMU row here is not
-necessarily your change.
+The last section covers what the guards rest on rather than the guards themselves:
+the program's output comes back, a profile that names its modules one by one still
+starts, and a failure says why. Each pins a defect that made every QEMU row here
+exit 1 with an empty stderr -- read as "the VM does not come up", for as long as
+nothing reported the cause. None of the three is specific to QEMU: a VM only made
+them visible, by putting a console filter and a second interpreter in the way.
 """
 
 import subprocess
@@ -39,7 +39,7 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
-from ._env import ALL_OS_SANDBOX, provider_skip_reason
+from ._env import backend_of, os_sandbox_params, provider_skip_reason, row_profile_lines
 
 # Project root (parent of tests/), where the package and its venv live.
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -91,7 +91,10 @@ def _run(
     # The backend confines the filesystem, so the script pytest just wrote is invisible
     # to the child unless its directory is exposed, and so is the interpreter it runs on.
     exposed = "".join(f"expose-ro={path}\n" for path in (str(tmp_path), *_INTERPRETER_PATHS))
-    profile.write_text(f"py-sandbox=true\nos-sandbox={os_sandbox}\n{exposed}{profile_lines}")
+    backend = backend_of(os_sandbox)
+    profile.write_text(
+        f"py-sandbox=true\nos-sandbox={backend}\n{row_profile_lines(os_sandbox)}{exposed}{profile_lines}"
+    )
     return subprocess.run(
         [
             sys.executable,
@@ -106,7 +109,7 @@ def _run(
         cwd=ROOT_DIR,
         capture_output=True,
         text=True,
-        timeout=_QEMU_TIMEOUT_SECONDS if os_sandbox == "qemu" else _TIMEOUT_SECONDS,
+        timeout=_QEMU_TIMEOUT_SECONDS if backend == "qemu" else _TIMEOUT_SECONDS,
     )
 
 
@@ -116,19 +119,33 @@ def _skip_unavailable(os_sandbox: str) -> None:
         pytest.skip(reason)
 
 
+def _diagnostics(done: "subprocess.CompletedProcess[str]", os_sandbox: str) -> str:
+    """Return the stream a guard's refusal message lands on.
+
+    Every process-based backend keeps stdout and stderr apart, so the message is on
+    stderr. QEMU cannot: ``-nographic`` multiplexes the guest's serial console onto a
+    single stream, and the host forwards that stream to its own stdout. The two are
+    already merged by the time the test sees them, and no profile rule can undo it --
+    the multiplexing is the console, not a setting. Asserting on stderr alone would
+    demand a separation the architecture does not provide.
+    """
+    return done.stdout + done.stderr if backend_of(os_sandbox) == "qemu" else done.stderr
+
+
 # --- guard_eval ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize("os_sandbox", ALL_OS_SANDBOX)
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
 def test_eval_is_refused_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     """An application `eval()` is denied whatever confines the process."""
     _skip_unavailable(os_sandbox)
     done = _run(os_sandbox, "python-import=*\n", "print(eval('40 + 2'))\n", tmp_path)
     assert done.returncode != 0, done.stdout
-    assert "dynamic-code" in done.stderr, done.stderr
+    diagnostics = _diagnostics(done, os_sandbox)
+    assert "dynamic-code" in diagnostics, diagnostics
 
 
-@pytest.mark.parametrize("os_sandbox", ALL_OS_SANDBOX)
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
 def test_eval_is_allowed_by_its_rule_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     """The same call passes once the rule allows it -- so the refusal above was the guard."""
     _skip_unavailable(os_sandbox)
@@ -145,16 +162,17 @@ def test_eval_is_allowed_by_its_rule_under_every_backend(os_sandbox: str, tmp_pa
 # --- guard_api ----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("os_sandbox", ALL_OS_SANDBOX)
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
 def test_os_system_is_refused_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     """`os.system` is on the blacklist, and stays there under every backend."""
     _skip_unavailable(os_sandbox)
     done = _run(os_sandbox, "python-import=*\n", "import os\nos.system('true')\n", tmp_path)
     assert done.returncode != 0, done.stdout
-    assert "denied by the API guard" in done.stderr, done.stderr
+    diagnostics = _diagnostics(done, os_sandbox)
+    assert "denied by the API guard" in diagnostics, diagnostics
 
 
-@pytest.mark.parametrize("os_sandbox", ALL_OS_SANDBOX)
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
 def test_os_system_is_allowed_by_its_rule_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     """An explicit ALLOW resolves under every backend, so the deny row is not a broken startup.
 
@@ -181,7 +199,7 @@ def test_os_system_is_allowed_by_its_rule_under_every_backend(os_sandbox: str, t
 # --- guard_import -------------------------------------------------------------
 
 
-@pytest.mark.parametrize("os_sandbox", ALL_OS_SANDBOX)
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
 def test_an_unlisted_import_is_refused_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     """`python-import` is a whitelist: a module no rule names cannot be imported.
 
@@ -197,10 +215,11 @@ def test_an_unlisted_import_is_refused_under_every_backend(os_sandbox: str, tmp_
     )
     assert done.returncode != 0, done.stdout
     assert "IMPORTED" not in done.stdout, done.stdout
-    assert f"'{_DENIED_MODULE}' is not allowed by a rule" in done.stderr, done.stderr
+    diagnostics = _diagnostics(done, os_sandbox)
+    assert f"'{_DENIED_MODULE}' is not allowed by a rule" in diagnostics, diagnostics
 
 
-@pytest.mark.parametrize("os_sandbox", ALL_OS_SANDBOX)
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
 def test_a_listed_import_is_accepted_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     """Naming the module in the whitelist lets it through, under the same narrow profile."""
     _skip_unavailable(os_sandbox)
@@ -210,5 +229,60 @@ def test_a_listed_import_is_accepted_under_every_backend(os_sandbox: str, tmp_pa
         f"import {_DENIED_MODULE}\nprint('IMPORTED', {_DENIED_MODULE}.hls_to_rgb(0.0, 0.5, 1.0))\n",
         tmp_path,
     )
-    assert done.returncode == 0, done.stderr
+    assert done.returncode == 0, _diagnostics(done, os_sandbox)
     assert "IMPORTED (1.0, 0.0, 0.0)" in done.stdout, done.stdout
+
+
+# --- what the guards rest on --------------------------------------------------
+
+
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
+def test_program_output_reaches_the_caller_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
+    """What the program prints comes back to whoever launched it.
+
+    Every allow row above reads the program's own output to tell an accepted call
+    from a broken start, so output that never arrives reports as a dead guard. It
+    is also the product itself: a sandbox that swallows ``print()`` runs the code
+    and loses the answer.
+
+    QEMU lost it. The guest's stdout is a pipe, not the serial tty, so CPython
+    block-buffers it, while the sentinels the host filters on are flushed to
+    stderr -- the buffer reached the console after the closing sentinel and the
+    filter dropped it. The guest interpreter now runs unbuffered.
+    """
+    _skip_unavailable(os_sandbox)
+    done = _run(os_sandbox, "python-import=*\n", "print('MARKER-OUT', 40 + 2)\n", tmp_path)
+    assert done.returncode == 0, _diagnostics(done, os_sandbox)
+    assert "MARKER-OUT 42" in done.stdout, done.stdout
+
+
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
+def test_a_profile_naming_its_modules_starts_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
+    """A profile without ``python-import=*`` still gets the interpreter going.
+
+    This is the shape learning mode writes: it records what the run imported, so
+    it never emits a wildcard. The harness defers imports of its own, and any one
+    of those made after arming is charged to these rules -- the sandbox then dies
+    on its own machinery, naming a stdlib module the program never asked for, and
+    no profile the user can write would help.
+    """
+    _skip_unavailable(os_sandbox)
+    done = _run(os_sandbox, "python-import=json\n", "print('STARTED')\n", tmp_path)
+    assert done.returncode == 0, _diagnostics(done, os_sandbox)
+    assert "STARTED" in done.stdout, done.stdout
+
+
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
+def test_a_failing_program_says_why_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
+    """A program that raises exits non-zero *and* reports the cause.
+
+    The exit code alone is what every deny row above already gets from a backend
+    that failed to start. Silence is therefore the expensive failure: it makes a
+    broken sandbox indistinguishable from a working guard, which is how the cause
+    of the QEMU rows stayed unknown while the tests stayed red.
+    """
+    _skip_unavailable(os_sandbox)
+    done = _run(os_sandbox, "python-import=*\n", "raise RuntimeError('MARKER-BOOM')\n", tmp_path)
+    assert done.returncode != 0, done.stdout
+    diagnostics = _diagnostics(done, os_sandbox)
+    assert "MARKER-BOOM" in diagnostics, diagnostics

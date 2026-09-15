@@ -30,7 +30,10 @@ net=ALLOW|*|*|53|*
 
 ignore=.env
 
-# qemu.use_kvm=true
+# Set by test_usage_with_providers: the "qemu-tcg" row refuses acceleration, so the
+# same scenario is covered both on KVM and on emulation -- the latter being what a
+# container gets, since it is not given /dev/kvm.
+qemu.use_kvm=${QEMU_USE_KVM:-true}
 # qemu.memory=2G
 # qemu.virtfs=auto
 # qemu.show_boot_console=true

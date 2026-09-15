@@ -18,7 +18,9 @@ from ._env import (
     ALL_OS_SANDBOX,
     NO_DEFAULT_ROUTE_REASON,
     NO_PROFILE_DNS_REASON,
+    backend_of,
     default_route_available,
+    os_sandbox_params,
     profile_hosts_resolvable,
     provider_skip_reason,
 )
@@ -41,7 +43,12 @@ all_os_sandbox: list[str] = list(ALL_OS_SANDBOX)
 def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
     """Run tst_usage via python-sb with the given OS_SANDBOX provider."""
     env = os.environ.copy()
-    env["OS_SANDBOX"] = os_sandbox.lower()
+    backend = backend_of(os_sandbox)
+    env["OS_SANDBOX"] = backend.lower()
+    # The shared profile reads it as qemu.use_kvm; the "qemu-tcg" row is the same
+    # backend with acceleration refused, which is what a container without /dev/kvm
+    # gets. Set for every row, so the value never leaks in from the caller's shell.
+    env["QEMU_USE_KVM"] = "false" if os_sandbox == "qemu-tcg" else "true"
     env.setdefault("TERM", "dumb")
     env["My_ENV"] = "1"
     # No rule whitelists this, so tst_usage fails if the sandbox can see it.
@@ -56,7 +63,7 @@ def _run_tst_usage(os_sandbox: str) -> subprocess.CompletedProcess:
         "tests.integration_tests.tst_usage",
     ]
     # qemu needs time for VM boot + cloud-init + bootstrap
-    timeout = 600 if os_sandbox == "qemu" else 120
+    timeout = 600 if backend == "qemu" else 120
 
     return subprocess.run(
         cmd,
@@ -82,7 +89,7 @@ def _skip_reason(os_sandbox: str) -> str | None:
     return provider_skip_reason(os_sandbox)
 
 
-@pytest.mark.parametrize("os_sandbox", all_os_sandbox)
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
 def test_usage_with_provider(os_sandbox: str) -> None:
     """Run tst_usage via python-sb for each OS sandbox provider; success = exit code 0."""
     reason = _skip_reason(os_sandbox)
@@ -112,6 +119,9 @@ PARTIAL_MODE_SECRET = "s3cr3t-do-not-leak"
 # because the row costs ten minutes to fail.
 _PARTIAL_MODE_XFAIL: dict[str, tuple[str, bool]] = {
     "qemu": ("partial mode exceeds the 30s configuration timeout while the VM boots", False),
+    # Same VM, emulated: a boot that already overruns the timeout does not get faster
+    # without KVM.
+    "qemu-tcg": ("partial mode exceeds the 30s configuration timeout while the VM boots", False),
 }
 
 
@@ -123,6 +133,8 @@ def _partial_mode_params() -> list:
         if os_sandbox in _PARTIAL_MODE_XFAIL:
             reason, run = _PARTIAL_MODE_XFAIL[os_sandbox]
             marks.append(pytest.mark.xfail(reason=reason, run=run, strict=True))
+        if os_sandbox == "qemu-tcg":
+            marks.append(pytest.mark.slow)
         rows.append(pytest.param(os_sandbox, marks=marks))
     return rows
 
@@ -130,12 +142,14 @@ def _partial_mode_params() -> list:
 def _run_partial_mode(os_sandbox: str) -> subprocess.CompletedProcess:
     """Run tst_env_leak with a plain interpreter, so the parent keeps its real environment."""
     env = os.environ.copy()
-    env["OS_SANDBOX"] = os_sandbox.lower()
+    backend = backend_of(os_sandbox)
+    env["OS_SANDBOX"] = backend.lower()
+    env["QEMU_USE_KVM"] = "false" if os_sandbox == "qemu-tcg" else "true"
     env.setdefault("TERM", "dumb")
     env["My_ENV"] = "1"
     env["SECRET_TOKEN"] = PARTIAL_MODE_SECRET
 
-    timeout = 600 if os_sandbox == "qemu" else 120
+    timeout = 600 if backend == "qemu" else 120
 
     return subprocess.run(
         [sys.executable, "-m", "tests.integration_tests.tst_env_leak"],
