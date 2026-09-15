@@ -75,8 +75,8 @@ integration-tests:
 coverage:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-report=term --cov-report=html
 
-# Uncomment a sample only once it satisfies the acceptance criteria of
-# the samples design spec
+# Uncomment a sample only once it satisfies the acceptance criteria of its
+# design spec.
 # Order of treatment: mcp-server-demo, then mcp-client-demo, then the frameworks.
 SAMPLES = \
 	agno \
