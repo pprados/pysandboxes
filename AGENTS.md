@@ -14,7 +14,7 @@ make unit-tests              # Run unit tests
 make integration-tests       # Run integration tests
 make container-tests         # Run docker/podman/kubernetes tests (needs images + minikube)
 make sample-tests            # Run the samples' own test suites
-make all-tests               # All four of the above (alias: make test)
+make all-tests               # All four of the above
 make gh-tests                # Run the github action locally, through `gh act`
 ```
 
