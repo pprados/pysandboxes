@@ -13,6 +13,7 @@ import platform
 import re
 import sys
 import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Callable
 
@@ -341,3 +342,20 @@ def is_kvm_available() -> bool:
         return os.access(kvm, os.R_OK)
     except OSError:
         return False
+
+
+def qemu_accel_args(os_sandbox_params: Mapping[str, str]) -> list[str]:
+    """Return the QEMU acceleration flags for these ``qemu.*`` parameters.
+
+    Acceleration needs both halves: the profile asking for it and the host
+    exposing ``/dev/kvm``. A container is normally not given the device, so the
+    empty list -- TCG emulation -- is a working configuration, not a failure.
+
+    Args:
+        os_sandbox_params: The ``qemu.*`` rules, without their prefix.
+
+    Returns:
+        ``["-enable-kvm"]`` or an empty list.
+    """
+    use_kvm = str(os_sandbox_params.get("use_kvm", "true")).lower() in ("true", "1", "yes")
+    return ["-enable-kvm"] if use_kvm and is_kvm_available() else []

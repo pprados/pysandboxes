@@ -50,7 +50,10 @@ def test_the_subclass_keeps_the_one_call_site_socket_py_uses() -> None:
 
     guarded = patch_rules(learn=False)["_socket.socket"](_socket.socket)
     assert "__init__" in guarded.__dict__
-    assert socket.socket(socket.AF_INET, socket.SOCK_STREAM).close() is None
+    # Constructing it is the assertion: the recursion this guards against was an
+    # infinite one, so a socket that comes back at all is the proof.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        assert isinstance(probe, socket.socket)
 
 
 def test_connect_through_the_c_class_is_refused(tmp_path: Path) -> None:

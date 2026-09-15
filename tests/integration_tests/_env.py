@@ -6,6 +6,8 @@ import platform
 import socket
 from functools import cache
 
+import pytest  # type: ignore[import-untyped]
+
 from pysandboxes.remote.landlock_daemon import landlock_user_available
 from pysandboxes.remote.tools import (
     get_default_interface,
@@ -18,14 +20,49 @@ PROFILE_RESOLVE_HOSTS = ("www.google.com",)
 
 # Every OS sandbox backend a test can be parametrized over. `none` is excluded: it is the
 # no-op provider, so a guard test would assert nothing there.
+#
+# "qemu-tcg" is not a backend but a second row for the same one, with KVM refused. QEMU
+# takes hardware acceleration when /dev/kvm is there and emulates when it is not, and the
+# two are different enough -- timings, CPU features -- that a green run under one says
+# little about the other. A container is not given /dev/kvm, so emulation is the
+# configuration most CI runs land on, and it must be covered on a developer machine that
+# does have KVM. On a host without /dev/kvm the two rows are identical and the extra one
+# costs a VM boot; that is the price of the row meaning something everywhere else.
 ALL_OS_SANDBOX: tuple[str, ...] = (
     "subprocess",
     "qemu",
+    "qemu-tcg",
     "unshare",
     "firejail",
     "landlock",
     "bwrap",
 )
+
+# Row name -> the value `os-sandbox=` accepts.
+_ROW_TO_BACKEND = {"qemu-tcg": "qemu"}
+
+
+def backend_of(row: str) -> str:
+    """Return the ``os-sandbox=`` backend a parametrized row runs on."""
+    return _ROW_TO_BACKEND.get(row, row)
+
+
+def row_profile_lines(row: str) -> str:
+    """Return the profile lines that make a row differ from its plain backend."""
+    return "qemu.use_kvm=false\n" if row == "qemu-tcg" else ""
+
+
+def os_sandbox_params() -> list:
+    """Return one parametrize row per backend, the emulated one marked ``slow``.
+
+    Emulation is not slightly slower, it is another order of magnitude: the same
+    boot measured 12s accelerated and 102s emulated, which turns the whole suite
+    from minutes into twenty of them on a host that has KVM. The row still runs by
+    default -- it covers what a container does, and a CI run should see it -- but
+    ``-m 'not slow'`` buys it back for a quick local loop.
+    """
+    return [pytest.param(row, marks=[pytest.mark.slow] if row == "qemu-tcg" else []) for row in ALL_OS_SANDBOX]
+
 
 NO_DEFAULT_ROUTE_REASON = "The host exposes no default network interface"
 NO_PROFILE_DNS_REASON = f"Cannot resolve {', '.join(PROFILE_RESOLVE_HOSTS)} (needed to parse the test profile)"
@@ -69,7 +106,7 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
         return "Landlock not available (kernel < 5.13 or not Linux)"
     if os_sandbox == "bwrap" and not which_command("bwrap"):
         return "bwrap not installed"
-    if os_sandbox == "qemu":
+    if backend_of(os_sandbox) == "qemu":
         arch = platform.machine()
         if not which_command(f"qemu-system-{arch}") and not which_command("qemu-system-x86_64"):
             return "QEMU not installed"

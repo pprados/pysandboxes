@@ -450,7 +450,7 @@ class TestDescriptorFallback:
 
     def test_a_non_exception_class_is_not_instantiated(self) -> None:
         """Resolving to dict must not let the stream build an arbitrary object."""
-        descriptor = ("builtins", "dict", "boom", [])
+        descriptor: tuple[str, str, str, list[str]] = ("builtins", "dict", "boom", [])
 
         rebuilt = rebuild_from_descriptor(descriptor, SandBoxProtocolError)
 
@@ -463,7 +463,7 @@ class TestDescriptorFallback:
         Otherwise the descriptor would be a way to forge the very classes
         exception_predicate excludes from the gadget set.
         """
-        descriptor = ("builtins", name, "boom", [])
+        descriptor: tuple[str, str, str, list[str]] = ("builtins", name, "boom", [])
 
         rebuilt = rebuild_from_descriptor(descriptor, SandBoxProtocolError)
 

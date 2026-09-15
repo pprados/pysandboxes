@@ -46,8 +46,8 @@ from .qemu_guest_console_io import start_qemu_serial_drain_tasks
 from .qemu_image import (
     ensure_image,
     get_default_image_path,
-    is_kvm_available,
     normalize_qemu_m_memory_arg,
+    qemu_accel_args,
 )
 from .qemu_setup import (
     GUEST_CONFIG_MOUNT,
@@ -1002,12 +1002,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         )
 
         # Keys match parse_rules: "qemu.foo=bar" → os_sandbox_params["foo"] (no "qemu." prefix)
-        use_kvm = all_rules.os_sandbox_params.get("use_kvm", "true").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
-        enable_kvm = ["-enable-kvm"] if use_kvm and is_kvm_available() else []
+        enable_kvm = qemu_accel_args(all_rules.os_sandbox_params)
 
         # Default 2 GiB: Ubuntu cloud images + Python need ~2G to avoid OOM (see Ubuntu QEMU docs)
         raw_memory = all_rules.os_sandbox_params.get("memory", "2048").strip()

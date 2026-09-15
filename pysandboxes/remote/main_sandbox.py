@@ -23,6 +23,7 @@ import socket as _socket_mod
 import subprocess
 import sys
 import time
+import traceback
 from logging import StreamHandler
 from pathlib import Path
 from typing import Any, cast
@@ -166,7 +167,13 @@ def run_guest(process_config: DaemonParameters) -> int:
             os.environ["OS_SANDBOX"] = "subprocess"
             _qemu_show_boot_console_guest_trace(process_config, "run_guest: before python_in_sb")
             from .python_in_sb import python_in_sb
-            from .vm_sse_daemon import (
+
+            # The two sentinels, from the module that defines them rather than from
+            # vm_sse_daemon, which re-exports them: that one pulls the subprocess daemon
+            # in, and the guest must not load a daemon (see the preimport block in
+            # main()). Both modules are preimported before arming, so neither import
+            # reaches the user's python-import rules.
+            from .qemu_guest_console_io import (
                 PYTHON_OUTPUT_END,
                 PYTHON_OUTPUT_START,
             )
@@ -174,6 +181,21 @@ def run_guest(process_config: DaemonParameters) -> int:
             print(PYTHON_OUTPUT_START, flush=True, file=sys.stderr)
             try:
                 rc = python_in_sb(all_rules, list(python_main_args))
+            except Exception:
+                # The host forwards only what sits between the two sentinels
+                # (wait_process_and_filter_console). An exception raised here is
+                # printed by the interpreter *after* the finally below wrote
+                # PYTHON_OUTPUT_END, so it falls outside that window and the run
+                # reports `returncode=1, stderr=''` -- a guest failure with no
+                # cause attached. Report it while the window is still open.
+                #
+                # traceback is imported at module level on purpose: importing it here
+                # would happen after arming, be charged to the user's python-import
+                # rules, and a profile that does not name it would raise *that* denial
+                # instead of the one being reported -- the reporting path erasing the
+                # failure it exists to describe.
+                traceback.print_exc(file=sys.stderr)
+                raise
             finally:
                 print(PYTHON_OUTPUT_END, flush=True, file=sys.stderr)
         else:
@@ -403,12 +425,25 @@ def main() -> int:
         if getattr(process_config, "guest_run_dir", None):
             os.environ.setdefault("TERM", "xterm-256color")
             os.environ.setdefault("FORCE_COLOR", "1")
-    if sandboxes_parsed._python_sb and not python_main_args:
+    if sandboxes_parsed._python_sb or python_main_args:
         # python-sb runs the user program in this process. Load its entry point
         # before arming: once the guards are active, the stdlib imports of
         # python_in_sb (os, logging, pathlib, ...) would be charged to the
         # user's python-import rules and denied.
+        #
+        # The guest reaches python_in_sb through run_guest() instead of the CLI
+        # flag -- it is started as `main_sandbox --_named-pipe ...`, so
+        # `_python_sb` is False there and only `python_main_args` marks the path.
+        # Importing it after arming captures the *patched* builtins into
+        # python_in_sb._RAW_COMPILE, and every script run in the VM then dies on
+        # `builtins.compile() is denied by the API guard`.
+        #
+        # qemu_guest_console_io goes with it: run_guest() reads the two console
+        # sentinels from it, and its own stdlib imports (abc, re, time, ...) would be
+        # charged to the user's rules just the same -- a profile naming its modules one
+        # by one, as a learned one does, then dies on the harness's imports.
         import pysandboxes.remote.python_in_sb  # noqa: F401
+        import pysandboxes.remote.qemu_guest_console_io  # noqa: F401
     # The transport pickles an exception together with its tblib traceback, and
     # catch_stdio imports tblib from inside its own except handler. That import
     # belongs to the framework, not to the user: a learned profile can never

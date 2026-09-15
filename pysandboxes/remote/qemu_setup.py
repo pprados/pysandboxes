@@ -272,11 +272,16 @@ def _bootstrap_script_content(
             ]
         )
     # Do not use "|| true" on main_sandbox: it masked segfault exit codes (e.g. 139).
+    # "-u": the guest's stdout is a pipe (cloud-init), not the serial tty, so CPython
+    # block-buffers it. The sentinels the host filters on are written to stderr with an
+    # explicit flush, so a buffered stdout is only flushed at interpreter exit -- after
+    # PYTHON_OUTPUT_END -- and every print() the user's program made is dropped by the
+    # console filter. Unbuffered keeps the program's output inside the forwarded window.
     lines.extend(
         [
             f'cd "{guest_cwd}" || true',
             "set +e",
-            env_py + '"$PYTHON_EXE" -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH"',
+            env_py + '"$PYTHON_EXE" -u -m pysandboxes.remote.main_sandbox --_named-pipe "$CONFIG_PATH"',
             "GUEST_RC=$?",
             "set -e",
             'echo "[pysandbox-bootstrap] main_sandbox finished with exit code $GUEST_RC" >&2',
