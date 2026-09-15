@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format format_diff lint lint_diff claude-lint test tests coverage \
+.PHONY: all format format_diff lint lint_diff claude-lint coverage \
 	unit-tests integration-tests container-tests sample-tests all-tests gh-tests \
 	spell_check spell_fix clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \

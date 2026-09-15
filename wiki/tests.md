@@ -32,7 +32,7 @@ Everything below is derived from the test sources, not from intent:
 | Containers | `make container-tests` | `tests/containers_tests/` — Docker, Podman, Kubernetes (minikube) |
 | Samples | `make sample-tests` | each sample's own test suite |
 
-`make all-tests` (alias `make test`) chains all four.
+`make all-tests` chains all four.
 
 ## A. Guard families
 
