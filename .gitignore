@@ -226,10 +226,8 @@ PPR*
 /tmp/
 
 # ---------------------------------------------------------------------------
-# the agent workspaces: nothing is versioned -- plans, specs and working workspaces
-# alike are local to the clone
+# Per-session working notes: local to the clone, never versioned
 # ---------------------------------------------------------------------------
-the agent workspaces/*
 _tasks/*
 # lessons.md is the one versioned exception: it carries repo-level rules, not
 # session workspace. Must stay last, after every _tasks pattern above.
