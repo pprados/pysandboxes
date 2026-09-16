@@ -597,8 +597,8 @@ def test_pickle_loads_and_its_twin_are_refused_end_to_end(tmp_path: Path) -> Non
         "import _pickle\n"
         "from pysandboxes.e import SandBoxError\n"
         "blob = pickle.dumps({'harmless': 1})\n"
-        "for tag, call in ((\"pickle.loads\", lambda: pickle.loads(blob)),\n"
-        "                  (\"_pickle.loads\", lambda: _pickle.loads(blob))):\n"
+        'for tag, call in (("pickle.loads", lambda: pickle.loads(blob)),\n'
+        '                  ("_pickle.loads", lambda: _pickle.loads(blob))):\n'
         "    try:\n"
         "        call()\n"
         "        print(tag, 'ALLOWED')\n"

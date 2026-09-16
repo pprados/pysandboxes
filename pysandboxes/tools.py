@@ -218,6 +218,7 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 
 # %% -----------------------
 
+
 def is_in_sandbox() -> bool:
     """Check if currently executing inside a sandbox.
 
