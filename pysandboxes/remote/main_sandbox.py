@@ -458,8 +458,12 @@ def main() -> int:
 
     pysandboxes.os_sandbox = all_rules.os_sandbox
     python_main_args = getattr(process_config, "python_main_args", ()) or ()
-    if python_main_args:
-        # QEMU guest: cwd-based root_path for rules; env restricted to profile.
+    in_guest = bool(getattr(process_config, "guest_run_dir", None))
+    if python_main_args or in_guest:
+        # The guest's environment is the VM's, not the caller's: the other backends narrow
+        # it host-side by choosing the child's env, which a boot cannot do. Both guest paths
+        # need this, the daemon one included -- without it partial mode kept the VM's own
+        # USER and never saw the variables the profile whitelists.
         # Must run before activate_sandboxes once (second activate would call
         # tempfile.mkdtemp() under /tmp while guards are already active → RuleFileNotFoundError).
         allowed_env_keys = set(all_rules.envs.keys())
@@ -468,6 +472,8 @@ def main() -> int:
                 del os.environ[key]
         for k, v in dict(all_rules.envs).items():
             os.environ[k] = str(v) if v is not None else ""
+    if python_main_args:
+        # QEMU guest running the program itself: rules are rooted on the cwd.
         all_rules = all_rules._replace(root_path=Path.cwd())
         process_config = process_config._replace(all_rules=all_rules)
         # Profile allowlist drops bootstrap exports; Rich still needs FORCE_COLOR on serial.
