@@ -23,6 +23,7 @@ KO: str = "\u274c\ufe0f "
 
 RANGETEST = 1
 
+
 def init_log_level(use_rich: bool = True) -> None:
     handlers: list[logging.Handler] = []
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"

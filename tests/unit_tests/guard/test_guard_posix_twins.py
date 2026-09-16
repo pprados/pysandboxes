@@ -82,8 +82,8 @@ def test_posix_open_is_refused_like_builtin_open(tmp_path: Path) -> None:
         "import posix\n"
         "from pysandboxes.e import SandBoxError\n"
         f"target = {str(secret)!r}\n"
-        "for tag, call in ((\"open\", lambda: open(target).close()),\n"
-        "                 (\"posix.open\", lambda: posix.close(posix.open(target, 0)))):\n"
+        'for tag, call in (("open", lambda: open(target).close()),\n'
+        '                 ("posix.open", lambda: posix.close(posix.open(target, 0)))):\n'
         "    try:\n"
         "        call()\n"
         "        print(tag, 'ALLOWED')\n"
