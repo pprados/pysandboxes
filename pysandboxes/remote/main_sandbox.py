@@ -80,8 +80,10 @@ def _redirect_guest_stderr(guest_run_dir: str | None) -> int | None:
     """
     if not guest_run_dir:
         return None
+    from .qemu_guest_console_io import GUEST_STDERR_FILE
+
     try:
-        handle = Path(guest_run_dir).joinpath("stderr").open("w", encoding="utf-8")
+        handle = Path(guest_run_dir).joinpath(GUEST_STDERR_FILE).open("w", encoding="utf-8")
     except OSError as e:
         logger.warning("QEMU guest: cannot open the stderr channel: %s", e)
         return None

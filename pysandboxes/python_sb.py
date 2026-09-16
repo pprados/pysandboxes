@@ -26,6 +26,7 @@ from .remote.client_subprocess_sse_daemon import (
 from .remote.daemon_parameters import DaemonParameters
 from .remote.none_daemon import NoneDaemon
 from .remote.parse_cpython_args import parse_python_cmd_line
+from .remote.qemu_guest_console_io import GUEST_STDERR_FILE, GuestStderrTail
 from .remote.python_in_sb import convert_extra_rules
 from .remote.vm_sse_daemon import VMSSEDaemon
 from .sb_types import Envs
@@ -241,21 +242,26 @@ def main() -> int:
                         qemu_console_path.resolve(),
                     )
                 try:
-                    process = await launch_sandbox(**launch_kwargs)
-                    try:
-                        if process.stdout is None or process.stderr is None:
-                            return await process.wait()
-                        # Full VM console only when qemu.show_boot_console=true (profile).
-                        forward_all = show_boot
-                        return await vm.wait_process_and_filter_console(
-                            process,
-                            forward_all=forward_all,
-                            tee_file=qemu_console_file,
-                        )
-                    finally:
-                        kill_slirp = getattr(vm, "_kill_slirp", None)
-                        if callable(kill_slirp):
-                            kill_slirp()
+                    # The guest writes its stderr to the shared run dir rather than to
+                    # the console, which QEMU merges with stdout. Forward it as the guest
+                    # produces it, so a long run reports on stderr while it is running,
+                    # as it would without a VM.
+                    with GuestStderrTail(Path(tmpdir) / GUEST_STDERR_FILE):
+                        process = await launch_sandbox(**launch_kwargs)
+                        try:
+                            if process.stdout is None or process.stderr is None:
+                                return await process.wait()
+                            # Full VM console only when qemu.show_boot_console=true (profile).
+                            forward_all = show_boot
+                            return await vm.wait_process_and_filter_console(
+                                process,
+                                forward_all=forward_all,
+                                tee_file=qemu_console_file,
+                            )
+                        finally:
+                            kill_slirp = getattr(vm, "_kill_slirp", None)
+                            if callable(kill_slirp):
+                                kill_slirp()
                 finally:
                     if qemu_console_file is not None:
                         qemu_console_file.close()
@@ -285,13 +291,6 @@ def main() -> int:
         # process status (e.g. 9p latency; QEMU may return non-zero on shutdown I/O).
         if isinstance(os_provider, VMSSEDaemon):
             vm = cast(VMSSEDaemon, os_provider)
-            # The guest writes its stderr to the shared run dir rather than to the
-            # console, which QEMU merges with stdout. Replay it here, now that the VM
-            # has stopped: 9p only shows the host what the guest already flushed.
-            guest_stderr_file = Path(tmpdir) / "stderr"
-            if guest_stderr_file.exists():
-                sys.stderr.write(guest_stderr_file.read_text(encoding="utf-8", errors="replace"))
-                sys.stderr.flush()
             exitcode_file = Path(tmpdir) / "exitcode"
             guest_rc = vm.read_guest_exitcode(exitcode_file)
             logger.debug(

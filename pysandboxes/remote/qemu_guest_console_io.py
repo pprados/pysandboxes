@@ -9,13 +9,18 @@ import asyncio
 import logging
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import TextIO
 
-# QEMU console sentinels: guest prints these to stderr; host forwards only lines between them
+# QEMU console sentinels: guest prints these to stdout; host forwards only lines between them
 PYTHON_OUTPUT_START = "[PYSANDBOXES]PYTHON_OUTPUT_START"
 PYTHON_OUTPUT_END = "[PYSANDBOXES]PYTHON_OUTPUT_END"
+
+# The guest program's stderr, in the 9p-shared run dir next to ``exitcode``. The console
+# cannot carry it: QEMU multiplexes it onto the same host stream as stdout.
+GUEST_STDERR_FILE = "stderr"
 
 # QEMU console filter state: 0=waiting for start sentinel, 1=forwarding, 2=stopped
 _FORWARD_STATE_WAITING = 0
@@ -210,6 +215,58 @@ def start_qemu_serial_drain_tasks(
             name="qemu-serial-stderr",
         ),
     ]
+
+
+class GuestStderrTail:
+    """Forward the guest's stderr file to the host's stderr while the VM is still running.
+
+    The guest writes to a file in the 9p-shared run dir, and the host sees those writes
+    as the guest makes them -- measured on a probe: a line written 13s into a 53s run
+    reached the host at 13s, not at teardown. Reading the file only once the VM stopped
+    would hold a long run's diagnostics back until the end, where a program run without
+    a VM reports them as they happen.
+
+    ``sys.stderr`` is line-buffered in the guest, so each line reaches the descriptor --
+    and the share -- on its own.
+    """
+
+    def __init__(self, path: Path, *, out: TextIO | None = None, interval_s: float = 0.2) -> None:
+        self._path = path
+        self._out = out if out is not None else sys.stderr
+        self._interval_s = interval_s
+        self._offset = 0
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def _drain(self) -> None:
+        """Copy whatever appeared since the last pass; a missing file just means nothing yet."""
+        try:
+            with self._path.open("r", encoding="utf-8", errors="replace") as f:
+                f.seek(self._offset)
+                chunk = f.read()
+                self._offset = f.tell()
+        except OSError:
+            return
+        if chunk:
+            self._out.write(chunk)
+            self._out.flush()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self._interval_s):
+            self._drain()
+
+    def __enter__(self) -> "GuestStderrTail":
+        self._thread = threading.Thread(target=self._loop, name="qemu-guest-stderr", daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+        # What the guest flushed between the last pass and the halt, including the
+        # traceback of a program that died: the run's most useful output is last.
+        self._drain()
 
 
 def read_qemu_guest_exitcode(
