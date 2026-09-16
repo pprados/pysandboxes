@@ -26,7 +26,8 @@ host without DNS.
 
 The last section covers what the guards rest on rather than the guards themselves:
 the program's output comes back, a profile that names its modules one by one still
-starts, and a failure says why. Each pins a defect that made every QEMU row here
+starts, a failure says why, and stdout and stderr reach the caller apart from each
+other. Each of the first three pins a defect that made every QEMU row here
 exit 1 with an empty stderr -- read as "the VM does not come up", for as long as
 nothing reported the cause. None of the three is specific to QEMU: a VM only made
 them visible, by putting a console filter and a second interpreter in the way.
@@ -119,19 +120,6 @@ def _skip_unavailable(os_sandbox: str) -> None:
         pytest.skip(reason)
 
 
-def _diagnostics(done: "subprocess.CompletedProcess[str]", os_sandbox: str) -> str:
-    """Return the stream a guard's refusal message lands on.
-
-    Every process-based backend keeps stdout and stderr apart, so the message is on
-    stderr. QEMU cannot: ``-nographic`` multiplexes the guest's serial console onto a
-    single stream, and the host forwards that stream to its own stdout. The two are
-    already merged by the time the test sees them, and no profile rule can undo it --
-    the multiplexing is the console, not a setting. Asserting on stderr alone would
-    demand a separation the architecture does not provide.
-    """
-    return done.stdout + done.stderr if backend_of(os_sandbox) == "qemu" else done.stderr
-
-
 # --- guard_eval ---------------------------------------------------------------
 
 
@@ -141,7 +129,7 @@ def test_eval_is_refused_under_every_backend(os_sandbox: str, tmp_path: Path) ->
     _skip_unavailable(os_sandbox)
     done = _run(os_sandbox, "python-import=*\n", "print(eval('40 + 2'))\n", tmp_path)
     assert done.returncode != 0, done.stdout
-    diagnostics = _diagnostics(done, os_sandbox)
+    diagnostics = done.stderr
     assert "dynamic-code" in diagnostics, diagnostics
 
 
@@ -168,7 +156,7 @@ def test_os_system_is_refused_under_every_backend(os_sandbox: str, tmp_path: Pat
     _skip_unavailable(os_sandbox)
     done = _run(os_sandbox, "python-import=*\n", "import os\nos.system('true')\n", tmp_path)
     assert done.returncode != 0, done.stdout
-    diagnostics = _diagnostics(done, os_sandbox)
+    diagnostics = done.stderr
     assert "denied by the API guard" in diagnostics, diagnostics
 
 
@@ -215,7 +203,7 @@ def test_an_unlisted_import_is_refused_under_every_backend(os_sandbox: str, tmp_
     )
     assert done.returncode != 0, done.stdout
     assert "IMPORTED" not in done.stdout, done.stdout
-    diagnostics = _diagnostics(done, os_sandbox)
+    diagnostics = done.stderr
     assert f"'{_DENIED_MODULE}' is not allowed by a rule" in diagnostics, diagnostics
 
 
@@ -229,7 +217,7 @@ def test_a_listed_import_is_accepted_under_every_backend(os_sandbox: str, tmp_pa
         f"import {_DENIED_MODULE}\nprint('IMPORTED', {_DENIED_MODULE}.hls_to_rgb(0.0, 0.5, 1.0))\n",
         tmp_path,
     )
-    assert done.returncode == 0, _diagnostics(done, os_sandbox)
+    assert done.returncode == 0, done.stderr
     assert "IMPORTED (1.0, 0.0, 0.0)" in done.stdout, done.stdout
 
 
@@ -252,7 +240,7 @@ def test_program_output_reaches_the_caller_under_every_backend(os_sandbox: str, 
     """
     _skip_unavailable(os_sandbox)
     done = _run(os_sandbox, "python-import=*\n", "print('MARKER-OUT', 40 + 2)\n", tmp_path)
-    assert done.returncode == 0, _diagnostics(done, os_sandbox)
+    assert done.returncode == 0, done.stderr
     assert "MARKER-OUT 42" in done.stdout, done.stdout
 
 
@@ -268,7 +256,7 @@ def test_a_profile_naming_its_modules_starts_under_every_backend(os_sandbox: str
     """
     _skip_unavailable(os_sandbox)
     done = _run(os_sandbox, "python-import=json\n", "print('STARTED')\n", tmp_path)
-    assert done.returncode == 0, _diagnostics(done, os_sandbox)
+    assert done.returncode == 0, done.stderr
     assert "STARTED" in done.stdout, done.stdout
 
 
@@ -284,5 +272,27 @@ def test_a_failing_program_says_why_under_every_backend(os_sandbox: str, tmp_pat
     _skip_unavailable(os_sandbox)
     done = _run(os_sandbox, "python-import=*\n", "raise RuntimeError('MARKER-BOOM')\n", tmp_path)
     assert done.returncode != 0, done.stdout
-    diagnostics = _diagnostics(done, os_sandbox)
+    diagnostics = done.stderr
     assert "MARKER-BOOM" in diagnostics, diagnostics
+
+
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
+def test_the_two_streams_stay_apart_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
+    """What the program wrote to stdout comes back on stdout, and stderr on stderr.
+
+    A process-based backend gets this for free. QEMU does not: ``-nographic``
+    multiplexes the guest console onto one host stream, which used to hand the caller
+    both outputs merged on stdout -- a program behaving differently for having been
+    run in a VM. The guest now sends its stderr through the shared run dir instead.
+
+    Neither stream is required to be empty: a backend is free to warn on stderr. The
+    claim is that a marker never crosses over.
+    """
+    _skip_unavailable(os_sandbox)
+    script = "import sys\nprint('MARKER-OUT')\nprint('MARKER-ERR', file=sys.stderr, flush=True)\n"
+    done = _run(os_sandbox, "python-import=sys\n", script, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert "MARKER-OUT" in done.stdout, done.stdout
+    assert "MARKER-ERR" in done.stderr, done.stderr
+    assert "MARKER-ERR" not in done.stdout, done.stdout
+    assert "MARKER-OUT" not in done.stderr, done.stderr

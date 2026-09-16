@@ -23,7 +23,9 @@ _FORWARD_STATE_FORWARDING = 1
 _FORWARD_STATE_STOPPED = 2
 
 # Strip kernel/cloud-init style prefix e.g. "[   12.525772] cloud-init[672]: "
-_QEMU_CONSOLE_PREFIX = re.compile(r"^\s*\[\s*\d+\.\d+\]\s*[\w-]+\[\d+\]:")
+# The trailing " ?" matters: without it every forwarded line keeps the space that
+# separated the prefix from the text, and `print(42)` reaches the caller as " 42".
+_QEMU_CONSOLE_PREFIX = re.compile(r"^\s*\[\s*\d+\.\d+\]\s*[\w-]+\[\d+\]: ?")
 
 # readline() can block forever on QEMU -nographic if a line never ends with \n;
 # read(max_chunk) returns as soon as any data or EOF arrives (no newline required).

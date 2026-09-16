@@ -285,6 +285,13 @@ def main() -> int:
         # process status (e.g. 9p latency; QEMU may return non-zero on shutdown I/O).
         if isinstance(os_provider, VMSSEDaemon):
             vm = cast(VMSSEDaemon, os_provider)
+            # The guest writes its stderr to the shared run dir rather than to the
+            # console, which QEMU merges with stdout. Replay it here, now that the VM
+            # has stopped: 9p only shows the host what the guest already flushed.
+            guest_stderr_file = Path(tmpdir) / "stderr"
+            if guest_stderr_file.exists():
+                sys.stderr.write(guest_stderr_file.read_text(encoding="utf-8", errors="replace"))
+                sys.stderr.flush()
             exitcode_file = Path(tmpdir) / "exitcode"
             guest_rc = vm.read_guest_exitcode(exitcode_file)
             logger.debug(
