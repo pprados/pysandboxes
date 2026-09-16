@@ -13,15 +13,17 @@ The redirect is deliberately tested at the descriptor level rather than through
 in the same file as a ``print()``, and only ``os.dup2`` gives that.
 """
 
+import io
 import os
 import re
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 from pysandboxes.remote.main_sandbox import _redirect_guest_stderr, _restore_guest_stderr
-from pysandboxes.remote.qemu_guest_console_io import _QEMU_CONSOLE_PREFIX
+from pysandboxes.remote.qemu_guest_console_io import _QEMU_CONSOLE_PREFIX, GuestStderrTail
 
 
 @pytest.fixture
@@ -91,6 +93,36 @@ def test_restoring_nothing_is_a_no_op(restore_fd2: None) -> None:
     _restore_guest_stderr(None)
     after = os.fstat(2)
     assert (after.st_dev, after.st_ino) == (before.st_dev, before.st_ino)
+
+
+def test_the_tail_forwards_before_the_vm_stops(tmp_path: Path) -> None:
+    """The point of the tail: a line written mid-run reaches the caller mid-run.
+
+    Reading the file only once the VM stopped would hold a long run's diagnostics back
+    until the end, where the same program without a VM reports them as they happen.
+    """
+    out = io.StringIO()
+    path = tmp_path / "stderr"
+
+    with GuestStderrTail(path, out=out, interval_s=0.01):
+        path.write_text("EARLY\n")
+        deadline = time.monotonic() + 5.0
+        while "EARLY" not in out.getvalue() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert "EARLY" in out.getvalue(), "the tail waited for the run to end"
+        path.write_text("EARLY\nLATE\n")
+
+    # Leaving the block drains what the guest flushed after the last pass, which is
+    # where the traceback of a program that died sits.
+    assert out.getvalue() == "EARLY\nLATE\n"
+
+
+def test_the_tail_survives_a_run_that_wrote_nothing(tmp_path: Path) -> None:
+    """A program with a silent stderr never creates the file; that is not an error."""
+    out = io.StringIO()
+    with GuestStderrTail(tmp_path / "absent", out=out, interval_s=0.01):
+        time.sleep(0.05)
+    assert out.getvalue() == ""
 
 
 @pytest.mark.parametrize(
