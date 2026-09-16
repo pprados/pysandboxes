@@ -4,8 +4,8 @@
 
 Runs the sandbox inside a QEMU VM. Uses -net user + hostfwd for SSE.
 Virtio-9p exposes file_rules root at /app (same strategy as bwrap) and
-the run dir (named pipe for config) at /mnt/pysandbox_run. Guest runs
-main_sandbox --_named-pipe to read config from the pipe.
+the run dir at /mnt/pysandbox_run. Guest runs main_sandbox --_named-pipe,
+which reads the config as a regular file on its own 9p mount.
 """
 
 import asyncio
@@ -66,7 +66,7 @@ QEMU_LOOP_FOR_PING = 200
 
 logger = logging.getLogger(__name__)
 
-# When True, config is written under ./tmp/pysb_config for inspection; else use named pipe to avoid race.
+# When True, config is written under ./tmp/pysb_config for inspection; else under the run dir.
 DEBUG_CONFIG = DEBUG or False
 
 
@@ -1120,9 +1120,9 @@ class QemuSSEDaemon(VMSSEDaemon):
     ) -> None:
         """Build NoCloud ISO (bootstrap + pipe_name), then launch QEMU.
 
-        Guest mounts /app (file_rules root) and /mnt/pysandbox_run (temp with FIFO)
-        via 9p, runs main_sandbox --_named-pipe; host writes config to the pipe
-        when the guest opens it (same flow as bwrap/unshare).
+        Guest mounts /app (file_rules root), /mnt/pysandbox_run and the config dir via 9p,
+        then runs main_sandbox --_named-pipe on the config file. Unlike bwrap/unshare, the
+        host cannot hand it over through a FIFO: the guest is on the other side of the VM.
         """
         from .client_subprocess_sse_daemon import get_callable_info
 
@@ -1165,24 +1165,23 @@ class QemuSSEDaemon(VMSSEDaemon):
         env = {**env, **extra_envs}
 
         temp = pipe_path.parent
-        # Avoid race on param files: DEBUG_CONFIG → file under ./tmp/ for inspection; else named pipe.
-        if DEBUG_CONFIG:
-            config_dir = Path("tmp") / "pysb_config"
-            config_dir.mkdir(parents=True, exist_ok=True)
-            # serialization only
-            (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
-        else:
-            config_dir = None
+        # A FIFO lives on the host, where the guest can never present itself as a reader, so
+        # the config travels as a regular file on a 9p mount -- the same transport the
+        # python_sb path uses. DEBUG_CONFIG only moves it under ./tmp/ for inspection.
+        config_dir = Path("tmp") / "pysb_config" if DEBUG_CONFIG else temp / "pysb_config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        # serialization only
+        (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
 
         cmd, _ = self._build_qemu_cmd(all_rules, temp, process_config, port, pipe_path, config_dir=config_dir)
 
         logger.debug("Launch QEMU: %s", " ".join((repr(a) if " " in a else a for a in cmd)))
 
-        # When DEBUG_CONFIG, config is in 9p-mounted dir; else launch_sandbox writes to FIFO
+        # Config is in the 9p-mounted dir, so there is nothing to write to a FIFO.
         def _noop_config_writer(_: DaemonParameters) -> None:
             pass
 
-        config_writer = _noop_config_writer if config_dir is not None else None
+        config_writer = _noop_config_writer
         show_boot = self.show_boot_console_truthy(all_rules)
         # When show_boot_console is false (default), redirect QEMU stdout/stderr so
         # boot/kernel/cloud-init traces are hidden; Python output is streamed via SSE.
