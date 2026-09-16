@@ -66,6 +66,47 @@ def _qemu_show_boot_console_guest_trace(process_config: DaemonParameters, msg: s
     print(f"[PYSANDBOX_DIAG] {msg}", file=sys.stderr, flush=True)
 
 
+def _redirect_guest_stderr(guest_run_dir: str | None) -> int | None:
+    """Point the guest's stderr at ``<run dir>/stderr`` and return the saved fd.
+
+    QEMU multiplexes the guest console onto a single host stream, so a program run in
+    the VM had its stdout and its stderr merged, where the same program run without a
+    VM keeps them apart. The run directory is already shared with the host over 9p --
+    it is how ``exitcode`` travels -- which makes it the one channel to the host that
+    does not go through the console.
+
+    Returns ``None`` when there is no run dir to write to: the caller then keeps the
+    console stderr, which is the merged behaviour this replaces.
+    """
+    if not guest_run_dir:
+        return None
+    try:
+        handle = Path(guest_run_dir).joinpath("stderr").open("w", encoding="utf-8")
+    except OSError as e:
+        logger.warning("QEMU guest: cannot open the stderr channel: %s", e)
+        return None
+    sys.stderr.flush()
+    saved_fd = os.dup(2)
+    # The redirect is on the file descriptor, not on sys.stderr: a child process, or a
+    # C extension writing to fd 2 directly, must land in the same place as a print().
+    os.dup2(handle.fileno(), 2)
+    handle.close()
+    return saved_fd
+
+
+def _restore_guest_stderr(saved_stderr_fd: int | None) -> None:
+    """Restore the console stderr, after flushing the run dir file for the host."""
+    if saved_stderr_fd is None:
+        return
+    sys.stderr.flush()
+    try:
+        os.fsync(2)
+    except OSError:
+        pass
+    os.dup2(saved_stderr_fd, 2)
+    os.close(saved_stderr_fd)
+
+
 def _debug_log() -> None:
     from ..main_logger import config_log
 
@@ -178,16 +219,21 @@ def run_guest(process_config: DaemonParameters) -> int:
                 PYTHON_OUTPUT_START,
             )
 
-            print(PYTHON_OUTPUT_START, flush=True, file=sys.stderr)
+            # Sentinels on stdout, not stderr: the user program's stderr is about to be
+            # redirected to the shared run dir, so stderr no longer reaches the console
+            # the host filters. Both streams are unbuffered here ("-u" in the bootstrap),
+            # so the window still opens before the first print() of the program.
+            print(PYTHON_OUTPUT_START, flush=True)
+            saved_stderr_fd = _redirect_guest_stderr(guest_run_dir)
             try:
                 rc = python_in_sb(all_rules, list(python_main_args))
             except Exception:
-                # The host forwards only what sits between the two sentinels
-                # (wait_process_and_filter_console). An exception raised here is
-                # printed by the interpreter *after* the finally below wrote
-                # PYTHON_OUTPUT_END, so it falls outside that window and the run
-                # reports `returncode=1, stderr=''` -- a guest failure with no
-                # cause attached. Report it while the window is still open.
+                # The host reads the guest's stderr from the shared run dir, and only
+                # until the interpreter exits. An exception raised here is printed by
+                # the interpreter *after* the finally below restored the real stderr,
+                # so it would land on the console instead of the caller's stderr and
+                # the run would report `returncode=1, stderr=''` -- a guest failure
+                # with no cause attached. Report it while the redirect still holds.
                 #
                 # traceback is imported at module level on purpose: importing it here
                 # would happen after arming, be charged to the user's python-import
@@ -197,7 +243,8 @@ def run_guest(process_config: DaemonParameters) -> int:
                 traceback.print_exc(file=sys.stderr)
                 raise
             finally:
-                print(PYTHON_OUTPUT_END, flush=True, file=sys.stderr)
+                _restore_guest_stderr(saved_stderr_fd)
+                print(PYTHON_OUTPUT_END, flush=True)
         else:
             rc = asyncio.run(run_server(process_config))
         _write_exitcode(rc)

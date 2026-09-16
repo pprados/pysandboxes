@@ -273,10 +273,9 @@ def _bootstrap_script_content(
         )
     # Do not use "|| true" on main_sandbox: it masked segfault exit codes (e.g. 139).
     # "-u": the guest's stdout is a pipe (cloud-init), not the serial tty, so CPython
-    # block-buffers it. The sentinels the host filters on are written to stderr with an
-    # explicit flush, so a buffered stdout is only flushed at interpreter exit -- after
-    # PYTHON_OUTPUT_END -- and every print() the user's program made is dropped by the
-    # console filter. Unbuffered keeps the program's output inside the forwarded window.
+    # block-buffers it. Both sentinels and the program's own output travel on that
+    # stdout, so buffering holds the whole window back until the interpreter exits and
+    # the caller sees nothing of a long run until it is over. Unbuffered streams it.
     lines.extend(
         [
             f'cd "{guest_cwd}" || true',
