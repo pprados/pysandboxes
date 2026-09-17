@@ -25,8 +25,8 @@ from .private_loop import (
 )
 from .remote.parameters import (
     TIMEOUT_FOR_START_DAEMON,
-    TIMEOUT_FOR_START_DAEMON_QEMU,
     TIMEOUT_FOR_STOP_DAEMON,
+    qemu_start_timeout,
 )
 from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sandbox
 
@@ -283,13 +283,17 @@ def start_daemon(
                 start_event.set()
                 logger.debug("Start event set")
 
+        start_timeout = (
+            qemu_start_timeout(all_rules.os_sandbox_params)
+            if all_rules.os_sandbox == "qemu"
+            else float(TIMEOUT_FOR_START_DAEMON)
+        )
         logger.info(
             "Starting %s daemon (waiting up to %ss for ready)",
             all_rules.os_sandbox,
-            (TIMEOUT_FOR_START_DAEMON_QEMU if all_rules.os_sandbox == "qemu" else TIMEOUT_FOR_START_DAEMON),
+            start_timeout,
         )
         loop.call_soon_threadsafe(lambda: loop.create_task(_start_daemon_and_signal(), name="Start daemon"))
-        start_timeout = TIMEOUT_FOR_START_DAEMON_QEMU if all_rules.os_sandbox == "qemu" else TIMEOUT_FOR_START_DAEMON
         if not start_event.wait(timeout=start_timeout):
             raise RuntimeError(
                 f"Daemon failed to start within {start_timeout}s. "

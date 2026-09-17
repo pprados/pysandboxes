@@ -9,6 +9,11 @@ and process lifecycle control.
 All timing values are in seconds unless otherwise specified.
 """
 
+import logging
+from typing import Any, Mapping
+
+logger = logging.getLogger(__name__)
+
 # Polling and retry configuration
 POLLING_DELAY = 0.1  # Base delay between polling operations
 INTERVAL_FOR_RETRY_CONNECTION = 0.5  # Connection retry delay
@@ -23,6 +28,33 @@ LOOP_FOR_PING = 100  # Try to ping how many times?
 TIMEOUT_FOR_START_DAEMON = 30  # seconds
 # QEMU needs VM boot (QEMU_BOOT_DELAY) + ping loop; allow up to 90s
 TIMEOUT_FOR_START_DAEMON_QEMU = 90  # seconds
+
+
+def qemu_start_timeout(os_sandbox_params: Mapping[str, Any]) -> float:
+    """Seconds the QEMU daemon gets to answer, from the ``qemu.start_timeout`` rule.
+
+    The default suits a KVM boot with room to spare -- a whole partial-mode run takes
+    ~22s. Emulation is another matter: without KVM the guest was measured answering at
+    ~125s. Raising the default for everyone would only delay the report of a setup that
+    is genuinely broken, so the slow case asks for what it needs, e.g. a profile carrying
+    ``qemu.start_timeout=180`` in a container without /dev/kvm.
+    """
+    raw = os_sandbox_params.get("start_timeout")
+    if raw is None:
+        return float(TIMEOUT_FOR_START_DAEMON_QEMU)
+    try:
+        timeout = float(str(raw).strip())
+    except ValueError:
+        timeout = 0.0
+    if timeout <= 0:
+        logger.warning(
+            "Ignoring qemu.start_timeout=%r: expected a positive number of seconds; using %ss",
+            raw,
+            TIMEOUT_FOR_START_DAEMON_QEMU,
+        )
+        return float(TIMEOUT_FOR_START_DAEMON_QEMU)
+    return timeout
+
 
 # RPC call timeout (prevents infinite block if guest never responds)
 TIMEOUT_FOR_RPC_CALL = 120  # seconds

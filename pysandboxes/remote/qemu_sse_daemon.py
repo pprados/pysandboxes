@@ -19,12 +19,14 @@ import shutil
 import site
 import subprocess
 import sys
+import time
 from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any, Mapping
 
 from ..all_rules import AllRules
 from ..config import DEBUG
+from ..e import SandBoxError
 from ..guard_files import FSExposeRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
@@ -41,6 +43,7 @@ from .daemon_parameters import DaemonParameters
 from .parameters import (
     INTERVAL_FOR_PING_DAEMON,
     TIMEOUT_FOR_PING,
+    qemu_start_timeout,
 )
 from .qemu_guest_console_io import start_qemu_serial_drain_tasks
 from .qemu_image import (
@@ -61,8 +64,6 @@ from .vm_sse_daemon import VMSSEDaemon
 
 # VM boot + cloud-init can take 20–40s before main_sandbox listens; wait before pinging.
 QEMU_BOOT_DELAY = 20.0
-# Allow more ping attempts after boot (VM is slower than a subprocess).
-QEMU_LOOP_FOR_PING = 200
 
 logger = logging.getLogger(__name__)
 
@@ -1213,12 +1214,18 @@ class QemuSSEDaemon(VMSSEDaemon):
         await self._on_process_started()
 
         gc.collect()
+        # One deadline rather than a count of attempts: an attempt costs its own request
+        # plus the interval, so a fixed count means a budget that silently disagrees with
+        # qemu.start_timeout. The host gives up at that same moment, which is what keeps a
+        # doomed VM from outliving the error that reported it.
+        start_timeout = qemu_start_timeout(all_rules.os_sandbox_params)
+        deadline = time.monotonic() + start_timeout
         ping_url = self.base_url.replace("{PORT}", str(port)) + "/ping"
         logger.debug(
-            "Waiting %.0fs for QEMU guest to boot, then pinging %s (max %d attempts)",
+            "Waiting %.0fs for QEMU guest to boot, then pinging %s for up to %.0fs",
             QEMU_BOOT_DELAY,
             ping_url,
-            QEMU_LOOP_FOR_PING,
+            start_timeout,
         )
         await asyncio.sleep(QEMU_BOOT_DELAY)
         import socket
@@ -1233,13 +1240,20 @@ class QemuSSEDaemon(VMSSEDaemon):
             while True:
                 try:
                     count_loop += 1
-                    if count_loop > QEMU_LOOP_FOR_PING:
+                    if time.monotonic() > deadline:
                         logger.error(
-                            "Cannot connect to sandbox daemon after %d attempts (%s)",
+                            "Cannot connect to sandbox daemon within %.0fs, after %d attempts (%s)",
+                            start_timeout,
                             count_loop - 1,
                             ping_url,
                         )
-                        raise SystemExit(-1)
+                        # SandBoxError, not SystemExit: the latter is a BaseException, so
+                        # the `except Exception` that stops the daemon never saw it and the
+                        # VM went on running long after the caller had been told it failed.
+                        raise SandBoxError(
+                            f"The QEMU guest did not answer within {start_timeout:.0f}s. "
+                            "A host without /dev/kvm needs a larger qemu.start_timeout."
+                        )
                     async with session.get(
                         ping_url,
                         timeout=ClientTimeout(total=TIMEOUT_FOR_PING),
@@ -1265,9 +1279,8 @@ class QemuSSEDaemon(VMSSEDaemon):
                 ) as e:
                     if count_loop % 25 == 0 or count_loop <= 3:
                         logger.debug(
-                            "Ping attempt %d/%d failed: %s",
+                            "Ping attempt %d failed: %s",
                             count_loop,
-                            QEMU_LOOP_FOR_PING,
                             type(e).__name__,
                         )
                 except ClientOSError as e:
@@ -1275,9 +1288,8 @@ class QemuSSEDaemon(VMSSEDaemon):
                         raise
                     if count_loop % 25 == 0 or count_loop <= 3:
                         logger.debug(
-                            "Ping attempt %d/%d failed: %s",
+                            "Ping attempt %d failed: %s",
                             count_loop,
-                            QEMU_LOOP_FOR_PING,
                             type(e).__name__,
                         )
                 await asyncio.sleep(INTERVAL_FOR_PING_DAEMON)
