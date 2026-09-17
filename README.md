@@ -10,7 +10,7 @@
 
 > Protect Python programs without their knowledge.
 
-[Home Page](https://www.github.com/pprados/pysandboxes/)
+[Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
 # Quick start
 
