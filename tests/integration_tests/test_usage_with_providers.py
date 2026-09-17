@@ -115,15 +115,12 @@ PARTIAL_MODE_SECRET = "s3cr3t-do-not-leak"
 # unshare builds its namespaces, mounts and iptables rules *before* the sandbox exists, so
 # its setup stage needs the host PATH; it now narrows os.environ down to the profile's
 # whitelist just before exec'ing the daemon, which is why this row is no longer xfail.
-# QEMU partial mode runs the daemon in the VM. It used to fail on the configuration
-# transport, not on any timeout; with the config on the 9p mount the KVM row passes in
-# ~22s. The emulated row is left: measured with both caps lifted, the guest answers at
-# ~125s, above TIMEOUT_FOR_START_DAEMON_QEMU (90s) and past QEMU_LOOP_FOR_PING (200
-# attempts). It is run rather than declared -- it now costs ~105s to fail, and a row that
-# never runs would not say when the limitation lifts.
-_PARTIAL_MODE_XFAIL: dict[str, tuple[str, bool]] = {
-    "qemu-tcg": ("without KVM the guest answers at ~125s, past the 90s daemon start cap", True),
-}
+# QEMU partial mode used to be xfail on both rows. It failed on the configuration
+# transport, not on the timeout the reason claimed: a FIFO on the host that the guest
+# could never open. With the config on a 9p mount the KVM row passes in ~22s, and the
+# emulated one once the start delay followed the acceleration in use -- it answers at
+# ~118s, over the 90s a KVM boot is given. Every backend is expected to pass here now.
+_PARTIAL_MODE_XFAIL: dict[str, tuple[str, bool]] = {}
 
 
 def _partial_mode_params() -> list:

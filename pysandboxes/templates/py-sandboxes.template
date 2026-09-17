@@ -296,10 +296,11 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 #   in the VM, stderr [PYSANDBOX_DIAG] lines and faulthandler after main() starts.
 #
 # qemu.start_timeout — Seconds the daemon gets to answer, VM boot included
-#   Default: 90, ample with KVM (a whole run takes about 22s). Without KVM the guest was
-#   measured answering at ~125s, so a host with no /dev/kvm needs qemu.start_timeout=180.
-#   The guest is pinged until this deadline and no other limit applies, so there is
-#   nothing else to raise. Past it the start fails and the VM is killed, not left behind.
+#   The default follows the acceleration in use: 90 with KVM (a whole run takes about
+#   22s), 180 when QEMU runs emulated (the same guest answers at ~125s). A container
+#   without /dev/kvm needs nothing here; set the key only to override that. The guest is
+#   pinged until this deadline and no other limit applies, so there is nothing else to
+#   raise. Past it the start fails and the VM is killed, not left behind.
 #
 # qemu.virtfs — Staging exec trees before virtio-9p (nested containers)
 #   auto (default): enable staging only when the host looks like a container (/.dockerenv,
