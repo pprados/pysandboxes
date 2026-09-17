@@ -70,8 +70,14 @@ class TestGetDefaultImagePath:
     def test_uses_sys_version_when_no_args(self) -> None:
         path = get_default_image_path()
         assert path.name == get_default_image_filename()
-        # Filename is either URL segment (e.g. ubuntu-*.img) or python-3.x-arch.qcow2
-        assert "ubuntu" in path.name or (path.suffix == ".qcow2" and "python" in path.name)
+        # Filename is the standard image's URL segment, or python-3.x-arch.qcow2 when
+        # the running version has no mapped image. The segment does not always carry
+        # "ubuntu": a release named by its codename gives resolute-server-cloudimg-*.
+        url = get_standard_download_url()
+        if url:
+            assert path.name == url.rstrip("/").split("/")[-1]
+        else:
+            assert path.suffix == ".qcow2" and "python" in path.name
 
 
 class TestGetStandardDownloadUrl:
