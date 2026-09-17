@@ -386,13 +386,19 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     module_name = pending_module.__name__
                 else:
                     module_name = fullname
-            # Change the loader to move in the right place
+            # Change the loader to move in the right place. `is_package` restores
+            # `submodule_search_locations`: Python 3.11 decides what is a package by
+            # reading it, so dropping it turned `pysandboxes` into a plain module and
+            # broke every `importlib.resources` read while the guard was armed.
             new_spec = importlib.machinery.ModuleSpec(
                 name=module_name,
                 loader=GuardLoader(fullname, original_spec, _pending_modules[fullname]),
                 origin=original_spec.origin if original_spec else None,
                 loader_state=original_spec.loader_state if original_spec else None,
+                is_package=bool(original_spec and original_spec.submodule_search_locations is not None),
             )
+            if original_spec and original_spec.submodule_search_locations is not None:
+                new_spec.submodule_search_locations = list(original_spec.submodule_search_locations)
             original_spec = None
 
         else:
@@ -648,9 +654,11 @@ def generate_rules(
     standard_result = set()
     deprecated_result = set()
     danger_result = set()
-    black_list = set(resources.read_text(__name__, "modules_blacklist.txt").split())
-    std_modules = set(resources.read_text(__name__, "modules_standard.txt").split())
-    deprecated_modules = set(resources.read_text(__name__, "modules_deprecated.txt").split())
+    # The package, not this module: Python 3.11 refuses a non-package anchor.
+    package = __package__ or "pysandboxes"
+    black_list = set(resources.read_text(package, "modules_blacklist.txt").split())
+    std_modules = set(resources.read_text(package, "modules_standard.txt").split())
+    deprecated_modules = set(resources.read_text(package, "modules_deprecated.txt").split())
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         if learn_rule.name in black_list:
