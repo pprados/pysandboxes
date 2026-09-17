@@ -607,7 +607,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                             "Is not possible to connect " "to the sandbox daemon (%s)",
                             ping_url,
                         )
-                        raise SystemExit(-1)
+                        # SandBoxError, not SystemExit: the latter is a BaseException,
+                        # so the `except Exception` meant to clean up after a failed
+                        # start never saw it, and what had been launched stayed alive.
+                        raise SandBoxError(f"The sandbox daemon never answered on {ping_url}.")
                     async with session.get(
                         ping_url,
                         timeout=ClientTimeout(

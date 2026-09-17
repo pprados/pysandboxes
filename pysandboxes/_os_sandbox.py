@@ -86,6 +86,10 @@ DEFAULT_OS_SANDBOX = "subprocess"
 _current_daemon: BaseDaemon | None = None
 # Number of times the daemon has been started. Used for reference counting.
 _startup_counter = 0
+# The daemon currently coming up, so a caller that stops waiting can still kill what was
+# launched. The start runs as a task on the sandbox loop: when the caller gives up on its
+# own clock, that task is still alive and holds the only reference to the process.
+_starting_daemon: BaseDaemon | None = None
 
 
 async def stop_incoming_call() -> None:
@@ -109,6 +113,27 @@ def is_accept_incoming_call() -> bool:
         True if the daemon is running and accepting calls, False otherwise.
     """
     return is_daemon_started() and _current_daemon is not None and _current_daemon._accept_incoming
+
+
+def _kill_unstarted_sandbox(os_provider: BaseDaemon | None) -> None:
+    """Kill the process of a daemon that failed to start.
+
+    A failed start drops the provider, but not what it launched. With a subprocess that
+    goes mostly unnoticed; with QEMU it is a whole VM, and one was found still running
+    long after the run that started it had reported the failure and exited, competing for
+    the CPU of everything that came next.
+
+    The process is killed rather than shut down: ``_stop`` only cancels the watchdog, and
+    ``_shutdown`` asks the daemon over SSE -- the very daemon that, here, never answered.
+    """
+    process = getattr(os_provider, "_process", None)
+    if process is None or process.returncode is not None:
+        return
+    logger.warning("The sandbox daemon did not start; killing the process it left behind")
+    try:
+        process.kill()
+    except (OSError, ValueError):
+        pass
 
 
 async def async_start_daemon(
@@ -141,7 +166,7 @@ async def async_start_daemon(
     """
     assert all_rules.os_sandbox
     async with _async_start_lock:
-        global _current_daemon, _startup_counter
+        global _current_daemon, _startup_counter, _starting_daemon
         if _current_daemon is not None:
             logger.info("Daemon already started")
             _startup_counter += 1
@@ -149,20 +174,25 @@ async def async_start_daemon(
 
         if all_rules.os_sandbox not in providers_factory:
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
+        os_provider: BaseDaemon | None = None
         try:
             token = str(uuid.uuid4())
-            os_provider: BaseDaemon = providers_factory[all_rules.os_sandbox](token, python_args=python_args)
+            os_provider = providers_factory[all_rules.os_sandbox](token, python_args=python_args)
             from .remote.base_sse_daemon import BaseSSESandbox
 
             if isinstance(os_provider, BaseSSESandbox):
                 os_provider._result_guard = all_rules.remote_result_guard
+            _starting_daemon = os_provider
             await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
+            _starting_daemon = None
             _current_daemon = os_provider
             assert os_provider.is_started
             _startup_counter += 1
             return os_provider
         except Exception as e:
             _current_daemon = None
+            _starting_daemon = None
+            _kill_unstarted_sandbox(os_provider)
             raise e
 
 
@@ -295,6 +325,10 @@ def start_daemon(
         )
         loop.call_soon_threadsafe(lambda: loop.create_task(_start_daemon_and_signal(), name="Start daemon"))
         if not start_event.wait(timeout=start_timeout):
+            # The start task is still running on the sandbox loop and will keep trying
+            # past this point, so whatever it launched has to be killed here: this caller
+            # raises, the process exits, and with QEMU a whole VM was left behind.
+            _kill_unstarted_sandbox(_starting_daemon)
             raise RuntimeError(
                 f"Daemon failed to start within {start_timeout}s. "
                 "Check that unshare/slirp4netns are installed and the environment allows namespaces."
