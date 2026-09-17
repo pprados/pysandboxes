@@ -53,6 +53,7 @@ all = [
 [project.urls]
 repository = "https://www.github.com/pprados/pysandboxes"
 homepage = "https://www.github.com/pprados/pysandboxes"
+documentation = "https://pprados.github.io/pysandboxes/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pysandboxes"]
