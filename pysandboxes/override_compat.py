@@ -18,7 +18,7 @@ try:
     from typing_extensions import override
 except ImportError:
     try:
-        from typing import override  # type: ignore[attr-defined]
+        from typing import override  # type: ignore[attr-defined,no-redef]
     except ImportError:
 
         def override(__func: _F, /) -> _F:

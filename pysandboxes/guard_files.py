@@ -440,6 +440,13 @@ def _apply_src_to_dest_rules(
     Otherwise, returns the potentially remapped path.
     """
     real_path = _os_path_abspath(os.path.normpath(path))
+    if _canonicalizing.get():
+        # Called back by our own realpath through the patched os.readlink, which
+        # checks the link target on the way out. Same reason as the symmetric
+        # guard in _apply_dest_to_src_rules: the outer call decides on the fully
+        # resolved path. Without this, an intermediate link pointing at an
+        # ignored name aborted the canonicalization itself.
+        return real_path, None
     # if path.endswith("/"):
     #     real_path = real_path + "/"
     original_path = path
