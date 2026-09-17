@@ -35,6 +35,7 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
+from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, SocketRule
 from ..immutable_dict import ImmutableDict
@@ -807,7 +808,10 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                                 "Cannot connect to the sandbox daemon (%s)",
                                 ping_url,
                             )
-                            raise SystemExit(-1)
+                            # SandBoxError, not SystemExit: the latter is a BaseException,
+                            # so the `except Exception` meant to clean up after a failed
+                            # start never saw it, and what had been launched stayed alive.
+                            raise SandBoxError(f"The unshare sandbox daemon never answered on {ping_url}.")
                         async with session.get(
                             ping_url,
                             timeout=ClientTimeout(total=TIMEOUT_FOR_PING),

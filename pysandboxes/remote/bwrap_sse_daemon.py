@@ -31,6 +31,7 @@ import aiohttp
 from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
 from ..all_rules import AllRules
+from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
@@ -557,7 +558,10 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                             "Is not possible to connect to the sandbox daemon (%s)",
                             ping_url,
                         )
-                        raise SystemExit(-1)
+                        # SandBoxError, not SystemExit: the latter is a BaseException,
+                        # so the `except Exception` meant to clean up after a failed
+                        # start never saw it, and what had been launched stayed alive.
+                        raise SandBoxError(f"The bwrap sandbox daemon never answered on {ping_url}.")
                     async with session.get(
                         ping_url,
                         timeout=ClientTimeout(total=TIMEOUT_FOR_PING),
