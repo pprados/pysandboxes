@@ -21,6 +21,8 @@ from pysandboxes.guard_eval import (
     TAG_PREFIX,
     _deactivate_guard_eval,
     _reset_context_warnings,
+    _wrap_compile,
+    _wrap_eval_like,
     activate_guard,
     build_namespace,
     classify_context_value,
@@ -34,6 +36,7 @@ from pysandboxes.guard_api import activate_guard as activate_api
 from pysandboxes.lifecycle import arm as arm_api
 from pysandboxes.guard_api import parse_rules as parse_api_rules
 from pysandboxes.guard_eval import is_ambient, patch_rules
+from pysandboxes.learning import set_learning_mode
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.sb_types import ConfigLine
 
@@ -582,3 +585,71 @@ def test_dataclasses_still_works_under_an_armed_declared_profile() -> None:
     finally:
         builtins.exec = saved  # type: ignore[assignment]
         _deactivate_guard_api()
+
+
+def test_eval_accepts_globals_and_locals_by_keyword() -> None:
+    """`eval(code, globals=..., locals=...)` is a valid CPython form.
+
+    The guard must not narrow those positional-or-keyword parameters, or a
+    plain application call raises TypeError before any rule is evaluated.
+    """
+    wrapper = _wrap_eval_like(eval, qualname="builtins.eval", mode="eval")
+    ns = {"__builtins__": builtins.__dict__, "a": 5}
+    assert wrapper("a + 1", globals=ns, locals={}) == 6
+
+
+def test_eval_still_accepts_globals_and_locals_positionally() -> None:
+    wrapper = _wrap_eval_like(eval, qualname="builtins.eval", mode="eval")
+    ns = {"__builtins__": builtins.__dict__, "a": 5}
+    assert wrapper("a + 1", ns, {}) == 6
+
+
+def test_armed_eval_accepts_a_keyword_context() -> None:
+    """The keyword form must survive the guarded (armed) branch, not only the
+    unarmed short circuit: this is the path an application actually runs on."""
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        assert patched_eval("40 + 2", globals={"__builtins__": {}}, locals={}) == 42
+    finally:
+        _deactivate_guard_api()
+
+
+def test_learning_mode_forwards_eval_with_a_keyword_context() -> None:
+    """Learning mode observes and forwards to the raw builtin; the keyword
+    globals/locals must reach that forward call intact."""
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    set_learning_mode(True)
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        ns = {"__builtins__": builtins.__dict__, "a": 5}
+        assert patched_eval("a + 1", globals=ns, locals={}) == 6
+    finally:
+        set_learning_mode(False)
+        _deactivate_guard_api()
+
+
+def test_exec_accepts_globals_and_locals_by_keyword() -> None:
+    wrapper = _wrap_eval_like(exec, qualname="builtins.exec", mode="exec")
+    ns: dict[str, Any] = {"__builtins__": builtins.__dict__, "a": 5}
+    wrapper("b = a + 1", globals=ns, locals=ns)
+    assert ns["b"] == 6
+
+
+def test_compile_accepts_source_filename_mode_by_keyword() -> None:
+    """`compile(source=..., filename=..., mode=...)` is a valid CPython form."""
+    wrapper = _wrap_compile(compile)
+    code = wrapper(source="1 + 1", filename="<s>", mode="eval")
+    assert eval(code) == 2  # noqa: S307
+
+
+def test_compile_still_accepts_positional_arguments() -> None:
+    wrapper = _wrap_compile(compile)
+    code = wrapper("1 + 1", "<s>", "eval")
+    assert eval(code) == 2  # noqa: S307

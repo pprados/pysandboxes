@@ -679,21 +679,21 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
         return func
 
     @guard_wraps(func)
-    def wrapper(
-        source: Any,
-        globals_: dict[str, Any] | None = None,
-        locals_: Any = None,
-        /,
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
+    def wrapper(source: Any, /, *args: Any, **kwargs: Any) -> Any:
+        # eval/exec take globals and locals positionally or by keyword. The
+        # wrapper must accept both without narrowing them, or a plain
+        # eval(code, globals=..., locals=...) raises TypeError before any rule
+        # is evaluated. Whatever remains is exec()'s keyword-only closure.
+        globals_: dict[str, Any] | None = args[0] if len(args) >= 1 else kwargs.pop("globals", None)
+        locals_: Any = args[1] if len(args) >= 2 else kwargs.pop("locals", None)
+        extra = args[2:]
         frame = sys._getframe(1)
         # eval() with no globals resolves in the frame of *its* caller, which
         # once wrapped is this wrapper. Reconstruct before delegating.
         raw_globals = globals_ if globals_ is not None else frame.f_globals
         raw_locals = locals_ if locals_ is not None else (frame.f_locals if globals_ is None else raw_globals)
         if not is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
-            return func(source, raw_globals, raw_locals, *args, **kwargs)
+            return func(source, raw_globals, raw_locals, *extra, **kwargs)
         rules = _profiles.get("")
         if is_learning_mode():
             # Learning observes, it never blocks: refusing here would stop the
@@ -703,7 +703,7 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
             # construct show up as a rule to propose -- and then runs through
             # the raw builtin so the run reaches its end.
             _learn_from(source, qualname, mode, rules)
-            return func(source, raw_globals, raw_locals, *args, **kwargs)
+            return func(source, raw_globals, raw_locals, *extra, **kwargs)
         if rules is None or not rules.declared:
             raise RuleApiPermissionError(qualname, "dynamic-code")
         if rules.namespace == "caller":
@@ -712,10 +712,10 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
             # calls into a namespace without the helpers would raise
             # NameError on the first attribute read. The debugging escape
             # hatch is therefore a straight passthrough.
-            return func(source, raw_globals, raw_locals, *args, **kwargs)
+            return func(source, raw_globals, raw_locals, *extra, **kwargs)
         text = _guarded_source(source, qualname)
         if not text:
-            return func(source, raw_globals, raw_locals, *args, **kwargs)
+            return func(source, raw_globals, raw_locals, *extra, **kwargs)
         if globals_ is not None and rules.namespace == "adaptive":
             warn_about_context(globals_, _call_site(frame))
             add_learning_rule(LearnEvalContext(_call_site(frame)))
@@ -739,7 +739,7 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
         return func
 
     @guard_wraps(func)
-    def wrapper(source: Any, filename: Any = "<string>", mode: Any = "exec", /, *args: Any, **kwargs: Any) -> Any:
+    def wrapper(source: Any, filename: Any = "<string>", mode: Any = "exec", *args: Any, **kwargs: Any) -> Any:
         frame = sys._getframe(1)
         if not is_armed() or is_ambient(frame) or guard_api.is_allowed("builtins.compile"):
             return func(source, filename, mode, *args, **kwargs)

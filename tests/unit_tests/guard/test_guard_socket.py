@@ -589,6 +589,24 @@ def test_sendto_refuses_an_unsupported_address_format() -> None:
         wrapped(_FakeSocket(SocketKind.SOCK_DGRAM), b"x", b"\x00raw")
 
 
+def test_sendto_accepts_the_flags_argument_form() -> None:
+    """``sendto(data, flags, address)`` is a documented CPython form.
+
+    The wrapper dropped the flags slot, so an application passing flags hit a
+    TypeError before any rule ran. The address is always the last positional,
+    and flags must reach the real call untouched.
+    """
+    _arm("net=ALLOW|UDP|127.0.0.1|12345|OUT")
+    calls: List[Tuple[Any, ...]] = []
+    wrapped = patch_rules(learn=False)["socket.socket.sendto"](lambda *a, **k: calls.append(a))
+    sock = _FakeSocket(SocketKind.SOCK_DGRAM)
+
+    wrapped(sock, b"x", 0, ("127.0.0.1", 12345))
+    assert calls == [(sock, b"x", 0, ("127.0.0.1", 12345))]
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        wrapped(sock, b"x", 0, ("127.0.0.1", 9999))
+
+
 def _parse_ok(*rules: str) -> Any:
     """Parse net= rules that must not produce an error."""
     errors: List[ErrorMsg] = []

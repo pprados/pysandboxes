@@ -1186,7 +1186,13 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
 
 def _wrap_socket_sendto(func: Callable) -> Callable:
     @guard_wraps(func)
-    def wrapper(self: Any, data: ReadableBuffer, address: _Address, /) -> int:
+    def wrapper(self: Any, data: ReadableBuffer, *args: Any) -> int:
+        # sendto has two documented forms: sendto(data, address) and
+        # sendto(data, flags, address). The address is always the last
+        # positional; flags, when present, must reach the real call untouched.
+        if not args:
+            return func(self, data)  # let the builtin raise its own arity error
+        address: _Address = args[-1]
         if (
             isinstance(address, tuple)
             and len(address) >= 2
@@ -1231,7 +1237,7 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
             raise RuleSocketConnectionRefusedError(
                 f"Guard sendto to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
             )
-        return func(self, data, address)
+        return func(self, data, *args)
 
     return wrapper
 
