@@ -66,7 +66,13 @@ python-import=typing_extensions
 python-import=urllib3
 python-import=yaml
 
-expose-ro=~/workspace/pysandboxes
+# The repository root, which uv installs as an editable dependency (see
+# `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
+# working directory, which is this sample's own directory: an absolute `~/...`
+# form only resolves on a machine that checked the repository out there, and
+# fails on any CI runner. Learning mode cannot emit this form -- it never walks
+# above PWD -- so `make learn` puts the absolute path back.
+expose-ro=../..
 
 net=ALLOW|TCP|ip6-localhost|0|IN
 net=ALLOW|TCP|ip6-loopback|0|IN
@@ -82,7 +88,9 @@ python-import=_decimal, _socket, tty
 
 
 expose-ro=/proc/sys/kernel/random
-expose-rw=${TMP}
+# `TMP` is a Windows convention and is unset on a stock Linux shell, which
+# leaves the rule empty and the whole file a syntax error.
+expose-rw=${TMP:-/tmp}
 
 # introspection: can be used to undo the patches
 # filelock (pulled by huggingface-hub) installs an audit hook to detect unsafe

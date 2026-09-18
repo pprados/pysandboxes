@@ -141,7 +141,13 @@ env=VIRTUAL_ENV=${VIRTUAL_ENV}
 # <learning_guard_files>
 
 # Add rules (2026/09/10 at 06:41)
-expose-ro=~/workspace/pysandboxes
+# The repository root, which uv installs as an editable dependency (see
+# `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
+# working directory, which is this sample's own directory: an absolute `~/...`
+# form only resolves on a machine that checked the repository out there, and
+# fails on any CI runner. Learning mode cannot emit this form -- it never walks
+# above PWD -- so `make learn` puts the absolute path back.
+expose-ro=../..
 
 # Add rules (2026/09/10 at 09:59)
 
