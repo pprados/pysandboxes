@@ -72,7 +72,8 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 
 ### Branches
 - **`develop`** is the integration branch: day-to-day work happens there, and feature
-  branches start from it and go back to it.
+  branches start from it and go back to it. It is also the GitHub default branch, which
+  is what lets `schedule:` and `workflow_dispatch` reach the integration workflows.
 - **`master`** is for releases only. It receives a merge at publication time, never as
   part of ordinary work. Do not propose a pull request or a merge towards `master`
   outside a release, and compare a branch against `develop`, not `master`.

@@ -5,11 +5,12 @@ name: Sample Tests
 # they are tied to a version tag rather than to every push. workflow_dispatch
 # reruns them on demand.
 #
-# The nightly run validates the integration branch, `develop`, not the branch the
-# schedule fires from: GitHub only honours `schedule:` on the default branch, and
-# `master` only moves at publication time. A night without a commit on `develop`
-# is skipped by the `changes` job -- re-running the same tree teaches nothing. A
-# tag push keeps testing the tag, and is never skipped.
+# The nightly run validates the integration branch, `develop`. GitHub only honours
+# `schedule:` on the default branch, which is `develop`, so the schedule already
+# fires from the branch under test; the pinning step below states that contract in
+# the tree rather than leaving it to a repository setting no file records. A night
+# without a commit on `develop` is skipped by the `changes` job -- re-running the
+# same tree teaches nothing. A tag push keeps testing the tag, and is never skipped.
 #
 # No secret is needed: pydantic-ai drives TestModel behind a placeholder key,
 # openai-agents-sdk is mocked, and the suites that would reach a real model
