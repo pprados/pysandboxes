@@ -181,6 +181,11 @@ SYNTAX_GROUPS: dict[str, tuple[str, ...]] = {
     "import": ("Import", "ImportFrom", "alias"),
     "subscript": ("Subscript", "Slice", "Starred"),
     "fstring": ("JoinedStr", "FormattedValue"),
+    # Separate from `fstring`: a t-string builds a Template whose interpolations
+    # are deferred, not a string, and a configuration written before 3.14 never
+    # asked for it. The nodes only exist from 3.14 on, so the group is simply
+    # unused on earlier interpreters.
+    "tstring": ("TemplateStr", "Interpolation"),
     "yield": ("Yield", "YieldFrom"),
 }
 

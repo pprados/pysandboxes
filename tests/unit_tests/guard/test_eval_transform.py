@@ -3,6 +3,7 @@
 """Phase 1 validation and phase 2 injection."""
 
 import ast
+import sys
 from types import CodeType
 from typing import cast
 
@@ -70,6 +71,11 @@ def test_arithmetic_passes_with_its_group() -> None:
         ("context", "with open() as f:\n    pass"),
         ("subscript", "x[0]"),
         ("fstring", 'f"{x}"'),
+        pytest.param(
+            "tstring",
+            't"{x}"',
+            marks=pytest.mark.skipif(sys.version_info < (3, 14), reason="t-strings arrived in 3.14"),
+        ),
         ("yield", "def f():\n    yield 1"),
     ],
 )
@@ -84,6 +90,16 @@ def test_each_group_gates_its_own_syntax(group: str, source: str) -> None:
         attribute=_names("x"),
     )
     assert not [v for v in opened if "is not allowed" in v.message]
+
+
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="t-strings arrived in 3.14")
+def test_a_tstring_needs_more_than_the_fstring_group() -> None:
+    """Deferred interpolation is its own capability, not a dialect of f-strings.
+
+    A configuration written before 3.14 asked for `fstring` and got string
+    formatting; it must not silently gain `Template` objects on an upgrade.
+    """
+    assert _check('t"{x}"', syntax=_syntax("fstring"), attribute=_names("x"))
 
 
 def test_async_is_neither_privileged_nor_special_cased() -> None:

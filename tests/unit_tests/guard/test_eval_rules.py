@@ -365,10 +365,28 @@ def test_an_import_pattern_is_accepted() -> None:
 
 def test_syntax_groups_only_name_real_ast_nodes() -> None:
     import ast
+    import sys
 
+    # A group naming syntax from a later interpreter stays declared on every
+    # version, so that a shared configuration keeps parsing; it is simply inert
+    # until the nodes exist. Asserting both directions still catches a typo.
+    introduced_in = {"TemplateStr": (3, 14), "Interpolation": (3, 14)}
     for nodes in SYNTAX_GROUPS.values():
         for node in nodes:
-            assert hasattr(ast, node), node
+            if node in introduced_in:
+                assert hasattr(ast, node) == (sys.version_info >= introduced_in[node]), node
+            else:
+                assert hasattr(ast, node), node
+
+
+def test_a_group_naming_later_syntax_still_parses() -> None:
+    """A .py-sandboxes travels between machines, so `tstring` must read anywhere.
+
+    Rejecting it as an unknown group below 3.14 would make one configuration
+    unusable on the very interpreters the project still supports.
+    """
+    profiles, errors = _parse("eval-syntax=tstring")
+    assert not errors
 
 
 def test_learning_emits_nothing_when_nothing_was_observed() -> None:
