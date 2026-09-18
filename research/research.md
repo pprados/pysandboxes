@@ -45,13 +45,7 @@ Apache-2.0.
     - [Scenario B — the augmented developer](#scenario-b--the-augmented-developer)
     - [What the two scenarios share, and where they differ](#what-the-two-scenarios-share-and-where-they-differ)
 - [2. Prior art](#2-prior-art)
-  - [2.1 In-interpreter confinement, and its recorded failure](#21-in-interpreter-confinement-and-its-recorded-failure)
-  - [2.2 Observability without confinement](#22-observability-without-confinement)
-  - [2.3 Restricted evaluators for dynamic source](#23-restricted-evaluators-for-dynamic-source)
-  - [2.4 Kernel-enforced isolation](#24-kernel-enforced-isolation)
-  - [2.5 Policy synthesis by observation](#25-policy-synthesis-by-observation)
-  - [2.6 The LLM-era execution sandboxes](#26-the-llm-era-execution-sandboxes)
-  - [2.7 What the prior art leaves open](#27-what-the-prior-art-leaves-open)
+  - [What the prior art leaves open](#what-the-prior-art-leaves-open)
 - [3. Contribution](#3-contribution)
 - [4. The ladder of attacker capability](#4-the-ladder-of-attacker-capability)
   - [4.1 The five rungs](#41-the-five-rungs)
@@ -85,11 +79,18 @@ Apache-2.0.
   - [9.4 Limits of inference](#94-limits-of-inference)
   - [9.5 Limits of the OS layer](#95-limits-of-the-os-layer)
 - [10. Open design tensions](#10-open-design-tensions)
-- [11. A reimplementation checklist](#11-a-reimplementation-checklist)
+- [11. Implementation checklist](#11-implementation-checklist)
 - [12. Validation, and what would falsify these claims](#12-validation-and-what-would-falsify-these-claims)
   - [12.1 What the implementation establishes](#121-what-the-implementation-establishes)
   - [12.2 What is not measured](#122-what-is-not-measured)
   - [12.3 Falsification conditions](#123-falsification-conditions)
+- [Appendix A — Prior art in detail](#appendix-a--prior-art-in-detail)
+  - [A.1 In-interpreter confinement, and its recorded failure](#a1-in-interpreter-confinement-and-its-recorded-failure)
+  - [A.2 Observability without confinement](#a2-observability-without-confinement)
+  - [A.3 Restricted evaluators for dynamic source](#a3-restricted-evaluators-for-dynamic-source)
+  - [A.4 Kernel-enforced isolation](#a4-kernel-enforced-isolation)
+  - [A.5 Policy synthesis by observation](#a5-policy-synthesis-by-observation)
+  - [A.6 The LLM-era execution sandboxes](#a6-the-llm-era-execution-sandboxes)
 - [References](#references)
 - [Relationship to the implementation](#relationship-to-the-implementation)
 
@@ -353,315 +354,52 @@ profile already confines.
 
 ## 2. Prior art
 
-Everything in this section predates December 2025. Each item is cited because it
-either (a) establishes a constraint the design must respect, or (b) is a direct
-antecedent whose limits the design tries to move past.
+Everything cited here predates December 2025. Each item either establishes a
+constraint the design must respect, or is a direct antecedent whose limits the
+design tries to move past. This section states what the record shows and what it
+leaves open; the evidence for each claim — projects, dates, CVEs, measurements —
+is set out in [Appendix A](#appendix-a--prior-art-in-detail).
 
-### 2.1 In-interpreter confinement, and its recorded failure
+Six families, and what each one settles:
 
-**`rexec` / `Bastion` (CPython, 1990s–2003).** CPython's own restricted-execution
-framework. A supervisor created a "padded cell" with a substituted `__builtins__`;
-restriction was keyed on the *identity* of that object, and enforced by denying
-selected attributes. Both modules were **disabled in Python 2.3** because of
-known and not readily fixable security holes, deprecated in 2.6, and removed in
-3.0 [[REXEC]] [[BASTION]]. The failure mode is instructive and recurs
-throughout this section: attackers repeatedly found object-graph paths from a
-permitted object back to an unrestricted one.
+1. **In-interpreter confinement has a recorded failure**
+   ([§A.1](#a1-in-interpreter-confinement-and-its-recorded-failure)). `rexec`,
+   `Bastion` and `pysandbox` were each abandoned by their own authors, the last
+   with the verdict *broken by design*; the recurring escape is an object-graph
+   path from a permitted object back to an unrestricted one. This paper accepts
+   that verdict as a premise rather than contesting it.
+2. **The interpreter can observe without confining**
+   ([§A.2](#a2-observability-without-confinement)). PEP 578 audit hooks state
+   plainly that they are *not* sandboxing. They are a complementary observation
+   substrate, with a vocabulary chosen by the runtime rather than by the
+   operator, and no integrity without a native pre-init hook.
+3. **Restricted evaluators show which constructs are capabilities**
+   ([§A.3](#a3-restricted-evaluators-for-dynamic-source)). `simpleeval`,
+   `asteval` and `RestrictedPython` establish that whitelisting by construction
+   beats blacklisting by subtraction, that `str.format` traverses the object
+   graph and is therefore a capability — rediscovered independently three times,
+   most recently as CVE-2025-24359 — and that an exception instance is itself an
+   object-graph reference.
+4. **Kernel enforcement is mature, and blind to resource identity**
+   ([§A.4](#a4-kernel-enforced-isolation)). seccomp-bpf cannot dereference
+   pointer arguments by design, so it cannot tell `/etc/passwd` from a scratch
+   file; Landlock, namespaces, gVisor and microVMs each trade expressiveness
+   against the privilege they require and the deployment they permit.
+5. **Learning a policy by observation is not new — at the syscall layer**
+   ([§A.5](#a5-policy-synthesis-by-observation)). `aa-genprof`, `audit2allow`,
+   *Mining Sandboxes* and *Confine* have mapped the ground thoroughly, including
+   the dynamic/static dilemma: observation under-approximates, static analysis
+   over-approximates. That work learns in a vocabulary an operator cannot review
+   and emits an artefact bound to one enforcement mechanism.
+6. **The LLM-era sandboxes isolate coarsely, over a network hop**
+   ([§A.6](#a6-the-llm-era-execution-sandboxes)). E2B, Modal and the agent
+   frameworks give a fresh machine with no per-application least-privilege
+   profile, because nothing produced one. The agent-security literature — CaMeL,
+   IsolateGPT, AgentDojo — governs *what the agent may decide*; this paper
+   governs *what the resulting process may touch*, and assumes the decision has
+   already gone wrong.
 
-**`pysandbox` (Victor Stinner, 2010–2013).** Three years of work on a
-higher-quality version of the same idea, intended for eventual merge into
-CPython. In November 2013 the author announced to python-dev that the project
-was **broken by design**; a security challenge had found two escapes in under a
-day, and the usability cost of the restrictions needed to close known holes had
-become prohibitive [[STINNER-2013]] [[LWN-574215]]. The repository README still
-carries the conclusion in capitals, with the recommended alternative stated as a
-single sentence: *run Python in a sandbox, not the opposite* [[PYSANDBOX-REPO]].
-
-This is the keystone of the present paper. The design proposed here does not
-contradict it — it **accepts it as a premise** and asks what an interpreter-level
-layer is still good for once enforcement has been conceded to the kernel.
-
-**PyPy's sandbox.** A structurally different and cleaner approach: a specially
-built interpreter whose entire I/O is serialised over a pipe to a trusted parent,
-which decides what to permit. Rather than restricting language features, it
-replaces external library calls with stubs [[PYPY-SANDBOX]]. It is the strongest
-in-interpreter design in the record. It is also, by PyPy's own documentation,
-**unmaintained**, with a rewrite pending; lack of user interest and maintenance
-cost were given as the reasons [[PYPY-2019]]. The lesson is about ecosystem
-viability, not about correctness: a confinement mechanism that requires a custom
-interpreter build inherits that build's adoption problem.
-
-**edX CodeJail.** Raised in the same 2013 python-dev thread as the counterexample
-that worked: rather than restricting Python, it runs untrusted Python as a
-separate OS user under AppArmor confinement [[STINNER-2013]]. Structurally the
-ancestor of the two-process architecture in [§8](#8-process-architecture).
-
-### 2.2 Observability without confinement
-
-**PEP 578 — Runtime Audit Hooks** (Python 3.8, 2019), with **PEP 551** as the
-deployment companion. CPython's own answer to "what is this process doing":
-`sys.audit()` raises named events from the runtime and the standard library,
-`sys.addaudithook()` observes them [[PEP-578]] [[PEP-551]].
-
-The PEP is unambiguous about its scope: *"This is not sandboxing, as this
-proposal does not attempt to prevent malicious behavior"*, and it points readers
-at its own "Why Not A Sandbox" section, which notes that sandboxing CPython has
-been attempted many times without success [[PEP-578]]. PEP 551 describes what it
-takes to make auditing *trustworthy*: the hook must be written in native code and
-installed before `Py_Initialize()`, which is the only point at which one can
-guarantee no Python has run unaudited and that no Python can prevent
-registration [[PEP-551]].
-
-This matters to the design in [§6](#6-policy-inference) in a specific way. Audit
-hooks are a legitimate *alternative substrate* for observation, with a real
-advantage (they are in CPython, maintained, and fire from C code paths that
-Python-level interception cannot see) and two real costs:
-
-- *Granularity mismatch.* The event vocabulary is the runtime's, not the
-  operator's. Events are emitted at points CPython chose to instrument; a
-  profile expressed in those terms is not the profile an operator wants to read
-  or edit.
-- *Trust only under PEP 551 deployment.* A pure-Python hook installed after
-  startup is removable by the code it audits — it buys no more integrity than a
-  function patch. Getting real integrity requires a native pre-init hook, i.e. a
-  compiled component, which changes the distribution model entirely.
-
-A reimplementation should treat audit hooks as a **complementary observation
-source** — particularly for events raised by C code — rather than as a
-replacement for API-level interception, and should not present a Python-level
-audit hook as an integrity mechanism.
-
-### 2.3 Restricted evaluators for dynamic source
-
-These are the direct antecedents of the dynamic-code layer in
-[§4.3](#43-rung-1--the-dynamic-code-layer).
-
-**`simpleeval`** inverts the model that killed `rexec`: instead of starting from
-full `eval()` and subtracting dangerous constructs, it implements handlers only
-for a small, explicit whitelist of AST node types. Anything not implemented is
-unreachable *by construction* rather than by patching. It additionally caps
-string length and exponent size to make trivial resource exhaustion impractical,
-and denies attributes with leading underscores [[SIMPLEEVAL]].
-
-**`asteval`** supports a materially larger subset — comprehensions, loops,
-`try`/`except`, user-defined functions — which is more useful and correspondingly
-harder to secure. Three findings from its history are worth carrying forward.
-
-An independent 2024 audit by IBM X-Force Security Research led, in release 1.0.1,
-to disallowing `string.format()`, hardening f-string evaluation, and removing
-several numpy submodules exposed by default [[ASTEVAL-101]]. Its documentation
-separately warns that exposing numpy ufuncs can segfault the interpreter from
-user input [[ASTEVAL]] — a reminder that a *permitted* callable implemented in C
-is a hole the AST layer cannot see.
-
-Then, in January 2025, **CVE-2025-24359** showed the formatting problem was not
-fully closed. The f-string handler evaluated `fmt.format(__fstring__=val)`; an
-attacker could craft the format string to raise an `AttributeError` deliberately
-and read the **exception's own `obj` attribute** to reach a protected object
-[[ASTEVAL-CVE]].
-
-That last one generalises beyond `asteval` and belongs in any design of this
-kind: **an exception is an object graph reference.** Once the accepted
-sub-language permits `try`/`except`, a raised exception can hand the source code
-a reference to something the allow-list never granted. Attribute mediation must
-therefore cover objects reached *through exception instances*, not only those
-reached through expressions the parser saw.
-
-**`RestrictedPython`** (long used by Zope and Plone) restricts via AST
-transformation, blocking `import`, `exec` and dangerous builtins, and routing
-attribute access through policy hooks. **CVE-2023-41039** illustrates the
-residual risk precisely: information disclosure through Python's formatting
-machinery — the `format` and `format_map` methods on `str`, and
-`string.Formatter` [[RESTRICTEDPYTHON-CVE]]. The same family produced
-**CVE-2021-32807** in the companion `AccessControl` layer, where the `string`
-module was exempted as safe but `string.Formatter` could be subclassed inside a
-restricted script to reach unsafe libraries [[ACCESSCONTROL-CVE]].
-
-Both are the same escape, found twice: the restricted subset permitted a
-construct whose *implementation* traverses the object graph.
-
-Three transferable lessons:
-
-1. **Whitelist by construction beats blacklist by subtraction** — the
-   `simpleeval` argument, and the inverse of the `rexec` failure.
-2. **`str.format` is a capability**, not a string operation: a format string
-   traverses attributes, so it reaches the object graph without naming `getattr`.
-   Any AST-level design must treat it as such. Three independent projects learned
-   this the same way — RestrictedPython, `AccessControl` and `asteval` — which
-   makes it the most reliably rediscovered mistake in this family.
-3. **Resource bounds belong in the same layer as the syntax bounds**, because a
-   permitted construct (`**`, a comprehension, a loop) is the exhaustion vector.
-
-### 2.4 Kernel-enforced isolation
-
-The mechanisms are mature. What differs is *what they can express*, *what
-privilege they require*, and *what they cost*.
-
-**seccomp-bpf** (Linux 3.5, 2012) filters syscalls and their scalar arguments in
-the kernel. Its decisive limitation is architectural: the filter **cannot
-dereference pointer arguments** — deliberately, to avoid TOCTOU. A seccomp
-filter therefore cannot tell whether an `open()` names `/etc/passwd` or a scratch
-directory [[SECCOMP]]. It narrows the kernel's attack surface; it is not an
-access-control system.
-
-**Landlock** (proposed as an LSM in 2016–2017 [[LANDLOCK-LWN]]; filesystem rules
-merged in 5.13, network rules in 6.7) is the complement: a real unprivileged
-access-control system that associates rights with files and directories.
-Restrictions are inherited across `clone(2)`, so a thread that sandboxes itself
-binds all descendants [[LANDLOCK-DOC]] [[LANDLOCK-TALK]].
-The Landlock project's own framing is that the two are complementary, not
-competing, and the emerging practice is to install Landlock first and then a
-seccomp filter covering syscalls Landlock has no notion of [[LANDLOCK-TALK]].
-
-**Namespace-based tooling** — `unshare`, `bubblewrap`, `firejail`, `nsjail`,
-`minijail` — composes mount, network, PID and user namespaces into a usable
-confinement. These give filesystem *views* (bind mounts, masking) and network
-isolation, at the cost of requiring privileges that many deployment targets
-(unprivileged containers, managed Kubernetes) will not grant.
-
-**Userspace kernels and microVMs.** **gVisor** interposes a user-space kernel
-(the Sentry) between the workload and the host, shrinking syscall exposure
-without hardware isolation. **Firecracker** and **Kata Containers** provide a
-dedicated guest kernel with KVM-enforced memory boundaries. Reported cold-start
-figures cluster around 50–100 ms for gVisor, 100–200 ms for Firecracker and
-150–300 ms for Kata, though published numbers vary widely with what is measured
-— benchmarks that time *full container* startup rather than VM boot put the
-microVM runtimes an order of magnitude higher [[ISOLATION-CMP]]. The standing
-motivation is blunt: the Linux kernel sees on the order of 300 CVEs a year, and
-one kernel compromise reaches every container on the host [[ISOLATION-CMP]].
-
-**WebAssembly** (Pyodide, wasmtime, `container2wasm`) is a different model
-again: isolation by the absence of ambient authority rather than by kernel
-mediation. Capabilities must be granted explicitly through the host, which is
-architecturally close to the capability-passing style of `eval-namespace=closed`
-in [§4.3](#43-rung-1--the-dynamic-code-layer). Its cost is ecosystem: native
-extension modules are the reason most real Python workloads cannot move there.
-
-### 2.5 Policy synthesis by observation
-
-This is the cluster the paper's central claim must be positioned against,
-because the idea of *learning* a policy is not new.
-
-**AppArmor `aa-genprof` / `aa-logprof`.** A profile is put in *complain* mode,
-where denials are logged rather than enforced; the operator exercises the
-application; the tool parses the log and walks the operator through each
-violation interactively, allow-or-deny; the profile is then switched to *enforce*
-[[AA-GENPROF]]. The stated goal is to iterate until complain mode produces zero
-entries.
-
-**SELinux `audit2allow`.** The batch equivalent: read AVC denials from the audit
-log, emit a Type Enforcement policy source, review it offline, compile and install
-[[AUDIT2ALLOW]]. Red Hat's own guidance is notably cautious — analyse denials
-first, and use `audit2allow` only as a last resort, because the risk is
-*accepting whatever it generates without understanding what is being granted*
-[[AUDIT2ALLOW]].
-
-**"Mining Sandboxes for Linux Containers"** (Wan, Lo, Xia, Cai, Li; ICST 2017)
-is the closest academic antecedent. It explores container behaviour by automatic
-testing, extracts the set of syscalls observed, and emits that set as a Docker
-seccomp profile. Its methodological argument is exactly the one made here:
-static analysis over-approximates — it assumes more behaviours than actually
-occur — whereas dynamic analysis observes real executions and establishes a
-*lower bound* [[MINING-SANDBOXES]]. It also states the caveat honestly:
-*sandboxing needs policy, dynamic analysis needs executions, and testing cannot
-guarantee the absence of malicious behaviour.*
-
-**Confine** (Ghavamnia, Palit, Benameur, Polychronakis; RAID 2020) answered the
-same problem from the opposite direction: rather than observing executions, it
-statically analyses the containerised application and its dependencies to derive
-a *superset* of required syscalls, and emits the corresponding seccomp policy.
-Its motivation is precisely the weakness of the dynamic approach — a training
-workload does not exhaustively capture rare runtime conditions, so an
-observation-derived policy is unsuitable as a generic solution. Evaluated over
-150 public Docker images, it disabled 145 or more syscalls for over half of them
-[[CONFINE]].
-
-The two directions have since been combined. *Shrinking the Kernel Attack
-Surface Through Static and Dynamic Syscall Limitation* (Zhan et al., 2025) states
-the trade-off in one sentence — dynamic tracking cannot obtain the full syscall
-list, while static analysis yields an over-approximated one — and builds a hybrid
-[[SYSCALL-LIMIT]].
-
-That sentence is the same dilemma this paper faces one layer up, and
-[§6.4](#64-the-soundness-gap-stated) resolves it differently: not by making the
-analysis complete, but by arranging that an access the analysis *missed* is
-denied rather than allowed.
-
-**Positioning.** Everything above learns at the **syscall** layer. That choice
-determines both its strength and its ceiling:
-
-| | Syscall-layer synthesis | API-layer synthesis (this paper) |
-|---|---|---|
-| **Completeness** | Sees *everything*, including native code and the dynamic linker | Sees only what crosses the language's own API surface |
-| **Vocabulary** | `openat`, `connect`, `socket` — with, per [§2.4](#24-kernel-enforced-isolation), no reachable path argument | `/etc/app/config.yaml`, `api.example.com:443`, `PGPASSWORD` |
-| **Reviewability** | An operator cannot tell from `openat` *which file* was opened | The rule names the resource the operator recognises |
-| **Portability of output** | Bound to one enforcement mechanism (a seccomp JSON profile) | Backend-independent; compiles to several ([§7](#7-compiling-one-profile-to-many-backends)) |
-| **Language semantics** | None — a syscall trace cannot express "may import `json`" | Native — module, call and dynamic-source rules have no syscall analogue |
-
-The trade is real in both directions, and a reimplementation should make it
-consciously. API-layer observation is **less complete** and **more
-reviewable**. Since the profile is *meant to be read and edited by a human*
-before it is enforced — the one step Red Hat's `audit2allow` guidance insists
-upon — reviewability is the property being optimised for. The completeness gap
-is then closed not by making observation perfect but by **placing enforcement
-below the observation layer**, where it does not depend on having seen
-everything. This is the key structural move and it is what
-[§6.4](#64-the-soundness-gap-stated) is about.
-
-### 2.6 The LLM-era execution sandboxes
-
-By 2025 the agent frameworks had converged on remote execution.
-**smolagents** ships a `LocalPythonExecutor` its own documentation labels *not a
-security boundary*, alongside E2B, Modal, Docker and WebAssembly backends;
-**E2B** runs Firecracker microVMs with sub-150 ms boots [[SMOLAGENTS-SEC]].
-The documented design choice is between *running the snippet remotely* and
-*running the whole agent inside the sandbox* [[SMOLAGENTS-SEC]] — the same two
-granularities as [§8.1](#81-two-granularities), reached independently.
-
-Two properties of this generation are worth naming, because they define the gap
-the present design aims at:
-
-- **Isolation is coarse and uniform.** The sandbox is a fresh machine. What the
-  code may reach inside it is largely "whatever is installed", constrained by
-  network egress rules if any. There is no per-application least-privilege
-  profile, because nothing produced one.
-- **The boundary is a network hop.** That buys strong isolation and costs
-  latency, a dependency on an external service, and a non-trivial story for
-  getting credentials and application state across.
-
-**The agent-security literature, and why it sits beside rather than above this
-work.** A substantial 2024–2025 line of research attacks the same overall
-problem from the *orchestration* side. It is worth reading alongside this paper,
-because the two are complementary and neither subsumes the other.
-
-- **CaMeL** (Debenedetti et al., 2025) builds a protective layer that extracts
-  the control and data flows from the *trusted* query, so that untrusted data
-  retrieved by the model can never influence program flow, and adds capabilities
-  to prevent exfiltration over unauthorised channels [[CAMEL]].
-- **Design Patterns for Securing LLM Agents against Prompt Injections**
-  (Beurer-Kellner et al., 2025) proposes principled patterns with provable
-  resistance to prompt injection, and analyses their trade-offs against agent
-  utility [[AGENT-PATTERNS]].
-- **IsolateGPT** (Wu, Roesner, Kohno, Zhang, Iqbal; 2024) observes that LLM app
-  ecosystems resemble early computing platforms with insufficient isolation
-  between apps and the system, and proposes an execution isolation architecture
-  [[ISOLATEGPT]].
-- **AgentDojo** (Debenedetti et al., 2024) and **ToolEmu** (Ruan et al., 2023)
-  supply the evaluation side: an extensible environment for attacks and defences
-  over untrusted tool output, and an LM-emulated sandbox for surfacing long-tail
-  risks without implementing every tool [[AGENTDOJO]] [[TOOLEMU]].
-
-The division of labour is clean, and stating it prevents a category error.
-That literature governs **what the agent is allowed to decide** — which data may
-influence control flow, which tool may be called, whether a plan is safe. This
-paper governs **what the resulting process is allowed to touch**, and assumes the
-decision has already gone wrong. An agent whose orchestration is perfectly
-secured still runs its tool bodies as ordinary code with ambient authority; an
-agent confined by a profile still benefits from not being hijacked in the first
-place. Neither layer makes the other unnecessary, and the evaluation frameworks
-above are the natural place to measure whether the combination holds.
-
-### 2.7 What the prior art leaves open
+### What the prior art leaves open
 
 Three gaps, and they are the paper's subject:
 
@@ -711,7 +449,7 @@ A corollary worth stating: this makes confinement **incrementally adoptable**.
 An application can be run with observation only, then with the interpreter layer
 enforcing, then with a kernel backend, without the policy changing at any step.
 Adoption failure — not mechanism weakness — is what the prior art in
-[§2.5](#25-policy-synthesis-by-observation) most consistently ran into; whether
+[§A.5](#a5-policy-synthesis-by-observation) most consistently ran into; whether
 that generalises is an empirical question, and the adoption of sandboxing across
 open-source ecosystems has been studied directly [[SANDBOX-ADOPTION]]. The
 present paper does not measure it ([§12](#12-validation-and-what-would-falsify-these-claims)).
@@ -794,7 +532,7 @@ routes. The honest response is to state the limit and place a kernel layer below
 
 **Downward silence.** A layer cannot see *concepts* below its own. Landlock has
 no notion of a Python module; seccomp cannot read a path argument
-([§2.4](#24-kernel-enforced-isolation)). So the kernel layer cannot replace the
+([§A.4](#a4-kernel-enforced-isolation)). So the kernel layer cannot replace the
 interpreter layer either — the substitution fails in both directions.
 
 ```mermaid
@@ -837,7 +575,7 @@ is *not* protected by the emptied builtins. The classical payload
 
 reaches a subprocess without naming a single builtin, by walking the object graph
 from a literal. Emptying `__builtins__` is a blacklist, and it fails the way
-every blacklist in [§2.1](#21-in-interpreter-confinement-and-its-recorded-failure)
+every blacklist in [§A.1](#a1-in-interpreter-confinement-and-its-recorded-failure)
 failed.
 
 **The principle: declare a sub-language, not a set of prohibitions.** The source
@@ -863,7 +601,7 @@ whitelist, and the default is *nothing beyond a minimal core*: the parse root,
 constants, name reads, container literals, and an expression used as a statement.
 Nothing else. `1 + 1` is refused until arithmetic is explicitly opened. That
 inversion is the design — and it is exactly the `simpleeval` argument from
-[§2.3](#23-restricted-evaluators-for-dynamic-source), generalised from
+[§A.3](#a3-restricted-evaluators-for-dynamic-source), generalised from
 expressions to a configurable subset.
 
 **Three states, not two.** The guard is usefully modelled as a three-valued
@@ -888,9 +626,9 @@ application's own call sites are guarded. This is a real trust decision, stated
 rather than hidden: it assumes installed packages are not the adversary, which
 [§1.3](#13-what-is-explicitly-out-of-scope) already conceded.
 
-**The rule dimensions.** Seven independent axes proved necessary in practice. A
-reimplementation may name them differently, but should not merge them — each
-corresponds to a distinct escape class:
+**The rule dimensions.** Seven independent axes proved necessary in practice. They may
+be named differently, but must not be merged — each corresponds to a distinct
+escape class:
 
 | Dimension | Governs | Escape class it closes |
 |---|---|---|
@@ -902,7 +640,7 @@ corresponds to a distinct escape class:
 | **namespace** | what the evaluated code sees | ambient authority from the caller's scope |
 | **budgets and timeout** | iterations, call depth, AST depth, node count, allocation, leaked threads, wall clock | resource exhaustion via *permitted* constructs |
 
-Five observations that a reimplementation will otherwise rediscover the hard way:
+Five observations, each otherwise rediscovered the hard way:
 
 1. **The capability builtins are a master lever.** `getattr`, `setattr`, `open`,
    `eval`, `exec`, `compile`, `__import__`, `type`, `vars`, `globals`, `dir`,
@@ -916,7 +654,7 @@ Five observations that a reimplementation will otherwise rediscover the hard way
    the same attribute check at runtime, which is precisely why the "rewrite"
    step exists and static validation alone is insufficient. `asteval`'s 2024
    audit reached the same conclusion by a different route
-   ([§2.3](#23-restricted-evaluators-for-dynamic-source)).
+   ([§A.3](#a3-restricted-evaluators-for-dynamic-source)).
 3. **Namespace mode is a stated trade.** Letting the evaluated source see the
    caller's scope is convenient and is *ambient authority* — the hazard the layer
    exists to address. A closed namespace, where the caller passes exactly what the
@@ -935,7 +673,7 @@ Five observations that a reimplementation will otherwise rediscover the hard way
    often holds a reference to the object that raised it. Attribute mediation must
    therefore cover objects reached through exception instances, not only those
    reached through expressions present in the parsed source — the escape behind
-   CVE-2025-24359 ([§2.3](#23-restricted-evaluators-for-dynamic-source)).
+   CVE-2025-24359 ([§A.3](#a3-restricted-evaluators-for-dynamic-source)).
 
 **What this layer is not.** It confines a *string* evaluated in a *bounded
 namespace*. It is not a defence against rung 2: code that reaches `exec` through
@@ -1039,7 +777,7 @@ covered in [§7.4](#74-provider-selection-a-decision-procedure). Conceptually:
 - **Rung 5** (kernel compromise) requires a *different kernel* — a full VM, or a
   microVM where one is available. Nothing that shares the host kernel can address
   it, including gVisor, which reduces the exposed syscall surface without
-  removing the shared-kernel assumption ([§2.4](#24-kernel-enforced-isolation)).
+  removing the shared-kernel assumption ([§A.4](#a4-kernel-enforced-isolation)).
   Both gVisor and the microVM runtimes are named here as *technology classes*;
   neither is an available backend
   ([§7.5](#75-providers-worth-adding-and-what-each-would-buy)).
@@ -1068,7 +806,7 @@ enforcement, and backend compilation. Four constraints follow:
    the first can compile to five backends, and only the first survives a change
    of deployment.
 2. **Reviewable by the operator who will be blamed.** The output of inference is
-   *a draft*. Red Hat's `audit2allow` caution ([§2.5](#25-policy-synthesis-by-observation))
+   *a draft*. Red Hat's `audit2allow` caution ([§A.5](#a5-policy-synthesis-by-observation))
    applies with full force: the risk is accepting generated rules without
    understanding what is being granted. A format that is tedious to read
    guarantees it will not be read.
@@ -1095,7 +833,7 @@ Seven families. The grouping, not the spelling, is what matters.
 | **Dynamic code** | the sub-language for `eval`/`exec`/`compile` and its budgets | 1 | ❌ — no kernel analogue |
 | **Backend selection and passthrough** | which backend; backend-specific options | 3–5 | — |
 
-Three structural points a reimplementation should preserve:
+Three structural points to preserve:
 
 - **Filesystem rules need three verbs, not two.** *Expose read-only*, *expose
   read-write*, and *hide* are distinct. Hiding is not a weaker form of denial: a
@@ -1123,8 +861,8 @@ A conventional chain is: package defaults → project profile → developer-loca
 overrides (git-ignored) → user profile → machine profile.
 
 **Resolution** is where a genuine unresolved tension sits, and it is recorded
-here rather than smoothed over, because a reimplementation must choose
-deliberately. The reference implementation uses **two different algebras**:
+here rather than smoothed over, because the choice must be made deliberately.
+The reference implementation uses **two different algebras**:
 
 | | Sensitive-call rules | Dynamic-code rules |
 |---|---|---|
@@ -1140,11 +878,11 @@ only monotone narrowing, which is simpler to reason about and strictly safer.
 
 The divergence is defensible — the registry is large and hierarchical, the
 dynamic-code vocabulary is small and flat — but it is *two mental models for one
-problem*, and users must hold both. A reimplementation should either unify on
-specificity (accepting that a deny becomes overridable by a more specific allow,
-which needs care) or unify on deny-wins sets (accepting the loss of
-category-with-exceptions, which then needs an explicit "all except" form). What
-it should not do is adopt both without noticing.
+problem*, and users must hold both. The two must either unify on specificity
+(accepting that a deny becomes overridable by a more specific allow, which needs
+care) or unify on deny-wins sets (accepting the loss of category-with-exceptions,
+which then needs an explicit "all except" form). What must not happen is adopting
+both without noticing.
 
 Two further properties worth carrying over:
 
@@ -1170,7 +908,7 @@ because the accesses are distributed across a dependency tree; not a static
 analyser, because the paths are computed at runtime from configuration.
 
 This is why `aa-genprof` and `audit2allow` exist
-([§2.5](#25-policy-synthesis-by-observation)), and why the container-debloating
+([§A.5](#a5-policy-synthesis-by-observation)), and why the container-debloating
 literature argues for dynamic over static analysis: static analysis
 over-approximates, dynamic analysis observes actual executions and sets a lower
 bound [[MINING-SANDBOXES]]. The same argument applies one layer up, with a
@@ -1280,9 +1018,8 @@ An access missed by inference is therefore **denied**, not permitted. Unsound
 inference yields a profile that is too *narrow*, never too *wide*, and a
 too-narrow profile fails visibly and is fixed by adding a rule. This is the
 correct failure direction, and it is the reason the architecture can tolerate an
-observation layer that is admittedly incomplete. Any reimplementation that
-inverts this — enforcing only at the layer that observes — loses the property
-entirely.
+observation layer that is admittedly incomplete. Inverting this — enforcing only
+at the layer that observes — loses the property entirely.
 
 ---
 
@@ -1324,7 +1061,7 @@ Two general principles:
 
 ### 7.2 Impedance mismatches worth naming
 
-These recur across backends and a reimplementation will meet all of them.
+These recur across every backend.
 
 **Hiding has at least three inequivalent semantics.** Asked to make a path
 disappear, backends variously: make it absent so access raises *not found*; deny
@@ -1572,7 +1309,7 @@ Arrow 2 is the one that matters. The data flows outward, but the *trust* flows
 inward: a rich deserialiser applied to arrow 2 turns a crafted payload from the
 confined child into code execution in the parent — outside the sandbox entirely.
 
-Two observations for a reimplementation:
+Two observations:
 
 - **Registry coverage does not help here.** If the framework's own transport binds
   its serialiser at import time — a reasonable choice, so that the framework's
@@ -1585,10 +1322,10 @@ Two observations for a reimplementation:
   is both weaker (the confined side can reach the accelerator module directly) and
   misplaced.
 
-A reimplementation should treat the return path as **untrusted input crossing a
-trust boundary inward**, and design the protocol accordingly: prefer a
-schema-constrained format, and where a rich serialiser is unavoidable, restrict
-it at the parsing site.
+The return path must be treated as **untrusted input crossing a trust boundary
+inward**, and the protocol designed accordingly: prefer a schema-constrained
+format, and where a rich serialiser is unavoidable, restrict it at the parsing
+site.
 
 ---
 
@@ -1601,7 +1338,19 @@ an appendix to it.
 ### 9.1 Limits of the interpreter layer
 
 Against rung 2 and above, the following are **open by construction** and are not
-scheduled to be closed:
+scheduled to be closed. The rung matters: each item is reachable only by code
+*already running as bytecode in the interpreter*. The same manoeuvres written as
+**dynamic source** — the `__subclasses__` walk, the introspection that recovers a
+patched original, the `__globals__` write, the `ctypes` import — never get that
+far when they arrive through a mediated entry point: they are refused one rung
+lower by the `attribute`, `magic` and `import` dimensions of
+[§4.3](#43-rung-1--the-dynamic-code-layer), whenever that layer is *guarded*
+rather than opened by the explicit escape hatch. Unmediated routes are the
+complement, and fall back to this section
+([§9.2](#92-limits-of-the-dynamic-code-layer)). What follows is what remains
+open once the attacker supplies Python directly, which is precisely why the two
+layers do not substitute for one another
+([§4.2](#42-why-the-layers-nest-and-do-not-substitute)):
 
 - **Patched functions retain a reference to the original.** Introspection finds
   it. Any wrapper implementation has this property.
@@ -1674,8 +1423,7 @@ allocation in a compiled library will each defeat everything above the kernel.
 Covered in [§6.4](#64-the-soundness-gap-stated): under-approximation, blindness
 to native code, and poisoning. The structural answer — enforcement below
 observation, so a missed access is denied rather than permitted — is what makes
-these tolerable, and it is the single most important thing to preserve in a
-reimplementation.
+these tolerable, and it is the single most important property to preserve.
 
 ### 9.5 Limits of the OS layer
 
@@ -1698,8 +1446,8 @@ reimplementation.
 
 ## 10. Open design tensions
 
-Recorded as open, because each is a genuine choice a reimplementation must make
-rather than inherit.
+Recorded as open, because each is a genuine choice to be made deliberately
+rather than inherited.
 
 1. **Two resolution algebras** ([§5.3](#53-composition-and-resolution)).
    Specificity for the sensitive-call registry, deny-wins sets for dynamic code.
@@ -1707,7 +1455,7 @@ rather than inherit.
    problem. Unify, or document the divergence prominently.
 
 2. **Audit hooks as a second observation source**
-   ([§2.2](#22-observability-without-confinement)). They see C-level events that
+   ([§A.2](#a2-observability-without-confinement)). They see C-level events that
    API interception misses, which directly attacks the native-code blindness in
    [§6.4](#64-the-soundness-gap-stated). Against: their vocabulary is the
    runtime's, not the operator's, and a Python-level hook confers no integrity.
@@ -1743,7 +1491,7 @@ rather than inherit.
    the paper's own thesis. If enforcement is conceded to the kernel, is
    interpreter-level enforcement worth its cost? The argument to keep it:
    `import` and dynamic-code rules have no kernel analogue
-   ([§2.7](#27-what-the-prior-art-leaves-open)), refusals in Python name the rule
+   ([§2](#what-the-prior-art-leaves-open)), refusals in Python name the rule
    and the call site in a way a syscall denial never can, and the same
    interception serves inference. The argument to drop it: it may create
    confidence disproportionate to what it delivers. The position taken here is
@@ -1752,7 +1500,7 @@ rather than inherit.
 
 ---
 
-## 11. A reimplementation checklist
+## 11. Implementation checklist
 
 Ordered so that each step is useful on its own, and so that nothing later
 invalidates anything earlier.
@@ -1913,7 +1661,7 @@ it looks:
 - **Reviewability.** Given a generated profile containing a deliberately planted
   over-grant — an exposed credentials directory, an unexpected host — do
   reviewers actually find it? This is the claim that distinguishes API-layer from
-  syscall-layer synthesis ([§2.5](#25-policy-synthesis-by-observation)), it is
+  syscall-layer synthesis ([§A.5](#a5-policy-synthesis-by-observation)), it is
   the one most load-bearing for the paper's contribution, and it is a
   human-subjects question that no test suite can answer.
 
@@ -1934,7 +1682,7 @@ assertions.
 be shown to cover two non-adjacent rungs — for instance an interpreter-level
 mechanism that genuinely contains native code. It is *supported* by the
 recurring failure of exactly that attempt in
-[§2.1](#21-in-interpreter-confinement-and-its-recorded-failure).
+[§A.1](#a1-in-interpreter-confinement-and-its-recorded-failure).
 
 **Claim 2 (inference produces reviewable, dual-use profiles)** is *partially
 supported*: the samples of [§12.1](#121-what-the-implementation-establishes) show
@@ -1954,6 +1702,317 @@ the count of rules that must change per backend switch, across a wider corpus �
 with [§7.2](#72-impedance-mismatches-worth-naming) predicting that
 filesystem-hiding rules would dominate the failures, since that is where the
 backends genuinely disagree.
+
+---
+
+## Appendix A — Prior art in detail
+
+The evidence behind [§2](#2-prior-art). Numbering follows that section's
+six families.
+
+### A.1 In-interpreter confinement, and its recorded failure
+
+**`rexec` / `Bastion` (CPython, 1990s–2003).** CPython's own restricted-execution
+framework. A supervisor created a "padded cell" with a substituted `__builtins__`;
+restriction was keyed on the *identity* of that object, and enforced by denying
+selected attributes. Both modules were **disabled in Python 2.3** because of
+known and not readily fixable security holes, deprecated in 2.6, and removed in
+3.0 [[REXEC]] [[BASTION]]. The failure mode is instructive and recurs
+throughout this appendix: attackers repeatedly found object-graph paths from a
+permitted object back to an unrestricted one.
+
+**`pysandbox` (Victor Stinner, 2010–2013).** Three years of work on a
+higher-quality version of the same idea, intended for eventual merge into
+CPython. In November 2013 the author announced to python-dev that the project
+was **broken by design**; a security challenge had found two escapes in under a
+day, and the usability cost of the restrictions needed to close known holes had
+become prohibitive [[STINNER-2013]] [[LWN-574215]]. The repository README still
+carries the conclusion in capitals, with the recommended alternative stated as a
+single sentence: *run Python in a sandbox, not the opposite* [[PYSANDBOX-REPO]].
+
+This is the verdict the present paper takes as its starting premise
+([§2](#2-prior-art)). The design proposed here does not contradict it; it asks
+what an interpreter-level layer is still good for once enforcement has been
+conceded to the kernel.
+
+**PyPy's sandbox.** A structurally different and cleaner approach: a specially
+built interpreter whose entire I/O is serialised over a pipe to a trusted parent,
+which decides what to permit. Rather than restricting language features, it
+replaces external library calls with stubs [[PYPY-SANDBOX]]. It is the strongest
+in-interpreter design in the record. It is also, by PyPy's own documentation,
+**unmaintained**, with a rewrite pending; lack of user interest and maintenance
+cost were given as the reasons [[PYPY-2019]]. The lesson is about ecosystem
+viability, not about correctness: a confinement mechanism that requires a custom
+interpreter build inherits that build's adoption problem.
+
+**edX CodeJail.** Raised in the same 2013 python-dev thread as the counterexample
+that worked: rather than restricting Python, it runs untrusted Python as a
+separate OS user under AppArmor confinement [[STINNER-2013]]. Structurally the
+ancestor of the two-process architecture in [§8](#8-process-architecture).
+
+### A.2 Observability without confinement
+
+**PEP 578 — Runtime Audit Hooks** (Python 3.8, 2019), with **PEP 551** as the
+deployment companion. CPython's own answer to "what is this process doing":
+`sys.audit()` raises named events from the runtime and the standard library,
+`sys.addaudithook()` observes them [[PEP-578]] [[PEP-551]].
+
+The PEP is unambiguous about its scope: *"This is not sandboxing, as this
+proposal does not attempt to prevent malicious behavior"*, and it points readers
+at its own "Why Not A Sandbox" section, which notes that sandboxing CPython has
+been attempted many times without success [[PEP-578]]. PEP 551 describes what it
+takes to make auditing *trustworthy*: the hook must be written in native code and
+installed before `Py_Initialize()`, which is the only point at which one can
+guarantee no Python has run unaudited and that no Python can prevent
+registration [[PEP-551]].
+
+This matters to the design in [§6](#6-policy-inference) in a specific way. Audit
+hooks are a legitimate *alternative substrate* for observation, with a real
+advantage (they are in CPython, maintained, and fire from C code paths that
+Python-level interception cannot see) and two real costs:
+
+- *Granularity mismatch.* The event vocabulary is the runtime's, not the
+  operator's. Events are emitted at points CPython chose to instrument; a
+  profile expressed in those terms is not the profile an operator wants to read
+  or edit.
+- *Trust only under PEP 551 deployment.* A pure-Python hook installed after
+  startup is removable by the code it audits — it buys no more integrity than a
+  function patch. Getting real integrity requires a native pre-init hook, i.e. a
+  compiled component, which changes the distribution model entirely.
+
+Audit hooks belong in the design as a **complementary observation source** —
+particularly for events raised by C code — rather than as a replacement for
+API-level interception, and a Python-level audit hook must not be presented as an
+integrity mechanism.
+
+### A.3 Restricted evaluators for dynamic source
+
+These are the direct antecedents of the dynamic-code layer in
+[§4.3](#43-rung-1--the-dynamic-code-layer).
+
+**`simpleeval`** inverts the model that killed `rexec`: instead of starting from
+full `eval()` and subtracting dangerous constructs, it implements handlers only
+for a small, explicit whitelist of AST node types. Anything not implemented is
+unreachable *by construction* rather than by patching. It additionally caps
+string length and exponent size to make trivial resource exhaustion impractical,
+and denies attributes with leading underscores [[SIMPLEEVAL]].
+
+**`asteval`** supports a materially larger subset — comprehensions, loops,
+`try`/`except`, user-defined functions — which is more useful and correspondingly
+harder to secure. Three findings from its history are worth carrying forward.
+
+An independent 2024 audit by IBM X-Force Security Research led, in release 1.0.1,
+to disallowing `string.format()`, hardening f-string evaluation, and removing
+several numpy submodules exposed by default [[ASTEVAL-101]]. Its documentation
+separately warns that exposing numpy ufuncs can segfault the interpreter from
+user input [[ASTEVAL]] — a reminder that a *permitted* callable implemented in C
+is a hole the AST layer cannot see.
+
+Then, in January 2025, **CVE-2025-24359** showed the formatting problem was not
+fully closed. The f-string handler evaluated `fmt.format(__fstring__=val)`; an
+attacker could craft the format string to raise an `AttributeError` deliberately
+and read the **exception's own `obj` attribute** to reach a protected object
+[[ASTEVAL-CVE]].
+
+That last one generalises beyond `asteval` and belongs in any design of this
+kind: **an exception is an object graph reference.** Once the accepted
+sub-language permits `try`/`except`, a raised exception can hand the source code
+a reference to something the allow-list never granted. Attribute mediation must
+therefore cover objects reached *through exception instances*, not only those
+reached through expressions the parser saw.
+
+**`RestrictedPython`** (long used by Zope and Plone) restricts via AST
+transformation, blocking `import`, `exec` and dangerous builtins, and routing
+attribute access through policy hooks. **CVE-2023-41039** illustrates the
+residual risk precisely: information disclosure through Python's formatting
+machinery — the `format` and `format_map` methods on `str`, and
+`string.Formatter` [[RESTRICTEDPYTHON-CVE]]. The same family produced
+**CVE-2021-32807** in the companion `AccessControl` layer, where the `string`
+module was exempted as safe but `string.Formatter` could be subclassed inside a
+restricted script to reach unsafe libraries [[ACCESSCONTROL-CVE]].
+
+Both are the same escape, found twice: the restricted subset permitted a
+construct whose *implementation* traverses the object graph.
+
+Three transferable lessons:
+
+1. **Whitelist by construction beats blacklist by subtraction** — the
+   `simpleeval` argument, and the inverse of the `rexec` failure.
+2. **`str.format` is a capability**, not a string operation: a format string
+   traverses attributes, so it reaches the object graph without naming `getattr`.
+   Any AST-level design must treat it as such. Three independent projects learned
+   this the same way — RestrictedPython, `AccessControl` and `asteval` — which
+   makes it the most reliably rediscovered mistake in this family.
+3. **Resource bounds belong in the same layer as the syntax bounds**, because a
+   permitted construct (`**`, a comprehension, a loop) is the exhaustion vector.
+
+### A.4 Kernel-enforced isolation
+
+The mechanisms are mature. What differs is *what they can express*, *what
+privilege they require*, and *what they cost*.
+
+**seccomp-bpf** (Linux 3.5, 2012) filters syscalls and their scalar arguments in
+the kernel. Its decisive limitation is architectural: the filter **cannot
+dereference pointer arguments** — deliberately, to avoid TOCTOU. A seccomp
+filter therefore cannot tell whether an `open()` names `/etc/passwd` or a scratch
+directory [[SECCOMP]]. It narrows the kernel's attack surface; it is not an
+access-control system.
+
+**Landlock** (proposed as an LSM in 2016–2017 [[LANDLOCK-LWN]]; filesystem rules
+merged in 5.13, network rules in 6.7) is the complement: a real unprivileged
+access-control system that associates rights with files and directories.
+Restrictions are inherited across `clone(2)`, so a thread that sandboxes itself
+binds all descendants [[LANDLOCK-DOC]] [[LANDLOCK-TALK]].
+The Landlock project's own framing is that the two are complementary, not
+competing, and the emerging practice is to install Landlock first and then a
+seccomp filter covering syscalls Landlock has no notion of [[LANDLOCK-TALK]].
+
+**Namespace-based tooling** — `unshare`, `bubblewrap`, `firejail`, `nsjail`,
+`minijail` — composes mount, network, PID and user namespaces into a usable
+confinement. These give filesystem *views* (bind mounts, masking) and network
+isolation, at the cost of requiring privileges that many deployment targets
+(unprivileged containers, managed Kubernetes) will not grant.
+
+**Userspace kernels and microVMs.** **gVisor** interposes a user-space kernel
+(the Sentry) between the workload and the host, shrinking syscall exposure
+without hardware isolation. **Firecracker** and **Kata Containers** provide a
+dedicated guest kernel with KVM-enforced memory boundaries. Reported cold-start
+figures cluster around 50–100 ms for gVisor, 100–200 ms for Firecracker and
+150–300 ms for Kata, though published numbers vary widely with what is measured
+— benchmarks that time *full container* startup rather than VM boot put the
+microVM runtimes an order of magnitude higher [[ISOLATION-CMP]]. The standing
+motivation is blunt: the Linux kernel sees on the order of 300 CVEs a year, and
+one kernel compromise reaches every container on the host [[ISOLATION-CMP]].
+
+**WebAssembly** (Pyodide, wasmtime, `container2wasm`) is a different model
+again: isolation by the absence of ambient authority rather than by kernel
+mediation. Capabilities must be granted explicitly through the host, which is
+architecturally close to the capability-passing style of `eval-namespace=closed`
+in [§4.3](#43-rung-1--the-dynamic-code-layer). Its cost is ecosystem: native
+extension modules are the reason most real Python workloads cannot move there.
+
+### A.5 Policy synthesis by observation
+
+This is the cluster the paper's central claim is positioned against
+([§2](#2-prior-art)), because the idea of *learning* a policy is not new.
+
+**AppArmor `aa-genprof` / `aa-logprof`.** A profile is put in *complain* mode,
+where denials are logged rather than enforced; the operator exercises the
+application; the tool parses the log and walks the operator through each
+violation interactively, allow-or-deny; the profile is then switched to *enforce*
+[[AA-GENPROF]]. The stated goal is to iterate until complain mode produces zero
+entries.
+
+**SELinux `audit2allow`.** The batch equivalent: read AVC denials from the audit
+log, emit a Type Enforcement policy source, review it offline, compile and install
+[[AUDIT2ALLOW]]. Red Hat's own guidance is notably cautious — analyse denials
+first, and use `audit2allow` only as a last resort, because the risk is
+*accepting whatever it generates without understanding what is being granted*
+[[AUDIT2ALLOW]].
+
+**"Mining Sandboxes for Linux Containers"** (Wan, Lo, Xia, Cai, Li; ICST 2017)
+is the closest academic antecedent. It explores container behaviour by automatic
+testing, extracts the set of syscalls observed, and emits that set as a Docker
+seccomp profile. Its methodological argument is exactly the one made here:
+static analysis over-approximates — it assumes more behaviours than actually
+occur — whereas dynamic analysis observes real executions and establishes a
+*lower bound* [[MINING-SANDBOXES]]. It also states the caveat honestly:
+*sandboxing needs policy, dynamic analysis needs executions, and testing cannot
+guarantee the absence of malicious behaviour.*
+
+**Confine** (Ghavamnia, Palit, Benameur, Polychronakis; RAID 2020) answered the
+same problem from the opposite direction: rather than observing executions, it
+statically analyses the containerised application and its dependencies to derive
+a *superset* of required syscalls, and emits the corresponding seccomp policy.
+Its motivation is precisely the weakness of the dynamic approach — a training
+workload does not exhaustively capture rare runtime conditions, so an
+observation-derived policy is unsuitable as a generic solution. Evaluated over
+150 public Docker images, it disabled 145 or more syscalls for over half of them
+[[CONFINE]].
+
+The two directions have since been combined. *Shrinking the Kernel Attack
+Surface Through Static and Dynamic Syscall Limitation* (Zhan et al., 2025) states
+the trade-off in one sentence — dynamic tracking cannot obtain the full syscall
+list, while static analysis yields an over-approximated one — and builds a hybrid
+[[SYSCALL-LIMIT]].
+
+That sentence is the same dilemma this paper faces one layer up, and
+[§6.4](#64-the-soundness-gap-stated) resolves it differently: not by making the
+analysis complete, but by arranging that an access the analysis *missed* is
+denied rather than allowed.
+
+**Positioning.** Everything above learns at the **syscall** layer. That choice
+determines both its strength and its ceiling:
+
+| | Syscall-layer synthesis | API-layer synthesis (this paper) |
+|---|---|---|
+| **Completeness** | Sees *everything*, including native code and the dynamic linker | Sees only what crosses the language's own API surface |
+| **Vocabulary** | `openat`, `connect`, `socket` — with, per [§A.4](#a4-kernel-enforced-isolation), no reachable path argument | `/etc/app/config.yaml`, `api.example.com:443`, `PGPASSWORD` |
+| **Reviewability** | An operator cannot tell from `openat` *which file* was opened | The rule names the resource the operator recognises |
+| **Portability of output** | Bound to one enforcement mechanism (a seccomp JSON profile) | Backend-independent; compiles to several ([§7](#7-compiling-one-profile-to-many-backends)) |
+| **Language semantics** | None — a syscall trace cannot express "may import `json`" | Native — module, call and dynamic-source rules have no syscall analogue |
+
+The trade is real in both directions, and must be made consciously. API-layer observation is **less complete** and **more
+reviewable**. Since the profile is *meant to be read and edited by a human*
+before it is enforced — the one step Red Hat's `audit2allow` guidance insists
+upon — reviewability is the property being optimised for. The completeness gap
+is then closed not by making observation perfect but by **placing enforcement
+below the observation layer**, where it does not depend on having seen
+everything. This is the key structural move and it is what
+[§6.4](#64-the-soundness-gap-stated) is about.
+
+### A.6 The LLM-era execution sandboxes
+
+By 2025 the agent frameworks had converged on remote execution.
+**smolagents** ships a `LocalPythonExecutor` its own documentation labels *not a
+security boundary*, alongside E2B, Modal, Docker and WebAssembly backends;
+**E2B** runs Firecracker microVMs with sub-150 ms boots [[SMOLAGENTS-SEC]].
+The documented design choice is between *running the snippet remotely* and
+*running the whole agent inside the sandbox* [[SMOLAGENTS-SEC]] — the same two
+granularities as [§8.1](#81-two-granularities), reached independently.
+
+Two properties of this generation are worth naming, because they define the gap
+the present design aims at:
+
+- **Isolation is coarse and uniform.** The sandbox is a fresh machine. What the
+  code may reach inside it is largely "whatever is installed", constrained by
+  network egress rules if any. There is no per-application least-privilege
+  profile, because nothing produced one.
+- **The boundary is a network hop.** That buys strong isolation and costs
+  latency, a dependency on an external service, and a non-trivial story for
+  getting credentials and application state across.
+
+**The agent-security literature, and why it sits beside rather than above this
+work.** A substantial 2024–2025 line of research attacks the same overall
+problem from the *orchestration* side. It is worth reading alongside this paper,
+because the two are complementary and neither subsumes the other.
+
+- **CaMeL** (Debenedetti et al., 2025) builds a protective layer that extracts
+  the control and data flows from the *trusted* query, so that untrusted data
+  retrieved by the model can never influence program flow, and adds capabilities
+  to prevent exfiltration over unauthorised channels [[CAMEL]].
+- **Design Patterns for Securing LLM Agents against Prompt Injections**
+  (Beurer-Kellner et al., 2025) proposes principled patterns with provable
+  resistance to prompt injection, and analyses their trade-offs against agent
+  utility [[AGENT-PATTERNS]].
+- **IsolateGPT** (Wu, Roesner, Kohno, Zhang, Iqbal; 2024) observes that LLM app
+  ecosystems resemble early computing platforms with insufficient isolation
+  between apps and the system, and proposes an execution isolation architecture
+  [[ISOLATEGPT]].
+- **AgentDojo** (Debenedetti et al., 2024) and **ToolEmu** (Ruan et al., 2023)
+  supply the evaluation side: an extensible environment for attacks and defences
+  over untrusted tool output, and an LM-emulated sandbox for surfacing long-tail
+  risks without implementing every tool [[AGENTDOJO]] [[TOOLEMU]].
+
+The division of labour is clean, and stating it prevents a category error.
+That literature governs **what the agent is allowed to decide** — which data may
+influence control flow, which tool may be called, whether a plan is safe. This
+paper governs **what the resulting process is allowed to touch**, and assumes the
+decision has already gone wrong. An agent whose orchestration is perfectly
+secured still runs its tool bodies as ordinary code with ambient authority; an
+agent confined by a profile still benefits from not being hijacked in the first
+place. Neither layer makes the other unnecessary, and the evaluation frameworks
+above are the natural place to measure whether the combination holds.
 
 ---
 
