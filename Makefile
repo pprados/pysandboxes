@@ -110,6 +110,16 @@ sample-tests-%:
 	$(MAKE) -C samples/$*-demo init
 	$(MAKE) -C samples/$*-demo tests
 
+# mcp-client spawns the neighbouring server sample as a subprocess, through that
+# sample's own interpreter, so that venv has to exist before its suite runs --
+# and `mcp-client` sorts before `mcp-server` in SAMPLES. A prerequisite rather
+# than an ordering assumption: under -jN nothing else would sequence them. The
+# rule carries no recipe, so the pattern rule above still supplies one.
+sample-init-%:
+	$(MAKE) -C samples/$*-demo init
+
+sample-tests-mcp-client: sample-init-mcp-server
+
 ## Make the samples' own test suites
 # Run every sample even when one fails, and still exit non-zero if any did:
 # stopping at the first failure hides the state of the samples behind it, and
