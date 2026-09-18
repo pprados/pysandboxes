@@ -14,7 +14,8 @@ name: Python Integration Tests
 # is skipped by the `changes` job -- re-running the same tree teaches nothing.
 #
 # container-tests and sample-tests are deliberately absent: the first needs
-# minikube plus locally built images, the second needs the samples' API keys.
+# minikube plus locally built images, the second has its own nightly workflow,
+# samples.yml.
 on:
   workflow_dispatch:
   schedule:
