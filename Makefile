@@ -97,7 +97,17 @@ SAMPLES = \
 # $(MAKE) shares the jobserver, so -jN stays a global budget.
 # The per-sample targets must not be declared .PHONY: make skips the implicit
 # rule search for phony targets, which would leave this pattern rule unused.
+# `init` first: pytest lives in the sample's `test` dependency group, which
+# `uv run pytest` does not install -- uv syncs `dev` only. A developer whose
+# sample venv was hydrated by an earlier `make init` never notices; a clean
+# container fails with `Failed to spawn: pytest`. Two recipe lines rather than
+# two goals on one $(MAKE): goals given on a command line run concurrently
+# under -jN, which would race `tests` against the sync it depends on.
+# UV_GROUP is deliberately not overridden here: the sample Makefile declares it
+# with `?=`, so a value pushed from the root would win for a local run too, and
+# `uv sync` prunes -- it would strip ipython, pyright and ruff from the venv.
 sample-tests-%:
+	$(MAKE) -C samples/$*-demo init
 	$(MAKE) -C samples/$*-demo tests
 
 ## Make the samples' own test suites
