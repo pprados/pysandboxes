@@ -1,19 +1,60 @@
 name: Python Integration Tests
 
-# Manual only. These tests launch real sandboxed child processes, so they are
-# slower and less hermetic than the unit suite, and the provider matrix in
-# tests/integration_tests/test_usage_with_providers.py currently targets qemu,
-# which a hosted runner cannot boot. Providers whose binary is missing skip
-# themselves cleanly (see _skip_reason), so the run stays green on a bare
-# runner. Add a `schedule:` block here to also run it nightly.
+# Nightly, plus on demand. These tests launch real sandboxed child processes, so
+# they are slower and less hermetic than the unit suite, and the provider matrix
+# in tests/integration_tests/test_usage_with_providers.py boots a VM. A hosted
+# runner exposes no /dev/kvm, so those rows run under TCG emulation, which
+# containers.yml already relies on. Providers whose binary is missing skip
+# themselves cleanly (see provider_skip_reason), so the run stays green on a
+# runner that lacks one.
+#
+# The nightly run validates the integration branch, `develop`, not the branch the
+# schedule fires from: GitHub only honours `schedule:` on the default branch, and
+# `master` only moves at publication time. A night without a commit on `develop`
+# is skipped by the `changes` job -- re-running the same tree teaches nothing.
 #
 # container-tests and sample-tests are deliberately absent: the first needs
 # minikube plus locally built images, the second needs the samples' API keys.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
 
 jobs:
+  # A cheap guard job rather than a step: it keeps the whole setup -- apt, uv,
+  # the dependency install -- out of a night that has nothing new to test.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commits.outputs.changed }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        # `git rev-list --since` needs the history the default shallow clone omits.
+        fetch-depth: 0
+
+    - name: Move to the integration branch
+      if: github.event_name == 'schedule'
+      run: git checkout -B develop origin/develop
+
+    - name: Look for commits from the last day
+      id: commits
+      run: |
+        count=$(git rev-list --count --since='24 hours ago' HEAD)
+        echo "$count commit(s) in the last 24 hours"
+        if [ "$count" -gt 0 ]; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        fi
+
   integration:
+    needs: changes
+    # Only the nightly run is skippable: a manual dispatch, and a local `act` run,
+    # always execute the suite.
+    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -24,6 +65,17 @@ jobs:
     - uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    # The branch under test is `develop`, not the branch the schedule fired from.
+    # Done here rather than through `actions/checkout`'s `ref:` input: `act` only
+    # substitutes its bind of the working directory when that input is absent, and
+    # the real action it otherwise runs wants credentials a local run has no reason
+    # to hold. Keeping `with:` free of `ref` is what keeps `make gh-tests` working.
+    - name: Move to the integration branch
+      if: github.event_name == 'schedule'
+      run: |
+        git fetch --depth=1 origin develop
+        git checkout -B develop FETCH_HEAD
 
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y make build-essential
@@ -55,4 +107,10 @@ jobs:
       run: uv sync --group test
 
     - name: Run integration tests
+      # The `qemu-tcg` rows -- the only ones marked `slow` -- are dropped here. They
+      # exist to cover emulation on a developer machine that has /dev/kvm; a hosted
+      # runner has none, so qemu already emulates and the extra row boots a second,
+      # identical VM per test for no added coverage (see _env.py:24-30).
+      env:
+        PYTEST_ADDOPTS: -m 'not slow'
       run: make integration-tests
