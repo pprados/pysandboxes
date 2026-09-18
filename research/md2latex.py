@@ -589,6 +589,11 @@ def strip_references(markdown: str) -> str:
     return re.sub(r"^## References\s*$.*?(?=^## |\Z)", "", markdown, flags=re.S | re.M)
 
 
+def break_page_before_appendices(markdown: str) -> str:
+    """Start each appendix on a fresh page; Markdown has no way to say this."""
+    return re.sub(r"^## Appendix ", lambda m: "\\clearpage\n\n" + m.group(0), markdown, flags=re.M)
+
+
 def rewrite_citations(markdown: str, known: set[str]) -> tuple[str, set[str]]:
     """Rewrite ``[[KEY]]`` into ``\\cite{KEY}``; report keys with no entry."""
     unknown: set[str] = set()
@@ -834,6 +839,7 @@ def main() -> int:
     markdown, meta = extract_metadata(markdown)
     markdown = strip_toc(markdown)
     markdown = strip_references(markdown)
+    markdown = break_page_before_appendices(markdown)
     markdown, unknown = rewrite_citations(markdown, {e.key for e in entries})
     # Diagrams first: the mermaid sources must reach mermaid-cli untouched, and
     # substituting Unicode inside them would corrupt every label.
