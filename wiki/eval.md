@@ -192,6 +192,7 @@ name of an `ast` node class**, mixed freely — the same shape as
 | `import` | `Import`, `ImportFrom`, `alias` |
 | `subscript` | `Subscript`, `Slice`, `Starred` |
 | `fstring` | `JoinedStr`, `FormattedValue` |
+| `tstring` | `TemplateStr`, `Interpolation` (Python 3.14 and later) |
 | `yield` | `Yield`, `YieldFrom` |
 
 Async is neither privileged nor special-cased: `eval-syntax=async` opens it,
