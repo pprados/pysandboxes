@@ -8,10 +8,12 @@ name: Python Integration Tests
 # themselves cleanly (see provider_skip_reason), so the run stays green on a
 # runner that lacks one.
 #
-# The nightly run validates the integration branch, `develop`, not the branch the
-# schedule fires from: GitHub only honours `schedule:` on the default branch, and
-# `master` only moves at publication time. A night without a commit on `develop`
-# is skipped by the `changes` job -- re-running the same tree teaches nothing.
+# The nightly run validates the integration branch, `develop`. GitHub only honours
+# `schedule:` on the default branch, which is `develop`, so the schedule already
+# fires from the branch under test; the pinning step below states that contract in
+# the tree rather than leaving it to a repository setting no file records. A night
+# without a commit on `develop` is skipped by the `changes` job -- re-running the
+# same tree teaches nothing.
 #
 # container-tests and sample-tests are deliberately absent: the first needs
 # minikube plus locally built images, the second has its own nightly workflow,
