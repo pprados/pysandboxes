@@ -345,11 +345,18 @@ def activate_sandboxes(
             str(uuid.uuid4()),
         )
         # Offer the opportunity to update the rules (add, remove, etc.)
-        all_rules = os_provider.update_rules_and_activate(
-            all_rules=all_rules,
-            envs=Envs(envs),
-            temp=Path(tempfile.mkdtemp()),
-        )
+        # The directory does not outlive the call: the only provider that writes into
+        # a `temp` does so for the netfilter FIFOs, and those need a `pipe_path`, which
+        # this call site has none of. A bare `mkdtemp()` here left one empty directory
+        # behind per sandboxed process -- thousands of them, since this runs on every
+        # activation. Removing it before the guards are armed also keeps the unlink out
+        # of the file guard's way.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            all_rules = os_provider.update_rules_and_activate(
+                all_rules=all_rules,
+                envs=Envs(envs),
+                temp=Path(temp_dir),
+            )
 
     # Apply the rules
     if all_rules.use_py_sandbox:
