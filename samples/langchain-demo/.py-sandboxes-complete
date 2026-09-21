@@ -109,6 +109,9 @@ env=TMPDIR=${TMPDIR}
 env=PSUTIL_DEBUG=${PSUTIL_DEBUG}
 env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
+# Add rules (2026/09/21 at 08:55)
+env=SSL_CERT_FILE=${SSL_CERT_FILE}
+
 # </learning_guard_envs>
 
 #######################################################################################
@@ -151,6 +154,9 @@ env=VIRTUAL_ENV=${VIRTUAL_ENV}
 expose-ro=../..
 
 # Add rules (2026/09/10 at 09:59)
+
+# Add rules (2026/09/21 at 08:55)
+expose-ro=/proc
 
 # </learning_guard_files>
 
@@ -297,6 +303,19 @@ python-import=httpx_aiohttp
 python-import=opentelemetry
 python-import=psutil
 
+# Add rules (2026/09/21 at 08:55)
+# Standard Python
+python-import=_thread
+
+
+# Add rules (2026/09/21 at 08:56)
+# Standard Python
+python-import=_hmac, linecache
+
+# External modules (Are you sure about the origin?)
+python-import=annotationlib
+python-import=compression
+
 # </learning_guard_import>
 
 #######################################################################################
@@ -332,6 +351,14 @@ python-import=psutil
 # before keeping them. httpx and anyio create threads, so ALLOW:threads
 # is common and legitimate; an ALLOW:process-exec deserves a hard look.
 # <learning_guard_api>
+
+# Add rules (2026/09/21 at 08:55)
+
+# Add rules (2026/09/21 at 08:55)
+
+# Add rules (2026/09/21 at 08:56)
+
+# Add rules (2026/09/21 at 08:56)
 
 # </learning_guard_api>
 

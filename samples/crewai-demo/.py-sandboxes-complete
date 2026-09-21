@@ -19,6 +19,11 @@ python-import=atexit, ctypes, importlib, inspect, mmap, pkgutil, subprocess
 python-import=webbrowser
 
 # Standard Python
+python-import=asyncio
+python-import=compression
+# annotationlib is new in 3.14 (PEP 649/749) and is pulled in by the annotation
+# machinery, so the profile needs it to cover that version.
+python-import=annotationlib
 python-import=__future__, _cffi_backend, _codecs_cn, _codecs_hk, _codecs_iso2022
 python-import=_codecs_jp, _codecs_kr, _codecs_tw, _compression, _elementtree
 python-import=_csv, _decimal, _hashlib, _markupbase, _multibytecodec, _queue, _socket, _sqlite3, _string
@@ -131,9 +136,13 @@ net=ALLOW|TCP|ip6-localhost|0|IN
 net=ALLOW|TCP|ip6-loopback|0|IN
 net=ALLOW|TCP|raw.githubusercontent.com|443|OUT
 
-# threads: concurrency primitives
+# threads: concurrency primitives. CPython renamed the internal entry point:
+# 3.13+ goes through _start_joinable_thread, 3.11 and 3.12 through
+# _start_new_thread. Both are named so one profile covers every version the
+# project claims -- this grants no capability the line above did not.
 python-api=ALLOW:threading.Thread.start
 python-api=ALLOW:threading._start_joinable_thread
+python-api=ALLOW:threading._start_new_thread
 
 # The calculator tool evaluates a string the model produced. `closed` rather
 # than the adaptive default: the caller already passes {"__builtins__": {}},

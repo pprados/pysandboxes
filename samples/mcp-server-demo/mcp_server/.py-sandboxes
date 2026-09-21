@@ -116,6 +116,10 @@ env=ANDROID_DATA=${ANDROID_DATA}
 env=FASTMCP_ENV_FILE=${FASTMCP_ENV_FILE}
 env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
+# Add rules (2026/09/21 at 09:08)
+env=NO_COLOR=${NO_COLOR}
+env=SSL_CERT_FILE=${SSL_CERT_FILE}
+
 # </learning_guard_envs>
 
 #######################################################################################
@@ -240,6 +244,7 @@ net=ALLOW|TCP|www.google.com|443|OUT
 python-import=atexit, importlib, inspect, mmap, subprocess, webbrowser
 
 # Standard Python
+python-import=_colorize
 python-import=__future__, _cffi_backend, _decimal, _hashlib, _markupbase
 python-import=_multibytecodec, _multiprocessing, _queue, _socket
 python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
@@ -321,6 +326,18 @@ python-import=uncalled_for
 python-import=watchfiles
 python-import=websockets
 
+# Add rules (2026/09/21 at 09:08)
+# Standard Python
+python-import=_thread
+
+# External modules (Are you sure about the origin?)
+python-import=backports
+
+# Add rules (2026/09/21 at 09:08)
+# Standard Python
+python-import=_hmac, annotationlib, compression, glob
+
+
 # </learning_guard_import>
 
 #######################################################################################
@@ -361,6 +378,16 @@ python-import=websockets
 # threads: concurrency primitives
 python-api=ALLOW:threading.Thread.start
 python-api=ALLOW:threading._start_joinable_thread
+
+# Add rules (2026/09/21 at 09:08)
+# threads: concurrency primitives
+python-api=ALLOW:threading._start_new_thread
+
+# Add rules (2026/09/21 at 09:08)
+
+# Add rules (2026/09/21 at 09:08)
+
+# Add rules (2026/09/21 at 09:08)
 
 # </learning_guard_api>
 

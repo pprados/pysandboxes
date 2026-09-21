@@ -33,6 +33,7 @@ env=TMPDIR=${TMPDIR}
 python-import=atexit, importlib, inspect, mmap, subprocess, webbrowser
 
 # Standard Python
+python-import=_colorize
 python-import=__future__, _cffi_backend, _decimal, _hashlib, _markupbase
 python-import=_multibytecodec, _multiprocessing, _queue, _socket
 python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
@@ -138,3 +139,26 @@ python-import=uncalled_for
 python-import=watchfiles
 
 expose-ro=/etc
+
+# Add rules (2026/09/21 at 09:08)
+env=NO_COLOR=${NO_COLOR}
+env=SSL_CERT_FILE=${SSL_CERT_FILE}
+
+# Standard Python
+python-import=_thread
+
+# External modules (Are you sure about the origin?)
+python-import=backports
+
+# threads: concurrency primitives
+python-api=ALLOW:threading._start_new_thread
+
+# Add rules (2026/09/21 at 09:08)
+
+# Add rules (2026/09/21 at 09:08)
+
+# Add rules (2026/09/21 at 09:08)
+# Standard Python
+python-import=_ast, _ast_unparse, _hmac, annotationlib, compression, glob
+
+

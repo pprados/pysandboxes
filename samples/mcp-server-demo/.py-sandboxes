@@ -7,6 +7,7 @@ env=OS_SANDBOX=${OS_SANDBOX}
 python-import=subprocess
 
 # Standard Python
+python-import=_colorize
 python-import=__future__, _cffi_backend, _decimal, _hashlib, _io, _markupbase
 python-import=_multibytecodec, _socket, _sysconfigdata__linux_x86_64-linux-gnu
 python-import=_zoneinfo, abc, argparse, array, ast, asyncio, atexit, base64

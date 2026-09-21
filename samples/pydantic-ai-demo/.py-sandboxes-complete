@@ -63,3 +63,22 @@ eval-namespace=closed
 eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
+
+# Add rules (2026/09/21 at 10:12)
+env=SSL_CERT_FILE=${SSL_CERT_FILE}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# Standard Python
+python-import=_thread, uuid
+
+
+
+# Add rules (2026/09/21 at 10:12)
+
+# Add rules (2026/09/21 at 10:12)
+
+# Add rules (2026/09/21 at 10:12)
+# Standard Python
+python-import=annotationlib
+
+
