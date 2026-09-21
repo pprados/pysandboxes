@@ -92,7 +92,7 @@ expose-ro=/proc/sys/kernel/random
 # three is set on a stock Linux shell or a CI runner, so the rule carries the
 # fallback tempfile.gettempdir() applies -- without it the rule is empty and
 # the whole file a syntax error. This is the form learning mode now emits.
-expose-rw=${TMPDIR:-/tmp}
+expose-rw=${TMPDIR:-${TEMP:-${TMP:-/tmp}}}
 
 # introspection: can be used to undo the patches
 # filelock (pulled by huggingface-hub) installs an audit hook to detect unsafe

@@ -52,6 +52,7 @@
 # Temporary directories
 --setenv TEMP "/tmp"
 --setenv TMP "/tmp"
+--setenv TMPDIR "/tmp"
 
 # Unset a specific environment variable
 #--unsetenv VAR
