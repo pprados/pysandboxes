@@ -296,6 +296,9 @@ def _check_is_in_rules(path: Path) -> bool:
 
 _learn_env = LearnEnviron()
 
+# tempfile.gettempdir() falls back to this when TMPDIR, TEMP and TMP are all unset.
+_TMP_FALLBACK = "/tmp"
+
 _special_env = OrderedDict(
     sorted(
         (
@@ -303,6 +306,10 @@ _special_env = OrderedDict(
             for k in [
                 "PWD",
                 "HOME",
+                # TMPDIR is the POSIX name and comes first; TMP and TEMP are Windows
+                # conventions, kept for a profile learned there. None of the three is
+                # set on a stock Linux shell, which is what _TMP_FALLBACK answers for.
+                "TMPDIR",
                 "TMP",
                 "TEMP",
             ]
@@ -408,7 +415,16 @@ def generate_rules(
                             elif key == "HOME":
                                 value = "~" + x
                             else:
-                                value = f"${{{key}}}" + x
+                                # Every remaining key names a temporary directory, and
+                                # none of them is set on a stock Linux shell or a CI
+                                # runner. A bare ${VAR} would expand to nothing there
+                                # and make the whole file a syntax error, so the rule
+                                # carries the one fallback that holds everywhere.
+                                # Only these keys get a default: for a key naming a
+                                # machine-specific path, a default would silently
+                                # expose the learning machine's directory instead of
+                                # failing where a human can see it.
+                                value = f"${{{key}:-{_TMP_FALLBACK}}}" + x
                         break
             if not value:
                 value = str(path)
