@@ -148,6 +148,7 @@ _EXPECTED_ENVS = frozenset(
         "PYTHONSTARTUP",
         "TEMP",
         "TMP",
+        "TMPDIR",
         # unshare passes PYTHONPATH so the child can import pysandboxes; its own
         # supervision (PID_FILE, SLIRP_READY_FD) is dropped before the exec into
         # the sandbox, so seeing either name back here is a regression.

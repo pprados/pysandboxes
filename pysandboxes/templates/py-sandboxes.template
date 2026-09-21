@@ -97,7 +97,10 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 # Common safe variables:
 #env=USER=sandbox
-#env=TEMP=${TEMP:-${TMP}}
+# The temporary directory, in the order tempfile.gettempdir() consults: TMPDIR is
+# the POSIX name, TEMP and TMP are Windows conventions, and none of the three is
+# set on a stock Linux shell -- hence the final literal.
+#env=TMPDIR=${TMPDIR:-${TEMP:-${TMP:-/tmp}}}
 
 # API access (high security risk):
 #env=*_API_KEY=${*_API_KEY}
