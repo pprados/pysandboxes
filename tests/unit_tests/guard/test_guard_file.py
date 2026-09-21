@@ -1,7 +1,13 @@
 import os
 from pathlib import Path
+from unittest.mock import patch
 
-from pysandboxes.guard_files import _apply_dest_to_src_rules, _apply_src_to_dest_rules
+from pysandboxes.guard_files import (
+    LearnFileRule,
+    _apply_dest_to_src_rules,
+    _apply_src_to_dest_rules,
+    generate_rules,
+)
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import activate_guard_files_rules
@@ -77,3 +83,38 @@ def test_apply_src_to_dest_rules() -> None:
 
     refuse = _apply_src_to_dest_rules("/refuse.txt", accept_dest=False)
     assert refuse == ("/refuse.txt", None)
+
+
+def test_generate_rules_gives_a_temporary_directory_a_fallback(tmp_path: Path) -> None:
+    # A learned rule naming a temporary directory must stay usable on a machine
+    # that sets none of TMPDIR, TEMP or TMP -- a stock Linux shell, or a CI
+    # runner. A bare ${TMPDIR} expands to nothing there and the whole config
+    # file becomes a syntax error.
+    work = tmp_path / "run" / "data"
+    work.mkdir(parents=True)
+
+    with patch.dict(
+        "pysandboxes.guard_files._special_env",
+        {"TMPDIR": str(tmp_path)},
+        clear=True,
+    ):
+        rules = generate_rules({LearnFileRule(work, False)})
+
+    assert "expose-ro=${TMPDIR:-/tmp}/run/data" in rules
+
+
+def test_generate_rules_leaves_a_home_relative_path_alone(tmp_path: Path) -> None:
+    # Only the temporary directory keys get a default: a default for a key
+    # naming a machine-specific path would silently expose the learning
+    # machine's directory rather than fail where a human can see it.
+    work = tmp_path / "project"
+    work.mkdir()
+
+    with patch.dict(
+        "pysandboxes.guard_files._special_env",
+        {"HOME": str(tmp_path)},
+        clear=True,
+    ):
+        rules = generate_rules({LearnFileRule(work, False)})
+
+    assert "expose-ro=~/project" in rules
