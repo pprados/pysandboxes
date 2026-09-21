@@ -4,7 +4,8 @@ SHELL=/bin/bash
 	spell_check spell_fix clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
-	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init
+	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init \
+	clean-sandbox-temps
 
 UV_GROUP?=--group dev --group test --group lint
 
@@ -197,6 +198,22 @@ clean: api_docs_clean extra-clean
 	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \; || true
 	@rm -Rf dist/ .make-* .mypy_cache .pytest_cache .ruff_cache
 	@rm -f denied-write.probe || true
+	@$(MAKE) --no-print-directory clean-sandbox-temps
+
+# A sandboxed run leaves temporary files in the repository root, not under /tmp:
+# once the guards are armed /tmp is unreachable, and tempfile.gettempdir() falls
+# back to the working directory (see the note at main_sandbox.py:468). The DNS
+# and hosts files unshare_setup.py writes are bind-mounted into the sandbox, so
+# they carry delete=False and nobody unlinks them afterwards -- a full sample or
+# integration run drops dozens, and they add up until the disk complains.
+# Restricted to the shapes tempfile produces, so the tracked `tmp/` directory and
+# anything a developer named `tmpfoo` by hand are left alone.
+## Remove the temporary files a sandboxed run leaves behind
+clean-sandbox-temps:
+	@find . -maxdepth 1 \( \
+		-type f \( -name 'tmp??????*.hosts' -o -name 'tmp??????*.resolv' \) -o \
+		-type d -name 'tmp??????' \
+	\) -exec rm -rf {} + 2>/dev/null || true
 
 # pdoc imports the package to introspect it, so it runs inside the project
 # environment (`--with` adds pdoc itself without touching pyproject.toml).
