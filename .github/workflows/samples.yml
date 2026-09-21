@@ -12,6 +12,12 @@ name: Sample Tests
 # without a commit on `develop` is skipped by the `changes` job -- re-running the
 # same tree teaches nothing. A tag push keeps testing the tag, and is never skipped.
 #
+# Every interpreter the project claims is covered, 3.11 through 3.14: a sample's
+# .py-sandboxes profile is learned under one version and the set of modules the
+# interpreter loads differs between them, so a profile green on 3.13 can refuse
+# an import on 3.11. langgraph-demo declares requires-python >=3.13 and is
+# skipped on the two lower rows by sample-tests-%.
+#
 # No secret is needed: pydantic-ai drives TestModel behind a placeholder key,
 # openai-agents-sdk is mocked, and the suites that would reach a real model
 # (mcp-client, mcp-server) skip themselves when OPENAI_API_KEY / RUN_CLAUDE_TESTS
@@ -61,6 +67,18 @@ jobs:
     if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    # Pins the interpreter for every uv call in the sample Makefiles, and tells
+    # sample-tests-% which version it is running: a sample whose requires-python
+    # excludes it is skipped rather than failed. Without this uv picks whatever
+    # the runner happens to offer, which is how a suite learned on one version
+    # ended up green by luck and red on another.
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
     - uses: actions/checkout@v4
@@ -81,10 +99,10 @@ jobs:
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y make build-essential
 
-    - name: Set up Python
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
-        python-version: "3.13"
+        python-version: ${{ matrix.python-version }}
 
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev

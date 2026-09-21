@@ -18,6 +18,8 @@ env=MY_IP=${MY_IP:-127.0.0.1}
 python-import=subprocess
 
 # Standard Python
+python-import=asyncio
+python-import=compression
 python-import=__future__, __main__, _cffi_backend, _decimal, _hashlib, _io, _socket
 python-import=_sysconfigdata__linux_x86_64-linux-gnu, _thread, _zoneinfo, abc
 python-import=argparse, array, ast, asyncio, atexit, base64, binascii, bisect

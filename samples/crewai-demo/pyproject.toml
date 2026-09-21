@@ -69,6 +69,18 @@ target-version = "py310"
 skip = ".git,*.pdf,*.svg,*.yaml,*.ipynb,uv.lock,./.venv"
 
 [tool.uv]
+# crewai 1.15.21 -- its latest release -- pins `chromadb~=1.1.0`, and chromadb
+# 1.1.1 still imports the `pydantic.v1` shim, which refuses to build its models
+# on Python 3.14: "Core Pydantic V1 functionality isn't compatible with Python
+# 3.14 or greater". The suite then dies during collection, before any sandbox
+# runs. chromadb 1.5 dropped the shim, so the override is what lets this sample
+# cover every version the project claims.
+#
+# The risk is carried knowingly: crewai does not test against chromadb 1.5. It
+# is small here because the sample uses neither RAG, memory nor knowledge --
+# chromadb only arrives as a transitive import. Re-check when crewai next moves:
+# if it relaxes the pin, drop this override.
+override-dependencies = ["chromadb>=1.5"]
 
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository

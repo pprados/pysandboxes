@@ -3,6 +3,8 @@ __main__
 _thread
 _tkinter
 abc
+annotationlib
+antigravity
 argparse
 array
 ast
@@ -19,6 +21,7 @@ codecs
 collections
 colorsys
 compileall
+compression
 concurrent
 configparser
 contextlib
@@ -67,6 +70,7 @@ ipaddress
 itertools
 json
 keyword
+lib2to3
 linecache
 locale
 logging
@@ -79,8 +83,11 @@ modulefinder
 msvcrt
 multiprocessing
 netrc
-numbers
+nt
 ntpath
+nturl2path
+numbers
+opcode
 operator
 optparse
 os
@@ -99,6 +106,8 @@ pwd
 py_compile
 pyclbr
 pydoc
+pydoc_data
+pyexpat
 queue
 quopri
 random
@@ -122,6 +131,9 @@ smtplib
 socket
 socketserver
 sqlite3
+sre_compile
+sre_constants
+sre_parse
 ssl
 stat
 statistics
@@ -138,6 +150,7 @@ tempfile
 termios
 test
 textwrap
+this
 threading
 time
 timeit

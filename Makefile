@@ -106,9 +106,20 @@ SAMPLES = \
 # UV_GROUP is deliberately not overridden here: the sample Makefile declares it
 # with `?=`, so a value pushed from the root would win for a local run too, and
 # `uv sync` prunes -- it would strip ipython, pyright and ruff from the venv.
+# UV_PYTHON, when set, pins the interpreter for every uv call below -- that is
+# what lets the nightly matrix run each sample on each version the project
+# claims. A sample whose own requires-python excludes that interpreter is
+# skipped, not failed: langgraph-demo is 3.13+, and uv cannot resolve it on
+# 3.11. sort -V puts the lower version first, so the sample runs exactly when
+# its floor is the lower of the two.
 sample-tests-%:
-	$(MAKE) -C samples/$*-demo init
-	$(MAKE) -C samples/$*-demo tests
+	@req=$$(grep -m1 requires-python samples/$*-demo/pyproject.toml | grep -oE '3\.[0-9]+'); \
+	if [ -n "$(UV_PYTHON)" ] && \
+	   [ "$$(printf '%s\n%s\n' "$$req" "$(UV_PYTHON)" | sort -V | head -1)" != "$$req" ]; then \
+		echo "skip $*-demo: requires-python >= $$req, running $(UV_PYTHON)"; \
+	else \
+		$(MAKE) -C samples/$*-demo init && $(MAKE) -C samples/$*-demo tests; \
+	fi
 
 # mcp-client spawns the neighbouring server sample as a subprocess, through that
 # sample's own interpreter, so that venv has to exist before its suite runs --

@@ -113,3 +113,18 @@ eval-namespace=closed
 eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
+
+# Add rules (2026/09/21 at 08:57)
+env=SSL_CERT_FILE=${SSL_CERT_FILE}
+
+expose-ro=/proc
+
+
+# Add rules (2026/09/21 at 08:57)
+# Standard Python
+python-import=_hmac
+
+# External modules (Are you sure about the origin?)
+python-import=annotationlib
+python-import=compression
+

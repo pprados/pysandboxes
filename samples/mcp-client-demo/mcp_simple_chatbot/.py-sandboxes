@@ -18,7 +18,12 @@ env=MY_IP=${MY_IP:-127.0.0.1}
 python-import=subprocess
 python-api=ALLOW:subprocess.Popen
 python-api=ALLOW:threading.Thread.start
+# CPython renamed the internal entry point: 3.13+ uses
+# _start_joinable_thread, 3.11 and 3.12 use _start_new_thread. Naming both
+# keeps one profile valid on every version the project claims; it grants no
+# capability the line above did not.
 python-api=ALLOW:threading._start_joinable_thread
+python-api=ALLOW:threading._start_new_thread
 
 # Standard Python
 python-import=__future__, __main__, _cffi_backend, _decimal, _hashlib, _io, _socket
