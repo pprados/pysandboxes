@@ -47,7 +47,7 @@
   form is usually the right one. Each refusal names the door it stopped
   at.
 
-## [0.1.0] - 2025-11-27
+## [0.1.0] - 2026-03-25
 
 ### Added
 - First stable version
