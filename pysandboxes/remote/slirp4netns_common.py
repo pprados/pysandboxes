@@ -167,6 +167,31 @@ def run_slirp_watcher(
     pipe_w. Puts the Popen instance in process_holder[0] when started so the
     daemon can kill it on shutdown.
     """
+    try:
+        _run_slirp_watcher(
+            shutdown_event,
+            pipe_w,
+            api_socket,
+            child_pid=child_pid,
+            pid_file=pid_file,
+            process_holder=process_holder,
+            timeout=timeout,
+        )
+    finally:
+        remove_slirp_temp_files(pid_file, api_socket)
+
+
+def _run_slirp_watcher(
+    shutdown_event: threading.Event,
+    pipe_w: int,
+    api_socket: str,
+    *,
+    child_pid: int | None = None,
+    pid_file: str | None = None,
+    process_holder: list[subprocess.Popen[bytes] | None] | None = None,
+    timeout: int = SLIRP_WATCHER_TIMEOUT,
+) -> None:
+    """Body of :func:`run_slirp_watcher`, which owns the temporary files it leaves."""
     if child_pid is not None:
         pid = child_pid
     elif pid_file is not None:
@@ -256,7 +281,8 @@ def make_slirp_temp_files() -> tuple[str, str]:
     """Create temporary pid file and API socket path for slirp4netns.
 
     Returns (pid_file_path, api_socket_path). The API socket path is unlinked
-    so slirp4netns can create it as a socket.
+    so slirp4netns can create it as a socket. Both are the caller's to remove
+    afterwards, through :func:`remove_slirp_temp_files`.
     """
     fd, pid_file = tempfile.mkstemp()
     os.close(fd)
@@ -264,3 +290,20 @@ def make_slirp_temp_files() -> tuple[str, str]:
     os.close(fd)
     os.unlink(api_socket)
     return pid_file, api_socket
+
+
+def remove_slirp_temp_files(pid_file: str | None, api_socket: str | None) -> None:
+    """Remove what a slirp4netns run leaves in the temporary directory.
+
+    slirp4netns re-creates ``api_socket`` as a Unix socket, and the sandbox writes
+    its pid into ``pid_file``; neither goes away on its own. Call this from the
+    shutdown path as well as from the watcher thread: the thread is a daemon one,
+    so the interpreter can exit while it still waits on slirp4netns, and its
+    ``finally`` then never runs.
+    """
+    for path in (pid_file, api_socket):
+        if path:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass

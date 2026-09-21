@@ -60,6 +60,10 @@ class UnshareSetupConfig:
     current_dir: str
     ignore_paths: list[str]  # paths relative to current_dir to mask (overlay with no-access)
     sandbox_envs: dict[str, str]  # the profile's env= whitelist, all the sandbox may see
+    # Chroot root, created by the daemon rather than here: this process execs into the
+    # sandbox and never returns, so it cannot remove it. Only the daemon outlives the
+    # namespace and can, once the tmpfs mounted over it has gone with it.
+    chroot_dir: str
 
     def to_json(self) -> str:
         return json.dumps(
@@ -73,6 +77,7 @@ class UnshareSetupConfig:
                 "current_dir": self.current_dir,
                 "ignore_paths": self.ignore_paths,
                 "sandbox_envs": self.sandbox_envs,
+                "chroot_dir": self.chroot_dir,
             }
         )
 
@@ -89,6 +94,7 @@ class UnshareSetupConfig:
             current_dir=d["current_dir"],
             ignore_paths=d.get("ignore_paths", []),
             sandbox_envs=d.get("sandbox_envs", {}),
+            chroot_dir=d["chroot_dir"],
         )
 
 
@@ -290,7 +296,8 @@ def main() -> None:
 
     # --- D. Create chroot root ---
     logger.debug("Create chroot root:")
-    new_root = tempfile.mkdtemp()
+    new_root = config.chroot_dir
+    os.makedirs(new_root, exist_ok=True)
     _run(["mount", "-t", "tmpfs", "none", new_root])
     for d in ["dev", "proc", "tmp", "etc", "home", "root"]:
         os.makedirs(os.path.join(new_root, d), exist_ok=True)
@@ -366,15 +373,20 @@ def main() -> None:
     # --- I. DNS/hosts setup ---
     if config.dns_servers:
         logger.debug("DNS/hosts setup:")
-        # Custom DNS: create resolv.conf and hosts
-        resolv_tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".resolv")
+        # Custom DNS: create resolv.conf and hosts. Both are bind-mount sources, so
+        # they have to outlive this process -- hence `delete=False` -- but they belong
+        # to the tmpfs mounted over the chroot root, which the kernel reclaims with the
+        # mount namespace. Written to `gettempdir()` instead they survived every run,
+        # and nothing was left to unlink them.
+        chroot_tmp = os.path.join(new_root, "tmp")
+        resolv_tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".resolv", dir=chroot_tmp)
         logger.debug(f"write dns {config.dns_servers=}")
         dns_servers = config.dns_servers
         for dns in dns_servers:
             resolv_tmp.write(f"nameserver {dns}\n")
         resolv_tmp.close()
 
-        hosts_tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".hosts")
+        hosts_tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".hosts", dir=chroot_tmp)
         hosts_tmp.write("127.0.0.1 localhost\n")
         for h in config.hosts:
             hosts_tmp.write(h + "\n")

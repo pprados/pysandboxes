@@ -81,6 +81,9 @@ from .slirp4netns_common import (
     make_slirp_temp_files as slirp_make_temp_files,
 )
 from .slirp4netns_common import (
+    remove_slirp_temp_files as slirp_remove_temp_files,
+)
+from .slirp4netns_common import (
     run_slirp_watcher as slirp_run_watcher,
 )
 from .slirp4netns_common import (
@@ -147,6 +150,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         "_last_reset",
         "_python_args",
         "restart",
+        "_chroot_dirs",
         "_slirp_pid_file",
         "_slirp_api_socket",
         "_slirp_pipe_r",
@@ -184,6 +188,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         self._last_reset = time.time()
         self._is_started = False
         self.restart = 0
+        self._chroot_dirs: list[str] = []
         self._slirp_pid_file: str | None = None
         self._slirp_api_socket: str | None = None
         self._slirp_process_holder: list[subprocess.Popen[bytes] | None] = [None]
@@ -220,10 +225,31 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         cmd.extend(["-m", main_sandbox.__name__])
         return cmd
 
+    def _make_chroot_dir(self) -> str:
+        """Reserve the chroot root for one launch, and remember it for shutdown.
+
+        ``unshare_setup`` execs into the sandbox, so it can never remove the directory
+        it chroots into; it is created here instead. Each relaunch gets its own, so
+        they are kept as a list rather than a single field.
+        """
+        chroot_dir = tempfile.mkdtemp()
+        self._chroot_dirs.append(chroot_dir)
+        return chroot_dir
+
+    def _remove_chroot_dirs(self) -> None:
+        """Remove the chroot roots, now that the namespaces holding their tmpfs are gone."""
+        for chroot_dir in self._chroot_dirs:
+            try:
+                os.rmdir(chroot_dir)
+            except OSError as e:
+                logger.debug("cannot remove chroot root %s: %s", chroot_dir, e)
+        self._chroot_dirs.clear()
+
     def _prepare_unshare_config(
         self,
         all_rules: AllRules,
         pipe_path: Path,
+        chroot_dir: str,
     ) -> tuple[UnshareSetupConfig, list[IPv4Address]]:
         """Prepare UnshareSetupConfig (DNS, mounts, netfilter)."""
         # Verify unshare availability
@@ -313,6 +339,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             # The setup stage runs with the host environment, on purpose; this is what
             # it narrows down to before exec'ing into the sandbox.
             sandbox_envs={k: str(v) if v is not None else "" for k, v in dict(all_rules.envs).items()},
+            chroot_dir=chroot_dir,
         )
         return config, dns_servers
 
@@ -361,7 +388,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         passed to the child via launch_sandbox's extra_preexec_fn and pass_fds.
         """
         # Prepare UnshareSetupConfig
-        config, _ = self._prepare_unshare_config(all_rules, pipe_path)
+        config, _ = self._prepare_unshare_config(all_rules, pipe_path, self._make_chroot_dir())
 
         # Write config via FIFO (or file in debug mode). Always pass a path under
         # temp so the unshare child can read it (e.g. under /tmp); with Docker the
@@ -511,6 +538,9 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             except Exception:
                 pass
             self._slirp_process_holder[0] = None
+        slirp_remove_temp_files(self._slirp_pid_file, self._slirp_api_socket)
+        self._slirp_pid_file = None
+        self._slirp_api_socket = None
 
     @override
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
@@ -520,6 +550,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             await super()._shutdown(graceful_shutdown)
         finally:
             await asyncio.to_thread(self._kill_slirp)
+            await asyncio.to_thread(self._remove_chroot_dirs)
 
     # -- Daemon lifecycle --
 
@@ -621,7 +652,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             all_rules = all_rules._replace(socket_rules=SocketRules(socket_rules))
 
             # Prepare UnshareSetupConfig
-            config, dns_servers = self._prepare_unshare_config(all_rules, pipe_path)
+            config, dns_servers = self._prepare_unshare_config(all_rules, pipe_path, self._make_chroot_dir())
 
             # Write UnshareSetupConfig via FIFO (or file in debug mode)
             if DEBUG_LAUNCH:
