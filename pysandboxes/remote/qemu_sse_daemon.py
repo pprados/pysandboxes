@@ -59,7 +59,7 @@ from .qemu_setup import (
     augment_all_rules_for_qemu_run_mount,
     prepare_guest_env,
 )
-from .tools import is_transient_connection_error, which_command
+from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, which_command
 from .vm_sse_daemon import VMSSEDaemon
 
 # VM boot + cloud-init can take 20–40s before main_sandbox listens; wait before pinging.
@@ -1235,7 +1235,7 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         # Force IPv4 so QEMU hostfwd is used (hostfwd is TCP on 0.0.0.0, not IPv6).
         connector = aiohttp.TCPConnector(family=socket.AF_INET)
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE) as session:
             count_loop = 0
             while True:
                 try:

@@ -30,10 +30,10 @@ import signal
 import subprocess
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
+from collections.abc import Callable
 from ctypes import cdll
 from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any, cast
 
 from ..e import RestrictedUnpicklingError, SandBoxProtocolError, set_sandbox_denials
@@ -429,7 +429,7 @@ _MAX_MEMO = 2_000_000
 _MAX_MARK_DEPTH = 256
 
 # The payload travels as one SSE line, and aiohttp caps a line at
-# 8 * ClientSession(read_bufsize=...), i.e. 8 * 65536 = 512 KiB on the default.
+# 8 * ClientSession(read_bufsize=...), i.e. 8 * 65536 = 512 KiB.
 # Measured end to end: a line of 524240 bytes crosses, 524242 raises
 # aiohttp LineTooLong -- so the real ceiling is the HTTP reader, not this
 # budget. It used to read 128 MiB, two orders of magnitude above what the
@@ -444,10 +444,15 @@ _MAX_MARK_DEPTH = 256
 # and for whatever the sandboxed function printed. Above that the reader would
 # refuse the line before this prescan ever sees it.
 #
-# CPYTHON-COMPAT-ADJACENT: keyed to an aiohttp default, not to CPython. Raising
-# read_bufsize on the ClientSession in base_sse_daemon.py is what would let this
-# budget grow; a test pins the relation so a change on either side reddens CI.
-_SSE_LINE_LIMIT = 8 * 65536
+# CPYTHON-COMPAT-ADJACENT: keyed to an aiohttp buffer size, not to CPython.
+# aiohttp moved its own read_bufsize default (65536 up to 3.13, 262144 from
+# 3.14), which would have quadrupled the budget without anyone deciding it, so
+# every ClientSession of the transport passes SSE_READ_BUFSIZE explicitly and
+# the line ceiling depends on this file alone. Raising SSE_READ_BUFSIZE is what
+# would let the budget grow; a test pins the relation so a change on either
+# side reddens CI.
+SSE_READ_BUFSIZE = 65536
+_SSE_LINE_LIMIT = 8 * SSE_READ_BUFSIZE
 _B85_EXPANSION = 1.25
 _MAX_BYTES = 384 * 1024
 

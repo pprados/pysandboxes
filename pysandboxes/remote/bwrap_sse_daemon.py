@@ -71,7 +71,7 @@ from .slirp4netns_common import (
 from .slirp4netns_common import (
     setup_port_forwarding as slirp_setup_port_forwarding,
 )
-from .tools import is_transient_connection_error, suggest_package_installation, which_command
+from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)
 
@@ -548,7 +548,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         logger.info("Pinging subprocess daemon at %s", ping_url)
         gc.collect()
         connector = aiohttp.TCPConnector(family=socket_mod.AF_INET)
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE) as session:
             count_loop = 0
             while True:
                 try:

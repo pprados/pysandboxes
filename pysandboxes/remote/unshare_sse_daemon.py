@@ -89,7 +89,7 @@ from .slirp4netns_common import (
 from .slirp4netns_common import (
     setup_port_forwarding as slirp_setup_port_forwarding,
 )
-from .tools import get_upstream_dns, is_transient_connection_error, which_command
+from .tools import SSE_READ_BUFSIZE, get_upstream_dns, is_transient_connection_error, which_command
 from .unshare_setup import UnshareSetupConfig
 
 logger = logging.getLogger(__name__)
@@ -838,7 +838,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             gc.collect()
             ping_url = self.base_url.replace("{PORT}", str(self.port)) + "/ping"
             logger.debug("Try to call %s", ping_url)
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(read_bufsize=SSE_READ_BUFSIZE) as session:
                 count_loop = 0
                 while True:
                     try:
