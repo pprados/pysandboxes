@@ -410,6 +410,9 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 try:
                     config_file.unlink(missing_ok=True)
                 except Exception:
+                    # Best effort: the FIFO has already been read by the child,
+                    # so a failed unlink leaves a stale entry in a temporary
+                    # directory, never an unguarded sandbox.
                     pass
 
         threading.Thread(target=publish_config, daemon=True).start()
@@ -536,6 +539,10 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 proc.kill()
                 proc.wait(timeout=5)
             except Exception:
+                # Teardown: the process is already gone, refuses to die, or
+                # outlives the timeout. Nothing here can recover it, and the
+                # caller is shutting down, so carry on to remove the socket
+                # and the pid file below.
                 pass
             self._slirp_process_holder[0] = None
         slirp_remove_temp_files(self._slirp_pid_file, self._slirp_api_socket)
@@ -672,6 +679,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                     try:
                         config_file.unlink(missing_ok=True)
                     except Exception:
+                        # Best effort: see the comment on the other
+                        # publish_config above -- a stale FIFO, nothing more.
                         pass
 
             threading.Thread(target=publish_config, daemon=True).start()

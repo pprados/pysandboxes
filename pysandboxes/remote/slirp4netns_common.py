@@ -121,6 +121,10 @@ def setup_port_forwarding(
             s.recv(4096)
             s.close()
         except Exception:
+            # Best effort, and it fails closed: a forward that slirp4netns
+            # refused simply does not exist, so the guest reaches nothing it
+            # would not have reached anyway. Keep going for the other specs
+            # rather than abort a sandbox over one unusable port.
             pass
 
 
