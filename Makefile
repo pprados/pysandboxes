@@ -1,7 +1,7 @@
 SHELL=/bin/bash
 .PHONY: all format format_diff lint lint_diff claude-lint coverage \
 	unit-tests integration-tests container-tests sample-tests all-tests gh-tests \
-	spell_check spell_fix clean extra-clean help \
+	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init \
@@ -189,6 +189,19 @@ spell_check:
 
 spell_fix:
 	uvx codespell --toml pyproject.toml -w
+
+# A vulnerable dev tool cannot reach production, so only the runtime
+# dependencies gate `validate`. `pip-audit-all` reports the rest without
+# failing, so a dev dependency can still be raised on purpose.
+EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annotate --no-header -q
+
+## Report the runtime dependencies with a known security vulnerability
+pip-audit:
+	unset VIRTUAL_ENV; uv export $(EXPORT_AUDIT) --no-dev | uv run pip-audit -r /dev/stdin
+
+## Report the vulnerabilities of every dependency, dev included (never fails)
+pip-audit-all:
+	-unset VIRTUAL_ENV; uv export $(EXPORT_AUDIT) --all-groups | uv run pip-audit -r /dev/stdin
 
 extra-clean:
 	@rm -f .zshrc .bashrc .profile .zprofile .bash_profile .gitconfig .ripgreprc .git/config.lock .gitmodules || true
@@ -480,7 +493,6 @@ endif
 
 uv.lock: pyproject.toml
 	uv lock
-	git add uv.lock
 	unset VIRTUAL_ENV && uv sync $(UV_GROUP)
 
 
@@ -490,7 +502,7 @@ lock: uv.lock
 # format is not a prerequisite: it rewrites the sources, which would make the
 # `black --check` inside lint pass unconditionally.
 ## Validate the code
-validate: uv.lock lint spell_check unit-tests
+validate: uv.lock lint spell_check pip-audit-all pip-audit unit-tests
 
 
 _uv-init:
