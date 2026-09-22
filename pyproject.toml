@@ -20,21 +20,24 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
+# Every entry below is imported by pysandboxes/. A sandbox argues about
+# reducing the attack surface, so it has no business installing what it never
+# imports: the commented lines record what was dropped and why, and belong
+# back here only when an import justifies them.
 dependencies = [
-    "httpcore (>=1.0.9)",
-    "fastapi (>=0.115.0)",
-    "uvicorn (>=0.34.0)",
-    "tblib (>=3.1.0)",
-    "aiohttp (>=3.12.0)",
-    "aiohttp-sse-client (>=0.2.1)",
-    "typing_extensions (>=4.0.0)",
-    "netifaces (>=0.11.0)",
-    # For CLI
-    "python-dotenv (>=0.9.0)",
-    "email-validator>=2.3.0",  # Why ?
-    "dnspython>=2.8.0",  # Why ?
-    "scipy-stubs>=1.15.3.0",  # Why here ?
-    "requests>=2.32.5"
+    "fastapi (>=0.115.0)",           # remote/sse_server_daemon.py
+    "uvicorn (>=0.34.0)",            # remote/sse_server_daemon.py
+    "tblib (>=3.1.0)",               # remote/base_sse_daemon.py, remote/catch_stdio.py
+    "aiohttp (>=3.12.0)",            # the SSE daemons
+    "aiohttp-sse-client (>=0.2.1)",  # remote/base_sse_daemon.py
+    "typing_extensions (>=4.0.0)",   # override_compat.py
+    "netifaces (>=0.11.0)",          # remote/tools.py
+    # "httpcore (>=1.0.9)",          # never imported; aiohttp is the client here
+    # "python-dotenv (>=0.9.0)",     # only the samples read a .env, and they declare it themselves
+    # "email-validator>=2.3.0",      # never imported
+    # "dnspython>=2.8.0",            # never imported; the DNS pinning calls socket directly
+    # "scipy-stubs>=1.15.3.0",       # type stubs, for a package this code never imports
+    # "requests>=2.32.5",            # only a docstring example; the integration test declares it
 ]
 
 [project.optional-dependencies]
@@ -101,6 +104,7 @@ test = [
     "pytest-dotenv>=0.5.2",
     "pytest-asyncio>=0.20.3",
     "pytest-mock>=3.10.0",
+    "requests>=2.32.5",
     "types-requests>=2.28.11.5",
     "toml>=0.10.2",
     "speckit>=1.0.1",
