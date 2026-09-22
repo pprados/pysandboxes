@@ -208,6 +208,21 @@ on the developer's machine. It is trusted in the sense that it is committed and
 reviewed, and untrusted in the sense that no one read every line the assistant
 produced.
 
+```mermaid
+%% caption: The four provenance classes of a single agent turn, and what the record answers for each
+flowchart TB
+    T["One agent turn<br/>one process, one second"]
+    T --> P1["<b>P1</b> · evaluated expression<br/>a string the model produced"]
+    T --> P2["<b>P2</b> · generated script<br/>a program the model wrote"]
+    T --> P3["<b>P3</b> · tool body<br/>third-party code, model-chosen arguments"]
+    T --> P4["<b>P4</b> · assisted codebase<br/>committed code, developer credentials"]
+    P1 --> A1["the language itself can be reduced<br/><i>restricted evaluators</i>"]
+    P2 --> A2["only the resource set can be bounded<br/><i>process isolation</i>"]
+    P3 --> A3["no articulated answer in the record"]
+    P4 --> A3
+    T --> A4["and no account at all of<br/>the four occurring together"]
+```
+
 The classical literature has an answer for P1 (restricted evaluators,
 [§A.3](#a3-restricted-evaluators-for-dynamic-source)) and an answer for P2
 (isolate the process, [§A.4](#a4-kernel-enforced-isolation), and the LLM-era
@@ -461,6 +476,32 @@ providers ([§Relationship to the implementation](#relationship-to-the-implement
 This is the argument for nesting, and it is a visibility argument, not a strength
 argument. Order the attacker by *capability*:
 
+```mermaid
+%% caption: Each rung of attacker capability, and the last boundary able to see it
+flowchart LR
+    subgraph rungs["Attacker capability — each rung contains the previous"]
+        direction TB
+        R1["R1<br/>source string"]
+        R2["R2<br/>Python bytecode"]
+        R3["R3<br/>native code"]
+        R4["R4<br/>raw syscall"]
+        R5["R5<br/>kernel compromise"]
+        R1 --> R2 --> R3 --> R4 --> R5
+    end
+    subgraph bounds["The LAST boundary able to see it"]
+        direction TB
+        L0["<b>L0</b> · source<br/>AST sub-language"]
+        L1["<b>L1</b> · API<br/>module, path, host, variable"]
+        L2["<b>L2</b> · kernel<br/>resources, no semantics"]
+        L3["<b>L3</b> · machine<br/>only the boundary itself"]
+    end
+    R1 --> L0
+    R2 --> L1
+    R3 --> L2
+    R4 --> L2
+    R5 --> L3
+```
+
 | Rung | Attacker capability | Last boundary that can see it |
 |---|---|---|
 | R1 | Supplies a source string to be evaluated | **L0** — after compilation, `__subclasses__` in a comprehension is indistinguishable from any other attribute walk |
@@ -562,6 +603,18 @@ removes the last boundary. It is also the layer that fails *operationally* most
 often: it is the hardest to deploy, and the deployment environment may simply
 forbid it ([§9.2](#92-what-the-deployment-decides-and-what-it-does-not)).
 
+```mermaid
+%% caption: How each boundary fails, and what the boundary below it must therefore expect
+flowchart TB
+    L0["<b>L0</b> · source"] -- "permits a construct that reaches further than it looks<br/><i>silent and total</i>" --> E0["the fragment is now an R2 attacker"]
+    E0 --> L1["<b>L1</b> · API"]
+    L1 -- "aliasing: the same callable under an unpatched name<br/><i>silent and total</i>" --> E1["the fragment is now an R3 attacker"]
+    E1 --> L2["<b>L2</b> · kernel"]
+    L2 -- "configured too permissively, never bypassed<br/><i>loud when it refuses, silent when it grants</i>" --> E2["one unneeded resource is granted<br/>the kernel is not"]
+    E2 --> L3["<b>L3</b> · machine"]
+    L3 -- "escape, or an environment that forbids deployment<br/><i>rare and absolute</i>" --> E3["no boundary left"]
+```
+
 The asymmetry across these four is the reason the contract in the next chapter is
 necessary. Two layers fail silently and totally; one fails loudly and partially;
 one fails almost never and absolutely. A composition that does not account for
@@ -592,6 +645,18 @@ data that an upper layer treats as trusted
 
 **What is guaranteed sideways.** Nothing. Two layers at the same level do not
 exist in this model; a stack is a total order.
+
+```mermaid
+%% caption: The interface between two layers, and the four clauses that constrain it
+flowchart TB
+    Lu["<b>Lu</b> — upper layer"]
+    Ld["<b>Ld</b> — the next lower layer"]
+    Lu -- "down: the fragment, its provenance class, and the<br/>permissions Lu did not refuse — never a claim that it is safe" --> Ld
+    Ld -- "up: exactly one decision,<br/>with a reason if the layer can produce one" --> Lu
+    C["<b>C1</b> monotone restriction — configure as though alone<br/><b>C2</b> fail-closed on the unseen<br/><b>C3</b> no upward trust<br/><b>C4</b> bounded claims"]
+    C -.- Lu
+    C -.- Ld
+```
 
 The four clauses constrain this interface.
 
@@ -804,14 +869,16 @@ Three structural points to preserve:
   exists but cannot be read behaves differently — and leaks differently — from
   code that concludes the file does not exist. This is also the family where
   backends diverge most ([§6.4](#64-compiling-one-profile-to-several-backends)).
-- **Path *renaming* is an L1 capability with no kernel analogue.** Mapping
-  `/real/secrets` to appear as `/app/config` is expressible when paths pass
-  through an API that can rewrite them; a bind mount can relocate, but the policy
-  vocabulary of most backends assumes identity mapping. Where the two layers
-  disagree, L1 must be the one that performs the rename, and the backend
-  configuration must be generated from the *post-rename* view — otherwise the two
-  layers hold different beliefs about what a path denotes, which is the mismatch
-  [§12](#12-open-tensions) declines to call solved.
+- **Path *renaming* is deliberately absent, and the reason is instructive.**
+  Mapping `/real/secrets` to appear as `/app/config` is expressible at L1, where
+  paths still pass through an API that can rewrite them. It has no counterpart
+  below: a bind mount can relocate a path, but Landlock — the access-control
+  mechanism the reference L2 backends rely on — can deny a path and cannot remap
+  one, and the policy vocabulary of the backends assumes identity mapping. A
+  mapping held at L1 alone would leave the two layers holding different beliefs
+  about what a path denotes — a deliberate instance of exactly the mismatch
+  [§12](#12-open-tensions) already declines to call solved for paths that merely
+  *resolve* differently. The family therefore has three verbs and no fourth.
 - **Network rules need deny-priority.** The useful policy shape is "everything
   except this range" — allow the internet, deny link-local and the cloud metadata
   endpoint. That requires broad allows with narrow denies overriding them, which
@@ -878,11 +945,26 @@ Two general principles govern it, and both are C1 restated at compile time.
    Quietly dropping a rule produces a profile that reads stricter than it is —
    the worst possible outcome for a security artefact, and the exact failure C4
    exists to prevent at the level of claims.
-2. **Compile from the post-transformation view.** Where L1 renames or hides
-   paths, the backend must be configured against the resulting view, not the
-   source one, or the two layers will disagree about what a path means.
+2. **Compile against the view the fragment actually sees.** Where L1 hides paths,
+   the backend must be configured against the resulting view, not against the
+   filesystem as it exists on the host, or the two layers will disagree about
+   what a path means.
 
-Four impedance mismatches recur across every backend and are worth naming.
+```mermaid
+%% caption: One profile compiled to several backends, and the fork taken when a rule does not fit
+flowchart TB
+    P["One observed profile<br/>environment · filesystem · network · imports<br/>sensitive calls · dynamic code"]
+    P --> Q{"Can the target<br/>express this rule?"}
+    Q -- yes --> T["translate into the target vocabulary<br/>mounts, Landlock rules, netfilter, namespaces"]
+    Q -- "no — a layer above owns it" --> K["leave it to L1, and say so in the compiled output"]
+    Q -- "no — and nothing above covers it" --> X["refuse the configuration"]
+    T --> B["backend configuration, compiled against<br/>the view the fragment actually sees"]
+    K --> B
+    N["never silently downgrade:<br/>a dropped rule reads stricter than it is"] -.- Q
+```
+
+Three impedance mismatches recur across every backend and are worth naming; a
+further candidate, path renaming, is avoided rather than reconciled.
 
 **Hiding has at least three inequivalent semantics.** Asked to make a path
 disappear, backends variously: make it absent, so access raises *not found*; deny
@@ -894,10 +976,12 @@ different things to tell a model. The profile should specify *intent* (this path
 is not part of the fragment's world) and the documentation must state what each
 backend actually does, because "hidden" is not a portable concept.
 
-**Path renaming is usually not available.** Most backends bind or deny paths
-under their real names. Where renaming is offered it is an L1 feature
-([§6.2](#62-the-rule-families)), and applying a mapping twice — once in each
-layer — is a bug, not a defence.
+**Path renaming is avoided by not offering it.** Backends
+bind or deny paths under their real names, and an access-control mechanism such
+as Landlock cannot remap one at all. Holding the mapping at L1 and compiling the
+backend against a view the kernel cannot reproduce would manufacture a permanent
+disagreement about what a path denotes, so the profile has no rename verb
+([§6.2](#62-the-rule-families)): a path names the same thing at every boundary.
 
 **Protocol granularity varies.** A backend may filter TCP ports and know nothing
 of UDP, or of hostnames. Where the backend covers less than the profile, L1
@@ -1000,6 +1084,17 @@ Four phases, and the third is the one that is usually skipped and should not be:
    [§8.4](#84-who-may-widen-a-policy) reserves for every later widening.
 4. **Enforce.** Later runs use the reviewed profile, now blocking, compiled to
    whichever boundaries the provenance and the deployment select.
+
+```mermaid
+%% caption: The observation loop, and the human review no pass may skip
+flowchart LR
+    O["<b>1 · Observe</b><br/>L1 guards installed, non-blocking<br/>only what an existing profile misses is recorded"]
+    G["<b>2 · Generalise</b><br/>observations into rules"]
+    R["<b>3 · Review</b><br/>a human, before anything is enforced"]
+    E["<b>4 · Enforce</b><br/>compiled to the boundaries provenance<br/>and deployment select"]
+    O --> G --> R --> E
+    E -- "coverage is never complete on one pass:<br/>re-enter, appending only the delta" --> O
+```
 
 Three operational properties:
 
@@ -1133,6 +1228,17 @@ is returned to the orchestrator as a structured value — layer, rule family,
 resource, and the permitted set in that family — which can be rendered into the
 model's context as an ordinary tool error. The model retries against a stated
 constraint rather than against an opaque failure.
+
+```mermaid
+%% caption: A refusal re-entering the loop that produced the code, and the layer at which it stops being legible
+flowchart LR
+    M["Model"] --> F["fragment"]
+    F --> D["<b>L0 / L1</b><br/>decision"]
+    D -- permitted --> RUN["the fragment runs"]
+    D -- "refused: layer, rule family, resource,<br/>and the permitted set in that family" --> CTX["rendered into the model context<br/>as an ordinary tool error"]
+    CTX --> M
+    LOW["<b>L2 / L3</b> · a signal number<br/>nothing a model can act on"] -.- D
+```
 
 Three properties are worth naming.
 
