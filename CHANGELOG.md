@@ -2,11 +2,11 @@
 
 | Python   | OS-Sandbox    | OS        | Feature   |
 |----------|---------------|-----------|-----------|
-| ✅ 3.10   | ✅ none        | ✅ Linux   | ✅ Env     |
-| ✅ 3.11   | ✅ subprocess  | ☐ MacOS   | ✅ Files   |
-| ✅ 3.12   | ✅ landlock    | ☐ Windows | ✅ Network |
-| ✅ 3.13   | ✅ bwrap       |           | ✅ Import  |
-| ✅ 3.14   | ✅ firejail    |           | ✅ API     |
+| ✅ 3.11   | ✅ none        | ✅ Linux   | ✅ Env     |
+| ✅ 3.12   | ✅ subprocess  | ☐ MacOS   | ✅ Files   |
+| ✅ 3.13   | ✅ landlock    | ☐ Windows | ✅ Network |
+| ✅ 3.14   | ✅ bwrap       |           | ✅ Import  |
+|          | ✅ firejail    |           | ✅ API     |
 |          | ✅ unshare     |           | ☐ Source  |
 |          | ✅ qemu        |           | ☐ Regexp  |
 |          | ✅ Docker¹     |           | ☐ DoS     |
