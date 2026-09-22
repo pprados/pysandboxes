@@ -14,7 +14,7 @@ expose-ro=/etc
 # Imports resolved *inside* the sandbox read the interpreter's library tree, and
 # guard_files has no stdlib exemption. On the host `expose-ro=.` happens to cover
 # it (the venv sits in the project); in a container the interpreter is elsewhere,
-# so a deferred `import requests` dies as ModuleNotFoundError. Spell it out.
+# so a deferred `import urllib.request` dies as ModuleNotFoundError. Spell it out.
 expose-ro=/usr/local/lib
 # expose-ro=/run,/run
 

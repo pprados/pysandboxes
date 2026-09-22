@@ -254,19 +254,23 @@ def _test_network() -> int:
         logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
         rc = 1
 
-    # web connection (timeout to avoid hanging in containers with slow/no network)
-    import requests
+    # web connection (timeout to avoid hanging in containers with slow/no network).
+    # urllib, not requests: the container images carry the wheel and its runtime
+    # dependencies only, so a third-party client is not importable in the sandbox.
+    import urllib.error
+    import urllib.request
 
     try:
-        requests.get("http://www.google.com/", timeout=10)
+        with urllib.request.urlopen("http://www.google.com/", timeout=10):
+            pass
         logger.info(f"{OK} get http://www.google.com")
     except SandBoxError:
         logger.error(f"{KO} get http://www.google.com")
         rc = 1
-    except (TimeoutError, requests.exceptions.Timeout) as e:
+    except TimeoutError as e:
         logger.error(f"{KO} get http://www.google.com {e}")
         rc = 1
-    except requests.exceptions.ConnectionError as e:
+    except urllib.error.URLError as e:
         logger.error(f"{KO} get http://www.google.com (network unreachable or refused) {e}")
         rc = 1
 
