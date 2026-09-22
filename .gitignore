@@ -172,7 +172,7 @@ _bmad/
 
 # https://github.com/oraios/serena
 # Serena provides essential semantic code retrieval and editing tools
-#.serena/
+.serena/
 
 #.container-use/
 #.planning/
@@ -219,7 +219,7 @@ PPR*
 /.gitmodules
 /.ripgreprc
 /.mcp.json
-**/.tgrep/*
+**/.tgrep/
 /openwiki/
 /audits/
 /lat.md/
