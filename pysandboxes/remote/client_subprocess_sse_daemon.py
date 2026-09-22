@@ -59,7 +59,7 @@ from .parameters import (
     TIMEOUT_FOR_START_DAEMON,
     TIMEOUT_FOR_STOP_DAEMON,
 )
-from .tools import is_transient_connection_error
+from .tools import SSE_READ_BUFSIZE, is_transient_connection_error
 
 logger = logging.getLogger(__name__)
 
@@ -594,7 +594,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         # Wait the server
         gc.collect()
         connector = aiohttp.TCPConnector(family=socket.AF_INET)
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE) as session:
             count_loop = 0
             while True:
                 try:

@@ -15,7 +15,6 @@ import datetime
 import decimal
 import enum
 import functools
-import inspect
 import math
 import operator
 import pathlib
@@ -23,14 +22,15 @@ import pickle
 import subprocess
 import uuid
 
-import aiohttp
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
+from pysandboxes.remote import tools
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
     _MAX_BYTES,
     _SSE_LINE_LIMIT,
+    SSE_READ_BUFSIZE,
     check_sse_line,
     describe_exception,
     descriptor_predicate,
@@ -524,10 +524,21 @@ class TestPayloadBudget:
         assert _SSE_LINE_LIMIT - encoded >= 32 * 1024
 
     def test_the_budget_matches_the_client_read_buffer(self) -> None:
-        """_SSE_LINE_LIMIT tracks the ClientSession default the transport uses."""
-        default_read_bufsize = inspect.signature(aiohttp.ClientSession.__init__).parameters["read_bufsize"].default
+        """_SSE_LINE_LIMIT tracks the read_bufsize the transport pins."""
+        assert _SSE_LINE_LIMIT == 8 * SSE_READ_BUFSIZE
 
-        assert _SSE_LINE_LIMIT == 8 * default_read_bufsize
+    def test_every_transport_session_pins_the_read_buffer(self) -> None:
+        """A session left on the aiohttp default would widen the line ceiling.
+
+        aiohttp raised that default from 65536 to 262144 in 3.14, which is
+        exactly the drift the budget above must not follow.
+        """
+        daemons = sorted(pathlib.Path(tools.__file__).parent.glob("*_sse_daemon.py"))
+        assert daemons, "no SSE daemon found next to tools.py"
+        for daemon in daemons:
+            for line in daemon.read_text().splitlines():
+                if "aiohttp.ClientSession(" in line:
+                    assert "read_bufsize=SSE_READ_BUFSIZE" in line, f"{daemon.name}: {line.strip()}"
 
     def test_an_oversized_payload_is_refused_by_the_prescan(self) -> None:
         with pytest.raises(RestrictedUnpicklingError, match="transport budget"):

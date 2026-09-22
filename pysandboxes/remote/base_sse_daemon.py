@@ -23,6 +23,7 @@ from ..sb_types import Envs
 from ..tools import get_callable_info, is_in_sandbox
 from .parameters import INTERVAL_FOR_RETRY_CONNECTION, TIMEOUT_FOR_RPC_CALL
 from .tools import (
+    SSE_READ_BUFSIZE,
     descriptor_predicate,
     exception_predicate,
     from_b85_restricted,
@@ -186,7 +187,7 @@ class BaseSSESandbox(BaseDaemon):
                 session = None
                 if self.host in ("127.0.0.1", "localhost"):
                     connector = aiohttp.TCPConnector(family=socket.AF_INET)
-                    session = aiohttp.ClientSession(connector=connector)
+                    session = aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE)
                 event_source_kw: dict[str, Any] = {
                     "option": {"method": "POST"},
                     "json": params,
