@@ -226,6 +226,13 @@ PPR*
 /tmp/
 
 # ---------------------------------------------------------------------------
+# research/: the markdown sources are versioned, the LaTeX chain and its
+# output are not. `make -C research` rebuilds them from research.md.
+# ---------------------------------------------------------------------------
+/research/*
+!/research/*.md
+
+# ---------------------------------------------------------------------------
 # Per-session working notes: local to the clone, never versioned
 # ---------------------------------------------------------------------------
 _tasks/*
