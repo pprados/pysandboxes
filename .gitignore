@@ -233,6 +233,14 @@ PPR*
 !/research/*.md
 
 # ---------------------------------------------------------------------------
+# Per-agent local files. AGENTS.md is the versioned guide, read by several
+# tools; CLAUDE.md is a copy of it that Claude Code looks for by name, and
+# .claudeignore is personal tooling. Keep them on disk, out of the repository.
+# ---------------------------------------------------------------------------
+/CLAUDE.md
+/.claudeignore
+
+# ---------------------------------------------------------------------------
 # Per-session working notes: local to the clone, never versioned
 # ---------------------------------------------------------------------------
 _tasks/*
