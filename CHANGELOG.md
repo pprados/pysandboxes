@@ -44,6 +44,22 @@
   `langchain-demo`, `langgraph-demo`, `mcp-client-demo`,
   `mcp-server-demo`, `openai-agents-sdk-demo`, `pydantic-ai-demo`,
   `smolagents-demo` and `strands-agents-demo`
+- Code that arrives as a string at runtime is guarded by the `eval-*`
+  rules. None of the other layers looks at it, and an emptied
+  `__builtins__` stops nothing on its own:
+  `().__class__.__base__.__subclasses__()` reaches `Popen` without
+  naming a single builtin. A source given to `eval()`, `exec()` or
+  `compile()` is parsed, checked against a sub-language, rewritten so
+  the remaining risks are enforced while it runs, and executed under a
+  budget and a timeout the caller can recover from. Five list keys
+  (`eval-syntax`, `eval-call`, `eval-attribute`, `eval-import`,
+  `eval-magic`) say what the sub-language accepts, `eval-namespace`
+  what it sees, and the `eval-max-*` keys bound nodes, depth,
+  iterations, call depth, allocations and leaked threads. Only code
+  reaching those three builtins is transformed: the application's own
+  modules are untouched and import time is unaffected. See
+  `wiki/eval.md`, and `wiki/audit-eval-security.md` for the attacks it
+  was tested against.
 - Control of sensitive API calls, independent of import rights: an
   import right is not a call right. A registry of 110 sensitive
   functions in eight categories (`process-exec`, `process-control`,
