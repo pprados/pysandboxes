@@ -1,15 +1,21 @@
 # Changelog
 
-| Python   | OS-Sandbox   | OS        | Feature   |
-|----------|--------------|-----------|-----------|
-| ✅ 3.10   | ✅ subprocess | ✅ Linux   | ✅ Env     |
-| ✅ 3.11   | ✅ Firejail   | ☐ MacOS   | ✅ Files   |
-| ✅ 3.12   | ☐ Docker     | ☐ Windows | ✅ Network |
-| ✅ 3.13   | ☐ Podman     |           | ✅ Import  |
-| ✅ 3.14   | ☐ qemu       |           | ✅ API     |
-|          | ☐ VM         |           | ☐ Source  |
-|          |              |           | ☐ Regexp  |
-|          |              |           | ☐ DoS     |
+| Python   | OS-Sandbox    | OS        | Feature   |
+|----------|---------------|-----------|-----------|
+| ✅ 3.10   | ✅ none        | ✅ Linux   | ✅ Env     |
+| ✅ 3.11   | ✅ subprocess  | ☐ MacOS   | ✅ Files   |
+| ✅ 3.12   | ✅ landlock    | ☐ Windows | ✅ Network |
+| ✅ 3.13   | ✅ bwrap       |           | ✅ Import  |
+| ✅ 3.14   | ✅ firejail    |           | ✅ API     |
+|          | ✅ unshare     |           | ☐ Source  |
+|          | ✅ qemu        |           | ☐ Regexp  |
+|          | ✅ Docker¹     |           | ☐ DoS     |
+|          | ✅ Podman¹     |           |           |
+|          | ☐ gVisor      |           |           |
+|          | ☐ micro-VM    |           |           |
+
+¹ Docker and Podman are not providers of their own: a container runs the
+`unshare` provider, with `--privileged` for Docker.
 
 ## [0.0.0] - 202X-XX-XX
 
