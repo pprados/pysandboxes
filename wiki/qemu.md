@@ -183,7 +183,7 @@ Use the **provider image** `python-sb-qemu:latest` (built with `make build-image
 
 ## Image and Python version
 
-The default image is **Debian 12 (bookworm)** and provides Python 3.11. For **one image per Python version from 3.10 onward**, use **Ubuntu Cloud Images** (table below).
+The default image is **Debian 12 (bookworm)** and provides Python 3.11. For **one image per supported Python version, 3.11 through 3.14**, use **Ubuntu Cloud Images** (table below).
 
 Image resolution uses environment variables (see `pysandboxes.remote.qemu_image`):
 
@@ -197,14 +197,13 @@ Example:
 export PYSANDBOXES_QEMU_IMAGE_URL="<full image URL>"
 ```
 
-### Mapping: Python version → image (Ubuntu, 3.10 to 3.14)
+### Mapping: Python version → image (Ubuntu, 3.11 to 3.14)
 
-A single source covers 3.10–3.14 with one image per version: **Ubuntu Cloud Images**. Releases **22.04–25.04** use `releases/<version>/release/`; **Python 3.14** uses the **resolute** development series under `{codename}/current/` (default `python3` is 3.14).
+A single source covers every supported version, 3.11–3.14, with one image each: **Ubuntu Cloud Images**. Releases **22.04–25.04** use `releases/<version>/release/`; **Python 3.14** uses the **resolute** development series under `{codename}/current/` (default `python3` is 3.14).
 
 
 | Python | Ubuntu            | File (.img)                               | Base URL |
 | ------ | ----------------- | ----------------------------------------- | -------- |
-| 3.10   | 22.04 LTS (Jammy) | `ubuntu-22.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/22.04/release/` |
 | 3.11   | 23.04 (Lunar)     | `ubuntu-23.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/23.04/release/` |
 | 3.12   | 24.04 LTS (Noble) | `ubuntu-24.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/24.04/release/` |
 | 3.13   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
@@ -215,7 +214,6 @@ Replace `<arch>` with `amd64`, `arm64`, `ppc64el`, `riscv64` or `s390x` for your
 
 **Full URL examples (amd64):**
 
-- Python 3.10: `https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img`
 - Python 3.11: `https://cloud-images.ubuntu.com/releases/23.04/release/ubuntu-23.04-server-cloudimg-amd64.img`
 - Python 3.12: `https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img`
 - Python 3.13: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
