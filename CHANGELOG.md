@@ -20,6 +20,15 @@
 ## [0.0.0] - 202X-XX-XX
 
 ### Added
+- First stable version
+- accept *complete* and *selected* mode
+- Control environment variables
+- Control import list
+- Control file and network access
+- Control life cycle of the sandbox-daemon (restart if necessary)
+- implement `none`, `subprocess`, `landlock`, `bwrap`, `firejail`,
+  `unshare` and `qemu` os-sandbox
+- MCP client/server samples
 - Control of sensitive API calls, independent of import rights: an
   import right is not a call right. A registry of 110 sensitive
   functions in eight categories (`process-exec`, `process-control`,
@@ -52,15 +61,3 @@
   `subprocess.run` reaches `Popen` — so for `process-exec` the category
   form is usually the right one. Each refusal names the door it stopped
   at.
-
-## [0.1.0] - 2026-03-25
-
-### Added
-- First stable version
-- accept *complete* and *selected* mode
-- Control environment variables
-- Control import list
-- Control file and network access
-- Control life cycle of the sandbox-daemon (restart if necessary)
-- implement `none`, `subprocess` and `firejail` os-sandbox
-- MCP client/server samples
