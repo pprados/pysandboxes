@@ -138,7 +138,7 @@ A learning mechanism allows for continuous improvement of security rules and rap
 Installation is covered in [Quick start](#quick-start). To track the development version instead:
 
 ```bash
-pip install git+https://github.com/pprados/pysandboxes.git
+pip install pysandboxes
 ```
 
 We propose only four things:
