@@ -15,7 +15,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [X] Guard some critical methods in Python (spawn, shell, etc.)
   - [ ] Management of *Denial of Service*
   - [ ] Management of regular expressions
-  - [/] Control of `exec()`, `eval()` and `compile()` (the [`eval-*` rules](eval.md))
+  - [X] Control of `exec()`, `eval()` and `compile()` (the [`eval-*` rules](eval.md))
     - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
 - [ ] OS Compatible
   - [X] Linux
