@@ -17,7 +17,11 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl
+# The caller names the wheel (make build-image-base passes it): dist/ may hold the
+# builds of several commits, and installing them all makes pip refuse two versions
+# of the same package.
+ARG WHEEL
+COPY dist/${WHEEL} /tmp/
+RUN pip install --no-cache-dir /tmp/${WHEEL}
 
 CMD ["python-sb"]
