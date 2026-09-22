@@ -233,11 +233,9 @@ PPR*
 !/research/*.md
 
 # ---------------------------------------------------------------------------
-# Per-agent local files. AGENTS.md is the versioned guide, read by several
-# tools; CLAUDE.md is a copy of it that Claude Code looks for by name, and
-# .claudeignore is personal tooling. Keep them on disk, out of the repository.
+# Per-agent local files. AGENTS.md is the versioned guide, and the tools read
+# it directly; .claudeignore is personal tooling, kept on disk only.
 # ---------------------------------------------------------------------------
-/CLAUDE.md
 /.claudeignore
 
 # ---------------------------------------------------------------------------
