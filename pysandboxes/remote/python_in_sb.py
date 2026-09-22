@@ -204,7 +204,7 @@ def _python_interactive(
                     result = super().in_prompt_tokens()
                     full_prompt = prefix + result[2][1]
                     result[2] = result[2][0], full_prompt
-                    self.shell.prompt_length = len(full_prompt)
+                    self.shell.prompt_length = len(full_prompt)  # type: ignore[attr-defined]
                     return result
 
             c.TerminalInteractiveShell.prompts_class = CustomPrompts
