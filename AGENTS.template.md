@@ -1,8 +1,10 @@
 ## Project Overview
 
 PySandboxes is a Python security framework that provides sandbox environments for executing untrusted Python
-code safely. It combines Python API patching with OS-level containers in a defense-in-depth architecture:
-Python guards plus OS providers (qemu, container, kubernetes).
+code safely. It combines Python API patching with OS-level isolation in a defense-in-depth architecture:
+Python guards plus one OS provider among `none`, `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`
+and `qemu`. Docker and Podman are not providers of their own: a container runs the `unshare` provider, with
+`--privileged` for Docker.
 
 All code is in English.
 
@@ -21,14 +23,17 @@ make gh-tests                # Run the github action locally, through `gh act`
 ### Code Quality
 ```bash
 make format                  # Format code with black
-make lint                    # Run all linters (mypy, black, ruff)
+make lint                    # Run all linters (mypy, pyright, black, ruff)
 make spell_check             # Check spell
+make coverage                # Unit and integration tests with a coverage report
+make pip-audit               # Audit the runtime dependencies for known CVEs
 make validate                # All validation (before commit)
 ```
 
 ### Build and Distribution
 ```bash
 make clean                   # Clean build artifacts
+make lock                    # Refresh uv.lock, which is versioned
 make dist                    # Build distribution packages
 make publish-minor           # Increment and publish a minor version
 make publish-patch           # Increment and publish a patch version
@@ -50,13 +55,23 @@ make tests
 ### Core Components
 - **pysandboxes/sandboxes_api.py**: Main API with `@sandbox` decorator and `sandboxes()` context manager
 - **pysandboxes/py_sandbox.py**: Python-level sandbox implementation using dynamic patching
-- **pysandboxes/os_sandbox.py**: OS-level sandbox wrapper (firejail, Docker, etc.)
-- **pysandboxes/guard_*.py**: Security guards for files, network, imports, and environment
-- **pysandboxes/remote/**: Server-Sent Events (SSE) based IPC for remote execution
+- **pysandboxes/_os_sandbox.py**: OS-level provider registry (`_PROVIDER_SPECS`), loaded lazily
+- **pysandboxes/guard_*.py**: Security guards for files (`guard_files`), network (`guard_socket`),
+  imports (`guard_import`), environment (`guard_envs`), sensitive calls (`guard_api`) and dynamically
+  evaluated code (`guard_eval`)
+- **pysandboxes/eval_rules.py, eval_transform.py, eval_runtime.py**: the `eval-*` sub-language — parsing,
+  AST rewriting and the runtime helpers that enforce what static inspection cannot
+- **pysandboxes/remote/**: Server-Sent Events (SSE) based IPC for remote execution, one daemon per provider
 
 ### Security Model
 - **Default deny-all** with explicit whitelisting via `.py-sandboxes` configuration files
-- **Multi-layered protection**: Python API patching + OS containers
+- **Multi-layered protection**: Python API patching + an OS boundary enforced by the kernel
+- **An import right is not a call right**: `guard_api` holds a registry of 110 sensitive functions in eight
+  categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`,
+  `dynamic-code`, `deserialization`), denied by default and granted with `python-api=ALLOW:<category>|<function>`
+- **Code arriving as a string is a layer of its own**: a source reaching `eval()`, `exec()` or `compile()` is
+  parsed, checked against the sub-language described by the `eval-*` rules, rewritten, and run under a budget
+  and a timeout. An emptied `__builtins__` stops nothing on its own
 - **Process isolation**: Main application communicates with sandboxed child processes via SSE over local HTTP
 - **Learning mode**: Automatic security rule generation based on application behavior
 
@@ -93,7 +108,8 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 
 ## Development Environment
 
-- **Python**: 3.11+ (tested up to 3.13)
+- **Python**: 3.11 to 3.14 (`requires-python = ">=3.11,<3.15"`), each covered by the lint, test and sample
+  CI matrices; the integration, container and API-doc workflows run on 3.13 only
 - **Package Manager**: uv (exclusively — no poetry)
 - **Virtual Environment**: `.venv/` directory
 - **Entry Points**: `python-sb` CLI commands for sandboxed Python execution
@@ -111,17 +127,13 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - Functions must be focused and small
 - Follow existing patterns exactly
 - Line length: 120 chars maximum (`line-length` in pyproject.toml, for both ruff and black)
-- Always uses 3.10 syntax (str | None in place of Optional[str])
+- Always uses 3.11 syntax (str | None in place of Optional[str])
 - avoid useless comments when generating code
 - For all new file, add the comment:
 ```python
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 ```
-
-## Python Conventions
-
-See: `.ai/rules/python.md`
 
 ## Testing Strategy
 
@@ -133,4 +145,8 @@ See: `.ai/rules/python.md`
 
 - The project targets AI/LLM-generated code security use cases
 - Configuration files use whitelist-only security model
-- Multiple OS sandbox backends supported (firejail primary, Docker/podman planned)
+- Seven OS providers ship today; `none` and `subprocess` give no OS boundary at all, and the kernel-backed
+  ones (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) are what holds against compiled code
+- Linux and WSL only: every OS backend is a Linux technology. On macOS and Windows, only the Python layer runs
+- Known weaknesses are documented, not hidden: see `wiki/weaknesses.md`, `wiki/audit-eval-security.md` and
+  `wiki/audit-python-security.md`. `SECURITY.md` says which of them count as a vulnerability
