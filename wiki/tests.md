@@ -34,6 +34,42 @@ Everything below is derived from the test sources, not from intent:
 
 `make all-tests` chains all four.
 
+## Orders of magnitude
+
+How many tests that represents, in collected rows rather than in the coverage
+cells of [section D](#d-counting-the-scenarios). The figures move with every
+commit that adds a test; the point is the shape of the effort:
+
+| Suite | Target | Tests |
+|---|---|---|
+| Unit | `make unit-tests` | ~1125 |
+| Integration | `make integration-tests` | ~130 |
+| Containers | `make container-tests` | ~60 |
+| Samples (12 demos) | `make sample-tests` | ~170 |
+| **Total, one interpreter** | `make all-tests` | **~1490** |
+
+The samples figure is the softest of the four: each sample has its own
+`pyproject.toml`, its own lock file and its own virtual environment, so the
+suites can only be collected once those environments exist.
+
+Not every suite is replayed on every interpreter, and no single event runs all
+of it:
+
+| Workflow | Suite | Versions | Executions | Fires on |
+|---|---|---|---|---|
+| `test.yml` | Unit | 3.11, 3.12, 3.13, 3.14 | ~4500 | every push and pull request |
+| `integration.yml` | Integration | 3.13 | ~130 | nightly (03:00) or dispatch |
+| `containers.yml` | Containers | 3.13 | ~60 | a `v*` tag or dispatch |
+| `samples.yml` | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | nightly (04:00), `v*` or dispatch |
+| **Total** | | | **~5340** | |
+
+The samples row is not a clean multiplication: a sample whose `requires-python`
+excludes the matrix interpreter is *skipped*, not failed. `langgraph-demo` is
+3.13+, so its suite runs on two rows of four — the Makefile compares the two
+versions with `sort -V` and prints a `skip` line rather than trying to resolve
+the environment. Both nightly workflows open with a guard job that exits early
+when the branch has not changed since the last run.
+
 ## A. Guard families
 
 | Family | Module | Unit | Integration (host) | Containers |
@@ -173,7 +209,7 @@ family, condition) tuple — rather than in pytest rows.
 
 | Symbol | Meaning | Value | Source |
 |---|---|---|---|
-| `V_host` | Python versions the host grid runs | 1 (4 claimed) | `test.yml` and `integration.yml` pin `3.13`; `requires-python = ">=3.11,<3.15"` |
+| `V_host` | Python versions the host grid runs | 1 (4 claimed) | `integration.yml` pins `3.13`; `requires-python = ">=3.11,<3.15"`. The unit suite does run the four, but it sits outside this grid |
 | `V_ctn` | Python versions the container grid runs | 1 | `_image_name()` returns `:latest`; `ARG PYTHON_VERSION` is a build knob, not a test axis |
 | `P_host` | backends on the host | 6 | `ALL_OS_SANDBOX` in `tests/integration_tests/_env.py` |
 | `P_ctn` | backends in containers, `none` excluded | 4 | `all_os_sandbox_provider` minus `none` |
@@ -225,17 +261,21 @@ N_run = 186 - 37 = 149
 
 Row counts, to cross-check against the sections above: 48 host rows and 60
 container rows, 48 of them on a real backend. Both are reproducible with
-`pytest --collect-only -q`. Unit tests sit outside this grid entirely — 1019
+`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1125
 collected, none parametrized by backend or container condition — so they scale
-with the Python version alone.
+with the Python version alone, and are the one suite that already runs on all
+four.
 
 Two facts fall out of the arithmetic that the tables above do not show. Partial
 mode arms one family of six: the mode is parametrized over every backend, but
 the only assertion is about environment variables. And both `V` coefficients are
 1 against a `requires-python` that claims four interpreters — raising `V_host`
-means uncommenting one line in `test.yml` and `integration.yml`, while raising
-`V_ctn` means building and tagging the per-version images, since the grid asks
-for `:latest`.
+means widening the one-entry matrix of `integration.yml`, while raising `V_ctn`
+means building and tagging the per-version images, since the grid asks for
+`:latest`. Neither is a code change: the five `Dockerfile*` already take
+`ARG PYTHON_VERSION`, and the Makefile derives it from the venv's interpreter.
+What holds them back is runtime — the container job is already budgeted at 300
+minutes for a single version, most of it QEMU booting under emulation.
 
 ## Gaps
 
@@ -258,8 +298,9 @@ for `:latest`.
 - **Partial mode arms one guard family of six.** The mode is parametrized over
   every backend, but the only assertion is about environment variables — see
   section D.
-- **The grid runs one interpreter against a four-version support claim.**
-  `requires-python = ">=3.11,<3.15"`, while `test.yml` and `integration.yml` pin
-  `3.13` and the container grid asks for `:latest` — see section D.
+- **The provider grids run one interpreter against a four-version support
+  claim.** `requires-python = ">=3.11,<3.15"`, while `integration.yml` and
+  `containers.yml` pin `3.13` and the container grid asks for `:latest`. Only
+  the unit and sample suites cover the four — see section D.
 - `call_llm()` in `tst_usage.py` is defined but never invoked — dead code, not a
   provider test.
