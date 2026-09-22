@@ -301,7 +301,11 @@ help:
 BUILD_SOURCES = pyproject.toml README.md $(shell find pysandboxes -type f \( -name '*.py' -o -name '*.toml' \) 2>/dev/null)
 
 # Sentinel updated after a successful build; dist depends on it so we only run uv build when sources are newer.
+# The version carries the git describe output, so building at two commits leaves two
+# wheels behind. The image Dockerfiles install dist/*.whl as a whole, and pip refuses
+# the two versions of the same package, so drop the previous build first.
 .make-dist: $(BUILD_SOURCES)
+	@rm -f dist/*.whl dist/*.tar.gz
 	uv build
 	@touch .make-dist
 
@@ -336,6 +340,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb:$(PYTHON_VERSION), python-sb:latest with $$CONTAINER_CMD (base)..."; \
 	  $$CONTAINER_CMD build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+	  	--build-arg WHEEL="$$(basename $$WHEEL)" \
 	  	-t python-sb:$(PYTHON_VERSION) \
 	  	-t python-sb:subprocess \
 	  	-t python-sb:landlock \
