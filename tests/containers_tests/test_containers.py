@@ -83,7 +83,8 @@ needs_privileged: frozenset[str] = frozenset({"unshare", "bwrap"})
 
 
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
-# QEMU in Podman: nested VM + tst_usage may need a higher CONTAINER_RUN_TIMEOUT (see wiki/qemu.md).
+# QEMU rows boot a nested VM before tst_usage runs, so they get CONTAINER_QEMU_RUN_TIMEOUT
+# rather than the default (see wiki/qemu.md).
 # Run on host: pytest tests/integration_tests/test_usage_with_providers.py -k qemu
 def _all_os_sandbox_params() -> list:
     """Full os_sandbox x py_sandbox x privileged matrix; unviable rows are declared xfail, not run."""
@@ -257,8 +258,18 @@ def _container_run_stdio() -> tuple[TextIO | None, TextIO | None, TextIO | None]
 BUILD_IMAGE_TIMEOUT = 600  # seconds
 
 # Timeout for the container run (inner python-sb + integration tests). Default 2 minutes.
-# Override with CONTAINER_RUN_TIMEOUT (seconds). Nested QEMU without KVM (TCG) may need more; see wiki/qemu.md.
+# Override with CONTAINER_RUN_TIMEOUT (seconds).
 CONTAINER_RUN_TIMEOUT = int(os.environ.get("CONTAINER_RUN_TIMEOUT", "120"))
+
+# QEMU boots a VM before the integration tests even start, so it cannot share the default:
+# the guest alone is given 90s under KVM and 180s under TCG (remote/parameters.py), which
+# the 120s above cannot contain. Same split as _k8s_exec_timeout_seconds does for the pod.
+CONTAINER_QEMU_RUN_TIMEOUT = int(os.environ.get("CONTAINER_QEMU_RUN_TIMEOUT", "600"))
+
+
+def _container_run_timeout_seconds(os_sandbox: str) -> int:
+    """Seconds the container run gets, from the provider: QEMU pays for a VM boot first."""
+    return CONTAINER_QEMU_RUN_TIMEOUT if os_sandbox.lower() == "qemu" else CONTAINER_RUN_TIMEOUT
 
 
 def _qemu_kvm_run_extra_flags() -> list[str]:
@@ -268,8 +279,8 @@ def _qemu_kvm_run_extra_flags() -> list[str]:
     if not kvm.exists():
         logger.warning(
             "container-tests (qemu): host has no /dev/kvm; nested QEMU will use TCG "
-            "(often exceeds %ss). Pass KVM or raise CONTAINER_RUN_TIMEOUT.",
-            CONTAINER_RUN_TIMEOUT,
+            "(often exceeds %ss). Pass KVM or raise CONTAINER_QEMU_RUN_TIMEOUT.",
+            CONTAINER_QEMU_RUN_TIMEOUT,
         )
         return extra
     extra.extend(["--device", "/dev/kvm"])
@@ -372,12 +383,13 @@ def _run_container_runtime(
     if os.environ.get("CONTAINER_TEST_TRACE_CMD") == "1":
         logger.warning("container-tests podman/docker cmd: %s", shlex.join(cmd))
 
+    run_timeout = _container_run_timeout_seconds(os_sandbox)
     logger.debug(
         "container-tests: starting %s run image=%s os_sandbox=%s timeout=%ss",
         runtime,
         image_name,
         os_sandbox,
-        CONTAINER_RUN_TIMEOUT,
+        run_timeout,
     )
 
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
@@ -396,12 +408,12 @@ def _run_container_runtime(
             elapsed = time.monotonic() - start
             logger.debug(
                 "container-tests: %s still running (os_sandbox=%s, elapsed=%.0fs, "
-                "timeout=%ss; nested QEMU may need a higher CONTAINER_RUN_TIMEOUT "
+                "timeout=%ss; nested QEMU may need a higher CONTAINER_QEMU_RUN_TIMEOUT "
                 "if TCG is slow)",
                 runtime,
                 os_sandbox,
                 elapsed,
-                CONTAINER_RUN_TIMEOUT,
+                run_timeout,
             )
 
     hb = threading.Thread(target=_heartbeat, name="container-test-heartbeat", daemon=True)
@@ -414,7 +426,7 @@ def _run_container_runtime(
             env=os.environ.copy(),
             stdout=out_io,
             stderr=err_io,
-            timeout=CONTAINER_RUN_TIMEOUT,
+            timeout=run_timeout,
         )
         _terminal_newline_before_log()
         logger.debug(
@@ -429,7 +441,7 @@ def _run_container_runtime(
         logger.error(
             "container-tests: %s timed out after %ss (os_sandbox=%s)",
             runtime,
-            CONTAINER_RUN_TIMEOUT,
+            run_timeout,
             os_sandbox,
         )
         raise e
