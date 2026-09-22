@@ -26,9 +26,24 @@
 - Control import list
 - Control file and network access
 - Control life cycle of the sandbox-daemon (restart if necessary)
-- implement `none`, `subprocess`, `landlock`, `bwrap`, `firejail`,
-  `unshare` and `qemu` os-sandbox
-- MCP client/server samples
+- seven os-sandbox providers, selected with `OS_SANDBOX=` or
+  `--os-sandbox`:
+  - `none`: no OS boundary, the Python layer alone
+  - `subprocess`: a separate interpreter process, still no OS boundary
+  - `landlock`: the process restricts itself, needs no privilege
+    (kernel 5.13+ for files, 6.7+ for network)
+  - `bwrap`: bubblewrap namespaces, disk and network filtering
+  - `firejail`: disk and network filtering
+  - `unshare`: namespaces driven directly, with `slirp4netns` and
+    `iptables`
+  - `qemu`: full OS and CPU emulation, KVM when available
+  Docker and Podman are covered through `unshare`, with `--privileged`
+  for Docker.
+- twelve samples, each with its own rules, test suite and interactive
+  chat: `agno-demo`, `autogen-demo`, `crewai-demo`, `google-adk-demo`,
+  `langchain-demo`, `langgraph-demo`, `mcp-client-demo`,
+  `mcp-server-demo`, `openai-agents-sdk-demo`, `pydantic-ai-demo`,
+  `smolagents-demo` and `strands-agents-demo`
 - Control of sensitive API calls, independent of import rights: an
   import right is not a call right. A registry of 110 sensitive
   functions in eight categories (`process-exec`, `process-control`,
