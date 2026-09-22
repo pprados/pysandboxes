@@ -61,12 +61,6 @@ documentation = "https://pprados.github.io/pysandboxes/"
 [tool.hatch.build.targets.wheel]
 packages = ["pysandboxes"]
 
-
-[tool.setuptools.packages.find]
-packages = [
-    { include = "pysandboxes" },
-]
-
 [tool.uv]
 package = true
 exclude-newer = "7 days"
