@@ -14,11 +14,15 @@ from .test_guard_io import activate_guard_files_rules
 
 
 def test_apply_dest_to_src_rule() -> None:
+    # The ignore pattern must not match the name of the directory the suite
+    # happens to run from: `ignore=c*` silently captured any checkout called
+    # `cleanup`, `code`, ... and the assertions below expect the exposed
+    # directory to come back untouched.
     cwd = str(Path.cwd())
     src_dir = f"{cwd}/tests"
     rules = [
         ConfigLine(f"expose-rw={cwd}", Path(), 0),
-        ConfigLine("ignore=c*", Path(), 0),
+        ConfigLine("ignore=zz-ignored-*", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -32,7 +36,7 @@ def test_apply_dest_to_src_rule() -> None:
         None,
     )
 
-    ignore_result = _apply_dest_to_src_rules("c.txt", write=False)
+    ignore_result = _apply_dest_to_src_rules("zz-ignored-1.txt", write=False)
     assert ignore_result[0] is None
     assert ignore_result[1] is not None
 
@@ -57,7 +61,7 @@ def test_apply_src_to_dest_rules() -> None:
     dst_dir = f"{cwd}/pysandboxes"
     rules = [
         ConfigLine(f"expose-rw={cwd}", Path(), 0),
-        ConfigLine("ignore=c*", Path(), 0),
+        ConfigLine("ignore=zz-ignored-*", Path(), 0),
     ]
     activate_guard_files_rules(rules)
 
@@ -65,7 +69,7 @@ def test_apply_src_to_dest_rules() -> None:
     assert _apply_src_to_dest_rules(f"{src_dir}/a.txt") == (f"{src_dir}/a.txt", None)
     assert _apply_src_to_dest_rules(f"{dst_dir}/a.txt") == (f"{dst_dir}/a.txt", None)
 
-    ignore_result = _apply_src_to_dest_rules("c.txt")
+    ignore_result = _apply_src_to_dest_rules("zz-ignored-1.txt")
     assert ignore_result[0] is None
     assert ignore_result[1] is not None
 
