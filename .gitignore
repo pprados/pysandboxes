@@ -225,6 +225,9 @@ PPR*
 /lat.md/
 /tmp/
 
+# Written at build time by hatch-vcs, from the git tag
+/pysandboxes/_version.py
+
 # ---------------------------------------------------------------------------
 # research/: the markdown sources are versioned, the LaTeX chain and its
 # output are not. `make -C research` rebuilds them from research.md.
