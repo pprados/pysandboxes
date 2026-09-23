@@ -195,9 +195,29 @@ spell_fix:
 # failing, so a dev dependency can still be raised on purpose.
 EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annotate --no-header -q
 
-## Report the runtime dependencies with a known security vulnerability
+# Each sample has its own uv.lock. pysandboxes is left out of their export: it is
+# an editable path dependency, already audited from the root lock. --frozen audits
+# the committed lock as it is, instead of relocking the sample. The export is
+# fully pinned, so pip-audit skips resolving it (--no-deps --disable-pip): the
+# resolution would run on the root interpreter, which a sample's requires-python
+# may exclude. Every sample is audited even when one fails, and the target still
+# fails if any did.
+#
+# crewai imports chromadb unconditionally, and chromadb 1.5.9 carries advisories
+# with no fixed release yet. The sample uses neither RAG, memory nor knowledge, so
+# they are ignored there only, for now. Re-check when chromadb publishes a fix.
+PIP_AUDIT_IGNORE_crewai = --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
+	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
+## Report the runtime dependencies with a known security vulnerability, samples included
 pip-audit:
-	unset VIRTUAL_ENV; uv export $(EXPORT_AUDIT) --no-dev | uv run pip-audit -r /dev/stdin
+	@unset VIRTUAL_ENV; status=0; \
+	echo "== pysandboxes"; \
+	uv export $(EXPORT_AUDIT) --no-dev | uv run pip-audit -r /dev/stdin || status=1; \
+	$(foreach s,$(SAMPLES), \
+		echo "== samples/$(s)-demo"; \
+		uv export $(EXPORT_AUDIT) --frozen --no-dev --project samples/$(s)-demo --no-emit-package pysandboxes \
+			| uv run pip-audit --no-deps --disable-pip $(PIP_AUDIT_IGNORE_$(s)) -r /dev/stdin || status=1;) \
+	exit $$status
 
 ## Report the vulnerabilities of every dependency, dev included (never fails)
 pip-audit-all:
