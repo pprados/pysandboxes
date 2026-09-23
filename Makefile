@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 .PHONY: all format format_diff lint lint_diff claude-lint coverage \
-	unit-tests integration-tests container-tests sample-tests all-tests gh-tests \
+	unit-tests integration-tests container-tests sample-tests all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
@@ -147,6 +147,16 @@ gh-tests: lint
 	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
 	gh act push
 	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi
+
+# samples.yml and integration.yml only run on schedule on GitHub. Dispatched here,
+# their `changes` guard never skips, so the local tree is always tested.
+## Make github tests locally, the scheduled samples and integration workflows included
+gh-all-tests: gh-tests
+	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
+	gh act workflow_dispatch -W .github/workflows/samples.yml; status=$$?; \
+	gh act workflow_dispatch -W .github/workflows/integration.yml || status=1; \
+	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi; \
+	exit $$status
 
 ## Make all tests
 all-tests: unit-tests integration-tests container-tests sample-tests
