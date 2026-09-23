@@ -189,8 +189,13 @@ def _parse_include(
     for rule in rules:
         match = pattern.match(rule.rule)
         if match:
-            filename = Path(match[1])
-            if "/" not in str(filename):
+            # Test the text, not the Path: pathlib normalises "./x" to "x", so an
+            # include written relative to the current directory looked like a bare
+            # name and was searched next to the including file instead -- where it
+            # is not, so the include was dropped without a word.
+            raw_filename = match[1]
+            filename = Path(raw_filename)
+            if "/" not in raw_filename:
                 filename = root_path / filename
             filename = filename.expanduser().absolute()
             if filename not in includes:  # No loop of include
@@ -206,6 +211,10 @@ def _parse_include(
                         # Recursive include
                         includes.add(filename.absolute())
                         others.extend(_parse_include(root_path, includes, include_config))
+                    else:
+                        # An optional local override is a deliberate pattern, so this is
+                        # not a warning -- but say it somewhere, or a typo is invisible.
+                        logger.debug("include %s: no such file, ignored", filename)
                 except PermissionError:
                     pass  # Ignore
         else:
