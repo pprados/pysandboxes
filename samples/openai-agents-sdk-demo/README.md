@@ -34,22 +34,19 @@ Optional: `cp env.example .env` and set API keys.
 
 ## Model selection (`CHAT_MODEL`)
 
-The SDK defaults to OpenAI when you pass a bare model name. This sample also supports **LiteLLM-routed** ids via the `litellm/` prefix (requires the `[litellm]` extra, already in dependencies).
-
-Accepts **both** `:` and `/` where noted below.
+The SDK defaults to OpenAI when you pass a bare model name. The sample only targets OpenAI:
+the SDK's `[litellm]` extra, which routes other providers, is not installed, because the
+LiteLLM release it resolved to carried known vulnerabilities.
 
 | Form | Resolved model id | Notes |
 |------|---------------------|--------|
 | *(empty)* | `gpt-4o-mini` | Default |
 | `gpt-4o-mini` | `gpt-4o-mini` | OpenAI |
 | `openai:gpt-4o-mini` or `openai/gpt-4o-mini` | `gpt-4o-mini` | OpenAI |
-| `litellm:anthropic/claude-sonnet-4-20250514` | `litellm/anthropic/claude-sonnet-4-20250514` | LiteLLM |
-| `anthropic/claude-sonnet-4-20250514` | `litellm/anthropic/claude-sonnet-4-20250514` | Non-OpenAI providers |
-| `litellm/openrouter/openai/gpt-4o-mini` | unchanged | Example OpenRouter via LiteLLM |
 
-Set the API keys your route expects (`OPENAI_API_KEY` for OpenAI, `ANTHROPIC_API_KEY` for Anthropic via LiteLLM, etc.).
+Set `OPENAI_API_KEY`.
 
-Tracing to the OpenAI dashboard is **disabled** when `OPENAI_API_KEY` is unset (avoids trace upload 401s for LiteLLM-only setups). See the SDK [tracing docs](https://openai.github.io/openai-agents-python/tracing/) to enable or customize.
+Tracing to the OpenAI dashboard is **disabled** when `OPENAI_API_KEY` is unset (avoids trace upload 401s). See the SDK [tracing docs](https://openai.github.io/openai-agents-python/tracing/) to enable or customize.
 
 ## Run
 
