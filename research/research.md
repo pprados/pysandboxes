@@ -2,7 +2,7 @@
 
 ### Inferred Least-Privilege Profiles Compiled to Heterogeneous Isolation Backends
 
-**Philippe PRADOS** — [github@prados.fr](mailto:github@prados.fr)
+**Philippe PRADOS** — [github@prados.fr](mailto:github@prados.fr) · ORCID [0009-0007-0558-9634](https://orcid.org/0009-0007-0558-9634)
 
 **Version 1.0** — September 2026
 

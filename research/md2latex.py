@@ -390,6 +390,7 @@ class Metadata:
     subtitle: str = ""
     author: str = ""
     email: str = ""
+    orcid: str = ""
     date: str = ""
     version: str = ""
     keywords: list[str] = field(default_factory=list)
@@ -409,10 +410,16 @@ def extract_metadata(markdown: str) -> tuple[str, Metadata]:
         meta.subtitle = subtitle.group(1).strip()
         markdown = markdown.replace(subtitle.group(0) + "\n", "", 1)
 
-    author = re.search(r"^\*\*([^*]+)\*\* — \[([^\]]+)\]\(mailto:([^)]+)\)\s*$", markdown, re.M)
+    author = re.search(
+        r"^\*\*([^*]+)\*\* — \[([^\]]+)\]\(mailto:([^)]+)\)"
+        r"(?: · ORCID \[([^\]]+)\]\(https://orcid\.org/[^)]+\))?\s*$",
+        markdown,
+        re.M,
+    )
     if author:
         meta.author = author.group(1).strip()
         meta.email = author.group(3).strip()
+        meta.orcid = (author.group(4) or "").strip()
         markdown = markdown.replace(author.group(0) + "\n", "", 1)
 
     # "**Version 1.0** — September 2026", or a bare month and year.
@@ -619,6 +626,8 @@ def yaml_header(meta: Metadata) -> str:
     if meta.author:
         # No `\\` here: pandoc escapes it to \textbackslash{} inside metadata.
         author = f"{meta.author} (\\texttt{{{meta.email}}})" if meta.email else meta.author
+        if meta.orcid:
+            author += f" --- ORCID \\href{{https://orcid.org/{meta.orcid}}}{{{meta.orcid}}}"
         lines.append(f"author: {quote(author)}")
     if meta.date:
         stamp = f"Version {meta.version} --- {meta.date}" if meta.version else meta.date
