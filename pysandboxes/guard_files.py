@@ -260,18 +260,24 @@ def parse_rules(
     # Add path for python
     list_bin = list(follow_links_executable(Path(sys.executable), set()))
     for p in list_bin:
-        rp = Path(p).resolve()
-        if rp.is_dir():
-            p_str = str(rp) + "/" if rp != Path("/") else "/"
-        else:
-            p_str = str(rp)
-        rules_expose.append(
-            FSExposeRule(
-                path=p_str,
-                write=False,
-                config=ConfigLine("<python>", Path(), 0),
+        # The link and its target both need a rule. Resolving here collapses the two
+        # names the chain walks through into one, and inside the sandbox the
+        # interpreter reports the *link* name: a uv venv puts sysconfig's stdlib under
+        # .../cpython-3.14-linux-x86_64-gnu, so a rule registered only for the resolved
+        # .../cpython-3.14.5-... denies it, and `import colorsys` fails with "Access to
+        # ... must be accepted by a rule" long before the import guard has its say.
+        for rp in dict.fromkeys((Path(p), Path(p).resolve())):
+            if rp.is_dir():
+                p_str = str(rp) + "/" if rp != Path("/") else "/"
+            else:
+                p_str = str(rp)
+            rules_expose.append(
+                FSExposeRule(
+                    path=p_str,
+                    write=False,
+                    config=ConfigLine("<python>", Path(), 0),
+                )
             )
-        )
     rules_expose = sorted(rules_expose, key=lambda r: len(r.path), reverse=True)
     return tuple(rules_ignore + cast(list[FilesRule], rules_expose)), ignore_rules
 
