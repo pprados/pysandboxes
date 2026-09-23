@@ -142,11 +142,18 @@ sample-tests:
 	@$(MAKE) -k $(addprefix sample-tests-,$(SAMPLES))
 
 
+# `gh act push` alone runs every workflow with a push trigger, whatever its
+# branches or tags filter, so the release-only ones would run and fail here. The
+# workflows a push on develop triggers are named instead. api-docs.yml is left out:
+# it publishes to GitHub Pages, which a local run cannot reach.
+GH_PUSH_WORKFLOWS = lint.yml test.yml
 ## Make github tests locally
 gh-tests: lint
 	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
-	gh act push
-	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi
+	status=0; \
+	for w in $(GH_PUSH_WORKFLOWS); do gh act push -W .github/workflows/$$w || status=1; done; \
+	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi; \
+	exit $$status
 
 # samples.yml and integration.yml only run on schedule on GitHub. Dispatched here,
 # their `changes` guard never skips, so the local tree is always tested.
