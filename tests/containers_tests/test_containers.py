@@ -9,6 +9,7 @@ implemented here in Python; no shell scripts are invoked.
 
 import logging
 import os
+import pty
 import re
 import shlex
 import signal
@@ -18,6 +19,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import TextIO
 
@@ -236,21 +238,112 @@ def _add_host_flags() -> list[str]:
     return flags
 
 
-def _container_run_stdio() -> tuple[TextIO | None, TextIO | None, TextIO | None]:
-    """Return (stdout, stderr, fd_to_close) for ``podman run`` / ``docker run``.
+# How much of a failing container's output to put in the report. The interesting part
+# (traceback, last [pysandbox-9p] mount, the guest's final words) is at the end.
+CONTAINER_OUTPUT_TAIL_LINES = int(os.environ.get("CONTAINER_OUTPUT_TAIL_LINES", "60"))
 
-    When pytest captures stdout/stderr, inheriting the default fds sends nested QEMU
-    serial into the capture buffer (often invisible until failure). Writing to the
-    controlling TTY (``os.ctermid()``) shows VM console live. Set
-    ``CONTAINER_TEST_NO_CTTY=1`` to keep inherited fds (e.g. CI without a TTY).
+
+def _open_ctty() -> TextIO | None:
+    """The controlling terminal, to mirror the run on, or None when there is none.
+
+    Set ``CONTAINER_TEST_NO_CTTY=1`` to skip it (CI has no TTY to write to).
     """
     if os.environ.get("CONTAINER_TEST_NO_CTTY", "").lower() in ("1", "true", "yes"):
-        return None, None, None
+        return None
     try:
-        tty = open(os.ctermid(), "w", encoding="utf-8", errors="replace", buffering=1)
-        return tty, tty, tty
+        return open(os.ctermid(), "w", encoding="utf-8", errors="replace", buffering=1)
     except OSError:
-        return None, None, None
+        return None
+
+
+class _PtyStream:
+    """One of the container's output streams, on its own pty, drained by a thread.
+
+    The pty keeps ``isatty()`` true for the child -- python-sb in CLI mode asks. The
+    thread is what makes that safe: an undrained pty fills its buffer and the container
+    blocks on write, exactly the deadlock a pipe would have caused. What it reads goes
+    to ``mirror`` (live view) and to ``tail`` (the failure report).
+    """
+
+    def __init__(self, name: str, mirror: TextIO | None) -> None:
+        self.name = name
+        self.tail: deque[str] = deque(maxlen=CONTAINER_OUTPUT_TAIL_LINES)
+        self.master_fd, self.slave_fd = pty.openpty()
+        self._closed = False
+        self._mirror = mirror
+        self._thread = threading.Thread(
+            target=self._drain,
+            name=f"container-test-{name}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _drain(self) -> None:
+        pending = ""
+        while True:
+            try:
+                chunk = os.read(self.master_fd, 65536)
+            except OSError:  # master closed by close(), or the slave end went away
+                break
+            if not chunk:
+                break
+            text = chunk.decode("utf-8", errors="replace")
+            if self._mirror is not None:
+                try:
+                    self._mirror.write(text)
+                except OSError:
+                    self._mirror = None
+            pending += text
+            *lines, pending = pending.split("\n")
+            # A pty translates \n to \r\n on the way out; keep the report free of them.
+            self.tail.extend(line.rstrip("\r") for line in lines)
+        if pending:
+            self.tail.append(pending.rstrip("\r"))
+
+    def close(self) -> None:
+        """Close the slave so the drain sees EOF, let it finish, then drop the master.
+
+        Idempotent: the failure paths close early, to report a complete tail, and the
+        ``finally`` closes again for the runs that succeeded.
+        """
+        if self._closed:
+            return
+        self._closed = True
+        for fd in (self.slave_fd, self.master_fd):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self._thread.join(timeout=5)
+
+
+def _report_container_output(out: _PtyStream, err: _PtyStream, runtime: str, os_sandbox: str) -> None:
+    """Log each stream's tail so pytest shows it under Captured log.
+
+    Mirroring to the terminal alone left the report empty: a row that timed out said
+    ``TimeoutExpired`` and not one line of what the container had done.
+    """
+    reported = False
+    for stream in (err, out):  # stderr first: that is where a failure usually explains itself
+        stream.close()  # let the drain finish, so the tail is the real end of the run
+        if stream.tail:
+            reported = True
+            logger.error(
+                "container-tests: last %d %s lines from %s (os_sandbox=%s):\n%s",
+                len(stream.tail),
+                stream.name,
+                runtime,
+                os_sandbox,
+                "\n".join(stream.tail),
+            )
+    if not reported:
+        logger.error(
+            "container-tests: %s (os_sandbox=%s) produced no output at all. For qemu this is "
+            "expected unless qemu.show_boot_console=true: the daemon sends the VM console to "
+            "DEVNULL otherwise (remote/qemu_sse_daemon.py).",
+            runtime,
+            os_sandbox,
+        )
 
 
 # Timeout for building the container image when missing (avoid indefinite hang)
@@ -382,9 +475,8 @@ def _run_container_runtime(
 
     # Do not use capture_output=True: the container produces a lot of log output (DEBUG).
     # With pipes, the buffer (~64KB) can fill and the container blocks on write → deadlock.
-    # Prefer the controlling TTY so nested QEMU serial is visible even when pytest captures.
+    # A file has no such limit and, unlike the TTY, survives the run to be reported.
     stop_heartbeat = threading.Event()
-    ctty: TextIO | None = None
 
     def _heartbeat() -> None:
         interval = int(os.environ.get("CONTAINER_TEST_HEARTBEAT_SEC", "60"))
@@ -406,14 +498,21 @@ def _run_container_runtime(
 
     hb = threading.Thread(target=_heartbeat, name="container-test-heartbeat", daemon=True)
     hb.start()
+    # A pty per stream, not a file and not one shared fd: python-sb in CLI mode checks
+    # isatty(), so the child must still see a terminal, and stdout must stay separate
+    # from stderr -- merging them is what QEMU already does to the guest, and the host
+    # side has no business repeating it. Each master end is drained by a thread, which
+    # mirrors the run live and keeps its tail for the failure report.
+    mirror = _open_ctty()
+    out = _PtyStream("stdout", mirror)
+    err = _PtyStream("stderr", mirror)
     try:
-        out_io, err_io, ctty = _container_run_stdio()
         completed = subprocess.run(
             cmd,
             cwd=ROOT_DIR,
             env=os.environ.copy(),
-            stdout=out_io,
-            stderr=err_io,
+            stdout=out.slave_fd,
+            stderr=err.slave_fd,
             timeout=CONTAINER_RUN_TIMEOUT,
         )
         _terminal_newline_before_log()
@@ -423,6 +522,8 @@ def _run_container_runtime(
             os_sandbox,
             completed.returncode,
         )
+        if completed.returncode != 0:
+            _report_container_output(out, err, runtime, os_sandbox)
         return completed
     except subprocess.TimeoutExpired as e:
         _terminal_newline_before_log()
@@ -432,12 +533,18 @@ def _run_container_runtime(
             CONTAINER_RUN_TIMEOUT,
             os_sandbox,
         )
+        # The container is what knows why it hung; without this the report is the
+        # TimeoutExpired and nothing else, which is how twelve qemu rows failed
+        # silently for a whole test run.
+        _report_container_output(out, err, runtime, os_sandbox)
         raise e
     finally:
         stop_heartbeat.set()
-        if ctty is not None:
+        out.close()
+        err.close()
+        if mirror is not None:
             try:
-                ctty.close()
+                mirror.close()
             except OSError:
                 pass
 
@@ -447,9 +554,9 @@ def _run_container_runtime(
 def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, privileged: bool) -> None:
     """Run container test with podman or docker; success = exit code 0.
 
-    Nested output goes to the **controlling TTY** when available (not pytest's captured
-    fds), so QEMU serial with ``qemu.show_boot_console=true`` is visible; use
-    ``CONTAINER_TEST_NO_CTTY=1`` to inherit fds instead. QEMU: with
+    Nested output is collected to a temporary file and, when the row fails, its tail is
+    logged so the report says what the container did (``CONTAINER_OUTPUT_TAIL_LINES``
+    sets how much). QEMU: with
     ``qemu.show_boot_console=false``, the host only
     forwards lines between ``[PYSANDBOXES]PYTHON_OUTPUT_START`` and ``END``;
     for full VM boot trace, set ``qemu.show_boot_console=true`` (see wiki/qemu.md).
