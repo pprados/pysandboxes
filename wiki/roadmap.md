@@ -31,7 +31,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [X] firejail
     - [X] unshare
     - [X] bwrap
-    - [ ] Proxy (SOCKS/HTTP over a bound Unix socket + socat, see TODO.md)
+    - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: filtering by domain, not only by IP)
   - [ ] Container
     - [X] Docker (--privileged with unshare)
     - [X] podman (--privileged with unshare)
@@ -81,14 +81,14 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] DevContainer
 
 ## Guard some critical methods
-A registry of 103 sensitive functions, in six categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`), is denied by default, independently of the import rights granted by `python-import=`.
+A registry of 110 sensitive functions, in eight categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`, `dynamic-code`, `deserialization`), is denied by default, independently of the import rights granted by `python-import=`.
 
 - Configured with `python-api=ALLOW:<category>|<function>` and `python-api=DENY:<category>|<function>`, resolved by specificity: a function rule beats its category, and `DENY` wins at equal specificity.
 - Learning mode records what an application really calls and generates the matching lines.
 - Honest limits: `native` and `introspection` are detection and friction, not a barrier — the real barrier is the OS provider.
 
 ## New **OS-sandboxes**
-Other OS-level sandbox solutions will be integrated, including `Docker` of course.
+Other OS-level sandbox solutions will be integrated. Docker and Podman are already covered through the `unshare` provider.
 
 If your application itself runs in a container, it may not be able to launch another inside (depending on the parameters). This is also the case for solutions relying on Linux *capabilities*.
 
