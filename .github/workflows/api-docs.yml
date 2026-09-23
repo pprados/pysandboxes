@@ -1,11 +1,10 @@
 name: API Documentation
 
-# Publishes the API reference from master only: master receives a merge at
-# publication time, so the public pages describe a released API rather than
-# whatever develop happens to hold. workflow_dispatch republishes on demand.
+# Publishes the API reference from develop, the integration branch, so the pages
+# follow the API as it is being built. workflow_dispatch republishes on demand.
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "develop" ]
   workflow_dispatch:
 
 permissions:
