@@ -54,6 +54,31 @@ def _get_terminal_size() -> tuple[int, int]:
 
 logger = logging.getLogger(__name__)
 
+QEMU_CONSOLE_LOG_NAME = ".pysandbox-qemu-console.log"
+
+
+def _open_qemu_console_log() -> tuple[TextIO | None, Path | None]:
+    """Open the boot console log next to the run, or failing that under the temp dir.
+
+    A diagnostic aid must not be able to kill the run it was turned on to diagnose.
+    The working directory is the project's bind mount inside the container, and
+    podman remaps uids, so ``qemu.show_boot_console=true`` raised PermissionError
+    before the VM had even started -- on the one option reached for when a QEMU run
+    goes wrong. The temp dir is the fallback rather than the run dir because the
+    latter is removed on exit, taking the console with it.
+    """
+    candidates = (
+        Path(QEMU_CONSOLE_LOG_NAME),
+        Path(tempfile.gettempdir()) / QEMU_CONSOLE_LOG_NAME.lstrip("."),
+    )
+    for path in candidates:
+        try:
+            return open(path, "w"), path
+        except OSError as e:
+            logger.debug("QEMU guest console: cannot write %s (%s)", path, e)
+    logger.warning("QEMU guest console: no writable log file; the console goes to the terminal only")
+    return None, None
+
 
 def _debug_log() -> None:
     sandbox_level = logging.DEBUG
@@ -235,12 +260,14 @@ def main() -> int:
                 launch_kwargs["stdout"] = subprocess.PIPE
                 launch_kwargs["stderr"] = subprocess.PIPE
                 if show_boot:
-                    qemu_console_path = Path(".pysandbox-qemu-console.log")
-                    qemu_console_file = open(qemu_console_path, "w")
-                    logger.debug(
-                        "QEMU guest console (terminal + tee) → %s",
-                        qemu_console_path.resolve(),
-                    )
+                    qemu_console_file, qemu_console_path = _open_qemu_console_log()
+                    if qemu_console_path is not None:
+                        # info, not debug: with a fallback the location is no longer
+                        # predictable, and an unfindable log is not a log.
+                        logger.info(
+                            "QEMU guest console (terminal + tee) → %s",
+                            qemu_console_path.resolve(),
+                        )
                 try:
                     # The guest writes its stderr to the shared run dir rather than to
                     # the console, which QEMU merges with stdout. Forward it as the guest
