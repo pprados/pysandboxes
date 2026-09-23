@@ -97,8 +97,6 @@ dev = [
     "devpi-server>=6.17.0",
     "devpi-web>=5.0.1",
     "devpi-client>=7.2.0",
-    "mempalace>=3.0.0",
-    "onnxruntime-gpu>=1.24.3",
     "pyright>=1.1.407",
     "pip-audit",
     "pytest-cov>=7.1.0",
