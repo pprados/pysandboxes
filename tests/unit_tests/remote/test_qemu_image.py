@@ -62,7 +62,7 @@ class TestGetDefaultImagePath:
 
     def test_filename_matches_download_url_for_python_3_14(self) -> None:
         path = get_default_image_path(python_version=(3, 14), arch="x86_64")
-        assert path.name == "resolute-server-cloudimg-amd64.img"
+        assert path.name == "ubuntu-25.04-server-cloudimg-amd64.img"
         url = get_standard_download_url(python_version=(3, 14), arch="x86_64")
         assert url is not None
         assert path.name == url.rstrip("/").split("/")[-1]
@@ -72,7 +72,7 @@ class TestGetDefaultImagePath:
         assert path.name == get_default_image_filename()
         # Filename is the standard image's URL segment, or python-3.x-arch.qcow2 when
         # the running version has no mapped image. The segment does not always carry
-        # "ubuntu": a release named by its codename gives resolute-server-cloudimg-*.
+        # "ubuntu": a release named by its codename gives <codename>-server-cloudimg-*.
         url = get_standard_download_url()
         if url:
             assert path.name == url.rstrip("/").split("/")[-1]
@@ -145,6 +145,22 @@ class TestGetUbuntuImageUrlForPythonVersion:
         assert "ubuntu-25.04-server-cloudimg-amd64.img" in url
 
     def test_mapping_3_14_amd64(self) -> None:
+        url = get_ubuntu_image_url_for_python_version(3, 14, "x86_64")
+        assert url is not None
+        assert "25.04" in url
+        assert "ubuntu-25.04-server-cloudimg-amd64.img" in url
+
+    def test_codename_release_uses_current_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A codename entry still resolves under {codename}/current/.
+
+        No supported version maps to a codename any more (they track the devel series,
+        whose glibc outruns the host's), but the branch stays reachable by config.
+        """
+        monkeypatch.setitem(
+            PYTHON_VERSION_TO_UBUNTU_IMAGE,
+            (3, 14),
+            ("resolute", "resolute-server-cloudimg-{arch}.img"),
+        )
         url = get_ubuntu_image_url_for_python_version(3, 14, "x86_64")
         assert url is not None
         assert UBUNTU_CLOUD_IMAGES_ROOT in url
