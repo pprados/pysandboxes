@@ -4145,7 +4145,6 @@ wheels = [
 
 [[package]]
 name = "pysandboxes"
-version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -4192,16 +4191,15 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.12.0" },
+    { name = "aiohttp", specifier = ">=3.14.3" },
     { name = "aiohttp-sse-client", specifier = ">=0.2.1" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "netifaces", specifier = ">=0.11.0" },
-    { name = "pysandboxes", extras = ["bwrap", "firejail", "landlock", "subprocess", "unshare"], marker = "extra == 'all'" },
     { name = "tblib", specifier = ">=3.1.0" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
-provides-extras = ["bwrap", "firejail", "landlock", "subprocess", "unshare", "all"]
+provides-extras = ["all", "bwrap", "firejail", "landlock", "subprocess", "unshare"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -4231,7 +4229,7 @@ test = [
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-dotenv", specifier = ">=0.5.2" },
     { name = "pytest-mock", specifier = ">=3.10.0" },
-    { name = "requests", specifier = ">=2.32.5" },
+    { name = "requests", specifier = ">=2.33.0" },
     { name = "speckit", specifier = ">=1.0.1" },
     { name = "toml", specifier = ">=0.10.2" },
     { name = "types-requests", specifier = ">=2.28.11.5" },
