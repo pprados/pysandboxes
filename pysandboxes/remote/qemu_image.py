@@ -56,13 +56,20 @@ DOWNLOAD_TIMEOUT = 300
 
 # Complete mapping Python 3.10–3.14 → Ubuntu Cloud Image (one image per version).
 # See wiki/qemu.md. Format: (release_or_codename, filename_pattern).
-# Numeric keys (22.04, …) use releases/{ver}/release/; codenames (resolute) use {codename}/current/.
+# Numeric keys (22.04, …) use releases/{ver}/release/; codenames use {codename}/current/.
+#
+# Pick a *released* image, never a development codename. Staging mounts the host's
+# /lib/<triplet> over the guest (see qemu.ld_closure_libs), so the guest runs its own
+# coreutils and cloud-init against the host's glibc: the guest release must therefore
+# be no newer than the host. A codename tracks the devel series, which eventually
+# ships a glibc the host lacks -- resolute reached 2.43 and every guest binary died
+# with "version `GLIBC_2.43' not found", so the bootstrap never answered its ping.
 PYTHON_VERSION_TO_UBUNTU_IMAGE: dict[tuple[int, int], tuple[str, str]] = {
     (3, 10): ("22.04", "ubuntu-22.04-server-cloudimg-{arch}.img"),
     (3, 11): ("23.04", "ubuntu-23.04-server-cloudimg-{arch}.img"),
     (3, 12): ("24.04", "ubuntu-24.04-server-cloudimg-{arch}.img"),
     (3, 13): ("25.04", "ubuntu-25.04-server-cloudimg-{arch}.img"),
-    (3, 14): ("resolute", "resolute-server-cloudimg-{arch}.img"),
+    (3, 14): ("25.04", "ubuntu-25.04-server-cloudimg-{arch}.img"),
 }
 UBUNTU_CLOUD_RELEASES_BASE = "https://cloud-images.ubuntu.com/releases"
 UBUNTU_CLOUD_IMAGES_ROOT = "https://cloud-images.ubuntu.com"

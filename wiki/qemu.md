@@ -199,7 +199,9 @@ export PYSANDBOXES_QEMU_IMAGE_URL="<full image URL>"
 
 ### Mapping: Python version → image (Ubuntu, 3.11 to 3.14)
 
-A single source covers every supported version, 3.11–3.14, with one image each: **Ubuntu Cloud Images**. Releases **22.04–25.04** use `releases/<version>/release/`; **Python 3.14** uses the **resolute** development series under `{codename}/current/` (default `python3` is 3.14).
+A single source covers every supported version, 3.11–3.14, with one image each: **Ubuntu Cloud Images**, all under `releases/<version>/release/`. Python 3.13 and 3.14 share **25.04**.
+
+Only **released** images are mapped, never a development codename. Staging mounts the host's `/lib/<triplet>` over the guest (see `qemu.ld_closure_libs` above), so the guest's own coreutils and cloud-init run against the **host's** glibc: the guest release must be no newer than the host. A codename tracks the devel series and eventually ships a glibc the host lacks — **resolute** reached **2.43**, every guest binary died with ``version `GLIBC_2.43' not found``, `cloud-final.service` failed, and the bootstrap never answered its ping, so the run hung with no output at all.
 
 
 | Python | Ubuntu            | File (.img)                               | Base URL |
