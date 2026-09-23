@@ -47,6 +47,7 @@ from ..sb_types import Args, ConfigLine, ConfigLines
 from ..tools import (
     Environ,
     SyncOrAsyncFunc,
+    follow_links_executable,
     get_callable_info,
     remove_comments,
     substitute_env_vars,
@@ -314,6 +315,15 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         for p in python_paths:
             if p and os.path.exists(p):
                 mounts.add((p, p, False))
+
+        # Mounting sys.executable is not enough to be able to run it. A venv reaches the
+        # interpreter through a chain of symlinks, and a bind mount resolves its target:
+        # the real binary lands where the chain ends, not at `.venv/bin/python`, which
+        # stays dangling inside the namespace -- `setpriv: failed to execute .../python:
+        # No such file or directory`. Mount every directory the chain names instead, as
+        # bwrap and firejail already do.
+        for link_path in follow_links_executable(Path(sys.executable), set()):
+            mounts.add((str(link_path), str(link_path), False))
 
         for rule in all_rules.file_rules:
             if isinstance(rule, FSExposeRule):

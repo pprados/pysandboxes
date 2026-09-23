@@ -339,25 +339,35 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
     Raises:
         RuntimeError: If unable to resolve executable symlink.
     """
-    if str(executable.resolve(strict=True)).startswith("/usr/bin"):
-        return all_paths
-    if str(executable.resolve(strict=True)).startswith("/usr/local/bin"):
-        return all_paths
-    if executable.parents[0].name == "bin":
-        if executable.parent.parent not in all_paths:
-            all_paths.add(executable.parent.parent)
-        else:
-            return all_paths
-    else:
-        if executable not in all_paths:
-            all_paths.add(executable)
-        else:
-            return all_paths
-    if executable.is_symlink():
+    # Walk the chain one link at a time. `resolve()` jumps straight to the end, which
+    # skips whatever the links name on the way: a uv venv reaches the interpreter through
+    # `.../uv/python/cpython-3.14-linux-x86_64-gnu`, a symlink to the patch-level
+    # `cpython-3.14.5-...`. Expose only the latter and the launcher still opens the former,
+    # so the backend execs a path that does not exist inside the sandbox -- `setpriv: failed
+    # to execute .venv/bin/python3: No such file or directory`, with no hint of which link
+    # was missing. Each step records the link *and* its target for that reason.
+    #
+    # `seen` is separate from `all_paths`: `python3 -> python` in the same `bin/` both map
+    # to the same directory, so deduplicating on the result would stop the walk on its
+    # second step, before it ever reaches the uv tree.
+    seen: set[Path] = set()
+    current = executable
+    while current not in seen:
+        seen.add(current)
         try:
-            follow_links_executable(executable.resolve(strict=True), all_paths)
+            resolved = current.resolve(strict=True)
         except FileNotFoundError as e:
             raise RuntimeError("Impossible to resolve the sys.executable `%s`", sys.executable) from e
+        if str(resolved).startswith("/usr/bin"):
+            break
+        if str(resolved).startswith("/usr/local/bin"):
+            break
+        for step in (current, resolved):
+            all_paths.add(step.parent.parent if step.parents[0].name == "bin" else step)
+        if not current.is_symlink():
+            break
+        target = Path(os.readlink(current))
+        current = target if target.is_absolute() else current.parent / target
     return all_paths
 
 
