@@ -676,12 +676,32 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
         logger.debug("Call remote daemon_shutdown...")
         try:
-            await self.async_call_in_sandbox(
-                main_shutdown.daemon_shutdown,  # Call remote sandbox daemon_shutdown
-                True,
-                graceful_shutdown,
-            )
-            logger.debug("Call remote daemon_shutdown done")
+            if not self._is_started:
+                # Only a daemon that answered its first ping can answer this one. After a
+                # failed start there is nobody to ask, so asking only costs time.
+                logger.debug("Daemon never started; skip the remote daemon_shutdown")
+            else:
+                try:
+                    # The call is bounded by max_connect_retry and by nothing else. A guest
+                    # that booted and then died leaves it waiting, and a start error that
+                    # waits is a start error the caller never sees: that is how a failed
+                    # QEMU row hung for its whole run instead of reporting in 110s.
+                    await asyncio.wait_for(
+                        self.async_call_in_sandbox(
+                            main_shutdown.daemon_shutdown,  # Call remote sandbox daemon_shutdown
+                            True,
+                            graceful_shutdown,
+                        ),
+                        timeout=TIMEOUT_FOR_STOP_DAEMON,
+                    )
+                    logger.debug("Call remote daemon_shutdown done")
+                except TimeoutError:
+                    # Fall through to the kill below rather than out of _shutdown, or the
+                    # process this was meant to stop outlives the error that reported it.
+                    logger.warning(
+                        "Remote daemon_shutdown did not answer within %.0fs; killing the daemon",
+                        TIMEOUT_FOR_STOP_DAEMON,
+                    )
             if graceful_shutdown:
                 if self._process:
                     try:
