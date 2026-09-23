@@ -61,11 +61,13 @@ def _open_qemu_console_log() -> tuple[TextIO | None, Path | None]:
     """Open the boot console log next to the run, or failing that under the temp dir.
 
     A diagnostic aid must not be able to kill the run it was turned on to diagnose.
-    The working directory is the project's bind mount inside the container, and
-    podman remaps uids, so ``qemu.show_boot_console=true`` raised PermissionError
-    before the VM had even started -- on the one option reached for when a QEMU run
-    goes wrong. The temp dir is the fallback rather than the run dir because the
-    latter is removed on exit, taking the console with it.
+    The container suite runs the docker rows before the podman ones over the same
+    checkout: docker runs as real root and leaves this file owned by uid 0, then
+    rootless podman maps to another uid and cannot reopen it for writing. So
+    ``qemu.show_boot_console=true`` raised PermissionError before the VM had even
+    started -- on the one option reached for when a QEMU run goes wrong. The temp
+    dir is the fallback rather than the run dir because the latter is removed on
+    exit, taking the console with it.
     """
     candidates = (
         Path(QEMU_CONSOLE_LOG_NAME),
