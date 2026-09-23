@@ -128,9 +128,9 @@ def test_glob_pattern_matches_legacy_regex() -> None:
     for _ in range(20000):
         glob = "".join(rng.choice("ab*\n*") for _ in range(rng.randint(0, 8)))
         subject = "".join(rng.choice("ab\n") for _ in range(rng.randint(0, 8)))
-        assert GlobPattern(glob).match(subject) is bool(_legacy_compile(glob).match(subject)), (
-            f"glob={glob!r} subject={subject!r}"
-        )
+        assert GlobPattern(glob).match(subject) is bool(
+            _legacy_compile(glob).match(subject)
+        ), f"glob={glob!r} subject={subject!r}"
 
 
 def test_glob_pattern_does_not_backtrack() -> None:
