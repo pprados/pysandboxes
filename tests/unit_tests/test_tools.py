@@ -3,7 +3,14 @@ import re
 import time
 from typing import List
 
-from pysandboxes.tools import GlobPattern, _remove_comment, resolve_env_variables
+from pathlib import Path
+
+from pysandboxes.tools import (
+    GlobPattern,
+    _remove_comment,
+    follow_links_executable,
+    resolve_env_variables,
+)
 
 
 def test_remove_comment_basic() -> None:
@@ -121,9 +128,9 @@ def test_glob_pattern_matches_legacy_regex() -> None:
     for _ in range(20000):
         glob = "".join(rng.choice("ab*\n*") for _ in range(rng.randint(0, 8)))
         subject = "".join(rng.choice("ab\n") for _ in range(rng.randint(0, 8)))
-        assert GlobPattern(glob).match(subject) is bool(
-            _legacy_compile(glob).match(subject)
-        ), f"glob={glob!r} subject={subject!r}"
+        assert GlobPattern(glob).match(subject) is bool(_legacy_compile(glob).match(subject)), (
+            f"glob={glob!r} subject={subject!r}"
+        )
 
 
 def test_glob_pattern_does_not_backtrack() -> None:
@@ -137,3 +144,31 @@ def test_glob_pattern_does_not_backtrack() -> None:
     started = time.monotonic()
     assert GlobPattern(glob).match(subject) is False
     assert time.monotonic() - started < 1.0
+
+
+def test_follow_links_executable_keeps_every_link_of_the_chain(tmp_path: Path) -> None:
+    """Each directory the symlink chain *names* is reported, not just the one it ends on.
+
+    Reproduces the uv venv layout: `.venv/bin/python3` points at `python`, which points
+    into `cpython-3.14-linux-x86_64-gnu`, itself a symlink to the patch-level
+    `cpython-3.14.5-linux-x86_64-gnu`. Resolving the chain in one jump yields only the
+    latter, so a backend exposing the result still had the launcher open the former --
+    and every sandbox that confines the filesystem died with `setpriv: failed to execute
+    .venv/bin/python3: No such file or directory`.
+    """
+    real = tmp_path / "cpython-3.14.5-linux-x86_64-gnu"
+    (real / "bin").mkdir(parents=True)
+    (real / "bin" / "python3.14").write_text("#!/bin/false\n")
+    alias = tmp_path / "cpython-3.14-linux-x86_64-gnu"
+    alias.symlink_to(real)
+
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").symlink_to(alias / "bin" / "python3.14")
+    (venv_bin / "python3").symlink_to("python")
+
+    found = follow_links_executable(venv_bin / "python3", set())
+
+    assert alias in found, f"the intermediate link is missing: {sorted(map(str, found))}"
+    assert real in found
+    assert tmp_path / "venv" in found
