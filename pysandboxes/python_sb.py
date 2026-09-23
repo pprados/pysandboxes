@@ -237,6 +237,17 @@ def main() -> int:
             env = dict(all_rules.envs)
         env = {**env, **extra_envs}
 
+        if isinstance(os_provider, VMSSEDaemon):
+            # QEMU is a host process, not the confined program, so the rules' environment
+            # is not its environment: stripped of TMPDIR it falls back to /var/tmp for the
+            # -snapshot scratch file, and a host where that is not writable fails with
+            # "Could not open temporary file '/var/tmp/vl.XXXXXX': Read-only file system"
+            # -- on a stream nobody reads, so the run exits 1 having printed nothing at
+            # all. Point it at the run's own temp dir, writable by construction and
+            # removed with it. Only the VM branch: the other providers exec a Python that
+            # must not see a TMPDIR no rule granted.
+            env = {**env, "TMPDIR": tmpdir}
+
         # Get optional launch extras (preexec_fn, pass_fds) for providers
         # that need custom child setup (e.g., unshare with slirp4netns fd)
         extra_preexec_fn, pass_fds = os_provider.get_launch_extras()

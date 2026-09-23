@@ -1166,6 +1166,14 @@ class QemuSSEDaemon(VMSSEDaemon):
         env = {**env, **extra_envs}
 
         temp = pipe_path.parent
+        # QEMU is a host process, not the confined program, so the rules' environment is not
+        # its environment: stripped of TMPDIR it falls back to /var/tmp for the -snapshot
+        # scratch file, and a host where that is not writable fails with
+        # "Could not open temporary file '/var/tmp/vl.XXXXXX': Read-only file system" --
+        # on stderr nobody reads, so the run exits 1 with nothing printed at all. Point it
+        # at the run's own temp dir, which is writable by construction and removed with it.
+        env["TMPDIR"] = str(temp)
+
         # A FIFO lives on the host, where the guest can never present itself as a reader, so
         # the config travels as a regular file on a 9p mount -- the same transport the
         # python_sb path uses. DEBUG_CONFIG only moves it under ./tmp/ for inspection.
