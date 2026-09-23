@@ -17,7 +17,7 @@ classifiers = [
 dependencies = [
     "pysandboxes",
     "markdownify>=1.2.0",
-    "openai-agents[litellm]>=0.13",
+    "openai-agents>=0.13",
     "httpx>=0.28",
     "python-dotenv>=1.0",
 ]
