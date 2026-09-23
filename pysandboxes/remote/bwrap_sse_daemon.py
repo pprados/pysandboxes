@@ -345,10 +345,16 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         for line in template_lines:
             args.extend(shlex.split(line))
 
-        # The template masks argv[0] with a bare "python", which stops CPython from
-        # deriving its prefix from the executable path. Name the prefix explicitly,
-        # then put the venv's site-packages back: PYTHONHOME resets sys.path to the
-        # base installation, so without this the child cannot import pysandboxes.
+        # Name the interpreter by its resolved path. A bare argv[0] leaves
+        # sys.executable empty, and multiprocessing spawns its resource_tracker with
+        # sys.executable: importing pysandboxes.sandboxes_api then died with
+        # BrokenPipeError, the tracker having failed to exec "". The path is the
+        # resolved one because that is what stays valid inside the sandbox.
+        args.extend(["--argv0", str(Path(sys.executable).resolve(strict=True))])
+
+        # Name the prefix explicitly rather than let CPython derive it, then put the
+        # venv's site-packages back: PYTHONHOME resets sys.path to the base
+        # installation, so without this the child cannot import pysandboxes.
         args.extend(["--setenv", "PYTHONHOME", sys.base_prefix])
         site_packages = [p for p in site.getsitepackages() if os.path.isdir(p)]
         if site_packages:

@@ -13,9 +13,14 @@
 # CPython derives sys.prefix and finds pyvenv.cfg from argv[0]. A bare name has
 # no slash, so the interpreter searches PATH for "python", does not find the
 # venv, and dies with "Failed to import encodings module" before the daemon can
-# start. BWrapSSEDaemon compensates by setting PYTHONHOME and PYTHONPATH; do not
-# uncomment this without them.
---argv0 python
+# start.
+#
+# It also leaves sys.executable as the empty string, and that breaks anything in
+# the sandbox that relaunches the interpreter: `multiprocessing` spawns its
+# resource_tracker with sys.executable, so importing pysandboxes.sandboxes_api
+# died with BrokenPipeError -- the tracker never started. BWrapSSEDaemon sets
+# argv[0] to the resolved interpreter path instead; do not set a bare name here.
+#--argv0 python
 
 # =============================================================================
 # Lifecycle and monitoring
