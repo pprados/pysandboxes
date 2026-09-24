@@ -213,20 +213,29 @@ def _test_network() -> int:
 
     # 1. Learn and accept
     # Learn a direct connection to google
+    remote_ip = "?"
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            remote_ip = socket.gethostbyname("www.google.com")
-            socket.gethostbyname_ex("www.google.com")
-            socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
-            # The first connection out of a QEMU guest can take more than 3s; same budget as urlopen below.
-            sock.settimeout(10)
-            sock.connect((remote_ip, 80))
-            logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
+        remote_ip = socket.gethostbyname("www.google.com")
+        socket.gethostbyname_ex("www.google.com")
+        socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
+        for attempt in (1, 2):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                # The first connection out of a QEMU guest can take more than 3s; same budget as urlopen below.
+                sock.settimeout(10)
+                try:
+                    sock.connect((remote_ip, 80))
+                    break
+                except TimeoutError:
+                    # An unanswered SYN is the internet, not a refusal: the guards raise at once.
+                    if attempt == 2:
+                        raise
+                    logger.warning(f"socket AF_INET SOCK_STREAM 80 to {remote_ip} timed out, retrying once")
+        logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
     except SandBoxError:
-        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 to {remote_ip}")
         rc = 1
     except (TimeoutError, OSError) as e:
-        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 to {remote_ip} {e}")
         rc = 1
 
     # learn tcp bind ipv4
