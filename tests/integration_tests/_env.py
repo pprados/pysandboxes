@@ -6,6 +6,7 @@ import platform
 import socket
 import subprocess
 from functools import cache
+from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
@@ -115,8 +116,13 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     """
     if os_sandbox == "firejail" and not which_command("firejail"):
         return "firejail not installed"
+    # firejail refuses to run inside a container, but not on a trivial command: the
+    # probe passes as root under `act`, while the daemon kills the test session. A
+    # GitHub runner is a VM, with neither marker file.
+    if os_sandbox == "firejail" and (Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()):
+        return "firejail does not run inside a container"
     if os_sandbox == "firejail" and not _runs("firejail", "--quiet", "--noprofile", "true"):
-        return "firejail cannot create its sandbox here (inside a container?)"
+        return "firejail cannot create its sandbox here"
     if os_sandbox == "unshare" and not unshare_user_namespace_available():
         return "unshare/slirp4netns missing or user namespaces not permitted"
     if os_sandbox == "landlock" and not landlock_user_available():
