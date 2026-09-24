@@ -62,7 +62,7 @@ def test_platform_refusal_does_not_import_the_provider() -> None:
         patch.object(_os_sandbox, "_load_provider_class", side_effect=AssertionError("imported")),
     ):
         reason = _os_sandbox.provider_unavailable_reason("subprocess")
-    assert reason == "os-sandbox 'subprocess' does not run on win32. Use one of: none"
+    assert reason == "os-sandbox 'subprocess' does not run on win32, and no provider does yet"
 
 
 def test_supported_platform_asks_the_provider() -> None:
@@ -78,7 +78,7 @@ def test_parse_rules_rejects_a_provider_of_another_platform(tmp_path: Path) -> N
     with patch("sys.platform", "darwin"):
         parse_rules(tmp_path / "p.conf", [ConfigLine("os-sandbox=landlock", tmp_path, 1)], errors)
     assert len(errors) == 1
-    assert "os-sandbox 'landlock' does not run on darwin. Use one of: none, subprocess." in errors[0][0]
+    assert "os-sandbox 'landlock' does not run on darwin. Use one of: subprocess." in errors[0][0]
 
 
 def test_start_refuses_a_provider_of_another_platform(subprocess_rules: AllRules) -> None:

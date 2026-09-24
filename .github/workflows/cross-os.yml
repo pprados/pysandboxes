@@ -9,6 +9,10 @@ name: Cross-OS Provider Tests
 # nature, and its failures would bury what this job is for. Modules testing a
 # Linux-only provider are left out of the collection by tests/conftest.py.
 #
+# Today only macOS exercises a provider (`subprocess`): on Windows every provider
+# row skips, `none` being left out of the suites, so that job only proves the
+# registry and the collection hold.
+#
 # On demand only, until both runners are green: `gh act` cannot run macOS or
 # Windows runners, and `make gh-tests` only replays the push workflows.
 # There is no `make` on Windows either, so pytest is called directly.
