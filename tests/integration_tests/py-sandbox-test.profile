@@ -35,5 +35,7 @@ ignore=.env
 # container gets, since it is not given /dev/kvm.
 qemu.use_kvm=${QEMU_USE_KVM:-true}
 # qemu.memory=2G
-# qemu.virtfs=auto
-# qemu.show_boot_console=true
+qemu.virtfs=${QEMU_VIRTFS:-auto}  # `on` stages the trees as inside a container
+# Off unless asked: set QEMU_SHOW_BOOT_CONSOLE=true to see the guest's own traces,
+# which partial mode otherwise sends to /dev/null (e.g. `gh act --env QEMU_SHOW_BOOT_CONSOLE=true`).
+qemu.show_boot_console=${QEMU_SHOW_BOOT_CONSOLE:-false}
