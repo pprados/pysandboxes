@@ -65,8 +65,9 @@ container-tests: build-images
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && OS_SANDBOX=$${OS_SANDBOX:-unshare} uv run pytest -v tests/containers_tests/
 
 ## Make integration tests
+INTEGRATION_TESTS ?= tests/integration_tests
 integration-tests:
-	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest $(INTEGRATION_TESTS)
 
 # (integration first: the unit tests leave the socket guard
 # armed with a deny-all rule set, which breaks the in-process integration tests).
