@@ -1586,8 +1586,6 @@ dev = [
     { name = "importlib-metadata", specifier = "==7.2.1" },
     { name = "ipython" },
     { name = "json-with-comments", specifier = ">=1.2.10" },
-    { name = "mempalace", specifier = ">=3.0.0" },
-    { name = "onnxruntime-gpu", specifier = ">=1.24.3" },
     { name = "pip-audit" },
     { name = "pre-commit", specifier = ">=3.6" },
     { name = "pyright", specifier = ">=1.1.407" },
