@@ -31,6 +31,7 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/remote/test_bwrap_*.py",
     "unit_tests/remote/test_landlock_*.py",
     "unit_tests/remote/test_qemu_*.py",
+    "unit_tests/remote/test_unshare_*.py",
 ]
 collect_ignore_glob = [] if sys.platform == "linux" else _LINUX_ONLY_TESTS
 
