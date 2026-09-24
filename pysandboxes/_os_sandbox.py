@@ -116,8 +116,6 @@ def provider_unavailable_reason(name: str) -> str | None:
     return unsupported_platform_reason(name) or providers_factory[name].unavailable_reason()
 
 
-DEFAULT_OS_SANDBOX = "subprocess"
-
 # Singleton with the current daemon used by the sandbox
 _current_daemon: BaseDaemon | None = None
 # Number of times the daemon has been started. Used for reference counting.
