@@ -120,6 +120,12 @@ jobs:
     - name: Install dependencies
       run: uv sync --group test
 
+    # The first qemu row would otherwise download the 665 MiB guest image inside its
+    # own daemon start timeout, and fail for a slow network rather than for a bug.
+    # Dockerfile-qemu fetches it at build time for the same reason.
+    - name: Fetch the QEMU guest image
+      run: uv run python -m pysandboxes.remote.qemu_fetch_image
+
     - name: Run integration tests
       # The `qemu-tcg` rows -- the only ones marked `slow` -- are dropped here. They
       # exist to cover emulation on a developer machine that has /dev/kvm; a hosted
