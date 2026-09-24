@@ -4,6 +4,7 @@
 
 import platform
 import socket
+import subprocess
 from functools import cache
 
 import pytest  # type: ignore[import-untyped]
@@ -85,6 +86,20 @@ def profile_hosts_resolvable() -> bool:
     return True
 
 
+@cache
+def _runs(*cmd: str) -> bool:
+    """Return True when ``cmd`` exits 0 within a few seconds.
+
+    A binary can be installed yet unusable: inside a container, bwrap and firejail
+    cannot create the namespaces they need, and fail at once with "Operation not
+    permitted" or "No permission to use this command".
+    """
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=10, check=False).returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
 def provider_skip_reason(os_sandbox: str) -> str | None:
     """Return why ``os_sandbox`` cannot run here, or None when it can.
 
@@ -100,12 +115,16 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     """
     if os_sandbox == "firejail" and not which_command("firejail"):
         return "firejail not installed"
+    if os_sandbox == "firejail" and not _runs("firejail", "--quiet", "--noprofile", "true"):
+        return "firejail cannot create its sandbox here (inside a container?)"
     if os_sandbox == "unshare" and not unshare_user_namespace_available():
         return "unshare/slirp4netns missing or user namespaces not permitted"
     if os_sandbox == "landlock" and not landlock_user_available():
         return "Landlock not available (kernel < 5.13 or not Linux)"
     if os_sandbox == "bwrap" and not which_command("bwrap"):
         return "bwrap not installed"
+    if os_sandbox == "bwrap" and not _runs("bwrap", "--ro-bind", "/", "/", "--unshare-net", "true"):
+        return "bwrap cannot create its namespaces here (inside a container, or user namespaces restricted)"
     if backend_of(os_sandbox) == "qemu":
         arch = platform.machine()
         if not which_command(f"qemu-system-{arch}") and not which_command("qemu-system-x86_64"):

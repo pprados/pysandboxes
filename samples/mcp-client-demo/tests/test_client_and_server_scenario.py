@@ -173,7 +173,8 @@ def test_claude_evaluate_expression(
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
         my_ip = _my_ip()
-        assert my_ip is not None
+        if my_ip is None:
+            pytest.skip("The default interface has no IPv4 address (or `ip` is missing)")
         result = run(
             cmd,
             env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},
@@ -221,7 +222,8 @@ def test_claude_fetch_webpage(
         logger.info("cmd: %s", " ".join([repr(c) if " " in c else c for c in cmd]))
         assert not process or process.returncode is None
         my_ip = _my_ip()
-        assert my_ip is not None
+        if my_ip is None:
+            pytest.skip("The default interface has no IPv4 address (or `ip` is missing)")
         result = run(
             cmd,
             env=os.environ.copy() | {"OS_SANDBOX": mcp_client_os_sandbox, "MY_IP": my_ip},

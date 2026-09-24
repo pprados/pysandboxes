@@ -91,6 +91,17 @@ jobs:
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev
 
+    # Without their binaries the provider rows skip themselves, and the run says
+    # nothing about bwrap, firejail, unshare or qemu. Ubuntu 24.04 also restricts
+    # unprivileged user namespaces through AppArmor, which bwrap and unshare need
+    # (see wiki/unshare.md). A container, as under `act`, cannot change that
+    # sysctl: the rows that need it then skip or fail there, not on the runner.
+    - name: Install the OS providers
+      run: |
+        sudo apt-get install -y bubblewrap firejail slirp4netns iptables iproute2 \
+          qemu-system-x86 qemu-utils genisoimage
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
     - name: Install uv
       shell: bash
       run: |
