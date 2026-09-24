@@ -272,7 +272,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             sys.exit(1)
 
         if not which_command("iptables"):
-            logger.error("unshare not found.")
+            logger.error("iptables not found.")
             sys.exit(1)
 
         # Check unprivileged user namespaces
