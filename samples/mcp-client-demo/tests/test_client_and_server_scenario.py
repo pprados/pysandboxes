@@ -37,7 +37,7 @@ requires_llm = pytest.mark.skipif(
 )
 
 
-def _get_default_interface() -> str:
+def _get_default_interface() -> str | None:
     """
     Retrieves the name of the default network interface by reading the
     /proc/net/route pseudo-file on Linux.
@@ -63,7 +63,7 @@ def _get_default_interface() -> str:
             # parts[0] is the Iface (Interface name) column
             interface_name: str = parts[0]
             return interface_name
-    raise ValueError("Default interface not found.")
+    return None
 
 
 def _get_ip_from_interface(interface_name: str) -> str | None:
@@ -105,11 +105,11 @@ def _get_ip_from_interface(interface_name: str) -> str | None:
 
 # In some scenarios, it is not possible to access localhost from an OS sandbox.
 # For example, with firejail. It is necessary to use the host's IP address and enable a bridge.
-# Computed on demand: at import time this runs `ip addr` on every collection,
-# and _get_default_interface() raises on a host with no default route, turning a
-# skipped test into a collection error.
+# Computed on demand: at import time this would run `ip addr` on every collection,
+# and a host with no default route would turn a skipped test into a collection error.
 def _my_ip() -> str | None:
-    return _get_ip_from_interface(_get_default_interface())
+    interface = _get_default_interface()
+    return _get_ip_from_interface(interface) if interface else None
 
 
 def _start_server(mcp_server_config: str) -> Popen | None:
