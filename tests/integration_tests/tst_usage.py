@@ -218,7 +218,8 @@ def _test_network() -> int:
             remote_ip = socket.gethostbyname("www.google.com")
             socket.gethostbyname_ex("www.google.com")
             socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
-            sock.settimeout(timeout)
+            # The first connection out of a QEMU guest can take more than 3s; same budget as urlopen below.
+            sock.settimeout(10)
             sock.connect((remote_ip, 80))
             logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
     except SandBoxError:
