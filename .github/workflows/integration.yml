@@ -23,6 +23,13 @@ on:
   schedule:
     - cron: "0 3 * * *"
 
+# One run per branch at a time: a second dispatch waits for the running one instead
+# of booting the same VMs twice, and a third replaces the waiting one. A run is
+# never cancelled midway, since restarting 45 minutes of tests teaches nothing new.
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # A cheap guard job rather than a step: it keeps the whole setup -- apt, uv,
   # the dependency install -- out of a night that has nothing new to test.
