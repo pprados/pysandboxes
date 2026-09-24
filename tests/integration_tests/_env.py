@@ -2,18 +2,13 @@
 # License: Apache V2
 """Host capability probes, to skip the integration tests the environment cannot run."""
 
-import platform
 import socket
 from functools import cache
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.remote.landlock_daemon import landlock_user_available
-from pysandboxes.remote.tools import (
-    get_default_interface,
-    unshare_user_namespace_available,
-    which_command,
-)
+from pysandboxes._os_sandbox import provider_unavailable_reason
+from pysandboxes.remote.tools import get_default_interface
 
 # Hostnames from py-sandbox-test.profile that require resolution at config load time
 PROFILE_RESOLVE_HOSTS = ("www.google.com",)
@@ -98,16 +93,4 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     Returns:
         A human-readable reason to pass to ``pytest.skip``, or None.
     """
-    if os_sandbox == "firejail" and not which_command("firejail"):
-        return "firejail not installed"
-    if os_sandbox == "unshare" and not unshare_user_namespace_available():
-        return "unshare/slirp4netns missing or user namespaces not permitted"
-    if os_sandbox == "landlock" and not landlock_user_available():
-        return "Landlock not available (kernel < 5.13 or not Linux)"
-    if os_sandbox == "bwrap" and not which_command("bwrap"):
-        return "bwrap not installed"
-    if backend_of(os_sandbox) == "qemu":
-        arch = platform.machine()
-        if not which_command(f"qemu-system-{arch}") and not which_command("qemu-system-x86_64"):
-            return "QEMU not installed"
-    return None
+    return provider_unavailable_reason(backend_of(os_sandbox))

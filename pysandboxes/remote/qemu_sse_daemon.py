@@ -935,6 +935,11 @@ class QemuSSEDaemon(VMSSEDaemon):
 
     __slots__ = ("_iso_config", "_qemu_console_tasks")
 
+    @classmethod
+    @override
+    def unavailable_reason(cls) -> str | None:
+        return None if which_command(_qemu_binary()) else "QEMU not installed"
+
     def guest_run_dir_mount(self) -> str:
         return GUEST_RUN_MOUNT
 

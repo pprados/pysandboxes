@@ -55,7 +55,11 @@ make tests
 ### Core Components
 - **pysandboxes/sandboxes_api.py**: Main API with `@sandbox` decorator and `sandboxes()` context manager
 - **pysandboxes/py_sandbox.py**: Python-level sandbox implementation using dynamic patching
-- **pysandboxes/_os_sandbox.py**: OS-level provider registry (`_PROVIDER_SPECS`), loaded lazily
+- **pysandboxes/_os_sandbox.py**: OS-level provider registry (`_PROVIDER_SPECS`), loaded lazily. Each entry
+  declares the `sys.platform` values it runs on, read without importing the provider; the provider probes
+  its own binaries and kernel features in `unavailable_reason()`. A macOS or Windows tag must be proven by
+  `.github/workflows/cross-os.yml`, and a test module of a Linux-only provider goes in `_LINUX_ONLY_TESTS`
+  (`tests/conftest.py`)
 - **pysandboxes/guard_*.py**: Security guards for files (`guard_files`), network (`guard_socket`),
   imports (`guard_import`), environment (`guard_envs`), sensitive calls (`guard_api`) and dynamically
   evaluated code (`guard_eval`)
