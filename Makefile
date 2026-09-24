@@ -65,8 +65,9 @@ container-tests: build-images
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && OS_SANDBOX=$${OS_SANDBOX:-unshare} uv run pytest -v tests/containers_tests/
 
 ## Make integration tests
+INTEGRATION_TESTS ?= tests/integration_tests
 integration-tests:
-	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest $(INTEGRATION_TESTS)
 
 # (integration first: the unit tests leave the socket guard
 # armed with a deny-all rule set, which breaks the in-process integration tests).
@@ -113,13 +114,21 @@ SAMPLES = \
 # skipped, not failed: langgraph-demo is 3.13+, and uv cannot resolve it on
 # 3.11. sort -V puts the lower version first, so the sample runs exactly when
 # its floor is the lower of the two.
+# pytest is run directly rather than through the sample's `tests` target, which
+# sources .env: the keys there enable the suites that call a live model and spend
+# tokens. The gate variables are also dropped from the caller's environment, and
+# pytest-dotenv, which two samples use to load .env on their own, is disabled, so a
+# run here skips them exactly as CI does. `make -C samples/<x>-demo tests` still
+# reads .env, for a deliberate live run.
+LIVE_TEST_GATES = OPENAI_API_KEY RUN_CLAUDE_TESTS
 sample-tests-%:
 	@req=$$(grep -m1 requires-python samples/$*-demo/pyproject.toml | grep -oE '3\.[0-9]+'); \
 	if [ -n "$(UV_PYTHON)" ] && \
 	   [ "$$(printf '%s\n%s\n' "$$req" "$(UV_PYTHON)" | sort -V | head -1)" != "$$req" ]; then \
 		echo "skip $*-demo: requires-python >= $$req, running $(UV_PYTHON)"; \
 	else \
-		$(MAKE) -C samples/$*-demo init && $(MAKE) -C samples/$*-demo tests; \
+		$(MAKE) -C samples/$*-demo init && \
+		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run pytest -p no:dotenv -v tests; \
 	fi
 
 # mcp-client spawns the neighbouring server sample as a subprocess, through that
@@ -147,11 +156,16 @@ sample-tests:
 # workflows a push on develop triggers are named instead. api-docs.yml is left out:
 # it publishes to GitHub Pages, which a local run cannot reach.
 GH_PUSH_WORKFLOWS = lint.yml test.yml
+# act loads .env into every job by default, which GitHub never does: a key
+# there would enable tests the CI skips. It also puts every job on the host
+# network, so the parallel rows of a matrix fight over the same fixed ports; a
+# bridge network gives each its own stack, as a GitHub runner VM has.
+GH_ACT = gh act --env-file /dev/null --network bridge
 ## Make github tests locally
 gh-tests: lint
 	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
 	status=0; \
-	for w in $(GH_PUSH_WORKFLOWS); do gh act push -W .github/workflows/$$w || status=1; done; \
+	for w in $(GH_PUSH_WORKFLOWS); do $(GH_ACT) push -W .github/workflows/$$w || status=1; done; \
 	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi; \
 	exit $$status
 
@@ -160,8 +174,8 @@ gh-tests: lint
 ## Make github tests locally, the scheduled samples and integration workflows included
 gh-all-tests: gh-tests
 	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi
-	gh act workflow_dispatch -W .github/workflows/samples.yml; status=$$?; \
-	gh act workflow_dispatch -W .github/workflows/integration.yml || status=1; \
+	$(GH_ACT) workflow_dispatch -W .github/workflows/samples.yml; status=$$?; \
+	$(GH_ACT) workflow_dispatch -W .github/workflows/integration.yml || status=1; \
 	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi; \
 	exit $$status
 

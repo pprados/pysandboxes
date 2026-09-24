@@ -96,6 +96,13 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - **`master`** is for releases only. It receives a merge at publication time, never as
   part of ordinary work. Do not propose a pull request or a merge towards `master`
   outside a release, and compare a branch against `develop`, not `master`.
+- **`CONTRIBUTING.md`** lists what a pull request must carry, and is the checklist the automated review
+  applies. A change to those rules goes there, not only here.
+
+### Design and Planning Documents
+- Design specs and implementation plans live in the repository tree, in a directory git excludes, so they are
+  never committed: `.superpowers/specs/YYYY-MM-DD-<topic>-design.md` and `.superpowers/plans/YYYY-MM-DD-<topic>.md`.
+- This overrides any user-level rule that keeps planning files out of the repository.
 
 ## Code Quality
 - Type hints required for all code

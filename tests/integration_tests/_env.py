@@ -3,7 +3,9 @@
 """Host capability probes, to skip the integration tests the environment cannot run."""
 
 import socket
+import subprocess
 from functools import cache
+from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
@@ -80,6 +82,20 @@ def profile_hosts_resolvable() -> bool:
     return True
 
 
+@cache
+def _runs(*cmd: str) -> bool:
+    """Return True when ``cmd`` exits 0 within a few seconds.
+
+    A binary can be installed yet unusable: inside a container, bwrap and firejail
+    cannot create the namespaces they need, and fail at once with "Operation not
+    permitted" or "No permission to use this command".
+    """
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=10, check=False).returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
 def provider_skip_reason(os_sandbox: str) -> str | None:
     """Return why ``os_sandbox`` cannot run here, or None when it can.
 
@@ -93,4 +109,15 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     Returns:
         A human-readable reason to pass to ``pytest.skip``, or None.
     """
-    return provider_unavailable_reason(backend_of(os_sandbox))
+    if reason := provider_unavailable_reason(backend_of(os_sandbox)):
+        return reason
+    # firejail refuses to run inside a container, but not on a trivial command: the
+    # probe passes as root under `act`, while the daemon kills the test session. A
+    # GitHub runner is a VM, with neither marker file.
+    if os_sandbox == "firejail" and (Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()):
+        return "firejail does not run inside a container"
+    if os_sandbox == "firejail" and not _runs("firejail", "--quiet", "--noprofile", "true"):
+        return "firejail cannot create its sandbox here"
+    if os_sandbox == "bwrap" and not _runs("bwrap", "--ro-bind", "/", "/", "--unshare-net", "true"):
+        return "bwrap cannot create its namespaces here (inside a container, or user namespaces restricted)"
+    return None

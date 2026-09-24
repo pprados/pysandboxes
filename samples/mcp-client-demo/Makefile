@@ -28,8 +28,10 @@ run:
 lint format: PYTHON_FILES=mcp_simple_chatbot tests
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=libs/experimental --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
+# --with pytest: without it mypy sees an untyped `pytest`, so `pytest.skip()`
+# does not read as NoReturn and nothing narrows after it.
 lint lint_diff:
-	uvx mypy $(PYTHON_FILES)
+	uvx --with pytest mypy $(PYTHON_FILES)
 	uvx black $(PYTHON_FILES) --check
 	uvx ruff check $(PYTHON_FILES)
 

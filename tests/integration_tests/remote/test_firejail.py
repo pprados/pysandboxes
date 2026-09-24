@@ -10,16 +10,15 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes import sandbox
 from pysandboxes._os_sandbox import async_shutdown_daemon, async_start_daemon
 from pysandboxes.py_sandbox import load_and_parse_config
-from pysandboxes.remote.tools import which_command
 
-from .._env import NO_DEFAULT_ROUTE_REASON, default_route_available
+from .._env import NO_DEFAULT_ROUTE_REASON, default_route_available, provider_skip_reason
 
-_FIREJAIL_SKIP_REASON = f"firejail not installed, or: {NO_DEFAULT_ROUTE_REASON}"
+_FIREJAIL_SKIP_REASON = provider_skip_reason("firejail") or NO_DEFAULT_ROUTE_REASON
 
 
 def _firejail_integration_ready() -> bool:
     # firejail derives its network namespace from the host default interface
-    return bool(which_command("firejail")) and default_route_available()
+    return provider_skip_reason("firejail") is None and default_route_available()
 
 
 # See https://github.com/tortoise/tortoise-orm/issues/638

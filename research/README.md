@@ -40,9 +40,12 @@ The `.bbl` is what ships, not the `.bib`: arXiv typesets the LaTeX itself but
 runs neither pandoc nor biber, so it needs the *formatted* bibliography. The
 `.bib` stays in `build/` as an intermediate.
 
-The tarball contains exactly what arXiv wants — the `.tex`, the `.bbl` and the
-figures — and deliberately omits `.aux`, `.log` and the PDF, which arXiv either
-ignores or chokes on.
+The tarball contains exactly what arXiv wants — the `.tex`, the `.bbl`, the
+figures and a `00README.json` — and deliberately omits `.aux`, `.log` and the
+PDF, which arXiv either ignores or chokes on. The `00README.json` asks for
+pdflatex and for the TeX Live release that reads the `.bbl` format the local
+biber wrote: 2023 for format 3.2 (biber 2.19), 2025 for format 3.3 (biber
+2.20). arXiv defaults to TeX Live 2025, so check that choice on the upload page.
 
 Or call the converter directly, which is useful while iterating:
 
@@ -59,7 +62,8 @@ python md2latex.py --name foo   # change the generated files' stem
 The converter degrades rather than failing: without pandoc you still get
 `refs.bib` and the normalised Markdown, and without mermaid-cli the diagrams are
 emitted as source instead of figures. For a submission-quality PDF you want all
-three.
+three. `make arxiv` does not degrade: it checks every tool below first, prints
+the install command of each one missing, and fails if a diagram is not rendered.
 
 **pandoc** — the Markdown → LaTeX step.
 
@@ -73,7 +77,7 @@ replace the Unicode ones pdflatex cannot typeset.
 
 ```bash
 sudo apt install texlive-latex-recommended texlive-latex-extra \
-                 texlive-fonts-recommended biber latexmk
+                 texlive-fonts-recommended texlive-bibtex-extra biber latexmk
 ```
 
 `latexmk` is optional: without it the script falls back to running

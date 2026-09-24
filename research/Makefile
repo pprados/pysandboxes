@@ -49,7 +49,7 @@ collect:
 	  if [ -f "$$pdf" ]; then cp -f "$$pdf" . && echo "  $$(basename $$pdf)"; fi; \
 	done
 	@if ls $(DIR)/figures/*.pdf >/dev/null 2>&1; then \
-	  mkdir -p figures && cp -f $(DIR)/figures/*.pdf figures/ \
+	  rm -rf figures && mkdir figures && cp -f $(DIR)/figures/*.pdf figures/ \
 	  && echo "  figures/ ($$(ls $(DIR)/figures/*.pdf | wc -l) figures)"; \
 	fi
 
