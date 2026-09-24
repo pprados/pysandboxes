@@ -11,6 +11,7 @@ of the currently active daemon.
 import asyncio
 import importlib
 import logging
+import sys
 import threading
 import uuid
 from collections.abc import Iterator, Mapping
@@ -32,18 +33,25 @@ from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sand
 
 logger = logging.getLogger(__name__)
 
-# (subpackage.module_name, class_name) relative to package ``pysandboxes``.
+_LINUX = frozenset({"linux"})
+_POSIX = frozenset({"linux", "darwin"})
+_ANY_OS = frozenset({"linux", "darwin", "win32"})
+
+# (subpackage.module_name, class_name, platforms) relative to package ``pysandboxes``.
 # Loaded on first use so ``main_sandbox`` / QEMU guest do not import aiohttp, bwrap, etc. at startup.
-_PROVIDER_SPECS: dict[str, tuple[str, str]] = {
-    "_task": ("remote.task_daemon", "TaskDaemon"),
-    "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon"),
-    "none": ("remote.none_daemon", "NoneDaemon"),
-    "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon"),
-    "bwrap": ("remote.bwrap_sse_daemon", "BWrapSSEDaemon"),
-    "firejail": ("remote.firejail_sse_daemon", "FireJailSSEDaemon"),
-    "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon"),
-    "landlock": ("remote.landlock_daemon", "LandlockSSEDaemon"),
-    "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon"),
+# ``platforms`` holds the ``sys.platform`` values a provider runs on. It is read without importing
+# the provider, whose module may not even import elsewhere (``fcntl`` does not exist on Windows).
+# A tag is a claim: the CI job of that OS must run the provider suites before a value is added.
+_PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
+    "_task": ("remote.task_daemon", "TaskDaemon", _ANY_OS),
+    "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon", _POSIX),
+    "none": ("remote.none_daemon", "NoneDaemon", _ANY_OS),
+    "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon", _POSIX),
+    "bwrap": ("remote.bwrap_sse_daemon", "BWrapSSEDaemon", _LINUX),
+    "firejail": ("remote.firejail_sse_daemon", "FireJailSSEDaemon", _LINUX),
+    "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon", _LINUX),
+    "landlock": ("remote.landlock_daemon", "LandlockSSEDaemon", _LINUX),
+    "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon", _LINUX),
 }
 
 _provider_class_cache: dict[str, type[BaseDaemon]] = {}
@@ -53,7 +61,7 @@ def _load_provider_class(key: str) -> type[BaseDaemon]:
     if key not in _PROVIDER_SPECS:
         raise KeyError(key)
     if key not in _provider_class_cache:
-        mod_path, cls_name = _PROVIDER_SPECS[key]
+        mod_path, cls_name, _ = _PROVIDER_SPECS[key]
         # Name from internal registry, not user input
         mod = importlib.import_module(f".{mod_path}", package="pysandboxes")
         _provider_class_cache[key] = getattr(mod, cls_name)
@@ -80,7 +88,33 @@ class _LazyProvidersFactory(Mapping[str, type[BaseDaemon]]):
 
 providers_factory: Mapping[str, type[BaseDaemon]] = _LazyProvidersFactory()
 
-DEFAULT_OS_SANDBOX = "subprocess"
+
+def platform_providers() -> list[str]:
+    """Return the public providers tagged for the running platform."""
+    return [name for name, spec in _PROVIDER_SPECS.items() if not name.startswith("_") and sys.platform in spec[2]]
+
+
+def unsupported_platform_reason(name: str) -> str | None:
+    """Return why provider ``name`` is not meant for this platform, or None when it is.
+
+    Reads the registry tag only: the provider module is not imported.
+    """
+    if sys.platform in _PROVIDER_SPECS[name][2]:
+        return None
+    # `none` is never suggested: it disarms the Python guards as well, so it is no alternative.
+    others = [provider for provider in platform_providers() if provider != "none"]
+    if not others:
+        return f"os-sandbox {name!r} does not run on {sys.platform}, and no provider does yet"
+    return f"os-sandbox {name!r} does not run on {sys.platform}. Use one of: {', '.join(others)}"
+
+
+def provider_unavailable_reason(name: str) -> str | None:
+    """Return why provider ``name`` cannot run on this host, or None when it can.
+
+    The platform tag is checked first, then the provider probes what it needs itself.
+    """
+    return unsupported_platform_reason(name) or providers_factory[name].unavailable_reason()
+
 
 # Singleton with the current daemon used by the sandbox
 _current_daemon: BaseDaemon | None = None
@@ -174,6 +208,8 @@ async def async_start_daemon(
 
         if all_rules.os_sandbox not in providers_factory:
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
+        if reason := unsupported_platform_reason(all_rules.os_sandbox):
+            raise ValueError(reason)
         os_provider: BaseDaemon | None = None
         try:
             token = str(uuid.uuid4())
@@ -286,6 +322,8 @@ def start_daemon(
 
         if all_rules.os_sandbox not in providers_factory:
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
+        if reason := unsupported_platform_reason(all_rules.os_sandbox):
+            raise ValueError(reason)
 
         loop = get_sandbox_loop()
         start_event = threading.Event()

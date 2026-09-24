@@ -169,6 +169,11 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         "_slirp_api_socket",
     )
 
+    @classmethod
+    @override
+    def unavailable_reason(cls) -> str | None:
+        return None if which_command("bwrap") else "bwrap not installed"
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._slirp_process_holder: list[subprocess.Popen[bytes] | None] = [None]

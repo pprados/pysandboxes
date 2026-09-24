@@ -216,6 +216,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     sandboxed processes with comprehensive OS-level isolation.
     """
 
+    @classmethod
+    @override
+    def unavailable_reason(cls) -> str | None:
+        return None if which_command("firejail") else "firejail not installed"
+
     @override
     def parse_rules(
         self,
