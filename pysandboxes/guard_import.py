@@ -158,6 +158,22 @@ def parse_rules(
     return tuple(white_list), ignore_rules
 
 
+_OS_SUPPORTS_SETS = ("supports_follow_symlinks", "supports_fd", "supports_dir_fd", "supports_effective_ids")
+
+
+def _keep_os_supports_sets(original: Any, patched: Any) -> None:
+    """Put a patched os function in every os.supports_* set its original is in.
+
+    The standard library tests those sets by identity: shutil.copystat falls back
+    to a no-op when os.stat is not in os.supports_follow_symlinks, then fails on
+    ``None.st_mode``.
+    """
+    for set_name in _OS_SUPPORTS_SETS:
+        supports = getattr(os, set_name, None)
+        if supports is not None and original in supports:
+            supports.add(patched)
+
+
 def _apply_patch(module: ModuleType, name: str) -> None:
     """Apply patches to a loaded module.
 
@@ -181,6 +197,8 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
             if __debug__ and isinstance(new_value, type(_apply_patch)):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined]
+            if cur_object is os:
+                _keep_os_supports_sets(original_value, new_value)
             setattr(cur_object, paths[-1], new_value)
             # logger.debug("Patch %s.%s",name, patch.code_path)
         else:
