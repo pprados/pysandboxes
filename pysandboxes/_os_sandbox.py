@@ -101,7 +101,11 @@ def unsupported_platform_reason(name: str) -> str | None:
     """
     if sys.platform in _PROVIDER_SPECS[name][2]:
         return None
-    return f"os-sandbox {name!r} does not run on {sys.platform}. Use one of: {', '.join(platform_providers())}"
+    # `none` is never suggested: it disarms the Python guards as well, so it is no alternative.
+    others = [provider for provider in platform_providers() if provider != "none"]
+    if not others:
+        return f"os-sandbox {name!r} does not run on {sys.platform}, and no provider does yet"
+    return f"os-sandbox {name!r} does not run on {sys.platform}. Use one of: {', '.join(others)}"
 
 
 def provider_unavailable_reason(name: str) -> str | None:
