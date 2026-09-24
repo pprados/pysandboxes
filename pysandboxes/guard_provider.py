@@ -17,7 +17,7 @@ def parse_rules(
     rules: ConfigLines,
     errors: List[ErrorMsg],
 ) -> Tuple[int, str, bool, Path, bool, bool, ConfigLines]:
-    from ._os_sandbox import providers_factory
+    from ._os_sandbox import providers_factory, unsupported_platform_reason
 
     port = -1
     other_rules: ConfigLines = []
@@ -37,6 +37,8 @@ def parse_rules(
                         rule.ln,
                     )
                 )
+            elif reason := unsupported_platform_reason(provider):
+                errors.append((f"{format_ruleref(rule)}: {reason}.", rule.path, rule.ln))
             else:
                 parameters_multi_values["os-sandbox"].add((provider, rule))
         elif rule.rule.startswith("py-sandbox="):
