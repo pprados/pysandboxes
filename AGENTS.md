@@ -94,8 +94,8 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
   outside a release, and compare a branch against `develop`, not `master`.
 
 ### Design and Planning Documents
-- Design specs and implementation plans are versioned in the repository, on the branch of the work they
-  describe: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
+- Design specs and implementation plans live in the repository tree, in a directory git excludes, so they are
+  never committed: `.superpowers/specs/YYYY-MM-DD-<topic>-design.md` and `.superpowers/plans/YYYY-MM-DD-<topic>.md`.
 - This overrides any user-level rule that keeps planning files out of the repository.
 
 ## Code Quality
