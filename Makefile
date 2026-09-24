@@ -222,7 +222,18 @@ EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annota
 #
 # crewai imports chromadb unconditionally, and chromadb 1.5.9 carries advisories
 # with no fixed release yet. The sample uses neither RAG, memory nor knowledge, so
-# they are ignored there only, for now. Re-check when chromadb publishes a fix.
+# they are ignored there only, for now. The matching Dependabot alerts on
+# samples/crewai-demo/uv.lock are dismissed as "tolerable risk" for the same reason.
+#
+# To reactivate, once chromadb publishes a fix:
+#   1. drop PIP_AUDIT_IGNORE_crewai below, then relock the sample:
+#        uv lock --project samples/crewai-demo --upgrade-package chromadb
+#   2. reopen the dismissed alerts, if the relock did not close them:
+#        gh api 'repos/pprados/pysandboxes/dependabot/alerts?state=dismissed&package=chromadb' \
+#          --jq '.[] | select(.dependency.manifest_path=="samples/crewai-demo/uv.lock") | .number'
+#      then, for each number N:
+#        gh api -X PATCH repos/pprados/pysandboxes/dependabot/alerts/N -f state=open
+#   3. run `make pip-audit`: it must pass without the ignore.
 PIP_AUDIT_IGNORE_crewai = --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
 	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 ## Report the runtime dependencies with a known security vulnerability, samples included
