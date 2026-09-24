@@ -30,7 +30,9 @@ Usage::
 Nothing is required to produce the bibliography and the normalised Markdown.
 ``pandoc`` is required for the LaTeX step, a LaTeX toolchain with ``biber`` for
 the PDF, and mermaid-cli plus a Chromium build for the diagrams; each missing
-tool degrades that one step rather than failing the run.
+tool degrades that one step rather than failing the run. ``--arxiv`` is the
+exception: it checks every tool first and fails on any diagram left unrendered,
+since arXiv refuses a submission with a figure missing.
 """
 
 from __future__ import annotations
@@ -272,6 +274,15 @@ def _mermaid_command() -> list[str] | None:
     return None
 
 
+def _find_browser() -> str | None:
+    """Locate the Chrome or Chromium build mermaid-cli will drive."""
+    import os
+
+    return os.environ.get("PUPPETEER_EXECUTABLE_PATH") or next(
+        (p for name in _BROWSERS if (p := shutil.which(name))), None
+    )
+
+
 def _puppeteer_config(figdir: Path) -> tuple[Path, dict[str, str]] | None:
     """Write a puppeteer config and the environment mermaid-cli needs.
 
@@ -281,9 +292,7 @@ def _puppeteer_config(figdir: Path) -> tuple[Path, dict[str, str]] | None:
     import json
     import os
 
-    browser = os.environ.get("PUPPETEER_EXECUTABLE_PATH") or next(
-        (p for name in _BROWSERS if (p := shutil.which(name))), None
-    )
+    browser = _find_browser()
     if not browser:
         return None
 
@@ -309,7 +318,10 @@ def extract_diagrams(markdown: str, figdir: Path, render: bool) -> tuple[str, in
     Returns the rewritten Markdown, the number of diagrams found, and the number
     rendered.
     """
-    figdir.mkdir(parents=True, exist_ok=True)
+    # Start from an empty directory: a figure left by an earlier run with more
+    # diagrams would otherwise be packaged and copied beside the paper.
+    shutil.rmtree(figdir, ignore_errors=True)
+    figdir.mkdir(parents=True)
     command = _mermaid_command() if render else None
     puppeteer = _puppeteer_config(figdir) if command else None
     if render and not command:
@@ -774,6 +786,34 @@ def build_pdf(tex: Path) -> bool:
     return True
 
 
+#: Tools an arXiv build cannot do without, and how to install each. arXiv
+#: compiles with pdflatex and expects a .bbl written by biber, so neither the
+#: xelatex nor the bibtex fallback of build_pdf would give a valid submission.
+_ARXIV_TOOLS = (
+    ("pandoc", lambda: shutil.which("pandoc"), "sudo apt install pandoc"),
+    (
+        "pdflatex",
+        lambda: shutil.which("pdflatex"),
+        "sudo apt install texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended latexmk",
+    ),
+    ("biber", lambda: shutil.which("biber"), "sudo apt install biber texlive-bibtex-extra"),
+    ("mermaid-cli", _mermaid_command, "npm install -g @mermaid-js/mermaid-cli"),
+    ("Chrome or Chromium", _find_browser, "sudo apt install chromium  # or an existing Google Chrome"),
+)
+
+#: The TeX Live release at arXiv able to read each biblatex .bbl format.
+#: TeX Live 2025, arXiv's default, only reads format 3.3.
+_BBL_TEXLIVE = {"3.2": 2023, "3.3": 2025}
+
+
+def check_arxiv_tools() -> bool:
+    """Report every tool an arXiv build needs that is missing, with its install command."""
+    missing = [(tool, hint) for tool, find, hint in _ARXIV_TOOLS if not find()]
+    for tool, hint in missing:
+        print(f"! {tool} not found, and the arXiv build needs it:\n    {hint}", file=sys.stderr)
+    return not missing
+
+
 def build_arxiv_archive(tex: Path, name: str) -> Path | None:
     """Package the sources arXiv needs into a tarball.
 
@@ -781,7 +821,12 @@ def build_arxiv_archive(tex: Path, name: str) -> Path | None:
     formatted bibliography (``.bbl``) must travel with the sources. Build
     products such as ``.aux``, ``.log`` and the PDF are deliberately excluded:
     arXiv rejects or ignores them, and a stale ``.aux`` can break its build.
+
+    A ``00README.json`` pins the compiler and the TeX Live release, the latter
+    read from the ``.bbl`` itself: a ``.bbl`` is only readable by the biblatex
+    that matches the biber which wrote it.
     """
+    import json
     import tarfile
 
     workdir = tex.parent
@@ -790,7 +835,28 @@ def build_arxiv_archive(tex: Path, name: str) -> Path | None:
         print("! no .bbl: run with --pdf first so biber produces it.", file=sys.stderr)
         return None
 
-    members: list[tuple[Path, str]] = [(tex, tex.name), (bbl, bbl.name)]
+    version = re.search(r"bbl format version (\S+)", bbl.read_text(encoding="utf-8", errors="replace"))
+    texlive = _BBL_TEXLIVE.get(version.group(1)) if version else None
+    if not texlive:
+        found = version.group(1) if version else "none"
+        print(f"! .bbl format {found} is not one arXiv's TeX Live reads: {sorted(_BBL_TEXLIVE)}", file=sys.stderr)
+        return None
+    readme = workdir / "00README.json"
+    readme.write_text(
+        json.dumps(
+            {
+                "spec_version": 1,
+                "process": {"compiler": "pdflatex"},
+                "sources": [{"filename": tex.name, "usage": "toplevel"}],
+                "texlive_version": texlive,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    members: list[tuple[Path, str]] = [(tex, tex.name), (bbl, bbl.name), (readme, readme.name)]
     figures = sorted((workdir / "figures").glob("*.pdf"))
     members += [(fig, f"figures/{fig.name}") for fig in figures]
 
@@ -800,14 +866,9 @@ def build_arxiv_archive(tex: Path, name: str) -> Path | None:
             tar.add(path, arcname=arcname)
 
     print(
-        f"  {archive.name:<34} {archive.stat().st_size // 1024} KB " f"({len(members)} files, {len(figures)} figures)"
+        f"  {archive.name:<34} {archive.stat().st_size // 1024} KB "
+        f"({len(members)} files, {len(figures)} figures, TeX Live {texlive})"
     )
-    if not figures:
-        print(
-            "    ! no rendered figures: the diagrams will appear as source in the"
-            " submission. Install mermaid-cli and re-run.",
-            file=sys.stderr,
-        )
     return archive
 
 
@@ -829,6 +890,9 @@ def main() -> int:
 
     if not args.input.exists():
         print(f"! no such file: {args.input}", file=sys.stderr)
+        return 1
+
+    if args.arxiv and not check_arxiv_tools():
         return 1
 
     markdown = args.input.read_text(encoding="utf-8")
@@ -862,6 +926,9 @@ def main() -> int:
         print(f"  {'symbols':<34} {substituted} replaced for pdflatex")
 
     print(f"  {'diagrams':<34} {found} found, {rendered} rendered to PDF")
+    if args.arxiv and rendered < found:
+        print(f"! {found - rendered} diagram(s) not rendered: arXiv refuses a submission with a figure missing.", file=sys.stderr)
+        return 1
     if unknown:
         print(f"! citation keys with no bibliography entry: {sorted(unknown)}", file=sys.stderr)
 
