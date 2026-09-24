@@ -221,6 +221,25 @@ def _virtfs_stage_copytree_ignore(_src: str, names: list[str]) -> list[str]:
     return ignored
 
 
+def _virtfs_stage_unreadable(src: str, names: list[str]) -> list[str]:
+    """Names this process cannot read, which the guest could not read either.
+
+    The guest sees a 9p mount with the host user's rights, so staging a copy must
+    not fail where the direct mount would only hide the entry: /etc keeps root-only
+    files (cloud-init network config, shadow). Symlinks are copied as links and
+    need no read access.
+    """
+    unreadable: list[str] = []
+    for name in names:
+        path = os.path.join(src, name)
+        if os.path.islink(path):
+            continue
+        mode = os.R_OK | os.X_OK if os.path.isdir(path) else os.R_OK
+        if not os.access(path, mode):
+            unreadable.append(name)
+    return unreadable
+
+
 def _virtfs_stage_copytree_ignore_staged(src_root: Path, dst_root: Path) -> Callable[[str, list[str]], list[str]]:
     """Also skip the symlinks an earlier mount already staged at the destination.
 
@@ -231,6 +250,7 @@ def _virtfs_stage_copytree_ignore_staged(src_root: Path, dst_root: Path) -> Call
 
     def ignore(src: str, names: list[str]) -> list[str]:
         ignored = _virtfs_stage_copytree_ignore(src, names)
+        ignored += [n for n in _virtfs_stage_unreadable(src, names) if n not in ignored]
         dst = dst_root / Path(src).relative_to(src_root)
         return ignored + [n for n in names if n not in ignored and (dst / n).is_symlink()]
 
@@ -458,7 +478,7 @@ def _merge_full_multiarch_lib_dirs(ld_root: Path, triplet: str) -> None:
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         try:
-            shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True)
+            shutil.copytree(src, dst, symlinks=True, dirs_exist_ok=True, ignore=_virtfs_stage_unreadable)
         except OSError as e:
             logger.warning("ld closure: full merge %s -> %s failed: %s", src, dst, e)
     logger.debug(
@@ -746,7 +766,7 @@ def _stage_overlay_etc_expose_mount(
         dest = misc / "etc"
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
-            shutil.copytree(host_path, dest, symlinks=True, dirs_exist_ok=True)
+            shutil.copytree(host_path, dest, symlinks=True, dirs_exist_ok=True, ignore=_virtfs_stage_unreadable)
         except OSError as e:
             logger.error("virtfs staging: copy /etc expose mount failed: %s", e)
             raise
