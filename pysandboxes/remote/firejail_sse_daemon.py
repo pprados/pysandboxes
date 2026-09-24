@@ -209,52 +209,6 @@ def parse_firejail_net_print(pid: int) -> ipaddress.IPv4Address | None:
         return None
 
 
-# Use firejail --net.print to return the ip of the daemon with a specific pid
-def get_firejail_daemon_ip(pid: int) -> ipaddress.IPv4Address:
-    """
-    Retrieves the IP address of a Firejail-isolated daemon using the 'firejail --net.print' command.
-
-    Args:
-        pid: The Process ID (PID) of the Firejail parent process to query.
-
-    Returns:
-        The IPv4 address of the daemon's isolated network interface.
-
-    Raises:
-        SystemExit: If firejail fails or the IP cannot be determined.
-        RuntimeError: On unexpected errors.
-    """
-    if not isinstance(pid, int) or pid <= 0:
-        raise ValueError(f"Invalid PID provided: {pid}")
-
-    try:
-        firejail_cmd = which_command("firejail")
-        if firejail_cmd is None:
-            logger.error("firejail not found. Install it with:")
-            logger.error(suggest_package_installation("firejail"))
-            raise SystemExit(1)
-
-        ip = parse_firejail_net_print(pid)
-        if ip is not None:
-            return ip
-
-        logger.error("firejail error: could not parse eth0 IP from --net.print=%s", pid)
-        raise SystemExit(1)
-
-    except FileNotFoundError as e:
-        logger.error("firejail not found. Install it with:")
-        logger.error(suggest_package_installation("firejail"))
-        raise SystemExit(1) from e
-    except subprocess.TimeoutExpired as e:
-        logger.error("firejail command timed out for PID %s.", pid)
-        raise RuntimeError(f"firejail command timed out for PID {pid}.") from e
-    except SystemExit:
-        raise
-    except Exception as e:
-        logger.error("with firejail command, an unexpected error occurred: %s.", e)
-        raise RuntimeError(f"with firejail command, an unexpected error occurred: {e}.") from e
-
-
 class FireJailSSEDaemon(BaseSubProcessDaemon):
     """Firejail-based subprocess daemon for OS-level sandboxing.
 
@@ -318,7 +272,10 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
     @override
     def base_url(self) -> str:
         assert self._process
-        return f"http://{get_firejail_daemon_ip(self._process.pid)}:{{PORT}}"
+        ip = parse_firejail_net_print(self._process.pid)
+        # No --net (e.g. the stock 'restricted-network yes'): the daemon is on the loopback, as the ping found it.
+        host = "127.0.0.1" if ip is None else str(ip)
+        return f"http://{host}:{{PORT}}"
 
     @override
     def _ping_url(self, port: int) -> str:
