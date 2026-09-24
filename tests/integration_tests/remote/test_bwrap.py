@@ -12,9 +12,10 @@ from pysandboxes import sandbox
 from pysandboxes._os_sandbox import async_shutdown_daemon, async_start_daemon
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.py_sandbox import load_and_parse_config
-from pysandboxes.remote.tools import which_command
 
-_BWRAP_SKIP_REASON = "bwrap not installed"
+from .._env import provider_skip_reason
+
+_BWRAP_SKIP_REASON = provider_skip_reason("bwrap") or ""
 
 # py-sandbox-test.profile includes net= rules, which would otherwise enable
 # --unshare-net + slirp4netns + iptables (needs CAP_NET_ADMIN). For a portable
@@ -23,7 +24,7 @@ _BWRAP_SHARE_NET = ImmutableDict({"share-net": "yes"})
 
 
 def _bwrap_integration_ready() -> bool:
-    return bool(which_command("bwrap"))
+    return provider_skip_reason("bwrap") is None
 
 
 # See https://github.com/tortoise/tortoise-orm/issues/638

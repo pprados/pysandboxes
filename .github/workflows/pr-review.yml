@@ -1,0 +1,72 @@
+name: PR Review
+
+# A maintainer asks for the review by adding the `claude-review` label.
+# pull_request_target runs with the base repository's secrets, so the
+# workflow never checks out the PR head: the working tree is develop, and the
+# PR is only read through `gh pr view` / `gh pr diff`. Its code is never
+# executed here, CI does that. The rule files are copied from develop to
+# $RUNNER_TEMP before the action starts, so the criteria stay develop's even
+# if the action moves the working tree. A head pushed after the label is
+# refused: the maintainer relabels to review it.
+# Not listed in GH_PUSH_WORKFLOWS: `make gh-tests` never spends tokens on it.
+
+on:
+  pull_request_target:
+    types: [ labeled ]
+    branches: [ "develop" ]
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.label.name == 'claude-review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Refuse a head pushed after the label
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        LABELED_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        current=$(gh pr view "$PR" --repo "$REPO" --json headRefOid --jq .headRefOid)
+        if [ "$current" != "$LABELED_SHA" ]; then
+          echo "::error::head moved from $LABELED_SHA to $current since the label was set: relabel"
+          exit 1
+        fi
+
+    - name: Keep the review rules of develop
+      run: |
+        mkdir -p "$RUNNER_TEMP/review-rules"
+        cp --parents CONTRIBUTING.md SECURITY.md wiki/weaknesses.md .github/prompts/review-pr.prompt.md \
+          "$RUNNER_TEMP/review-rules/"
+
+    - name: Review
+      uses: anthropics/claude-code-action@8cf3482550831fb35a4fc3fbf7ca139cf8028b4c  # v1.0.233
+      with:
+        anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        use_sticky_comment: true
+        prompt: |
+          REPO: ${{ github.repository }}
+          PR NUMBER: ${{ github.event.pull_request.number }}
+          HEAD SHA: ${{ github.event.pull_request.head.sha }}
+          RULES: ${{ runner.temp }}/review-rules
+
+          Review this pull request by following RULES/.github/prompts/review-pr.prompt.md.
+          Read every rule file under RULES, never from the working tree.
+        claude_args: |
+          --max-turns 30
+          --add-dir ${{ runner.temp }}/review-rules
+          --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"

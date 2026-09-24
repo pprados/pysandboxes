@@ -239,3 +239,55 @@ def test_shutil_move(files: Dict[str, Path]) -> None:  # noqa: F811
     s.mkdir()
     (s / "inner").mkdir()
     shutil.move(s, d, copy_function=shutil.copy2)
+
+
+def test_the_guarded_os_functions_keep_their_supports_sets(files: Dict[str, Path]) -> None:  # noqa: F811
+    """A patched os function must stay in the os.supports_* sets its original was in.
+
+    The standard library tests membership by identity -- shutil.copystat picks a
+    no-op instead of os.stat when os.stat is missing from supports_follow_symlinks,
+    and then fails on None.st_mode.
+    """
+    rules = [
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import os
+    import shutil
+
+    assert os.stat in os.supports_follow_symlinks
+    assert os.stat in os.supports_fd
+    assert os.stat in os.supports_dir_fd
+
+    src = files["path"] / "tree_with_link"
+    dst = files["path"] / "tree_with_link_copy"
+    for tree in (src, dst):
+        if tree.exists():
+            shutil.rmtree(tree)
+    src.mkdir()
+    (src / "target.txt").write_text("content")
+    (src / "link").symlink_to("target.txt")
+
+    shutil.copytree(src, dst, symlinks=True)
+
+    assert (dst / "link").is_symlink()
+    assert (dst / "link").read_text() == "content"
+    shutil.copy2(src / "link", dst / "link_copy", follow_symlinks=False)
+    assert (dst / "link_copy").is_symlink()
+
+
+def test_patching_os_environ_leaves_the_supports_sets_alone() -> None:
+    """Learning mode patches os.environ too, and a _Environ cannot be hashed."""
+    import os
+
+    from pysandboxes.guard_import import _keep_os_supports_sets
+
+    before = {name: set(getattr(os, name)) for name in ("supports_follow_symlinks", "supports_fd")}
+
+    _keep_os_supports_sets(os.environ, os.environ)
+
+    assert {name: set(getattr(os, name)) for name in before} == before

@@ -23,6 +23,13 @@ on:
   schedule:
     - cron: "0 3 * * *"
 
+# One run per branch at a time: a second dispatch waits for the running one instead
+# of booting the same VMs twice, and a third replaces the waiting one. A run is
+# never cancelled midway, since restarting 45 minutes of tests teaches nothing new.
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # A cheap guard job rather than a step: it keeps the whole setup -- apt, uv,
   # the dependency install -- out of a night that has nothing new to test.
@@ -91,6 +98,17 @@ jobs:
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev
 
+    # Without their binaries the provider rows skip themselves, and the run says
+    # nothing about bwrap, firejail, unshare or qemu. Ubuntu 24.04 also restricts
+    # unprivileged user namespaces through AppArmor, which bwrap and unshare need
+    # (see wiki/unshare.md). A container, as under `act`, cannot change that
+    # sysctl: the rows that need it then skip or fail there, not on the runner.
+    - name: Install the OS providers
+      run: |
+        sudo apt-get install -y bubblewrap firejail slirp4netns iptables iproute2 \
+          qemu-system-x86 qemu-utils genisoimage
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
     - name: Install uv
       shell: bash
       run: |
@@ -108,6 +126,12 @@ jobs:
 
     - name: Install dependencies
       run: uv sync --group test
+
+    # The first qemu row would otherwise download the 665 MiB guest image inside its
+    # own daemon start timeout, and fail for a slow network rather than for a bug.
+    # Dockerfile-qemu fetches it at build time for the same reason.
+    - name: Fetch the QEMU guest image
+      run: uv run python -m pysandboxes.remote.qemu_fetch_image
 
     - name: Run integration tests
       # The `qemu-tcg` rows -- the only ones marked `slow` -- are dropped here. They

@@ -41,8 +41,9 @@ def make_relative_path(path: Path | str | None) -> str:
         try:
             path.absolute().relative_to(Path.home())
             rel_path = "~" + str(path.absolute())[len(str(Path.home())) :]
-        except ValueError:
-            # File not in home
+        except (ValueError, RuntimeError):
+            # File not in home, or no home at all (a qemu guest has neither HOME nor a
+            # passwd entry, and Path.home() raises RuntimeError there)
             rel_path = str(path.absolute())
     return rel_path
 
