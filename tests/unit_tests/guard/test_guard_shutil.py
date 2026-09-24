@@ -278,3 +278,16 @@ def test_the_guarded_os_functions_keep_their_supports_sets(files: Dict[str, Path
     assert (dst / "link").read_text() == "content"
     shutil.copy2(src / "link", dst / "link_copy", follow_symlinks=False)
     assert (dst / "link_copy").is_symlink()
+
+
+def test_patching_os_environ_leaves_the_supports_sets_alone() -> None:
+    """Learning mode patches os.environ too, and a _Environ cannot be hashed."""
+    import os
+
+    from pysandboxes.guard_import import _keep_os_supports_sets
+
+    before = {name: set(getattr(os, name)) for name in ("supports_follow_symlinks", "supports_fd")}
+
+    _keep_os_supports_sets(os.environ, os.environ)
+
+    assert {name: set(getattr(os, name)) for name in before} == before
