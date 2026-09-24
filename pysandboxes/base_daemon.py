@@ -49,6 +49,15 @@ class BaseDaemon(ABC):
         self._token = token
         self._accept_incoming = False
 
+    @classmethod
+    def unavailable_reason(cls) -> str | None:
+        """Return why this provider cannot run on this host, or None when it can.
+
+        Covers what the provider itself needs -- a binary, a kernel feature. The
+        platform is checked before, from the registry, without importing the provider.
+        """
+        return None
+
     def parse_rules(
         self,
         rules: ConfigLines,

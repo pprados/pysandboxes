@@ -90,7 +90,13 @@ from .slirp4netns_common import (
 from .slirp4netns_common import (
     setup_port_forwarding as slirp_setup_port_forwarding,
 )
-from .tools import SSE_READ_BUFSIZE, get_upstream_dns, is_transient_connection_error, which_command
+from .tools import (
+    SSE_READ_BUFSIZE,
+    get_upstream_dns,
+    is_transient_connection_error,
+    unshare_user_namespace_available,
+    which_command,
+)
 from .unshare_setup import UnshareSetupConfig
 
 logger = logging.getLogger(__name__)
@@ -162,6 +168,13 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         "_slirp_process_holder",
         "_slirp_shutdown_event",
     )
+
+    @classmethod
+    @override
+    def unavailable_reason(cls) -> str | None:
+        if unshare_user_namespace_available():
+            return None
+        return "unshare/slirp4netns missing or user namespaces not permitted"
 
     def __init__(
         self,

@@ -459,6 +459,11 @@ class LandlockSSEDaemon(SubProcessDaemon):
     Communication is the same as SubProcessDaemon (SSE).
     """
 
+    @classmethod
+    @override
+    def unavailable_reason(cls) -> str | None:
+        return None if landlock_user_available() else "Landlock not available (kernel < 5.13 or not Linux)"
+
     @override
     def update_rules_and_activate(
         self,
