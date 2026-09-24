@@ -22,7 +22,7 @@ import sys
 import time
 from ipaddress import IPv4Address
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from ..all_rules import AllRules
 from ..config import DEBUG
@@ -221,6 +221,22 @@ def _virtfs_stage_copytree_ignore(_src: str, names: list[str]) -> list[str]:
     return ignored
 
 
+def _virtfs_stage_copytree_ignore_staged(src_root: Path, dst_root: Path) -> Callable[[str, list[str]], list[str]]:
+    """Also skip the symlinks an earlier mount already staged at the destination.
+
+    The mounts are sorted, so a parent is staged before its child, and the child's
+    tree is already there. ``copytree(dirs_exist_ok=True)`` overwrites files, but
+    re-creating a symlink fails with EEXIST.
+    """
+
+    def ignore(src: str, names: list[str]) -> list[str]:
+        ignored = _virtfs_stage_copytree_ignore(src, names)
+        dst = dst_root / Path(src).relative_to(src_root)
+        return ignored + [n for n in names if n not in ignored and (dst / n).is_symlink()]
+
+    return ignore
+
+
 def _stage_exec_virtfs_mounts(
     temp: Path,
     mount_specs: list[tuple[str, Path, str]],
@@ -249,7 +265,7 @@ def _stage_exec_virtfs_mounts(
                     dest,
                     symlinks=True,
                     dirs_exist_ok=True,
-                    ignore=_virtfs_stage_copytree_ignore,
+                    ignore=_virtfs_stage_copytree_ignore_staged(host_path, dest),
                 )
             elif host_path.is_file():
                 shutil.copy2(host_path, dest)
