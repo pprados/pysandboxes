@@ -34,6 +34,9 @@ ignore=.env
 # same scenario is covered both on KVM and on emulation -- the latter being what a
 # container gets, since it is not given /dev/kvm.
 qemu.use_kvm=${QEMU_USE_KVM:-true}
+# A hosted runner has no /dev/kvm and emulates slower than the 180s TCG default allows;
+# an upper bound only, kept under the 600s the tests give a qemu run.
+qemu.start_timeout=420
 # qemu.memory=2G
 qemu.virtfs=${QEMU_VIRTFS:-auto}  # `on` stages the trees as inside a container
 # Off unless asked: set QEMU_SHOW_BOOT_CONSOLE=true to see the guest's own traces,
