@@ -19,6 +19,7 @@ import shutil
 import site
 import subprocess
 import sys
+import tempfile
 import time
 from ipaddress import IPv4Address
 from pathlib import Path
@@ -866,12 +867,14 @@ def _file_rules_mounts(
     temp: Path,
     pipe_path: Path,
     config_dir: Path | None = None,
+    stage_root: Path | None = None,
 ) -> tuple[list[tuple[str, Path, str]], list[tuple[str, str]]]:
     """Build one 9p (tag, host_path, guest_path) per FSExposeRule, run dir, optional config dir, and execution dirs.
 
     Returns (mount_specs, mount_list_for_iso) where mount_specs is used for -virtfs
     and mount_list_for_iso is [(tag, guest_path), ...] for the bootstrap script.
     When config_dir is set, it is mounted at GUEST_CONFIG_MOUNT so the guest reads config from a regular file via 9p.
+    Staged trees go under stage_root (default: temp), which must outlive the VM: the guest reads them over 9p.
     """
     mount_specs: list[tuple[str, Path, str]] = []
     mount_list: list[tuple[str, str]] = []
@@ -912,13 +915,14 @@ def _file_rules_mounts(
         mount_list.append((tag, guest_path))
 
     if stage_exec:
-        _stage_exec_virtfs_mounts(temp, mount_specs)
+        stage = stage_root or temp
+        _stage_exec_virtfs_mounts(stage, mount_specs)
         _merge_staged_virtfs_into_expose_mounts(mount_specs)
         _rebase_file_expose_hosts_under_staged_app(mount_specs)
-        _stage_overlay_etc_expose_mount(temp, mount_specs)
+        _stage_overlay_etc_expose_mount(stage, mount_specs)
         # Prepend so sort places these before project expose mounts; guest must see host ld.so/libc.
         ld_mode = _normalize_ld_closure_libs_param(str(all_rules.os_sandbox_params.get("ld_closure_libs", "full")))
-        mount_specs[:] = _stage_dynamic_linker_closure(temp, ld_closure_libs=ld_mode) + mount_specs
+        mount_specs[:] = _stage_dynamic_linker_closure(stage, ld_closure_libs=ld_mode) + mount_specs
 
     mount_list = [(tag, gp) for tag, _hp, gp in mount_specs]
 
@@ -969,7 +973,7 @@ class QemuSSEDaemon(VMSSEDaemon):
 
     host_run_temp_prefix = QEMU_HOST_RUN_PREFIX
 
-    __slots__ = ("_iso_config", "_qemu_console_tasks")
+    __slots__ = ("_iso_config", "_qemu_console_tasks", "_stage_root")
 
     def guest_run_dir_mount(self) -> str:
         return GUEST_RUN_MOUNT
@@ -987,6 +991,29 @@ class QemuSSEDaemon(VMSSEDaemon):
         )
         self._iso_config: DaemonParameters | None = None
         self._qemu_console_tasks: list[asyncio.Task[None]] = []
+        self._stage_root: tempfile.TemporaryDirectory[str] | None = None
+
+    def _remove_stage_root(self) -> None:
+        if self._stage_root is not None:
+            self._stage_root.cleanup()
+            self._stage_root = None
+
+    @override
+    async def _start(self, all_rules: AllRules, *, envs: Environ, log_level: int, init_fn: Any) -> None:
+        """Start the VM; a failed start is not shut down, so it removes its staged trees itself."""
+        try:
+            await super()._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
+        except BaseException:
+            self._remove_stage_root()
+            raise
+
+    @override
+    async def _shutdown(self, graceful_shutdown: bool = True) -> None:
+        """Shutdown the VM, then remove the trees staged for it."""
+        try:
+            await super()._shutdown(graceful_shutdown)
+        finally:
+            self._remove_stage_root()
 
     @override
     def parse_rules(
@@ -1017,6 +1044,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         port: int,
         pipe_path: Path,
         config_dir: Path | None = None,
+        stage_root: Path | None = None,
     ) -> tuple[Args, Environ]:
         """Build QEMU command: one virtio-9p tag per file_rule FSExposeRule + run dir.
 
@@ -1024,7 +1052,9 @@ class QemuSSEDaemon(VMSSEDaemon):
         """
         image_path = get_default_image_path()
         ensure_image(image_path)
-        mount_specs, mount_list = _file_rules_mounts(all_rules, temp, pipe_path, config_dir=config_dir)
+        mount_specs, mount_list = _file_rules_mounts(
+            all_rules, temp, pipe_path, config_dir=config_dir, stage_root=stage_root
+        )
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
         config_guest_path = f"{GUEST_CONFIG_MOUNT}/config.pkl" if config_dir else None
         nocloud_iso = prepare_guest_env(
@@ -1218,7 +1248,20 @@ class QemuSSEDaemon(VMSSEDaemon):
         # serialization only
         (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))
 
-        cmd, _ = self._build_qemu_cmd(all_rules, temp, process_config, port, pipe_path, config_dir=config_dir)
+        # temp is removed once the guest answers its first ping, and the guest keeps reading
+        # the staged trees over 9p after that: they get a directory of their own, removed
+        # with the VM. A restart comes after the previous VM is gone.
+        self._remove_stage_root()
+        self._stage_root = tempfile.TemporaryDirectory(prefix=QEMU_HOST_RUN_PREFIX, ignore_cleanup_errors=True)
+        cmd, _ = self._build_qemu_cmd(
+            all_rules,
+            temp,
+            process_config,
+            port,
+            pipe_path,
+            config_dir=config_dir,
+            stage_root=Path(self._stage_root.name),
+        )
 
         logger.debug("Launch QEMU: %s", " ".join((repr(a) if " " in a else a for a in cmd)))
 
