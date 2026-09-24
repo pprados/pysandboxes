@@ -167,7 +167,12 @@ def _keep_os_supports_sets(original: Any, patched: Any) -> None:
     The standard library tests those sets by identity: shutil.copystat falls back
     to a no-op when os.stat is not in os.supports_follow_symlinks, then fails on
     ``None.st_mode``.
+
+    Only functions can be members: ``os.environ`` is patched too, in learning
+    mode, and a ``_Environ`` is not hashable.
     """
+    if not callable(original):
+        return
     for set_name in _OS_SUPPORTS_SETS:
         supports = getattr(os, set_name, None)
         if supports is not None and original in supports:
