@@ -52,10 +52,17 @@ unit-tests:
 minikube-ready:
 	@command -v minikube >/dev/null 2>&1 && (minikube status >/dev/null 2>&1 || (minikube start && kubectl wait --for=condition=Ready nodes --all --timeout=120s 2>/dev/null && (kubectl wait --for=condition=Ready pod -l k8s-app=kube-dns -n kube-system --timeout=120s 2>/dev/null || true))) || true
 
-# Build all provider images into minikube's Docker (no-op if minikube is missing or not running).
-minikube-build-images:
+# Load the provider images built by build-images into minikube (no-op if minikube is missing or not running).
+# They are loaded, not rebuilt there: `minikube docker-env` now points at an ssh:// daemon, where buildx
+# falls back to its docker-container driver and fails to start BuildKit.
+MINIKUBE_IMAGES := python-sb:latest python-sb-landlock:latest python-sb-unshare:latest python-sb-bwrap:latest \
+	python-sb-qemu:latest
+minikube-build-images: build-images
 	@if command -v minikube >/dev/null 2>&1 && minikube status >/dev/null 2>&1; then \
-	  eval $$(minikube docker-env) && $(MAKE) build-image-docker; \
+	  for IMAGE in $(MINIKUBE_IMAGES); do \
+	    echo "Loading $$IMAGE into minikube..."; \
+	    minikube image load "$$IMAGE" || exit 1; \
+	  done; \
 	fi
 
 ## Make docker/podman/kubernetes tests (builds python-sb:latest from dist/ if needed). Use OS_SANDBOX (default: unshare).

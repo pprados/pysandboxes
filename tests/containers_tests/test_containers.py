@@ -715,8 +715,8 @@ def _assert_minikube_image(os_sandbox: str) -> None:
     if inspect.returncode != 0:
         raise RuntimeError(
             f"Image {image_ref!r} not found in minikube's Docker daemon. "
-            "Build with: eval $(minikube docker-env) && make build-image-docker "
-            "(or run make container-tests, which runs minikube-build-images)."
+            "Load it with: make minikube-build-images "
+            "(or run make container-tests, which runs it)."
         )
 
 
