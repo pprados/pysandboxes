@@ -203,6 +203,8 @@ A single source covers every supported version, 3.11–3.14, with one image each
 
 Only **released** images are mapped, never a development codename. Staging mounts the host's `/lib/<triplet>` over the guest (see `qemu.ld_closure_libs` above), so the guest's own coreutils and cloud-init run against the **host's** glibc: the guest release must be no newer than the host. A codename tracks the devel series and eventually ships a glibc the host lacks — **resolute** reached **2.43**, every guest binary died with ``version `GLIBC_2.43' not found``, `cloud-final.service` failed, and the bootstrap never answered its ping, so the run hung with no output at all.
 
+The other direction binds too: where the host's libraries are not staged, the host interpreter runs against the **image's** glibc, so it must not need a newer one. The GitHub runner's `actions/setup-python` 3.11 is built against glibc **2.38**, the 23.04 image ships **2.37**, and the bootstrap's Python probe fails with ``version `GLIBC_2.38' not found``. uv's managed interpreters target an older glibc, which is why `integration.yml` uses them. The bootstrap writes such a fatal error to the run directory's `stderr` file too, so it reaches the caller without `qemu.show_boot_console`.
+
 
 | Python | Ubuntu            | File (.img)                               | Base URL |
 | ------ | ----------------- | ----------------------------------------- | -------- |

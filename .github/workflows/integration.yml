@@ -71,6 +71,13 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11","3.12","3.13","3.14"]
+    # A uv-managed interpreter, not actions/setup-python: the qemu guest runs the host's
+    # interpreter over 9p against the image's glibc (2.37), and the runner's own 3.11
+    # build needs glibc 2.38, so the guest could not even start it. uv's builds target
+    # an older glibc.
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+      UV_PYTHON_PREFERENCE: only-managed
 
     steps:
     - uses: actions/checkout@v5
@@ -90,11 +97,6 @@ jobs:
 
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y make build-essential
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
-      with:
-        python-version: ${{ matrix.python-version }}
 
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev
