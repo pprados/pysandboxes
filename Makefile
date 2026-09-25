@@ -398,6 +398,8 @@ dist: .make-dist
 # PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu. (firejail not supported in Docker.)
 PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
 VARIANT ?= qemu
+# Container engines the images are built with, when installed; CI builds one per runner.
+CONTAINER_CMDS ?= podman docker
 # QEMU package per host arch (for build-image-qemu, no script in image)
 UNAME_M       := $(shell uname -m)
 QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qemu-system-x86)
@@ -405,7 +407,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 .make-build-image-base: Dockerfile .make-dist
 	@WHEEL="$$(find dist -maxdepth 1 -name '*.whl' -print -quit)"; \
 	if [ -z "$$WHEEL" ]; then echo "No wheel in dist/"; exit 1; fi; \
-	for CONTAINER_CMD in podman docker; do \
+	for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb:$(PYTHON_VERSION), python-sb:latest with $$CONTAINER_CMD (base)..."; \
 	  $$CONTAINER_CMD build --build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
@@ -419,7 +421,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	touch .make-build-image-base
 
 .make-build-image-landlock: .make-build-image-base Dockerfile-landlock
-	@for CONTAINER_CMD in podman docker; do \
+	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb-landlock:$(PYTHON_VERSION), python-sb-landlock:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
@@ -433,7 +435,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 
 
 .make-build-image-unshare: .make-build-image-base Dockerfile-unshare
-	@for CONTAINER_CMD in podman docker; do \
+	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb-unshare:$(PYTHON_VERSION), python-sb-unshare:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
@@ -446,7 +448,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	touch .make-build-image-unshare
 
 .make-build-image-bwrap: .make-build-image-base Dockerfile-bwrap
-	@for CONTAINER_CMD in podman docker; do \
+	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
@@ -459,7 +461,7 @@ QEMU_PKG      := $(if $(filter aarch64 arm64,$(UNAME_M)),qemu-system-aarch64,qem
 	touch .make-build-image-bwrap
 
 .make-build-image-qemu: .make-build-image-base Dockerfile-qemu
-	@for CONTAINER_CMD in podman docker; do \
+	@for CONTAINER_CMD in $(CONTAINER_CMDS); do \
 	  if ! command -v $$CONTAINER_CMD >/dev/null 2>&1; then continue; fi; \
 	  echo "Building python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest with $$CONTAINER_CMD..."; \
 	  $$CONTAINER_CMD build \
