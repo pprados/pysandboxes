@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: pysandboxes-test
 spec:
-  # Explicit DNS so config parsing can resolve hostnames (e.g. www.google.com in py-sandbox-test.profile)
+  # Explicit DNS so config parsing can resolve hostnames (e.g. github.com in py-sandbox-test.profile)
   dnsPolicy: "None"
   dnsConfig:
     nameservers:

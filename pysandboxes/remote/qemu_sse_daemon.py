@@ -28,7 +28,7 @@ from typing import Any, Callable, Mapping
 from ..all_rules import AllRules
 from ..config import DEBUG
 from ..e import SandBoxError
-from ..guard_files import FSExposeRule
+from ..guard_files import _CA_STORES, FSExposeRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
@@ -950,6 +950,27 @@ def _file_rules_mounts(
     return mount_specs, mount_list
 
 
+def _virtfs_security_model(host_path: Path, configured: str) -> str:
+    """Return the 9p ``security_model`` for one mount.
+
+    mapped-xattr (the default) lets the guest see normal files, but a host symlink read
+    through it fails with ELOOP. Staged trees (tmpfs copies of a container overlay) and
+    the CA stores -- ``/etc/ssl/certs`` is a forest of links -- use "none" instead.
+    """
+    host_s = str(host_path.resolve())
+    if (
+        "virtfs_stage_exec" in host_s
+        or "virtfs_stage_misc" in host_s
+        or "/virtfs_stage/" in host_s
+        or "ld_closure_fs" in host_s
+        or host_s + "/" in _CA_STORES
+    ):
+        return "none"
+    configured = configured.strip().lower()
+    # QEMU has no security_model=auto; treat as mapped-xattr (guest-friendly default).
+    return "mapped-xattr" if configured in ("auto", "") else configured
+
+
 def _qemu_binary() -> str:
     """Return the QEMU system binary for the current architecture."""
     arch = platform.machine()
@@ -1086,25 +1107,9 @@ class QemuSSEDaemon(VMSSEDaemon):
         ]
 
         virtfs_args: Args = []
+        configured = str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr"))
         for tag, host_path, guest_path in mount_specs:
-            # mapped-xattr: guest sees normal files (e.g. config). Staged trees (tmpfs copies)
-            # from container overlay: use "none" so ELF/DSO mmap is reliable in the guest.
-            host_s = str(host_path.resolve())
-            if (
-                "virtfs_stage_exec" in host_s
-                or "virtfs_stage_misc" in host_s
-                or "/virtfs_stage/" in host_s
-                or "ld_closure_fs" in host_s
-            ):
-                # Staged/copied trees: "none" avoids 9p symlink issues (ELOOP loading .so)
-                # with mapped-xattr; see nested QEMU ld_closure + SONAME symlinks.
-                security = "none"
-            else:
-                configured = (
-                    str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr")).strip().lower()
-                )
-                # QEMU has no security_model=auto; treat as mapped-xattr (guest-friendly default).
-                security = "mapped-xattr" if configured in ("auto", "") else configured
+            security = _virtfs_security_model(host_path, configured)
             virtfs_args.extend(
                 [
                     "-virtfs",
