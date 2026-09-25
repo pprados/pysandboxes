@@ -5,10 +5,14 @@ name: Container Tests
 # to a version tag rather than to every push. workflow_dispatch reruns them on
 # demand.
 #
-# A hosted runner exposes no /dev/kvm, so the qemu rows of the matrix boot their
-# VM under TCG emulation. is_kvm_available() in pysandboxes/remote/qemu_image.py
-# already drops -enable-kvm in that case, so they run correctly -- just slowly,
-# which is what the generous timeout below is for.
+# One runner per suite: each builds its images with the one engine it tests
+# (CONTAINER_CMDS), so no runner holds two copies of the five images -- with both,
+# plus the copy loaded into minikube, /var reached 99% and minikube refused to start.
+# The suites also run in parallel and report apart.
+#
+# A hosted runner has /dev/kvm, but root:kvm 0660 without the runner user in the
+# group: docker reaches it through its root daemon, rootless podman does not and
+# falls back to TCG, too slow for the container timeout. A step opens it.
 on:
   push:
     tags: [ "v*" ]
@@ -18,11 +22,40 @@ jobs:
   containers:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: docker
+            engine: docker
+            tests: test_container_runtime and docker
+          - suite: podman
+            engine: podman
+            tests: test_container_runtime and podman
+          - suite: kubernetes
+            engine: docker
+            tests: test_container_kubernetes
+    name: containers (${{ matrix.suite }})
 
     steps:
     - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    # Margin for the images and minikube's copy of them: the runner starts at
+    # 83% with one engine per job, and minikube refuses to start near 99%.
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        df -h /
+
+    - name: Give the runner user /dev/kvm
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+          | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        ls -l /dev/kvm
 
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y make build-essential
@@ -35,15 +68,15 @@ jobs:
     - name: Install Python development headers
       run: sudo apt-get install -y python3-dev
 
-    # The podman rows skip themselves when the binary is missing, which would
-    # silently halve the runtime coverage.
     - name: Install podman
+      if: matrix.engine == 'podman'
       run: sudo apt-get install -y podman
 
     # test_containers.py invokes `kubectl` as a command, not `minikube kubectl`,
     # so it needs its own binary. Both downloads follow the vendors' documented
     # "latest stable" URLs rather than a pinned release.
     - name: Install minikube and kubectl
+      if: matrix.suite == 'kubernetes'
       run: |
         curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         sudo install minikube-linux-amd64 /usr/local/bin/minikube
@@ -72,7 +105,13 @@ jobs:
       run: uv sync --group test
 
     # container-tests depends on build-images, which depends on .make-dist, so
-    # make builds the wheel and the five provider images on its own. It then
-    # starts minikube and rebuilds the images inside its Docker daemon.
+    # make builds the wheel and the five provider images on its own, with this
+    # job's engine only. Where minikube is installed, it then starts it and loads
+    # the images into it.
     - name: Run container tests
-      run: make container-tests
+      env:
+        CONTAINER_CMDS: ${{ matrix.engine }}
+        PYTEST_ADDOPTS: -k "${{ matrix.tests }}"
+      run: |
+        df -h /
+        make container-tests
