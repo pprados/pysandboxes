@@ -161,6 +161,9 @@ _EXPECTED_ENVS = frozenset(
         "PYTHONUNBUFFERED",
         "PYTHONUSERBASE",
         "OS_SANDBOX",
+        # macOS: CoreFoundation sets it (uid and text encoding, no secret) in any process
+        # that loads it, whatever environment the process was given.
+        "__CF_USER_TEXT_ENCODING",
     }
 )
 
