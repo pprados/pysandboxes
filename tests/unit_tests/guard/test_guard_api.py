@@ -426,7 +426,7 @@ def test_factory_does_not_wrap_twice() -> None:
     """An object already guarded through an alias is not re-wrapped."""
     table = patch_rules(learn=False)
     once = table["os.system"](lambda *a, **k: "called")
-    twice = table["posix.system"](once)
+    twice = table[f"{os.name if os.name == 'nt' else 'posix'}.system"](once)
     assert twice is once
 
 
