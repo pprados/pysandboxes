@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ..all_rules import AllRules
+from .qemu_guest_console_io import GUEST_STDERR_FILE
 from .vm_sse_daemon import VMSSEDaemon
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,15 @@ def _bootstrap_script_content(
         "  poweroff -f 2>/dev/null || true",
         "  halt -fp 2>/dev/null || true",
         "}",
+        "# The console is hidden unless qemu.show_boot_console is set; python_sb relays the",
+        "# run dir's stderr file, so a fatal error goes there too.",
+        "_pysb_fatal() {",
+        "  printf '[pysandbox-bootstrap] ERROR: %s\\n' \"$*\" >&2",
+        f"  {{ printf '[pysandbox-bootstrap] ERROR: %s\\n' \"$*\" >> {pipe_run_guest_path}/{GUEST_STDERR_FILE}; }}"
+        " 2>/dev/null || true",
+        "  _pysb_halt_guest",
+        "  exit 1",
+        "}",
         "",
         "echo '[pysandbox-bootstrap] starting' >&2",
         "",
@@ -191,12 +201,7 @@ def _bootstrap_script_content(
             '  if [ -n "$RL" ] && [ -f "$RL" ]; then HOST_EXE=$RL; fi',
             "fi",
             'if [ -n "$HOST_EXE" ] && [ ! -f "$HOST_EXE" ]; then',
-            (
-                '  echo "[pysandbox-bootstrap] ERROR: host Python not found at ${HOST_EXE} '
-                'after 9p mounts (check mount failures above)." >&2'
-            ),
-            "  _pysb_halt_guest",
-            "  exit 1",
+            '  _pysb_fatal "host Python not found at ${HOST_EXE} after 9p mounts (check mount failures above)."',
             "fi",
             '[ -n "$HOST_EXE" ] && [ -f "$HOST_EXE" ] && PYTHON_EXE=$HOST_EXE',
             # Else use guest python (same major.minor as required)
@@ -210,37 +215,20 @@ def _bootstrap_script_content(
             # Verify version: image must have expected Python (no install).
             # Do not use set -e for the probe: a failing python (missing .so, segfault)
             # would exit the whole script before the error line, leaving cloud-init opaque.
+            "PROBE_ERR=$(mktemp)",
             "set +e",
             (
                 'ACTUAL_VERSION="$("$PYTHON_EXE" -c '
                 "'import sys; print(\"%d.%d\" % (sys.version_info.major, sys.version_info.minor))' "
-                '2>/dev/null)"'
+                '2>"$PROBE_ERR")"'
             ),
             "PY_PROBE_RC=$?",
             "set -e",
             'if [ "$PY_PROBE_RC" != 0 ] || [ -z "$ACTUAL_VERSION" ]; then',
-            (
-                "  echo '[pysandbox-bootstrap] ERROR: Python probe rc='"
-                '"$PY_PROBE_RC"'
-                "' from '"
-                '"$PYTHON_EXE"'
-                "'; stderr:' >&2"
-            ),
-            (
-                '  "$PYTHON_EXE" -c '
-                "'import sys; print(\"%d.%d\" % (sys.version_info.major, sys.version_info.minor))' "
-                "2>&2 || true"
-            ),
-            "  _pysb_halt_guest",
-            "  exit 1",
+            '  _pysb_fatal "Python probe rc=$PY_PROBE_RC from $PYTHON_EXE: $(cat "$PROBE_ERR")"',
             "fi",
             'if [ "$ACTUAL_VERSION" != "$PYTHON_VERSION" ]; then',
-            (
-                "  echo '[pysandbox-bootstrap] ERROR: expected Python $PYTHON_VERSION, "
-                "image has Python $ACTUAL_VERSION' >&2"
-            ),
-            "  _pysb_halt_guest",
-            "  exit 1",
+            '  _pysb_fatal "expected Python $PYTHON_VERSION, image has Python $ACTUAL_VERSION"',
             "fi",
             'echo "[pysandbox-bootstrap] Python version OK: $ACTUAL_VERSION" >&2',
             "",
@@ -262,11 +250,7 @@ def _bootstrap_script_content(
                 "PIPE_NAME=$(cat "
                 + f"{GUEST_CIDATA_MOUNT}/{PIPE_NAME_FILE}"
                 + " 2>/dev/null | tr -d '\\n' || echo '')",
-                (
-                    'if [ -z "$PIPE_NAME" ]; then '
-                    'echo "[pysandbox-bootstrap] ERROR: pipe_name not found on cidata" >&2; '
-                    "_pysb_halt_guest; exit 1; fi"
-                ),
+                'if [ -z "$PIPE_NAME" ]; then _pysb_fatal "pipe_name not found on cidata"; fi',
                 f'CONFIG_PATH={pipe_run_guest_path}/"$PIPE_NAME"',
                 "echo '[pysandbox-bootstrap] exec main_sandbox --_named-pipe '\"'\"'$CONFIG_PATH'\"'\"'' >&2",
             ]
