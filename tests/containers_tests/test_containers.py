@@ -174,7 +174,7 @@ def _host_dns_servers() -> list[str]:
 
 
 # Hostname from py-sandbox-test.profile that require resolution at config load time
-_PROFILE_RESOLVE_HOSTS = ("www.google.com",)
+_PROFILE_RESOLVE_HOSTS = ("github.com",)
 
 
 def _is_ipv4(addr: str) -> bool:

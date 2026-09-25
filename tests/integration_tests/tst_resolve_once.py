@@ -16,7 +16,7 @@ from pysandboxes import sandbox, sandboxes
 
 @sandbox
 def _resolve() -> str:
-    return socket.gethostbyname("www.google.com")
+    return socket.gethostbyname("github.com")
 
 
 def main() -> None:

@@ -169,7 +169,7 @@
 # --writable-var-log
 
 # Private /etc with only these files
---private-etc=hosts,resolv.conf,nsswitch.conf
+--private-etc=hosts,resolv.conf,nsswitch.conf,ssl,pki,ca-certificates
 
 # Remount path as noexec
 --noexec=/tmp

@@ -3,10 +3,11 @@ name: Python Integration Tests
 # Nightly, plus on demand. These tests launch real sandboxed child processes, so
 # they are slower and less hermetic than the unit suite, and the provider matrix
 # in tests/integration_tests/test_usage_with_providers.py boots a VM. A hosted
-# runner exposes no /dev/kvm, so those rows run under TCG emulation, which
-# containers.yml already relies on. Providers whose binary is missing skip
-# themselves cleanly (see provider_skip_reason), so the run stays green on a
-# runner that lacks one.
+# runner exposes /dev/kvm once a udev rule opens it to the runner user: the `qemu`
+# rows then run accelerated, and the `qemu-tcg` rows cover emulation. Every
+# integration test must run here: a skipped test -- a provider missing, a network
+# the runner lacks -- fails the run, but only at the end, so the report still
+# shows what passes and what does not (see tests/integration_tests/conftest.py).
 #
 # The nightly run validates the integration branch, `develop`. GitHub only honours
 # `schedule:` on the default branch, which is `develop`, so the schedule already
@@ -39,7 +40,7 @@ jobs:
       changed: ${{ steps.commits.outputs.changed }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         # `git rev-list --since` needs the history the default shallow clone omits.
@@ -69,10 +70,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.11","3.12","3.13","3.14"]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -91,7 +92,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y make build-essential
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -108,6 +109,16 @@ jobs:
         sudo apt-get install -y bubblewrap firejail slirp4netns iptables iproute2 \
           qemu-system-x86 qemu-utils genisoimage
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+    # The rule GitHub documents for hardware-accelerated emulators. Where /dev/kvm is
+    # absent, as in a container under `act`, qemu falls back to emulation by itself.
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+          | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm || true
+        ls -l /dev/kvm || echo "no /dev/kvm: qemu rows will emulate"
 
     - name: Install uv
       shell: bash
@@ -134,10 +145,7 @@ jobs:
       run: uv run python -m pysandboxes.remote.qemu_fetch_image
 
     - name: Run integration tests
-      # The `qemu-tcg` rows -- the only ones marked `slow` -- are dropped here. They
-      # exist to cover emulation on a developer machine that has /dev/kvm; a hosted
-      # runner has none, so qemu already emulates and the extra row boots a second,
-      # identical VM per test for no added coverage (see _env.py:24-30).
       env:
-        PYTEST_ADDOPTS: -m 'not slow'
+        PYSANDBOXES_FAIL_ON_SKIP: "1"
+        PYTEST_ADDOPTS: --durations=20
       run: make integration-tests
