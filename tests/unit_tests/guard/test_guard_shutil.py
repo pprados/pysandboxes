@@ -262,7 +262,8 @@ def test_the_guarded_os_functions_keep_their_supports_sets(files: Dict[str, Path
 
     assert os.stat in os.supports_follow_symlinks
     assert os.stat in os.supports_fd
-    assert os.stat in os.supports_dir_fd
+    if sys.platform != "win32":  # Windows supports no dir_fd at all: the set is empty
+        assert os.stat in os.supports_dir_fd
 
     src = files["path"] / "tree_with_link"
     dst = files["path"] / "tree_with_link_copy"

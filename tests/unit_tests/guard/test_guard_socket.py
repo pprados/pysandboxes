@@ -807,7 +807,8 @@ def test_invalid_sendTo() -> None:
     """
     from pysandboxes.guard_socket import socket
 
-    with pytest.raises(BrokenPipeError):
+    # Windows reports the unconnected stream as WSAENOTCONN (10057), an OSError.
+    with pytest.raises(OSError if sys.platform == "win32" else BrokenPipeError):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:  # Invalid type
             sock.sendto(b"hello", ("127.0.0.1", 12345))
 
