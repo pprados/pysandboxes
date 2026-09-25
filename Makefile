@@ -4,7 +4,7 @@ SHELL=/bin/bash
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
-	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init \
+	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test release-beta-local init \
 	clean-sandbox-temps
 
 UV_GROUP?=--group dev --group test --group lint
@@ -641,6 +641,28 @@ inspector:
 
 github-push-test:
 	gh act push
+
+# Replays release.yml on TAG against the local devpi. On a throw-away clone, not the working directory: act copies
+# the tree as is, so an untracked change would give hatch-vcs a .devN version, and a worktree's .git points to a host
+# path absent from the container. origin/develop in the clone is the local develop; nothing reaches GitHub.
+# Host network: devpi listens on localhost only.
+RELEASE_CLONE = $(or $(TMPDIR),/tmp)/release-$(TAG)
+## Replay the release of a signed tag locally, against devpi: make release-beta-local TAG=v0.1.0b1
+release-beta-local:
+	@test -n "$(TAG)" || { echo "Usage: make release-beta-local TAG=v0.1.0b1"; exit 1; }
+	@git rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null || { echo "No tag $(TAG) in this repository."; exit 1; }
+	$(MAKE) devpi-start
+	rm -rf "$(RELEASE_CLONE)" "$(RELEASE_CLONE).artifacts"
+	git clone --quiet --no-hardlinks . "$(RELEASE_CLONE)"
+	git -C "$(RELEASE_CLONE)" checkout --quiet "$(TAG)"
+	printf '{"ref": "refs/tags/%s", "act": true}\n' "$(TAG)" >"$(RELEASE_CLONE).event.json"
+	key=$$(git config user.signingkey); if [ -f "$$key" ]; then key=$$(cat "$$key"); fi; \
+	cd "$(RELEASE_CLONE)" && gh act push --env-file /dev/null --network host \
+		-W .github/workflows/release.yml -e "$(RELEASE_CLONE).event.json" \
+		--artifact-server-path "$(RELEASE_CLONE).artifacts" \
+		--var RELEASE_ALLOWED_SIGNERS="$$(git config user.email) $$key" \
+		-s DEVPI_USER=$(DEVPI_USER) -s DEVPI_PASS=$(DEVPI_PASS); \
+	status=$$?; rm -rf "$(RELEASE_CLONE)" "$(RELEASE_CLONE).event.json" "$(RELEASE_CLONE).artifacts"; exit $$status
 
 init: _uv-init
 #	@pre-commit install
