@@ -7,6 +7,7 @@ Only the pure parts are covered here. ``GuardFinder`` and ``GuardLoader`` mutate
 """
 
 from pathlib import Path
+from types import ModuleType
 from typing import cast
 
 import pytest
@@ -14,6 +15,7 @@ import pytest
 from pysandboxes import guard_import
 from pysandboxes.guard_import import (
     LearnImportRule,
+    PatchRule,
     _conv_patch_rules,
     _group_by_width,
     _is_import_allowed,
@@ -185,3 +187,25 @@ def test_packaged_resources_stay_readable_while_the_guard_is_armed() -> None:
     # `resolve()` is the point of the test: a degraded Traversable wrapper does not
     # have it, which is exactly the regression guarded here.
     assert Path(str(template)).resolve().is_file()
+
+
+def test_a_function_missing_on_this_platform_is_left_unpatched(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `os.listxattr` exists on Linux only: macOS and Windows failed on it before
+    # any test could run.
+    module = ModuleType("fake")
+    module.present = lambda: "original"  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        guard_import,
+        "_patch_rules",
+        {
+            "fake": (
+                PatchRule("absent", lambda original: original),
+                PatchRule("present", lambda original: lambda: "patched"),
+            )
+        },
+    )
+
+    guard_import._apply_patch(module, "fake")
+
+    assert module.present() == "patched"  # type: ignore[attr-defined]
+    assert not hasattr(module, "absent")
