@@ -367,6 +367,8 @@ def _test_network() -> int:
             logger.info(f"{OK} Use socket to connect to github is stopped by OS")
         except gaierror:
             logger.info(f"{OK} Use socket to connect to github is stopped by OS")
+        except PermissionError:
+            logger.info(f"{OK} Use socket to connect to github is stopped by OS")
 
         try:
             with socket.socket(AF_INET, SOCK_STREAM) as sock:
