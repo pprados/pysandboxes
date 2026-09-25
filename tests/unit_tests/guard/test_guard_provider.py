@@ -43,7 +43,10 @@ def existing_config(tmp_path: Path) -> Path:
 
 
 @pytest.mark.parametrize("value", ["  FireJail  ", "BWRAP"])
-def test_os_sandbox_is_case_and_space_insensitive(value: str, existing_config: Path) -> None:
+def test_os_sandbox_is_case_and_space_insensitive(
+    value: str, existing_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("sys.platform", "linux")  # A Linux backend, parsed on any host
     result, errors = _parse(f"os-sandbox={value}", config_path=existing_config)
     assert not errors
     assert result[PROVIDER] == value.strip().lower()
@@ -110,8 +113,9 @@ def test_disabling_the_py_sandbox_also_disables_an_explicit_learn_rule(tmp_path:
     assert result[LEARN] is False
 
 
-def test_the_same_value_twice_is_not_a_conflict(tmp_path: Path) -> None:
+def test_the_same_value_twice_is_not_a_conflict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The rules are de-duplicated, so an include repeated twice stays valid."""
+    monkeypatch.setattr("sys.platform", "linux")  # A Linux backend, parsed on any host
     rule_file = tmp_path / CONFIG_NAME
     rule_file.write_text("")
     lines: ConfigLines = [ConfigLine("os-sandbox=firejail", rule_file, 1)] * 2

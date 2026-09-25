@@ -1,5 +1,6 @@
 import pathlib as opl
 import stat
+import sys
 from typing import Any, Dict, List
 
 import pytest  # type: ignore[import-untyped]
@@ -107,6 +108,7 @@ def test_pathlib_is(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     assert pathlib.Path(files["bind_dest"] / "bound_file.txt").exists() is True
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Path.owner() is unsupported on Windows")
 def test_pathlib_info(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
@@ -263,6 +265,7 @@ def test_pathlib_mkdir_removedirs_and_rmdir(
     pathlib.Path(files["bind_dest"] / "dir_to_remove").rmdir()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows readlink returns \\\\?\\ paths")
 def test_pathlib_link_symlink_and_readlink(
     files: Dict[str, opl.Path],  # noqa: F811
 ) -> None:

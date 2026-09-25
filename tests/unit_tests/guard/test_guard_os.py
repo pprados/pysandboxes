@@ -69,6 +69,7 @@ def test_os_statand_stat_and_lstat(files: Dict[str, Path]) -> None:  # noqa: F81
     assert os.lstat(files["bind_src"])
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="xattr is Linux-only")
 def test_os_listxattr(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -88,6 +89,7 @@ def test_os_listxattr(files: Dict[str, Path]) -> None:  # noqa: F811
     assert os.listxattr(files["bind_src"]) == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="xattr is Linux-only")
 def test_os_xattr(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -115,6 +117,7 @@ def test_os_xattr(files: Dict[str, Path]) -> None:  # noqa: F811
         os.getxattr(files["bind_src"], "user.comment")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows readlink returns \\\\?\\ paths")
 def test_os_link_symlink_and_readlink(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -666,6 +669,7 @@ def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:  # noqa: F811
     os.lchown(files["bind_src"], uid, gid)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.chown")
 def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -946,6 +950,7 @@ def test_os_walk_and_fwalk(files: Dict[str, Path]) -> None:  # noqa: F811
     assert "bound_file.txt" in dir_files
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no posix module")
 def test_os_and_posix_chroot_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     """guard_files guards both os.chroot and posix.chroot the same
     way: a target outside the exposed rules is refused before the

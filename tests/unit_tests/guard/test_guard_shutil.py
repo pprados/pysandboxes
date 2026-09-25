@@ -13,6 +13,7 @@ from .test_guard_io import (
 )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.chown")
 def test_shutil_chown(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),

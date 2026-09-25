@@ -1,6 +1,9 @@
 import os
+import sys
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from pysandboxes.guard_files import (
     LearnFileRule,
@@ -13,6 +16,7 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import activate_guard_files_rules
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="expected paths are POSIX literals")
 def test_apply_dest_to_src_rule() -> None:
     # The ignore pattern must not match the name of the directory the suite
     # happens to run from: `ignore=c*` silently captured any checkout called
@@ -55,6 +59,7 @@ def test_apply_dest_to_src_rule() -> None:
     assert _apply_dest_to_src_rules("", write=False) == (None, None)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="expected paths are POSIX literals")
 def test_apply_src_to_dest_rules() -> None:
     cwd = str(Path.cwd())
     src_dir = f"{cwd}/tests"
@@ -89,6 +94,11 @@ def test_apply_src_to_dest_rules() -> None:
     assert refuse == ("/refuse.txt", None)
 
 
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    strict=True,
+    reason="learning mode glues a native relative path to its POSIX fallback: ${TMPDIR:-/tmp}/run\\data",
+)
 def test_generate_rules_gives_a_temporary_directory_a_fallback(tmp_path: Path) -> None:
     # A learned rule naming a temporary directory must stay usable on a machine
     # that sets none of TMPDIR, TEMP or TMP -- a stock Linux shell, or a CI

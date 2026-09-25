@@ -1,4 +1,5 @@
 import re
+import sys
 from ipaddress import ip_address
 from pathlib import Path
 from socket import AddressFamily, SocketKind
@@ -104,6 +105,7 @@ def test_hostname_resolution_failure_raises_value_error(
     pass
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
 def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     mock_getaddrinfo: Mock,
 ) -> None:
