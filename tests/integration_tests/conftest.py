@@ -1,7 +1,12 @@
 import os
+import sys
 from typing import Any
 
 import pytest  # type: ignore[import-untyped]
+
+# Read by py-sandbox-test.profile to expose the interpreter's library tree, which is
+# not /usr/local/lib everywhere (a macOS runner has none).
+os.environ.setdefault("PYTHON_BASE_PREFIX", sys.base_prefix)
 
 # In CI every integration test must run: a skip there means a provider or a network the
 # runner lacks. The session still runs to the end, so the report shows what passes and
