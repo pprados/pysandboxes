@@ -2,16 +2,17 @@ name: Cross-OS Provider Tests
 
 # Every provider declares the platforms it runs on, in `_PROVIDER_SPECS`
 # (pysandboxes/_os_sandbox.py). A macOS or Windows tag is a claim, and this is
-# where it is checked: the registry tests, then the provider suites, whose rows
-# skip every provider not tagged for -- or not installed on -- the runner.
+# where it is checked: the registry tests, then the provider suites. A provider
+# not tagged for the runner gets no row there; one tagged but not installed skips,
+# and PYSANDBOXES_FAIL_ON_SKIP turns that skip into a failure.
 #
 # The whole unit suite is not run here: much of it is POSIX- or Linux-bound by
 # nature, and its failures would bury what this job is for. Modules testing a
 # Linux-only provider are left out of the collection by tests/conftest.py.
 #
-# Today only macOS exercises a provider (`subprocess`): on Windows every provider
-# row skips, `none` being left out of the suites, so that job only proves the
-# registry and the collection hold.
+# Only macOS exercises a provider (`subprocess`). Windows has none, `none` being
+# left out of the suites, so it runs the guards' own unit tests instead: they are
+# what "only the Python layer runs on Windows" rests on.
 #
 # On demand only, until both runners are green: `gh act` cannot run macOS or
 # Windows runners, and `make gh-tests` only replays the push workflows.
@@ -50,7 +51,14 @@ jobs:
     - name: Provider registry
       run: uv run pytest tests/unit_tests/test_provider_platforms.py
 
+    - name: Guard layer
+      if: runner.os == 'Windows'
+      run: uv run pytest tests/unit_tests/guard
+
     - name: Provider suites
+      if: runner.os != 'Windows'
+      env:
+        PYSANDBOXES_FAIL_ON_SKIP: "1"
       run: >-
         uv run pytest -rs -m 'not slow'
         tests/integration_tests/test_guards_with_providers.py
