@@ -132,3 +132,46 @@ jobs:
         name: dist
         path: dist/
         if-no-files-found: error
+
+  # Trusted Publishing (no stored token); the action generates the PEP 740 attestations.
+  # The testpypi environment keeps the maintainer as required reviewer until the approve job exists.
+  publish-testpypi:
+    needs: [verify, build]
+    if: ${{ !github.event.act }}
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/pysandboxes/${{ needs.verify.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+      with:
+        name: dist
+        path: dist/
+
+    - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        skip-existing: true
+
+  # Local bench only: devpi's dev index is volatile, so the same tag can be replayed.
+  publish-devpi:
+    needs: build
+    if: ${{ github.event.act }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+      with:
+        name: dist
+        path: dist/
+
+    - name: Install uv
+      run: curl -LsSf https://astral.sh/uv/0.11.16/install.sh | sh
+
+    # act sets GITHUB_ACTIONS: without --trusted-publishing never, uv would ask the runner for an OIDC token.
+    - name: Publish to devpi
+      env:
+        UV_PUBLISH_USERNAME: ${{ secrets.DEVPI_USER }}
+        UV_PUBLISH_PASSWORD: ${{ secrets.DEVPI_PASS }}
+      run: uv publish --trusted-publishing never --publish-url "http://localhost:3141/$UV_PUBLISH_USERNAME/dev/" dist/*
