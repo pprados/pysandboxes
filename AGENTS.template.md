@@ -112,8 +112,8 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 
 ## Development Environment
 
-- **Python**: 3.11 to 3.14 (`requires-python = ">=3.11,<3.15"`), each covered by the lint, test and sample
-  CI matrices; the integration, container and API-doc workflows run on 3.13 only
+- **Python**: 3.11 to 3.14 (`requires-python = ">=3.11,<3.15"`), each covered by the lint, test, sample and
+  integration CI matrices; the container and API-doc workflows run on 3.13 only
 - **Package Manager**: uv (exclusively — no poetry)
 - **Virtual Environment**: `.venv/` directory
 - **Entry Points**: `python-sb` CLI commands for sandboxed Python execution
