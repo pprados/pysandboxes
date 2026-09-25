@@ -14,7 +14,6 @@ Key components:
 
 import asyncio
 import errno
-import fcntl
 import gc
 import logging
 import os
@@ -150,6 +149,8 @@ async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
             if e.errno != errno.ENXIO:
                 raise
         else:
+            import fcntl  # Imported here: python_sb imports this module, and Windows has no fcntl
+
             fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) & ~os.O_NONBLOCK)
             return fd
         if process.returncode is not None:

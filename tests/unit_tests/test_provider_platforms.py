@@ -2,10 +2,12 @@
 # License: Apache V2
 """Each provider declares the platforms it runs on, and nothing starts it elsewhere.
 
-The tag lives in the registry so it can be read without importing the provider:
-on Windows, the subprocess provider's module does not even import (no ``fcntl``).
+The tag lives in the registry so it can be read without importing the provider: a
+provider's module may depend on what another platform lacks.
 """
 
+import importlib
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,8 +23,8 @@ from pysandboxes.sb_types import ConfigLine
 
 @pytest.fixture
 def subprocess_rules(tmp_path: Path) -> AllRules:
-    # Parsed as `none`, then renamed: parsing `subprocess` loads its provider class, whose
-    # module imports fcntl, and a patched sys.platform does not give a Windows runner one.
+    # Parsed as `none`, then renamed: parsing `subprocess` loads its provider class, and
+    # a patched sys.platform does not give a Windows runner what that module may need.
     profile = tmp_path / "start.profile"
     profile.write_text("py-sandbox=true\nos-sandbox=none\npython-import=*\n")
     return load_and_parse_config(config_path=profile)._replace(os_sandbox="subprocess")
@@ -64,6 +66,15 @@ def test_platform_refusal_does_not_import_the_provider() -> None:
     ):
         reason = _os_sandbox.provider_unavailable_reason("subprocess")
     assert reason == "os-sandbox 'subprocess' does not run on win32, and no provider does yet"
+
+
+def test_python_sb_imports_without_fcntl(monkeypatch: pytest.MonkeyPatch) -> None:
+    # python_sb imports the subprocess client, whose module imported fcntl at the top:
+    # on Windows the CLI died on its own import, whatever the provider asked for.
+    monkeypatch.setitem(sys.modules, "fcntl", None)  # None makes `import fcntl` fail
+    for name in ("pysandboxes.python_sb", "pysandboxes.remote.client_subprocess_sse_daemon"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    importlib.import_module("pysandboxes.python_sb")
 
 
 def test_supported_platform_asks_the_provider() -> None:
