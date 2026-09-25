@@ -21,10 +21,11 @@ from pysandboxes.sb_types import ConfigLine
 
 @pytest.fixture
 def subprocess_rules(tmp_path: Path) -> AllRules:
+    # Parsed as `none`, then renamed: parsing `subprocess` loads its provider class, whose
+    # module imports fcntl, and a patched sys.platform does not give a Windows runner one.
     profile = tmp_path / "start.profile"
-    profile.write_text("py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n")
-    with patch("sys.platform", "linux"):
-        return load_and_parse_config(config_path=profile)
+    profile.write_text("py-sandbox=true\nos-sandbox=none\npython-import=*\n")
+    return load_and_parse_config(config_path=profile)._replace(os_sandbox="subprocess")
 
 
 @pytest.fixture(autouse=True)
