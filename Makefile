@@ -656,7 +656,9 @@ release-beta-local:
 	git clone --quiet --no-hardlinks . "$(RELEASE_CLONE)"
 	git -C "$(RELEASE_CLONE)" checkout --quiet "$(TAG)"
 	printf '{"ref": "refs/tags/%s", "act": true}\n' "$(TAG)" >"$(RELEASE_CLONE).event.json"
-	email=$$(git config user.email); key=$$(git config user.signingkey); if [ -f "$$key" ]; then key=$$(cat "$$key"); fi; \
+	email=$$(git config user.email); key=$$(git config user.signingkey); key=$${key#key::}; \
+	case "$$key" in "~/"*) key="$$HOME/$${key#\~/}";; esac; if [ -f "$$key" ]; then key=$$(cat "$$key"); fi; \
+	case "$$key" in ssh-*|sk-*) ;; *) echo "user.signingkey is not an SSH public key."; exit 1;; esac; \
 	cd "$(RELEASE_CLONE)" && gh act push --env-file /dev/null --network host \
 		-W .github/workflows/release.yml -e "$(RELEASE_CLONE).event.json" \
 		--artifact-server-path "$(RELEASE_CLONE).artifacts" \
