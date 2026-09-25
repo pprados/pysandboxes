@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -34,7 +34,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y make build-essential
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.13"
 
@@ -72,9 +72,9 @@ jobs:
       run: make api_docs_linkcheck
       continue-on-error: true
 
-    - uses: actions/configure-pages@v5
+    - uses: actions/configure-pages@v6
 
-    - uses: actions/upload-pages-artifact@v3
+    - uses: actions/upload-pages-artifact@v5
       with:
         path: docs/api
 
@@ -87,4 +87,4 @@ jobs:
 
     steps:
     - id: deployment
-      uses: actions/deploy-pages@v4
+      uses: actions/deploy-pages@v5

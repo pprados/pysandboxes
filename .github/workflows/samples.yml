@@ -39,7 +39,7 @@ jobs:
       changed: ${{ steps.commits.outputs.changed }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         # `git rev-list --since` needs the history the default shallow clone omits.
@@ -81,7 +81,7 @@ jobs:
       UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -100,7 +100,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y make build-essential
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
