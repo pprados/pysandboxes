@@ -100,7 +100,9 @@ jobs:
   # A skipped job in `needs` skips this one too: push-checks is skipped under act, hence the explicit condition.
   build:
     needs: [verify, push-checks, validate]
-    if: ${{ !cancelled() && needs.validate.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.push-checks.result) }}
+    if: >-
+      ${{ !cancelled() && needs.validate.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.push-checks.result) }}
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.verify.outputs.version }}
