@@ -37,7 +37,7 @@ jobs:
       run: .github/scripts/verify-release-tag.sh "$GITHUB_REF" >>"$GITHUB_OUTPUT"
 
   # lint.yml and test.yml do not run on tags: wait for their runs on the develop push of the tagged commit.
-  # GitHub only runs them on the head of a push, so tag the head of origin/develop, or this job times out.
+  # GitHub only runs them on the head of a push: review origin/develop, then tag its head, or this job times out.
   push-checks:
     needs: verify
     if: ${{ !github.event.act }}
