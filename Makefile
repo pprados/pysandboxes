@@ -656,11 +656,11 @@ release-beta-local:
 	git clone --quiet --no-hardlinks . "$(RELEASE_CLONE)"
 	git -C "$(RELEASE_CLONE)" checkout --quiet "$(TAG)"
 	printf '{"ref": "refs/tags/%s", "act": true}\n' "$(TAG)" >"$(RELEASE_CLONE).event.json"
-	key=$$(git config user.signingkey); if [ -f "$$key" ]; then key=$$(cat "$$key"); fi; \
+	email=$$(git config user.email); key=$$(git config user.signingkey); if [ -f "$$key" ]; then key=$$(cat "$$key"); fi; \
 	cd "$(RELEASE_CLONE)" && gh act push --env-file /dev/null --network host \
 		-W .github/workflows/release.yml -e "$(RELEASE_CLONE).event.json" \
 		--artifact-server-path "$(RELEASE_CLONE).artifacts" \
-		--var RELEASE_ALLOWED_SIGNERS="$$(git config user.email) $$key" \
+		--var RELEASE_ALLOWED_SIGNERS="$$email $$key" \
 		-s DEVPI_USER=$(DEVPI_USER) -s DEVPI_PASS=$(DEVPI_PASS); \
 	status=$$?; rm -rf "$(RELEASE_CLONE)" "$(RELEASE_CLONE).event.json" "$(RELEASE_CLONE).artifacts"; exit $$status
 
