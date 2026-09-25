@@ -14,13 +14,13 @@ import sys
 from typing import Any, Callable, NamedTuple
 
 from .e import RuleApiPermissionError
-from .lifecycle import is_armed as _lc_is_armed
+from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
+from .lifecycle import is_armed as _lc_is_armed
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 from .tools import patch_factory as _f
-from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,14 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "pty.spawn",
         "pty.fork",
         "multiprocessing.Process.start",
+        "nt.system",
+        "nt.execv",
+        "nt.execve",
+        "nt.spawnv",
+        "nt.spawnve",
+        "os.startfile",
+        "nt.startfile",
+        "_winapi.CreateProcess",
     ),
     # os._exit/posix._exit are not listed: they terminate only the
     # calling process, run no code outside the patched interpreter and
@@ -117,6 +125,8 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "_signal.pthread_kill",
         "resource.setrlimit",
         "resource.prlimit",
+        "nt.kill",
+        "nt.abort",
     ),
     "privileges": (
         "os.setuid",
@@ -139,6 +149,7 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         # stronger than this category's binary allow/deny.
         "os.umask",
         "posix.umask",
+        "nt.umask",
     ),
     "threads": (
         "_thread.start_new_thread",
@@ -239,7 +250,66 @@ _FROM_313 = frozenset(
 # `_pickle` module at all. The twins are then absent rather than mistyped.
 _NO_C_PICKLE = frozenset({"_pickle.loads", "_pickle.load"})
 
-OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313 | _NO_C_PICKLE
+# Windows spells the os twin `nt`, not `posix`: there `os.system is nt.system`, so the
+# posix twins alone leave `import nt; nt.system(...)` unguarded. subprocess reaches
+# _winapi.CreateProcess there, as it reaches _posixsubprocess.fork_exec elsewhere.
+_WINDOWS_ONLY = frozenset(
+    {
+        "nt.system",
+        "nt.execv",
+        "nt.execve",
+        "nt.spawnv",
+        "nt.spawnve",
+        "os.startfile",
+        "nt.startfile",
+        "_winapi.CreateProcess",
+        "nt.kill",
+        "nt.abort",
+        "nt.umask",
+    }
+)
+
+# Absent from Windows: no posix module at all, and no fork, setuid, process group,
+# rlimit, pty or alarm-style timer.
+_POSIX_ONLY = frozenset(
+    {qualname for qualnames in SENSITIVE_API.values() for qualname in qualnames if qualname.startswith("posix.")}
+    | {
+        "os.fork",
+        "os.forkpty",
+        "os.killpg",
+        "os.nice",
+        "os.posix_spawn",
+        "os.posix_spawnp",
+        "os.setegid",
+        "os.seteuid",
+        "os.setgid",
+        "os.setgroups",
+        "os.setpgid",
+        "os.setpgrp",
+        "os.setpriority",
+        "os.setregid",
+        "os.setreuid",
+        "os.setsid",
+        "os.setuid",
+        "os.spawnlp",
+        "os.spawnlpe",
+        "os.spawnvp",
+        "os.spawnvpe",
+        "_posixsubprocess.fork_exec",
+        "pty.fork",
+        "pty.spawn",
+        "resource.prlimit",
+        "resource.setrlimit",
+        "signal.alarm",
+        "_signal.alarm",
+        "signal.pthread_kill",
+        "_signal.pthread_kill",
+        "signal.setitimer",
+        "_signal.setitimer",
+    }
+)
+
+OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY
 """Entries whose absence is legitimate on some version or platform.
 
 The integrity test fails on a missing entry unless it is listed here, so
@@ -252,12 +322,13 @@ def _not_applicable() -> frozenset[str]:
 
     ``guard_import._apply_patch`` calls ``getattr`` before invoking the
     factory, so a registered name absent from a module that *is*
-    imported would raise at startup. Only ``threading`` is concerned:
-    a module that cannot be imported at all is never patched.
+    imported would raise at startup: ``threading`` across versions, and
+    ``os`` across platforms. A module that cannot be imported at all is
+    never patched.
     """
-    if sys.version_info >= (3, 13):
-        return _PRE_313
-    return _FROM_313
+    version = _PRE_313 if sys.version_info >= (3, 13) else _FROM_313
+    platform = _POSIX_ONLY if sys.platform == "win32" else _WINDOWS_ONLY
+    return version | platform
 
 
 _CATEGORY_OF: dict[str, str] = {

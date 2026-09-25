@@ -8,6 +8,7 @@ object is reachable through a qualified name absent from the registry.
 """
 
 import importlib
+import os
 from typing import Any
 
 import pytest
@@ -16,12 +17,13 @@ from pysandboxes.guard_api import (
     OPTIONAL,
     SENSITIVE_API,
     all_qualnames,
+    patch_rules,
     split_qualname,
 )
 
 # Low-level modules whose objects the high-level modules re-export.
 ALIAS_SOURCES: tuple[tuple[str, str], ...] = (
-    ("os", "posix"),
+    ("os", "nt" if os.name == "nt" else "posix"),
     ("signal", "_signal"),
     ("threading", "_thread"),
 )
@@ -51,6 +53,25 @@ def test_registry_entry_exists(qualname: str) -> None:
             "either it is a typo, or add it to OPTIONAL with the "
             "version or platform that justifies it"
         )
+
+
+def test_the_windows_twins_are_registered() -> None:
+    # On Windows `os.system is nt.system`, and subprocess reaches _winapi.CreateProcess:
+    # with only the posix twins registered, `import nt; nt.system(...)` ran unguarded.
+    assert {"nt.system", "nt.spawnv", "nt.kill", "os.startfile", "_winapi.CreateProcess"} <= set(all_qualnames())
+
+
+@pytest.mark.parametrize(
+    ("platform", "patched", "left_out"),
+    [("win32", "nt.system", "os.fork"), ("linux", "os.fork", "nt.system")],
+)
+def test_each_platform_patches_only_its_own_entries(
+    monkeypatch: pytest.MonkeyPatch, platform: str, patched: str, left_out: str
+) -> None:
+    monkeypatch.setattr("sys.platform", platform)
+    table = patch_rules(learn=False)
+    assert patched in table
+    assert left_out not in table
 
 
 def test_optional_entries_are_registered() -> None:
