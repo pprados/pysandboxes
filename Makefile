@@ -4,8 +4,8 @@ SHELL=/bin/bash
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
-	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test release-beta-local init \
-	clean-sandbox-temps
+	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init \
+	clean-sandbox-temps release-beta-local
 
 UV_GROUP?=--group dev --group test --group lint
 
