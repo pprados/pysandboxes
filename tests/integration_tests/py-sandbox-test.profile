@@ -15,7 +15,8 @@ expose-ro=/etc
 # guard_files has no stdlib exemption. On the host `expose-ro=.` happens to cover
 # it (the venv sits in the project); in a container the interpreter is elsewhere,
 # so a deferred `import urllib.request` dies as ModuleNotFoundError. Spell it out.
-expose-ro=/usr/local/lib
+# PYTHON_BASE_PREFIX is set by the integration conftest; a container has /usr/local.
+expose-ro=${PYTHON_BASE_PREFIX:-/usr/local}/lib
 # expose-ro=/run,/run
 
 
