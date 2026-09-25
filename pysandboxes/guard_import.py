@@ -194,6 +194,8 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             paths = patch.code_path.split(".")
             for node in paths[:-1]:
                 cur_object = cur_object.__dict__[node]
+            if not hasattr(cur_object, paths[-1]):
+                continue  # Not on this platform (`os.listxattr` off Linux): nothing to guard
             original_value = getattr(cur_object, paths[-1])
             # FIXME # Skip if already patched
             # if hasattr(original_value, "__pysandbox__"):
