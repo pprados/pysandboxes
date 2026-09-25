@@ -173,7 +173,7 @@ For diagnosis, set **`qemu.show_boot_console=true`** and inspect bootstrap lines
 
 ## Using with Kubernetes
 
-Use the **provider image** `python-sb-qemu:latest` (built with `make build-image-qemu`). For minikube, build images in the cluster's Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-qemu` for this provider only).
+Use the **provider image** `python-sb-qemu:latest` (built with `make build-image-qemu`). For minikube, build the images on the host and load them into the cluster: `make minikube-build-images` (runs `make build-images`, then `minikube image load` for each image). For this provider only: `make build-image-qemu` then `minikube image load python-sb-qemu:latest`.
 
 **KVM vs TCG:** with the default **`qemu.use_kvm=true`**, the daemon adds **`-enable-kvm`** only when **`/dev/kvm`** exists and is readable; otherwise it omits that flag and QEMU runs in **TCG**. Use **`qemu.use_kvm=false`** only when you must never attempt KVM (e.g. policy), even if the device appears.
 

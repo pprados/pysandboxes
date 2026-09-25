@@ -156,7 +156,7 @@ podman \
 
 ## Using with Kubernetes
 
-Use the **provider image** `python-sb-unshare:latest` (built with `make build-image-unshare`). For minikube, build images in the cluster’s Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-unshare` for this provider only).
+Use the **provider image** `python-sb-unshare:latest` (built with `make build-image-unshare`). For minikube, build the images on the host and load them into the cluster: `make minikube-build-images` (runs `make build-images`, then `minikube image load` for each image). For this provider only: `make build-image-unshare` then `minikube image load python-sb-unshare:latest`.
 
 Example YAML configuration:
 
@@ -169,7 +169,7 @@ spec:
   containers:
     - name: pysandboxes-test
       image: python-sb-unshare:latest
-      imagePullPolicy: Never   # Image built locally (e.g. in minikube)
+      imagePullPolicy: Never   # Image loaded into minikube (make minikube-build-images)
       workingDir: /app
       securityContext:
         privileged: true      # Or add SYS_ADMIN + NET_ADMIN + seccompProfile: Unconfined
@@ -200,7 +200,7 @@ Run the tests from the host (pod stays alive; tests run via `kubectl exec`). Exa
 
 ```bash
 minikube mount "$(pwd):/mnt/pysandboxes" &
-eval $(minikube docker-env) && make build-images
+make minikube-build-images
 kubectl apply -f tests/containers_tests/kube-pysandboxes.yaml
 # Then run the container test suite: make container-tests (or pytest tests/containers_tests/)
 kubectl delete pod pysandboxes-test

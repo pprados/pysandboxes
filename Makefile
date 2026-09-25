@@ -489,7 +489,7 @@ build-image-bwrap: .make-build-image-bwrap
 # Build qemu image (FROM python-sb): python-sb-qemu:$(PYTHON_VERSION), python-sb-qemu:latest
 build-image-qemu: .make-build-image-qemu
 
-## Build all provider images (and base first); see dependency graph above (e.g. minikube: eval $(minikube docker-env) && make build-image-docker)
+## Build all provider images (and base first); see dependency graph above (for minikube: make minikube-build-images)
 build-images: Dockerfile .make-dist \
 	.make-build-image-base \
 	.make-build-image-landlock \
