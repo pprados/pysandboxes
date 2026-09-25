@@ -13,7 +13,7 @@ from pysandboxes._os_sandbox import provider_unavailable_reason
 from pysandboxes.remote.tools import get_default_interface
 
 # Hostnames from py-sandbox-test.profile that require resolution at config load time
-PROFILE_RESOLVE_HOSTS = ("www.google.com",)
+PROFILE_RESOLVE_HOSTS = ("github.com",)
 
 # Every OS sandbox backend a test can be parametrized over. `none` is excluded: it is the
 # no-op provider, so a guard test would assert nothing there.

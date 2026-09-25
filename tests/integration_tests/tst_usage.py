@@ -212,30 +212,30 @@ def _test_network() -> int:
     timeout = 3
 
     # 1. Learn and accept
-    # Learn a direct connection to google
+    # Learn a direct connection to github
     remote_ip = "?"
     try:
-        remote_ip = socket.gethostbyname("www.google.com")
-        socket.gethostbyname_ex("www.google.com")
-        socket.getaddrinfo("www.google.com", None, family=socket.AF_UNSPEC)
+        remote_ip = socket.gethostbyname("github.com")
+        socket.gethostbyname_ex("github.com")
+        socket.getaddrinfo("github.com", None, family=socket.AF_UNSPEC)
         for attempt in (1, 2):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 # The first connection out of a QEMU guest can take more than 3s; same budget as urlopen below.
                 sock.settimeout(10)
                 try:
-                    sock.connect((remote_ip, 80))
+                    sock.connect((remote_ip, 443))
                     break
                 except TimeoutError:
                     # An unanswered SYN is the internet, not a refusal: the guards raise at once.
                     if attempt == 2:
                         raise
-                    logger.warning(f"socket AF_INET SOCK_STREAM 80 to {remote_ip} timed out, retrying once")
-        logger.info(f"{OK} socket AF_INET SOCK_STREAM 80")
+                    logger.warning(f"socket AF_INET SOCK_STREAM 443 to {remote_ip} timed out, retrying once")
+        logger.info(f"{OK} socket AF_INET SOCK_STREAM 443")
     except SandBoxError:
-        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 to {remote_ip}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 443 to {remote_ip}")
         rc = 1
     except (TimeoutError, OSError) as e:
-        logger.error(f"{KO} socket AF_INET SOCK_STREAM 80 to {remote_ip} {e}")
+        logger.error(f"{KO} socket AF_INET SOCK_STREAM 443 to {remote_ip} {e}")
         rc = 1
 
     # learn tcp bind ipv4
@@ -271,17 +271,17 @@ def _test_network() -> int:
     import urllib.request
 
     try:
-        with urllib.request.urlopen("http://www.google.com/", timeout=10):
+        with urllib.request.urlopen("https://github.com/", timeout=10):
             pass
-        logger.info(f"{OK} get http://www.google.com")
+        logger.info(f"{OK} get https://github.com")
     except SandBoxError:
-        logger.error(f"{KO} get http://www.google.com")
+        logger.error(f"{KO} get https://github.com")
         rc = 1
     except TimeoutError as e:
-        logger.error(f"{KO} get http://www.google.com {e}")
+        logger.error(f"{KO} get https://github.com {e}")
         rc = 1
     except urllib.error.URLError as e:
-        logger.error(f"{KO} get http://www.google.com (network unreachable or refused) {e}")
+        logger.error(f"{KO} get https://github.com (network unreachable or refused) {e}")
         rc = 1
 
     # udp connection ipv4

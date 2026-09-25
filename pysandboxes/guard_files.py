@@ -12,9 +12,9 @@ directory scanning to enforce security rules defined in the configuration.
 
 import contextvars
 import fnmatch
+import importlib
 import io
 import logging
-import importlib
 import os
 import sys
 from collections import OrderedDict
@@ -37,12 +37,12 @@ from typing import (
 from .config import OPTIMIZE
 from .e import RuleFileNotFoundError, RulePermissionError
 from .guard_envs import LearnEnviron
+from .guard_wraps import guard_wraps
 from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines
 from .tools import follow_links_executable
 from .tools import patch_factory as _f
-from .guard_wraps import guard_wraps
 
 if io or os:
     pass
@@ -150,6 +150,17 @@ def _safe_realpath(path: str) -> str:
         return _os_path_realpath(path)
     finally:
         _canonicalizing.reset(token)
+
+
+# System CA stores: Debian/Ubuntu (/etc/ssl, whose certs link to /usr/share/ca-certificates),
+# Fedora/RHEL (/etc/pki, /usr/share/pki), Arch (/etc/ca-certificates).
+_CA_STORES = (
+    "/etc/ssl/",
+    "/etc/pki/",
+    "/etc/ca-certificates/",
+    "/usr/share/ca-certificates/",
+    "/usr/share/pki/",
+)
 
 
 def parse_rules(
@@ -277,6 +288,14 @@ def parse_rules(
                     write=False,
                     config=ConfigLine("<python>", Path(), 0),
                 )
+            )
+    # OpenSSL reads the CA store from C: the Python guards never see it, the OS
+    # providers do, and HTTPS then fails with "certificate verify failed". Where it
+    # lives depends on the distribution, and exposing a missing path is an error.
+    for store in _CA_STORES:
+        if Path(store).is_dir():
+            rules_expose.append(
+                FSExposeRule(path=store, write=False, config=ConfigLine("<ca-certificates>", Path(), 0))
             )
     rules_expose = sorted(rules_expose, key=lambda r: len(r.path), reverse=True)
     return tuple(rules_ignore + cast(list[FilesRule], rules_expose)), ignore_rules
