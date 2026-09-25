@@ -976,7 +976,7 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         flags: int,
-        mode: int = 0x777,
+        mode: int = 0o777,
         *,
         dir_fd: int | None = None,
     ) -> int:

@@ -393,6 +393,27 @@ def test_os_getcwdb(files: Dict[str, Path]) -> None:  # noqa: F811
     assert cwd.decode(sys.getfilesystemencoding()) == os.getcwd()
 
 
+def test_os_open_without_a_mode_uses_the_default_0o777(files: Dict[str, Path]) -> None:  # noqa: F811
+    # The wrapper defaulted to 0x777 (0o3567): setgid and sticky, and no write bit for
+    # the owner, so Windows made the file read-only and refused to remove it.
+    activate_guard_files_rules([ConfigLine(f"expose-rw={files['path']}", Path(), 0)])
+
+    import os
+
+    umask = os.umask(0)
+    os.umask(umask)
+    target = files["path"] / "default_mode.txt"
+    os.close(os.open(target, os.O_CREAT | os.O_WRONLY))
+    try:
+        if sys.platform == "win32":
+            assert os.stat(target).st_mode & 0o200, "created read-only"
+        else:
+            assert os.stat(target).st_mode & 0o7777 == 0o777 & ~umask
+    finally:
+        os.remove(target)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_os_open_readonly(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -420,6 +441,7 @@ def test_os_open_readonly(files: Dict[str, Path]) -> None:  # noqa: F811
         os.open(files["ignore"], os.O_RDONLY)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_os_open_writeonly(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -467,6 +489,7 @@ def test_os_open_writeonly_refused(files: Dict[str, Path]) -> None:  # noqa: F81
                 os.close(fd)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_os_open_readwrite(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
