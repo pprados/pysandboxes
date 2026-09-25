@@ -30,6 +30,10 @@ printf '%s\n' "$ALLOWED_SIGNERS" >"$signers"
 git -c gpg.ssh.allowedSignersFile="$signers" verify-tag "$tag"
 
 sha=$(git rev-parse "$tag^{commit}")
+if [[ $sha != "${GITHUB_SHA:-$sha}" ]]; then
+    echo "$tag ($sha) is not the commit being built (${GITHUB_SHA})" >&2
+    exit 1
+fi
 if ! git merge-base --is-ancestor "$sha" origin/develop; then
     echo "$tag ($sha) is not on develop" >&2
     exit 1

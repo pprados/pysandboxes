@@ -36,11 +36,11 @@ def _tag(repo: Path, name: str, key: Path | None) -> None:
         _git(repo, "-c", f"user.signingkey={key}", "tag", "-s", "-m", f"Release {name}", name)
 
 
-def _verify(repo: Path, ref: str, signers: str) -> subprocess.CompletedProcess[str]:
+def _verify(repo: Path, ref: str, signers: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["bash", str(SCRIPT), ref],
         cwd=repo,
-        env={**os.environ, "ALLOWED_SIGNERS": signers},
+        env={**os.environ, "ALLOWED_SIGNERS": signers, **(env or {})},
         capture_output=True,
         text=True,
     )
@@ -101,6 +101,16 @@ def test_other_tag_names_are_refused(repo: Path, key: Path, tag: str) -> None:
 
     assert result.returncode != 0
     assert "final release not enabled yet" in result.stderr
+
+
+def test_tag_not_the_commit_being_built_fails(repo: Path, key: Path) -> None:
+    _tag(repo, "v0.1.0b1", key)
+    other_sha = "a" * 40
+
+    result = _verify(repo, "refs/tags/v0.1.0b1", _signers(key), env={"GITHUB_SHA": other_sha})
+
+    assert result.returncode != 0
+    assert "not the commit being built" in result.stderr
 
 
 def test_tag_off_develop_fails(repo: Path, key: Path) -> None:
