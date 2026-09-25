@@ -77,7 +77,7 @@ podman \
 
 ## Using with Kubernetes
 
-Use the **provider image** `python-sb-bwrap:latest` (built with `make build-image-bwrap`). For minikube, build images in the cluster's Docker daemon: `eval $(minikube docker-env)` then `make build-images` (or `make build-image-bwrap` for this provider only).
+Use the **provider image** `python-sb-bwrap:latest` (built with `make build-image-bwrap`). For minikube, build the images on the host and load them into the cluster: `make minikube-build-images` (runs `make build-images`, then `minikube image load` for each image). For this provider only: `make build-image-bwrap` then `minikube image load python-sb-bwrap:latest`.
 
 Example Pod: same structure as for unshare (see [unshare.md](unshare.md#using-with-kubernetes)), with `image: python-sb-bwrap:latest` and the same volume mount for `/app`. Network and capabilities depend on whether you use socket rules (slirp + netns) or only shared network; adjust `securityContext` (e.g. `privileged: true` or capabilities `SYS_ADMIN`, `NET_ADMIN`) as required by your cluster.
 
