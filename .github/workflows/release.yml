@@ -156,9 +156,10 @@ jobs:
         skip-existing: true
 
   # Local bench only: devpi's dev index is volatile, so the same tag can be replayed.
+  # Explicit condition: push-checks, an ancestor through build, is skipped under act.
   publish-devpi:
     needs: build
-    if: ${{ github.event.act }}
+    if: ${{ !cancelled() && github.event.act && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
