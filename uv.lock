@@ -840,7 +840,7 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/01/1253e6698a07380cd31a736d248a3f2a50a7c88779a1813da27503cadc2a/contourpy-1.3.3.tar.gz", hash = "sha256:083e12155b210502d0bca491432bb04d56dc3432f95a979b429f2848c3dbe880", size = 13466174, upload-time = "2025-07-26T12:03:12.549Z" }
 wheels = [
@@ -933,7 +933,7 @@ resolution-markers = [
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/83/5a/a55177dd22553a277388e8a1b3220e92de91bacb28356cdc73caa240121d/contourpy-1.4.0.tar.gz", hash = "sha256:20156f5a1ac4f8ce02656e39a61e82164a3d359796dc8026f75b062783d500e1", size = 13323726, upload-time = "2026-09-11T19:05:05.808Z" }
 wheels = [
@@ -1160,7 +1160,7 @@ wheels = [
 
 [[package]]
 name = "devpi-server"
-version = "6.20.3"
+version = "6.19.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "argon2-cffi" },
@@ -1177,15 +1177,13 @@ dependencies = [
     { name = "py" },
     { name = "pyramid" },
     { name = "repoze-lru" },
-    { name = "requests" },
     { name = "ruamel-yaml" },
-    { name = "setuptools" },
     { name = "strictyaml" },
     { name = "waitress" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3b/7f/c1e727cc26a522d28c6e8693f2d05f84d35f251f0fcb945fe4bfb2b246b5/devpi_server-6.20.3.tar.gz", hash = "sha256:8307fe955288b85d591168add03a8a9fd377e730f5602d60b71a1abc116200d7", size = 310390, upload-time = "2026-06-30T18:49:37.223Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/e8/acfabdd02dfce78748fc60c949d6d987b8f7907c81e8533fc0badd87cd26/devpi_server-6.19.0.tar.gz", hash = "sha256:134df3c326f2a9f76d07d2299415b19caa26d8cbdb90faeba16bfabda7217096", size = 301716, upload-time = "2026-02-06T12:39:24.924Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/ee/1cf7c78e111a4717ce69efb8588c178ac4d7477c93a7dc20170f68e54504/devpi_server-6.20.3-py3-none-any.whl", hash = "sha256:4cdc372ce695ad45c7e5eb20f5eaf7e50fd5abe1991db3700f0e68b26e406e67", size = 323472, upload-time = "2026-06-30T18:49:35.275Z" },
+    { url = "https://files.pythonhosted.org/packages/be/6a/9d61e07bb843deef3baecdb9e30e552b9ec9378b69ff77d03fe2c06a8f70/devpi_server-6.19.0-py3-none-any.whl", hash = "sha256:8885d35be2c83784c84a157c97199843d808d6e0dea32e4dff37a4395b6a3ed8", size = 312591, upload-time = "2026-02-06T12:39:22.889Z" },
 ]
 
 [[package]]
@@ -2559,7 +2557,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "ptyprocess" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -3257,7 +3255,7 @@ wheels = [
 
 [[package]]
 name = "pyramid"
-version = "2.1"
+version = "2.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "hupper" },
@@ -3270,9 +3268,9 @@ dependencies = [
     { name = "zope-deprecation" },
     { name = "zope-interface" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7e/f3/05b49d8bbc6f4592f8820d9e306e20b0b4c266171f3455c737c49b4a7338/pyramid-2.1.tar.gz", hash = "sha256:5a24bc1b5f9e0f0d1c0b6ddd1111e84c15dac44a07e3c1d24e74dd9bb4fc22eb", size = 2628991, upload-time = "2026-03-11T01:23:59.642Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/c3/5d5736e692fc7ff052577f03136b5edfdf1e2e177eff2f4b91206acae11d/pyramid-2.0.2.tar.gz", hash = "sha256:372138a738e4216535cc76dcce6eddd5a1aaca95130f2354fb834264c06f18de", size = 2637533, upload-time = "2023-08-25T06:33:23.642Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1f/d4/03a8f9b60b8f2a9198c962d08fd9b657c1c0797cbbde3793babbad200845/pyramid-2.1-py3-none-any.whl", hash = "sha256:0aa62604221f6a8ac6e77a0faa02a5b7a294d6675f15581d8d416dffe2ac98e7", size = 243407, upload-time = "2026-03-11T01:23:56.896Z" },
+    { url = "https://files.pythonhosted.org/packages/db/41/a2114b8dd2187ae007e022a2baabdc7937cc78211cefc0c01fc5452193af/pyramid-2.0.2-py3-none-any.whl", hash = "sha256:2e6585ac55c147f0a51bc00dadf72075b3bdd9a871b332ff9e5e04117ccd76fa", size = 247277, upload-time = "2023-08-25T06:33:20.883Z" },
 ]
 
 [[package]]
@@ -3642,7 +3640,7 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
@@ -3724,7 +3722,7 @@ resolution-markers = [
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7e/74/66de6258867beb2ef08f35f9f2ac017a52cacd5081714d239ff1a442d458/scipy-1.18.1.tar.gz", hash = "sha256:52c4b7422442aba924d03ad4019852b08a92e64ea187b933135687bfe2747307", size = 30781235, upload-time = "2026-08-21T23:28:50.599Z" }
 wheels = [
@@ -3772,11 +3770,11 @@ wheels = [
 
 [[package]]
 name = "setuptools"
-version = "81.0.0"
+version = "83.0.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0d/1c/73e719955c59b8e424d015ab450f51c0af856ae46ea2da83eba51cc88de1/setuptools-81.0.0.tar.gz", hash = "sha256:487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a", size = 1198299, upload-time = "2026-02-06T21:10:39.601Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/26/f5d29e25ffdb535afef2d35cdb55b325298f96debd670da4c325e08d70f4/setuptools-83.0.0.tar.gz", hash = "sha256:025bccbbf0fa05b6192bc64ae1e7b16e001fd6d6d4d5de03c97b1c1ade523bef", size = 1154254, upload-time = "2026-07-04T15:31:22.699Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/e3/c164c88b2e5ce7b24d667b9bd83589cf4f3520d97cad01534cd3c4f55fdb/setuptools-81.0.0-py3-none-any.whl", hash = "sha256:fdd925d5c5d9f62e4b74b30d6dd7828ce236fd6ed998a08d81de62ce5a6310d6", size = 1062021, upload-time = "2026-02-06T21:10:37.175Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/40/e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3", size = 1008090, upload-time = "2026-07-04T15:31:20.885Z" },
 ]
 
 [[package]]
