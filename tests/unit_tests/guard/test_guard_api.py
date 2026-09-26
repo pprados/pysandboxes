@@ -618,3 +618,21 @@ def test_pickle_loads_and_its_twin_are_refused_end_to_end(tmp_path: Path) -> Non
 
     assert "pickle.loads GUARD" in result.stdout, result.stdout + result.stderr
     assert "_pickle.loads GUARD" in result.stdout, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the Windows twins exist on Windows only")
+@pytest.mark.parametrize(
+    ("qualname", "category"),
+    [("nt.system", "process-exec"), ("_winapi.CreateProcess", "process-exec"), ("os.startfile", "process-exec")],
+)
+def test_armed_denies_the_windows_twins(qualname: str, category: str) -> None:
+    """``os.system is nt.system`` on Windows: registered is not enough, the twin must be refused."""
+    activate_guard(())
+    wrapped = _guarded(qualname)
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            wrapped("cmd")
+        assert exc.value.category == category
+    finally:
+        _reset_guard()
