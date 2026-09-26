@@ -27,7 +27,8 @@ RANGETEST = 1
 def init_log_level(use_rich: bool = True) -> None:
     handlers: list[logging.Handler] = []
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
-    if use_rich:
+    # rich queries kernel32 through ctypes on Windows, which the API guard denies
+    if use_rich and sys.platform != "win32":
         try:
             from rich.console import Console
             from rich.logging import RichHandler
