@@ -164,6 +164,18 @@ async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
         await asyncio.sleep(POLLING_DELAY)
 
 
+def _child_env(envs: Envs) -> dict[str, str]:
+    """Return the sandbox child's environment: the allowed variables, plus SYSTEMROOT on Windows.
+
+    Winsock reads SYSTEMROOT to load its providers; without it the child dies on
+    ``import asyncio`` with WinError 10106 before running anything.
+    """
+    env = dict(envs)
+    if sys.platform == "win32" and "SYSTEMROOT" in os.environ:
+        env.setdefault("SYSTEMROOT", os.environ["SYSTEMROOT"])
+    return env
+
+
 @sandbox_loop
 async def launch_sandbox(
     cmd: list[str],
@@ -230,7 +242,7 @@ async def launch_sandbox(
             os.umask(0o006)  # Only user:RW
 
         logger.debug("Start process: " + " ".join((repr(c) if " " in c else c for c in cmd)))
-        subprocess_kwargs: dict[str, Any] = dict(env=dict(envs))
+        subprocess_kwargs: dict[str, Any] = dict(env=_child_env(envs))
         if sys.platform != "win32":  # Windows has no preexec_fn, and no umask to narrow
             subprocess_kwargs["preexec_fn"] = preexec_fn
         if pass_fds:
