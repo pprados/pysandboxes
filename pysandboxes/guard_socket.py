@@ -41,6 +41,7 @@ import logging
 import os
 import socket
 import sys
+import threading
 import time
 from enum import Enum, IntEnum
 from ipaddress import (
@@ -65,11 +66,11 @@ from typing import (
 
 from .e import RuleSocketConnectionRefusedError
 from .guard_files import _apply_dest_to_src_rules
+from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg, format_ruleref, pysandboxes_logger
 from .sb_types import ConfigLine, ConfigLines
-from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +234,23 @@ def _addr_infos_from_ips(ips: Iterable[IPv4Address | IPv6Address]) -> list[AddrI
     return infos
 
 
+def _typed_addr_infos(infos: Iterable[AddrInfoType]) -> list[AddrInfoType]:
+    """Split each untyped resolver entry into its stream and datagram forms.
+
+    Windows answers an untyped lookup with type 0 and proto 0, one entry per address,
+    where Linux gives one entry per type: pinned as is, the type filter of the patched
+    getaddrinfo dropped every Windows entry.
+    """
+    typed: list[AddrInfoType] = []
+    for family, kind, proto, canonname, sockaddr in infos:
+        if kind:
+            typed.append((family, kind, proto, canonname, sockaddr))
+        else:
+            typed.append((family, socket.SOCK_STREAM, socket.IPPROTO_TCP, canonname, sockaddr))
+            typed.append((family, socket.SOCK_DGRAM, socket.IPPROTO_UDP, canonname, sockaddr))
+    return typed
+
+
 _TRANSIENT_GAI_ERRNOS = frozenset(
     code
     for code in (
@@ -301,7 +319,7 @@ def _yield_networks_from_string(
         if input_str in host_dns:
             # Use pined dns?
             try:
-                pin_dns[input_str] = getaddrinfo(input_str, 0)
+                pin_dns[input_str] = _typed_addr_infos(getaddrinfo(input_str, 0))
             except socket.gaierror:
                 # The name is known here but not to the resolver: pin
                 # the addresses the hosts table already gave us.
@@ -312,7 +330,7 @@ def _yield_networks_from_string(
             all_adresss = set()
             addr_info = _resolve_with_retry(input_str)
             # Remove duplicate
-            pin_dns[input_str] = addr_info
+            pin_dns[input_str] = _typed_addr_infos(addr_info)
             for result in addr_info:
                 address: str = result[4][0]
                 all_adresss.add(ip_network(address))
@@ -971,6 +989,25 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
     return wrapper
 
 
+# Windows has no native socketpair: the stdlib emulates it with a loopback listener on an
+# ephemeral port. That is the interpreter's own plumbing -- asyncio builds its event loop
+# on it -- not a connection the code asked for, so no rule has to name it.
+_socketpair_scope = threading.local()
+
+
+def _wrap_socket_socketpair(func: Callable) -> Callable:
+    @guard_wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        previous = getattr(_socketpair_scope, "active", False)
+        _socketpair_scope.active = True
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _socketpair_scope.active = previous
+
+    return wrapper
+
+
 def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
     @guard_wraps(func)
     def wrapper(
@@ -1037,8 +1074,17 @@ def _resolve_wildcard_host(self: Any, address: tuple[str, int]) -> tuple[str, in
     return hostname, port
 
 
+def _is_loopback(host: str) -> bool:
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def _check_address(self: Any, address: tuple[str, int], conn_direction: Direction) -> None:
     if not _rules_loaded:
+        return
+    if getattr(_socketpair_scope, "active", False) and _is_loopback(address[0]):
         return
     _check_address_with_rules(_rules, Kind(self.type), _resolve_wildcard_host(self, address), conn_direction)
 
@@ -1305,6 +1351,8 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         "_socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "_socket.getaddrinfo": _wrap_socket_getaddrinfo,
     }
+    if sys.platform == "win32":
+        rules["socket.socketpair"] = _wrap_socket_socketpair
     return rules
 
 

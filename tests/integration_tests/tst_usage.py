@@ -197,7 +197,11 @@ def _test_envs() -> int:
             else:
                 logger.info(f"{OK} {name} is not visible")
 
-        unexpected = sorted(set(os.environ) - _EXPECTED_ENVS)
+        expected = _EXPECTED_ENVS
+        if sys.platform == "win32":
+            # Windows folds the names to upper case, and its child needs SYSTEMROOT to start Winsock
+            expected = frozenset(name.upper() for name in expected | {"SYSTEMROOT"})
+        unexpected = sorted(set(os.environ) - expected)
         if unexpected:
             logger.error(f"{KO} unexpected env names visible in the sandbox: {', '.join(unexpected)}")
             rc = 1
