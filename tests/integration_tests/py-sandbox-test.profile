@@ -10,7 +10,8 @@ python-import=*
 
 expose-rw=./tmp
 expose-ro=.
-expose-ro=/etc
+# PYSANDBOXES_SYSTEM_ETC is set by the integration conftest on Windows, which has no /etc.
+expose-ro=${PYSANDBOXES_SYSTEM_ETC:-/etc}
 # Imports resolved *inside* the sandbox read the interpreter's library tree, and
 # guard_files has no stdlib exemption. On the host `expose-ro=.` happens to cover
 # it (the venv sits in the project); in a container the interpreter is elsewhere,

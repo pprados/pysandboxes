@@ -69,7 +69,7 @@ def test_os_statand_stat_and_lstat(files: Dict[str, Path]) -> None:  # noqa: F81
     assert os.lstat(files["bind_src"])
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="xattr is Linux-only")
+@pytest.mark.skipif(sys.platform != "linux", reason="xattr is Linux-only")
 def test_os_listxattr(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -89,7 +89,7 @@ def test_os_listxattr(files: Dict[str, Path]) -> None:  # noqa: F811
     assert os.listxattr(files["bind_src"]) == []
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="xattr is Linux-only")
+@pytest.mark.skipif(sys.platform != "linux", reason="xattr is Linux-only")
 def test_os_xattr(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -604,6 +604,7 @@ def test_os_access_read_only(files: Dict[str, Path]) -> None:  # noqa: F811
 def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
         ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
         ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
@@ -611,12 +612,13 @@ def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import os
 
-    assert os.chflags(files["path"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
-    assert os.chflags(files["bound_file"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
-    assert os.lchflags(files["path"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
-    assert os.lchflags(files["bound_file"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
-    assert os.lchflags(files["bind_dest"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
-    assert os.lchflags(files["bind_src"], stat.SF_ARCHIVED)  # type: ignore[attr-defined]
+    # UF_NODUMP: a user flag the owner may set; the SF_* system flags need root.
+    os.chflags(files["path"], stat.UF_NODUMP)  # type: ignore[attr-defined]
+    os.chflags(files["bound_file"], stat.UF_NODUMP)  # type: ignore[attr-defined]
+    os.lchflags(files["path"], stat.UF_NODUMP)  # type: ignore[attr-defined]
+    os.lchflags(files["bound_file"], stat.UF_NODUMP)  # type: ignore[attr-defined]
+    os.lchflags(files["bind_dest"], stat.UF_NODUMP)  # type: ignore[attr-defined]
+    os.lchflags(files["bind_src"], stat.UF_NODUMP)  # type: ignore[attr-defined]
 
 
 def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:  # noqa: F811
