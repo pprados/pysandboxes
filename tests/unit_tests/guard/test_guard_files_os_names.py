@@ -183,3 +183,42 @@ def test_an_exposed_directory_under_a_linked_tmp_is_writable_by_both_names(linke
 
     assert _apply_dest_to_src_rules(f"{linked_tmp_dir}/file", write=True)[0] is not None
     assert _apply_dest_to_src_rules(f"{os.path.realpath(linked_tmp_dir)}/file", write=True)[0] is not None
+
+
+def _is_writable(path: str) -> bool:
+    return _apply_dest_to_src_rules(path, write=True)[0] is not None
+
+
+def _link_directory(link: Path, target: Path) -> None:
+    if sys.platform == "win32":
+        # A junction needs no privilege, where a directory symbolic link does.
+        subprocess.run(f'cmd /c mklink /J "{link}" "{target}"', capture_output=True, check=True)
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def test_a_directory_exposed_through_a_link_is_writable_by_both_names(tmp_path: Path) -> None:
+    """A rule may name a directory through a link -- /tmp on macOS, a junction on Windows."""
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    _link_directory(link, real)
+    activate_guard_files_rules([ConfigLine(f"expose-rw={link}", Path(), 0)])
+
+    assert _is_writable(str(link / "file"))
+    assert _is_writable(str(real / "file"))
+
+
+@_windows
+@pytest.mark.parametrize("rule_is_short", [True, False])
+def test_an_exposed_directory_is_writable_by_its_short_and_long_names(tmp_path: Path, rule_is_short: bool) -> None:
+    """%TEMP% often comes in 8.3 form (C:\\Users\\RUNNER~1\\...): the rule and the access may differ in form."""
+    long_dir = tmp_path / "long directory name"
+    long_dir.mkdir()
+    short = _short_name(long_dir)
+    if Path(short).name.lower() == long_dir.name:
+        pytest.skip("8.3 name generation is disabled on this volume")
+    rule, access = (short, str(long_dir)) if rule_is_short else (str(long_dir), short)
+    activate_guard_files_rules([ConfigLine(f"expose-rw={rule}", Path(), 0)])
+
+    assert _is_writable(f"{access}\\file")
