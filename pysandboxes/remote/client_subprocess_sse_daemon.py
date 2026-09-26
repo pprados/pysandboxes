@@ -198,9 +198,12 @@ async def launch_sandbox(
     Returns:
         The launched subprocess.
     """
-    use_fifo = config_writer is None
+    use_fifo = config_writer is None and sys.platform != "win32"
     if use_fifo:
         os.mkfifo(pipe_path)
+    elif config_writer is None:
+        # Windows has no FIFO: the child reads a plain file in the private temporary directory
+        pipe_path.write_bytes(pickle.dumps(process_config))
     else:
         assert config_writer is not None
         config_writer(process_config)
@@ -227,10 +230,9 @@ async def launch_sandbox(
             os.umask(0o006)  # Only user:RW
 
         logger.debug("Start process: " + " ".join((repr(c) if " " in c else c for c in cmd)))
-        subprocess_kwargs: dict[str, Any] = dict(
-            env=dict(envs),
-            preexec_fn=preexec_fn,
-        )
+        subprocess_kwargs: dict[str, Any] = dict(env=dict(envs))
+        if sys.platform != "win32":  # Windows has no preexec_fn, and no umask to narrow
+            subprocess_kwargs["preexec_fn"] = preexec_fn
         if pass_fds:
             subprocess_kwargs["pass_fds"] = pass_fds
         if stdout is not None:

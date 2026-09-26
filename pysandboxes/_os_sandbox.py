@@ -34,7 +34,6 @@ from .tools import Environ, SyncOrAsyncFunc, check_mixte_async_async, is_in_sand
 logger = logging.getLogger(__name__)
 
 _LINUX = frozenset({"linux"})
-_POSIX = frozenset({"linux", "darwin"})
 _ANY_OS = frozenset({"linux", "darwin", "win32"})
 
 # (subpackage.module_name, class_name, platforms) relative to package ``pysandboxes``.
@@ -44,9 +43,9 @@ _ANY_OS = frozenset({"linux", "darwin", "win32"})
 # A tag is a claim: the CI job of that OS must run the provider suites before a value is added.
 _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
     "_task": ("remote.task_daemon", "TaskDaemon", _ANY_OS),
-    "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon", _POSIX),
+    "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon", _ANY_OS),
     "none": ("remote.none_daemon", "NoneDaemon", _ANY_OS),
-    "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon", _POSIX),
+    "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon", _ANY_OS),
     "bwrap": ("remote.bwrap_sse_daemon", "BWrapSSEDaemon", _LINUX),
     "firejail": ("remote.firejail_sse_daemon", "FireJailSSEDaemon", _LINUX),
     "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon", _LINUX),
