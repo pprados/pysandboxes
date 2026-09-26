@@ -591,7 +591,7 @@ def _apply_dest_to_src_rules(
         elif isinstance(rule, IgnoreRule):
             assert rule.source is not None
             # The canonical path catches a link, a device prefix or a short name to the ignored file.
-            spellings = (str(original_path), fake_path, canon_path)
+            spellings: tuple[str, ...] = (str(original_path), fake_path, canon_path)
             if not os.path.isabs(rule.source):
                 spellings = tuple(Path(spelling).name for spelling in spellings)
             if any(_ignore_matches(spelling, rule.source) for spelling in spellings):
