@@ -309,7 +309,10 @@ _POSIX_ONLY = frozenset(
     }
 )
 
-OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY
+# Linux only: macOS has no prlimit.
+_LINUX_ONLY = frozenset({"resource.prlimit"})
+
+OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY
 """Entries whose absence is legitimate on some version or platform.
 
 The integrity test fails on a missing entry unless it is listed here, so
@@ -328,7 +331,8 @@ def _not_applicable() -> frozenset[str]:
     """
     version = _PRE_313 if sys.version_info >= (3, 13) else _FROM_313
     platform = _POSIX_ONLY if sys.platform == "win32" else _WINDOWS_ONLY
-    return version | platform
+    linux = frozenset() if sys.platform == "linux" else _LINUX_ONLY
+    return version | platform | linux
 
 
 _CATEGORY_OF: dict[str, str] = {

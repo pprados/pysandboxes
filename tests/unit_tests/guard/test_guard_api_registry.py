@@ -63,7 +63,12 @@ def test_the_windows_twins_are_registered() -> None:
 
 @pytest.mark.parametrize(
     ("platform", "patched", "left_out"),
-    [("win32", "nt.system", "os.fork"), ("linux", "os.fork", "nt.system")],
+    [
+        ("win32", "nt.system", "os.fork"),
+        ("linux", "os.fork", "nt.system"),
+        ("linux", "resource.setrlimit", "nt.system"),
+        ("darwin", "resource.setrlimit", "resource.prlimit"),  # prlimit is Linux-only
+    ],
 )
 def test_each_platform_patches_only_its_own_entries(
     monkeypatch: pytest.MonkeyPatch, platform: str, patched: str, left_out: str
