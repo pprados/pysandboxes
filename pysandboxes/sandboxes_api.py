@@ -170,7 +170,10 @@ class sandboxes:
 
     def _register_signals_handlers(self) -> None:
         with self._lock:
-            register_signal = (signal.SIGINT, signal.SIGTERM, signal.SIGQUIT)
+            # Windows has no SIGQUIT
+            register_signal = tuple(
+                getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGQUIT") if hasattr(signal, name)
+            )
 
             self._signals: dict[signal.Signals, Any | int | signal.Handlers | None] = {
                 s: signal.getsignal(s) for s in register_signal

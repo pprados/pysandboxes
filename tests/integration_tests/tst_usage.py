@@ -27,7 +27,8 @@ RANGETEST = 1
 def init_log_level(use_rich: bool = True) -> None:
     handlers: list[logging.Handler] = []
     format = "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
-    if use_rich:
+    # rich queries kernel32 through ctypes on Windows, which the API guard denies
+    if use_rich and sys.platform != "win32":
         try:
             from rich.console import Console
             from rich.logging import RichHandler
@@ -197,7 +198,11 @@ def _test_envs() -> int:
             else:
                 logger.info(f"{OK} {name} is not visible")
 
-        unexpected = sorted(set(os.environ) - _EXPECTED_ENVS)
+        expected = _EXPECTED_ENVS
+        if sys.platform == "win32":
+            # Windows folds the names to upper case, and its child needs SYSTEMROOT to start Winsock
+            expected = frozenset(name.upper() for name in expected | {"SYSTEMROOT"})
+        unexpected = sorted(set(os.environ) - expected)
         if unexpected:
             logger.error(f"{KO} unexpected env names visible in the sandbox: {', '.join(unexpected)}")
             rc = 1

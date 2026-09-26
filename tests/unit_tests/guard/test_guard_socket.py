@@ -1,4 +1,5 @@
 import re
+import sys
 from ipaddress import ip_address
 from pathlib import Path
 from socket import AddressFamily, SocketKind
@@ -104,6 +105,7 @@ def test_hostname_resolution_failure_raises_value_error(
     pass
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
 def test_hostname_resolves_to_no_valid_ips_raises_value_error(
     mock_getaddrinfo: Mock,
 ) -> None:
@@ -715,6 +717,28 @@ def test_getaddrinfo_accepts_a_bytes_host(pin_dns: None) -> None:
     assert [entry[4][0] for entry in wrapped(b"pinned.example", 80)] == [_PINNED_IP]
 
 
+def test_a_windows_resolver_answer_still_serves_a_typed_lookup(pin_dns: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows answers an untyped getaddrinfo with type 0 and proto 0, one entry per address.
+
+    Pinned as is, the type filter dropped every entry, so create_connection(), which asks
+    for SOCK_STREAM, got an empty list for a host a rule allows.
+    """
+    import pysandboxes.guard_socket as gs
+
+    windows_answer = [(AddressFamily.AF_INET, 0, 0, "", (_PINNED_IP, 0))]
+    monkeypatch.setattr(gs.socket, "getaddrinfo", lambda *a, **k: windows_answer)
+    gs.getaddrinfo.cache_clear()
+    errors: List[ErrorMsg] = []
+    _, _, pinned = parse_rules([ConfigLine("net=ALLOW|TCP|pinned.example|443|OUT", Path(), 1)], errors)
+    assert not errors
+    gs._pin_dns = pinned
+    wrapped = _over_resolver("socket.getaddrinfo", [])
+
+    stream = wrapped("pinned.example", 443, 0, SocketKind.SOCK_STREAM, 6)
+    assert [(entry[1], entry[2], entry[4]) for entry in stream] == [(SocketKind.SOCK_STREAM, 6, (_PINNED_IP, 443))]
+    assert [entry[1] for entry in wrapped("pinned.example", 53, 0, SocketKind.SOCK_DGRAM)] == [SocketKind.SOCK_DGRAM]
+
+
 def test_gethostbyname_fails_when_the_pin_holds_no_ipv4(pin_dns: None) -> None:
     """gethostbyname returns an IPv4: a v6-only pin must fail, not fall back.
 
@@ -805,7 +829,8 @@ def test_invalid_sendTo() -> None:
     """
     from pysandboxes.guard_socket import socket
 
-    with pytest.raises(BrokenPipeError):
+    # Linux reports EPIPE; macOS (ENOTCONN) and Windows (WSAENOTCONN) a plain OSError.
+    with pytest.raises(BrokenPipeError if sys.platform == "linux" else OSError):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:  # Invalid type
             sock.sendto(b"hello", ("127.0.0.1", 12345))
 
@@ -929,3 +954,42 @@ def test_arming_with_no_rules_still_denies_everything() -> None:
 
     with pytest.raises(RuleSocketConnectionRefusedError):
         _guarded("socket.socket.connect")(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 9999))
+
+
+def _windows_socketpair(monkeypatch: pytest.MonkeyPatch, func: Callable[..., Any]) -> Callable[..., Any]:
+    monkeypatch.setattr("sys.platform", "win32")
+    return patch_rules(learn=False)["socket.socketpair"](func)
+
+
+def test_the_windows_socketpair_emulation_passes_the_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows has no native socketpair: the stdlib emulates it over a loopback listener.
+
+    The guard refused that listener, so asyncio could not even build its event loop
+    in a sandbox, whatever the rules said.
+    """
+    import socket
+
+    _arm()
+    table = patch_rules(learn=False)
+    monkeypatch.setattr(socket.socket, "bind", table["socket.socket.bind"](socket.socket.bind))
+    monkeypatch.setattr(socket.socket, "connect", table["socket.socket.connect"](socket.socket.connect))
+
+    first, second = _windows_socketpair(monkeypatch, socket._fallback_socketpair)()  # type: ignore[attr-defined]
+    with first, second:
+        first.sendall(b"x")
+        assert second.recv(1) == b"x"
+
+
+def test_the_socketpair_exemption_is_loopback_only_and_ends_with_the_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    _arm()
+    bind = _guarded("socket.socket.bind")
+    sock = _FakeSocket(SocketKind.SOCK_STREAM)
+
+    def emulation() -> None:
+        bind(sock, ("127.0.0.1", 0))
+        bind(sock, ("10.0.0.1", 0))
+
+    with pytest.raises(RuleSocketConnectionRefusedError, match="10.0.0.1"):
+        _windows_socketpair(monkeypatch, emulation)()
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        bind(sock, ("127.0.0.1", 0))

@@ -70,7 +70,7 @@ make tests
 ### Security Model
 - **Default deny-all** with explicit whitelisting via `.py-sandboxes` configuration files
 - **Multi-layered protection**: Python API patching + an OS boundary enforced by the kernel
-- **An import right is not a call right**: `guard_api` holds a registry of 110 sensitive functions in eight
+- **An import right is not a call right**: `guard_api` holds a registry of 121 sensitive functions in eight
   categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`,
   `dynamic-code`, `deserialization`), denied by default and granted with `python-api=ALLOW:<category>|<function>`
 - **Code arriving as a string is a layer of its own**: a source reaching `eval()`, `exec()` or `compile()` is
@@ -158,6 +158,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - Configuration files use whitelist-only security model
 - Seven OS providers ship today; `none` and `subprocess` give no OS boundary at all, and the kernel-backed
   ones (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) are what holds against compiled code
-- Linux and WSL only: every OS backend is a Linux technology. On macOS and Windows, only the Python layer runs
+- Kernel boundaries are Linux and WSL only: every kernel-backed provider is a Linux technology. On macOS and
+  Windows, the Python layer runs with `none` or `subprocess`, as `.github/workflows/cross-os.yml` proves
 - Known weaknesses are documented, not hidden: see `wiki/weaknesses.md`, `wiki/audit-eval-security.md` and
   `wiki/audit-python-security.md`. `SECURITY.md` says which of them count as a vulnerability

@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes._os_sandbox import unsupported_platform_reason
+
 from ._env import (
     ALL_OS_SANDBOX,
     NO_DEFAULT_ROUTE_REASON,
@@ -127,6 +129,8 @@ def _partial_mode_params() -> list:
     """One row per provider; the two known holes are declared xfail instead of hidden."""
     rows = []
     for os_sandbox in all_os_sandbox:
+        if unsupported_platform_reason(backend_of(os_sandbox)):
+            continue  # No row for a backend of another platform, as in os_sandbox_params
         marks = []
         if os_sandbox in _PARTIAL_MODE_XFAIL:
             reason, run = _PARTIAL_MODE_XFAIL[os_sandbox]

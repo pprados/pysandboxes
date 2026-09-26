@@ -1,6 +1,9 @@
 import os
+import sys
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from pysandboxes.guard_files import (
     LearnFileRule,
@@ -13,6 +16,7 @@ from pysandboxes.sb_types import ConfigLine
 from .test_guard_io import activate_guard_files_rules
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="expected paths are POSIX literals")
 def test_apply_dest_to_src_rule() -> None:
     # The ignore pattern must not match the name of the directory the suite
     # happens to run from: `ignore=c*` silently captured any checkout called
@@ -55,6 +59,7 @@ def test_apply_dest_to_src_rule() -> None:
     assert _apply_dest_to_src_rules("", write=False) == (None, None)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="expected paths are POSIX literals")
 def test_apply_src_to_dest_rules() -> None:
     cwd = str(Path.cwd())
     src_dir = f"{cwd}/tests"

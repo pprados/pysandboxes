@@ -7,6 +7,13 @@ import pytest  # type: ignore[import-untyped]
 # Read by py-sandbox-test.profile to expose the interpreter's library tree, which is
 # not /usr/local/lib everywhere (a macOS runner has none).
 os.environ.setdefault("PYTHON_BASE_PREFIX", sys.base_prefix)
+# Read by the same profile for the system configuration directory: Windows has no /etc,
+# its hosts and services files live under System32\drivers\etc.
+if sys.platform == "win32":
+    os.environ.setdefault(
+        "PYSANDBOXES_SYSTEM_ETC",
+        os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32", "drivers", "etc"),
+    )
 
 # In CI every integration test must run: a skip there means a provider or a network the
 # runner lacks. The session still runs to the end, so the report shows what passes and

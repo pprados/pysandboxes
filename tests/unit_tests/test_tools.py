@@ -1,9 +1,10 @@
 import random
 import re
 import time
+from pathlib import Path
 from typing import List
 
-from pathlib import Path
+import pytest
 
 from pysandboxes.tools import (
     GlobPattern,
@@ -172,3 +173,23 @@ def test_follow_links_executable_keeps_every_link_of_the_chain(tmp_path: Path) -
     assert alias in found, f"the intermediate link is missing: {sorted(map(str, found))}"
     assert real in found
     assert tmp_path / "venv" in found
+
+
+def test_follow_links_executable_exposes_a_windows_venv_and_its_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A Windows venv keeps python.exe in Scripts\, as a copy rather than a symlink: the
+    # walk exposed that one file, and neither the venv's site-packages nor the base
+    # interpreter's Lib\ and DLLs\ -- so under the armed guard `import gzip` failed.
+    venv_scripts = tmp_path / "venv" / "Scripts"
+    venv_scripts.mkdir(parents=True)
+    (venv_scripts / "python.exe").write_text("")
+    base = tmp_path / "Python313"
+    base.mkdir()
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr("sys.base_prefix", str(base))
+
+    found = follow_links_executable(venv_scripts / "python.exe", set())
+
+    assert tmp_path / "venv" in found, sorted(map(str, found))
+    assert base in found, sorted(map(str, found))

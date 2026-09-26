@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes._os_sandbox import provider_unavailable_reason
+from pysandboxes._os_sandbox import provider_unavailable_reason, unsupported_platform_reason
 from pysandboxes.remote.tools import get_default_interface
 
 # Hostnames from py-sandbox-test.profile that require resolution at config load time
@@ -57,8 +57,16 @@ def os_sandbox_params() -> list:
     from minutes into twenty of them on a host that has KVM. The row still runs by
     default -- it covers what a container does, and a CI run should see it -- but
     ``-m 'not slow'`` buys it back for a quick local loop.
+
+    A backend not meant for this platform gets no row at all, rather than a skip: with
+    PYSANDBOXES_FAIL_ON_SKIP a skip fails the run, and a Linux backend on macOS is not a
+    gap in the environment but a structural absence.
     """
-    return [pytest.param(row, marks=[pytest.mark.slow] if row == "qemu-tcg" else []) for row in ALL_OS_SANDBOX]
+    return [
+        pytest.param(row, marks=[pytest.mark.slow] if row == "qemu-tcg" else [])
+        for row in ALL_OS_SANDBOX
+        if not unsupported_platform_reason(backend_of(row))
+    ]
 
 
 NO_DEFAULT_ROUTE_REASON = "The host exposes no default network interface"

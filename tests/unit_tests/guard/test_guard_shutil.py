@@ -13,6 +13,7 @@ from .test_guard_io import (
 )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.chown")
 def test_shutil_chown(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -261,7 +262,8 @@ def test_the_guarded_os_functions_keep_their_supports_sets(files: Dict[str, Path
 
     assert os.stat in os.supports_follow_symlinks
     assert os.stat in os.supports_fd
-    assert os.stat in os.supports_dir_fd
+    if sys.platform != "win32":  # Windows supports no dir_fd at all: the set is empty
+        assert os.stat in os.supports_dir_fd
 
     src = files["path"] / "tree_with_link"
     dst = files["path"] / "tree_with_link_copy"

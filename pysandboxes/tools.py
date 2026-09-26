@@ -363,11 +363,15 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
         if str(resolved).startswith("/usr/local/bin"):
             break
         for step in (current, resolved):
-            all_paths.add(step.parent.parent if step.parents[0].name == "bin" else step)
+            all_paths.add(step.parent.parent if step.parents[0].name in ("bin", "Scripts") else step)
         if not current.is_symlink():
             break
         target = Path(os.readlink(current))
         current = target if target.is_absolute() else current.parent / target
+    # A Windows venv's python.exe is a copy, not a link to the base interpreter: the
+    # walk never reaches the tree holding Lib\ and DLLs\, so it is named directly.
+    if sys.platform == "win32":
+        all_paths.add(Path(sys.base_prefix))
     return all_paths
 
 

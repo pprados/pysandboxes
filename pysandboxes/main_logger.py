@@ -7,6 +7,7 @@ error messages, file paths, and configuration references throughout the framewor
 """
 
 import logging
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -83,7 +84,8 @@ def format_error_list(errors: Sequence[str]) -> str:
 
 def config_log(log_level: int, format: str | None = None, use_rich: bool = False) -> None:
     handlers: list[logging.Handler] = []
-    if use_rich:
+    # rich queries kernel32 through ctypes on Windows, which the API guard denies
+    if use_rich and sys.platform != "win32":
         try:
             from rich.console import Console
             from rich.logging import RichHandler

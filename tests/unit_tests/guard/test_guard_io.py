@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -82,7 +83,9 @@ def reset_rules() -> Iterator[None]:
     _deactivate_all_rules()
 
 
-tmp_path = Path(tempfile.TemporaryDirectory(prefix="pysandboxes_test_").name)
+# Resolved: Windows hands out an 8.3 short name (C:\Users\RUNNER~1\...) that realpath
+# expands, so a test comparing a resolved path with this one would see two spellings.
+tmp_path = Path(os.path.realpath(tempfile.TemporaryDirectory(prefix="pysandboxes_test_").name))
 
 
 @pytest.fixture

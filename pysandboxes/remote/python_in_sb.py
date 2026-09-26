@@ -85,7 +85,8 @@ def _debug_log() -> None:
 
 
 def _register_signals_handlers() -> None:
-    register_signal = (signal.SIGINT, signal.SIGTERM, signal.SIGQUIT)
+    # Windows has no SIGQUIT
+    register_signal = tuple(getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGQUIT") if hasattr(signal, name))
 
     signals = {s: signal.getsignal(s) for s in register_signal}
     saved: set[bool] = set()

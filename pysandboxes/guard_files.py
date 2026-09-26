@@ -15,7 +15,9 @@ import fnmatch
 import importlib
 import io
 import logging
+import ntpath
 import os
+import re
 import sys
 from collections import OrderedDict
 from errno import ENOENT
@@ -143,6 +145,14 @@ _os_path_abspath = os.path.abspath
 _canonicalizing: contextvars.ContextVar[bool] = contextvars.ContextVar("_canonicalizing", default=False)
 
 
+def _dir_path(path: str) -> str:
+    """Return ``path`` ending with the native separator, the form directory rules are stored in.
+
+    A literal '/' would never prefix a Windows rule such as 'D:\\a\\'.
+    """
+    return path if path.endswith(("/", os.sep)) else path + os.sep
+
+
 def _safe_realpath(path: str) -> str:
     """Resolve symlinks in ``path`` without re-entering the file guard."""
     token = _canonicalizing.set(True)
@@ -239,7 +249,7 @@ def parse_rules(
                 )
                 continue
             is_write = rule.rule.startswith("expose-rw=")
-            path_str = str(Path(resolved)) + "/" if resolved != Path("/") else "/"
+            path_str = _dir_path(str(resolved))
             for expose_rule in rules_expose:
                 if expose_rule.path == path_str:
                     if expose_rule.write != is_write:
@@ -279,7 +289,7 @@ def parse_rules(
         # ... must be accepted by a rule" long before the import guard has its say.
         for rp in dict.fromkeys((Path(p), Path(p).resolve())):
             if rp.is_dir():
-                p_str = str(rp) + "/" if rp != Path("/") else "/"
+                p_str = _dir_path(str(rp))
             else:
                 p_str = str(rp)
             rules_expose.append(
@@ -311,7 +321,7 @@ def _check_is_in_rules(path: Path) -> bool:
         True if path is covered by rules, False otherwise.
     """
     global _rules
-    spath = str(path) + "/"
+    spath = str(path) + os.sep
     for rule in _rules:
         if isinstance(rule, FSExposeRule):
             if spath == rule.path:
@@ -432,7 +442,8 @@ def generate_rules(
                 for key, val in _special_env.items():
                     if path.is_relative_to(val):
                         if not _check_is_in_rules(path):
-                            x = "/" + str(path.relative_to(val))
+                            # POSIX separators: the fallback and ~ are POSIX, and a learned profile travels
+                            x = "/" + path.relative_to(val).as_posix()
                             if x == "/.":
                                 x = ""
                             if key == "PWD":
@@ -460,13 +471,32 @@ def generate_rules(
     return sorted(list(result))
 
 
+def _without_ntfs_streams(path: str) -> str:
+    """Drop the ``:stream`` suffix NTFS accepts on any component: ``d::$INDEX_ALLOCATION\\f`` opens ``d\\f``."""
+    drive, rest = ntpath.splitdrive(path)
+    return drive + "".join(part.split(":", 1)[0] for part in re.split(r"([\\/])", rest))
+
+
+def _ignore_matches(name: str, pattern: str) -> bool:
+    """Match an ``ignore=`` pattern against every spelling the file system resolves to the same file.
+
+    fnmatch already folds case on Windows, not on macOS, whose APFS ignores it by default:
+    on a case-sensitive volume this denies more, never less.
+    """
+    if sys.platform == "win32":
+        name = _without_ntfs_streams(name)
+    elif sys.platform == "darwin":
+        name, pattern = name.casefold(), pattern.casefold()
+    return fnmatch.fnmatch(name, pattern)
+
+
 def _apply_ignore_rule(
     path: str | os.PathLike[str] | os.PathLike[bytes],
 ) -> tuple[str | None, FilesRule | None]:
     for rule in _rules:
         if isinstance(rule, IgnoreRule):
             assert rule.source is not None
-            if fnmatch.fnmatch(Path(str(path)).name, rule.source):
+            if _ignore_matches(Path(str(path)).name, rule.source):
                 return None, rule
     return str(path), None
 
@@ -499,7 +529,7 @@ def _apply_src_to_dest_rules(
             if real_path.startswith(rp) or real_path == rp[:-1]:
                 return real_path, None
         elif isinstance(rule, IgnoreRule):
-            if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(real_path, rule.source):
+            if _ignore_matches(original_path, rule.source) or _ignore_matches(real_path, rule.source):
                 return None, rule
         else:
             assert "Invalid rules"
@@ -529,16 +559,17 @@ def _apply_dest_to_src_rules(
         # by the outer call that started the canonicalization.
         return _os_path_abspath(str(path)), None
     fake_path: str = _os_path_abspath(str(path))
-    if str(path).endswith("/"):
-        fake_path = fake_path + "/"
+    is_dir_form = str(path).endswith(("/", os.sep))
+    if is_dir_form:
+        fake_path = fake_path + os.sep
     # The decision is taken on the canonical path, so that a symlink cannot
     # authorize an access outside the exposed directories (the rules are
     # stored realpath-resolved, see parse_rules). The path *returned* stays
     # unresolved: it is the one handed to the real syscall, and resolving it
     # would change link semantics (os.path.islink, os.readlink, ...).
     canon_path: str = _safe_realpath(str(path))
-    if str(path).endswith("/"):
-        canon_path = canon_path + "/"
+    if is_dir_form:
+        canon_path = canon_path + os.sep
     original_path = path
 
     for rule in _rules:
@@ -559,14 +590,12 @@ def _apply_dest_to_src_rules(
                 return fake_path, None
         elif isinstance(rule, IgnoreRule):
             assert rule.source is not None
-            if rule.source[0] == "/":
-                if fnmatch.fnmatch(str(original_path), rule.source) or fnmatch.fnmatch(fake_path, rule.source):
-                    return None, rule
-            else:
-                if fnmatch.fnmatch(Path(str(original_path)).name, rule.source) or fnmatch.fnmatch(
-                    Path(fake_path).name, rule.source
-                ):
-                    return None, rule
+            # The canonical path catches a link, a device prefix or a short name to the ignored file.
+            spellings = (str(original_path), fake_path, canon_path)
+            if not os.path.isabs(rule.source):
+                spellings = tuple(Path(spelling).name for spelling in spellings)
+            if any(_ignore_matches(spelling, rule.source) for spelling in spellings):
+                return None, rule
         else:
             assert False, f"Invalid guard_files rules {type(rule)=}"  # noqa: B011
     return None, None
@@ -875,9 +904,7 @@ def _wrap_os_chdir(func: Callable[..., Any], *, write: bool) -> Callable[..., An
 
         if isinstance(path, int):
             return func(path)
-        new_dir = os.fspath(path)
-        if not new_dir.endswith("/"):
-            new_dir = new_dir + "/"
+        new_dir = _dir_path(os.fspath(path))
         remapped, rule = _apply_dest_to_src_rules(new_dir, write=write)
         if rule:
             _raise_ignore(path, rule)
@@ -924,7 +951,7 @@ def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
                         _ = _check_alias.set(True)
                     remapped_filter, rule = _apply_src_to_dest_rules(str(name), accept_src=False, accept_dest=True)
                     if remapped_filter:
-                        if not str(self).startswith("/"):
+                        if not os.path.isabs(str(self)):
                             remapped_filter = remapped_filter[len(abs_remapper) + 1 :]
                         if remapped_filter == "":
                             remapped_filter = "."
@@ -969,7 +996,7 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
     def wrapper(
         path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int,
         flags: int,
-        mode: int = 0x777,
+        mode: int = 0o777,
         *,
         dir_fd: int | None = None,
     ) -> int:
@@ -1061,9 +1088,7 @@ def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
     def wrapper() -> str:
         # Detect call from posixpath
         dir: str = func()
-        new_dir = os.fsdecode(os.fspath(dir))
-        if not new_dir.endswith("/"):
-            new_dir = new_dir + "/"
+        new_dir = _dir_path(os.fsdecode(os.fspath(dir)))
 
         remapped, rule = _apply_src_to_dest_rules(new_dir, accept_src=True)
         if remapped is None:
@@ -1087,9 +1112,7 @@ def _wrap_os_getcwdb(func: Callable[..., Any]) -> Callable[..., Any]:
     def wrapper() -> bytes:
         # Detect call from posixpath
         dir: bytes = func()
-        new_dir: str = os.fspath(dir.decode())
-        if not new_dir.endswith("/"):
-            new_dir = new_dir + "/"
+        new_dir: str = _dir_path(os.fspath(dir.decode()))
 
         remapped, rule = _apply_src_to_dest_rules(new_dir, accept_dest=True)
         if remapped is None:
@@ -1750,4 +1773,5 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_files() -> None:
         global _rules
-        _rules = (FSExposeRule(path="/", write=True, config=ConfigLine("pytest", Path(), 0)),)
+        # "" prefixes every path, on every drive; "/" covers POSIX only.
+        _rules = (FSExposeRule(path="", write=True, config=ConfigLine("pytest", Path(), 0)),)

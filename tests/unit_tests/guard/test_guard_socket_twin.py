@@ -20,7 +20,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest  # type: ignore[import-untyped]
+
+from pysandboxes._os_sandbox import unsupported_platform_reason
 from pysandboxes.guard_socket import patch_rules
+
+# The end-to-end probes run under os-sandbox=subprocess, the provider that keeps the
+# Python guards armed; `none` disarms them, so it cannot stand in where subprocess is missing.
+_needs_subprocess = pytest.mark.skipif(
+    unsupported_platform_reason("subprocess") is not None,
+    reason=unsupported_platform_reason("subprocess") or "",
+)
 
 
 def test_the_c_class_name_hands_back_a_guarded_subclass() -> None:
@@ -56,6 +66,7 @@ def test_the_subclass_keeps_the_one_call_site_socket_py_uses() -> None:
         assert isinstance(probe, socket.socket)
 
 
+@_needs_subprocess
 def test_connect_through_the_c_class_is_refused(tmp_path: Path) -> None:
     """The point of the change, end to end under python-sb.
 
@@ -121,6 +132,7 @@ def test_every_guarded_resolution_call_has_its_c_twin() -> None:
         assert rules[f"_socket.{name}"] is rules[key]
 
 
+@_needs_subprocess
 def test_resolution_through_the_c_module_behaves_like_the_guarded_name(tmp_path: Path) -> None:
     """End to end: the C name must not be a softer path than the socket one.
 

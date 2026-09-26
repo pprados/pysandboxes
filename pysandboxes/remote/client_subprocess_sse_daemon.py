@@ -14,7 +14,6 @@ Key components:
 
 import asyncio
 import errno
-import fcntl
 import gc
 import logging
 import os
@@ -150,6 +149,8 @@ async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
             if e.errno != errno.ENXIO:
                 raise
         else:
+            import fcntl  # Imported here: python_sb imports this module, and Windows has no fcntl
+
             fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) & ~os.O_NONBLOCK)
             return fd
         if process.returncode is not None:
@@ -161,6 +162,18 @@ async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
                 f"The sandbox process did not read its configuration within {TIMEOUT_FOR_START_DAEMON}s."
             )
         await asyncio.sleep(POLLING_DELAY)
+
+
+def _child_env(envs: Envs) -> dict[str, str]:
+    """Return the sandbox child's environment: the allowed variables, plus SYSTEMROOT on Windows.
+
+    Winsock reads SYSTEMROOT to load its providers; without it the child dies on
+    ``import asyncio`` with WinError 10106 before running anything.
+    """
+    env = dict(envs)
+    if sys.platform == "win32" and "SYSTEMROOT" in os.environ:
+        env.setdefault("SYSTEMROOT", os.environ["SYSTEMROOT"])
+    return env
 
 
 @sandbox_loop
@@ -197,9 +210,12 @@ async def launch_sandbox(
     Returns:
         The launched subprocess.
     """
-    use_fifo = config_writer is None
+    use_fifo = config_writer is None and sys.platform != "win32"
     if use_fifo:
         os.mkfifo(pipe_path)
+    elif config_writer is None:
+        # Windows has no FIFO: the child reads a plain file in the private temporary directory
+        pipe_path.write_bytes(pickle.dumps(process_config))
     else:
         assert config_writer is not None
         config_writer(process_config)
@@ -226,10 +242,9 @@ async def launch_sandbox(
             os.umask(0o006)  # Only user:RW
 
         logger.debug("Start process: " + " ".join((repr(c) if " " in c else c for c in cmd)))
-        subprocess_kwargs: dict[str, Any] = dict(
-            env=dict(envs),
-            preexec_fn=preexec_fn,
-        )
+        subprocess_kwargs: dict[str, Any] = dict(env=_child_env(envs))
+        if sys.platform != "win32":  # Windows has no preexec_fn, and no umask to narrow
+            subprocess_kwargs["preexec_fn"] = preexec_fn
         if pass_fds:
             subprocess_kwargs["pass_fds"] = pass_fds
         if stdout is not None:
