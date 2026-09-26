@@ -15,7 +15,9 @@ import fnmatch
 import importlib
 import io
 import logging
+import ntpath
 import os
+import re
 import sys
 from collections import OrderedDict
 from errno import ENOENT
@@ -469,13 +471,32 @@ def generate_rules(
     return sorted(list(result))
 
 
+def _without_ntfs_streams(path: str) -> str:
+    """Drop the ``:stream`` suffix NTFS accepts on any component: ``d::$INDEX_ALLOCATION\\f`` opens ``d\\f``."""
+    drive, rest = ntpath.splitdrive(path)
+    return drive + "".join(part.split(":", 1)[0] for part in re.split(r"([\\/])", rest))
+
+
+def _ignore_matches(name: str, pattern: str) -> bool:
+    """Match an ``ignore=`` pattern against every spelling the file system resolves to the same file.
+
+    fnmatch already folds case on Windows, not on macOS, whose APFS ignores it by default:
+    on a case-sensitive volume this denies more, never less.
+    """
+    if sys.platform == "win32":
+        name = _without_ntfs_streams(name)
+    elif sys.platform == "darwin":
+        name, pattern = name.casefold(), pattern.casefold()
+    return fnmatch.fnmatch(name, pattern)
+
+
 def _apply_ignore_rule(
     path: str | os.PathLike[str] | os.PathLike[bytes],
 ) -> tuple[str | None, FilesRule | None]:
     for rule in _rules:
         if isinstance(rule, IgnoreRule):
             assert rule.source is not None
-            if fnmatch.fnmatch(Path(str(path)).name, rule.source):
+            if _ignore_matches(Path(str(path)).name, rule.source):
                 return None, rule
     return str(path), None
 
@@ -508,7 +529,7 @@ def _apply_src_to_dest_rules(
             if real_path.startswith(rp) or real_path == rp[:-1]:
                 return real_path, None
         elif isinstance(rule, IgnoreRule):
-            if fnmatch.fnmatch(original_path, rule.source) or fnmatch.fnmatch(real_path, rule.source):
+            if _ignore_matches(original_path, rule.source) or _ignore_matches(real_path, rule.source):
                 return None, rule
         else:
             assert "Invalid rules"
@@ -569,14 +590,12 @@ def _apply_dest_to_src_rules(
                 return fake_path, None
         elif isinstance(rule, IgnoreRule):
             assert rule.source is not None
-            if os.path.isabs(rule.source):
-                if fnmatch.fnmatch(str(original_path), rule.source) or fnmatch.fnmatch(fake_path, rule.source):
-                    return None, rule
-            else:
-                if fnmatch.fnmatch(Path(str(original_path)).name, rule.source) or fnmatch.fnmatch(
-                    Path(fake_path).name, rule.source
-                ):
-                    return None, rule
+            # The canonical path catches a link, a device prefix or a short name to the ignored file.
+            spellings = (str(original_path), fake_path, canon_path)
+            if not os.path.isabs(rule.source):
+                spellings = tuple(Path(spelling).name for spelling in spellings)
+            if any(_ignore_matches(spelling, rule.source) for spelling in spellings):
+                return None, rule
         else:
             assert False, f"Invalid guard_files rules {type(rule)=}"  # noqa: B011
     return None, None
