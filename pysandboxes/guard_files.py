@@ -440,7 +440,8 @@ def generate_rules(
                 for key, val in _special_env.items():
                     if path.is_relative_to(val):
                         if not _check_is_in_rules(path):
-                            x = "/" + str(path.relative_to(val))
+                            # POSIX separators: the fallback and ~ are POSIX, and a learned profile travels
+                            x = "/" + path.relative_to(val).as_posix()
                             if x == "/.":
                                 x = ""
                             if key == "PWD":

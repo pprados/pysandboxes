@@ -94,11 +94,6 @@ def test_apply_src_to_dest_rules() -> None:
     assert refuse == ("/refuse.txt", None)
 
 
-@pytest.mark.xfail(
-    sys.platform == "win32",
-    strict=True,
-    reason="learning mode glues a native relative path to its POSIX fallback: ${TMPDIR:-/tmp}/run\\data",
-)
 def test_generate_rules_gives_a_temporary_directory_a_fallback(tmp_path: Path) -> None:
     # A learned rule naming a temporary directory must stay usable on a machine
     # that sets none of TMPDIR, TEMP or TMP -- a stock Linux shell, or a CI
