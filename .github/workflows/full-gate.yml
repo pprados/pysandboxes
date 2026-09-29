@@ -1,0 +1,67 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+#
+# The full test gate: the integration suite (3.11-3.14), the samples (3.11-3.14) and the container suites.
+# Nightly on develop, TCG included; called by release.yml, TCG left out, for a tag whose commit no nightly proved.
+# .github/scripts/find-nightly-gate.sh reuses a nightly by reading the names of these jobs: keep the ids
+# integration, samples and containers.
+name: Full Gate
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      exclude-tcg:
+        description: Leave the qemu-tcg rows out and require /dev/kvm
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      exclude-tcg:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # A cheap guard job: a night without a commit on develop re-runs nothing. A call or a dispatch always runs.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commits.outputs.changed }}
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      with:
+        fetch-depth: 0
+
+    # Under schedule, the checkout is github.sha, the head of develop: the commit the suites test.
+    - name: Look for commits from the last day
+      id: commits
+      run: |
+        count=$(git rev-list --count --since='24 hours ago' HEAD)
+        echo "$count commit(s) in the last 24 hours"
+        if [ "$count" -gt 0 ]; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+  # Under schedule, inputs.exclude-tcg is null, and null == true is false: the nightly keeps TCG.
+  integration:
+    needs: changes
+    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    uses: ./.github/workflows/integration.yml
+    with:
+      exclude-tcg: ${{ inputs.exclude-tcg == true }}
+
+  samples:
+    needs: changes
+    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    uses: ./.github/workflows/samples.yml
+
+  containers:
+    needs: changes
+    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    uses: ./.github/workflows/containers.yml
