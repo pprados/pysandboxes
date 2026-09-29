@@ -4,14 +4,39 @@
 
 This package provides sandbox environments for executing untrusted Python code safely.
 It uses a multi-layered defense-in-depth security architecture combining Python API
-patching with OS-level containers.
+patching with an OS boundary enforced by the kernel: one provider among `none`,
+`subprocess`, `landlock`, `bwrap`, `firejail`, `unshare` and `qemu`, selected by the
+`os-sandbox` directive. Docker and Podman are not providers of their own: a container
+runs the `unshare` provider.
 
 The main API consists of:
-- @sandbox decorator for function-level sandboxing
-- sandboxes() context manager for process-level sandboxing
-- run() function for running coroutines in sandboxes
-- is_in_sandbox() to tell the sandboxed process from the calling one
-- Learning mode for automatic security rule generation
+- `sandbox`, the decorator that runs a function in the sandbox
+- `sandboxes`, the context manager, synchronous or asynchronous, that starts and stops it
+- `run`, the `asyncio.run()` counterpart that starts the sandbox around a coroutine
+- `is_in_sandbox`, to tell the sandboxed process from the calling one
+- `guarded_eval`, to evaluate a source string under the `eval-*` rules
+- the learning mode, started with `learn=".py-sandboxes"`, which writes the rules the
+  application needs
+
+Every exception of the framework derives from `SandBoxError`, and each denial also from the
+built-in exception the same failure would raise without a sandbox:
+- `RuleFileNotFoundError`: a path not exposed to the sandbox, or hidden from it
+- `RulePermissionError`: a write to a path the sandbox may only read
+- `RuleSocketConnectionRefusedError`: a network connection not allowed
+- `RuleModuleNotFoundError`: an import not allowed
+- `RuleApiPermissionError`: a sensitive API call denied by the API guard
+- `RuleAttributeError`: a write to an attribute the framework protects on its own modules
+- `EvalSyntaxRejected`, `RuleEvalPermissionError`: a dynamically evaluated source outside
+  the `eval-*` rules, or refused by a runtime guard
+- `ConfigSyntaxError`: a malformed configuration file
+- `SandBoxProtocolError`: a failed dialogue with the sandbox process, not the code it ran
+- `RestrictedUnpicklingError`: a result or exception from the sandbox that the transport
+  refuses to deserialize
+
+`EvalInterrupted`, raised inside evaluated code when a budget or the timeout runs out,
+derives from `BaseException` instead, so that the evaluated code cannot catch it:
+`except SandBoxError:` does not catch a timeout either.
+`sandbox_denials` returns the denials that caused an exception.
 
 Example:
     Basic function sandboxing:
@@ -42,9 +67,10 @@ if TYPE_CHECKING:
         ConfigSyntaxError,  # noqa: F401
         EvalInterrupted,  # noqa: F401
         EvalSyntaxRejected,  # noqa: F401
+        RestrictedUnpicklingError,  # noqa: F401
         RuleApiPermissionError,  # noqa: F401
-        RuleEvalPermissionError,  # noqa: F401
         RuleAttributeError,  # noqa: F401
+        RuleEvalPermissionError,  # noqa: F401
         RuleFileNotFoundError,  # noqa: F401
         RuleModuleNotFoundError,  # noqa: F401
         RulePermissionError,  # noqa: F401
@@ -74,10 +100,7 @@ _exception = {
     "EvalSyntaxRejected",
     "EvalInterrupted",
     "RuleEvalPermissionError",
-}
-
-_cli = {
-    "cli",
+    "RestrictedUnpicklingError",
 }
 
 # Explicit list to avoid pyright warning about unsupported __all__ operation
@@ -101,6 +124,7 @@ __all__ = [
     "EvalSyntaxRejected",
     "EvalInterrupted",
     "RuleEvalPermissionError",
+    "RestrictedUnpicklingError",
 ]
 
 
