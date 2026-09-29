@@ -73,7 +73,7 @@ jobs:
     # The SAMPLES list lives in the root Makefile, so a sample commented out
     # there disappears here too. Sequential on purpose: these suites arm real
     # sandboxes, and an armed sandbox left behind by one suite changes what the
-    # next one measures. `make -jN sample-tests` works locally, but a tag-time
-    # job can absorb the wall clock in exchange for isolation.
+    # next one measures. `make -jN sample-tests` works locally, but a nightly or
+    # release job can absorb the wall clock in exchange for isolation.
     - name: Run the samples' test suites
       run: make sample-tests

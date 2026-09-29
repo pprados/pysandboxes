@@ -11,7 +11,7 @@ set -euo pipefail
 
 sha=$1
 runs=$(gh run list --workflow full-gate.yml --event schedule --branch develop --commit "$sha" --status completed \
-    --json databaseId,url,headSha,event,status)
+    --limit 100 --json databaseId,url,headSha,event,status)
 # shellcheck disable=SC2016  # $sha is a jq variable, bound by --arg
 nightly='.[] | select(.headSha == $sha and .event == "schedule" and .status == "completed") | .databaseId'
 for id in $(jq -r --arg sha "$sha" "$nightly" <<<"$runs"); do

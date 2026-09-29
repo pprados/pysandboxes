@@ -92,6 +92,7 @@ def test_only_completed_nightly_runs_of_full_gate_on_develop_at_the_commit_are_a
     assert options["--branch"] == "develop"
     assert options["--commit"] == SHA
     assert options["--status"] == "completed"
+    assert options["--limit"] == "100"
 
 
 def test_no_nightly_on_the_commit_means_no_reuse(fake: Path) -> None:

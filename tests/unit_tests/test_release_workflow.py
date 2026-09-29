@@ -62,6 +62,7 @@ def test_the_publication_condition_is_exactly_the_reviewed_one() -> None:
 
 def test_the_full_gate_is_skipped_only_when_a_nightly_is_reused() -> None:
     full_gate = _jobs()["full-gate"]
+    assert "reuse-lookup" in _needs(full_gate)
     assert full_gate["uses"] == "./.github/workflows/full-gate.yml"
     assert full_gate["if"] == "needs.reuse-lookup.outputs.reuse != 'true'"
     assert full_gate["with"]["exclude-tcg"] is True
@@ -77,6 +78,10 @@ def test_the_wheel_tests_run_on_every_claimed_interpreter() -> None:
         "3.13",
         "3.14",
     ]
+
+
+def test_the_reuse_lookup_reads_the_verified_commit() -> None:
+    assert "verify" in _needs(_jobs()["reuse-lookup"])
 
 
 def test_the_build_waits_for_the_light_gate() -> None:

@@ -32,8 +32,10 @@ on:
 # One run per branch at a time: a second dispatch waits for the running one instead
 # of booting the same VMs twice, and a third replaces the waiting one. A run is
 # never cancelled midway, since restarting 45 minutes of tests teaches nothing new.
+# Called by full-gate.yml, github.workflow is the caller's name: a dispatch never
+# replaces a waiting nightly, whose run the release could reuse.
 concurrency:
-  group: integration-${{ github.ref }}
+  group: integration-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
