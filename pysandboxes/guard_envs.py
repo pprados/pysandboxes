@@ -10,20 +10,18 @@ The guard supports pattern matching, variable substitution, and learning mode
 for automatic rule generation based on observed environment variable usage.
 """
 
-import inspect
 import logging
 import os
 import sys
 import threading
-from types import FrameType
 from typing import Any, Callable, Generator, Iterator, NamedTuple, cast
 from weakref import WeakKeyDictionary
 
+from .guard_wraps import guard_wraps
 from .main_logger import ErrorMsg, format_ruleref
 from .sb_types import ConfigLine, ConfigLines, Envs
 from .tools import Environ, GlobPattern, resolve_env_variables
 from .tools import patch_factory as _f
-from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -165,43 +163,42 @@ class LearnEnviron(os._Environ):
             assert hasattr(os.environ, "_data")
             data = os.environ._data  # type: ignore[attr-defined]
             super().__init__(data, encodekey, decodekey, encodevalue, decodevalue)
-            self._ignore_keys: WeakKeyDictionary[threading.Thread, tuple[FrameType, set[str]]] = WeakKeyDictionary()
+            # Keys a scan yielded and that were not read back yet, in scan order
+            self._scanned: WeakKeyDictionary[threading.Thread, list[str]] = WeakKeyDictionary()
+            # Reads that match the scan order, so may be its read-back: learned if the order breaks
+            self._unsure: WeakKeyDictionary[threading.Thread, list[str]] = WeakKeyDictionary()
+            # The key a running scan just yielded
+            self._yielded: WeakKeyDictionary[threading.Thread, str] = WeakKeyDictionary()
             self._keys_used: set[str] = set()
             self._original_envs = os.environ
 
     def __iter__(self) -> Iterator[str]:
-        frame: FrameType | None = inspect.currentframe()
-        if not frame or not frame.f_back:
-            return super().__iter__()
-        frame = frame.f_back.f_back
         root_iter = super().__iter__()
-
-        self._ignore_keys[threading.current_thread()] = (cast(FrameType, frame), set())
+        t = threading.current_thread()
+        self._commit_unsure(t)
+        scanned: list[str] = []
+        self._scanned[t] = scanned
 
         def _catch_for_all() -> Generator[Any, None, None]:
-            t = threading.current_thread()
-            for k in root_iter:
-                cur_frame = inspect.currentframe()
-                if cur_frame is None or cur_frame.f_back is None or cur_frame.f_back.f_back is None:
-                    # No caller frame to compare the key against, which is what
-                    # a module-level ``for k in os.environ`` looks like. The key
-                    # cannot be attributed, so it is not recorded -- but it must
-                    # still be yielded: dropping it made the whole environment
-                    # look empty to the sandboxed program.
+            try:
+                for k in root_iter:
+                    scanned.append(k)
+                    self._yielded[t] = k
                     yield k
-                    continue
-                iter_frame: FrameType = cur_frame.f_back.f_back
-                keys: set[str]
-                if id(iter_frame) == id(frame):
-                    iter_frame, keys = self._ignore_keys.get(t, (cast(FrameType, frame), set()))
-                    keys.add(k)
-                    self._ignore_keys[t] = (iter_frame, keys)
-                else:
-                    # New frame, so remove the ignore_keys for this parent frame
-                    self._ignore_keys[t] = (cast(FrameType, frame), k)
-                yield k
+            finally:
+                self._yielded.pop(t, None)
 
-        return _catch_for_all()  # TODO: items()
+        return _catch_for_all()
+
+    def _commit_unsure(self, t: threading.Thread) -> None:
+        """The scan order broke: the reads kept aside were real uses."""
+        self._keys_used.update(self._unsure.pop(t, []))
+        self._scanned.pop(t, None)
+
+    def commit_unsure(self) -> None:
+        """Learn the reads still kept aside, before the rules are generated."""
+        for t in list(self._unsure.keys()):
+            self._commit_unsure(t)
 
     def __getitem__(self, key: str) -> str:
         """Get environment variable and track access in learning mode.
@@ -215,37 +212,24 @@ class LearnEnviron(os._Environ):
         Raises:
             KeyError: If environment variable doesn't exist.
         """
-        try:
-            result = super(LearnEnviron, self).__getitem__(key)
-            frame = inspect.currentframe()
-            if not frame:
-                return result
-            t = threading.current_thread()
-            iter_frame, ignore_keys = self._ignore_keys.get(t, (None, set()))
-            # Search the iter_frame
-            for _ in range(0, 3):
-                frame = frame.f_back
-                if not frame or id(frame) == id(iter_frame):
-                    break
-            if key not in ignore_keys:
-                self._keys_used.add(key)
-            else:
-                ignore_keys.remove(key)  # Ignore one time
-            if id(frame) != id(iter_frame):  # New frame, remove ignore_keys
-                # Use by a sub frame?
-                while frame and frame.f_back:
-                    frame = frame.f_back
-                    if frame == iter_frame:
-                        break
-                else:
-                    # or in parent or brother frame?
-                    if t in self._ignore_keys:
-                        del self._ignore_keys[t]
-                ignore_keys.clear()
-
+        result = super(LearnEnviron, self).__getitem__(key)
+        t = threading.current_thread()
+        scanned = self._scanned.get(t)
+        # A scan reads a key back right after yielding it (``for k in os.environ: os.environ[k]``,
+        # ``items()``), or lists every key first and reads them back in order (``dict(os.environ)``).
+        # Neither is a use. Any other read is, like a key skipped by urllib's proxy scan read later.
+        if scanned and key == scanned[-1] and self._yielded.get(t) == key:
+            scanned.pop()
+        elif scanned and key == scanned[0]:
+            scanned.pop(0)
+            self._unsure.setdefault(t, []).append(key)
+        else:
+            self._commit_unsure(t)
+            self._keys_used.add(key)
             return result
-        except KeyError:
-            raise
+        if not scanned:
+            self._unsure.pop(t, None)  # The whole scan was read back
+        return result
 
     def __setitem__(self, key: str, value: str) -> None:
         """Set environment variable and track access in learning mode.
@@ -308,6 +292,7 @@ def generate_rules() -> list[str]:
     """
     global _rules
     learn_env = LearnEnviron()  # Get singleton
+    learn_env.commit_unsure()
     result = []
     for key in sorted(learn_env._keys_used):
         find = False

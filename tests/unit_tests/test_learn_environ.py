@@ -1,3 +1,4 @@
+import threading
 from typing import Iterator
 
 from pysandboxes.guard_envs import LearnEnviron
@@ -34,7 +35,7 @@ def test_iter_detection_environ() -> None:
         print(envs[k])
 
     assert not envs._keys_used, "Can not add key during iteration"
-    assert not len(next(iter(envs._ignore_keys.items()))[1][1])  # All key consumed
+    assert not envs._scanned[threading.current_thread()]  # All key consumed
 
 
 def test_iter_use_by_child_detection_environ() -> None:
@@ -100,6 +101,35 @@ def test_iter_use_directly_detection_environ() -> None:
         _ = envs[k]
         _ = envs["PATH"]
     assert "PATH" in envs._keys_used, "Can add direct key usage during iteration"
+
+
+def test_key_read_after_a_scan_is_learned() -> None:
+    envs = LearnEnviron()  # Reset singleton
+    envs["DEMO_API_KEY"] = "sk-demo"
+    envs._keys_used.clear()
+
+    def scan_proxies() -> None:  # What urllib.request.getproxies_environment() does before any request
+        for name in envs:
+            if name.lower().endswith("_proxy"):
+                _ = envs[name]
+
+    try:
+        scan_proxies()
+        _ = envs["DEMO_API_KEY"]
+        assert "DEMO_API_KEY" in envs._keys_used, "A key skipped by an earlier scan must still be learned"
+    finally:
+        del envs["DEMO_API_KEY"]
+
+
+def test_first_scanned_key_read_after_a_scan_is_learned() -> None:
+    envs = LearnEnviron()  # Reset singleton
+    envs._keys_used.clear()
+    first = next(iter(envs))  # A scan that stops at once reads nothing back
+    for _ in envs:
+        pass
+    _ = envs[first]
+    envs.commit_unsure()
+    assert first in envs._keys_used, "A read in scan order that no read-back follows is a use"
 
 
 def test_update_from_environ() -> None:
