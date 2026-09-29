@@ -19,7 +19,6 @@ import logging
 import os
 import signal
 import threading
-from multiprocessing import Lock
 from pathlib import Path
 from types import FrameType
 from typing import (
@@ -40,8 +39,6 @@ from .tools import (
 )
 
 logger = logging.getLogger(__name__)
-
-_lock = Lock()
 
 
 def _check__main__coroutine(coroutine: Any) -> None:
