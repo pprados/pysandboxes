@@ -1,28 +1,33 @@
 name: Python Integration Tests
 
-# Nightly, plus on demand. These tests launch real sandboxed child processes, so
-# they are slower and less hermetic than the unit suite, and the provider matrix
-# in tests/integration_tests/test_usage_with_providers.py boots a VM. A hosted
-# runner exposes /dev/kvm once a udev rule opens it to the runner user: the `qemu`
-# rows then run accelerated, and the `qemu-tcg` rows cover emulation. Every
-# integration test must run here: a skipped test -- a provider missing, a network
-# the runner lacks -- fails the run, but only at the end, so the report still
-# shows what passes and what does not (see tests/integration_tests/conftest.py).
+# Called by full-gate.yml (nightly on develop, and for a release tag whose commit no nightly proved), plus on
+# demand. These tests launch real sandboxed child processes, so they are slower and less hermetic than the unit
+# suite, and the provider matrix in tests/integration_tests/test_usage_with_providers.py boots a VM. A hosted
+# runner exposes /dev/kvm once a udev rule opens it to the runner user: the `qemu` rows then run accelerated, and
+# the `qemu-tcg` rows cover emulation. Every integration test must run here: a skipped test -- a provider missing,
+# a network the runner lacks -- fails the run, but only at the end, so the report still shows what passes and what
+# does not (see tests/integration_tests/conftest.py).
 #
-# The nightly run validates the integration branch, `develop`. GitHub only honours
-# `schedule:` on the default branch, which is `develop`, so the schedule already
-# fires from the branch under test; the pinning step below states that contract in
-# the tree rather than leaving it to a repository setting no file records. A night
-# without a commit on `develop` is skipped by the `changes` job -- re-running the
-# same tree teaches nothing.
+# `exclude-tcg` deselects the `qemu-tcg` rows (`-m "not slow"`, the marker only they carry) and makes a missing
+# /dev/kvm fail the run instead of letting the `qemu` rows emulate. The release sets it: those rows cost about 40 of
+# the 46 minutes of a row, and the nightly runs them anyway.
 #
-# container-tests and sample-tests are deliberately absent: the first needs
-# minikube plus locally built images, the second has its own nightly workflow,
-# samples.yml.
+# The nightly run validates the integration branch, `develop`: GitHub only honours `schedule:` on the default
+# branch, and full-gate.yml, which holds the schedule, skips a night without a commit.
+#
+# container-tests and sample-tests are deliberately absent: containers.yml and samples.yml hold them.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 3 * * *"
+    inputs:
+      exclude-tcg:
+        description: Leave the qemu-tcg rows out and require /dev/kvm
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      exclude-tcg:
+        type: boolean
+        default: false
 
 # One run per branch at a time: a second dispatch waits for the running one instead
 # of booting the same VMs twice, and a third replaces the waiting one. A run is
@@ -32,40 +37,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # A cheap guard job rather than a step: it keeps the whole setup -- apt, uv,
-  # the dependency install -- out of a night that has nothing new to test.
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.commits.outputs.changed }}
-
-    steps:
-    - uses: actions/checkout@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        # `git rev-list --since` needs the history the default shallow clone omits.
-        fetch-depth: 0
-
-    - name: Move to the integration branch
-      if: github.event_name == 'schedule'
-      run: git checkout -B develop origin/develop
-
-    - name: Look for commits from the last day
-      id: commits
-      run: |
-        count=$(git rev-list --count --since='24 hours ago' HEAD)
-        echo "$count commit(s) in the last 24 hours"
-        if [ "$count" -gt 0 ]; then
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-        fi
-
   integration:
-    needs: changes
-    # Only the nightly run is skippable: a manual dispatch, and a local `act` run,
-    # always execute the suite.
-    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -83,17 +55,6 @@ jobs:
     - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-
-    # The branch under test is `develop`, not the branch the schedule fired from.
-    # Done here rather than through `actions/checkout`'s `ref:` input: `act` only
-    # substitutes its bind of the working directory when that input is absent, and
-    # the real action it otherwise runs wants credentials a local run has no reason
-    # to hold. Keeping `with:` free of `ref` is what keeps `make gh-tests` working.
-    - name: Move to the integration branch
-      if: github.event_name == 'schedule'
-      run: |
-        git fetch --depth=1 origin develop
-        git checkout -B develop FETCH_HEAD
 
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y make build-essential
@@ -113,14 +74,24 @@ jobs:
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
     # The rule GitHub documents for hardware-accelerated emulators. Where /dev/kvm is
-    # absent, as in a container under `act`, qemu falls back to emulation by itself.
+    # absent, as in a container under `act`, qemu falls back to emulation by itself,
+    # unless exclude-tcg asks for KVM.
     - name: Enable KVM
+      env:
+        EXCLUDE_TCG: ${{ inputs.exclude-tcg }}
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
           | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm || true
-        ls -l /dev/kvm || echo "no /dev/kvm: qemu rows will emulate"
+        if [ -e /dev/kvm ]; then
+          ls -l /dev/kvm
+        elif [ "$EXCLUDE_TCG" = true ]; then
+          echo "::error::no /dev/kvm: with exclude-tcg the qemu rows must not emulate"
+          exit 1
+        else
+          echo "no /dev/kvm: qemu rows will emulate"
+        fi
 
     - name: Install uv
       shell: bash
@@ -149,5 +120,5 @@ jobs:
     - name: Run integration tests
       env:
         PYSANDBOXES_FAIL_ON_SKIP: "1"
-        PYTEST_ADDOPTS: --durations=20
+        PYTEST_ADDOPTS: --durations=20 ${{ inputs.exclude-tcg && '-m "not slow"' || '' }}
       run: make integration-tests

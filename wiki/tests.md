@@ -58,9 +58,9 @@ of it:
 | Workflow | Suite | Versions | Executions | Fires on |
 |---|---|---|---|---|
 | `test.yml` | Unit | 3.11, 3.12, 3.13, 3.14 | ~4500 | every push and pull request |
-| `integration.yml` | Integration | 3.13 | ~130 | nightly (03:00) or dispatch |
-| `containers.yml` | Containers | 3.13 | ~60 | a `v*` tag or dispatch |
-| `samples.yml` | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | nightly (04:00), `v*` or dispatch |
+| `integration.yml` | Integration | 3.13 | ~130 | `full-gate.yml` (nightly 03:00, release tag) or dispatch |
+| `containers.yml` | Containers | 3.13 | ~60 | `full-gate.yml` (nightly 03:00, release tag) or dispatch |
+| `samples.yml` | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | `full-gate.yml` (nightly 03:00, release tag) or dispatch |
 | **Total** | | | **~5340** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`

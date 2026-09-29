@@ -1,16 +1,11 @@
 name: Sample Tests
 
-# Runs the samples' own suites nightly and at publication time. They are heavy
-# -- twelve projects, each with its own pyproject.toml, uv.lock and venv -- so
-# they are tied to a version tag rather than to every push. workflow_dispatch
-# reruns them on demand.
+# Runs the samples' own suites. Called by full-gate.yml (nightly on develop, and for a release tag whose commit no
+# nightly proved), plus on demand. They are heavy -- twelve projects, each with its own pyproject.toml, uv.lock and
+# venv -- so they are not tied to every push.
 #
-# The nightly run validates the integration branch, `develop`. GitHub only honours
-# `schedule:` on the default branch, which is `develop`, so the schedule already
-# fires from the branch under test; the pinning step below states that contract in
-# the tree rather than leaving it to a repository setting no file records. A night
-# without a commit on `develop` is skipped by the `changes` job -- re-running the
-# same tree teaches nothing. A tag push keeps testing the tag, and is never skipped.
+# The nightly run validates the integration branch, `develop`: GitHub only honours `schedule:` on the default
+# branch, and full-gate.yml, which holds the schedule, skips a night without a commit.
 #
 # Every interpreter the project claims is covered, 3.11 through 3.14: a sample's
 # .py-sandboxes profile is learned under one version and the set of modules the
@@ -24,47 +19,11 @@ name: Sample Tests
 # are unset. The test_tools_sandbox.py suites do use the real network, which a
 # hosted runner provides.
 on:
-  push:
-    tags: [ "v*" ]
   workflow_dispatch:
-  schedule:
-    - cron: "0 4 * * *"
+  workflow_call:
 
 jobs:
-  # A cheap guard job rather than a step: it keeps the whole setup -- apt, uv,
-  # twelve `uv sync` runs -- out of a night that has nothing new to test.
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.commits.outputs.changed }}
-
-    steps:
-    - uses: actions/checkout@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        # `git rev-list --since` needs the history the default shallow clone omits.
-        fetch-depth: 0
-
-    - name: Move to the integration branch
-      if: github.event_name == 'schedule'
-      run: git checkout -B develop origin/develop
-
-    - name: Look for commits from the last day
-      id: commits
-      run: |
-        count=$(git rev-list --count --since='24 hours ago' HEAD)
-        echo "$count commit(s) in the last 24 hours"
-        if [ "$count" -gt 0 ]; then
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-        fi
-
   samples:
-    needs: changes
-    # Only the nightly run is skippable: a tag push, a manual dispatch, and a
-    # local `act` run always execute the suites.
-    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -84,17 +43,6 @@ jobs:
     - uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-
-    # The branch under test is `develop`, not the branch the schedule fired from.
-    # Done here rather than through `actions/checkout`'s `ref:` input: `act` only
-    # substitutes its bind of the working directory when that input is absent, and
-    # the real action it otherwise runs wants credentials a local run has no reason
-    # to hold. Keeping `with:` free of `ref` is what keeps `make gh-tests` working.
-    - name: Move to the integration branch
-      if: github.event_name == 'schedule'
-      run: |
-        git fetch --depth=1 origin develop
-        git checkout -B develop FETCH_HEAD
 
     - name: Install build tools
       run: sudo apt-get update && sudo apt-get install -y make build-essential

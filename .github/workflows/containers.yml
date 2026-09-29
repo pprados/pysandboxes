@@ -1,9 +1,8 @@
 name: Container Tests
 
-# Runs the docker, podman and kubernetes suites at publication time. They build
-# five provider images from dist/ and start a minikube cluster, so they are tied
-# to a version tag rather than to every push. workflow_dispatch reruns them on
-# demand.
+# Runs the docker, podman and kubernetes suites. Called by full-gate.yml (nightly on develop, and for a release tag
+# whose commit no nightly proved), plus on demand. They build five provider images and start a minikube cluster, so
+# they are not tied to every push. They have no TCG row: nested QEMU needs the host's /dev/kvm, which a step opens.
 #
 # One runner per suite: each builds its images with the one engine it tests
 # (CONTAINER_CMDS), so no runner holds two copies of the five images -- with both,
@@ -14,9 +13,8 @@ name: Container Tests
 # group: docker reaches it through its root daemon, rootless podman does not and
 # falls back to TCG, too slow for the container timeout. A step opens it.
 on:
-  push:
-    tags: [ "v*" ]
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   containers:
