@@ -17,6 +17,8 @@ def _isolated_git(monkeypatch: pytest.MonkeyPatch) -> None:
     # The developer's global config may sign every commit with their own key.
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    # Every CI runner, act included, sets it to the commit it checked out, not to these throw-away repositories.
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
 
 
 def _git(repo: Path, *args: str) -> None:
