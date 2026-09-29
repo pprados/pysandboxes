@@ -56,4 +56,4 @@ async def drive() -> None:
 if is_in_sandbox():  # complete mode: python-sb already armed the profile
     asyncio.run(drive())
 else:
-    pysandboxes.run(drive(), config_path=CONFIG, learn=str(CONFIG))
+    pysandboxes.run(drive(), sandboxes_config=CONFIG, learn=str(CONFIG))

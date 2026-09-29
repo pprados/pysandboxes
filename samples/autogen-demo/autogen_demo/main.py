@@ -149,7 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     max_tool_iterations=args.max_tool_iterations,
                     verbose=args.verbose,
                 ),
-                config_path=CONFIG,
+                sandboxes_config=CONFIG,
             )
         except Exception as e:
             logging.getLogger(__name__).error("Agent failed: %s", e, exc_info=True)
@@ -172,7 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Partial mode: only the tool bodies run in the sandbox. `pysandboxes.run()`
         # is the asynchronous entry point -- it arms the profile *and* binds the
         # sandbox loop, which `async with sandboxes(...)` alone does not do.
-        text = pysandboxes.run(_run(), config_path=CONFIG)
+        text = pysandboxes.run(_run(), sandboxes_config=CONFIG)
     except Exception as e:
         logging.getLogger(__name__).error("Agent failed: %s", e, exc_info=True)
         return 1

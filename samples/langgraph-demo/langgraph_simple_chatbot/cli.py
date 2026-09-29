@@ -34,7 +34,7 @@ def chat(model: str, temperature: float) -> None:
     # sandbox loop, which `async with sandboxes(...)` alone does not do.
     pysandboxes.run(
         run_console_chat(model_name=model, temperature=temperature),
-        config_path=CONFIG,
+        sandboxes_config=CONFIG,
     )
 
 
@@ -51,7 +51,7 @@ def ask(message: tuple[str, ...], model: str, temperature: float) -> None:
         response = await chat_with_agent(agent, question)
         click.echo(response)
 
-    pysandboxes.run(run_ask(), config_path=CONFIG)
+    pysandboxes.run(run_ask(), sandboxes_config=CONFIG)
 
 
 @main.command()
@@ -64,7 +64,7 @@ def calc(expression: str) -> None:
 
         click.echo(await evaluate_expression.ainvoke({"expression": expression}))
 
-    pysandboxes.run(run_calc(), config_path=CONFIG)
+    pysandboxes.run(run_calc(), sandboxes_config=CONFIG)
 
 
 @main.command()
@@ -77,7 +77,7 @@ def fetch(url: str) -> None:
 
         click.echo(await fetch_webpage.ainvoke({"url": url}))
 
-    pysandboxes.run(run_fetch(), config_path=CONFIG)
+    pysandboxes.run(run_fetch(), sandboxes_config=CONFIG)
 
 
 if __name__ == "__main__":

@@ -139,7 +139,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         # Same asynchronous entry point as the one-shot path below: it arms the
         # profile *and* binds the sandbox loop for the whole conversation.
-        return pysandboxes.run(chat(agent, max_turns=args.max_turns), config_path=CONFIG)
+        return pysandboxes.run(chat(agent, max_turns=args.max_turns), sandboxes_config=CONFIG)
 
     try:
         # Partial mode: only the tool bodies run in the sandbox. `pysandboxes.run()`
@@ -147,7 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # sandbox loop, which `async with sandboxes(...)` alone does not do.
         text = pysandboxes.run(
             run_agent_async(args.task, max_turns=args.max_turns, model=model),
-            config_path=CONFIG,
+            sandboxes_config=CONFIG,
         )
     except Exception as e:
         log.error("Agent failed: %s", e, exc_info=True)

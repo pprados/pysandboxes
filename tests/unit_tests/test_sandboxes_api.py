@@ -1,6 +1,7 @@
 """Unit tests for sandboxes_api module."""
 
-from unittest.mock import Mock, patch
+import inspect
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest  # type: ignore[import-untyped]
 
@@ -213,3 +214,51 @@ class TestSandboxesContextManager:
         mock_async_shutdown.assert_called_once()
         # Check that parameters were passed correctly - this is a basic test
         # since the actual parameter structure is complex
+
+    @patch("pysandboxes._os_sandbox.start_daemon")
+    @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
+    def test_sync_context_manager_passes_python_args(self, mock_shutdown: Mock, mock_start: Mock) -> None:
+        """The interpreter arguments reach the daemon."""
+        mock_start.return_value = Mock()
+
+        with sandboxes(python_args=["-X", "dev"]):
+            pass
+
+        assert mock_start.call_args.kwargs["python_args"] == ["-X", "dev"]
+
+    @patch("pysandboxes._os_sandbox.async_start_daemon")
+    @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
+    @pytest.mark.asyncio
+    async def test_async_context_manager_passes_python_args(
+        self, mock_async_shutdown: Mock, mock_async_start: Mock
+    ) -> None:
+        """The asynchronous entry, and so run(), passes the interpreter arguments on as the synchronous one does."""
+        mock_async_start.return_value = Mock()
+
+        async with sandboxes(python_args=["-X", "dev"]):
+            pass
+
+        assert mock_async_start.call_args.kwargs["python_args"] == ["-X", "dev"]
+
+
+class TestRunParameters:
+    """run() takes the parameters of sandboxes(), under the same names."""
+
+    @patch("pysandboxes.sandboxes_api.sandboxes")
+    def test_run_forwards_sandboxes_config(self, mock_sandboxes: Mock) -> None:
+        """The configuration keyword is sandboxes_config, as for sandboxes()."""
+        mock_sandboxes.return_value.__aenter__ = AsyncMock()
+        mock_sandboxes.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        async def job() -> int:
+            return 42
+
+        assert run(job(), sandboxes_config="custom.conf") == 42
+        assert mock_sandboxes.call_args.kwargs["sandboxes_config"] == "custom.conf"
+
+    def test_run_and_sandboxes_share_their_parameter_names(self) -> None:
+        """Every named parameter of sandboxes() exists in run(), under the same name."""
+        sandboxes_params = set(inspect.signature(sandboxes).parameters) - {"extra_rules"}
+        run_params = set(inspect.signature(run).parameters) - {"main", "extra_rules"}
+
+        assert run_params == sandboxes_params
