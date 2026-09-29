@@ -145,5 +145,3 @@ OS_SANDBOX=landlock python-sb app/demo.py --evil
 - Rehearse once: the first `uv run` builds the environment.
 - Keep a working policy aside (`cp .py-sandboxes /tmp/demo.py-sandboxes`) in case the room's network
   fails during step 2.
-- Each run ends with a `resource_tracker: ... leaked semaphore` warning from `multiprocessing`; it is
-  harmless.
