@@ -601,7 +601,7 @@ init: _uv-init
 
 ### DEBUG ###
 
-.PHONY: get-new-version publish-patch publish-minor
+.PHONY: get-new-version publish-pre-release publish-patch publish-minor
 
 # Helper target to calculate next version
 get-new-version:
@@ -676,6 +676,30 @@ define _publish-github-release
 	gh release create --draft $$TAG ./dist/* --title "$(2)" --notes-file CHANGELOG.md; \
 	echo "Release $$TAG would be published on GitHub with title: $(2)"
 endef
+
+# Tags the head of develop with a signed vX.Y.Z(a|b|rc)N and pushes develop, then the tag: release.yml verifies it,
+# builds the wheel and, once the testpypi deployment is approved, publishes it to test.pypi.org. The tag is signed
+# on this machine only; review what the head brings before confirming, a published tag is never moved.
+## Tag and push a pre-release, which the CI publishes to test.pypi.org: make publish-pre-release VERSION=0.1.0b2
+publish-pre-release:
+	@[[ "$(VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+(a|b|rc)[0-9]+$$ ]] || \
+		{ echo "Usage: make publish-pre-release VERSION=X.Y.Z(a|b|rc)N, e.g. VERSION=0.1.0b2"; exit 1; }
+	$(call _check_git_status)
+	$(call _check_git_branch)
+	git fetch --quiet --tags origin develop
+	@git merge-base --is-ancestor origin/develop HEAD || \
+		{ echo "develop is behind or has diverged from origin/develop: pull first."; exit 1; }
+	@! git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null || { echo "Tag v$(VERSION) already exists."; exit 1; }
+	@last=$$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null); \
+	echo "Changes since $${last:-the first commit} that reach the pipeline or the wheel:"; \
+	git --no-pager diff --stat "$${last:-$$(git hash-object -t tree /dev/null)}" HEAD -- \
+		.github Makefile pyproject.toml uv.lock pysandboxes; \
+	read -r -p "Sign and push v$(VERSION) on $$(git rev-parse --short HEAD)? [y/N] " answer; \
+	[[ $$answer == [yY] ]] || { echo "Nothing tagged."; exit 1; }
+	git tag -s "v$(VERSION)" -m "Release v$(VERSION)"
+	git push origin develop
+	git push origin "v$(VERSION)"
+	@echo "Approve the testpypi deployment: https://github.com/pprados/pysandboxes/actions/workflows/release.yml"
 
 ## Publish a patch release (complete workflow)
 publish-patch:
