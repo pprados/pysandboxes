@@ -62,7 +62,7 @@ def armed(coro: Coroutine[Any, Any, Any]) -> Any:
     """Run one coroutine with the partial profile armed."""
     return pysandboxes.run(
         coro,
-        config_path=CONFIG,
+        sandboxes_config=CONFIG,
         py_sandbox="true",
         os_sandbox="subprocess",
     )

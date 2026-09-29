@@ -237,7 +237,11 @@ class sandboxes:
             envs: Environment variables to make available in sandbox.
             python_args: Additional arguments for Python interpreter.
             graceful_shutdown: Whether to shut down gracefully on exit.
-            **extra_rules: Additional security rules as keyword arguments.
+            **extra_rules: Configuration directives, added in front of those of the configuration file. The
+                keyword is the directive with its dashes written as underscores, the value is the directive's
+                value, or a set of values for a directive that repeats: `learn=".py-sandboxes"` starts the
+                learning mode and writes the rules it discovers to that file, `os_sandbox="bwrap"` selects
+                the OS provider, `py_sandbox="true"` arms the Python layer.
         """
         self.init_fn = init_fn
         self.sandboxes_config = (
@@ -339,7 +343,11 @@ class sandboxes:
             except ConfigSyntaxError as e:
                 raise e.with_traceback(None) from e
             self._daemon = await async_start_daemon(
-                all_rules, envs=self.envs, log_level=log_level, init_fn=self.init_fn
+                all_rules,
+                envs=self.envs,
+                log_level=log_level,
+                init_fn=self.init_fn,
+                python_args=self.python_args,
             )
             self.learning_path = all_rules.learning_path
 
@@ -369,11 +377,11 @@ def run(
     main: Coroutine[Any, Any, Any],  # TODO: accept function without parameter
     *,
     init_fn: SyncOrAsyncFunc | None = None,
-    config_path: Path | str | None = None,
+    sandboxes_config: Path | str | None = None,
     envs: Environ | None = None,
     python_args: list[str] | None = None,
     graceful_shutdown: bool = True,
-    **kwargs: dict[str, Any],
+    **extra_rules: dict[str, Any],
 ) -> Any:
     """Run a coroutine in a new event loop, with the sandbox started around it.
 
@@ -388,11 +396,13 @@ def run(
             function that produces one.
         init_fn: Function called during daemon initialization in the sandbox
             process.
-        config_path: Path to the configuration file or directory.
+        sandboxes_config: Path to the configuration file or directory.
         envs: Environment variables to make available in the sandbox.
         python_args: Additional arguments for the Python interpreter.
         graceful_shutdown: Whether to shut down gracefully on exit.
-        **kwargs: Additional security rules, passed on to `sandboxes`.
+        **extra_rules: Configuration directives, passed on to `sandboxes`: `learn=".py-sandboxes"` starts the
+            learning mode, `os_sandbox="bwrap"` selects the OS provider, `py_sandbox="true"` arms the Python
+            layer.
 
     Returns:
         Whatever ``main`` returns.
@@ -416,11 +426,11 @@ def run(
         set_sandbox_loop(asyncio.get_running_loop())
         async with sandboxes(
             init_fn=init_fn,
-            sandboxes_config=config_path,
+            sandboxes_config=sandboxes_config,
             envs=envs,
             python_args=python_args,
             graceful_shutdown=graceful_shutdown,
-            **kwargs,
+            **extra_rules,
         ):
             return await asyncio.create_task(main)
 
