@@ -43,7 +43,7 @@ A plain `uv sync` installs the `dev` group only and removes the linters. `make h
 
 ### The wiki
 
-The [`wiki/`](wiki/index.md) directory holds the documentation a contributor needs before touching the code:
+The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor needs before touching the code:
 
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
