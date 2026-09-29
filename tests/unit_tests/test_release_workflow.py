@@ -52,6 +52,14 @@ def test_a_skipped_full_gate_passes_only_through_the_reuse_lookup() -> None:
     assert "(needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success')" in _condition()
 
 
+def test_the_publication_condition_is_exactly_the_reviewed_one() -> None:
+    assert _condition() == (
+        "${{ !cancelled() && needs.build.result == 'success' && needs.wheel-tests.result == 'success' "
+        "&& needs.reuse-lookup.result == 'success' "
+        "&& (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success') }}"
+    )
+
+
 def test_the_full_gate_is_skipped_only_when_a_nightly_is_reused() -> None:
     full_gate = _jobs()["full-gate"]
     assert full_gate["uses"] == "./.github/workflows/full-gate.yml"

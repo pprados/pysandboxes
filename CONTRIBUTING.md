@@ -128,7 +128,7 @@ A test for a guard must be able to fail. The rules below come from bugs that shi
 
 - No `ref:` under `actions/checkout`: it disables the local run through `act` (`make gh-tests`). Pin a branch
   through a `run:` step guarded by `if: github.event_name == ...`.
-- A `schedule:` workflow pins the branch it tests.
+- A `schedule:` workflow pins or asserts the branch it tests, and never re-fetches a later commit than its own.
 - Minimal `permissions:`, and no secret reachable by code coming from a fork.
 
 ### Documentation

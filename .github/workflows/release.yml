@@ -160,7 +160,7 @@ jobs:
       exclude-tcg: true
 
   # Tests run from the checkout import the source tree, so a file left out of the wheel passes them. These run
-  # against the wheel about to be published, installed in a venv that holds only the test dependencies.
+  # against the wheel about to be published, installed in a venv that holds the test dependencies but not the project.
   wheel-tests:
     needs: build
     runs-on: ubuntu-latest

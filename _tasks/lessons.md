@@ -235,10 +235,12 @@ local run holds, and the workflow fails in a way GitHub never reproduces.
 -> Pin a branch through a `run:` step guarded by `if: github.event_name == ...`, not through
 `ref:`. The step is skipped on the events a local run replays, so `with:` stays free of `ref`.
 
--> A workflow whose trigger is `schedule:` must pin the branch it tests. GitHub fires the
+-> A workflow whose trigger is `schedule:` must pin or assert the branch it tests. GitHub fires the
 schedule only from the default branch, and which branch that is lives in a repository
 setting, not in the tree: a scheduled job that does not move itself silently follows that
-setting wherever it points.
+setting wherever it points. Moving the checkout to the branch tip can test a later commit than
+the run's `headSha`, so a workflow whose result is reused by commit asserts the branch instead
+of re-fetching it.
 
 ## A guard wrapper must preserve every documented calling form of the API it patches
 

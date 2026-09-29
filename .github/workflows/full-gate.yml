@@ -36,6 +36,17 @@ jobs:
       with:
         fetch-depth: 0
 
+    # GitHub fires schedule: from the default branch, a repository setting: assert it is develop rather than
+    # re-fetch it, which could test a later commit than the run's headSha, the one the reuse lookup trusts. A failed
+    # guard skips the suites, and such a nightly is never reused.
+    - name: Check that the nightly tests develop
+      if: github.event_name == 'schedule'
+      run: |
+        if [ "$GITHUB_REF" != refs/heads/develop ]; then
+          echo "::error::the nightly runs on $GITHUB_REF, not refs/heads/develop"
+          exit 1
+        fi
+
     # Under schedule, the checkout is github.sha, the head of develop: the commit the suites test.
     - name: Look for commits from the last day
       id: commits
