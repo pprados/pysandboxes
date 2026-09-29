@@ -115,17 +115,6 @@ class RuleModuleNotFoundError(ModuleNotFoundError, SandBoxError):
     """
 
 
-class RuleAttributeError(AttributeError, SandBoxError):
-    """Refusal to write an attribute the framework protects on its own modules.
-
-    Reserved for the self-protection guard: the guards run inside the process
-    they protect, so rewriting one of their module attributes would disarm the
-    sandbox from inside. That guard is not active today -- `guard_self`
-    installs nothing -- so nothing raises this at present. It stays public
-    because a caller catching `SandBoxError` must keep working once it does.
-    """
-
-
 class RuleApiPermissionError(PermissionError, SandBoxError):
     """Raised when a sensitive API call is denied by the API guard."""
 

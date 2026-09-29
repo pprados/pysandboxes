@@ -25,7 +25,6 @@ built-in exception the same failure would raise without a sandbox:
 - `RuleSocketConnectionRefusedError`: a network connection not allowed
 - `RuleModuleNotFoundError`: an import not allowed
 - `RuleApiPermissionError`: a sensitive API call denied by the API guard
-- `RuleAttributeError`: a write to an attribute the framework protects on its own modules
 - `EvalSyntaxRejected`, `RuleEvalPermissionError`: a dynamically evaluated source outside
   the `eval-*` rules, or refused by a runtime guard
 - `ConfigSyntaxError`: a malformed configuration file
@@ -69,7 +68,6 @@ if TYPE_CHECKING:
         EvalSyntaxRejected,  # noqa: F401
         RestrictedUnpicklingError,  # noqa: F401
         RuleApiPermissionError,  # noqa: F401
-        RuleAttributeError,  # noqa: F401
         RuleEvalPermissionError,  # noqa: F401
         RuleFileNotFoundError,  # noqa: F401
         RuleModuleNotFoundError,  # noqa: F401
@@ -95,7 +93,6 @@ _exception = {
     "RulePermissionError",
     "RuleSocketConnectionRefusedError",
     "RuleModuleNotFoundError",
-    "RuleAttributeError",
     "RuleApiPermissionError",
     "EvalSyntaxRejected",
     "EvalInterrupted",
@@ -116,7 +113,6 @@ __all__ = [
     "RulePermissionError",
     "RuleSocketConnectionRefusedError",
     "RuleModuleNotFoundError",
-    "RuleAttributeError",
     "RuleApiPermissionError",
     "SandBoxProtocolError",
     "sandbox_denials",

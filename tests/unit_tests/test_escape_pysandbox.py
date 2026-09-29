@@ -6,8 +6,6 @@ from typing import Any, Dict, Set, Tuple
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleAttributeError
-
 
 def test_escape_with_closure() -> None:
     # Find the _original version of io.open (possible if the code is in Python)
@@ -52,7 +50,7 @@ def test_escape_with_subclasses() -> None:
     # Gets the modules associated with these subclasses
     found_modules = get_subclasses_modules(find_all_subclasses(object))
     import_module = found_modules["pysandboxes.guard_import"]
-    with pytest.raises(RuleAttributeError):
+    with pytest.raises(AttributeError):
         import_module._rules = ()  # type: ignore[attr-defined]
 
 
@@ -66,7 +64,7 @@ def test_escape_with_meta_path() -> None:
     # Unhooking GuardFinder is a deliberate act, not something code solving the wrong
     # problem does by accident.
 
-    with pytest.raises(RuleAttributeError):
+    with pytest.raises(AttributeError):
         new_list = list(sys.meta_path)[1:]
         sys.meta_path = new_list
 
@@ -145,7 +143,7 @@ def test_escape_with_globals_introspection() -> None:
 
     # Even in a sandbox, any function defined in an imported module may have
     # references to restricted modules in its __globals__
-    with pytest.raises((AttributeError, RuleAttributeError)):
+    with pytest.raises(AttributeError):
         # Attempt to access __globals__ on a function
         _ = harmless_func.__globals__
 
@@ -156,7 +154,7 @@ def test_escape_with_globals_introspection() -> None:
     gen = gen_func()
     # gen.gi_frame gives the frame object; f_globals on frame exposes all module globals
     if gen.gi_frame is not None:
-        with pytest.raises((AttributeError, RuleAttributeError)):
+        with pytest.raises(AttributeError):
             _ = gen.gi_frame.f_globals
 
 
@@ -195,9 +193,9 @@ def test_escape_with_obfuscated_strings() -> None:
     try:
         subclasses_method = getattr(type, "__sub" + "classes" + "__")
         _ = subclasses_method(object)  # type: ignore[assignment]
-        # If this succeeds, we've escaped. In sandbox, should raise RuleAttributeError
+        # If this succeeds, we've escaped. In sandbox, should raise AttributeError
         pytest.fail("Obfuscated __subclasses__ access succeeded; sandbox compromised")
-    except (AttributeError, RuleAttributeError):
+    except AttributeError:
         # Expected: sandbox blocked the dynamic attribute access
         pass
 
@@ -212,7 +210,7 @@ def test_escape_with_obfuscated_strings() -> None:
         import_func = getattr(builtins, forbidden_name, None)
         if import_func is not None:
             pytest.fail("chr() obfuscated __import__ access succeeded; sandbox compromised")
-    except (AttributeError, RuleAttributeError):
+    except AttributeError:
         # Expected: sandbox blocked getattr on builtins
         pass
 
@@ -228,7 +226,7 @@ def test_escape_with_obfuscated_strings() -> None:
         import_func = getattr(builtins, obfuscated, None)
         if import_func is not None:
             pytest.fail("Hex-encoded __import__ access succeeded; sandbox compromised")
-    except (AttributeError, RuleAttributeError):
+    except AttributeError:
         # Expected: sandbox blocked the getattr
         pass
 

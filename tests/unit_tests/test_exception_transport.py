@@ -15,7 +15,6 @@ import pytest
 from pysandboxes.e import (
     ConfigSyntaxError,
     RuleApiPermissionError,
-    RuleAttributeError,
     RuleFileNotFoundError,
     RuleModuleNotFoundError,
     RulePermissionError,
@@ -53,7 +52,6 @@ def test_config_syntax_error_round_trip() -> None:
         RulePermissionError,
         RuleSocketConnectionRefusedError,
         RuleModuleNotFoundError,
-        RuleAttributeError,
     ],
 )
 def test_message_only_errors_round_trip(exception_class: type[BaseException]) -> None:
