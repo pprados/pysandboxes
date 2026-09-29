@@ -176,8 +176,9 @@ gh-tests: lint
 	if [ -f .local.py-sandboxes.backup ]; then mv .local.py-sandboxes.backup .local.py-sandboxes; fi; \
 	exit $$status
 
-# samples.yml and integration.yml only run on schedule on GitHub. Dispatched here,
-# their `changes` guard never skips, so the local tree is always tested.
+# On GitHub, samples.yml and integration.yml are called by full-gate.yml (nightly on develop, release tag) or
+# dispatched. The `changes` guard lives in full-gate.yml: dispatched here, they always run, so the local tree
+# is always tested.
 ## Make github tests locally, the scheduled samples and integration workflows included
 gh-all-tests: gh-tests
 	if [ -f .local.py-sandboxes ]; then mv .local.py-sandboxes .local.py-sandboxes.backup; fi

@@ -58,17 +58,18 @@ of it:
 | Workflow | Suite | Versions | Executions | Fires on |
 |---|---|---|---|---|
 | `test.yml` | Unit | 3.11, 3.12, 3.13, 3.14 | ~4500 | every push and pull request |
-| `integration.yml` | Integration | 3.13 | ~130 | nightly (03:00) or dispatch |
-| `containers.yml` | Containers | 3.13 | ~60 | a `v*` tag or dispatch |
-| `samples.yml` | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | nightly (04:00), `v*` or dispatch |
+| `integration.yml` | Integration | 3.13 | ~130 | `full-gate.yml` (nightly 01:17 UTC, release tag) or dispatch |
+| `containers.yml` | Containers | 3.13 | ~60 | `full-gate.yml` (nightly 01:17 UTC, release tag) or dispatch |
+| `samples.yml` | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | `full-gate.yml` (nightly 01:17 UTC, release tag) or dispatch |
 | **Total** | | | **~5340** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
 excludes the matrix interpreter is *skipped*, not failed. `langgraph-demo` is
 3.13+, so its suite runs on two rows of four — the Makefile compares the two
 versions with `sort -V` and prints a `skip` line rather than trying to resolve
-the environment. Both nightly workflows open with a guard job that exits early
-when the branch has not changed since the last run.
+the environment. `full-gate.yml`, which holds the schedule, opens with the guard
+job that exits early when the branch has not changed since the last run; the suites
+it calls have none of their own.
 
 ## A. Guard families
 
