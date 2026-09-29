@@ -4,8 +4,8 @@ SHELL=/bin/bash
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
-	minikube-ready minikube-build-images lock validate _uv-init devpi-deploy inspector github-push-test init \
-	clean-sandbox-temps release-beta-local
+	minikube-ready minikube-build-images lock validate _uv-init inspector github-push-test init \
+	clean-sandbox-temps
 
 UV_GROUP?=--group dev --group test --group lint
 
@@ -585,86 +585,12 @@ _uv-init:
 	@uv sync $(UV_GROUP)
 
 
-# Variables for the devpi environment
-DEVPI_URL := http://localhost:3141
-PIP_INDEX_URL=http://localhost:3141/$(USER)/dev
-UV_INDEX=http://localhost:3141/$(USER)/dev
-# User credentials (Adjust these or export them via 'export' from the shell)
-DEVPI_USER := $(USER)
-DEVPI_PASS := 123
-
-.PHONY: devpi-start devpi-stop devpi-web devpi-install-devpi
-
-.devpi:
-	@echo "--- 🛠️ Initializing User and Index ---"
-	@devpi-init --serverdir .devpi  --role master
-	@devpi-server --serverdir .devpi > /dev/null 2>&1 & echo $$!>.devpi/devpi.pid
-	@sleep 3
-	@devpi use $(DEVPI_URL)
-	@devpi user -c $(DEVPI_USER) password=$(DEVPI_PASS)
-	@devpi login $(DEVPI_USER) --password=$(DEVPI_PASS)
-	@devpi index -c dev bases=root/pypi
-	@$(MAKE) devpi-stop
-	@echo "✅ devpi initialized."
-
-## Start Devpi server (local python repo)
-devpi-start: .devpi
-	@if [ ! -f ".devpi/devpi.pid" ]; then \
-		devpi-server --serverdir .devpi > /dev/null 2>&1 & echo $$!>.devpi/devpi.pid ; \
-		echo "✅ devpi-server started." ;\
-	fi
-
-devpi-stop:
-	@if [ -f ".devpi/devpi.pid" ]; then \
-		PID=$$(cat .devpi/devpi.pid); \
-		kill $$PID; \
-		rm .devpi/devpi.pid; \
-		echo "devpi Server (PID $$PID) stopped."; \
-	else \
-		echo "PID file not found. Please stop the devpi-server process manually if necessary."; \
-	fi
-
-## Start Devpi console
-devpi-web:
-	xdg-open $(PIP_INDEX_URL)
-
-devpi-install-devpi:
-	 uv pip install -i $(PIP_INDEX_URL) .
-
-devpi-deploy:
-	uv build
-	devpi upload
-
 ## Start MCP inspector
 inspector:
 	npx @modelcontextprotocol/inspector
 
 github-push-test:
 	gh act push
-
-# Replays release.yml on TAG against the local devpi. On a throw-away clone, not the working directory: act copies
-# the tree as is, so an untracked change would give hatch-vcs a .devN version, and a worktree's .git points to a host
-# path absent from the container. origin/develop in the clone is the local develop; nothing reaches GitHub.
-# Host network: devpi listens on localhost only.
-RELEASE_CLONE = $(or $(TMPDIR),/tmp)/release-$(TAG)
-## Replay the release of a signed tag locally, against devpi: make release-beta-local TAG=v0.1.0b1
-release-beta-local:
-	@test -n "$(TAG)" || { echo "Usage: make release-beta-local TAG=v0.1.0b1"; exit 1; }
-	@git rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null || { echo "No tag $(TAG) in this repository."; exit 1; }
-	$(MAKE) devpi-start
-	rm -rf "$(RELEASE_CLONE)" "$(RELEASE_CLONE).artifacts"
-	git clone --quiet --no-hardlinks . "$(RELEASE_CLONE)"
-	git -C "$(RELEASE_CLONE)" checkout --quiet "$(TAG)"
-	printf '{"ref": "refs/tags/%s", "act": true}\n' "$(TAG)" >"$(RELEASE_CLONE).event.json"
-	email=$$(git config user.email); key=$$(git config user.signingkey); key=$${key#key::}; \
-	case "$$key" in "~/"*) key="$$HOME/$${key#\~/}";; esac; if [ -f "$$key" ]; then key=$$(cat "$$key"); fi; \
-	case "$$key" in ssh-*|sk-*) ;; *) echo "user.signingkey is not an SSH public key."; exit 1;; esac; \
-	cd "$(RELEASE_CLONE)" && gh act push --env-file /dev/null --network host \
-		-W .github/workflows/release.yml -e "$(RELEASE_CLONE).event.json" \
-		--artifact-server-path "$(RELEASE_CLONE).artifacts" \
-		--var RELEASE_ALLOWED_SIGNERS="$$email $$key" \
-		-s DEVPI_USER=$(DEVPI_USER) -s DEVPI_PASS=$(DEVPI_PASS); \
-	status=$$?; rm -rf "$(RELEASE_CLONE)" "$(RELEASE_CLONE).event.json" "$(RELEASE_CLONE).artifacts"; exit $$status
 
 init: _uv-init
 #	@pre-commit install

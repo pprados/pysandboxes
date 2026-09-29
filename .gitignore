@@ -46,9 +46,6 @@ pip-delete-this-directory.txt
 # Makefile stamps (make dist, make build-image-*)
 .make-*
 
-# Local devpi index
-.devpi/
-
 # ---------------------------------------------------------------------------
 # Dependency lock files
 # ---------------------------------------------------------------------------
