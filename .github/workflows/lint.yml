@@ -3,8 +3,10 @@ name: Python Lint
 on:
   push:
     branches: [ "develop", "master" ]
+    paths-ignore: [ "**.md", "wiki/**" ]
   pull_request:
     branches: [ "develop", "master" ]
+    paths-ignore: [ "**.md", "wiki/**" ]
 
 jobs:
   lint:
