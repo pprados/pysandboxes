@@ -1,6 +1,6 @@
 # PY-SANDBOXES
 
-![Sandboxes](https://raw.githubusercontent.com/pprados/pysandboxes/master/py-sandboxes-small.png)
+![Sandboxes](https://raw.githubusercontent.com/pprados/pysandboxes/HEAD/py-sandboxes-small.png)
 
 [![PyPI version](https://img.shields.io/pypi/v/pysandboxes.svg)](https://pypi.org/project/pysandboxes/)
 [![Python versions](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://pypi.org/project/pysandboxes/)
