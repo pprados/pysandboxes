@@ -5,15 +5,15 @@ three ordinary things: it fetches a URL, reads a directory and reads `DEMO_API_K
 learns one from the script's real behaviour, then runs the same script in another context and shows
 what the policy refuses.
 
-Setup, from this directory (the alias runs the `python-sb` of this repository):
+Setup, from this directory:
 
 ```bash
-cd samples/quick-demo
-alias python-sb='uv run --project ../.. python-sb'
-rm -f .py-sandboxes          # no policy yet: the audience must see it being born
-export DEMO_API_KEY=sk-demo-123
-export AWS_SECRET_ACCESS_KEY=do-not-leak   # a secret the application never needs
+source samples/quick-demo/init.sh
 ```
+
+`init.sh` moves to this directory, removes any previous `.py-sandboxes` (the audience must see it
+being born), exports `DEMO_API_KEY` and an `AWS_SECRET_ACCESS_KEY` the application never needs, and
+aliases `python-sb` to this repository's copy until the release `uvx python-sb` needs is published.
 
 ## 1. The application, without a sandbox (30 s)
 
