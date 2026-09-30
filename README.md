@@ -10,6 +10,8 @@
 
 > Protect Python programs without their knowledge.
 
+Applications increasingly run code, or call tools, chosen by an LLM, and a manipulated model can make them read local files, reach the intranet or run commands ([LLM05:2025 Improper Output Handling](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/), [LLM06:2025 Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)). **Py-Sandboxes** restricts what the process may actually do, from a whitelist learned by watching it run.
+
 [Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
 > **Not yet on pypi.org.** Until the project is published there, `pip install pysandboxes` and
@@ -60,21 +62,8 @@ For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock
 
 ---
 
-Modern programming often relies on code generation or API invocation by language models (LLMs). However, these models can be manipulated to execute malicious commands. The [OWASP](https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/) provides a list of risks associated with using these models.
-
-Among these, we find [LLM05:2025 - Improper Output Handling](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/) and [LLM06:2025 Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/).
-
-Indeed, it is not easy to control the code that an LLM will execute. It can generate Python code that will be directly invoked, or describe the launch of a tool that the application will run, with parameters provided by the LLM (directly via a function or indirectly via an API or an [MCP call](https://modelcontextprotocol.io/)).
-
-Furthermore, developers are increasingly using AI to improve code. Without rigorous verification, the generated code can open up security vulnerabilities.
-
-**It's time to control, as much as possible, the allowed capabilities for your application.**
-
----
-
 # Table of Contents
 
-- [Table of Contents](#table-of-contents)
 - [Quick start](#quick-start)
 - [What it protects against, and what it does not](#what-it-protects-against-and-what-it-does-not)
 - [Platform support](#platform-support)
@@ -90,10 +79,16 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
 - [Security Filters](#security-filters)
   - [Dynamically evaluated code](#dynamically-evaluated-code)
 - [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
-- [Manage config file locations](#manage-config-file-locations)
-- [Integration in a module](#integration-in-a-module)
-  - [Samples](#samples)
+- [Samples](#samples)
 - [Documentation](#documentation)
+
+# Principle
+
+It is not easy to control the code that an LLM will execute. It can generate Python code that will be directly invoked, or describe the launch of a tool that the application will run, with parameters provided by the LLM (directly via a function or indirectly via an API or an [MCP call](https://modelcontextprotocol.io/)).
+
+Furthermore, developers are increasingly using AI to improve code. Without rigorous verification, the generated code can open up security vulnerabilities.
+
+**It's time to control, as much as possible, the allowed capabilities for your application.**
 
 The **Py-Sandboxes** project proposes to add multiple layers of security to limit the actions of your application, and thus, indirectly, the actions caused by an LLM or a malicious user of your application.
 
@@ -118,10 +113,6 @@ Like [TypeScript Deno](https://docs.deno.com/runtime/fundamentals/security/#perm
 - [X] **Malicious Execution**: `eval()`, `exec()` and `compile()` are refused unless the profile declares the sub-language they may run, via the [`eval-*` rules](wiki/eval.md).
 - [X] **Denial of Service**: An evaluated string runs under an iteration budget, a recursion bound, an allocation ceiling and a timeout the caller can recover from (`eval-timeout=`, `eval-max-iterations=`).
 - [X] **Malicious syntax**: The syntax of a dynamically evaluated string is filtered against a declared whitelist of constructs (`eval-syntax=`)
-
----
-
-# Principle
 
 The approach is based on the principle of **Least Privilege** and **Defense in Depth**, with an exclusively "*whitelist*" configuration. By default, everything is forbidden. You must explicitly authorize actions.
 
@@ -223,7 +214,7 @@ This approach allows for application isolation, but requires granting privileges
 flowchart LR
     subgraph Python_sb [<b>Python-sb</b><br/>Process:python]
     end
-    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firjail,docker,..."]
+    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firejail,docker,..."]
     end
     subgraph PythonSandbox ["<b>PythonSandbox</b><br/>Process:python"]
     end
@@ -395,7 +386,7 @@ There are a few peculiarities to note:
 flowchart LR
     subgraph Python [<b>Python</b><br/>Process:python]
     end
-    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firjail,docker,..."]
+    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firejail,docker,..."]
     end
     subgraph PythonSandbox ["<b>PythonSandbox</b><br/>Process:python"]
     end
@@ -462,18 +453,6 @@ What each technology enforces, its container and Kubernetes compatibility, and t
 
 ---
 
-# Manage config file locations
-
-The rules come from the `.py-sandboxes` at the root of the module that launches the sandbox, else from `./.py-sandboxes`. `include` statements compose a project, a local, a per-user and a per-machine file, and `python-sb --pysandboxes-config=FILE` selects another one. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/configuration.md)
-
----
-
-# Integration in a module
-
-A `.py-sandboxes` shipped as a resource inside your wheel is picked up automatically, and a small `main_sb()` wrapper turns your module's entry point into a sandboxed CLI. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/configuration.md#integration-in-a-module)
-
----
-
 ## Samples
 
 Twelve samples, one per MCP or agent framework (LangChain, CrewAI, smolagents, ...), run the same two tools under pysandboxes: one fetches a web page, the other evaluates an expression. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/samples.md)
@@ -482,4 +461,4 @@ Twelve samples, one per MCP or agent framework (LangChain, CrewAI, smolagents, .
 
 # Documentation
 
-The [wiki](https://github.com/pprados/pysandboxes/blob/master/wiki/Home.md) holds the rest of the documentation: FAQ, implementation, weaknesses, security assessments, OS providers, roadmap and related CVEs. Its index is the menu to start from.
+The [wiki](https://github.com/pprados/pysandboxes/blob/master/wiki/Home.md) holds the rest of the documentation: FAQ, configuration files and integration in a module, implementation, weaknesses, security assessments, OS providers, roadmap and related CVEs. Its index is the menu to start from.
