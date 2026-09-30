@@ -35,7 +35,7 @@ python app/demo.py --url=https://example.com --dir=data/
 
 ```bash
 ls -a                        # no .py-sandboxes
-python-sb --learn app/demo.py
+python-sb --learn app/demo.py --url=https://example.com --dir=data/
 ```
 
 ```
@@ -80,7 +80,7 @@ net=ALLOW|TCP|example.com|443|OUT
 ## 4. Replay in the learned context (20 s)
 
 ```bash
-python-sb app/demo.py
+python-sb app/demo.py --url=https://example.com --dir=data/
 ```
 
 Same three `[ OK ]`: the policy is enforced, and the legitimate use still works.
