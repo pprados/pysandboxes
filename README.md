@@ -10,6 +10,8 @@
 
 > Protect Python programs without their knowledge.
 
+[![Quick demo: learn a policy, then enforce it](https://raw.githubusercontent.com/pprados/pysandboxes/HEAD/samples/quick-demo/quick-demo.gif)](samples/quick-demo/)
+
 [Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
 > **Not yet on pypi.org.** Until the project is published there, `pip install pysandboxes` and

