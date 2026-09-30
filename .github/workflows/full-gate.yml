@@ -9,9 +9,9 @@ name: Full Gate
 
 on:
   schedule:
-    # 01:17 UTC: done before the working day in Paris, even when GitHub fires a schedule late; off the hour, when
-    # scheduled runs pile up.
-    - cron: "17 1 * * *"
+    # 20:17 UTC (22:17 in Paris in summer): done before the working day even when GitHub fires a schedule hours
+    # late, as it did by 5h30 on 2026-09-30; off the hour, when scheduled runs pile up.
+    - cron: "17 20 * * *"
   workflow_dispatch:
     inputs:
       exclude-tcg:
