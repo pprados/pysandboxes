@@ -278,6 +278,12 @@ def parse_python_cmd_line(
             help="Where to find the pysandboxes configuration.",
         )
         parser.add_argument(
+            "--learn",
+            nargs="?",
+            metavar="FILE",
+            help="Learning mode: run the program and append the rules it needs to FILE (default: .py-sandboxes).",
+        )
+        parser.add_argument(
             "--<sb-option>=<value>",
             action="store_true",
             dest="config",
