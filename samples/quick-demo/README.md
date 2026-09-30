@@ -122,6 +122,7 @@ python-sb app/demo.py --evil
 [REFUSED] run a shell command: RuleApiPermissionError: os.system() is denied by the API guard (category: process-exec).
 Add `python-api=ALLOW:os.system` for this function only, or `python-api=ALLOW:process-exec` for the whole category.
 [ OK ]    list secrets in the environment: DEMO_API_KEY
+[REFUSED] read $AWS_SECRET_ACCESS_KEY: KeyError: 'AWS_SECRET_ACCESS_KEY'
 [REFUSED] exfiltrate: URLError: <urlopen error Guard network connection to '[54.172.131.225]:443' DENIED by implicit default policy.>
 ```
 
@@ -158,6 +159,7 @@ python-sb --learn app/demo.py --evil
 uid=1000(<user>) gid=1000(<user>) groups=1000(<user>)
 [ OK ]    run a shell command: exit code 0
 [ OK ]    list secrets in the environment: AWS_SECRET_ACCESS_KEY, DEMO_API_KEY
+[ OK ]    read $AWS_SECRET_ACCESS_KEY: do-...
 Connection to '[3.234.28.4]:443' DENIED by implicit default policy.
 [ OK ]    exfiltrate: HTTP 200, title=?
 
@@ -166,8 +168,8 @@ The old version is here '.py-sandboxes.old'.
 Check and update this file to validate the rules.
 ```
 
-Everything passes: in learning mode the application sees the whole environment, `AWS_SECRET_ACCESS_KEY`
-included. The previous policy is kept aside, and the impact of this run is the difference
+Everything passes: in learning mode the application sees the whole environment, and reads the value of
+`AWS_SECRET_ACCESS_KEY`. The previous policy is kept aside, and the impact of this run is the difference
 between the two files:
 
 ```bash
@@ -175,16 +177,20 @@ diff .py-sandboxes.old .py-sandboxes
 ```
 
 ```
-99a100,103
+62a63,65
+> # Add rules (<date>)
+> env=AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+>
+98a102,105
 > # Add rules (<date>)
 > expose-ro=/etc
 > expose-ro=~/.ssh
 >
-144a149,151
+143a151,153
 > # Add rules (<date>)
 > net=ALLOW|TCP|httpbin.org|443|OUT
 >
-208a216,219
+207a218,221
 >
 > # Add rules (<date>)
 > # ⚠ process-exec: runs code outside the patched interpreter
@@ -192,7 +198,8 @@ diff .py-sandboxes.old .py-sandboxes
 ```
 
 > *Say:* "Learning records what the code does, including what it should not do. Learn from a trusted
-> run, and review this diff like any other code change: here, four lines give away the attack."
+> run, and review this diff like any other code change: here, five lines give away the attack, and the first one would hand the AWS secret to every
+> future run."
 
 Put the reviewed policy back before replaying:
 
