@@ -70,12 +70,10 @@ For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock
 - [Principle](#principle)
 - [Usage](#usage)
   - [Apply the sandbox to the entire application  (complete mode)](#apply-the-sandbox-to-the-entire-application--complete-mode)
-    - [How the python-sb work?](#how-the-python-sb-work)
     - [Use with uvx](#use-with-uvx)
   - [Apply the sandbox to a part of the application (partial mode).](#apply-the-sandbox-to-a-part-of-the-application-partial-mode)
     - [Launching the Sandbox](#launching-the-sandbox)
     - [Executing a function in the sandbox (partial mode)](#executing-a-function-in-the-sandbox-partial-mode)
-    - [How the partial mode work?](#how-the-partial-mode-work)
 - [Security Filters](#security-filters)
   - [Dynamically evaluated code](#dynamically-evaluated-code)
 - [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
@@ -152,7 +150,7 @@ flowchart TD
     end
 
     A -- "1- my_function(param)" --> C
-    C -- "4- Propagate to caller" --> A
+    C -- "2- Return to caller" --> A
 
 %% Custom style for OSSandbox
 style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
@@ -195,9 +193,7 @@ It is recommended for launching an [MCP](https://modelcontextprotocol.io/specifi
 
 > For more information on using sandboxes with MCP, see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/mcp.md).
 
-During the first launch, noting that there is no `.py-sandboxes` parameter file, the application starts in learning mode. Use your application in all its capacities, so that the solution learns network and disk usage, imported modules, usage of environment variables, etc. When the application is stopped, a `.py-sandboxes` file is created in the current directory. It has been populated with all the learned rules. **We invite you to review this file to make any necessary adjustments.**
-
-From now on, during subsequent launches, the application runs by limiting the application's capabilities to the previously learned whitelist.
+The first launch learns the rules, as described in [Quick start](#quick-start): exercise every feature of your application, so that nothing it legitimately needs is missing from the whitelist.
 
 If you want to restart a learning session to add missing rules:
 
@@ -207,24 +203,6 @@ If you want to restart a learning session to add missing rules:
 This way, only the missing rules will be added to the file.
 
 This approach allows for application isolation, but requires granting privileges to the entire application, such as access to API tokens. It's likely that only a small part of the application needs these privileges, but not the rest.
-
-### How the python-sb work?
-
-```mermaid
-flowchart LR
-    subgraph Python_sb [<b>Python-sb</b><br/>Process:python]
-    end
-    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firejail,docker,..."]
-    end
-    subgraph PythonSandbox ["<b>PythonSandbox</b><br/>Process:python"]
-    end
-    Python_sb  -- launch --> OSSandbox
-    OSSandbox  -- launch --> PythonSandbox
-
-    %% Custom style for OSSandbox
-    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
-    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
-```
 
 ### Use with uvx
 
@@ -380,25 +358,6 @@ There are a few peculiarities to note:
 - If an exception is raised in the sandbox, the stack trace is propagated to the main application to allow for a stack analysis as if the call had been made directly. This facilitates debugging.
 - If the application writes to *stdout* or *stderr*, the stream is captured by the sandbox and returned to the caller. The caller will then write to its own *stdout* and *stderr* streams. Thus, the capture of your application's prints includes all information, without forgetting those from the sandbox or mixing the different outputs between several threads. They are executed in the correct process, in the same async loop.
 
-### How the partial mode work?
-
-```mermaid
-flowchart LR
-    subgraph Python [<b>Python</b><br/>Process:python]
-    end
-    subgraph OSSandbox ["<b>OSSandbox</b><br/>Process:firejail,docker,..."]
-    end
-    subgraph PythonSandbox ["<b>PythonSandbox</b><br/>Process:python"]
-    end
-    Python  -- launch --> OSSandbox
-    OSSandbox  -- launch --> PythonSandbox
-
-    %% Custom style for OSSandbox
-    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
-    style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
-
-```
-
 ---
 
 # Security Filters
@@ -410,7 +369,7 @@ What are the security filters offered by **Py-Sandboxes**?
 - **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `ignore=.*`).
 - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
 - **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
-- **Dynamically evaluated code control**: a string handed to `eval()`, `exec()` or `compile()` — which is exactly the shape of a model's answer — is refused unless the profile declares the sub-language it may use. The declared source is then parsed, checked, rewritten so attribute walks and resource exhaustion are refused while it runs, and executed under a timeout the caller can recover from. See [the `eval-*` rules](https://github.com/pprados/pysandboxes/blob/master/wiki/eval.md).
+- **Dynamically evaluated code control**: a string handed to `eval()`, `exec()` or `compile()` is refused unless the profile declares the sub-language it may use. See [Dynamically evaluated code](#dynamically-evaluated-code).
 
 Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandboxes.template) generated during the first execution for more details.
 
