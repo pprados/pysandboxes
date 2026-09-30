@@ -600,9 +600,18 @@ Parameters for all of the user's projects can be present in `~/.config/py-sandbo
 By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is simply ignored.
 
 With **python-sb**, a special parameter can be used to select the configuration.
+Without it, `python-sb` reads `./.py-sandboxes`. Both `--pysandboxes-config=FILE` and `--pysandboxes-config FILE`
+are accepted.
 
 ```bash
 python-sb --pysandboxes-config=./.py-sandboxes -m ...
+```
+
+If the file does not exist, the first run learns the rules and writes them into it. To add rules to an existing
+file, pass the same file to `--learn`:
+
+```bash
+python-sb --pysandboxes-config=cfg/my-app.py-sandboxes --learn=cfg/my-app.py-sandboxes -m ...
 ```
 
 ---
