@@ -114,8 +114,11 @@ class TestParsePythonCmdLine:
             mock_exit.assert_called_once_with(0)
 
     @patch("sys.exit")
-    def test_parse_python_cmd_line_help_lists_learn(self, mock_exit: Mock, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_parse_python_cmd_line_help_lists_learn(
+        self, mock_exit: Mock, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test the help documents the --learn option."""
+        monkeypatch.setenv("PYTHON_COLORS", "0")  # Python 3.14 colours argparse help under FORCE_COLOR
         parse_python_cmd_line(["--help"])
 
         assert "--learn [FILE]" in capsys.readouterr().out
