@@ -130,7 +130,64 @@ Add `python-api=ALLOW:os.system` for this function only, or `python-api=ALLOW:pr
 > passes. Looking for secrets finds only the one key the application was given: the AWS secret set in
 > my shell never reached it. And the application keeps working for what it was built to do."
 
-## 6. Bonus: the kernel boundary (30 s)
+## 6. Widen the policy on purpose (1 min)
+
+The new context is legitimate after all: learn it, on top of the current policy.
+
+```bash
+python-sb --learn app/demo.py --url https://www.wikipedia.org --dir ~
+```
+
+```
+Connection to '[185.15.58.224]:443' DENIED by implicit default policy.
+[ OK ]    GET https://www.wikipedia.org: HTTP 200, title=Wikipedia
+[ OK ]    read /home/<user>/: .bash_history='...', .bashrc='# ~/.bashrc: executed by bash(1', ...
+[ OK ]    read $DEMO_API_KEY: sk-...
+
+Write all learning rules in '.py-sandboxes'.
+The old version is here '.py-sandboxes.old'.
+Check and update this file to validate the rules.
+```
+
+Learning only adds rules; the new rights are the difference between the two files:
+
+```bash
+diff .py-sandboxes.old .py-sandboxes
+```
+
+```
+98a99,101
+> # Add rules (<date>)
+> expose-ro=~
+>
+142a146,148
+>
+> # Add rules (<date>)
+> net=ALLOW|TCP|www.wikipedia.org|443|OUT
+```
+
+Replay without `--learn`, with the new rights:
+
+```bash
+python-sb app/demo.py --url https://www.wikipedia.org --dir ~
+```
+
+```
+[ OK ]    GET https://www.wikipedia.org: HTTP 200, title=Wikipedia
+[ OK ]    read /home/<user>/: .bash_history='...', .bashrc='# ~/.bashrc: executed by bash(1', ...
+[ OK ]    read $DEMO_API_KEY: sk-...
+```
+
+> *Say:* "Two lines, one per new need, and the new context works. But `expose-ro=~` also covers
+> `~/.ssh`: with this policy, `--evil` reads the SSH key. A diff is where a too-broad right is caught."
+
+Put the reviewed policy back before going on:
+
+```bash
+mv .py-sandboxes.old .py-sandboxes
+```
+
+## 7. Bonus: the kernel boundary (30 s)
 
 The refusals above come from the Python layer, which a determined attacker can bypass with compiled
 code. The OS layer applies the same policy through the kernel:
@@ -142,7 +199,7 @@ OS_SANDBOX=landlock python-sb app/demo.py --evil
 > *Say:* "Same file, now enforced by the Linux kernel. This one also holds against `ctypes` or a
 > native extension."
 
-## 7. Learning trusts what it sees (1 min)
+## 8. Learning trusts what it sees (1 min)
 
 Learn again, but this time with the injected behaviour:
 
