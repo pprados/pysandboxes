@@ -23,13 +23,20 @@ def step(title: str, action: Callable[[], str]) -> None:
 
 
 def fetch_title(url: str) -> str:
-    with urllib.request.urlopen(url, timeout=10) as response:
+    # Sites such as Wikipedia answer 403 to the default "Python-urllib" User-Agent
+    request = urllib.request.Request(url, headers={"User-Agent": "pysandboxes-demo/1.0"})
+    with urllib.request.urlopen(request, timeout=10) as response:
         match = re.search(r"<title>(.*?)</title>", response.read().decode(errors="replace"), re.S)
         return f"HTTP {response.status}, title={match.group(1).strip() if match else '?'}"
 
 
+def read_head(file: Path) -> str:
+    with file.open(errors="replace") as f:
+        return f.read(30).strip()
+
+
 def read_directory(directory: Path) -> str:
-    return ", ".join(f"{f.name}={f.read_text().strip()!r}" for f in sorted(directory.iterdir()) if f.is_file())
+    return ", ".join(f"{f.name}={read_head(f)!r}" for f in sorted(directory.iterdir()) if f.is_file())
 
 
 def evil() -> None:
