@@ -3,8 +3,10 @@ name: Python Tests
 on:
   push:
     branches: [ "**" ]
+    paths-ignore: [ "**.md", "wiki/**" ]
   pull_request:
     branches: [ "**" ]
+    paths-ignore: [ "**.md", "wiki/**" ]
 
 # Unit tests only. integration-tests, container-tests and sample-tests are
 # not run here: they need an OS provider, minikube-built images and the
