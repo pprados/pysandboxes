@@ -16,6 +16,7 @@ Index of the documentation pages.
 - [Security assessment of the eval-* guard](audit-eval-security.md) — attacks against dynamically evaluated code.
 - [The transport unpickle guard](transport-unpickle-guard.md) — how the parent safely deserializes what the sandboxed child sends back.
 - [Dynamically evaluated code](eval.md) — the `eval-*` rules.
+- [Related CVEs](related-cves.md) — published vulnerabilities in agent frameworks.
 
 ## OS-level sandbox providers
 

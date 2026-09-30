@@ -58,12 +58,6 @@ This is **not** a defense against a malicious third-party dependency that you in
 
 For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock, bwrap, firejail, unshare) is a Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
 
-# Cost and compatibility
-
-The performance impact is negligible, and nothing breaks as long as the privilege is granted. Once an access is authorized in `.py-sandboxes`, the call behaves exactly as it would outside the sandbox: the interception adds a whitelist check, not a re-implementation. What is *not* authorized raises an explicit error, which is the whole point.
-
-Compiled extensions are a special case: since the Python layer cannot intercept them, they are neither slowed down nor restricted by it. A database driver written in C keeps working as before, and that is exactly the gap the OS layer is there to close.
-
 ---
 
 Modern programming often relies on code generation or API invocation by language models (LLMs). However, these models can be manipulated to execute malicious commands. The [OWASP](https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/) provides a list of risks associated with using these models.
@@ -84,7 +78,6 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
 - [Quick start](#quick-start)
 - [What it protects against, and what it does not](#what-it-protects-against-and-what-it-does-not)
 - [Platform support](#platform-support)
-- [Cost and compatibility](#cost-and-compatibility)
 - [Principle](#principle)
 - [Usage](#usage)
   - [Apply the sandbox to the entire application  (complete mode)](#apply-the-sandbox-to-the-entire-application--complete-mode)
@@ -100,14 +93,7 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
 - [Manage config file locations](#manage-config-file-locations)
 - [Integration in a module](#integration-in-a-module)
   - [Samples](#samples)
-  - [FAQ](#faq)
-  - [Implementation](#implementation)
-  - [What are the weaknesses of py-sandbox?](#what-are-the-weaknesses-of-py-sandbox)
-- [Roadmap](#roadmap)
-- [Appendix](#appendix)
-  - [Related CVEs](#related-cves)
-    - [Langchain](#langchain)
-    - [Smolagent](#smolagent)
+- [Documentation](#documentation)
 
 The **Py-Sandboxes** project proposes to add multiple layers of security to limit the actions of your application, and thus, indirectly, the actions caused by an LLM or a malicious user of your application.
 
@@ -490,95 +476,10 @@ A `.py-sandboxes` shipped as a resource inside your wheel is picked up automatic
 
 ## Samples
 
-Twelve samples live under [`samples/`](https://github.com/pprados/pysandboxes/tree/master/samples/). They all demonstrate the **same** scenario, so that what changes from one to the next is only the framework's own way of declaring and dispatching a tool. A chat agent is given exactly two tools:
-
-- **`fetch_webpage`** fetches a URL and returns it as markdown — pysandboxes controls which hosts it may reach;
-- **`evaluate_expression`** receives a "python like" expression and computes it with a plain `eval()` — pysandboxes confines the malicious code that arrives through the argument.
-
-Neither tool is written defensively, and there is deliberately no expression filter: whatever refuses a host or an escape is pysandboxes, and no applicative filter can take the credit.
-
-Each sample carries **two profiles**, one per mode — `.py-sandboxes` confines only the tool bodies, `.py-sandboxes-complete` confines the whole process under `python-sb` — and each is learned in its own mode.
-
-**MCP**
-
-| Sample | What it shows |
-|--------|---------------|
-| [mcp-server-demo](https://github.com/pprados/pysandboxes/blob/master/samples/mcp-server-demo/README.md) | a FastMCP server, isolated to a greater or lesser extent, over `stdio` or `http` |
-| [mcp-client-demo](https://github.com/pprados/pysandboxes/blob/master/samples/mcp-client-demo/README.md) | an MCP chat client against that server, with four sandboxing scenarios |
-
-**Agent frameworks**, each integrating the tools its own way
-
-| Sample | Framework |
-|--------|-----------|
-| [agno-demo](https://github.com/pprados/pysandboxes/blob/master/samples/agno-demo/README.md) | [Agno](https://www.agno.com/) |
-| [autogen-demo](https://github.com/pprados/pysandboxes/blob/master/samples/autogen-demo/README.md) | [AutoGen AgentChat](https://microsoft.github.io/autogen/) |
-| [crewai-demo](https://github.com/pprados/pysandboxes/blob/master/samples/crewai-demo/README.md) | [CrewAI](https://www.crewai.com/) |
-| [google-adk-demo](https://github.com/pprados/pysandboxes/blob/master/samples/google-adk-demo/README.md) | [Google ADK](https://google.github.io/adk-docs/) |
-| [langchain-demo](https://github.com/pprados/pysandboxes/blob/master/samples/langchain-demo/README.md) | [LangChain](https://www.langchain.com/) |
-| [langgraph-demo](https://github.com/pprados/pysandboxes/blob/master/samples/langgraph-demo/README.md) | [LangGraph](https://langchain-ai.github.io/langgraph/) |
-| [openai-agents-sdk-demo](https://github.com/pprados/pysandboxes/blob/master/samples/openai-agents-sdk-demo/README.md) | [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) |
-| [pydantic-ai-demo](https://github.com/pprados/pysandboxes/blob/master/samples/pydantic-ai-demo/README.md) | [Pydantic AI](https://ai.pydantic.dev/) |
-| [smolagents-demo](https://github.com/pprados/pysandboxes/blob/master/samples/smolagents-demo/README.md) | [smolagents](https://huggingface.co/docs/smolagents) |
-| [strands-agents-demo](https://github.com/pprados/pysandboxes/blob/master/samples/strands-agents-demo/README.md) | [Strands Agents](https://strandsagents.com/) |
-
-Every sample is self-contained — its own `uv` environment, its own `Makefile`, its own documentation:
-
-```bash
-cd samples/langchain-demo
-make init      # uv sync
-make run       # interactive chat with the framework's agent
-make tests     # the sample's own suite
-make learn     # relearn both profiles, one per mode
-```
-
-Ask the chat for a host the profile does not allow, or for an expression that tries to escape: the tool answers with the rule that refused it. From the repository root, `make sample-tests` runs every sample's suite.
-
-See [here for more information](https://github.com/pprados/pysandboxes/blob/master/wiki/samples.md)
+Twelve samples, one per MCP or agent framework (LangChain, CrewAI, smolagents, ...), run the same two tools under pysandboxes: one fetches a web page, the other evaluates an expression. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/samples.md)
 
 ---
 
-## FAQ
+# Documentation
 
-see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/faq.md)
-
----
-
-## Implementation
-
-see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/implementation.md)
-
-## What are the weaknesses of py-sandbox?
-
-See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/weaknesses.md)
-
----
-
-# Roadmap
-
-See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/roadmap.md)
-
----
-
-# Appendix
-
-1. Connection to Databases: See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/database.md)
-
-## Related CVEs
-
-Some related CVEs
-
-### Langchain
-
-- [CVE-2023-46229](https://nvd.nist.gov/vuln/detail/CVE-2023-46229)
-- [CVE-2023-32786](https://nvd.nist.gov/vuln/detail/CVE-2023-32786)
-- [CVE-2024-28088](https://nvd.nist.gov/vuln/detail/CVE-2024-28088)
-- [CVE-2024-7774](https://nvd.nist.gov/vuln/detail/CVE-2024-7774)
-- [CVE-2024-3571](https://nvd.nist.gov/vuln/detail/CVE-2024-3571)
-- [CVE-2024-3095](https://nvd.nist.gov/vuln/detail/CVE-2024-3095)
-- [CVE-2024-2057](https://nvd.nist.gov/vuln/detail/CVE-2024-2057)
-- [CVE-2025-2828](https://nvd.nist.gov/vuln/detail/CVE-2025-2828)
-- [CVE-2025-6985](https://nvd.nist.gov/vuln/detail/CVE-2025-6985)
-
-### Smolagent
-
-- [CVE-2025-5120](https://nvd.nist.gov/vuln/detail/CVE-2025-5120)
+The [wiki](https://github.com/pprados/pysandboxes/blob/master/wiki/Home.md) holds the rest of the documentation: FAQ, implementation, weaknesses, security assessments, OS providers, roadmap and related CVEs. Its index is the menu to start from.

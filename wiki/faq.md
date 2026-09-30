@@ -130,3 +130,9 @@ If you want to allow rules from the working directory to be added when using you
 include "./.py-sandboxes"
 # ... specific rules
 ```
+
+## What does the sandbox cost, and what does it break?
+
+The performance impact is negligible, and nothing breaks as long as the privilege is granted. Once an access is authorized in `.py-sandboxes`, the call behaves exactly as it would outside the sandbox: the interception adds a whitelist check, not a re-implementation. What is *not* authorized raises an explicit error, which is the whole point.
+
+Compiled extensions are a special case: since the Python layer cannot intercept them, they are neither slowed down nor restricted by it. A database driver written in C keeps working as before, and that is exactly the gap the OS layer is there to close.
