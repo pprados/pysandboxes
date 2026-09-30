@@ -7,6 +7,7 @@ Index of the documentation pages.
 - [Implementation](implementation.md) — how the framework is put together.
 - [Roadmap](roadmap.md) — planned work and direction.
 - [FAQ](faq.md) — common questions.
+- [Configuration files](configuration.md) — where `.py-sandboxes` is looked up, `include`, and integration in a module.
 
 ## Security model
 
@@ -18,6 +19,7 @@ Index of the documentation pages.
 
 ## OS-level sandbox providers
 
+- [Choosing a provider](os-providers.md) — what each technology enforces, and the paranoia levels.
 - [Bubblewrap (bwrap)](bwrap.md)
 - [Firejail](firejail.md)
 - [Unshare](unshare.md)
