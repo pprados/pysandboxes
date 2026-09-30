@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from pysandboxes.config import CONFIG_NAME
 from pysandboxes.remote.parse_cpython_args import (
     parse_python_cmd_line,
@@ -110,6 +112,13 @@ class TestParsePythonCmdLine:
             parse_python_cmd_line(args)
 
             mock_exit.assert_called_once_with(0)
+
+    @patch("sys.exit")
+    def test_parse_python_cmd_line_help_lists_learn(self, mock_exit: Mock, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test the help documents the --learn option."""
+        parse_python_cmd_line(["--help"])
+
+        assert "--learn [FILE]" in capsys.readouterr().out
 
     def test_parse_python_cmd_line_boolean_flags(self) -> None:
         """Test parsing various boolean flags."""
