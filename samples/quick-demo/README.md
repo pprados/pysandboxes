@@ -198,8 +198,8 @@ diff .py-sandboxes.old .py-sandboxes
 ```
 
 > *Say:* "Learning records what the code does, including what it should not do. Learn from a trusted
-> run, and review this diff like any other code change: here, five lines give away the attack, and the first one would hand the AWS secret to every
-> future run."
+> run, and review this diff like any other code change: here, five lines give away the attack, and
+> the first one would hand the AWS secret to every future run."
 
 Put the reviewed policy back before replaying:
 
