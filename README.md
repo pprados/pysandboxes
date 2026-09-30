@@ -12,6 +12,15 @@
 
 [Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
+> **Not yet on pypi.org.** Until the project is published there, `pip install pysandboxes` and
+> `uvx python-sb` do not work. Install it from the sources instead:
+>
+> ```bash
+> git clone https://github.com/pprados/pysandboxes.git
+> cd pysandboxes
+> pip install -e .
+> ```
+
 # Quick start
 
 Run any module in a sandbox, without installing anything and without touching a single line of your code:
