@@ -199,9 +199,3 @@ Put the reviewed policy back before replaying:
 ```bash
 mv .py-sandboxes.old .py-sandboxes
 ```
-
-## Tips for the live session
-
-- Rehearse once: the first `uv run` builds the environment.
-- Keep a working policy aside (`cp .py-sandboxes /tmp/demo.py-sandboxes`) in case the room's network
-  fails during step 2.
