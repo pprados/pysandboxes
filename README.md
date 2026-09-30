@@ -97,7 +97,6 @@ Furthermore, developers are increasingly using AI to improve code. Without rigor
 - [Security Filters](#security-filters)
   - [Dynamically evaluated code](#dynamically-evaluated-code)
 - [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox)
-- [Paranoia level](#paranoia-level)
 - [Manage config file locations](#manage-config-file-locations)
 - [Integration in a module](#integration-in-a-module)
   - [Samples](#samples)
@@ -467,198 +466,25 @@ Every rule of the `eval-*` family is described key by key, with a valid and an i
 
 # OS-sandbox vs Py-sandbox
 
-Our solution offers multiple layers of security:
-
-- a sandbox at the Python API level (**py-sandbox**)
-- another sandbox at the OS level (**os-sandbox**)
-
-The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel. For example, database access is often done via compiled C drivers (See the appendix for more details). Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. **We want to prevent abusive use of our code.**
-
-Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.
-
-We offer several implementations to encapsulate the Python sandbox:
-
-| Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
-|-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| subprocess                                                      |                                            | • no complementary security                                                  |                                                                                                                                          |
-| [bwrap](https://github.com/containers/bubblewrap)               | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [firejail](https://github.com/netblue30/firejail)               | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
-| [landlock](https://landlock.io/)                                | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
-| [qemu](https://www.qemu.org/)                            | [here](https://github.com/pprados/pysandboxes/blob/master/wiki/qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
-
-*Other implementations will be added soon*
-
-How to read the matrix below. The `none` column is the baseline: plain Python, no sandbox at all. The `py-sandbox` column is the Python layer on its own. Every other column lists what that OS technology enforces **on its own** too, whereas in practice you nest it *around* the py-sandbox instead of replacing it.
-
-So a ❌ means "*this technology does not deal with that concern*", never "*that concern is left unprotected*". Choosing landlock, for instance, does not stop the Python guards from filtering `import` or sensitive API calls: landlock simply has no notion of Python, and in exchange it covers what the Python layer cannot reach, namely compiled code and direct syscalls. Read each OS column as what you *add* on top of the Python layer, and the union of the two as your actual protection.
-
-| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       |
-|--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|
-| Isolation                |  ❌   |  Process   | Linux ABI | Namespace | Namespace | Namespace | VM+<br/>emulator |
-| Python code              |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
-| Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
-| expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
-| python-api=*             |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| eval-*                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
-| **Network**              |      |            |           |           |           |        |                  |
-| • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
-| • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
-| • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| **Container compatible** |      |            |           |           |           |        |                  |
-| • Docker / Podman        |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
-| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         |
-| **Kubernetes**           |      |            |           |           |           |        |                  |
-| • kube                   |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
-| • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
-| • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
-| **Extra**                |      |            |           |           |           |        |                  |
-| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  |        ✅         |
-| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    |        ✅         |
-| • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        |
-
-`ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the path disappear (`FileNotFoundError`), **unshare** has the OS refuse it, and **bwrap** and **qemu** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays readable there.
-
-**landlock** under Kubernetes needs no capability at all, which is why its three Kubernetes rows are identical: unlike **unshare** and **bwrap**, it never asks the pod for `SYS_ADMIN` or `NET_ADMIN`, it restricts itself from the inside. Its single requirement sits elsewhere, on the *node*: the kernel must expose Landlock (5.13+ for filesystem rules, 6.7+ for network rules), and the ABI seen inside the pod is the node's, not the image's. On a managed cluster, where the node kernel is not yours to choose, verify it before relying on it.
-
-On the **Extra** rows, **bwrap** is `❌` twice, for two different reasons. It has no resource-limit option at all, and the `bwrap.<option>=` passthrough can only forward flags bubblewrap already understands. Seccomp it *does* expose, but only as `--seccomp FD` / `--add-seccomp-fd FD`, which expect a file descriptor carrying a compiled BPF program; a textual configuration line cannot provision one, so the feature is out of reach here rather than missing from the tool.
-
-For **qemu**, the resource that is bounded is memory: `qemu.memory` caps guest RAM (2048 MiB by default). The vCPU count is not exposed, and unlike `bwrap.*`, unknown `qemu.*` keys are not forwarded to the command line, only the documented ones are read.
-
-A `❌` in the **py-sandbox** column is a deliberate posture, not a gap: with `py-sandbox=False` (or `--py-sandbox=False`) the Python layer is switched off on purpose, so `python-api=`, `eval-*`, `import=`, the Python-code guard and, on **landlock**, `ignore=` stop being enforced. Only the OS layer of the chosen technology remains. Use it when the sandboxed code is trusted not to attack the interpreter itself and you want the OS boundary alone; keep the Python layer on otherwise.
-
-The parent deserializes what the sandboxed child returns over the local SSE transport. Reconstructing a returned object can run arbitrary code in the parent, outside the sandbox, so that channel is filtered by a restricted unpickler. On the result channel the guard is a fail-open denylist of dangerous gadgets, on by default; turn it off with `remote-result-guard=false` only if a legitimate return value is wrongly rejected. It affects only the result denylist: the opcode prescan, the anti-DoS budgets, and the exception-channel guard stay on regardless.
-
-On the exception channel the guard is fail-closed, and an exception's state routinely holds a type it refuses — `httpx.ConnectError` carries the `httpx.Request` it failed on. So the child also sends a descriptor of the exception (class, message, denials), and the parent falls back to it rather than losing the refusal. An exception that crosses that way keeps its class, its message, its traceback and `sandbox_denials(e)`, but arrives **without its attributes**: `except httpx.ConnectError as e` still works, `e.request` does not. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/transport-unpickle-guard.md).
-
-
-
-> During the learning phase, `os-sandbox` is forced to `subprocess`.
-
-> Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
-
-To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file, or set the environment variable `OS_SANDBOX`.
+The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct calls to the kernel. An OS-level provider (**os-sandbox**), nested around it, closes that gap: `subprocess`, `landlock`, `unshare`, `bwrap`, `firejail` or `qemu`. Select it with the `os-sandbox` parameter of the config file, or with the `OS_SANDBOX` environment variable.
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
-> Need help: can you propose a PR to integrate some solution for Apple OS ?
+What each technology enforces, its container and Kubernetes compatibility, and the paranoia levels (which Python and OS combination for which threat): see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/os-providers.md)
 
 ---
 
-# Paranoia level
-Depending on your level of paranoia, you can choose a suitable approach.
-
-| Paranoia | Py-sandbox       | os-sandbox     | docker/pod | --privileged |
-|:--------:|------------------|----------------|:----------:|:------------:|
-|    0     | python           | None           |     No     |              |
-|    1     | python-sb        | subprocess     |     No     |              |
-|    2     | with sandboxes() | subprocess     |     No     |              |
-|    3     | python-sb        | landlock       |     No     |              |
-|    4     | with sandboxes() | landlock       |     No     |              |
-|    5     | python-sb        | unshare        |     No     |              |
-|    6     | with sandboxes() | unshare        |     No     |              |
-|    7     | python-sb        | bwrap/firejail |     No     |              |
-|    8     | with sandboxes() | bwrap/firejail |     No     |              |
-|    9     | python-sb        | qemu + kvm     |     No     |              |
-|    10    | with sandboxes() | qemu + kvm     |     No     |              |
-|    11    | python-sb        | landlock       |    Yes     |      No      |
-|    12    | with sandboxes() | landlock       |    Yes     |      No      |
-|    13    | python-sb        | unshare        |    Yes     |     Yes      |
-|    14    | with sandboxes() | unshare        |    Yes     |     Yes      |
-|    15    | python-sb        | bwrap/firejail |    Yes     |     yes      |
-|    16    | with sandboxes() | bwrap/firejail |    Yes     |     yes      |
-|    17    | python-sb        | qemu           |    Yes     |      no      |
-|    18    | with sandboxes() | qemu           |    Yes     |      no      |       
-
-
 # Manage config file locations
 
-By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./.py-sandboxes` file is used. This can be modified before the program is launched. If you package your application in a Wheel, place your parameters within your module.
-
-To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
-
-By default, you'll find this:
-
-```text
-include "./.local.py-sandboxes"  # May be added to .gitignore
-include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
-include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
-```
-
-The goal is to be able to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`).
-
-Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
-
-By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is simply ignored.
-
-With **python-sb**, a special parameter can be used to select the configuration.
-Without it, `python-sb` reads `./.py-sandboxes`. Both `--pysandboxes-config=FILE` and `--pysandboxes-config FILE`
-are accepted.
-
-```bash
-python-sb --pysandboxes-config=./.py-sandboxes -m ...
-```
-
-If the file does not exist, the first run learns the rules and writes them into it. To add rules to an existing
-file, pass the same file to `--learn`:
-
-```bash
-python-sb --pysandboxes-config=cfg/my-app.py-sandboxes --learn=cfg/my-app.py-sandboxes -m ...
-```
+The rules come from the `.py-sandboxes` at the root of the module that launches the sandbox, else from `./.py-sandboxes`. `include` statements compose a project, a local, a per-user and a per-machine file, and `python-sb --pysandboxes-config=FILE` selects another one. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/configuration.md)
 
 ---
 
 # Integration in a module
 
-It is possible to use the solution to integrate it into a module, when you install your *wheel*. To do this, the `.py-sandboxes` file must be placed at the root of your module, as a resource.
-
-When the sandbox is activated, the code searches for the caller's module and checks whether the resource exists. If so, it is used to apply the security rules. Otherwise, the same file is searched for in the working directory.
-
-If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file
-
-```ini
-# File my_module/.py-sandboxes
-include "./.py-sandboxes"
-# ... specific rules
-```
-
-To create a CLI that uses **py-sandboxes**, use the following pattern:
-
-```python
-def main() -> int:
-    # ...
-    print("hello")
-    return 99
-
-def main_sb() -> int:
-    import sys
-    import os
-
-    sys.argv = (
-            [
-                __file__,
-                "-m", globals()['__spec__'].name
-            ] +
-            sys.argv[1:])
-    from pysandboxes.python_sb import main
-    return(main())  # Launch 'python-sb'
-```
-
-And declare it in your TOML file.
-
-```TOML
-[project.scripts]
-my-script = "my_module:main_sb"
-# my-script = "my_module:main"  # Without sandboxes
-```
+A `.py-sandboxes` shipped as a resource inside your wheel is picked up automatically, and a small `main_sb()` wrapper turns your module's entry point into a sandboxed CLI. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/configuration.md#integration-in-a-module)
 
 ---
 
