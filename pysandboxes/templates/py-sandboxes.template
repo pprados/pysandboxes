@@ -5,28 +5,6 @@
 # unless explicitly allowed through rules.
 
 #######################################################################################
-# LEARNING MODE
-# =============
-# Learning mode automatically observes your application's behavior and generates
-# security rules. When enabled, the sandbox monitors file access, network connections,
-# imports, and environment variable usage, then creates appropriate whitelist rules.
-#
-# How it works:
-# 1. If no configuration exists, learning mode activates automatically
-# 2. Run your application through all its features to capture required permissions
-# 3. Review and validate the generated rules before deploying to production
-# 4. Disable learning mode for production use
-#
-# Security note: Never use learning mode with untrusted code as it may generate
-# overly permissive rules.
-
-# Uncomment to enable continuous learning (development only):
-#learn=.py-sandboxes
-
-# Uncomment to generate rules to a specific file:
-#learn=/path/to/custom-rules.conf
-
-#######################################################################################
 # CONFIGURATION COMPOSITION
 # ==========================
 # You can include additional configuration files for better organization.
@@ -36,46 +14,6 @@
 include "./.local.py-sandboxes"  # May be add to .gitignore
 include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
 include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
-
-#######################################################################################
-# PYTHON SANDBOX ACTIVATION
-# ==========================
-# Controls whether Python-level security guards are active.
-# Set to false to disable Python API patching while keeping OS-level sandboxing.
-
-py-sandbox=true
-
-#######################################################################################
-# TRANSPORT RESULT GUARD
-# ======================
-# The parent deserializes what the sandboxed child returns over the local SSE
-# transport. Because a returned object's reconstruction can run arbitrary code in
-# the parent (outside the sandbox), that channel is filtered by a restricted
-# unpickler. On the result channel the guard is a denylist of dangerous gadgets
-# (fail-open): it lets legitimate return values through and refuses obvious
-# escapes. Set to false only if a legitimate return value is wrongly rejected.
-#
-# Disabling this affects ONLY the result denylist. The opcode prescan, the
-# anti-DoS budgets, and the exception-channel guard stay active regardless.
-# See wiki/transport-unpickle-guard.md.
-
-remote-result-guard=true
-
-#######################################################################################
-# OS-LEVEL SANDBOX PROVIDERS
-# ===========================
-# Python-level sandboxing alone cannot prevent all escapes (native code, syscalls).
-# OS-level sandboxing provides additional isolation through system namespaces.
-#
-# Available providers:
-# - subprocess: Isolates code in separate Python process (default, safest)
-# - firejail, unshare, bwrap, qemu, etc: Advanced Linux sandboxing with syscall filtering,
-#   network isolation
-# - none: Disables @sandbox decorator (for testing/debugging only)
-#
-# Note: Some providers may not work in containers without additional privileges.
-
-os-sandbox=${OS_SANDBOX:-subprocess}
 
 #######################################################################################
 # ENVIRONMENT VARIABLES
@@ -268,6 +206,46 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # <learning_guard_eval>
 
 # </learning_guard_eval>
+
+#######################################################################################
+# PYTHON SANDBOX ACTIVATION
+# ==========================
+# Controls whether Python-level security guards are active.
+# Set to false to disable Python API patching while keeping OS-level sandboxing.
+
+py-sandbox=true
+
+#######################################################################################
+# OS-LEVEL SANDBOX PROVIDERS
+# ===========================
+# Python-level sandboxing alone cannot prevent all escapes (native code, syscalls).
+# OS-level sandboxing provides additional isolation through system namespaces.
+#
+# Available providers:
+# - subprocess: Isolates code in separate Python process (default, safest)
+# - firejail, unshare, bwrap, qemu, etc: Advanced Linux sandboxing with syscall filtering,
+#   network isolation
+# - none: Disables @sandbox decorator (for testing/debugging only)
+#
+# Note: Some providers may not work in containers without additional privileges.
+
+os-sandbox=${OS_SANDBOX:-subprocess}
+
+#######################################################################################
+# TRANSPORT RESULT GUARD
+# ======================
+# The parent deserializes what the sandboxed child returns over the local SSE
+# transport. Because a returned object's reconstruction can run arbitrary code in
+# the parent (outside the sandbox), that channel is filtered by a restricted
+# unpickler. On the result channel the guard is a denylist of dangerous gadgets
+# (fail-open): it lets legitimate return values through and refuses obvious
+# escapes. Set to false only if a legitimate return value is wrongly rejected.
+#
+# Disabling this affects ONLY the result denylist. The opcode prescan, the
+# anti-DoS budgets, and the exception-channel guard stay active regardless.
+# See wiki/transport-unpickle-guard.md.
+
+remote-result-guard=true
 
 #######################################################################################
 # OS PROVIDER PARAMETERS (os-sandbox=…)
