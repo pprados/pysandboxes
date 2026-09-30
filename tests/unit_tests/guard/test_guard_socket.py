@@ -1,3 +1,4 @@
+import logging
 import re
 import sys
 from ipaddress import ip_address
@@ -27,6 +28,7 @@ from pysandboxes.guard_socket import (
     _check_address_with_rules,
     _convert_ports_range,
     _deactivate_guard_sockets,
+    _socket_add_learning_rule,
     activate_guard,
     generate_rules,
     parse_rules,
@@ -993,3 +995,14 @@ def test_the_socketpair_exemption_is_loopback_only_and_ends_with_the_call(monkey
         _windows_socketpair(monkeypatch, emulation)()
     with pytest.raises(RuleSocketConnectionRefusedError):
         bind(sock, ("127.0.0.1", 0))
+
+
+def test_learning_records_a_missing_rule_without_logging_a_refusal(caplog: pytest.LogCaptureFixture) -> None:
+    """Learning checks whether a rule is missing: the refusal it catches is not an error to report."""
+    _arm()
+    recorded: List[LearnSocketRule] = []
+    rule = LearnSocketRule("connect", Kind.TCP, "10.0.0.1", 443, Direction.OUT, ())
+    with patch("pysandboxes.guard_socket.add_learning_rule", recorded.append), caplog.at_level(logging.ERROR):
+        _socket_add_learning_rule(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 443), Direction.OUT, rule)
+    assert recorded == [rule]
+    assert not caplog.records
