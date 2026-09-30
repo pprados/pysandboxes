@@ -12,8 +12,8 @@ cd quick-demo
 source ./init.sh
 ```
 
-`init.sh` moves to this directory, removes any previous `.py-sandboxes` (the audience must see it
-being born), exports `DEMO_API_KEY` and an `AWS_SECRET_ACCESS_KEY` the application never needs, and
+`init.sh` moves to this directory, removes any previous `.py-sandboxes` and its `.py-sandboxes.old`
+backups (the audience must see it being born), exports `DEMO_API_KEY` and an `AWS_SECRET_ACCESS_KEY` the application never needs, and
 aliases `python-sb` to this repository's copy until the release `uvx python-sb` needs is published.
 
 ## 1. The application, without a sandbox (30 s)
@@ -141,8 +141,61 @@ OS_SANDBOX=landlock python-sb app/demo.py --evil
 > *Say:* "Same file, now enforced by the Linux kernel. This one also holds against `ctypes` or a
 > native extension."
 
-## Tips for the live session
+## 7. Learning trusts what it sees (1 min)
 
-- Rehearse once: the first `uv run` builds the environment.
-- Keep a working policy aside (`cp .py-sandboxes /tmp/demo.py-sandboxes`) in case the room's network
-  fails during step 2.
+Learn again, but this time with the injected behaviour:
+
+```bash
+python-sb --learn app/demo.py --evil
+```
+
+```
+[ OK ]    GET https://example.com: HTTP 200, title=Example Domain
+[ OK ]    read data/: hello.txt='Hello from the sandbox demo'
+[ OK ]    read $DEMO_API_KEY: sk-...
+[ OK ]    read an SSH key: -----BEGIN RSA PRIVATE KEY----
+[ OK ]    read /etc/passwd: root:x:0:0:root:/root:/bin/bash
+uid=1000(<user>) gid=1000(<user>) groups=1000(<user>)
+[ OK ]    run a shell command: exit code 0
+[ OK ]    list secrets in the environment: AWS_SECRET_ACCESS_KEY, DEMO_API_KEY
+Connection to '[3.234.28.4]:443' DENIED by implicit default policy.
+[ OK ]    exfiltrate: HTTP 200, title=?
+
+Write all learning rules in '.py-sandboxes'.
+The old version is here '.py-sandboxes.old'.
+Check and update this file to validate the rules.
+```
+
+Everything passes: in learning mode the application sees the whole environment, `AWS_SECRET_ACCESS_KEY`
+included. The previous policy is kept aside, and the impact of this run is the difference
+between the two files:
+
+```bash
+diff .py-sandboxes.old .py-sandboxes
+```
+
+```
+99a100,103
+> # Add rules (<date>)
+> expose-ro=/etc
+> expose-ro=~/.ssh
+>
+144a149,151
+> # Add rules (<date>)
+> net=ALLOW|TCP|httpbin.org|443|OUT
+>
+208a216,219
+>
+> # Add rules (<date>)
+> # ⚠ process-exec: runs code outside the patched interpreter
+> python-api=ALLOW:os.system
+```
+
+> *Say:* "Learning records what the code does, including what it should not do. Learn from a trusted
+> run, and review this diff like any other code change: here, four lines give away the attack."
+
+Put the reviewed policy back before replaying:
+
+```bash
+mv .py-sandboxes.old .py-sandboxes
+```
