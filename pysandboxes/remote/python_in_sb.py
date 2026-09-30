@@ -390,7 +390,7 @@ def python_in_sb(
                 )
         else:
             # Run a script
-            _python_script(all_rules, Path(python_cmd[0]), python_cmd[1:])
+            return _python_script(all_rules, Path(python_cmd[0]), python_cmd[1:])
         return 0
     finally:
         if is_learning_mode():

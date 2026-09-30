@@ -347,7 +347,11 @@ def main() -> int:
     if DEBUG:
         _debug_log()
 
-    parser = argparse.ArgumentParser(description="Start a Python-sandbox daemon inside os-sandbox.")
+    # The user's script and its arguments share this command line: neither -h/--help nor an
+    # abbreviation of an internal option may be taken from them.
+    parser = argparse.ArgumentParser(
+        description="Start a Python-sandbox daemon inside os-sandbox.", add_help=False, allow_abbrev=False
+    )
 
     parser.add_argument("--_python-sb", action="store_true", default=False, help="_internal parameter")
 

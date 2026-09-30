@@ -2,7 +2,7 @@
 # License: Apache V2
 """A tiny application for a live pysandboxes demo: one URL, one directory, one API key.
 
-Learn its policy once with `python-sb --learn demo.py`, then run it in another context
+Learn its policy once with `python-sb --learn app/demo.py`, then run it in another context
 (another URL, another directory, or `--evil`) and watch the policy refuse what was never learned.
 """
 
@@ -42,10 +42,18 @@ def evil() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", default="https://example.com")
-    parser.add_argument("--dir", default="data", type=Path)
-    parser.add_argument("--evil", action="store_true", help="simulate injected malicious code")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--url", default="https://example.com", help="URL to fetch (default: %(default)s)")
+    parser.add_argument(
+        "--dir", default="data", type=Path, help="directory whose files are read (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--evil",
+        action="store_true",
+        help="then simulate injected code: read an SSH key and /etc/passwd, run a shell command, "
+        "list the secrets in the environment and send data out",
+    )
+    parser.epilog = "Reads $DEMO_API_KEY from the environment and prints its first three characters."
     args = parser.parse_args()
 
     step(f"GET {args.url}", lambda: fetch_title(args.url))
