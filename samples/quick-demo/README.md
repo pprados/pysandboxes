@@ -8,7 +8,8 @@ what the policy refuses.
 Setup, from this directory:
 
 ```bash
-source samples/quick-demo/init.sh
+cd quick-demo
+source ./init.sh
 ```
 
 `init.sh` moves to this directory, removes any previous `.py-sandboxes` (the audience must see it
@@ -18,7 +19,7 @@ aliases `python-sb` to this repository's copy until the release `uvx python-sb` 
 ## 1. The application, without a sandbox (30 s)
 
 ```bash
-python app/demo.py
+python app/demo.py --url=https://example.com --dir=data/
 ```
 
 ```
