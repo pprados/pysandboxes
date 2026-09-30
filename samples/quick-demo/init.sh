@@ -10,5 +10,5 @@ uv sync --quiet --inexact --project "${_repo_dir}"
 alias python-sb="'${_repo_dir}/.venv/bin/python-sb'"
 export DEMO_API_KEY=sk-demo-123
 export AWS_SECRET_ACCESS_KEY=do-not-leak  # a secret the application never needs
-cd "${_demo_dir}" && rm -f .py-sandboxes  # no policy yet: the audience must see it being born
+cd "${_demo_dir}" && find . -maxdepth 1 -name '.py-sandboxes*' -delete  # no policy yet: the audience must see it being born
 unset _demo_dir _repo_dir
