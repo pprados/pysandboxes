@@ -5,6 +5,8 @@ three ordinary things: it fetches a URL, reads a directory and reads `DEMO_API_K
 learns one from the script's real behaviour, then runs the same script in another context and shows
 what the policy refuses.
 
+![Quick demo: learn a policy, then enforce it](quick-demo.gif)
+
 Setup, from this directory:
 
 ```bash
