@@ -5,7 +5,7 @@ LaTeX/PDF submission.
 
 | File | What it is |
 |---|---|
-| [`research.md`](research.md) | The paper. This is the **source of truth** — edit only this. |
+| [`confining-python-by-observation.md`](confining-python-by-observation.md) | The paper. This is the **source of truth** — edit only this. |
 | [`md2latex.py`](md2latex.py) | Converter: Markdown → LaTeX + BibTeX (+ PDF). |
 | [`Makefile`](Makefile) | The paper's own build rules, independent of the repository's. |
 | [`LICENSE`](LICENSE) | CC BY-NC-SA 4.0, covering the paper. The *software* stays Apache-2.0. |
@@ -23,7 +23,7 @@ The paper has its own `Makefile`, so its build stays independent of the
 repository's. From this directory:
 
 ```bash
-make tex    # research.md -> .tex + the bibliography
+make tex    # confining-python-by-observation.md -> .tex + the bibliography
 make pdf    # the above, then the PDF
 make arxiv  # the above, then the submission tarball
 make clean  # drop build/ and every generated file
@@ -31,7 +31,7 @@ make clean  # drop build/ and every generated file
 
 Or from the repository root, with `make -C research <rule>`.
 
-Every rule depends on `research.md` and on the converter, so a change to either
+Every rule depends on `confining-python-by-observation.md` and on the converter, so a change to either
 triggers a rebuild and nothing else does. Everything is produced under
 `build/`, then the publishable subset — `.tex`, `.bbl`, `.pdf` and the rendered
 figures — is copied back beside the paper.

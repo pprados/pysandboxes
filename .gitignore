@@ -229,7 +229,7 @@ PPR*
 
 # ---------------------------------------------------------------------------
 # research/: the markdown sources are versioned, the LaTeX chain and its
-# output are not. `make -C research` rebuilds them from research.md.
+# output are not. `make -C research` rebuilds them from confining-python-by-observation.md.
 # ---------------------------------------------------------------------------
 /research/*
 !/research/*.md

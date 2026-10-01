@@ -20,7 +20,7 @@ script normalises them before handing the document over:
 
 Usage::
 
-    python md2latex.py                    # research.md -> build/*.tex + *.bib
+    python md2latex.py                    # confining-python-by-observation.md -> build/*.tex + *.bib
     python md2latex.py --pdf              # ... and typeset the PDF
     python md2latex.py --arxiv            # ... and package the arXiv tarball
     python md2latex.py --bib-only         # only regenerate the bibliography
@@ -875,7 +875,7 @@ def build_arxiv_archive(tex: Path, name: str) -> Path | None:
 def main() -> int:
     here = Path(__file__).parent
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--input", type=Path, default=here / "research.md")
+    parser.add_argument("--input", type=Path, default=here / "confining-python-by-observation.md")
     parser.add_argument("--outdir", type=Path, default=here / "build")
     parser.add_argument("--bib-only", action="store_true", help="only generate refs.bib")
     parser.add_argument("--no-render", action="store_true", help="never invoke mermaid-cli")
