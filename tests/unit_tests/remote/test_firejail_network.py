@@ -1,7 +1,8 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
-"""Regression: firejail must never run a jail on the host network with only the Python layer denying."""
+"""Regression: firejail keeps the host network only when the admin's config forces it, and says so."""
 
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -51,11 +52,19 @@ def test_explicit_net_param_is_kept(tmp_path: Path) -> None:
     assert "--net=none" not in args
 
 
-@pytest.mark.parametrize("config", ["restricted-network yes\n", None])
-def test_socket_rule_with_restricted_network_refuses_to_start(tmp_path: Path, config: str | None) -> None:
-    """Socket rules cannot be enforced by the kernel there: refuse instead of keeping the host network."""
+def test_socket_rule_without_restricted_network_line_refuses_to_start(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
-        _firejail_args(_with_socket_rule(), tmp_path, config)
+        _firejail_args(_with_socket_rule(), tmp_path, None)
+
+
+def test_socket_rule_with_explicit_restricted_network_is_tolerated_with_a_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Explicit ``yes`` (GitHub runner): starts on the host network, and says so."""
+    with caplog.at_level(logging.WARNING, logger=firejail_sse_daemon.__name__):
+        args = _firejail_args(_with_socket_rule(), tmp_path, "restricted-network yes\n")
+    assert not any(a.startswith(("--net=", "--netfilter")) for a in args)
+    assert "keeps the host network" in caplog.text
 
 
 def test_socket_rule_without_restriction_gets_its_own_network(tmp_path: Path) -> None:

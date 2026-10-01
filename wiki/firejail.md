@@ -20,7 +20,7 @@ The host launches a Firejail sandbox with a generated profile: whitelist/read-on
 | Aspect | Detail |
 |--------|--------|
 | **Docker / Podman** | Not compatible with Docker and Podman (no Firejail in typical container images; bridge model differs). |
-| **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config`, otherwise the sandbox refuses to start; host access requires a bridge (e.g. `add-bridge.sh`). The daemon mode always has a socket rule (its SSE port), so it needs that setting too. |
+| **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config` for the kernel to filter; host access requires a bridge (e.g. `add-bridge.sh`). The daemon mode always has a socket rule (its SSE port). An explicit `restricted-network yes` is tolerated with a warning: the sandbox then keeps the **host network** and only the Python layer enforces the socket rules. |
 | **Debug** | Profile and netfilter generation can be complex; check logs and Firejail options for troubleshooting. |
 
 ## How it works
@@ -76,4 +76,4 @@ Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`
 
 - Firejail installed (e.g. `sudo apt install firejail`).
 - For network and socket rules: a bridge (e.g. `docker0`, `br0`). Check with `ip link show type bridge`. The script `scripts/add-bridge.sh` can create one if needed.
-- For socket rules (and so for the daemon mode): set `restricted-network no` in `/etc/firejail/firejail.config` so that network filtering can be applied. With `restricted-network yes`, or without the line, the sandbox refuses to start rather than keep the host network.
+- For socket rules (and so for the daemon mode): set `restricted-network no` in `/etc/firejail/firejail.config` so that network filtering can be applied. Without the line, the sandbox refuses to start. With an explicit `restricted-network yes` (as on a GitHub runner), it starts with a warning on the host network: native code, `ctypes` or a subprocess can then reach any address.

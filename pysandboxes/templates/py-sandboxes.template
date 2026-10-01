@@ -340,7 +340,9 @@ remote-result-guard=true
 # firejail.seccomp.block — Blocked syscalls as --seccomp.block=…
 #
 # Socket rules require restricted-network no in /etc/firejail/firejail.config for netfilter
-# setup, otherwise the sandbox refuses to start; see wiki/firejail.md.
+# setup. Without the line the sandbox refuses to start; with an explicit 'restricted-network
+# yes' it starts with a warning on the host network, socket rules enforced by Python only;
+# see wiki/firejail.md.
 
 # firejail.net=docker0
 # firejail.seccomp.keep=read,write,exit
