@@ -248,6 +248,17 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 remote-result-guard=true
 
 #######################################################################################
+# LEARNING MODE LOCK
+# ==================
+# Every --key=value given to python-sb is a rule that takes precedence over this file,
+# and --learn allows everything while recording it. Once this file is reviewed,
+# uncomment the line below: the configuration is then refused when the learning mode
+# is requested (--learn, learn=<file>, or a missing rule file) and when python-sb
+# receives a rule on its command line. See wiki/configuration.md.
+
+# learn=false
+
+#######################################################################################
 # OS PROVIDER PARAMETERS (os-sandbox=…)
 # ======================================
 # Lines below apply only when os-sandbox matches that provider. Syntax is always
