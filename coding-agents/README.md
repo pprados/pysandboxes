@@ -59,6 +59,56 @@ Copy `cursor/hooks.json` to `.cursor/hooks.json` (project) or `~/.cursor/hooks.j
 Copy `copilot/python-sb.json` to `.github/hooks/` and replace `/path/to/pysandboxes`. The file uses the
 `PreToolUse` form, whose payload carries `tool_input`. Copy `skills/python-sb` into `.github/skills/`.
 
+## To confirm
+
+What the documentation of each agent did not establish, and what a real run must check before the "untested"
+mark goes away. For every agent, the first check is the same: ask the agent to run `python3 -c 'print(42)'`, and
+verify that the command is refused and that the model receives the message of the hook.
+
+### Claude Code
+
+- `claude plugin validate` accepts the plugin and the marketplace; installing through
+  `claude plugin marketplace add pprados/pysandboxes`, with the relative source `./coding-agents`, is not tried.
+- The skill is listed and loaded by the agent.
+
+### Codex
+
+- The schema of `.codex-plugin/plugin.json`: only `name` and `hooks` appear in the documentation, `version` and
+  `description` are assumed.
+- The `skills/` directory of a plugin is discovered without a manifest entry.
+- `CLAUDE_PLUGIN_ROOT` is documented as an environment variable: the shell of the hook expands
+  `"${CLAUDE_PLUGIN_ROOT}"`, Codex does not substitute it.
+- For `PreToolUse`, the reason of an exit code 2 reaches the model: the documentation states it for other events
+  only.
+- How to add this repository as a plugin source in `/plugins`.
+
+### Gemini CLI
+
+- The key of the shell command in `tool_input` for `run_shell_command`: the script reads `command`.
+- `gemini/hooks/hooks.json` uses the shape documented for `settings.json`; the documentation of extensions does
+  not show a complete file.
+- `${extensionPath}` and `${/}` are substituted in the hook command, and `timeout` is in milliseconds.
+- `gemini extensions link` follows the symbolic links `gemini/skills` and `gemini/hooks/require_python_sb.py`;
+  `gemini extensions install` from a clone copies them or not.
+- `version` is required in `gemini-extension.json`.
+
+### Cursor
+
+- The shape of `hooks.json` (`version`, a list of `{"command": ...}` under `beforeShellExecution`).
+- The command is the top-level `command` field of the input.
+- Exit code 2 refuses the command and its stderr reaches the model; otherwise the script must print
+  `{"permission": "deny", "agent_message": ...}` on stdout.
+- Skills: the documentation of the hooks does not mention them.
+
+### Copilot CLI
+
+- A `PreToolUse` entry with `"matcher": "Bash"` in `.github/hooks/*.json` fires for shell commands.
+- The command is `tool_input.command` in that form (`toolArgs.command` in the `preToolUse` form, also read by the
+  script).
+- Exit code 2 sends its stderr to the model; the documented path for the reason is
+  `{"permissionDecision": "deny", "permissionDecisionReason": ...}` on stdout.
+- `.github/skills/python-sb/SKILL.md` is discovered.
+
 ## Limits
 
 The hook is a guard against a habit, not a barrier. It reads the command line only: `sh -c "python ..."`,
