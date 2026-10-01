@@ -98,6 +98,7 @@ def parse_python_cmd_line(
         args = args[:split_pos]
 
     pysandboxes_config: Path = Path(CONFIG_NAME)
+    named_config: Path | None = None
     module_mode = False
     if len(python_run_args) >= 2 and python_run_args[0] == "-m":
         module_mode = True
@@ -121,6 +122,8 @@ def parse_python_cmd_line(
             remove_index.append(i + 1)
             skip_next = True
 
+    if remove_index:
+        named_config = pysandboxes_config
     for i in sorted(remove_index, reverse=True):
         del args[i]
 
@@ -141,6 +144,9 @@ def parse_python_cmd_line(
 
     # Remove --pysandboxes-config. it's not a real parameter
     sandboxes_args = [arg for arg in sandboxes_args if not arg.startswith("--pysandboxes-config=")]
+    # A bare --learn writes to the rule file the command line names, as given, never into a module's resource
+    if named_config is not None:
+        sandboxes_args = [f"--learn={named_config}" if arg == "--learn" else arg for arg in sandboxes_args]
 
     parser = argparse.ArgumentParser(
         prog="python-sb",
@@ -281,7 +287,8 @@ def parse_python_cmd_line(
             "--learn",
             nargs="?",
             metavar="FILE",
-            help="Learning mode: run the program and append the rules it needs to FILE (default: .py-sandboxes).",
+            help="Learning mode: run the program and append the rules it needs to FILE "
+            "(default: the --pysandboxes-config file, else .py-sandboxes).",
         )
         parser.add_argument(
             "--<sb-option>=<value>",

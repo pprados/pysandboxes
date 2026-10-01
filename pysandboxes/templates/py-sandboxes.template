@@ -253,8 +253,9 @@ remote-result-guard=true
 # Every --key=value given to python-sb is a rule that takes precedence over this file,
 # and --learn allows everything while recording it. Once this file is reviewed,
 # uncomment the line below: the configuration is then refused when the learning mode
-# is requested (--learn, learn=<file>, or a missing rule file) and when python-sb
-# receives a rule on its command line. See wiki/configuration.md.
+# is requested (--learn, learn=<file>, or a missing rule file), when python-sb
+# receives a rule on its command line, and when the code passes one to sandboxes()
+# or run(). See wiki/configuration.md.
 
 # learn=false
 

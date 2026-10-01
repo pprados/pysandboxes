@@ -29,7 +29,7 @@ down. The effective rights also depend on:
 
 When the rights of a program matter, remove the `./` includes from its rule file, write `os-sandbox=` without a
 variable, and add `learn=false`: the configuration is then refused if the learning mode is requested, if the rule
-file is missing, or if the command line adds a rule (see [Lock the rules](configuration.md#lock-the-rules)). Only
+file is missing, or if the command line or the code adds a rule (see [Lock the rules](configuration.md#lock-the-rules)). Only
 `--pysandboxes-config=` remains, so pin the full command line where the program is launched.
 
 ## Contain the script of an agent skill
@@ -68,10 +68,10 @@ python-import=codecs, csv, encodings, json
 The rule file becomes the **permission manifest** of the skill: before installing a skill written by someone else,
 read it, as one reads the permissions of a mobile application. A skill that asks for `net=ALLOW|...|OUT` or
 `expose-rw=~` says so in one line. If a new version of the script tries more, the run stops at the first access
-the file does not grant, for instance:
+the file does not grant. A script that starts opening connections is stopped at its `import socket`:
 
 ```text
-RuleSocketConnectionRefusedError: Guard network connection to '[1.1.1.1]:80' DENIED by implicit default policy.
+RuleModuleNotFoundError: Module named 'socket' is not allowed by a rule
 ```
 
 A skill shipped without its rule file is not contained: the first run on the user's machine learns, and grants,

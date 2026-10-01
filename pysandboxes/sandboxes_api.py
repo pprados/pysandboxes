@@ -23,6 +23,7 @@ import threading
 from pathlib import Path
 from types import FrameType
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Coroutine,
@@ -38,6 +39,9 @@ from .tools import (
     check_mixte_async_async,
     is_in_sandbox,
 )
+
+if TYPE_CHECKING:
+    from .all_rules import AllRules
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,25 @@ def _check__main__coroutine(coroutine: Any) -> None:
     if module and hasattr(module, "__name__"):
         if module.__name__ == "__main__":
             raise ValueError("The coroutine must be declared in a module " "other than __main__.")
+
+
+def _refuse_locked_extra_rules(all_rules: "AllRules", extra_rules: dict[str, Any]) -> None:
+    """Refuse the directives given to the API when the rule file holds `learn=false`.
+
+    Raises:
+        ConfigSyntaxError: If `extra_rules` is not empty and the rules are locked.
+    """
+    from .guard_provider import learn_lock
+    from .main_logger import format_ruleref
+
+    if extra_rules and (lock := learn_lock(all_rules.config)):
+        raise ConfigSyntaxError(
+            "Syntax error in config files.",
+            [
+                f"{format_ruleref(lock)}: {lock.rule!r} locks the rules, the API cannot add "
+                f"{', '.join(sorted(extra_rules))}"
+            ],
+        )
 
 
 def sandbox(
@@ -289,6 +312,7 @@ class sandboxes:
                 )
             except ConfigSyntaxError as e:
                 raise e.with_traceback(None) from e
+            _refuse_locked_extra_rules(all_rules, self.extra_rules)
             self._daemon = start_daemon(
                 all_rules,
                 envs=self.envs,
@@ -345,6 +369,7 @@ class sandboxes:
                 )
             except ConfigSyntaxError as e:
                 raise e.with_traceback(None) from e
+            _refuse_locked_extra_rules(all_rules, self.extra_rules)
             self._daemon = await async_start_daemon(
                 all_rules,
                 envs=self.envs,

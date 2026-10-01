@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
-"""Pre-execution hook for coding agents: refuse a shell command that runs Python without python-sb.
+"""Pre-execution hook for coding agents: refuse a shell command that runs Python without python-sb, or python-sb
+in learning mode (--learn).
 
 The agent sends the tool call as JSON on stdin. The command is read from `tool_input.command`
 (Claude Code, Codex, Gemini CLI, Copilot CLI with `PreToolUse`), `command` (Cursor) or
@@ -58,8 +59,8 @@ def _program(segment: list[str]) -> str | None:
     return PurePath(words[0]).name if words else None
 
 
-def direct_python(command: str) -> str | None:
-    """Return the program of the first segment of `command` that runs Python directly, or None."""
+def refusal(command: str) -> str | None:
+    """Return why `command` is refused: a direct Python, or python-sb in learning mode. None if allowed."""
     try:
         segments = _segments(command)
     except ValueError:
@@ -67,7 +68,16 @@ def direct_python(command: str) -> str | None:
     for segment in segments:
         program = _program(segment)
         if program and _PYTHON.fullmatch(program):
-            return program
+            return (
+                f"Run Python through python-sb, not {program!r}: replace {program!r} with 'python-sb' "
+                "so the rules of .py-sandboxes apply. Do not add --learn, and do not edit .py-sandboxes: "
+                "if python-sb refuses an access, report the error."
+            )
+        if program == "python-sb" and any(word == "--learn" or word.startswith("--learn=") for word in segment):
+            return (
+                "Do not run python-sb with --learn: the learning mode allows every access and writes the rules "
+                "it observes. Run it without --learn, and report the refused access to the user."
+            )
     return None
 
 
@@ -78,15 +88,10 @@ def main() -> int:
     except ValueError:
         return 0
     command = command_of(event)
-    program = direct_python(command) if command else None
-    if program is None:
+    reason = refusal(command) if command else None
+    if reason is None:
         return 0
-    print(
-        f"Run Python through python-sb, not {program!r}: replace {program!r} with 'python-sb' "
-        "so the rules of .py-sandboxes apply. Do not add --learn, and do not edit .py-sandboxes: "
-        "if python-sb refuses an access, report the error.",
-        file=sys.stderr,
-    )
+    print(reason, file=sys.stderr)
     return 2
 
 

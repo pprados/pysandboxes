@@ -3,10 +3,12 @@
 import inspect
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest  # type: ignore[import-untyped]
 
+from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.sandboxes_api import (
     _check__main__coroutine,
     run,
@@ -273,3 +275,44 @@ def test_importing_the_api_loads_multiprocessing_before_any_sandbox() -> None:
     code = "import sys, pysandboxes.sandboxes_api; print('multiprocessing.synchronize' in sys.modules)"
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert result.stdout.strip() == "True"
+
+
+LOCKED_RULES = "py-sandbox=true\nos-sandbox=none\nlearn=false\n"
+
+
+@patch("pysandboxes._os_sandbox.start_daemon")
+def test_a_locked_rule_file_refuses_the_rules_of_the_api(mock_start: Mock, tmp_path: Path) -> None:
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(LOCKED_RULES)
+
+    with pytest.raises(ConfigSyntaxError) as e:
+        with sandboxes(sandboxes_config=config, expose_ro={"/etc"}):  # type: ignore[arg-type]
+            pass
+
+    assert "locks the rules, the API cannot add expose_ro" in str(e.value)
+    mock_start.assert_not_called()
+
+
+@patch("pysandboxes._os_sandbox.async_start_daemon")
+@pytest.mark.asyncio
+async def test_a_locked_rule_file_refuses_the_rules_of_the_async_api(mock_start: Mock, tmp_path: Path) -> None:
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(LOCKED_RULES)
+
+    with pytest.raises(ConfigSyntaxError, match="the API cannot add os_sandbox"):
+        async with sandboxes(sandboxes_config=config, os_sandbox="subprocess"):  # type: ignore[arg-type]
+            pass
+
+    mock_start.assert_not_called()
+
+
+@patch("pysandboxes._os_sandbox.start_daemon")
+@patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
+def test_a_locked_rule_file_without_api_rules_starts(mock_shutdown: Mock, mock_start: Mock, tmp_path: Path) -> None:
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(LOCKED_RULES)
+
+    with sandboxes(sandboxes_config=config):
+        pass
+
+    mock_start.assert_called_once()
