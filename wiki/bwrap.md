@@ -10,7 +10,7 @@ The host runs `bwrap` with options from a template (e.g. `--clearenv`) plus **`-
 
 | Aspect | Detail |
 |--------|--------|
-| **Isolation** | Namespace-based (e.g. user, IPC); filesystem restricted to explicit expose rules (implemented as bind mounts) and ignore rules. |
+| **Isolation** | Mount namespace, plus the user namespace bwrap creates on its own when run unprivileged, and a network namespace unless `bwrap.share-net=yes`. The `--unshare-*` options of `bwrap.template` are commented out, so IPC, PID and UTS stay shared with the host unless enabled with `bwrap.unshare-ipc=` (etc.). Filesystem restricted to explicit expose rules (implemented as bind mounts) and ignore rules. |
 | **Network modes** | Isolated netns by default: loopback only without socket rules, user-land filtering when socket rules are present. Shared host network only on explicit opt-out (`bwrap.share-net=yes`). |
 | **Lightweight** | Single child process from bubblewrap’s perspective; no VM; fast startup. |
 | **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe) as firejail/unshare; slirp/port-forward logic is shared with unshare via `slirp4netns_common`. |
