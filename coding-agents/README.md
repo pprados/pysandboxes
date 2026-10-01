@@ -7,7 +7,8 @@ things that make it run that Python through `python-sb`, so the rules of `.py-sa
   when an access is refused (report it, never widen the rules or fall back to `python`);
 - **a pre-execution hook**, [`hooks/require_python_sb.py`](hooks/require_python_sb.py): it refuses a shell command
   that runs `python`, `python3`, `python3.N`, `uv run python` or `uvx python`, and tells the agent to use
-  `python-sb` (or `uvx python-sb`) instead.
+  `python-sb` (or `uvx python-sb`) instead. It also refuses `python-sb --learn`, which allows every access: the
+  learning mode is for the user to run, not the agent.
 
 The script only needs the standard library. It reads the tool call on stdin, and refuses with exit code 2 and the
 reason on stderr: every agent below honours that, and shows the reason to the model.

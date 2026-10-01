@@ -51,12 +51,31 @@ def test_a_direct_python_is_refused(command: str) -> None:
         'echo "python script.py"',
         "ls python3",
         "git commit -m 'unbalanced",
+        "grep -- --learn README.md",
+        "python-sb --learning-rate=3 script.py",
     ],
 )
 def test_other_commands_are_allowed(command: str) -> None:
     result = run_hook({"tool_input": {"command": command}})
     assert result.returncode == 0
     assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python-sb --learn script.py",
+        "python-sb --learn=other.py-sandboxes script.py",
+        "python-sb --pysandboxes-config=skill/.py-sandboxes --learn skill/scripts/report.py",
+        "uvx python-sb --learn script.py",
+        "uv run python-sb --learn script.py",
+        "cd skill && python-sb --learn report.py",
+    ],
+)
+def test_python_sb_in_learning_mode_is_refused(command: str) -> None:
+    result = run_hook({"tool_input": {"command": command}})
+    assert result.returncode == 2
+    assert "--learn" in result.stderr
 
 
 @pytest.mark.parametrize(
