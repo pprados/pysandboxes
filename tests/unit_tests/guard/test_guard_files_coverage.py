@@ -21,6 +21,7 @@ while reading the source, described in each test's docstring.
 
 import os
 from pathlib import Path
+from typing import Any, Callable
 from unittest.mock import patch
 
 import pytest  # type: ignore[import-untyped]
@@ -35,6 +36,7 @@ from pysandboxes.guard_files import (
     _apply_ignore_rule,
     _apply_src_to_dest_rules,
     _check_is_in_rules,
+    _dir_fd_path,
     _DirEntry,
     _ignore_matches,
     _wrap_buitins_open,
@@ -623,15 +625,6 @@ def test_wrap_os_open_denies_an_ignored_path_with_dir_fd(tmp_path: Path) -> None
         os.close(dir_fd)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "apparent bug: in learning mode, `_wrap_os_open` records `LearnFileRule(path, False)` "
-        "unconditionally, ignoring `need_to_write`. Learning a write-open (O_WRONLY|O_CREAT) on "
-        "an unexposed path yields an `expose-ro=` rule, which then denies that same write on the "
-        "enforced run the learned profile is meant to unblock."
-    ),
-)
 def test_wrap_os_open_learns_the_actual_write_intent_of_an_unexposed_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -737,15 +730,6 @@ def test_wrap_os_symlink_learns_an_unexposed_target(tmp_path: Path, monkeypatch:
     assert link.is_symlink()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "apparent bug: `_wrap_os_symlink` enforces the destination with `write=True` but its "
-        "learning-mode fallback records `LearnFileRule(dst, False)`. A profile learned from "
-        "creating a symlink at an unexposed destination yields an `expose-ro=` rule, which then "
-        "denies that same `os.symlink` call on the enforced run."
-    ),
-)
 def test_wrap_os_symlink_learns_the_write_intent_of_an_unexposed_destination(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -806,14 +790,6 @@ def test_wrap_os_unlink_learns_an_unexposed_file(tmp_path: Path, monkeypatch: py
     assert LearnFileRule(Path(str(target)), True) in learning_mod._learning
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "apparent bug: `_wrap_os_unlink` calls `_apply_dest_to_src_rules(path, write=False)`, so "
-        "the rule check never sees this as a write. An `expose-ro=` directory is documented as "
-        "read-only, but `os.unlink` deletes a file inside it anyway."
-    ),
-)
 def test_wrap_os_unlink_is_blocked_by_a_read_only_rule(tmp_path: Path) -> None:
     target = tmp_path / "f.txt"
     target.write_text("x")
@@ -864,14 +840,6 @@ def test_wrap_os_rmdir_learns_an_unexposed_directory(tmp_path: Path, monkeypatch
     assert LearnFileRule(Path(str(sub)), True) in learning_mod._learning
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "apparent bug: `_wrap_os_rmdir` calls `_apply_dest_to_src_rules(path, write=False)`, so "
-        "the rule check never sees this as a write. An `expose-ro=` directory is documented as "
-        "read-only, but `os.rmdir` removes a sub-directory inside it anyway."
-    ),
-)
 def test_wrap_os_rmdir_is_blocked_by_a_read_only_rule(tmp_path: Path) -> None:
     sub = tmp_path / "sub"
     sub.mkdir()
@@ -882,3 +850,31 @@ def test_wrap_os_rmdir_is_blocked_by_a_read_only_rule(tmp_path: Path) -> None:
         wrapped(str(sub))
 
     assert sub.exists()
+
+
+@pytest.mark.skipif(os.unlink not in os.supports_dir_fd, reason="no dir_fd on this platform")
+@pytest.mark.parametrize("wrap, func, name", [(_wrap_os_unlink, os.unlink, "f.txt"), (_wrap_os_rmdir, os.rmdir, "sub")])
+def test_a_dir_fd_removal_is_checked_against_the_directory_it_names(
+    tmp_path: Path, wrap: Callable[..., Any], func: Callable[..., Any], name: str
+) -> None:
+    """A relative name under ``dir_fd`` resolves in that directory, so expose-ro holds there too."""
+    (tmp_path / "f.txt").write_text("x")
+    (tmp_path / "sub").mkdir()
+    wrapped = wrap(func)
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+        with pytest.raises(RulePermissionError):
+            wrapped(name, dir_fd=dir_fd)
+        assert (tmp_path / name).exists()
+
+        activate_guard_files_rules([ConfigLine(f"expose-rw={tmp_path}", Path(), 0)])
+        wrapped(name, dir_fd=dir_fd)
+        assert not (tmp_path / name).exists()
+    finally:
+        os.close(dir_fd)
+
+
+def test_dir_fd_path_denies_a_descriptor_it_cannot_resolve() -> None:
+    with pytest.raises(RuleFileNotFoundError):
+        _dir_fd_path("f.txt", 987654)
