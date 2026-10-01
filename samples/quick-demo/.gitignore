@@ -1,5 +1,5 @@
 # Generated live during the demo: the audience must see it being born.
 .py-sandboxes
 .py-sandboxes.old*
-# Local tooling that records quick-demo.gif
-gif-demo/
+# Recorded by `make -C gif-demo`, which rebuilds quick-demo.gif from it
+gif-demo/*.cast
