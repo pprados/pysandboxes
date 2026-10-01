@@ -14,6 +14,7 @@ automatic lifecycle management for sandbox processes.
 
 import asyncio
 import functools
+import importlib
 import inspect
 import logging
 import os
@@ -39,6 +40,11 @@ from .tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Loaded before any sandbox arms, without creating a lock: arming hands a module already loaded back as it is,
+# and the learned profiles never list what multiprocessing imports for itself (_weakrefset, _pickle...). A call,
+# not an import statement, so that no unused-import cleanup can remove it; test_sandboxes_api.py pins it.
+importlib.import_module("multiprocessing.synchronize")
 
 
 def _check__main__coroutine(coroutine: Any) -> None:
