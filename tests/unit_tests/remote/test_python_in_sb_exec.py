@@ -8,8 +8,8 @@ from typing import Iterator
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.guard_api import _deactivate_guard_api, activate_guard
-from pysandboxes.lifecycle import arm
 from pysandboxes.guard_eval import _deactivate_guard_eval, patch_rules
+from pysandboxes.lifecycle import arm
 from pysandboxes.remote import python_in_sb
 
 
@@ -20,6 +20,8 @@ def _armed_and_undeclared() -> Iterator[None]:
     activate_guard(())
     arm()
     for key, factory in patch_rules(False).items():
+        if not key.startswith("builtins."):
+            continue
         name = key.split(".")[1]
         setattr(builtins, name, factory(saved[name]))
     yield

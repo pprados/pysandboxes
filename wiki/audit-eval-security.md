@@ -66,8 +66,9 @@ The `eval-*` guard exists precisely because that pattern fails.
 
 The design principle: **static validation catches nothing an attacker cannot
 route around; the namespace and the runtime helpers are the real barriers.**
-The hardening described here removed the last ways to reach an attribute
-*without* going through `_check_attr`.
+The hardening described here removed the known ways to reach an attribute
+*without* going through `_check_attr`, `string.Formatter` included (see
+[the `str.format` section](#the-strformat-blind-spot-and-how-it-was-closed)).
 
 ---
 
@@ -115,6 +116,7 @@ Every row is refused. "Layer" names what actually stops it. All are pinned in
 |---|---|---|---|
 | dunder by dot | `().__class__` | *(defaults)* | static (`eval-magic`) |
 | f-string attribute | `f'{ ().__class__ }'` | `eval-syntax=fstring` | static (`eval-magic`) |
+| t-string attribute (3.14) | `t'{ ().__class__ }'` | `eval-syntax=tstring` | static (`eval-magic`) |
 | `import` statement | `import os` | `eval-syntax=import` | static (`eval-import`) |
 | frame by dot | `(i for i in ()).gi_frame` | `eval-syntax=comprehension` | runtime — frame-capture DENY |
 | getattr → dunder | `getattr((), '__class__')` | `eval-call=getattr` | runtime — `__sb_getattr__` |
@@ -191,6 +193,45 @@ The instance wrapper did not cover these, because the object to the left of the
 dot is the `str` *class*, not a string. Both are now validated by an unbound
 wrapper (`_guarded_format_unbound`), which also covers `str` subclasses.
 
+A third door was found and closed afterwards: `string.Formatter`. Its
+`format`, `vformat` and `get_field` resolve the same fields in Python, and
+`__sb_getattr__` wraps `format` only when the object is a `str`:
+
+```python
+F.format('{0.__class__.__base__}', ())   # names={"F": string.Formatter()}, eval-attribute=format
+# was: <class 'object'>
+```
+
+The same held with `eval-import=string`, `eval-call=Formatter,__import__` and
+`eval-attribute=Formatter,format`. Validating the template before the call
+would not be enough: a subclass can override `parse` and hand `get_field` a
+field the template never showed. So the guard patches the one place the
+attribute is read, `string.Formatter.get_field`: during a guarded evaluation,
+every field it receives goes through `_check_attr`; outside one, the method is
+untouched. Pinned in `test_eval_hardening.py` and, for the patch installed at
+startup, in `test_eval_integration.py`.
+
+That check reads the evaluation state of the *current* thread, which opened a
+fourth door: a `Formatter` method handed to an executor the application
+supplied runs on a thread with no state.
+
+```python
+X.submit(F.format, '{0.__class__.__base__}', ()).result()   # names={"F": ..., "X": ThreadPoolExecutor()}
+# was: <class 'object'>
+```
+
+A method fetched from a `Formatter` (instance or class) by the evaluated code
+now carries the fetching evaluation's state, and pushes it on whatever thread
+calls it. Threads of the application that use a `Formatter` on their own stay
+untouched.
+
+Two configuration rules keep the method out of reach in the first place:
+
+- **Only the exact name grants `format` or `format_map`.** `eval-attribute=*`
+  or `f*` leave both refused; a wide grant never opens them by accident.
+- **The refusal points to the f-string**, whose attribute accesses are checked
+  like any dotted read, rather than telling the reader to grant `format`.
+
 ---
 
 ## Lambdas and the call-depth budget
@@ -266,7 +307,7 @@ uv run pytest tests/unit_tests/guard/test_eval_security_corpus.py -v
 ```
 
 Bottom line: every attribute read — by dot, by `getattr`/`vars`/`hasattr`, by
-`str.format` on an instance or on the class — now passes through the single
-`_check_attr` gate, and recursion by function, lambda or generator is bounded
-by `eval-max-call-depth`. The only remaining ways through are denial of
-service, which the design states plainly are the OS layer's job.
+`str.format` on an instance or on the class, by `string.Formatter` — now passes
+through the single `_check_attr` gate, and recursion by function, lambda or
+generator is bounded by `eval-max-call-depth`. The only remaining ways through
+are denial of service, which the design states plainly are the OS layer's job.

@@ -322,6 +322,15 @@ class _Accumulator:
             deny_patterns=tuple(self.deny_patterns[field]),
         )
 
+    def _attribute_names(self) -> NameSet:
+        """Return `eval-attribute`, where only an exact name grants `format`/`format_map`.
+
+        A pattern such as `*` or `f*` would otherwise grant them silently,
+        while the f-string spelling does the same job with a checked attribute.
+        """
+        names = self.names("attribute")
+        return names._replace(deny=names.deny | (frozenset(_BLIND_ATTRIBUTES) - names.allow))
+
     def build(self) -> EvalRules:
         syntax = self.names("syntax")
         syntax = syntax._replace(allow=syntax.allow | CORE_NODES)
@@ -330,7 +339,7 @@ class _Accumulator:
             declared=True,
             syntax=syntax,
             call=self.names("call"),
-            attribute=self.names("attribute"),
+            attribute=self._attribute_names(),
             imports=self.names("imports"),
             magic=self.names("magic"),
             # Each key reaches its own field, so the value type varies per key.
@@ -357,6 +366,9 @@ def _parse_list_value(
         if not token:
             _add_error(errors, rule, "empty target.")
             return
+        if token.startswith("DENY:"):
+            _add_error(errors, rule, f"DENY: applies to a whole line; put `{key}={token}` on a line of its own.")
+            return
         if "*" in token:
             if key in _PATTERNS_FORBIDDEN:
                 _add_error(errors, rule, f"a pattern is not accepted on {key}: the vocabulary is finite.")
@@ -372,9 +384,9 @@ def _parse_list_value(
             return
         if key == "eval-attribute" and token in _BLIND_ATTRIBUTES and not deny:
             logger.warning(
-                "eval-attribute=%s reopens an attribute the guard is structurally blind to "
-                "(design spec 4bis.a): the name is resolved in C from the contents of the string, "
-                "so no Attribute node exists to rewrite",
+                "eval-attribute=%s grants a method that resolves attributes in C from the contents "
+                "of the string (design spec 4bis.a): no Attribute node exists to check statically, "
+                "so the template is validated at runtime instead, field by field",
                 token,
             )
         if key == "eval-call" and not deny and hasattr(builtins, token):
