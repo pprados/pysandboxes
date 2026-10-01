@@ -40,4 +40,4 @@ Index of the documentation pages.
 
 ## Research
 
-- [Confining Python by observation](research_fr.md) — the conceptual paper behind the design (French).
+- [Confining Python by observation](../research/confining-python-by-observation.md) — the conceptual paper behind the design.
