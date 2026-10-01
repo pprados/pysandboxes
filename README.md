@@ -29,14 +29,16 @@ Run any module in a sandbox, without installing anything and without touching a 
 uvx python-sb -m my_module
 ```
 
-The first run has no rules yet, so it starts in **learning mode**: use your application normally, and a `.py-sandboxes` file is written when it stops, populated with the network, disk, module and environment accesses it actually needed. Review that file, then every later run is restricted to that whitelist.
-
 Or install it:
 
 ```bash
 pip install pysandboxes
 python-sb -m my_module
 ```
+
+The first run has no rules yet, so it starts in **learning mode**: use your application normally, and a `.py-sandboxes` file is written when it stops, populated with the network, disk, module and environment accesses it actually needed. Review that file, then every later run is restricted to that whitelist.
+
+[![Quick demo: learn a policy, then enforce it](samples/quick-demo/quick-demo.gif)](samples/quick-demo/)
 
 That is the whole integration for *complete mode*. To sandbox only part of an application, see [partial mode](#apply-the-sandbox-to-a-part-of-the-application-partial-mode).
 
