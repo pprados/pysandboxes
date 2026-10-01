@@ -372,9 +372,9 @@ def _parse_list_value(
             return
         if key == "eval-attribute" and token in _BLIND_ATTRIBUTES and not deny:
             logger.warning(
-                "eval-attribute=%s reopens an attribute the guard is structurally blind to "
-                "(design spec 4bis.a): the name is resolved in C from the contents of the string, "
-                "so no Attribute node exists to rewrite",
+                "eval-attribute=%s grants a method that resolves attributes in C from the contents "
+                "of the string (design spec 4bis.a): no Attribute node exists to check statically, "
+                "so the template is validated at runtime instead, field by field",
                 token,
             )
         if key == "eval-call" and not deny and hasattr(builtins, token):

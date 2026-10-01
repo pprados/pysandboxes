@@ -11,6 +11,7 @@ layer. A payload moving between the two matrices is a real change in the
 contract, which is why every one is pinned here.
 """
 
+import sys
 from typing import Any, Iterator
 
 import pytest  # type: ignore[import-untyped]
@@ -152,6 +153,11 @@ BLOCKED: list[tuple[str, str, dict[str, Any], str, dict[str, Any] | None]] = [
     ),
     ("import_statement", "import os", dict(syntax=_syntax("import")), "exec", None),
     ("fstring_attribute", "f'{ ().__class__ }'", dict(syntax=_syntax("fstring")), "eval", None),
+    *(
+        [("tstring_attribute", "t'{ ().__class__ }'", dict(syntax=_syntax("tstring")), "eval", None)]
+        if sys.version_info >= (3, 14)
+        else []
+    ),
     (
         "type_mro_hop_to_subclasses",
         "getattr(type(()).mro()[1], '__subclasses__')",

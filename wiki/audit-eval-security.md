@@ -66,8 +66,9 @@ The `eval-*` guard exists precisely because that pattern fails.
 
 The design principle: **static validation catches nothing an attacker cannot
 route around; the namespace and the runtime helpers are the real barriers.**
-The hardening described here removed the last ways to reach an attribute
-*without* going through `_check_attr`.
+The hardening described here removed the known ways to reach an attribute
+*without* going through `_check_attr`, except `string.Formatter` (see
+[the `str.format` section](#the-strformat-blind-spot-and-how-it-was-closed)).
 
 ---
 
@@ -115,6 +116,7 @@ Every row is refused. "Layer" names what actually stops it. All are pinned in
 |---|---|---|---|
 | dunder by dot | `().__class__` | *(defaults)* | static (`eval-magic`) |
 | f-string attribute | `f'{ ().__class__ }'` | `eval-syntax=fstring` | static (`eval-magic`) |
+| t-string attribute (3.14) | `t'{ ().__class__ }'` | `eval-syntax=tstring` | static (`eval-magic`) |
 | `import` statement | `import os` | `eval-syntax=import` | static (`eval-import`) |
 | frame by dot | `(i for i in ()).gi_frame` | `eval-syntax=comprehension` | runtime — frame-capture DENY |
 | getattr → dunder | `getattr((), '__class__')` | `eval-call=getattr` | runtime — `__sb_getattr__` |
@@ -190,6 +192,20 @@ type('').format('{0.__class__}', ())   # same, reached through type()
 The instance wrapper did not cover these, because the object to the left of the
 dot is the `str` *class*, not a string. Both are now validated by an unbound
 wrapper (`_guarded_format_unbound`), which also covers `str` subclasses.
+
+A third door is **still open**: `string.Formatter`. Its `format`, `vformat`
+and `get_field` resolve the same fields in Python (`getattr` in
+`Formatter.get_field`), and `__sb_getattr__` wraps `format` only when the
+object is a `str` or a `str` subclass:
+
+```python
+F.format('{0.__class__.__base__}', ())   # names={"F": string.Formatter()}, eval-attribute=format
+# -> <class 'object'>
+```
+
+The same holds with `eval-import=string`, `eval-call=Formatter,__import__`
+and `eval-attribute=Formatter,format`. Until the guard covers it, a
+`Formatter` must not be handed to evaluated code, nor its methods granted.
 
 ---
 
@@ -268,5 +284,7 @@ uv run pytest tests/unit_tests/guard/test_eval_security_corpus.py -v
 Bottom line: every attribute read — by dot, by `getattr`/`vars`/`hasattr`, by
 `str.format` on an instance or on the class — now passes through the single
 `_check_attr` gate, and recursion by function, lambda or generator is bounded
-by `eval-max-call-depth`. The only remaining ways through are denial of
-service, which the design states plainly are the OS layer's job.
+by `eval-max-call-depth`. One escape remains open, `string.Formatter`, and only
+when the profile or the application hands it to the evaluated code; the other
+remaining ways through are denial of service, which the design states plainly
+are the OS layer's job.
