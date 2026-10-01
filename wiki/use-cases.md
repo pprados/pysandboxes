@@ -81,7 +81,9 @@ The instruction in `SKILL.md` is only a request: nothing stops the agent from ru
 directly. The containment holds only if the agent harness enforces it, with a permission rule that allows the
 exact `python-sb` command line and refuses a bare `python` on the skill's scripts. A rule that allows any
 `python-sb ...` is not enough, since the agent could point to another configuration; `learn=false` in the
-skill's rule file refuses the other options, `--learn` included.
+skill's rule file refuses the other options, `--learn` included. The
+[coding-agents](https://github.com/pprados/pysandboxes/tree/master/coding-agents) directory packages a skill and a
+pre-execution hook that refuses a bare `python`, for Claude Code, Codex, Gemini CLI, Cursor and Copilot CLI.
 
 The same reasoning applies to **hooks and plugins** of an agent written in Python: they run third-party code with
 the rights of the user, and the same rule file pattern contains them.

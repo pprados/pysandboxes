@@ -1,0 +1,6 @@
+{
+  "name": "python-sb",
+  "version": "0.1.0",
+  "description": "Run Python through python-sb: a skill, and a hook that refuses a bare python command.",
+  "hooks": "./hooks/hooks.json"
+}

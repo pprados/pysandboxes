@@ -1,0 +1,10 @@
+{
+  "name": "python-sb",
+  "version": "0.1.0",
+  "author": {
+    "name": "Philippe Prados"
+  },
+  "description": "Run Python through python-sb: a skill, and a hook that refuses a bare python command.",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/pprados/pysandboxes"
+}
