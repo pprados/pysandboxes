@@ -64,9 +64,10 @@ Two consequences, both deliberate:
   it,** are planned. Either would close one row of section 6 while the rows below
   it stay open, and neither survives a reader who can call native code anyway.
   The one audit hook the layer does install, in `guard_import`, is not that: it
-  keeps `sys.meta_path` from being unhooked or overtaken, a single list edit an
-  import-heavy program can make by accident, and turns it into a refused import
-  instead of a silent bypass.
+  keeps the import finder at the head of `sys.meta_path`. Frameworks put their
+  own finder there when they are imported (crewai, wrapt post-import hooks,
+  httpx2 aliases, py-key-value), so overtaking the guard is the ordinary case,
+  not an attack; the hook moves it back before each import instead of refusing.
 - The residual entries in section 6 are **documented, not scheduled**. What the
   layer does owe its target is that an accidental disarming be *loud* rather
   than silent.
@@ -166,7 +167,7 @@ only the *decision* uses the resolved path.
 | Attack | Layer | Status |
 |---|---|---|
 | `import` a module outside `python-import=` | `guard_import.GuardFinder.find_spec` denies via `_is_import_allowed` → `raise RuleModuleNotFoundError`; the finder is inserted at `sys.meta_path[0]` when the rules are activated | **Blocked — demonstrated** (`test_guard_import.py`, `test_guard_escape_fixes.py::test_find_spec_denies_a_module_outside_the_rules`) |
-| Unhook the finder from `sys.meta_path`, or insert a finder ahead of it | `sys.meta_path` stays a writable list, but `guard_import._audit_import`, a PEP 578 audit hook installed with the finder, sees the live list on every `import` event and refuses the import unless the guard finder heads it; Python offers no way to remove an audit hook | **Blocked — demonstrated** (`test_escape_pysandbox.py::test_tampering_with_meta_path_refuses_the_next_import`) |
+| Unhook the finder from `sys.meta_path`, or insert a finder ahead of it | `sys.meta_path` stays a writable list, but `guard_import._audit_import`, a PEP 578 audit hook installed with the finder, sees the live list on every `import` event and moves the guard finder back to its head (restoring it if it was dropped) before CPython walks it, so the next import is checked and the other finders, reached through `GuardFinder`'s delegation, keep working; a `sys.meta_path` that is no longer a list refuses the import. Python offers no way to remove an audit hook | **Blocked — demonstrated** (`test_escape_pysandbox.py::test_tampering_with_meta_path_leaves_the_next_import_guarded`, `test_a_framework_finder_ahead_of_the_guard_keeps_working`) |
 | Empty rule set treated as "no filter" | empty `_rules` is deny-all, wildcard `("*",)` is allow-all (`guard_import._is_import_allowed`) | **Blocked — demonstrated** (`test_no_import_rule_denies_every_module`, `test_wildcard_import_rule_allows_every_module`) |
 | Reach a module already in `sys.modules` (e.g. `os`, pre-imported by the framework) | `find_spec` is not consulted for a cached module — but its **sensitive functions** are still denied by objective 3 | **Reasoned**: import rights and call rights are deliberately distinct (`guard_api.py` docstring); a reachable `os` module is not a reachable `os.system` |
 
@@ -305,7 +306,7 @@ uv run pytest tests/unit_tests/guard/test_guard_api.py \
               tests/unit_tests/test_learning.py -v
 ```
 
-At the time of writing this run reports **19 passed, 3 xfailed** for the escape
+At the time of writing this run reports **20 passed, 3 xfailed** for the escape
 files and **197 passed, 4 skipped, 1 xfailed** for the guard corpus on Linux
 (three skips are the Windows-only twins of `test_armed_denies_the_windows_twins`,
 one is `test_os_chflags_and_lchflags`). The three `xfail` entries of the escape
@@ -314,9 +315,9 @@ files are the open escapes: `test_escape_with_subclasses` (objective 6),
 `test_escape_with_pickle_blocked` (the pickle entry of
 [inert guards](#guards-that-are-inert-by-design): removing `pickle` from
 `sys.modules` blocks nothing). Tampering with `sys.meta_path`, a hostile pickle
-and a name built at run time are no longer listed: the import audit hook refuses
-an import once the finder is unhooked or overtaken, as
-`test_tampering_with_meta_path_refuses_the_next_import` shows, and once armed, guard_api refuses `pickle.loads` and the
+and a name built at run time are no longer listed: the import audit hook puts
+the finder back at the head once it is unhooked or overtaken, as
+`test_tampering_with_meta_path_leaves_the_next_import_guarded` shows, and once armed, guard_api refuses `pickle.loads` and the
 call a built name reaches, as `test_a_hostile_pickle_is_refused_once_armed` and
 `test_a_name_built_at_run_time_is_refused_at_the_call` show; the corpus `xfail` is `test_guard_api.py::test_the_unpickler_route_is_guarded`,
 which records that `pickle.Unpickler` is an immutable C type. All are

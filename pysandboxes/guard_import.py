@@ -538,21 +538,32 @@ _audit_hook_installed = False
 
 
 def _audit_import(event: str, args: tuple[Any, ...]) -> None:
-    """Refuse an import once the guard finder no longer heads ``sys.meta_path``.
+    """Put the guard finder back at the head of ``sys.meta_path`` before each import.
 
-    ``sys.meta_path`` is a plain list: removing the guard finder, or inserting a
-    finder ahead of it, would let every later import skip the rules. CPython raises
-    the ``import`` audit event with the live ``sys.meta_path`` before it resolves a
-    module, and an audit hook cannot be removed from Python, so the check survives
-    whatever the list becomes. A module already in ``sys.modules`` raises no event,
-    which activation covers by evicting them. Nothing is logged here: logging may
-    import, and an import inside the hook would re-enter it.
+    ``sys.meta_path`` is a plain list. Frameworks insert their own finder at its head
+    when they are imported (crewai, wrapt post-import hooks, httpx2 aliases,
+    py-key-value), and code can drop the guard finder from it: either would let a
+    later import skip the rules. CPython raises the ``import`` audit event with the
+    live list before it walks it, so moving the guard finder back to the head there
+    keeps every import checked, and the frameworks' finders keep working, since
+    ``GuardFinder`` delegates to every finder behind it. An audit hook cannot be
+    removed from Python. A module already in ``sys.modules`` raises no event, which
+    activation covers by evicting them.
     """
     if event != "import" or not _activated:
         return
     meta_path = args[3]
-    if not meta_path or meta_path[0] is not _guard_finder:
-        raise RuleModuleNotFoundError(f"Import of {args[0]!r} refused: the import guard no longer heads sys.meta_path")
+    if not isinstance(meta_path, list):
+        # A tuple or any other iterable cannot be repaired in place: refuse rather than walk it unguarded.
+        raise RuleModuleNotFoundError(f"Import of {args[0]!r} refused: sys.meta_path is no longer a list")
+    if meta_path and meta_path[0] is _guard_finder:
+        return
+    if _guard_finder in meta_path:
+        meta_path.remove(_guard_finder)
+    else:
+        # print, not logging: logging may import, and an import here would re-enter the hook.
+        print("pysandboxes: the import guard was removed from sys.meta_path, and restored", file=sys.stderr)
+    meta_path.insert(0, _guard_finder)
 
 
 def _activate_patch_import(

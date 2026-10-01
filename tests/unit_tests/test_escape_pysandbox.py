@@ -1,3 +1,6 @@
+import importlib.abc
+import importlib.machinery
+import importlib.util
 import inspect
 import os
 import pickle
@@ -60,45 +63,77 @@ def test_escape_with_subclasses() -> None:
         import_module._rules = ()  # type: ignore[attr-defined]
 
 
-class _PassThroughFinder:
-    """A finder that resolves nothing: enough to stand ahead of the guard in sys.meta_path."""
+class _AliasFinder:
+    """A framework-style finder (crewai, wrapt, httpx2) that serves one module of its own."""
 
-    def find_spec(self, *args: Any) -> None:
+    def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> Any:
+        if fullname != "framework_alias":
+            return None
+        return importlib.util.spec_from_loader(fullname, _AliasLoader())
+
+
+class _AliasLoader(importlib.abc.Loader):
+    def create_module(self, spec: Any) -> None:
         return None
+
+    def exec_module(self, module: ModuleType) -> None:
+        module.VALUE = 42  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize(
     "tamper",
     [
         pytest.param(lambda finders: finders[1:], id="guard-removed"),
-        pytest.param(lambda finders: [_PassThroughFinder(), *finders], id="finder-ahead-of-guard"),
+        pytest.param(lambda finders: [importlib.machinery.PathFinder, *finders], id="finder-ahead-of-guard"),
     ],
 )
-def test_tampering_with_meta_path_refuses_the_next_import(tamper: Any) -> None:
+def test_tampering_with_meta_path_leaves_the_next_import_guarded(tamper: Any) -> None:
     """``sys.meta_path`` is a plain list, so code can unhook the import guard or get ahead of it.
 
-    Either leaves the list writable, but the next import is refused: an audit hook,
-    which Python cannot remove, checks on every import that the guard still heads it.
+    An audit hook, which Python cannot remove, puts the guard back at the head before
+    each import, so the module the rules do not name is still refused.
     """
-    guard_import.activate_guard_import({}, ("*",))
-    assert sys.meta_path[0] is guard_import._guard_finder
+    guard_import.activate_guard_import({}, ("json", "framework_alias"))
     saved = list(sys.meta_path)
     sys.modules.pop("colorsys", None)
     try:
         sys.meta_path = tamper(saved)
-        with pytest.raises(RuleModuleNotFoundError, match="no longer heads sys.meta_path"):
+        with pytest.raises(RuleModuleNotFoundError, match="'colorsys' is not allowed by a rule"):
+            import colorsys  # noqa: F401
+        assert sys.meta_path[0] is guard_import._guard_finder
+    finally:
+        sys.meta_path = saved
+        _reset_for_tests()
+
+
+def test_a_framework_finder_ahead_of_the_guard_keeps_working() -> None:
+    """Frameworks insert their finder at the head when imported; their modules still load."""
+    guard_import.activate_guard_import({}, ("json", "framework_alias"))
+    saved = list(sys.meta_path)
+    sys.modules.pop("framework_alias", None)
+    try:
+        sys.meta_path.insert(0, _AliasFinder())
+        import framework_alias  # type: ignore[import-not-found]
+
+        assert framework_alias.VALUE == 42
+        assert sys.meta_path[0] is guard_import._guard_finder
+    finally:
+        sys.meta_path = saved
+        sys.modules.pop("framework_alias", None)
+        _reset_for_tests()
+
+
+def test_a_meta_path_that_is_no_longer_a_list_refuses_the_import() -> None:
+    guard_import.activate_guard_import({}, ("*",))
+    saved = sys.meta_path
+    sys.modules.pop("colorsys", None)
+    try:
+        sys.meta_path = tuple(saved[1:])  # type: ignore[assignment]
+        with pytest.raises(RuleModuleNotFoundError, match="no longer a list"):
             import colorsys  # noqa: F401
     finally:
         sys.meta_path = saved
-
-
-def test_an_import_passes_while_the_guard_heads_meta_path() -> None:
-    guard_import.activate_guard_import({}, ("*",))
-    assert sys.meta_path[0] is guard_import._guard_finder
-    sys.modules.pop("colorsys", None)
-    import colorsys
-
-    assert colorsys.hls_to_rgb(0.0, 0.5, 1.0) == (1.0, 0.0, 0.0)
+        _reset_for_tests()
 
 
 def _install_armed(monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str) -> None:
