@@ -1,10 +1,15 @@
 import inspect
+import os
 import pickle
 import sys
 from types import ModuleType
 from typing import Any, Dict, Set, Tuple
 
 import pytest  # type: ignore[import-untyped]
+
+from pysandboxes.e import RuleApiPermissionError
+from pysandboxes.guard_api import activate_guard, patch_rules
+from pysandboxes.lifecycle import _reset_for_tests, arm
 
 
 def test_escape_with_closure() -> None:
@@ -69,23 +74,31 @@ def test_escape_with_meta_path() -> None:
         sys.meta_path = new_list
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="guard_api is not armed here, and no Python-level guard covers the pickle opcodes "
-    "themselves: armed, pickle.loads is denied (test_guard_api.py::test_armed_denies_pickle_loads)",
-)
-def test_escape_with_pickle_allowed() -> None:
-    # This test exercises the import guard alone, with guard_api disarmed, and demonstrates
-    # that pickle.loads() bypasses ALL import guards.
-    # The payload calls os.system() through the pickle opcodes, so unpickling it
-    # must raise instead of running it. Nothing in the import layer stops it, hence the xfail;
-    # the denial armed comes from the guard_api "deserialization" category, not from here.
-    # Containing hostile in-process bytecode is the OS sandbox's role; see
-    # wiki/audit-python-security.md for why a Python-level pickle guard was dropped.
-    malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_ALLOWED'\ntRp1\n."
+def _install_armed(monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str) -> None:
+    """Replace ``module.name`` with the guard_api wrapper the sandbox installs, then arm."""
+    activate_guard(())
+    wrapper = patch_rules(learn=False)[f"{module.__name__}.{name}"](getattr(module, name))
+    monkeypatch.setattr(module, name, wrapper)
+    arm()
 
-    with pytest.raises((ImportError, pickle.UnpicklingError)):
-        pickle.loads(malicious_pickle)  # type: ignore[arg-type]
+
+def test_a_hostile_pickle_is_refused_once_armed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pickle stream that calls ``os.system`` never runs under an armed sandbox.
+
+    The import guard alone does not stop it: the stream names ``os.system`` through the
+    pickle opcodes, and ``os`` is already imported, so no import is ever checked. That is
+    not a hole in a real sandbox, because ``pickle.loads`` sits in the ``deserialization``
+    category of guard_api, denied by default once armed. The call is refused before a
+    single byte of the stream is read, whatever callable it names.
+    """
+    malicious_pickle = b"cos\nsystem\np0\n(S'echo PICKLE_ALLOWED'\ntRp1\n."
+    try:
+        _install_armed(monkeypatch, pickle, "loads")
+        with pytest.raises(RuleApiPermissionError) as exc:
+            pickle.loads(malicious_pickle)
+        assert exc.value.category == "deserialization"
+    finally:
+        _reset_for_tests()
 
 
 @pytest.mark.xfail(
@@ -158,77 +171,24 @@ def test_escape_with_globals_introspection() -> None:
             _ = gen.gi_frame.f_globals
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="this layer does no static name scanning, so runtime-built names are never seen: "
-    "records a defense never claimed rather than an unfixed hole. Out of scope for the "
-    "wayward-LLM target, which has no reason to obfuscate",
-)
-def test_escape_with_obfuscated_strings() -> None:
-    # What this pins is comparative, not a pysandboxes defect: it is why this layer is
-    # not built on name matching in the first place.
-    #
-    # The eval sub-language *does* stop these, and for the opposite reason: it decides at
-    # run time, not on the source. __sb_getattr__ and the getattr/vars/hasattr shims hand
-    # _check_attr the *value* of the name (eval_runtime.py:213, 293, 321), so
-    # '__sub' + 'classes__' arrives there as "__subclasses__" and is refused like the
-    # dotted form -- see
-    # test_eval_security_corpus.py::test_a_name_built_by_concatenation_dies_on_the_namespace.
-    # That guard only covers code routed through guarded_eval; arbitrary bytecode in the
-    # host interpreter, which is what this file exercises, never passes through it.
-    #
-    # Obfuscation bypass: AST-based filters (RestrictedPython, Basilisk) scan for
-    # obvious patterns like "__import__", "eval", "exec", "__subclasses__".
-    # But Python's dynamic nature allows obfuscating these:
-    # - String concatenation: '__sub' + 'classes__'
-    # - getattr with constructed names: getattr(type, '__subclasses__')
-    # - eval/exec with encoding: compile() then execute
-    # - chr() chains: chr(95) + chr(95) builds "__"
-    #
-    # These bypass static analysis because they construct names at runtime.
+def test_a_name_built_at_run_time_is_refused_at_the_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Building a sensitive name at run time does not get around guard_api.
 
-    # Attack 1: getattr with concatenated string
-    # Directly accessing would be: object.__subclasses__
-    # But filter blocks it. Workaround: getattr + string ops
+    Static filters (RestrictedPython, Basilisk) scan the source for ``os.system`` and are
+    beaten by ``"sy" + "stem"``. guard_api does not read the source: it wraps the function
+    itself, so the check runs when the function is called, however it was reached --
+    ``getattr``, a ``chr()`` chain, bytes decoded at run time.
+    """
+    name = "sy" + "stem"
+    hex_name = bytes.fromhex("73797374656d").decode("ascii")
     try:
-        subclasses_method = getattr(type, "__sub" + "classes" + "__")
-        _ = subclasses_method(object)  # type: ignore[assignment]
-        # If this succeeds, we've escaped. In sandbox, should raise AttributeError
-        pytest.fail("Obfuscated __subclasses__ access succeeded; sandbox compromised")
-    except AttributeError:
-        # Expected: sandbox blocked the dynamic attribute access
-        pass
-
-    # Attack 2: chr() chain to build forbidden names
-    # chr(95) = '_', chr(105) = 'i', chr(109) = 'm', chr(112) = 'p', chr(111) = 'o', chr(114) = 'r', chr(116) = 't'
-    # '__import__' = chr(95)*2 + 'import'
-    try:
-        forbidden_name = chr(95) * 2 + "import" + chr(95) * 2
-        # Attempt to access via globals/builtins
-        import builtins  # type: ignore[no-redef]
-
-        import_func = getattr(builtins, forbidden_name, None)
-        if import_func is not None:
-            pytest.fail("chr() obfuscated __import__ access succeeded; sandbox compromised")
-    except AttributeError:
-        # Expected: sandbox blocked getattr on builtins
-        pass
-
-    # Attack 3: string encoding/decoding tricks
-    # encode to bytes, then decode back to bypass string filters
-    try:
-        # Some filters scan source for "__import__" string literals
-        # But runtime-constructed strings from bytes bypass this
-        obfuscated = b"\x5f\x5f\x69\x6d\x70\x6f\x72\x74\x5f\x5f".decode("ascii")
-        # obfuscated now = "__import__"
-        import builtins  # type: ignore[no-redef]
-
-        import_func = getattr(builtins, obfuscated, None)
-        if import_func is not None:
-            pytest.fail("Hex-encoded __import__ access succeeded; sandbox compromised")
-    except AttributeError:
-        # Expected: sandbox blocked the getattr
-        pass
+        _install_armed(monkeypatch, os, "system")
+        for built in (name, hex_name):
+            with pytest.raises(RuleApiPermissionError) as exc:
+                getattr(os, built)("true")
+            assert exc.value.qualname == "os.system"
+    finally:
+        _reset_for_tests()
 
 
 # See https://rushter.com/blog/python-code-exec/

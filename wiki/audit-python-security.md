@@ -174,7 +174,7 @@ only the *decision* uses the resolved path.
 | Rebind the call-site alias instead of the flag: `guard_api._lc_is_armed = lambda: False` | `guard_api` imports `is_armed` under the name `_lc_is_armed`, binding the function by value, so the alias is a second, independent switch read by every wrapper | **Open — reasoned** |
 | Reach the unguarded original through `__wrapped__` | `guard_wraps.guard_wraps()` replaces `functools.wraps` in the five guards: it restores `__signature__`, then drops the back-reference | **Closed** (the guarded callable does not carry `__wrapped__`; `test_guard_escape_fixes.py`) |
 | Reach the original through the wrapper's own closure cell (`__closure__[i].cell_contents`) or `gc.get_referents` | a Python wrapper necessarily holds a reference to what it wraps; hiding the name does not hide the object | **Open — by construction** |
-| Obfuscated name construction (`'__sub'+'classes__'`, `chr()` chains, hex-decoded `__import__`) | static name scanning is a courtesy, not a barrier — runtime-built names are never seen | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_obfuscated_strings`) |
+| Obfuscated name construction (`getattr(os, "sy" + "stem")`, `chr()` chains, hex-decoded names) | guard_api wraps the function, not the source text, so the check runs at the call however the name was built; a name that reaches no guarded call (`'__sub'+'classes__'`) is the `__subclasses__` row above | **Closed for guarded calls** (`test_escape_pysandbox.py::test_a_name_built_at_run_time_is_refused_at_the_call`) |
 
 These are the defining limits of a patch-based layer, not defects to be fixed
 in it. They are why the OS sandbox exists.
@@ -300,17 +300,19 @@ uv run pytest tests/unit_tests/guard/test_guard_api.py \
               tests/unit_tests/test_learning.py -v
 ```
 
-At the time of writing this run reports **14 passed, 6 xfailed** for the escape
+At the time of writing this run reports **16 passed, 4 xfailed** for the escape
 files and **197 passed, 4 skipped, 1 xfailed** for the guard corpus on Linux
 (three skips are the Windows-only twins of `test_armed_denies_the_windows_twins`,
-one is `test_os_chflags_and_lchflags`). The six `xfail` entries of the escape
-files are the open escapes: `test_escape_with_subclasses` and
-`test_escape_with_obfuscated_strings` (objective 6),
+one is `test_os_chflags_and_lchflags`). The four `xfail` entries of the escape
+files are the open escapes: `test_escape_with_subclasses` (objective 6),
 `test_escape_with_globals_introspection` (objective 4),
-`test_escape_with_pickle_allowed` and `test_escape_with_pickle_blocked` (the
-pickle entry of [inert guards](#guards-that-are-inert-by-design)), and
-`test_escape_with_meta_path`, which removes the import finder from
-`sys.meta_path`; the corpus `xfail` is `test_guard_api.py::test_the_unpickler_route_is_guarded`,
+`test_escape_with_pickle_blocked` (the pickle entry of
+[inert guards](#guards-that-are-inert-by-design): removing `pickle` from
+`sys.modules` blocks nothing), and `test_escape_with_meta_path`, which removes
+the import finder from `sys.meta_path`. A hostile pickle and a name built at run
+time are no longer listed: once armed, guard_api refuses `pickle.loads` and the
+call a built name reaches, as `test_a_hostile_pickle_is_refused_once_armed` and
+`test_a_name_built_at_run_time_is_refused_at_the_call` show; the corpus `xfail` is `test_guard_api.py::test_the_unpickler_route_is_guarded`,
 which records that `pickle.Unpickler` is an immutable C type. All are
 `strict=True`, so if any is ever closed, the XPASS fails the suite and this page
 must change with it.
