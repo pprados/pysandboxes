@@ -57,6 +57,8 @@ DEBUG_NETFILTER = DEBUG or False
 # Exceptions differ from unshare backend
 REPLACE = False  # TODO: firejail
 
+FIREJAIL_CONFIG = Path("/etc/firejail/firejail.config")
+
 
 class AllowList(MutableSet[str]):
     """Optimized list for directory paths with prefix logic.
@@ -316,27 +318,14 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
             sys.exit(1)
-        firejail_config = Path("/etc/firejail/firejail.config")
+        firejail_config = FIREJAIL_CONFIG
         restricted_network = True
-        # If explicit_yes is True it means the admin set 'restricted-network yes'
-        # in /etc/firejail/firejail.config. In that case we will log a warning and
-        # skip the network-specific filtering setup (netfilter, --net, --dns, ...).
-        restricted_network_explicit_yes = False
         if firejail_config.exists():
             for line in firejail_config.read_text().split("\n"):
                 if re.match(r"restricted-network\s+no", line):
                     restricted_network = False
-                    restricted_network_explicit_yes = False
                     break
                 if re.match(r"restricted-network\s+yes", line):
-                    # Explicit yes -> respect it but warn that we will skip
-                    # firejail-specific network filtering configuration.
-                    restricted_network = True
-                    restricted_network_explicit_yes = True
-                    logger.warning(
-                        "firejail config: 'restricted-network yes' detected; "
-                        "network-specific filtering will be skipped."
-                    )
                     break
 
         need_root = False
@@ -447,103 +436,88 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append(f"--read-only={str(pipe_path)}")
 
         if all_rules.socket_rules:
-            # If restricted_network is True and it was NOT explicitly set to
-            # 'yes' in the firejail config, then we cannot use firejail with
-            # network rules: keep existing behavior (error + exit).
-            if restricted_network and not restricted_network_explicit_yes:
+            # Without its own network namespace the jail cannot filter: refuse rather
+            # than run with the host network and only the Python layer denying.
+            if restricted_network:
                 logger.error(
-                    "Set 'restricted_network no' in %s " "to use firejail with networks rules.",
+                    "Set 'restricted-network no' in %s " "to use firejail with networks rules.",
                     repr(str(firejail_config)),
                 )
                 sys.exit(1)
 
-            # If admin explicitly set 'restricted-network yes', tolerate it:
-            # warn and skip the network-specific filtering setup (netfilter,
-            # --net, --dns, --netfilter6, ...). Socket rules will be ignored in
-            # that case for the firejail-level network filtering.
-            if restricted_network and restricted_network_explicit_yes:
-                logger.warning(
-                    "firejail config 'restricted-network yes' detected: "
-                    "skipping network-specific filtering (socket rules ignored)."
-                )
-                skip_network_setup = True
+            dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
+
+            if dns_servers:
+                for dns in dns_servers:
+                    if not dns.is_loopback:
+                        # Change to other, because inside the firejail, the loopback is not accessible
+                        for dns in dns_servers:
+                            args.append(f"--dns={dns}")
+                        break
             else:
-                skip_network_setup = False
-
-            if not skip_network_setup:
-                dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
-
-                if dns_servers:
-                    for dns in dns_servers:
-                        if not dns.is_loopback:
-                            # Change to other, because inside the firejail, the loopback is not accessible
-                            for dns in dns_servers:
-                                args.append(f"--dns={dns}")
-                            break
+                # TODO: see https://github.com/netblue30/firejail/discussions/6931
+                # for pin_dns in dns_server_v6:
+                #     if not pin_dns.is_loopback:
+                #         loopback_dns = True
+                #         args.append(f"--pin_dns={pin_dns}")
+                #         break
+                pass
+            if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
+                default_interface = get_default_interface()
+                bridges = get_bridge_interfaces()
+                if not bridges:
+                    bridge = default_interface
                 else:
-                    # TODO: see https://github.com/netblue30/firejail/discussions/6931
-                    # for pin_dns in dns_server_v6:
-                    #     if not pin_dns.is_loopback:
-                    #         loopback_dns = True
-                    #         args.append(f"--pin_dns={pin_dns}")
-                    #         break
-                    pass
-                if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
-                    default_interface = get_default_interface()
-                    bridges = get_bridge_interfaces()
-                    if not bridges:
-                        bridge = default_interface
+                    # Search "docker*" else, the first bridge
+                    for bridge in bridges:
+                        if bridge.startswith("docker"):
+                            break
                     else:
-                        # Search "docker*" else, the first bridge
-                        for bridge in bridges:
-                            if bridge.startswith("docker"):
-                                break
-                        else:
-                            bridge = bridges[0]
-                    logger.debug(f"Select bridge {bridges}")
-                    if not default_interface:
-                        raise ValueError("Impossible to detect the default network interface")
-                    args.append(f"--net={bridge}")
+                        bridge = bridges[0]
+                logger.debug(f"Select bridge {bridges}")
+                if not default_interface:
+                    raise ValueError("Impossible to detect the default network interface")
+                args.append(f"--net={bridge}")
 
-                # The sandbox now owns a network namespace, so firejail accepts
-                # --x11=none, which also closes the abstract X11 socket that the
-                # template's blacklist cannot reach.
-                args.append("--x11=none")
+            # The sandbox now owns a network namespace, so firejail accepts
+            # --x11=none, which also closes the abstract X11 socket that the
+            # template's blacklist cannot reach.
+            args.append("--x11=none")
 
-                if pipe_path:  # Update rules?
-                    net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
+            if pipe_path:  # Update rules?
+                net_filter4 = rule_to_netfilter(all_rules.socket_rules, dns_servers, is_ipv6=False)
 
-                    if DEBUG_NETFILTER:
-                        Path("tmp").mkdir(parents=True, exist_ok=True)
-                        netfilter_file = Path("tmp/netfilter.net")
-                    else:
-                        netfilter_file = temp / "netfilter.net"
-                        os.mkfifo(netfilter_file)
+                if DEBUG_NETFILTER:
+                    Path("tmp").mkdir(parents=True, exist_ok=True)
+                    netfilter_file = Path("tmp/netfilter.net")
+                else:
+                    netfilter_file = temp / "netfilter.net"
+                    os.mkfifo(netfilter_file)
 
-                    def publish_netfilter() -> None:
-                        _ = netfilter_file.write_text("\n".join(net_filter4))
-                        if not DEBUG_NETFILTER:
-                            netfilter_file.unlink(missing_ok=True)
+                def publish_netfilter() -> None:
+                    _ = netfilter_file.write_text("\n".join(net_filter4))
+                    if not DEBUG_NETFILTER:
+                        netfilter_file.unlink(missing_ok=True)
 
-                    threading.Thread(target=publish_netfilter, daemon=True).start()
+                threading.Thread(target=publish_netfilter, daemon=True).start()
 
-                    args.append(f"--netfilter={netfilter_file}")
+                args.append(f"--netfilter={netfilter_file}")
 
-                    net_filter6 = rule_to_netfilter(all_rules.socket_rules, [], is_ipv6=True)
-                    if DEBUG_NETFILTER:
-                        # tmp already created above for netfilter.net
-                        netfilter6_file = Path("tmp/netfilter6.net")
-                    else:
-                        netfilter6_file = temp / "netfilter6.net"
-                        os.mkfifo(netfilter6_file)
+                net_filter6 = rule_to_netfilter(all_rules.socket_rules, [], is_ipv6=True)
+                if DEBUG_NETFILTER:
+                    # tmp already created above for netfilter.net
+                    netfilter6_file = Path("tmp/netfilter6.net")
+                else:
+                    netfilter6_file = temp / "netfilter6.net"
+                    os.mkfifo(netfilter6_file)
 
-                    def publish_netfilter6() -> None:
-                        _ = netfilter6_file.write_text("\n".join(net_filter6))
-                        if not DEBUG_NETFILTER:
-                            netfilter6_file.unlink(missing_ok=True)
+                def publish_netfilter6() -> None:
+                    _ = netfilter6_file.write_text("\n".join(net_filter6))
+                    if not DEBUG_NETFILTER:
+                        netfilter6_file.unlink(missing_ok=True)
 
-                    threading.Thread(target=publish_netfilter6, daemon=True).start()
-                    args.append(f"--netfilter6={netfilter6_file}")
+                threading.Thread(target=publish_netfilter6, daemon=True).start()
+                args.append(f"--netfilter6={netfilter6_file}")
 
             # Remove duplicate sockets rules
             if REPLACE:
@@ -552,14 +526,21 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 new_socket_rules, *_ = socket_parse_rules([ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
                 all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
-            # Clean env variable
-            # TODO: remove dependencies ?
-            args.extend(["/usr/bin/env", "-i"])
-            for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
-                args.append(f"{env}={val}")
+        else:
+            # No socket rule: no network at all, loopback only. Allowed to regular
+            # users even under 'restricted-network yes'.
+            if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
+                args.append("--net=none")
+            args.append("--x11=none")
 
-            if need_root:
-                logger.warning("Firejail needs root to run")
+        # Clean env variable
+        # TODO: remove dependencies ?
+        args.extend(["/usr/bin/env", "-i"])
+        for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
+            args.append(f"{env}={val}")
+
+        if need_root:
+            logger.warning("Firejail needs root to run")
 
         return args, all_rules
 

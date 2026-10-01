@@ -69,11 +69,14 @@ jobs:
     # unprivileged user namespaces through AppArmor, which bwrap and unshare need
     # (see wiki/unshare.md). A container, as under `act`, cannot change that
     # sysctl: the rows that need it then skip or fail there, not on the runner.
+    # firejail refuses socket rules, and so the daemon mode, under the runner's
+    # 'restricted-network yes': the jail could not filter the network (wiki/firejail.md).
     - name: Install the OS providers
       run: |
         sudo apt-get install -y bubblewrap firejail slirp4netns iptables iproute2 \
           qemu-system-x86 qemu-utils genisoimage
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+        sudo sed -i 's/^#\? *restricted-network .*/restricted-network no/' /etc/firejail/firejail.config
 
     # The rule GitHub documents for hardware-accelerated emulators. Where /dev/kvm is
     # absent, as in a container under `act`, qemu falls back to emulation by itself,

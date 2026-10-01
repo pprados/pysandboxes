@@ -1,16 +1,16 @@
 # Firejail
 
-**Firejail** is an **OS-sandbox** provider that runs code in an isolated environment with restricted filesystem access, optional network namespace (bridge), and configurable seccomp. It allows limiting disk access, network access, and system calls. See the [Firejail documentation](https://man7.org/linux/man-pages/man1/firejail.1.html) for details.
+**Firejail** is an **OS-sandbox** provider that runs code in an isolated environment with restricted filesystem access, its own network namespace (on a bridge with socket rules, loopback only without), and configurable seccomp. It allows limiting disk access, network access, and system calls. See the [Firejail documentation](https://man7.org/linux/man-pages/man1/firejail.1.html) for details.
 
 ## Solution in brief
 
-The host launches a Firejail sandbox with a generated profile: whitelist/read-only paths from **`expose-ro` / `expose-rw`** file rules, optional `--net=<bridge>` for network, and netfilter rules (FIFO) for socket rules. The sandbox runs `main_sandbox` which reads the configuration from a named pipe and starts the SSE server. The host talks to the sandbox via SSE on a local URL. For security, code running in Firejail cannot reach host servers unless a network bridge is used (e.g. `docker0`, `br0`).
+The host launches a Firejail sandbox with a generated profile: whitelist/read-only paths from **`expose-ro` / `expose-rw`** file rules, `--net=<bridge>` and netfilter rules (FIFO) for socket rules, `--net=none` (loopback only) without them. The sandbox runs `main_sandbox` which reads the configuration from a named pipe and starts the SSE server. The host talks to the sandbox via SSE on a local URL. For security, code running in Firejail cannot reach host servers unless a network bridge is used (e.g. `docker0`, `br0`).
 
 ## Advantages
 
 | Aspect | Detail |
 |--------|--------|
-| **Isolation** | Filesystem whitelist, optional private network namespace, netfilter-based socket rules. |
+| **Isolation** | Filesystem whitelist, private network namespace (loopback only without socket rules), netfilter-based socket rules. |
 | **Ease of use** | Single binary, profile from template + Py-sandboxes rules; no VM or kernel feature beyond namespaces. |
 | **Security hardening** | Optional seccomp (allow/block lists) to restrict system calls. |
 | **Alignment with other providers** | Same API (SSE, `call_in_sandbox`) and config flow (named pipe) as bwrap/unshare. |
@@ -20,15 +20,15 @@ The host launches a Firejail sandbox with a generated profile: whitelist/read-on
 | Aspect | Detail |
 |--------|--------|
 | **Docker / Podman** | Not compatible with Docker and Podman (no Firejail in typical container images; bridge model differs). |
-| **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config`; host access requires a bridge (e.g. `add-bridge.sh`). |
+| **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config`, otherwise the sandbox refuses to start; host access requires a bridge (e.g. `add-bridge.sh`). The daemon mode always has a socket rule (its SSE port), so it needs that setting too. |
 | **Debug** | Profile and netfilter generation can be complex; check logs and Firejail options for troubleshooting. |
 
 ## How it works
 
-1. **Host**: The daemon builds Firejail arguments from the template, file rules (whitelist/read-only/read-write), and optional socket rules. If socket rules are used, it generates netfilter rules and passes them via FIFOs (`--netfilter`, `--netfilter6`). Config is written to a named pipe; the sandbox reads it on startup.
-2. **Launch**: The host runs `firejail [options] -- /usr/bin/env -i ... python -m pysandboxes.remote.main_sandbox --_named-pipe <path>`. Options include `--whitelist`, `--read-only`, `--net=<bridge>`, `--dns`, `--netfilter` when network rules are enabled.
+1. **Host**: The daemon builds Firejail arguments from the template, file rules (whitelist/read-only/read-write), and optional socket rules. If socket rules are used, it generates netfilter rules and passes them via FIFOs (`--netfilter`, `--netfilter6`); without them, it adds `--net=none` unless `firejail.net` is set. Config is written to a named pipe; the sandbox reads it on startup.
+2. **Launch**: The host runs `firejail [options] -- /usr/bin/env -i ... python -m pysandboxes.remote.main_sandbox --_named-pipe <path>`. Options include `--whitelist`, `--read-only`, `--net=<bridge>`, `--dns`, `--netfilter` when network rules are enabled, `--net=none` otherwise.
 3. **Inside the sandbox**: `main_sandbox` loads the config from the pipe, applies Python guards, starts the SSE server on the expected port and waits for requests.
-4. **Communication**: The host sends calls over SSE to the sandbox (localhost or bridge-assigned IP when using `--net`).
+4. **Communication**: The host sends calls over SSE to the sandbox, on the bridge-assigned IP given by `--net`.
 
 For more details, see the [Firejail documentation](https://firejail.wordpress.com/).
 
@@ -76,4 +76,4 @@ Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`
 
 - Firejail installed (e.g. `sudo apt install firejail`).
 - For network and socket rules: a bridge (e.g. `docker0`, `br0`). Check with `ip link show type bridge`. The script `scripts/add-bridge.sh` can create one if needed.
-- For socket rules: set `restricted-network no` in `/etc/firejail/firejail.config` so that network filtering can be applied.
+- For socket rules (and so for the daemon mode): set `restricted-network no` in `/etc/firejail/firejail.config` so that network filtering can be applied. With `restricted-network yes`, or without the line, the sandbox refuses to start rather than keep the host network.
