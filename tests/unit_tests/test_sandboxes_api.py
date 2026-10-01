@@ -1,6 +1,8 @@
 """Unit tests for sandboxes_api module."""
 
 import inspect
+import subprocess
+import sys
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest  # type: ignore[import-untyped]
@@ -262,3 +264,12 @@ class TestRunParameters:
         run_params = set(inspect.signature(run).parameters) - {"main", "extra_rules"}
 
         assert run_params == sandboxes_params
+
+
+def test_importing_the_api_loads_multiprocessing_before_any_sandbox() -> None:
+    # Arming the import guard evicts sys.modules, then hands back a module loaded before it without running its
+    # code again. The samples' profiles were learned that way, so multiprocessing must be loaded here, or its first
+    # import inside the sandbox runs its own imports (_weakrefset...) against rules that never listed them.
+    code = "import sys, pysandboxes.sandboxes_api; print('multiprocessing.synchronize' in sys.modules)"
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == "True"

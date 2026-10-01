@@ -16,6 +16,10 @@ import asyncio
 import functools
 import inspect
 import logging
+
+# Loaded before any sandbox arms, without creating a lock: arming hands a module already loaded back as it is,
+# and the learned profiles never list what multiprocessing imports for itself (_weakrefset, _pickle...).
+import multiprocessing.synchronize  # noqa: F401
 import os
 import signal
 import threading
