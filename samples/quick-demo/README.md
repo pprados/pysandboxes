@@ -261,17 +261,3 @@ Put the reviewed policy back before replaying:
 ```bash
 mv .py-sandboxes.old .py-sandboxes
 ```
-
-## Recording the demo
-
-`demo.sh` plays steps 1 to 5 unattended, up to the first `--evil`, with a comment before each command,
-for [asciinema](https://asciinema.org) and its GIF converter [agg](https://github.com/asciinema/agg).
-It runs under `bwrap`, with `HOME=/home/pysandboxes` on a tmpfs that exists only for the demo, so the
-refused `--dir ~` shows no real user name.
-
-```bash
-asciinema rec --overwrite --cols 110 --rows 12 -c ./demo.sh ../quick-demo.cast
-agg ../quick-demo.cast quick-demo.gif
-```
-
-`TYPE_DELAY` (seconds per character) and `PAUSE` (seconds after each command) set the pace.
