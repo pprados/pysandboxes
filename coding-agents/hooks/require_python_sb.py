@@ -52,8 +52,9 @@ def _segments(command: str) -> list[list[str]]:
 
 def _program(segment: list[str]) -> str | None:
     words = [word for word in segment if not _ASSIGNMENT.fullmatch(word)]
-    if words[:2] == ["uv", "run"]:
-        words = [word for word in words[2:] if not word.startswith("-")]
+    launcher = 1 if words[:1] == ["uvx"] else 2 if words[:2] == ["uv", "run"] else 0
+    if launcher:
+        words = [word for word in words[launcher:] if not word.startswith("-")]
     return PurePath(words[0]).name if words else None
 
 

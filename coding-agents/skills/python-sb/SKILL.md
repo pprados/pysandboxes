@@ -19,6 +19,8 @@ python-sb -m package.module
 python-sb -c "print(1)"
 ```
 
+If `python-sb` is not installed, `uvx python-sb` runs it from PyPI with the same arguments.
+
 A skill that ships its own rule file names it explicitly:
 
 ```bash

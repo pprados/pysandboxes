@@ -29,6 +29,7 @@ def run_hook(payload: object) -> subprocess.CompletedProcess[str]:
         "make build; python3 x.py",
         "uv run python script.py",
         "uv run --frozen python script.py",
+        "uvx python script.py",
         "echo ok\npython script.py",
     ],
 )
@@ -44,6 +45,8 @@ def test_a_direct_python_is_refused(command: str) -> None:
         "python-sb script.py",
         "python-sb --pysandboxes-config=skill/.py-sandboxes skill/scripts/report.py",
         "uv run python-sb script.py",
+        "uvx python-sb script.py",
+        "uvx python-sb --pysandboxes-config=skill/.py-sandboxes skill/scripts/report.py",
         "uv run pytest -k python",
         'echo "python script.py"',
         "ls python3",

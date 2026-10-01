@@ -6,7 +6,8 @@ things that make it run that Python through `python-sb`, so the rules of `.py-sa
 - **a skill**, [`skills/python-sb/SKILL.md`](skills/python-sb/SKILL.md): when to use `python-sb`, and what to do
   when an access is refused (report it, never widen the rules or fall back to `python`);
 - **a pre-execution hook**, [`hooks/require_python_sb.py`](hooks/require_python_sb.py): it refuses a shell command
-  that runs `python`, `python3`, `python3.N` or `uv run python`, and tells the agent to use `python-sb` instead.
+  that runs `python`, `python3`, `python3.N`, `uv run python` or `uvx python`, and tells the agent to use
+  `python-sb` (or `uvx python-sb`) instead.
 
 The script only needs the standard library. It reads the tool call on stdin, and refuses with exit code 2 and the
 reason on stderr: every agent below honours that, and shows the reason to the model.
@@ -61,8 +62,8 @@ Copy `copilot/python-sb.json` to `.github/hooks/` and replace `/path/to/pysandbo
 ## Limits
 
 The hook is a guard against a habit, not a barrier. It reads the command line only: `sh -c "python ..."`,
-`env python`, a script with a `#!/usr/bin/env python` shebang, a Makefile or `uv run --with x python` (an option
-with a value before `python`) still run Python directly. A command it cannot parse is allowed.
+`env python`, a script with a `#!/usr/bin/env python` shebang, a Makefile, `uv run --with x python` or
+`uvx --python 3.12 python` (an option with a value before `python`) still run Python directly. A command it cannot parse is allowed.
 
 Containing hostile code is the job of the OS provider of `python-sb` (`bwrap`, `landlock`, `unshare`, `qemu`),
 and of `learn=false` in the rule file, which forbids the command-line options that would widen the rules. See
