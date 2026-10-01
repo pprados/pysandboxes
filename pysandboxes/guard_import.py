@@ -532,6 +532,28 @@ _guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
 
 _activated = False
 
+# Held before guard_api can wrap it: the hook is installed by the framework, never by user code.
+_sys_addaudithook = sys.addaudithook
+_audit_hook_installed = False
+
+
+def _audit_import(event: str, args: tuple[Any, ...]) -> None:
+    """Refuse an import once the guard finder no longer heads ``sys.meta_path``.
+
+    ``sys.meta_path`` is a plain list: removing the guard finder, or inserting a
+    finder ahead of it, would let every later import skip the rules. CPython raises
+    the ``import`` audit event with the live ``sys.meta_path`` before it resolves a
+    module, and an audit hook cannot be removed from Python, so the check survives
+    whatever the list becomes. A module already in ``sys.modules`` raises no event,
+    which activation covers by evicting them. Nothing is logged here: logging may
+    import, and an import inside the hook would re-enter it.
+    """
+    if event != "import" or not _activated:
+        return
+    meta_path = args[3]
+    if not meta_path or meta_path[0] is not _guard_finder:
+        raise RuleModuleNotFoundError(f"Import of {args[0]!r} refused: the import guard no longer heads sys.meta_path")
+
 
 def _activate_patch_import(
     patch_rules: PatchRules,
@@ -544,7 +566,7 @@ def _activate_patch_import(
     Returns:
         True if patching was activated, False if already active.
     """
-    global _activated
+    global _activated, _audit_hook_installed
     import sys
 
     if _guard_finder not in sys.meta_path:
@@ -553,6 +575,9 @@ def _activate_patch_import(
         _patch_rules = patch_rules
 
         sys.meta_path.insert(0, _guard_finder)
+        if not _audit_hook_installed:
+            _sys_addaudithook(_audit_import)
+            _audit_hook_installed = True
         _activated = True
         return True
     else:

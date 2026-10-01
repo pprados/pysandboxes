@@ -7,7 +7,8 @@ from typing import Any, Dict, Set, Tuple
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.e import RuleApiPermissionError
+from pysandboxes import guard_import
+from pysandboxes.e import RuleApiPermissionError, RuleModuleNotFoundError
 from pysandboxes.guard_api import activate_guard, patch_rules
 from pysandboxes.lifecycle import _reset_for_tests, arm
 
@@ -59,19 +60,45 @@ def test_escape_with_subclasses() -> None:
         import_module._rules = ()  # type: ignore[attr-defined]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="sys.meta_path escape: open by construction, out of scope for the wayward-LLM "
-    "target (wiki/audit-python-security.md#the-design-target-wayward-llm-generated-code) -- "
-    "documented, not scheduled since guard_self was removed",
-)
-def test_escape_with_meta_path() -> None:
-    # Unhooking GuardFinder is a deliberate act, not something code solving the wrong
-    # problem does by accident.
+class _PassThroughFinder:
+    """A finder that resolves nothing: enough to stand ahead of the guard in sys.meta_path."""
 
-    with pytest.raises(AttributeError):
-        new_list = list(sys.meta_path)[1:]
-        sys.meta_path = new_list
+    def find_spec(self, *args: Any) -> None:
+        return None
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        pytest.param(lambda finders: finders[1:], id="guard-removed"),
+        pytest.param(lambda finders: [_PassThroughFinder(), *finders], id="finder-ahead-of-guard"),
+    ],
+)
+def test_tampering_with_meta_path_refuses_the_next_import(tamper: Any) -> None:
+    """``sys.meta_path`` is a plain list, so code can unhook the import guard or get ahead of it.
+
+    Either leaves the list writable, but the next import is refused: an audit hook,
+    which Python cannot remove, checks on every import that the guard still heads it.
+    """
+    guard_import.activate_guard_import({}, ("*",))
+    assert sys.meta_path[0] is guard_import._guard_finder
+    saved = list(sys.meta_path)
+    sys.modules.pop("colorsys", None)
+    try:
+        sys.meta_path = tamper(saved)
+        with pytest.raises(RuleModuleNotFoundError, match="no longer heads sys.meta_path"):
+            import colorsys  # noqa: F401
+    finally:
+        sys.meta_path = saved
+
+
+def test_an_import_passes_while_the_guard_heads_meta_path() -> None:
+    guard_import.activate_guard_import({}, ("*",))
+    assert sys.meta_path[0] is guard_import._guard_finder
+    sys.modules.pop("colorsys", None)
+    import colorsys
+
+    assert colorsys.hls_to_rgb(0.0, 0.5, 1.0) == (1.0, 0.0, 0.0)
 
 
 def _install_armed(monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str) -> None:

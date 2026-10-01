@@ -46,7 +46,7 @@ Here is a brief description of the implementation in **partial mode**. You will 
   - An HTTP FastAPI server is launched with the selected port.
       - It implements the SSE protocol.
       - The sandbox is activated.
-          - A Finder/Loader pair is added to `sys.meta_path`.
+          - A Finder/Loader pair is added to `sys.meta_path`, and an audit hook that refuses any import once that finder no longer heads the list.
           - All modules (except some critical ones) are uninstalled or reloaded.
           - From now on, when a module is loaded, it undergoes *on-the-fly* modifications.
           - Critical functions and methods are re-implemented to follow the security rules.
