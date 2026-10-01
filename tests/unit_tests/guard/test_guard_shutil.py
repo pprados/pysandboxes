@@ -219,6 +219,29 @@ def test_shutil_rmtree(files: Dict[str, Path]) -> None:  # noqa: F811
     shutil.rmtree(d, ignore_errors=False, onerror=None, **extra)
 
 
+def test_shutil_rmtree_cannot_empty_a_read_only_tree(files: Dict[str, Path]) -> None:  # noqa: F811
+    """rmtree opens the tree for reading, then unlinks through ``dir_fd``: that must count as a write."""
+    import shutil
+    import tempfile
+
+    tree = files["path"] / "ro_tree"
+    (tree / "inner").mkdir(parents=True)
+    (tree / "inner" / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={files['path']}", Path(), 0)])
+
+    assert shutil._use_fd_functions or sys.platform == "win32"  # type: ignore[attr-defined]
+    with pytest.raises(OSError):
+        shutil.rmtree(tree)
+    assert (tree / "inner" / "f.txt").exists()
+
+    activate_guard_files_rules([ConfigLine(f"expose-rw={files['path']}", Path(), 0)])
+    with tempfile.TemporaryDirectory(dir=files["path"]) as scratch:
+        (Path(scratch) / "inner").mkdir()
+        (Path(scratch) / "inner" / "f.txt").write_text("x")
+    assert not Path(scratch).exists()
+    shutil.rmtree(tree)
+
+
 def test_shutil_move(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),

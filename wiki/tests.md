@@ -12,9 +12,9 @@ also what every container row runs. `guard_eval`, `guard_api` and
 host only — so no container row arms them. The seventh family,
 `guard_provider`, parses configuration rather than guarding a call.
 
-"Parametrized" is not "verified": the QEMU rows of the second scenario have
-never passed on a host without `/dev/kvm`, for a reason nobody has pinned down.
-Five backends are green.
+QEMU is run twice on the host: the `qemu` row takes KVM when `/dev/kvm` is
+there, and the `qemu-tcg` row refuses it, so emulation is covered even on a
+machine that has KVM.
 
 The container grid is therefore narrower than the host one, and narrower still
 than its row count suggests: a quarter of its rows are declared `xfail` and
@@ -42,11 +42,11 @@ commit that adds a test; the point is the shape of the effort:
 
 | Suite | Target | Tests |
 |---|---|---|
-| Unit | `make unit-tests` | ~1125 |
-| Integration | `make integration-tests` | ~130 |
+| Unit | `make unit-tests` | ~1410 |
+| Integration | `make integration-tests` | ~135 |
 | Containers | `make container-tests` | ~60 |
 | Samples (12 demos) | `make sample-tests` | ~170 |
-| **Total, one interpreter** | `make all-tests` | **~1490** |
+| **Total, one interpreter** | `make all-tests` | **~1775** |
 
 The samples figure is the softest of the four: each sample has its own
 `pyproject.toml`, its own lock file and its own virtual environment, so the
@@ -57,11 +57,11 @@ of it:
 
 | Workflow | Suite | Versions | Executions | Fires on |
 |---|---|---|---|---|
-| `test.yml` | Unit | 3.11, 3.12, 3.13, 3.14 | ~4500 | every push and pull request |
-| `integration.yml` | Integration | 3.13 | ~130 | `full-gate.yml` (nightly 20:17 UTC, release tag) or dispatch |
+| `test.yml` | Unit | 3.11, 3.12, 3.13, 3.14 | ~5640 | every push and pull request |
+| `integration.yml` | Integration | 3.11, 3.12, 3.13, 3.14 | ~540 | `full-gate.yml` (nightly 20:17 UTC, release tag) or dispatch |
 | `containers.yml` | Containers | 3.13 | ~60 | `full-gate.yml` (nightly 20:17 UTC, release tag) or dispatch |
 | `samples.yml` | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | `full-gate.yml` (nightly 20:17 UTC, release tag) or dispatch |
-| **Total** | | | **~5340** | |
+| **Total** | | | **~6890** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
 excludes the matrix interpreter is *skipped*, not failed. `langgraph-demo` is
@@ -100,8 +100,8 @@ each backend re-exports (`PATH`, `PYTHONPATH`, `COLUMNS`, `PYTHONUNBUFFERED`…)
 and it grows deliberately as backends add exports. The check catches an
 *unknown* name, not every name.
 
-**`test_guards_with_providers.py`** covers the other three families, six rows
-per backend. Each family is a deny/allow pair: `eval('40 + 2')` refused, then
+**`test_guards_with_providers.py`** covers the other three families, six tests
+per backend row. Each family is a deny/allow pair: `eval('40 + 2')` refused, then
 allowed by `python-api=ALLOW:dynamic-code`; `os.system` refused, then allowed by
 `python-api=ALLOW:os.system`; an unlisted module refused by name, then accepted
 once `python-import=` names it. The pairing is the point — a deny row alone
@@ -116,9 +116,11 @@ disarms the very guard under test. The profile exposes the interpreter's own
 library tree explicitly, since a backend with its own mount namespace otherwise
 hides it.
 
-Five backends were verified when that file landed — `subprocess`, `unshare`,
-`firejail`, `landlock`, `bwrap`: 30 of its 36 rows pass. The six QEMU rows were
-not; see [Gaps](#gaps).
+Four more tests per row cover what the guards rest on: the program's output
+comes back, a profile naming its modules one by one still starts, a failure
+says why, and stdout and stderr stay apart. The first three pin the defects
+that made every QEMU row exit 1 with an empty stderr; with them fixed, the QEMU
+rows run like the others. Ten tests over seven rows: 70 rows.
 
 `test_eval_integration.py` and `test_guard_api_arming.py` stay pinned to
 `os-sandbox=subprocess`, and keep their role: depth rather than breadth. They
@@ -142,9 +144,13 @@ Nine providers are registered in `pysandboxes/_os_sandbox.py`; `_task` and
 | `bwrap` | yes | yes | yes (privileged) | yes (privileged) | yes (privileged) |
 | `unshare` | yes | yes | yes (privileged) | yes (privileged) | yes (privileged) |
 | `landlock` | yes | yes | yes | yes | yes |
-| `qemu` | yes | **unverified** | yes | yes | yes |
+| `qemu` | yes | yes | yes | yes | yes |
+| `qemu-tcg` | yes | yes | — | — | — |
 
-"Host: guards" is `test_guards_with_providers`.
+"Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
+a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
+`tests/integration_tests/_env.py`). It carries the `slow` marker, which is how a
+release run leaves it out (`exclude-tcg` in `integration.yml`); the nightly runs it.
 
 `none` is left out of this page. It is the no-op provider — a development aid,
 not a confinement technology — so nothing it does or fails to do says anything
@@ -192,10 +198,9 @@ backends build their own namespaces and mounts, which an unprivileged container
 does not grant, so the row is marked rather than silently dropped — but it is
 not coverage. A quarter of the container grid is a label.
 
-The same convention applies on the host: `qemu` in partial mode is
-`xfail(run=False)` in `test_usage_with_providers.py`, because the VM boot
-exceeds the 30 s configuration timeout and the row would cost ten minutes to
-fail. Five of the six partial-mode rows actually run.
+The host no longer has any: `qemu` in partial mode used to be `xfail`, and
+every partial-mode row of `test_usage_with_providers.py` now runs
+(`_PARTIAL_MODE_XFAIL` is empty).
 
 Kubernetes rows need minikube and the per-backend images
 (`make minikube-ready`, `make minikube-build-images`); they skip otherwise.
@@ -210,9 +215,9 @@ family, condition) tuple — rather than in pytest rows.
 
 | Symbol | Meaning | Value | Source |
 |---|---|---|---|
-| `V_host` | Python versions the host grid runs | 1 (4 claimed) | `integration.yml` pins `3.13`; `requires-python = ">=3.11,<3.15"`. The unit suite does run the four, but it sits outside this grid |
+| `V_host` | Python versions the host grid runs | 4 | the `integration.yml` matrix, `3.11` to `3.14`, matching `requires-python = ">=3.11,<3.15"` |
 | `V_ctn` | Python versions the container grid runs | 1 | `_image_name()` returns `:latest`; `ARG PYTHON_VERSION` is a build knob, not a test axis |
-| `P_host` | backends on the host | 6 | `ALL_OS_SANDBOX` in `tests/integration_tests/_env.py` |
+| `P_host` | backends on the host | 6 | `ALL_OS_SANDBOX` in `tests/integration_tests/_env.py`, `qemu-tcg` counted with `qemu` |
 | `P_ctn` | backends in containers, `none` excluded | 4 | `all_os_sandbox_provider` minus `none` |
 | `G` | armable guard families | 6 | section A; `guard_provider` is excluded — it parses configuration, it does not guard a call |
 | `G_os` | families still enforced without the Python layer | 3 | files, socket, envs — empirically, the 24 `py_sandbox=false` container rows run `tst_usage` and pass, which is what makes those three OS-enforced rather than guard-enforced |
@@ -226,9 +231,9 @@ family, condition) tuple — rather than in pytest rows.
 N_ideal = V_host x P_host x M x G                    (host)
         + V_ctn  x P_ctn  x R x K x (G + G_os)       (containers)
 
-        = 1 x 6 x 2 x 6   +   1 x 4 x 3 x 2 x (6 + 3)
-        = 72 + 216
-        = 288
+        = 4 x 6 x 2 x 6   +   1 x 4 x 3 x 2 x (6 + 3)
+        = 288 + 216
+        = 504
 ```
 
 The `(G + G_os)` term is the `py_sandbox` axis written honestly. The
@@ -240,42 +245,38 @@ they are inapplicable, and counting them would inflate the denominator.
 **What the suites cover**
 
 ```
-N_covered = P_host x 3   (tst_usage on the host: files, socket, envs)      =  18
-          + P_host x 3   (test_guards_with_providers: eval, api, import)   =  18
-          + P_host x 1   (partial mode: environment variables only)        =   6
-          + 48 x 3       (every real-backend container row runs tst_usage) = 144
-          = 186
+N_covered = V_host x P_host x 3   (tst_usage on the host: files, socket, envs)    =  72
+          + V_host x P_host x 3   (test_guards_with_providers: eval, api, import) =  72
+          + V_host x P_host x 1   (partial mode: environment variables only)      =  24
+          + 48 x 3       (every real-backend container row runs tst_usage)        = 144
+          = 312
 ```
 
-**What actually executes** — subtract the `xfail(run=False)` cells: the qemu
-partial-mode row (1 cell) and the twelve unprivileged `unshare`/`bwrap`
-container rows (12 x 3 = 36 cells).
+**What actually executes** — subtract the `xfail(run=False)` cells: the twelve
+unprivileged `unshare`/`bwrap` container rows (12 x 3 = 36 cells).
 
 ```
-N_run = 186 - 37 = 149
+N_run = 312 - 36 = 276
 ```
 
-| | Cells | Of 288 |
+| | Cells | Of 504 |
 |---|---|---|
-| Declared | 186 | 65 % |
-| Executed | 149 | 52 % |
+| Declared | 312 | 62 % |
+| Executed | 276 | 55 % |
 
-Row counts, to cross-check against the sections above: 48 host rows and 60
-container rows, 48 of them on a real backend. Both are reproducible with
-`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1125
+Row counts, to cross-check against the sections above: 84 host rows per
+interpreter and 60 container rows, 48 of them on a real backend. Both are reproducible with
+`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1410
 collected, none parametrized by backend or container condition — so they scale
-with the Python version alone, and are the one suite that already runs on all
-four.
+with the Python version alone.
 
 Two facts fall out of the arithmetic that the tables above do not show. Partial
 mode arms one family of six: the mode is parametrized over every backend, but
-the only assertion is about environment variables. And both `V` coefficients are
-1 against a `requires-python` that claims four interpreters — raising `V_host`
-means widening the one-entry matrix of `integration.yml`, while raising `V_ctn`
-means building and tagging the per-version images, since the grid asks for
-`:latest`. Neither is a code change: the five `Dockerfile*` already take
-`ARG PYTHON_VERSION`, and the Makefile derives it from the venv's interpreter.
-What holds them back is runtime — the container job is already budgeted at 300
+the only assertion is about environment variables. And `V_ctn` is 1 against a
+`requires-python` that claims four interpreters: raising it means building and
+tagging the per-version images, since the grid asks for `:latest`. That is not a
+code change: the five `Dockerfile*` already take `ARG PYTHON_VERSION`, and the
+Makefile derives it from the venv's interpreter. What holds it back is runtime — the container job is already budgeted at 300
 minutes for a single version, most of it QEMU booting under emulation.
 
 ## Gaps
@@ -286,12 +287,6 @@ minutes for a single version, most of it QEMU booting under emulation.
   Closing this means either teaching `tst_usage` those three families — and
   narrowing `python-import=` in a profile that feeds every container row — or
   giving the container suite a second scenario.
-- **The six QEMU rows of `test_guards_with_providers` are unverified.** On a
-  host with no `/dev/kvm` they exit 1 with an empty stderr, before any guard
-  runs. The same profile and script pass on the other five backends, so this
-  looks like the VM failing to come up rather than the guard — but the cause was
-  not established, and it is untriaged, not expected. The silent exit is its own
-  small problem: a user gets no diagnostic at all.
 - **Split (partial) mode is untested in containers** — `test_containers.py`
   carries an explicit `# TODO: test with split mode`. It is covered on the host
   by `test_partial_mode_hides_the_parent_environment`.
@@ -299,9 +294,9 @@ minutes for a single version, most of it QEMU booting under emulation.
 - **Partial mode arms one guard family of six.** The mode is parametrized over
   every backend, but the only assertion is about environment variables — see
   section D.
-- **The provider grids run one interpreter against a four-version support
-  claim.** `requires-python = ">=3.11,<3.15"`, while `integration.yml` and
-  `containers.yml` pin `3.13` and the container grid asks for `:latest`. Only
-  the unit and sample suites cover the four — see section D.
+- **The container grid runs one interpreter against a four-version support
+  claim.** `requires-python = ">=3.11,<3.15"`, while `containers.yml` pins
+  `3.13` and the grid asks for `:latest`. The unit, integration and sample
+  suites cover the four — see section D.
 - `call_llm()` in `tst_usage.py` is defined but never invoked — dead code, not a
   provider test.

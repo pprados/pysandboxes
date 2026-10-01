@@ -36,6 +36,9 @@ from typing import (
     cast,
 )
 
+if sys.platform == "darwin":
+    import fcntl
+
 from .config import OPTIMIZE
 from .e import RuleFileNotFoundError, RulePermissionError
 from .guard_envs import LearnEnviron
@@ -138,6 +141,7 @@ _rules: FilesRules = cast(FilesRules, ())
 
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
+_os_readlink = os.readlink
 
 # Set while the guard canonicalizes a path for itself. ``os.path.realpath``
 # calls ``os.lstat``/``os.readlink``, which are patched, so canonicalizing
@@ -532,7 +536,7 @@ def _apply_src_to_dest_rules(
             if _ignore_matches(original_path, rule.source) or _ignore_matches(real_path, rule.source):
                 return None, rule
         else:
-            assert "Invalid rules"
+            assert False, f"Invalid guard_files rules {type(rule)=}"  # noqa: B011
     return path, None
 
 
@@ -620,6 +624,38 @@ def _raise_access(file: str) -> NoReturn:
     ex = RuleFileNotFoundError(f"Access to {f!r} must be accepted by a rule.")
     ex.errno = ENOENT
     raise ex
+
+
+def _dir_fd_path(path: str, dir_fd: int) -> str:
+    """Return the path the kernel resolves ``path`` to, relative to the directory open as ``dir_fd``.
+
+    An unresolvable descriptor denies the call: checking ``path`` against the current
+    directory instead would let ``shutil.rmtree`` empty a read-only tree.
+    """
+    if os.path.isabs(path):
+        return path
+    try:
+        if sys.platform == "darwin":
+            directory = os.fsdecode(fcntl.fcntl(dir_fd, fcntl.F_GETPATH, bytes(1024)).rstrip(b"\0"))
+        else:
+            directory = _os_readlink(f"/proc/self/fd/{dir_fd}")
+    except OSError:
+        _raise_access(path)
+    return os.path.join(directory, path)
+
+
+def _check_dir_fd(path: str, dir_fd: int, *, write: bool, learn: bool = True) -> None:
+    """Apply the rules to ``path`` relative to ``dir_fd``; the call keeps both unchanged."""
+    target = _dir_fd_path(path, dir_fd)
+    remapped, rule = _apply_dest_to_src_rules(target, write=write)
+    if rule:
+        _raise_ignore(path, rule)
+    if not remapped:
+        if is_learning_mode():
+            if learn:
+                add_learning_rule(LearnFileRule(Path(target), write))
+        else:
+            _raise_access(target)
 
 
 # %% Generic wrapper
@@ -716,6 +752,10 @@ def _wrap_filename(func: Callable[..., Any], *, write: bool, learn: bool = True)
         if isinstance(file, bytes):
             file = os.fsdecode(file)
         file = cast(str, file)
+        dir_fd = kwargs.get("dir_fd")
+        if dir_fd is not None:
+            _check_dir_fd(file, cast(int, dir_fd), write=write, learn=learn)
+            return func(file, *args, **kwargs)
         remapped, rule = _apply_dest_to_src_rules(file, write=write)
         if rule:
             _raise_ignore(file, rule)
@@ -1015,11 +1055,12 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
                 _raise_ignore(path, rule)
             return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
         if isinstance(flags, int):
-            need_to_write = bool((flags & os.O_WRONLY) or (flags & os.O_RDWR) or (flags & os.O_APPEND))
+            # O_TRUNC empties a file even opened O_RDONLY, and O_CREAT creates one.
+            need_to_write = bool(flags & (os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC))
             remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
             if remapped is None:
                 if is_learning_mode():
-                    add_learning_rule(LearnFileRule(Path(path), False))
+                    add_learning_rule(LearnFileRule(Path(path), need_to_write))
                     remapped = path
                 else:
                     _raise_access(path)
@@ -1231,7 +1272,7 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
             _raise_ignore(dst, rule)
         if not remapped:
             if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(dst), False))
+                add_learning_rule(LearnFileRule(Path(dst), True))
                 remapped = dst
             else:
                 _raise_access(dst)
@@ -1264,12 +1305,13 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
 def _wrap_os_unlink(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
-        if dir_fd is not None:
-            return func(path=path, dir_fd=dir_fd)
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
-        remapped, rule = _apply_dest_to_src_rules(path, write=False)
+        if dir_fd is not None:
+            _check_dir_fd(path, dir_fd, write=True)
+            return func(path=path, dir_fd=dir_fd)
+        remapped, rule = _apply_dest_to_src_rules(path, write=True)
         if rule:
             _raise_ignore(path, rule)
         if not remapped:
@@ -1286,12 +1328,13 @@ def _wrap_os_unlink(func: Callable[..., Any]) -> Callable[..., Any]:
 def _wrap_os_rmdir(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(path: StrOrBytesPath, *, dir_fd: int | None = None) -> None:
-        if dir_fd is not None:
-            return func(path=path, dir_fd=dir_fd)
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
-        remapped, rule = _apply_dest_to_src_rules(path, write=False)
+        if dir_fd is not None:
+            _check_dir_fd(path, dir_fd, write=True)
+            return func(path=path, dir_fd=dir_fd)
+        remapped, rule = _apply_dest_to_src_rules(path, write=True)
         if rule:
             _raise_ignore(path, rule)
         if not remapped:
@@ -1550,7 +1593,7 @@ _default_rules: dict[str, Callable[..., Any]] = {
     "os.chroot": _f(_wrap_filename, write=False),
     "os.link": _f(_wrap_two_filenames),
     "os.listdir": _f(_wrap_os_listdir),
-    "os.mkdir": _f(_wrap_filename, write=False),
+    "os.mkdir": _f(_wrap_filename, write=True),
     # ALLOW "os.makedirs" (indirect calls)
     # DENY os.mkfifo
     # DENY os.mknod
