@@ -47,13 +47,12 @@ learn=false
 
 From then on, the configuration is refused at startup when:
 
-- the learning mode is requested, by `--learn`, by a `learn=<file>` in another file, by the `learn=` argument of
-  `sandboxes()` or `@sandbox`, or because the rule file does not exist;
-- `python-sb` receives a rule on its command line.
+- the learning mode is requested, by `--learn`, by a `learn=<file>` in another file, or because the rule file does
+  not exist;
+- `python-sb` receives a rule on its command line, or the code passes one to `sandboxes()` or `run()`.
 
-The rules passed by code to `sandboxes()` or `@sandbox` stay allowed, except `learn`: they are versioned and
-reviewed with that code. The lock only holds while the file holding it is loaded: `--pysandboxes-config=` can name
-another file, so pin the full command line where the program is launched.
+The lock only holds while the file holding it is loaded: `--pysandboxes-config=` can name another file, so pin the
+full command line where the program is launched.
 
 ---
 

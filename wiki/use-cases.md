@@ -29,7 +29,7 @@ down. The effective rights also depend on:
 
 When the rights of a program matter, remove the `./` includes from its rule file, write `os-sandbox=` without a
 variable, and add `learn=false`: the configuration is then refused if the learning mode is requested, if the rule
-file is missing, or if the command line adds a rule (see [Lock the rules](configuration.md#lock-the-rules)). Only
+file is missing, or if the command line or the code adds a rule (see [Lock the rules](configuration.md#lock-the-rules)). Only
 `--pysandboxes-config=` remains, so pin the full command line where the program is launched.
 
 ## Contain the script of an agent skill
