@@ -14,9 +14,6 @@ branch a test targets is exercised either way. A refusal is asserted through
 (where relevant) that the file system was left untouched -- checked with the
 rules disarmed first, since a post-condition check goes through the very
 guard the test just armed, and a hidden file reads as absent to `exists()`.
-
-A few tests are marked `xfail(strict=True)`: they pin an inconsistency found
-while reading the source, described in each test's docstring.
 """
 
 import os
@@ -201,15 +198,6 @@ def test_apply_ignore_rule_matches_by_name(tmp_path: Path) -> None:
     assert result == (None, rule)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "apparent bug: `_apply_src_to_dest_rules`'s catch-all `else` branch is `assert "
-        '"Invalid rules"`, a non-empty string literal that is always truthy, so it never '
-        "raises. The symmetric branch in `_apply_dest_to_src_rules` (`assert False, ...`) "
-        "does raise for the same situation."
-    ),
-)
 def test_apply_src_to_dest_rules_rejects_an_unknown_rule_type(tmp_path: Path) -> None:
     bogus = object()
 

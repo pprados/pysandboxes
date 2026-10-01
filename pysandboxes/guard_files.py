@@ -536,7 +536,7 @@ def _apply_src_to_dest_rules(
             if _ignore_matches(original_path, rule.source) or _ignore_matches(real_path, rule.source):
                 return None, rule
         else:
-            assert "Invalid rules"
+            assert False, f"Invalid guard_files rules {type(rule)=}"  # noqa: B011
     return path, None
 
 
