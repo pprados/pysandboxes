@@ -1,0 +1,13 @@
+{
+  "name": "pysandboxes",
+  "owner": {
+    "name": "Philippe Prados"
+  },
+  "plugins": [
+    {
+      "name": "python-sb",
+      "source": "./coding-agents",
+      "description": "Run Python through python-sb: a skill, and a hook that refuses a bare python command."
+    }
+  ]
+}
