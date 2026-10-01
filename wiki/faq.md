@@ -81,6 +81,7 @@ def call_llm() -> None:
 ## How to ensure a new version of a module doesn't hide new network accesses?
 Using **Py-sandboxes** also makes you aware that a module update can also call the security rules into question.
 We invite you, after each update, to test your application without learning. This way, if a rule is violated, you will know its origin.
+See [use cases](use-cases.md) for this scenario and the others.
 
 ##  Do I have any new rule violations since the update?
 Indeed, new ones can be proposed. As the approach is based on *denial by default*, these rules are rejected. Restart a learning session to add what is necessary.

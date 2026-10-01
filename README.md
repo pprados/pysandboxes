@@ -60,6 +60,22 @@ Nest them: the dynamic-code layer for the strings an LLM produces, the Python la
 
 This is **not** a defense against a malicious third-party dependency that you installed yourself.
 
+# Use cases
+
+`python-sb` replaces `python` on a command line, so anything launched as a Python script runs with the rights
+written in its `.py-sandboxes` file:
+
+- **Agent skills, hooks and plugins**: the scripts of a skill run with all the rights of the user. A rule file
+  shipped with the skill bounds them, and doubles as its permission manifest.
+- **Tools, CLIs and MCP servers**: a tool driven by a manipulated LLM can only reach what its function needs.
+- **AI coding agents**: the rule file is versioned, so `git diff -- '*.py-sandboxes'` shows every right the agent
+  added between two commits.
+- **Dependency updates**: a run without `--learn` turns a new behavior of a dependency into a visible violation.
+- **Untrusted tests in CI**, **audit of an unknown script** with `--learn`, **LLM-generated code**.
+
+See [use cases](https://github.com/pprados/pysandboxes/blob/master/wiki/use-cases.md) for each scenario, the
+protection level it needs, and what the rule file does not show.
+
 # Platform support
 
 For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock, bwrap, firejail, unshare) is a Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
@@ -70,6 +86,7 @@ For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock
 
 - [Quick start](#quick-start)
 - [What it protects against, and what it does not](#what-it-protects-against-and-what-it-does-not)
+- [Use cases](#use-cases)
 - [Platform support](#platform-support)
 - [Principle](#principle)
 - [Usage](#usage)
