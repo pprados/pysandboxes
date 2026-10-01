@@ -29,11 +29,14 @@ python-sb --pysandboxes-config=./.py-sandboxes -m ...
 ```
 
 If the file does not exist, the first run learns the rules and writes them into it. To add rules to an existing
-file, pass the same file to `--learn`:
+file, add `--learn`: without a value, it writes into the file of `--pysandboxes-config`, as written on the command
+line (never into the resource of a module found by `-m`):
 
 ```bash
-python-sb --pysandboxes-config=cfg/my-app.py-sandboxes --learn=cfg/my-app.py-sandboxes -m ...
+python-sb --pysandboxes-config=cfg/my-app.py-sandboxes --learn -m ...
 ```
+
+`--learn=<file>` writes into another file.
 
 ### Lock the rules
 

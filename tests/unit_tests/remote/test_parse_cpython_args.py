@@ -223,6 +223,23 @@ class TestParsePythonCmdLine:
         assert python_cmd == []
         assert config == Path(CONFIG_NAME)
 
+    @pytest.mark.parametrize(
+        "config_args",
+        [["--pysandboxes-config=skill/.py-sandboxes"], ["--pysandboxes-config", "skill/.py-sandboxes"]],
+    )
+    def test_a_bare_learn_writes_to_the_named_rule_file(self, config_args: list[str]) -> None:
+        _, sandboxes_args, _, config = parse_python_cmd_line([*config_args, "--learn", "script.py"])
+
+        assert sandboxes_args == ["--learn=skill/.py-sandboxes"]
+        assert config == Path("skill/.py-sandboxes")
+
+    def test_a_learn_with_a_file_keeps_its_file(self) -> None:
+        args = ["--pysandboxes-config=skill/.py-sandboxes", "--learn=other.py-sandboxes", "script.py"]
+
+        _, sandboxes_args, _, _ = parse_python_cmd_line(args)
+
+        assert sandboxes_args == ["--learn=other.py-sandboxes"]
+
     def test_parse_python_cmd_line_preserves_order(self) -> None:
         """Test that argument order is preserved."""
         args = ["-O", "-v", "-B", "script.py", "arg2", "arg1"]
