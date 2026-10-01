@@ -1,7 +1,7 @@
 SHELL=/bin/bash
 .PHONY: tex pdf arxiv clean collect help
 
-SRC := research.md md2latex.py
+SRC := confining-python-by-observation.md md2latex.py
 DIR := build
 NAME := confining-python-by-observation
 

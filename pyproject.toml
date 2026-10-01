@@ -123,7 +123,7 @@ lint = [
 # audits/ and any *_fr.* file are written in French; codespell only knows
 # English, so every French word would be reported as a typo. Name a French
 # document with the _fr suffix and it is skipped without a new entry here.
-# The LaTeX artefacts under research/ are generated from research.md, which is
+# The LaTeX artefacts under research/ are generated from confining-python-by-observation.md, which is
 # checked: re-checking the derived files only reports biblatex's own macro names.
 skip = '*/.git,*/.venv,*/node_modules,*/.mypy_cache,*/.pytest_cache,*/.ruff_cache,*/dist,*/.ia_backup,*/graphify-out,*/htmlcov,*/docs/api,*/.agents,*/_bmad,*/wiki/bmad,*/PPR,*/audits,*/TODO.md,*_fr.md,*/research/build,*.tex,*.bib,*.bbl,*.mmd,*.pdf,*.svg,*.yaml,*.ipynb,*.lock,*.min.js,*.css,package-lock.json'
 # Ignore latin etc
