@@ -5,6 +5,8 @@ three ordinary things: it fetches a URL, reads a directory and reads `DEMO_API_K
 learns one from the script's real behaviour, then runs the same script in another context and shows
 what the policy refuses.
 
+![Quick demo: learn a policy, then enforce it](quick-demo.gif)
+
 Setup, from this directory:
 
 ```bash
@@ -39,7 +41,6 @@ python-sb --learn app/demo.py --url=https://example.com --dir=data/
 ```
 
 ```
-Connection to '[2606:4700:10::6814:179a]:443' DENIED by implicit default policy.
 [ OK ]    GET https://example.com: HTTP 200, title=Example Domain
 [ OK ]    read data/: hello.txt='Hello from the sandbox demo'
 [ OK ]    read $DEMO_API_KEY: sk-...
@@ -123,7 +124,7 @@ python-sb app/demo.py --evil
 Add `python-api=ALLOW:os.system` for this function only, or `python-api=ALLOW:process-exec` for the whole category.
 [ OK ]    list secrets in the environment: DEMO_API_KEY
 [REFUSED] read $AWS_SECRET_ACCESS_KEY: KeyError: 'AWS_SECRET_ACCESS_KEY'
-[REFUSED] exfiltrate: URLError: <urlopen error Guard network connection to '[54.172.131.225]:443' DENIED by implicit default policy.>
+[REFUSED] exfiltrate: URLError: <urlopen error Guard network connection to '[162.159.142.41]:443' DENIED by implicit default policy.>
 ```
 
 > *Say:* "Reading a key, running a shell, sending data out: none of it was learned, none of it
@@ -139,7 +140,6 @@ python-sb --learn app/demo.py --url https://www.wikipedia.org --dir ~
 ```
 
 ```
-Connection to '[185.15.58.224]:443' DENIED by implicit default policy.
 [ OK ]    GET https://www.wikipedia.org: HTTP 200, title=Wikipedia
 [ OK ]    read /home/<user>/: .bash_history='...', .bashrc='# ~/.bashrc: executed by bash(1', ...
 [ OK ]    read $DEMO_API_KEY: sk-...
@@ -213,11 +213,9 @@ python-sb --learn app/demo.py --evil
 [ OK ]    read $DEMO_API_KEY: sk-...
 [ OK ]    read an SSH key: -----BEGIN RSA PRIVATE KEY----
 [ OK ]    read /etc/passwd: root:x:0:0:root:/root:/bin/bash
-uid=1000(<user>) gid=1000(<user>) groups=1000(<user>)
 [ OK ]    run a shell command: exit code 0
 [ OK ]    list secrets in the environment: AWS_SECRET_ACCESS_KEY, DEMO_API_KEY
 [ OK ]    read $AWS_SECRET_ACCESS_KEY: do-...
-Connection to '[3.234.28.4]:443' DENIED by implicit default policy.
 [ OK ]    exfiltrate: HTTP 200, title=?
 
 Write all learning rules in '.py-sandboxes'.
@@ -245,7 +243,7 @@ diff .py-sandboxes.old .py-sandboxes
 >
 143a151,153
 > # Add rules (<date>)
-> net=ALLOW|TCP|httpbin.org|443|OUT
+> net=ALLOW|TCP|postman-echo.com|443|OUT
 >
 207a218,221
 >
@@ -263,3 +261,17 @@ Put the reviewed policy back before replaying:
 ```bash
 mv .py-sandboxes.old .py-sandboxes
 ```
+
+## Recording the demo
+
+`demo.sh` plays steps 1 to 5 unattended, up to the first `--evil`, with a comment before each command,
+for [asciinema](https://asciinema.org) and its GIF converter [agg](https://github.com/asciinema/agg).
+It runs under `bwrap`, with `HOME=/home/pysandboxes` on a tmpfs that exists only for the demo, so the
+refused `--dir ~` shows no real user name.
+
+```bash
+asciinema rec --overwrite --cols 110 --rows 12 -c ./demo.sh ../quick-demo.cast
+agg ../quick-demo.cast quick-demo.gif
+```
+
+`TYPE_DELAY` (seconds per character) and `PAUSE` (seconds after each command) set the pace.

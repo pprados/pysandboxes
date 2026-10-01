@@ -714,6 +714,8 @@ def _check_address_with_rules(
     socket_kind: Kind,
     address: tuple[str, int],
     conn_direction: Direction,
+    *,
+    log: bool = True,
 ) -> None:
     """Check if socket address is allowed by configured rules.
 
@@ -722,6 +724,7 @@ def _check_address_with_rules(
         socket_kind: Type of socket (TCP, UDP).
         address: Target address (hostname/IP, port).
         conn_direction: Connection direction (IN or OUT).
+        log: Log a refusal as an error. Learning turns it off: the refusal it catches is a missing rule.
 
     Raises:
         RuleSocketConnectionRefusedError: If access is denied by rules.
@@ -792,14 +795,15 @@ def _check_address_with_rules(
                             if ip_host in network_list and destination_port in rule_ports_list:
                                 if action == Action.DENY:
                                     if use_hostname:
-                                        pysandboxes_logger.error(
-                                            "Connection to '%s' (%s:%s) " "DENIED by explicit rule " "'%s' from %s",
-                                            hostname,
-                                            ip_host,
-                                            destination_port,
-                                            config.rule,
-                                            format_ruleref(config),
-                                        )
+                                        if log:
+                                            pysandboxes_logger.error(
+                                                "Connection to '%s' (%s:%s) " "DENIED by explicit rule " "'%s' from %s",
+                                                hostname,
+                                                ip_host,
+                                                destination_port,
+                                                config.rule,
+                                                format_ruleref(config),
+                                            )
                                         raise RuleSocketConnectionRefusedError(
                                             f"Guard network connection to "
                                             f"{hostname!r} "
@@ -809,13 +813,14 @@ def _check_address_with_rules(
                                             f"from {format_ruleref(config)})."
                                         )
                                     else:
-                                        pysandboxes_logger.error(
-                                            "Connection to [%s]:%s " "DENIED by explicit rule " "'%s' from %s",
-                                            ip_host,
-                                            destination_port,
-                                            config.rule,
-                                            format_ruleref(config),
-                                        )
+                                        if log:
+                                            pysandboxes_logger.error(
+                                                "Connection to [%s]:%s " "DENIED by explicit rule " "'%s' from %s",
+                                                ip_host,
+                                                destination_port,
+                                                config.rule,
+                                                format_ruleref(config),
+                                            )
                                         raise RuleSocketConnectionRefusedError(
                                             f"Guard network connection to "
                                             f"[{ip_host}]:{destination_port} "
@@ -855,7 +860,8 @@ def _check_address_with_rules(
             f"({', '.join([str(unique_ip) for unique_ip in unique_ips])}:{destination_port}) "
         )
 
-    pysandboxes_logger.error("Connection to '%s' " "DENIED by implicit default policy.", target)
+    if log:
+        pysandboxes_logger.error("Connection to '%s' " "DENIED by implicit default policy.", target)
     raise RuleSocketConnectionRefusedError(
         f"Guard network connection to {str(target)!r} " f"DENIED by implicit default policy."
     )
@@ -1081,12 +1087,12 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
-def _check_address(self: Any, address: tuple[str, int], conn_direction: Direction) -> None:
+def _check_address(self: Any, address: tuple[str, int], conn_direction: Direction, *, log: bool = True) -> None:
     if not _rules_loaded:
         return
     if getattr(_socketpair_scope, "active", False) and _is_loopback(address[0]):
         return
-    _check_address_with_rules(_rules, Kind(self.type), _resolve_wildcard_host(self, address), conn_direction)
+    _check_address_with_rules(_rules, Kind(self.type), _resolve_wildcard_host(self, address), conn_direction, log=log)
 
 
 def _socket_add_learning_rule(
@@ -1100,6 +1106,7 @@ def _socket_add_learning_rule(
             self,
             address,
             conn_direction,
+            log=False,
         )
     except RuleSocketConnectionRefusedError:
         add_learning_rule(rule)
