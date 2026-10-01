@@ -347,3 +347,60 @@ def test_command_line_priority(mocker: MagicMock) -> None:
     port, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
     assert port == 9090
     assert not errors
+
+
+def test_learn_lock_alone_is_accepted(tmp_path: Path) -> None:
+    profile = tmp_path / ".py-sandboxes"
+    profile.touch()
+    errors: list[ErrorMsg] = []
+
+    _, _, _, _, learn, _, _ = parse_rules(profile, [ConfigLine("learn=false", profile, 1)], errors)
+
+    assert learn is False
+    assert not errors
+
+
+def test_learn_lock_refuses_learn_from_the_command_line(tmp_path: Path) -> None:
+    profile = tmp_path / ".py-sandboxes"
+    profile.touch()
+    rules = [ConfigLine("learn=", Path("."), 0), ConfigLine("learn=false", profile, 3)]
+    errors: list[ErrorMsg] = []
+
+    parse_rules(profile, rules, errors)
+
+    assert len(errors) == 1
+    assert "learning mode is forbidden" in errors[0][0]
+
+
+def test_learn_lock_in_an_include_refuses_learn_from_the_profile(tmp_path: Path) -> None:
+    profile = tmp_path / ".py-sandboxes"
+    profile.touch()
+    included = tmp_path / "global.profile"
+    rules = [ConfigLine("learn=new.py-sandboxes", profile, 1), ConfigLine("learn=false", included, 1)]
+    errors: list[ErrorMsg] = []
+
+    parse_rules(profile, rules, errors)
+
+    assert len(errors) == 1
+    assert "learning mode is forbidden" in errors[0][0]
+
+
+def test_learn_lock_refuses_a_missing_rule_file(tmp_path: Path) -> None:
+    included = tmp_path / "global.profile"
+    errors: list[ErrorMsg] = []
+
+    parse_rules(tmp_path / "missing.py-sandboxes", [ConfigLine("learn=false", included, 1)], errors)
+
+    assert len(errors) == 1
+    assert "learning mode is forbidden" in errors[0][0]
+
+
+def test_learn_false_from_the_command_line_is_still_invalid(tmp_path: Path) -> None:
+    profile = tmp_path / ".py-sandboxes"
+    profile.touch()
+    errors: list[ErrorMsg] = []
+
+    parse_rules(profile, [ConfigLine("learn=false", Path("."), 0)], errors)
+
+    assert len(errors) == 1
+    assert "Invalid value 'false' for 'learn'" in errors[0][0]

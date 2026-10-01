@@ -12,6 +12,15 @@ from .sb_types import ConfigLine, ConfigLines
 logger = logging.getLogger(__name__)
 
 
+def learn_lock(rules: ConfigLines) -> ConfigLine | None:
+    """Return the `learn=false` line of a rule file, which forbids the learning mode, or None."""
+    for rule in rules:
+        if rule.path != Path(".") and rule.rule.startswith("learn="):
+            if rule.rule.split("=", 1)[1].strip().lower() == "false":
+                return rule
+    return None
+
+
 def parse_rules(
     config_path: Path,
     rules: ConfigLines,
@@ -97,6 +106,8 @@ def parse_rules(
 
         elif rule.rule.startswith("learn="):
             value = rule.rule.split("=", 1)[1].strip()
+            if value.lower() == "false" and rule.path != Path("."):
+                continue  # The lock, checked below
             if value.lower() in ("true", "false", "0", "1"):
                 errors.append(
                     (
@@ -168,6 +179,19 @@ def parse_rules(
     # Force learn mode if the file not exists
     elif not learning_path.exists():
         learn = True
+
+    if learn and (lock := learn_lock(rules)):
+        if "learn" in parameters_prioritize_single_value:
+            cause = format_ruleref(parameters_prioritize_single_value["learn"][1])
+        else:
+            cause = f"the missing rule file {str(learning_path)!r}"
+        errors.append(
+            (
+                f"{format_ruleref(lock)}: learning mode is forbidden, but requested by {cause}.",
+                lock.path,
+                lock.ln,
+            )
+        )
 
     if errors:
         return port, "error", use_py_sandbox, learning_path, learn, remote_result_guard, other_rules

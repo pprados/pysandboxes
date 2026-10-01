@@ -24,7 +24,7 @@ from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.remote.none_daemon import NoneDaemon
 from pysandboxes.remote.qemu_guest_console_io import GUEST_STDERR_FILE
 from pysandboxes.remote.vm_sse_daemon import VMSSEDaemon
-from pysandboxes.sb_types import Envs
+from pysandboxes.sb_types import ConfigLine, Envs
 
 
 @pytest.fixture(autouse=True)
@@ -181,6 +181,28 @@ class TestMainEarlyExits:
         err = capsys.readouterr().err
         assert "bad rule" in err
         assert "line 3: unknown key" in err
+
+    def test_learn_lock_refuses_a_rule_from_the_command_line(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _patch_cmd_line(
+            monkeypatch,
+            python_parsed_args=[],
+            sandboxes_args=["--expose-ro=/etc"],
+            python_cmd=["-c", "print(1)"],
+            config_path=_config_path(tmp_path),
+        )
+        lock = ConfigLine("learn=false", _config_path(tmp_path), 2)
+        _stub_config_loader(monkeypatch, EmptyRules._replace(os_sandbox="fake-locked", config=[lock]))
+        _stub_providers_factory(monkeypatch, "fake-locked", lambda token, python_args: MagicMock())
+
+        with pytest.raises(SystemExit) as exc_info:
+            python_sb.main()
+
+        assert exc_info.value.code == -1
+        err = capsys.readouterr().err
+        assert "--expose-ro=/etc" in err
+        assert "learn=false" in err
 
     def test_sandboxes_args_and_term_rule_reach_the_config_loader(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -350,6 +372,16 @@ class TestMainSubprocessBranch:
 
         result = python_sb.main()
         return result, launch_sandbox_mock
+
+    def test_learn_lock_without_command_line_rule_runs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        lock = ConfigLine("learn=false", _config_path(tmp_path), 2)
+        all_rules = EmptyRules._replace(os_sandbox="fake-sub-locked", port=4321, envs=Envs({}), config=[lock])
+
+        result, _ = self._run(
+            tmp_path, monkeypatch, daemon=_FakeSubprocessDaemon(), all_rules=all_rules, rc=0, python_cmd=["-c", "1"]
+        )
+
+        assert result == 0
 
     def test_happy_path_builds_argv_env_and_returns_process_exit_code(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
