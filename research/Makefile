@@ -5,11 +5,6 @@ SRC := research.md md2latex.py
 DIR := build
 NAME := confining-python-by-observation
 
-# research.md is published under $(NAME); every other research*.md -- the short
-# versions -- is typeset under its own stem.
-OTHERS := $(filter-out research.md,$(wildcard research*.md))
-OTHER_PDFS := $(OTHERS:%.md=$(DIR)/%.pdf)
-
 .DEFAULT_GOAL := help
 
 # The LaTeX and the bibliography are derived artefacts: they are rebuilt
@@ -19,9 +14,6 @@ $(DIR)/$(NAME).tex $(DIR)/$(NAME).bib &: $(SRC)
 
 $(DIR)/$(NAME).pdf: $(SRC)
 	unset VIRTUAL_ENV && uv run python3 md2latex.py --pdf
-
-$(DIR)/%.pdf: %.md md2latex.py
-	unset VIRTUAL_ENV && uv run python3 md2latex.py --input $< --name $* --pdf
 
 $(DIR)/$(NAME)-arxiv.tar.gz: $(SRC)
 	unset VIRTUAL_ENV && uv run python3 md2latex.py --arxiv
@@ -45,9 +37,6 @@ collect:
 	  src=$(DIR)/$(NAME).$$ext; \
 	  if [ -f "$$src" ]; then cp -f "$$src" . && echo "  $(NAME).$$ext"; fi; \
 	done
-	@for pdf in $(OTHER_PDFS); do \
-	  if [ -f "$$pdf" ]; then cp -f "$$pdf" . && echo "  $$(basename $$pdf)"; fi; \
-	done
 	@if ls $(DIR)/figures/*.pdf >/dev/null 2>&1; then \
 	  rm -rf figures && mkdir figures && cp -f $(DIR)/figures/*.pdf figures/ \
 	  && echo "  figures/ ($$(ls $(DIR)/figures/*.pdf | wc -l) figures)"; \
@@ -56,7 +45,7 @@ collect:
 tex: $(DIR)/$(NAME).tex
 	@$(MAKE) --no-print-directory collect
 
-pdf: $(DIR)/$(NAME).pdf $(OTHER_PDFS)
+pdf: $(DIR)/$(NAME).pdf
 	@$(MAKE) --no-print-directory collect
 
 arxiv: $(DIR)/$(NAME)-arxiv.tar.gz
@@ -65,11 +54,11 @@ arxiv: $(DIR)/$(NAME)-arxiv.tar.gz
 
 clean:
 	@rm -rf $(DIR) figures $(NAME)-arxiv
-	@rm -f $(NAME).* $(NAME)-arxiv.tar.gz $(notdir $(OTHER_PDFS))
+	@rm -f $(NAME).* $(NAME)-arxiv.tar.gz
 
 help:
 	@echo "Available rules:"
 	@echo "  tex    Convert the paper to LaTeX and regenerate its bibliography"
-	@echo "  pdf    The above, then typeset the PDF of every research*.md"
+	@echo "  pdf    The above, then typeset the PDF"
 	@echo "  arxiv  The above, then package $(NAME)-arxiv.tar.gz"
 	@echo "  clean  Drop $(DIR)/ and every generated file"
