@@ -57,6 +57,8 @@ DEBUG_NETFILTER = DEBUG or False
 # Exceptions differ from unshare backend
 REPLACE = False  # TODO: firejail
 
+FIREJAIL_CONFIG = Path("/etc/firejail/firejail.config")
+
 
 class AllowList(MutableSet[str]):
     """Optimized list for directory paths with prefix logic.
@@ -316,27 +318,17 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
             sys.exit(1)
-        firejail_config = Path("/etc/firejail/firejail.config")
+        firejail_config = FIREJAIL_CONFIG
         restricted_network = True
-        # If explicit_yes is True it means the admin set 'restricted-network yes'
-        # in /etc/firejail/firejail.config. In that case we will log a warning and
-        # skip the network-specific filtering setup (netfilter, --net, --dns, ...).
+        # True when the admin wrote 'restricted-network yes': tolerated, see below.
         restricted_network_explicit_yes = False
         if firejail_config.exists():
             for line in firejail_config.read_text().split("\n"):
                 if re.match(r"restricted-network\s+no", line):
                     restricted_network = False
-                    restricted_network_explicit_yes = False
                     break
                 if re.match(r"restricted-network\s+yes", line):
-                    # Explicit yes -> respect it but warn that we will skip
-                    # firejail-specific network filtering configuration.
-                    restricted_network = True
                     restricted_network_explicit_yes = True
-                    logger.warning(
-                        "firejail config: 'restricted-network yes' detected; "
-                        "network-specific filtering will be skipped."
-                    )
                     break
 
         need_root = False
@@ -447,28 +439,25 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             args.append(f"--read-only={str(pipe_path)}")
 
         if all_rules.socket_rules:
-            # If restricted_network is True and it was NOT explicitly set to
-            # 'yes' in the firejail config, then we cannot use firejail with
-            # network rules: keep existing behavior (error + exit).
+            # Without 'restricted-network no' a regular user only gets --net=none, which
+            # would also cut the host from the daemon's SSE port. A missing line is refused.
             if restricted_network and not restricted_network_explicit_yes:
                 logger.error(
-                    "Set 'restricted_network no' in %s " "to use firejail with networks rules.",
+                    "Set 'restricted-network no' in %s " "to use firejail with networks rules.",
                     repr(str(firejail_config)),
                 )
                 sys.exit(1)
 
-            # If admin explicitly set 'restricted-network yes', tolerate it:
-            # warn and skip the network-specific filtering setup (netfilter,
-            # --net, --dns, --netfilter6, ...). Socket rules will be ignored in
-            # that case for the firejail-level network filtering.
-            if restricted_network and restricted_network_explicit_yes:
+            # An explicit 'restricted-network yes' is tolerated, as on a GitHub runner: the
+            # jail then keeps the HOST network and the socket rules are enforced by the
+            # Python layer only. Native code, ctypes or a subprocess can reach any address.
+            skip_network_setup = restricted_network and restricted_network_explicit_yes
+            if skip_network_setup:
                 logger.warning(
-                    "firejail config 'restricted-network yes' detected: "
-                    "skipping network-specific filtering (socket rules ignored)."
+                    "firejail config 'restricted-network yes' in %s: the sandbox keeps the host "
+                    "network, socket rules are enforced by the Python layer only.",
+                    repr(str(firejail_config)),
                 )
-                skip_network_setup = True
-            else:
-                skip_network_setup = False
 
             if not skip_network_setup:
                 dns_servers = [ip for ip in get_upstream_dns() if isinstance(ip, IPv4Address)]
@@ -552,14 +541,21 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 new_socket_rules, *_ = socket_parse_rules([ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
                 all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
-            # Clean env variable
-            # TODO: remove dependencies ?
-            args.extend(["/usr/bin/env", "-i"])
-            for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
-                args.append(f"{env}={val}")
+        else:
+            # No socket rule: no network at all, loopback only. Allowed to regular
+            # users even under 'restricted-network yes'.
+            if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
+                args.append("--net=none")
+            args.append("--x11=none")
 
-            if need_root:
-                logger.warning("Firejail needs root to run")
+        # Clean env variable
+        # TODO: remove dependencies ?
+        args.extend(["/usr/bin/env", "-i"])
+        for env, val in all_rules.envs.items():  # type: ignore[attr-defined]
+            args.append(f"{env}={val}")
+
+        if need_root:
+            logger.warning("Firejail needs root to run")
 
         return args, all_rules
 

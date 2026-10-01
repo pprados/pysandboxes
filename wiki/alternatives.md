@@ -140,7 +140,7 @@ layer 7, and it grants privileges on more than the network destination alone.
 
 | Solution | Default egress | UDP | ICMP | DNS | Domain rules | Layer 7 | Credentials |
 |---|---|---|---|---|---|---|---|
-| **PySandboxes** | Deny at the Python layer. At the OS layer: `unshare` and `qemu` set `iptables` to `DROP`; `bwrap` and `firejail` keep the host network when the profile has no `net=` rule | `net=` rules, enforced by Python and `iptables`. `landlock` cannot filter UDP | No rule can name it; blocked as a side effect | Names resolved once and pinned into `getaddrinfo` | Name resolved to IPs when the profile is parsed | None | `env=` whitelist; a granted secret enters the sandbox in clear |
+| **PySandboxes** | Deny at the Python layer. At the OS layer: `unshare` and `qemu` set `iptables` to `DROP`; `bwrap` and `firejail` leave only loopback when the profile has no `net=` rule; with `net=` rules under an explicit `restricted-network yes`, `firejail` keeps the host network and warns | `net=` rules, enforced by Python and `iptables`. `landlock` cannot filter UDP | No rule can name it; blocked as a side effect | Names resolved once and pinned into `getaddrinfo` | Name resolved to IPs when the profile is parsed | None | `env=` whitelist; a granted secret enters the sandbox in clear |
 | OpenShell | Deny | Only to the DNS relay | Socket never created | Own relay, policy per name | Proxy `CONNECT` + OPA | REST, GraphQL, JSON-RPC, MCP, WebSocket, TLS interception | Placeholders, SigV4, SPIFFE to OAuth2 |
 | sandbox-runtime | Open if `allowedDomains` is undefined; the CLI closes it | Impossible: the netns has only loopback | Impossible | Resolved by the proxy after the allow decision | HTTP and SOCKS proxy | Optional TLS interception; domain fronting acknowledged | Masked credentials, SigV4 re-signed |
 | Codex | Deny on Linux and macOS; on Windows (restricted token), allow with a WFP deny-list | Blocked by seccomp (Linux Restricted mode) | Blocked on Windows by WFP | Resolved by the proxy, rebinding checked | Optional proxy | Method, path, headers (optional proxy) | Credential broker scoped per host |
@@ -252,10 +252,7 @@ allow rule per human approval.
   kernel providers are available.
 - **Weaknesses**: no layer 7, no TLS interception, no credential brokering. A granted secret enters the
   sandbox in clear. There is no built-in list of private ranges or metadata addresses: the profile author has
-  to write the `DENY` rules. No rule can name ICMP. `landlock` cannot filter UDP. With `bwrap` and `firejail`,
-  a profile without any `net=` rule keeps the host network, so only the Python layer denies
-  (`_use_network_filtering` in [`bwrap_sse_daemon.py`](../pysandboxes/remote/bwrap_sse_daemon.py), and the
-  `socket_rules` test in [`firejail_sse_daemon.py`](../pysandboxes/remote/firejail_sse_daemon.py)). A change
+  to write the `DENY` rules. No rule can name ICMP. `landlock` cannot filter UDP. A change
   of profile needs a restart. Kernel boundaries exist on Linux and WSL only. The Python layer's known escapes
   are listed in [Weaknesses](weaknesses.md) and the two security assessments.
 
@@ -548,18 +545,6 @@ def generic_visit(self, node: ast.AST) -> _T_visit_return:
     self.not_allowed(node)
 ```
 
-**PySandboxes: without a socket rule, `bwrap` keeps the host network**
-([`bwrap_sse_daemon.py`](../pysandboxes/remote/bwrap_sse_daemon.py), `_use_network_filtering`, abridged).
-This is the reason the Python layer, and not the kernel, denies the network in that case:
-
-```python
-@staticmethod
-def _use_network_filtering(all_rules: AllRules) -> bool:
-    """True when socket rules exist and bwrap should use unshare-net + iptables."""
-    if not all_rules.socket_rules:
-        return False
-```
-
 ## Where PySandboxes stands
 
 **What only PySandboxes does.** No other solution in this survey controls what the Python code itself does.
@@ -587,10 +572,6 @@ full QEMU VM.
 
 **Limits this comparison brings to the fore.**
 
-- With `bwrap` and `firejail`, a profile without any `net=` rule does not isolate the network at the kernel
-  level (see [Code worth reading](#code-worth-reading)). The Python layer still denies, but compiled code
-  would not be stopped there. The [bwrap page](bwrap.md) documents this behaviour. OpenShell, and Codex on
-  Linux and macOS, deny the network by default below the language, through seccomp or Seatbelt.
 - No rule can name ICMP. ICMP is only blocked as a side effect, and the `IPPROTO_ICMP` entry of the
   `iptables` generator ([`netfilter.py`](../pysandboxes/netfilter.py)) is never used.
 - `landlock` cannot filter UDP, which the [Landlock page](landlock.md) already says.
