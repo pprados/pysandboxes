@@ -10,6 +10,7 @@ functions already were.
 
 import logging
 import string
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Iterator
 
@@ -186,6 +187,23 @@ def test_string_formatter_is_checked_where_the_field_is_read_not_where_it_is_par
 def test_string_formatter_keeps_a_granted_attribute() -> None:
     _activate(attribute=_names("format", "real"))
     assert guarded_eval("F.format('{0.real}', 5)", names={"F": string.Formatter()}) == "5"
+
+
+@pytest.mark.usefixtures("_patched_get_field")
+def test_a_formatter_method_keeps_its_check_on_another_thread() -> None:
+    _activate(attribute=_names("format", "submit", "result"))
+    with ThreadPoolExecutor(1) as executor, pytest.raises(RuleEvalPermissionError) as caught:
+        guarded_eval(
+            "X.submit(F.format, '{0.__class__.__base__}', ()).result()",
+            names={"F": string.Formatter(), "X": executor},
+        )
+    assert caught.value.target == "__class__"
+
+
+def test_a_refused_format_points_to_the_fstring() -> None:
+    _activate(attribute=_names("upper"))
+    with pytest.raises(RuleEvalPermissionError, match="f-string"):
+        guarded_eval("'{0}'.format(1)")
 
 
 @pytest.mark.usefixtures("_patched_get_field")

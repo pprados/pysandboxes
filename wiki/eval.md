@@ -290,9 +290,14 @@ method, which is where the guard checks them: during a guarded evaluation,
 every field `get_field` receives goes through `_check_attr`, whatever template
 or overridden `parse` produced it. `Formatter().format('{0.__class__}', ())` is
 refused like the `str` spelling; outside an evaluation the method is untouched.
+A `Formatter` method fetched by the evaluated code carries the evaluation with
+it, so handing it to an executor's thread does not escape the check.
 
-Granting `format` by name therefore works, and still emits a warning. Keeping
-it out of `str-methods` remains the safer default.
+Granting `format` by name therefore works, and still emits a warning. Only the
+exact name grants it: a pattern such as `eval-attribute=*` or `f*` leaves
+`format` and `format_map` refused, so a wide grant never opens them by
+accident. The refusal points to the f-string, which does the same job with a
+checked attribute — the safer default.
 
 Contrast the f-string spelling `f"{o.__class__}"`, which compiles to a real
 attribute access and is validated normally. Same result to the eye, opposite
@@ -301,8 +306,12 @@ exposure.
 ```ini
 # Valid
 eval-syntax=arith
-eval-attribute=str-methods, DENY:encode
+eval-attribute=str-methods
+eval-attribute=DENY:encode
 ```
+
+`DENY:` prefixes a whole line: `eval-attribute=str-methods, DENY:encode` is
+rejected at load, because the guard cannot tell a refusal from a name there.
 
 ```python
 eval("'a b'.split()")     # OK

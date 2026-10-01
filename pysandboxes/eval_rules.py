@@ -322,6 +322,15 @@ class _Accumulator:
             deny_patterns=tuple(self.deny_patterns[field]),
         )
 
+    def _attribute_names(self) -> NameSet:
+        """Return `eval-attribute`, where only an exact name grants `format`/`format_map`.
+
+        A pattern such as `*` or `f*` would otherwise grant them silently,
+        while the f-string spelling does the same job with a checked attribute.
+        """
+        names = self.names("attribute")
+        return names._replace(deny=names.deny | (frozenset(_BLIND_ATTRIBUTES) - names.allow))
+
     def build(self) -> EvalRules:
         syntax = self.names("syntax")
         syntax = syntax._replace(allow=syntax.allow | CORE_NODES)
@@ -330,7 +339,7 @@ class _Accumulator:
             declared=True,
             syntax=syntax,
             call=self.names("call"),
-            attribute=self.names("attribute"),
+            attribute=self._attribute_names(),
             imports=self.names("imports"),
             magic=self.names("magic"),
             # Each key reaches its own field, so the value type varies per key.
@@ -356,6 +365,9 @@ def _parse_list_value(
         token = raw.strip()
         if not token:
             _add_error(errors, rule, "empty target.")
+            return
+        if token.startswith("DENY:"):
+            _add_error(errors, rule, f"DENY: applies to a whole line; put `{key}={token}` on a line of its own.")
             return
         if "*" in token:
             if key in _PATTERNS_FORBIDDEN:

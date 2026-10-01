@@ -211,6 +211,27 @@ every field it receives goes through `_check_attr`; outside one, the method is
 untouched. Pinned in `test_eval_hardening.py` and, for the patch installed at
 startup, in `test_eval_integration.py`.
 
+That check reads the evaluation state of the *current* thread, which opened a
+fourth door: a `Formatter` method handed to an executor the application
+supplied runs on a thread with no state.
+
+```python
+X.submit(F.format, '{0.__class__.__base__}', ()).result()   # names={"F": ..., "X": ThreadPoolExecutor()}
+# was: <class 'object'>
+```
+
+A method fetched from a `Formatter` (instance or class) by the evaluated code
+now carries the fetching evaluation's state, and pushes it on whatever thread
+calls it. Threads of the application that use a `Formatter` on their own stay
+untouched.
+
+Two configuration rules keep the method out of reach in the first place:
+
+- **Only the exact name grants `format` or `format_map`.** `eval-attribute=*`
+  or `f*` leave both refused; a wide grant never opens them by accident.
+- **The refusal points to the f-string**, whose attribute accesses are checked
+  like any dotted read, rather than telling the reader to grant `format`.
+
 ---
 
 ## Lambdas and the call-depth budget

@@ -21,12 +21,12 @@ from pysandboxes.eval_rules import (
     DEFAULT_RULES,
     EMPTY_NAMES,
     SYNTAX_GROUPS,
-    LearnEvalContext,
-    LearnEvalRule,
-    generate_rules,
     EvalProfiles,
     EvalRules,
+    LearnEvalContext,
+    LearnEvalRule,
     NameSet,
+    generate_rules,
     parse_rules,
     parse_scalar,
 )
@@ -303,6 +303,32 @@ def test_str_methods_excludes_format_and_format_map() -> None:
     assert "split" in ATTRIBUTE_GROUPS["str-methods"]
     assert "format" not in ATTRIBUTE_GROUPS["str-methods"]
     assert "format_map" not in ATTRIBUTE_GROUPS["str-methods"]
+
+
+@pytest.mark.parametrize("pattern", ["*", "f*", "format*"])
+def test_a_pattern_never_grants_format(pattern: str) -> None:
+    errors: list[ErrorMsg] = []
+    profiles, _ = parse_rules(_lines(f"eval-attribute={pattern}"), errors)
+    assert not errors
+    attribute = _profile(profiles).attribute
+    assert not attribute.allows("format")
+    assert not attribute.allows("format_map")
+
+
+def test_format_named_next_to_a_pattern_is_granted() -> None:
+    errors: list[ErrorMsg] = []
+    profiles, _ = parse_rules(_lines("eval-attribute=*", "eval-attribute=format"), errors)
+    assert not errors
+    attribute = _profile(profiles).attribute
+    assert attribute.allows("format")
+    assert not attribute.allows("format_map")
+
+
+def test_deny_inside_a_list_is_rejected() -> None:
+    errors: list[ErrorMsg] = []
+    parse_rules(_lines("eval-attribute=str-methods, DENY:encode"), errors)
+    assert errors
+    assert "DENY: applies to a whole line" in str(errors[0])
 
 
 def test_granting_format_by_name_warns(caplog: pytest.LogCaptureFixture) -> None:

@@ -238,10 +238,15 @@ def _check_attr(name: str) -> None:
     elif not state.rules.attribute.allows(name):
         state.attributes.add(name)
         if not state.learn:
-            raise RuleEvalPermissionError(name, "eval-attribute")
+            raise RuleEvalPermissionError(name, "eval-attribute", _FORMAT_HINT if name in _FORMAT_METHODS else None)
 
 
 _FORMAT_METHODS = frozenset({"format", "format_map"})
+
+_FORMAT_HINT = (
+    'Prefer an f-string (f"{x}"), whose attribute accesses are checked like any other; '
+    "or name `eval-attribute=format` (or `format_map`) exactly -- a pattern never grants it."
+)
 
 
 def _validate_format_template(template: str) -> None:
@@ -325,7 +330,35 @@ def __sb_getattr__(obj: Any, name: str) -> Any:
         if isinstance(obj, type) and issubclass(obj, str):
             return _guarded_format_unbound(obj, name)
     _warn_about_regex(obj, name)
-    return getattr(obj, name)
+    value = getattr(obj, name)
+    if callable(value) and (
+        isinstance(obj, string.Formatter) or (isinstance(obj, type) and issubclass(obj, string.Formatter))
+    ):
+        return _carry_state(value)
+    return value
+
+
+def _carry_state(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Return `method` bound to the evaluation that fetched it, on any thread.
+
+    The patched `string.Formatter.get_field` checks fields only while an
+    evaluation state sits on the current thread. Handed to an executor the
+    application supplied, a `Formatter` method would run on a thread with no
+    state and read `{0.__class__}` unchecked; this wrapper pushes the fetching
+    evaluation's state there for the duration of the call.
+    """
+    state = current_state()
+
+    def carried(*args: Any, **kwargs: Any) -> Any:
+        if in_evaluation():
+            return method(*args, **kwargs)
+        push_state(state)
+        try:
+            return method(*args, **kwargs)
+        finally:
+            pop_state()
+
+    return carried
 
 
 _MISSING = object()
