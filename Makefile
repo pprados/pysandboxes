@@ -5,7 +5,7 @@ SHELL=/bin/bash
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate _uv-init inspector github-push-test init \
-	clean-sandbox-temps
+	clean-sandbox-temps quick-demo-gif
 
 UV_GROUP?=--group dev --group test --group lint
 
@@ -579,7 +579,20 @@ lock: uv.lock
 # format is not a prerequisite: it rewrites the sources, which would make the
 # `black --check` inside lint pass unconditionally.
 ## Validate the code
-validate: uv.lock lint spell_check pip-audit-all pip-audit unit-tests
+validate: uv.lock lint spell_check pip-audit-all pip-audit unit-tests quick-demo-gif
+
+# quick-demo.gif is recorded from these files. A change to their content records it again: a hash, kept in
+# git, is compared rather than the dates, which a clone or a pull resets.
+QUICK_DEMO := samples/quick-demo
+QUICK_DEMO_INPUTS := $(addprefix $(QUICK_DEMO)/,gif-demo/demo.sh gif-demo/Makefile app/demo.py init.sh data/hello.txt)
+QUICK_DEMO_HASH := $(QUICK_DEMO)/gif-demo/quick-demo.gif.sha256
+
+## Record the quick demo GIF again if what produces it changed
+quick-demo-gif:
+	@hash=$$(cat $(QUICK_DEMO_INPUTS) | sha256sum | cut -d' ' -f1); \
+	if [[ $$hash != "$$(cat $(QUICK_DEMO_HASH) 2>/dev/null)" ]]; then \
+		$(MAKE) -C $(QUICK_DEMO)/gif-demo && echo "$$hash" >$(QUICK_DEMO_HASH); \
+	fi
 
 
 _uv-init:
@@ -682,7 +695,7 @@ endef
 # builds the wheel and, once the testpypi deployment is approved, publishes it to test.pypi.org. The tag is signed
 # on this machine only; review what the head brings before confirming, a published tag is never moved.
 ## Tag and push a pre-release, which the CI publishes to test.pypi.org: make publish-pre-release VERSION=0.1.0b2
-publish-pre-release:
+publish-pre-release: quick-demo-gif
 	@[[ "$(VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+(a|b|rc)[0-9]+$$ ]] || \
 		{ echo "Usage: make publish-pre-release VERSION=X.Y.Z(a|b|rc)N, e.g. VERSION=0.1.0b2"; exit 1; }
 	$(call _check_git_status)
@@ -703,7 +716,7 @@ publish-pre-release:
 	@echo "Approve the testpypi deployment: https://github.com/pprados/pysandboxes/actions/workflows/release.yml"
 
 ## Publish a patch release (complete workflow)
-publish-patch:
+publish-patch: quick-demo-gif
 	@echo "=== Starting PATCH release workflow ==="
 	@echo ""
 	$(call _check_git_status)
@@ -742,7 +755,7 @@ publish-patch:
 	echo "=== PATCH draft release $$RELEASE_TITLE workflow completed successfully ==="
 
 ## Publish a minor release (complete workflow)
-publish-minor:
+publish-minor: quick-demo-gif
 	@echo "=== Starting MINOR release workflow ==="
 	@echo ""
 	$(call _check_git_status)
