@@ -15,6 +15,8 @@ import base64
 import ipaddress
 import pickle
 import subprocess
+import sys
+import types
 from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
 from typing import Any
@@ -165,16 +167,21 @@ class _StrictError(Exception):
         return super().__new__(cls, *args)
 
 
-def test_rebuild_from_descriptor_falls_back_when_new_raises() -> None:
+def test_rebuild_from_descriptor_falls_back_when_new_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """A resolvable class whose __new__ fails still reaches the fallback (756-759)."""
+    # Registered under a module of its own: activating the import guard evicts this test
+    # module from sys.modules, the only place rebuild_from_descriptor looks.
+    holder = types.ModuleType("strict_error_holder")
+    holder._StrictError = _StrictError  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "strict_error_holder", holder)
     _StrictError.new_calls = 0
-    descriptor: tuple[str, str, str, list[str]] = (__name__, "_StrictError", "boom", [])
+    descriptor: tuple[str, str, str, list[str]] = ("strict_error_holder", "_StrictError", "boom", [])
 
     rebuilt = rebuild_from_descriptor(descriptor, SandBoxProtocolError)
 
     assert _StrictError.new_calls == 1, "the failing __new__ must have actually run"
     assert type(rebuilt) is SandBoxProtocolError
-    assert f"{__name__}._StrictError: boom" in str(rebuilt)
+    assert "strict_error_holder._StrictError: boom" in str(rebuilt)
 
 
 class TestGetDefaultInterfaceViaIp:

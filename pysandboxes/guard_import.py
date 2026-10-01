@@ -197,13 +197,13 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             if not hasattr(cur_object, paths[-1]):
                 continue  # Not on this platform (`os.listxattr` off Linux): nothing to guard
             original_value = getattr(cur_object, paths[-1])
-            # FIXME # Skip if already patched
-            # if hasattr(original_value, "__pysandbox__"):
-            #     continue
+            if vars(original_value).get("__pysandbox__") if hasattr(original_value, "__dict__") else False:
+                continue  # Patched by an earlier activation: wrapping it again would check every call twice
             new_value = patch.patch_factory(original_value)
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
-            if __debug__ and isinstance(new_value, type(_apply_patch)):  # Fake kinds.FunctionType
-                new_value.__pysandbox__ = True  # type: ignore[attr-defined]
+            # A class wrapper (io.FileIO) is marked too, in its own __dict__: a subclass must not read as patched.
+            if __debug__ and isinstance(new_value, (type(_apply_patch), type)):  # Fake kinds.FunctionType
+                new_value.__pysandbox__ = True  # type: ignore[attr-defined,union-attr]
             if cur_object is os:
                 _keep_os_supports_sets(original_value, new_value)
             setattr(cur_object, paths[-1], new_value)

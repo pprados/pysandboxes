@@ -93,6 +93,7 @@ def test_tampering_with_meta_path_leaves_the_next_import_guarded(tamper: Any) ->
     An audit hook, which Python cannot remove, puts the guard back at the head before
     each import, so the module the rules do not name is still refused.
     """
+    _reset_for_tests()  # the conftest activated the guard with "*"; these rules must take its place
     guard_import.activate_guard_import({}, ("json", "framework_alias"))
     saved = list(sys.meta_path)
     sys.modules.pop("colorsys", None)
@@ -108,6 +109,7 @@ def test_tampering_with_meta_path_leaves_the_next_import_guarded(tamper: Any) ->
 
 def test_a_framework_finder_ahead_of_the_guard_keeps_working() -> None:
     """Frameworks insert their finder at the head when imported; their modules still load."""
+    _reset_for_tests()  # the conftest activated the guard with "*"; these rules must take its place
     guard_import.activate_guard_import({}, ("json", "framework_alias"))
     saved = list(sys.meta_path)
     sys.modules.pop("framework_alias", None)
