@@ -1,3 +1,6 @@
+import importlib.abc
+import importlib.machinery
+import importlib.util
 import inspect
 import os
 import pickle
@@ -7,7 +10,8 @@ from typing import Any, Dict, Set, Tuple
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.e import RuleApiPermissionError
+from pysandboxes import guard_import
+from pysandboxes.e import RuleApiPermissionError, RuleModuleNotFoundError
 from pysandboxes.guard_api import activate_guard, patch_rules
 from pysandboxes.lifecycle import _reset_for_tests, arm
 
@@ -59,19 +63,99 @@ def test_escape_with_subclasses() -> None:
         import_module._rules = ()  # type: ignore[attr-defined]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="sys.meta_path escape: open by construction, out of scope for the wayward-LLM "
-    "target (wiki/audit-python-security.md#the-design-target-wayward-llm-generated-code) -- "
-    "documented, not scheduled since guard_self was removed",
-)
-def test_escape_with_meta_path() -> None:
-    # Unhooking GuardFinder is a deliberate act, not something code solving the wrong
-    # problem does by accident.
+class _AliasFinder:
+    """A framework-style finder (crewai, wrapt, httpx2) that serves one module of its own."""
 
-    with pytest.raises(AttributeError):
-        new_list = list(sys.meta_path)[1:]
-        sys.meta_path = new_list
+    def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> Any:
+        if fullname != "framework_alias":
+            return None
+        return importlib.util.spec_from_loader(fullname, _AliasLoader())
+
+
+class _AliasLoader(importlib.abc.Loader):
+    def create_module(self, spec: Any) -> None:
+        return None
+
+    def exec_module(self, module: ModuleType) -> None:
+        module.VALUE = 42  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        pytest.param(lambda finders: finders[1:], id="guard-removed"),
+        pytest.param(lambda finders: [importlib.machinery.PathFinder, *finders], id="finder-ahead-of-guard"),
+    ],
+)
+def test_tampering_with_meta_path_leaves_the_next_import_guarded(tamper: Any) -> None:
+    """``sys.meta_path`` is a plain list, so code can unhook the import guard or get ahead of it.
+
+    An audit hook, which Python cannot remove, puts the guard back at the head before
+    each import, so the module the rules do not name is still refused.
+    """
+    _reset_for_tests()  # the conftest activated the guard with "*"; these rules must take its place
+    guard_import.activate_guard_import({}, ("json", "framework_alias"))
+    saved = list(sys.meta_path)
+    sys.modules.pop("colorsys", None)
+    try:
+        sys.meta_path = tamper(saved)
+        with pytest.raises(RuleModuleNotFoundError, match="'colorsys' is not allowed by a rule"):
+            import colorsys  # noqa: F401
+        assert sys.meta_path[0] is guard_import._guard_finder
+    finally:
+        sys.meta_path = saved
+        _reset_for_tests()
+
+
+def test_a_framework_finder_ahead_of_the_guard_keeps_working() -> None:
+    """Frameworks insert their finder at the head when imported; their modules still load."""
+    _reset_for_tests()  # the conftest activated the guard with "*"; these rules must take its place
+    guard_import.activate_guard_import({}, ("json", "framework_alias"))
+    saved = list(sys.meta_path)
+    sys.modules.pop("framework_alias", None)
+    try:
+        sys.meta_path.insert(0, _AliasFinder())
+        import framework_alias  # type: ignore[import-not-found]
+
+        assert framework_alias.VALUE == 42
+        assert sys.meta_path[0] is guard_import._guard_finder
+    finally:
+        sys.meta_path = saved
+        sys.modules.pop("framework_alias", None)
+        _reset_for_tests()
+
+
+def test_a_c_extension_still_loads_under_the_audit_hook() -> None:
+    """Loading a ``.so`` raises a second ``import`` event, with None for sys.meta_path.
+
+    It is not a walk of the finders, so it must pass: refusing it stopped the sandbox
+    daemon from importing pydantic_core.
+    """
+    saved = {name: module for name, module in sys.modules.items() if name.startswith("pydantic_core")}
+    for name in saved:
+        del sys.modules[name]
+    guard_import.activate_guard_import({}, ("*",))
+    try:
+        import pydantic_core._pydantic_core as extension
+
+        origin = extension.__spec__.origin if extension.__spec__ else None
+        assert origin is not None and origin.endswith((".so", ".pyd"))
+    finally:
+        _reset_for_tests()
+        sys.modules.update(saved)
+
+
+def test_a_meta_path_that_is_no_longer_a_list_refuses_the_import() -> None:
+    guard_import.activate_guard_import({}, ("*",))
+    saved = sys.meta_path
+    sys.modules.pop("colorsys", None)
+    try:
+        sys.meta_path = tuple(saved[1:])  # type: ignore[assignment]
+        with pytest.raises(RuleModuleNotFoundError, match="no longer a list"):
+            import colorsys  # noqa: F401
+    finally:
+        sys.meta_path = saved
+        _reset_for_tests()
 
 
 def _install_armed(monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str) -> None:

@@ -20,14 +20,14 @@ def _deactivate_all_rules() -> None:
     _reset_for_tests()
 
 
-_guard_import_for_tests_activated: bool = False
-
-
 def _activate_guard_import_for_tests() -> None:
-    global _guard_import_for_tests_activated
-    if _guard_import_for_tests_activated:
+    # Ask guard_import rather than keep a flag here: the conftest resets every guard
+    # before each test, and a local flag that outlived that reset left all but the first
+    # test of a session running without the import guard.
+    from pysandboxes import guard_import
+
+    if guard_import._activated:
         return
-    _guard_import_for_tests_activated = True
     from pysandboxes.guard_files import patch_rules as file_patch_rules
     from pysandboxes.guard_import import (
         activate_guard_import,

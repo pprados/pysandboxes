@@ -197,13 +197,13 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             if not hasattr(cur_object, paths[-1]):
                 continue  # Not on this platform (`os.listxattr` off Linux): nothing to guard
             original_value = getattr(cur_object, paths[-1])
-            # FIXME # Skip if already patched
-            # if hasattr(original_value, "__pysandbox__"):
-            #     continue
+            if vars(original_value).get("__pysandbox__") if hasattr(original_value, "__dict__") else False:
+                continue  # Patched by an earlier activation: wrapping it again would check every call twice
             new_value = patch.patch_factory(original_value)
             assert not hasattr(new_value, "__pysandbox__"), "Double injection"
-            if __debug__ and isinstance(new_value, type(_apply_patch)):  # Fake kinds.FunctionType
-                new_value.__pysandbox__ = True  # type: ignore[attr-defined]
+            # A class wrapper (io.FileIO) is marked too, in its own __dict__: a subclass must not read as patched.
+            if __debug__ and isinstance(new_value, (type(_apply_patch), type)):  # Fake kinds.FunctionType
+                new_value.__pysandbox__ = True  # type: ignore[attr-defined,union-attr]
             if cur_object is os:
                 _keep_os_supports_sets(original_value, new_value)
             setattr(cur_object, paths[-1], new_value)
@@ -532,6 +532,43 @@ _guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
 
 _activated = False
 
+# Held before guard_api can wrap it: the hook is installed by the framework, never by user code.
+_sys_addaudithook = sys.addaudithook
+_audit_hook_installed = False
+
+
+def _audit_import(event: str, args: tuple[Any, ...]) -> None:
+    """Put the guard finder back at the head of ``sys.meta_path`` before each import.
+
+    ``sys.meta_path`` is a plain list. Frameworks insert their own finder at its head
+    when they are imported (crewai, wrapt post-import hooks, httpx2 aliases,
+    py-key-value), and code can drop the guard finder from it: either would let a
+    later import skip the rules. CPython raises the ``import`` audit event with the
+    live list before it walks it, so moving the guard finder back to the head there
+    keeps every import checked, and the frameworks' finders keep working, since
+    ``GuardFinder`` delegates to every finder behind it. An audit hook cannot be
+    removed from Python. A module already in ``sys.modules`` raises no event, which
+    activation covers by evicting them.
+    """
+    if event != "import" or not _activated:
+        return
+    meta_path = args[3]
+    if meta_path is None:
+        # Raised again when a C extension is loaded (``_imp.create_dynamic``), with no
+        # sys.path or sys.meta_path: the finders were already walked by the import itself.
+        return
+    if not isinstance(meta_path, list):
+        # A tuple or any other iterable cannot be repaired in place: refuse rather than walk it unguarded.
+        raise RuleModuleNotFoundError(f"Import of {args[0]!r} refused: sys.meta_path is no longer a list")
+    if meta_path and meta_path[0] is _guard_finder:
+        return
+    if _guard_finder in meta_path:
+        meta_path.remove(_guard_finder)
+    else:
+        # print, not logging: logging may import, and an import here would re-enter the hook.
+        print("pysandboxes: the import guard was removed from sys.meta_path, and restored", file=sys.stderr)
+    meta_path.insert(0, _guard_finder)
+
 
 def _activate_patch_import(
     patch_rules: PatchRules,
@@ -544,7 +581,7 @@ def _activate_patch_import(
     Returns:
         True if patching was activated, False if already active.
     """
-    global _activated
+    global _activated, _audit_hook_installed
     import sys
 
     if _guard_finder not in sys.meta_path:
@@ -553,6 +590,9 @@ def _activate_patch_import(
         _patch_rules = patch_rules
 
         sys.meta_path.insert(0, _guard_finder)
+        if not _audit_hook_installed:
+            _sys_addaudithook(_audit_import)
+            _audit_hook_installed = True
         _activated = True
         return True
     else:
