@@ -7,6 +7,7 @@
 _demo_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 _repo_dir="$(cd "${_demo_dir}/../.." && pwd)"
 uv sync --quiet --inexact --project "${_repo_dir}"
+# FIXME: when the first release is published, remove the alias ?
 alias python-sb="'${_repo_dir}/.venv/bin/python-sb'"
 export DEMO_API_KEY=sk-demo-123
 export AWS_SECRET_ACCESS_KEY=do-not-leak  # a secret the application never needs
