@@ -11,7 +11,7 @@ on:
   schedule:
     # 20:17 UTC (22:17 in Paris in summer): done before the working day even when GitHub fires a schedule hours
     # late, as it did by 5h30 on 2026-09-30; off the hour, when scheduled runs pile up.
-    - cron: "17 20 * * *"
+    - cron: "37 9 * * *"
   workflow_dispatch:
     inputs:
       exclude-tcg:
