@@ -992,14 +992,15 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
     dns_servers: list[IPv4Address | IPv6Address] = []
     config_path: str = "/run/systemd/resolve/resolv.conf"
 
-    # Regex to capture IP addresses following the 'DNS=' directive
-    # It handles multiple IPs separated by spaces.
-    dns_pattern: re.Pattern = re.compile(r"^\s*nameserver\s*(.*)$", re.IGNORECASE)
+    # resolv.conf lists 'nameserver <ip>' lines; resolved.conf, the fallback, uses the
+    # 'DNS=<ip> <ip>...' directive. Both may carry several IPs separated by spaces.
+    dns_pattern: re.Pattern = re.compile(r"^\s*nameserver\s+(.*)$", re.IGNORECASE)
 
     if not os.path.exists(config_path):
         config_path = "/etc/systemd/resolved.conf"
         if not os.path.exists(config_path):
             return []
+        dns_pattern = re.compile(r"^\s*DNS\s*=\s*(.*)$")
     try:
         with open(config_path, "r") as f:
             for line in f:
@@ -1013,8 +1014,8 @@ def get_systemd_resolved_static_dns() -> list[IPv4Address | IPv6Address]:
                 if match:
                     # The captured group (1) contains the IP list (e.g., "8.8.8.8 8.8.4.4")
                     ip_list: str = match.group(1).strip()
-                    # Split the string by spaces and filter out any empty strings
-                    servers_found: list[str] = [ip.strip() for ip in ip_list.split() if ip]
+                    # resolved.conf may suffix an IP with '%<interface>' or '#<server name>'
+                    servers_found: list[str] = [re.split("[%#]", ip)[0] for ip in ip_list.split()]
                     dns_servers.extend([ipaddress.ip_address(ip) for ip in servers_found])
 
         return list(set(dns_servers))
@@ -1060,7 +1061,7 @@ def get_systemd_resolved_upstream_dns() -> list[IPv4Address | IPv6Address]:
         # Regex to capture the IPs following "Current DNS Server" or "DNS Servers"
         # from both Global and Link configuration sections.
         # Group 2 captures the list of IPs.
-        dns_pattern: re.Pattern = re.compile(r"^\s*(Current\s+)?DNS\s+Servers:\s*(.*?)\s*$", re.MULTILINE)
+        dns_pattern: re.Pattern = re.compile(r"^\s*(Current\s+)?DNS\s+Servers?:\s*(.*?)\s*$", re.MULTILINE)
 
         all_ips: list[IPv4Address | IPv6Address] = []
         # Find all matches across the output

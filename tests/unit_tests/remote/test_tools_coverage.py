@@ -403,20 +403,14 @@ class TestGetSystemdResolvedStaticDns:
         assert result == []
         assert "unexpected error occurred" in capsys.readouterr().out
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "the fallback file /etc/systemd/resolved.conf uses the INI 'DNS=' directive "
-            "(per the function's own docstring/comment), but the regex only matches a "
-            "resolv.conf-style 'nameserver' line, so the fallback path can never find entries"
-        ),
-    )
     def test_fallback_config_path_parses_dns_directive(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The resolved.conf fallback reads 'DNS=', drops suffixes, and skips 'FallbackDNS='."""
         monkeypatch.setattr(tools.platform, "system", lambda: "Linux")
         monkeypatch.setattr(tools.os.path, "exists", lambda path: path == "/etc/systemd/resolved.conf")
-        with patch("builtins.open", mock_open(read_data="[Resolve]\nDNS=1.1.1.1\n")):
+        content = "[Resolve]\n#DNS=9.9.9.9\nDNS=1.1.1.1#cloudflare-dns.com 10.0.0.1%eth0\nFallbackDNS=8.8.8.8\n"
+        with patch("builtins.open", mock_open(read_data=content)):
             result = get_systemd_resolved_static_dns()
-        assert set(result) == {ipaddress.ip_address("1.1.1.1")}
+        assert set(result) == {ipaddress.ip_address("1.1.1.1"), ipaddress.ip_address("10.0.0.1")}
 
 
 class TestGetSystemdResolvedUpstreamDns:
@@ -448,14 +442,6 @@ class TestGetSystemdResolvedUpstreamDns:
                 result = get_systemd_resolved_upstream_dns()
         assert set(result) == {ipaddress.ip_address("8.8.8.8"), ipaddress.ip_address("1.1.1.1")}
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "the comment at tools.py:1060 says the regex covers 'Current DNS Server' (singular), "
-            "but the pattern requires the literal 'Servers' (plural), so real resolvectl output "
-            "using the singular form is never matched"
-        ),
-    )
     def test_resolvectl_singular_current_dns_server_is_parsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """`resolvectl status` also reports a singular 'Current DNS Server' line."""
         monkeypatch.setattr(tools.platform, "system", lambda: "Linux")
