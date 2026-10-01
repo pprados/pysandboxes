@@ -181,17 +181,17 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         self._slirp_api_socket: str = ""
 
     @staticmethod
-    def _use_network_filtering(all_rules: AllRules) -> bool:
-        """True when socket rules exist and bwrap should use unshare-net + iptables."""
-        if not all_rules.socket_rules:
-            return False
-        # Allow config to disable: bwrap.share-net=yes or bwrap.unshare-net=no
+    def _shares_host_network(all_rules: AllRules) -> bool:
+        """True when the config opts out of isolation: bwrap.share-net=yes or bwrap.unshare-net=no."""
         params = all_rules.os_sandbox_params
         if params.get("share-net"):
-            return False
-        if str(params.get("unshare-net", "")).lower() in ("no", "0", "false"):
-            return False
-        return True
+            return True
+        return str(params.get("unshare-net", "")).lower() in ("no", "0", "false")
+
+    @staticmethod
+    def _use_network_filtering(all_rules: AllRules) -> bool:
+        """True when socket rules exist and bwrap should use unshare-net + iptables."""
+        return bool(all_rules.socket_rules) and not BWrapSSEDaemon._shares_host_network(all_rules)
 
     @staticmethod
     def _build_netfilter_rules(all_rules: AllRules, port: int) -> tuple[str, ...]:
@@ -369,12 +369,12 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         for k, v in all_rules.envs.items():
             args.extend(["--setenv", k, str(v)])
 
-        # Network: share host net by default; use unshare-net + slirp + iptables when socket rules exist
-        use_net_filter = self._use_network_filtering(all_rules)
-        if use_net_filter:
-            args.extend(["--unshare-net"])
-        else:
+        # Network: isolated by default (default-deny, loopback only without socket rules);
+        # slirp4netns + iptables are added when socket rules exist. Host net only on opt-out.
+        if self._shares_host_network(all_rules):
             args.extend(["--share-net"])
+        else:
+            args.extend(["--unshare-net"])
         # Optional bwrap.* params (skip share-net/unshare-net to avoid overriding)
         for k, v in all_rules.os_sandbox_params.items():
             if k in ("share-net", "unshare-net"):
