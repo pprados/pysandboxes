@@ -2,11 +2,9 @@
 
 ### Four Layers, a Composition Contract, and a Profile Nobody Had to Write
 
-**Philippe PRADOS** — [github@prados.fr](mailto:github@prados.fr) · Sept. 2026
+**Philippe PRADOS** — [github@prados.fr](mailto:github@prados.fr)
 
-Reference implementation:
-[`py-sandboxes`](https://github.com/pprados/pysandboxes) (Apache-2.0). Paper
-licensed CC BY-NC-SA 4.0.
+September 2026
 
 ---
 
@@ -28,6 +26,10 @@ Python API boundary it observes every file, socket, import and environment
 access in the operator's own terms — a path, a hostname, a module name — and
 emits one declarative profile, compiled to whichever backend the deployment
 allows.
+
+Reference implementation:
+[`py-sandboxes`](https://github.com/pprados/pysandboxes) (Apache-2.0). Paper
+licensed CC BY-NC-SA 4.0.
 
 ## Contribution — four claims, and what would refute each
 
