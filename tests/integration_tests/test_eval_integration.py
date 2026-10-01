@@ -162,6 +162,31 @@ def test_a_declared_profile_guards_the_application_eval(tmp_path: Path) -> None:
     assert "REFUSED" in done.stdout
 
 
+def test_a_string_formatter_cannot_walk_the_type_hierarchy(tmp_path: Path) -> None:
+    """`string.Formatter.get_field` is patched at startup, not only in unit tests."""
+    done = _run(
+        """
+        py-sandbox=true
+        os-sandbox=subprocess
+        python-import=*
+        eval-attribute=format
+        eval-timeout=2s
+        """,
+        """
+        import string
+        try:
+            print(eval("F.format('{0.__class__.__base__}', ())", {"F": string.Formatter()}))
+        except BaseException as err:
+            print('REFUSED', type(err).__name__)
+        print('HOST', string.Formatter().format('{0.__class__.__name__}', ()))
+        """,
+        tmp_path,
+    )
+    assert done.returncode == 0, done.stderr
+    assert "REFUSED" in done.stdout, done.stdout
+    assert "HOST tuple" in done.stdout, done.stdout
+
+
 def test_a_timeout_is_recoverable_by_the_caller(tmp_path: Path) -> None:
     done = _run(
         """

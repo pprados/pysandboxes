@@ -137,7 +137,8 @@ only the *decision* uses the resolved path.
 | Resolve a name through `_socket` instead of `socket` | `socket.py` does `from _socket import *`, so `socket.gethostbyname is _socket.gethostbyname` — the `posix` relationship. `getaddrinfo` differs: `socket.py` redefines it, leaving the raw C one a separate unnamed function. Both C names carry the socket wrapper | **Blocked — demonstrated at the table** (`::test_every_guarded_resolution_call_has_its_c_twin`; removing a twin fails it). The end-to-end check compares the two names rather than asserting a refusal: with no resolver the call dies of `gaierror` before the guard is consulted |
 | `gethostbyaddr`, `getnameinfo` | shared with `_socket` by the same star-import, but **no rule guards them under either name** | **Open — demonstrated** (absent from `patch_rules`); reverse lookup is not covered by the DNS rules |
 | Reach the original class through the type graph (`socket.socket.__mro__[1]`) | none — attribute patching replaces names, not the inheritance chain | **Open — by construction**, same shape as the closure cell in §1. Out of scope for the [wayward-LLM target](#the-design-target-wayward-llm-generated-code) |
-| Lower-level fd handoff (`socket.fromfd`, `socketpair`, an fd inherited from the parent) | not in the socket patch table — no `_check_address` on an fd the process already holds | **Open — reasoned**; contained only by the OS network namespace ([unshare](unshare.md)/[netfilter](dns.md)) |
+| Lower-level fd handoff (`socket.fromfd`, `socketpair`, an fd inherited from the parent) | not in the socket patch table — no `_check_address` on an fd the process already holds. On Windows only, `socket.socketpair` is patched, but to exempt rather than check: see the next row | **Open — reasoned**; contained only by the OS network namespace ([unshare](unshare.md)/[netfilter](dns.md)) |
+| Connect to a loopback port from inside `socket.socketpair` on Windows | the stdlib emulates `socketpair` over a loopback listener, so `guard_socket._wrap_socket_socketpair` sets the thread-local `_socketpair_scope.active` for the call, and `_check_address` lets any loopback address through while it is set | **Open — reasoned**: a third switch of the objective 6 class, reachable as a module global; loopback only, Windows only |
 
 ### 3. Execute a process or native code
 
@@ -300,9 +301,16 @@ uv run pytest tests/unit_tests/guard/test_guard_api.py \
 ```
 
 At the time of writing this run reports **14 passed, 6 xfailed** for the escape
-files and **190 passed, 1 skipped, 1 xfailed** for the guard corpus. The six
-`xfail` entries of the escape files are the open escapes in objectives 5 and 6;
-the corpus `xfail` is `test_guard_api.py::test_the_unpickler_route_is_guarded`,
+files and **197 passed, 4 skipped, 1 xfailed** for the guard corpus on Linux
+(three skips are the Windows-only twins of `test_armed_denies_the_windows_twins`,
+one is `test_os_chflags_and_lchflags`). The six `xfail` entries of the escape
+files are the open escapes: `test_escape_with_subclasses` and
+`test_escape_with_obfuscated_strings` (objective 6),
+`test_escape_with_globals_introspection` (objective 4),
+`test_escape_with_pickle_allowed` and `test_escape_with_pickle_blocked` (the
+pickle entry of [inert guards](#guards-that-are-inert-by-design)), and
+`test_escape_with_meta_path`, which removes the import finder from
+`sys.meta_path`; the corpus `xfail` is `test_guard_api.py::test_the_unpickler_route_is_guarded`,
 which records that `pickle.Unpickler` is an immutable C type. All are
 `strict=True`, so if any is ever closed, the XPASS fails the suite and this page
 must change with it.

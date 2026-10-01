@@ -303,10 +303,10 @@ remote-result-guard=true
 # Base command is built from pysandboxes/templates/bwrap.template, then PySandboxes adds
 # binds, env --setenv, and network mode. Extra options: man bwrap(1), wiki/bwrap.md.
 #
-# bwrap.share-net — Keep host (or container) network when you have socket rules
-#   If set to a truthy value (e.g. yes): do not use the isolated netns + slirp4netns +
-#   iptables path even when socket rules exist. Use when slirp4netns is unavailable or you
-#   want the sandbox to share the host network stack.
+# bwrap.share-net — Keep host (or container) network
+#   By default the sandbox gets its own network namespace: loopback only without socket
+#   rules, slirp4netns + iptables with them. If set to a truthy value (e.g. yes): share
+#   the host network stack instead. Use when slirp4netns is unavailable.
 #
 # bwrap.unshare-net — Disable network filtering / isolated netns
 #   no, 0, or false: same effect as forcing shared network—no --unshare-net for filtering.
@@ -332,14 +332,17 @@ remote-result-guard=true
 # ignored by the provider parser—extend firejail.template or env for more Firejail options:
 #
 # firejail.net — Network bridge for the sandbox (host reachability often needs a bridge).
-#   Example: firejail.net=docker0. If unset with socket rules, the daemon may pick a default.
+#   Example: firejail.net=docker0. If unset with socket rules, the daemon may pick a default;
+#   if unset without socket rules, the sandbox gets --net=none (loopback only).
 #
 # firejail.seccomp — Path to a seccomp list file (passed as --seccomp=…).
 # firejail.seccomp.keep — Allowed syscalls (comma-separated) as --seccomp.keep=…
 # firejail.seccomp.block — Blocked syscalls as --seccomp.block=…
 #
 # Socket rules require restricted-network no in /etc/firejail/firejail.config for netfilter
-# setup; see wiki/firejail.md.
+# setup. Without the line the sandbox refuses to start; with an explicit 'restricted-network
+# yes' it starts with a warning on the host network, socket rules enforced by Python only;
+# see wiki/firejail.md.
 
 # firejail.net=docker0
 # firejail.seccomp.keep=read,write,exit

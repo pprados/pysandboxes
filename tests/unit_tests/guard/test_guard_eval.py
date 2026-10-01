@@ -15,6 +15,9 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, SandBoxError
 from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, NameSet
+from pysandboxes.guard_api import SENSITIVE_API, _deactivate_guard_api
+from pysandboxes.guard_api import activate_guard as activate_api
+from pysandboxes.guard_api import parse_rules as parse_api_rules
 from pysandboxes.guard_eval import (
     CAPABILITY_BUILTINS,
     STRONG_MODULES,
@@ -27,17 +30,15 @@ from pysandboxes.guard_eval import (
     build_namespace,
     classify_context_value,
     guarded_eval,
+    is_ambient,
     leaked_threads,
+    patch_rules,
     resolve_profile,
     warn_about_context,
 )
-from pysandboxes.guard_api import SENSITIVE_API, _deactivate_guard_api
-from pysandboxes.guard_api import activate_guard as activate_api
-from pysandboxes.lifecycle import arm as arm_api
-from pysandboxes.guard_api import parse_rules as parse_api_rules
-from pysandboxes.guard_eval import is_ambient, patch_rules
-from pysandboxes.learning import set_learning_mode
 from pysandboxes.immutable_dict import ImmutableDict
+from pysandboxes.learning import set_learning_mode
+from pysandboxes.lifecycle import arm as arm_api
 from pysandboxes.sb_types import ConfigLine
 
 
@@ -442,7 +443,11 @@ def _patched() -> dict[str, Callable[..., Any]]:
     `# type: ignore[operator]`: the table's values are what `patch_rules`
     already declares them to be.
     """
-    return {name: factory(getattr(builtins, name.split(".")[1])) for name, factory in patch_rules(False).items()}
+    return {
+        name: factory(getattr(builtins, name.split(".")[1]))
+        for name, factory in patch_rules(False).items()
+        if name.startswith("builtins.")
+    }
 
 
 def test_dynamic_code_holds_exactly_three_names() -> None:
@@ -467,7 +472,12 @@ def test_guard_api_does_not_patch_the_three_builtins() -> None:
 
 
 def test_guard_eval_patches_exactly_the_three_builtins() -> None:
-    assert set(patch_rules(False)) == {"builtins.eval", "builtins.exec", "builtins.compile"}
+    assert set(patch_rules(False)) == {
+        "builtins.eval",
+        "builtins.exec",
+        "builtins.compile",
+        "string.Formatter.get_field",
+    }
 
 
 def test_an_unarmed_call_reaches_the_raw_builtin() -> None:

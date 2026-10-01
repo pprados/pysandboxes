@@ -7,6 +7,7 @@ Index of the documentation pages.
 - [Implementation](implementation.md) — how the framework is put together.
 - [Roadmap](roadmap.md) — planned work and direction.
 - [FAQ](faq.md) — common questions.
+- [Alternatives](alternatives.md) — comparison with eighteen other sandboxes, frameworks and cloud services.
 - [Configuration files](configuration.md) — where `.py-sandboxes` is looked up, `include`, and integration in a module.
 
 ## Security model
