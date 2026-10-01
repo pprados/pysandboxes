@@ -553,6 +553,10 @@ def _audit_import(event: str, args: tuple[Any, ...]) -> None:
     if event != "import" or not _activated:
         return
     meta_path = args[3]
+    if meta_path is None:
+        # Raised again when a C extension is loaded (``_imp.create_dynamic``), with no
+        # sys.path or sys.meta_path: the finders were already walked by the import itself.
+        return
     if not isinstance(meta_path, list):
         # A tuple or any other iterable cannot be repaired in place: refuse rather than walk it unguarded.
         raise RuleModuleNotFoundError(f"Import of {args[0]!r} refused: sys.meta_path is no longer a list")

@@ -123,6 +123,26 @@ def test_a_framework_finder_ahead_of_the_guard_keeps_working() -> None:
         _reset_for_tests()
 
 
+def test_a_c_extension_still_loads_under_the_audit_hook() -> None:
+    """Loading a ``.so`` raises a second ``import`` event, with None for sys.meta_path.
+
+    It is not a walk of the finders, so it must pass: refusing it stopped the sandbox
+    daemon from importing pydantic_core.
+    """
+    saved = {name: module for name, module in sys.modules.items() if name.startswith("pydantic_core")}
+    for name in saved:
+        del sys.modules[name]
+    guard_import.activate_guard_import({}, ("*",))
+    try:
+        import pydantic_core._pydantic_core as extension
+
+        origin = extension.__spec__.origin if extension.__spec__ else None
+        assert origin is not None and origin.endswith((".so", ".pyd"))
+    finally:
+        _reset_for_tests()
+        sys.modules.update(saved)
+
+
 def test_a_meta_path_that_is_no_longer_a_list_refuses_the_import() -> None:
     guard_import.activate_guard_import({}, ("*",))
     saved = sys.meta_path
