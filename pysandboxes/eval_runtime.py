@@ -133,6 +133,11 @@ def current_state() -> EvalState:
     return stack[-1]
 
 
+def in_evaluation() -> bool:
+    """Return whether a guarded evaluation is in progress on this thread."""
+    return bool(getattr(_current, "stack", None))
+
+
 def __sb_tick__() -> None:
     """Charge one iteration and honour an interruption.
 
@@ -254,12 +259,21 @@ def _validate_format_template(template: str) -> None:
     """
     for _literal, field, spec, _conversion in string.Formatter().parse(template):
         if field is not None:
-            _first, rest = _string.formatter_field_name_split(field)
-            for is_attribute, value in rest:
-                if is_attribute:
-                    _check_attr(value)
+            check_format_field(field)
         if spec and "{" in spec:
             _validate_format_template(spec)
+
+
+def check_format_field(field: str) -> None:
+    """Run the attribute accesses of one format field (`0.a.b`) past `_check_attr`.
+
+    Raises:
+        RuleEvalPermissionError: The field reaches a refused attribute.
+    """
+    _first, rest = _string.formatter_field_name_split(field)
+    for is_attribute, value in rest:
+        if is_attribute:
+            _check_attr(value)
 
 
 def _guarded_format(template: str, name: str) -> Callable[..., str]:

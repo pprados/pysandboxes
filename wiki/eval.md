@@ -285,11 +285,14 @@ a dotted read — and only then delegates to the real method. Index access
 walked in turn. The unbound forms `str.format(template, ...)` and
 `type('').format(template, ...)` are validated the same way.
 
-Granting `format` by name therefore works, and still emits a warning: the
-validation covers `str.format` and `str.format_map` only. `string.Formatter`
-resolves fields in Python, outside that wrapper, and is **not** validated — see
-[What this does not cover](#what-this-does-not-cover). Keeping `format` out of `str-methods` remains the safer
-default.
+`string.Formatter` resolves the same fields in Python, in its `get_field`
+method, which is where the guard checks them: during a guarded evaluation,
+every field `get_field` receives goes through `_check_attr`, whatever template
+or overridden `parse` produced it. `Formatter().format('{0.__class__}', ())` is
+refused like the `str` spelling; outside an evaluation the method is untouched.
+
+Granting `format` by name therefore works, and still emits a warning. Keeping
+it out of `str-methods` remains the safer default.
 
 Contrast the f-string spelling `f"{o.__class__}"`, which compiles to a real
 attribute access and is validated normally. Same result to the eye, opposite
@@ -1089,14 +1092,11 @@ Stated plainly so no one reads more into the guard than it offers.
 - **Side effects of allowed calls.** If `eval-call` grants a function that
   opens files, the file rules apply — but this guard adds nothing.
 - **Timing and side channels.**
-- **`string.Formatter`.** `str.format` and `format_map` resolve attributes in
-  C from the contents of a string; the guard closes that by validating the
-  template at runtime (see [`eval-attribute`](#eval-attribute)). A
-  `string.Formatter` instance — passed through `names`, or reached with
-  `eval-import=string` — resolves the same fields in Python, outside that
-  validation: `Formatter().format('{0.__class__.__base__}', ())` returns
-  `object`. Do not hand a `Formatter` to evaluated code, and do not grant
-  `eval-import=string` together with its `Formatter` methods.
+- **A formatter the guard does not know.** `str.format`, `format_map` and
+  `string.Formatter` fields are checked (see [`eval-attribute`](#eval-attribute)).
+  A native or third-party callable that walks attributes from a string on its
+  own is not: it reaches the evaluated code only if the application passes it
+  in, and is then trusted like any callable in `names`.
 - **Audit from the configuration alone**, under `eval-namespace=adaptive`: the
   reachable surface is the configuration *plus* what each call site passes.
   `closed` restores the property, at the cost of declaring every name.

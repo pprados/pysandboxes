@@ -2,7 +2,8 @@
 # License: Apache V2
 """Guard for code that arrives as a string at runtime.
 
-`builtins.eval`, `builtins.exec` and `builtins.compile` are patched here. A
+`builtins.eval`, `builtins.exec` and `builtins.compile` are patched here, and
+`string.Formatter.get_field`, whose attribute reads no rewrite can reach. A
 guarded call parses the source, validates it against the sub-language the
 `eval-*` rules describe, rewrites it so the remaining risks are enforced by
 `eval_runtime`, and runs it in a dedicated thread under a budget and a
@@ -34,11 +35,11 @@ What this guard does not cover, stated so no one reads more into it:
 - Side effects of allowed calls. If `eval-call` grants a function that opens
   files, the file rules apply, but this guard adds nothing.
 - Timing and side channels.
-- `str.format` and `format_map`. The attribute is resolved in C from the
-  contents of the string, so no `Attribute` node exists to validate or
-  rewrite. Handled by curating them out of `str-methods`, which is a
-  mitigation and not a fix: granting `format` by name reopens it, with a
-  warning.
+- A field resolved by a host callable during the evaluation. `str.format`
+  templates are validated by `__sb_getattr__`, `string.Formatter` fields by
+  the patched `get_field`; a native or third-party formatter that walks
+  attributes on its own is not seen. Such a callable reaches the evaluated
+  code only if the application passes it in.
 - Audit from the configuration alone, under `eval-namespace=adaptive`: the
   reachable surface is the configuration *plus* what each call site passes.
   `eval-namespace=closed` restores the property, at the cost of declaring
@@ -63,15 +64,23 @@ from typing import Any, Callable, NoReturn, cast
 
 from . import guard_api
 from .e import EvalInterrupted, RuleApiPermissionError
-from .guard_api import LearnApiRule
 from .eval_rules import DEFAULT_RULES, EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
-from .eval_runtime import GUARDED_BUILTINS, HELPERS, EvalState, pop_state, push_state
+from .eval_runtime import (
+    GUARDED_BUILTINS,
+    HELPERS,
+    EvalState,
+    check_format_field,
+    in_evaluation,
+    pop_state,
+    push_state,
+)
 from .eval_transform import inject, learn_targets, raise_if_rejected, validate
+from .guard_api import LearnApiRule
+from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .lifecycle import is_armed
 from .tools import patch_factory as _f
-from .guard_wraps import guard_wraps
 
 logger = logging.getLogger(__name__)
 
@@ -758,6 +767,31 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
+def _wrap_formatter_get_field(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap `string.Formatter.get_field`, the one attribute read of `string.Formatter`.
+
+    `Formatter.format`, `vformat` and `_vformat` resolve `{0.__class__}` with a
+    plain `getattr` in `get_field`, which the bounded namespace never sees.
+    Every field reaches this method, whatever parse produced it, so checking
+    here covers a subclass whose `parse` lies to a validation done beforehand.
+    Outside a guarded evaluation the method is untouched.
+
+    Args:
+        func: The original method.
+
+    Returns:
+        The replacement method.
+    """
+
+    @guard_wraps(func)
+    def wrapper(self: Any, field_name: Any, *args: Any, **kwargs: Any) -> Any:
+        if in_evaluation():
+            check_format_field(field_name)
+        return func(self, field_name, *args, **kwargs)
+
+    return wrapper
+
+
 def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
     """Return the patch table for the three dynamic-code builtins.
 
@@ -773,6 +807,7 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
         "builtins.eval": _f(_wrap_eval_like, qualname="builtins.eval", mode="eval"),
         "builtins.exec": _f(_wrap_eval_like, qualname="builtins.exec", mode="exec"),
         "builtins.compile": _f(_wrap_compile),
+        "string.Formatter.get_field": _f(_wrap_formatter_get_field),
     }
 
 

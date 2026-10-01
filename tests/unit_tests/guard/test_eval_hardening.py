@@ -9,6 +9,7 @@ functions already were.
 """
 
 import logging
+import string
 from pathlib import Path
 from typing import Iterator
 
@@ -16,7 +17,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import EvalInterrupted, RuleEvalPermissionError
 from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, NameSet, parse_rules
-from pysandboxes.guard_eval import _deactivate_guard_eval, activate_guard, guarded_eval
+from pysandboxes.guard_eval import _deactivate_guard_eval, activate_guard, guarded_eval, patch_rules
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.sb_types import ConfigLine
 
@@ -142,6 +143,55 @@ def test_unbound_str_format_reached_through_type_is_validated() -> None:
     with pytest.raises(RuleEvalPermissionError) as caught:
         guarded_eval("type('').format('{0.__class__}', ())")
     assert caught.value.target == "__class__"
+
+
+# ----------------------------------------------------------- string.Formatter
+class _LyingFormatter(string.Formatter):
+    """Hands get_field a field its template never showed."""
+
+    def parse(self, format_string: str) -> Iterator[tuple[str, str | None, str | None, str | None]]:
+        yield "", "0.__class__", "", None
+
+
+@pytest.fixture
+def _patched_get_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    factory = patch_rules(False)["string.Formatter.get_field"]
+    monkeypatch.setattr(string.Formatter, "get_field", factory(string.Formatter.get_field))
+
+
+@pytest.mark.usefixtures("_patched_get_field")
+@pytest.mark.parametrize(
+    "source",
+    [
+        "F.format('{0.__class__.__base__}', ())",
+        "F.vformat('{0.__class__}', ((),), {})",
+        "F.get_field('0.__class__', ((),), {})",
+    ],
+)
+def test_string_formatter_fields_are_validated(source: str) -> None:
+    _activate(attribute=_names("format", "vformat", "get_field"))
+    with pytest.raises(RuleEvalPermissionError) as caught:
+        guarded_eval(source, names={"F": string.Formatter()})
+    assert caught.value.target == "__class__"
+
+
+@pytest.mark.usefixtures("_patched_get_field")
+def test_string_formatter_is_checked_where_the_field_is_read_not_where_it_is_parsed() -> None:
+    _activate(attribute=_names("format"))
+    with pytest.raises(RuleEvalPermissionError):
+        guarded_eval("F.format('plain', ())", names={"F": _LyingFormatter()})
+
+
+@pytest.mark.usefixtures("_patched_get_field")
+def test_string_formatter_keeps_a_granted_attribute() -> None:
+    _activate(attribute=_names("format", "real"))
+    assert guarded_eval("F.format('{0.real}', 5)", names={"F": string.Formatter()}) == "5"
+
+
+@pytest.mark.usefixtures("_patched_get_field")
+def test_string_formatter_is_untouched_outside_an_evaluation() -> None:
+    _activate(attribute=_names("format"))
+    assert string.Formatter().format("{0.__class__.__name__}", ()) == "tuple"
 
 
 # --------------------------------------------------------------- lambda depth
