@@ -22,12 +22,15 @@ down. The effective rights also depend on:
   `include "./.local.py-sandboxes"` lets whoever runs the command add rules. A bare name (`include "common"`)
   is resolved next to the including file. The `~/.config/...` and `/etc/...` profiles are outside the repository;
 - the environment: `os-sandbox=${OS_SANDBOX:-subprocess}` lets a variable downgrade the provider;
-- the command line: `--learn` and `--pysandboxes-config=` are chosen by the caller;
+- the command line: every `--key=value` given to `python-sb` is a rule that takes precedence over the file
+  (`--learn`, `--expose-ro=/etc`, `--os-sandbox=none`), and `--pysandboxes-config=` chooses the file itself;
 - the absence of the file: a missing rule file starts the **learning mode**, where the Python layer records
   accesses instead of refusing them. Deleting the file opens everything.
 
 When the rights of a program matter, remove the `./` includes from its rule file, write `os-sandbox=` without a
-variable, and pin the full command line where it is launched.
+variable, and add `learn=false`: the configuration is then refused if the learning mode is requested, if the rule
+file is missing, or if the command line adds a rule (see [Lock the rules](configuration.md#lock-the-rules)). Only
+`--pysandboxes-config=` remains, so pin the full command line where the program is launched.
 
 ## Contain the script of an agent skill
 
@@ -77,7 +80,8 @@ whatever the script does.
 The instruction in `SKILL.md` is only a request: nothing stops the agent from running `python scripts/report.py`
 directly. The containment holds only if the agent harness enforces it, with a permission rule that allows the
 exact `python-sb` command line and refuses a bare `python` on the skill's scripts. A rule that allows any
-`python-sb ...` is not enough, since the agent could add `--learn` or point to another configuration.
+`python-sb ...` is not enough, since the agent could point to another configuration; `learn=false` in the
+skill's rule file refuses the other options, `--learn` included.
 
 The same reasoning applies to **hooks and plugins** of an agent written in Python: they run third-party code with
 the rights of the user, and the same rule file pattern contains them.

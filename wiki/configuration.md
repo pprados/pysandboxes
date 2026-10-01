@@ -35,6 +35,26 @@ file, pass the same file to `--learn`:
 python-sb --pysandboxes-config=cfg/my-app.py-sandboxes --learn=cfg/my-app.py-sandboxes -m ...
 ```
 
+### Lock the rules
+
+Every `--key=value` given to `python-sb` is a rule, and it takes precedence over the file: `--expose-ro=/etc`,
+`--os-sandbox=none` or `--py-sandbox=false` widen what the program may do, and `--learn` makes it allowed to do
+anything. Once a rule file is reviewed, write in it, or in a file it includes:
+
+```ini
+learn=false
+```
+
+From then on, the configuration is refused at startup when:
+
+- the learning mode is requested, by `--learn`, by a `learn=<file>` in another file, by the `learn=` argument of
+  `sandboxes()` or `@sandbox`, or because the rule file does not exist;
+- `python-sb` receives a rule on its command line.
+
+The rules passed by code to `sandboxes()` or `@sandbox` stay allowed, except `learn`: they are versioned and
+reviewed with that code. The lock only holds while the file holding it is loaded: `--pysandboxes-config=` can name
+another file, so pin the full command line where the program is launched.
+
 ---
 
 ## Integration in a module

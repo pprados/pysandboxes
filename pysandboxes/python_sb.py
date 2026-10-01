@@ -14,7 +14,8 @@ from ._os_sandbox import providers_factory
 from .base_daemon import BaseDaemon
 from .config import DEBUG
 from .e import ConfigSyntaxError
-from .main_logger import config_log
+from .guard_provider import learn_lock
+from .main_logger import config_log, format_ruleref
 from .py_sandbox import load_and_parse_config
 from .remote.client_subprocess_sse_daemon import (
     BaseSubProcessDaemon,
@@ -26,8 +27,8 @@ from .remote.client_subprocess_sse_daemon import (
 from .remote.daemon_parameters import DaemonParameters
 from .remote.none_daemon import NoneDaemon
 from .remote.parse_cpython_args import parse_python_cmd_line
-from .remote.qemu_guest_console_io import GUEST_STDERR_FILE, GuestStderrTail
 from .remote.python_in_sb import convert_extra_rules
+from .remote.qemu_guest_console_io import GUEST_STDERR_FILE, GuestStderrTail
 from .remote.vm_sse_daemon import VMSSEDaemon
 from .sb_types import Envs
 from .tools import Environ
@@ -137,6 +138,13 @@ def main() -> int:
         )
     except ConfigSyntaxError as e:
         print(str(e), file=sys.stderr)
+        sys.exit(-1)
+    if sandboxes_args and (lock := learn_lock(all_rules.config)):
+        print(
+            f"{format_ruleref(lock)}: {lock.rule!r} locks the rules, the command line cannot add "
+            f"{' '.join(sandboxes_args)}",
+            file=sys.stderr,
+        )
         sys.exit(-1)
 
     token = str(uuid.uuid4())
