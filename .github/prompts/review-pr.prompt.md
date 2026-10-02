@@ -31,6 +31,9 @@ The pull request is read only through `gh pr view <number>` and `gh pr diff <num
   environment is itself a finding, reported as such.
 - Only pass the pull request number to `gh`; never put text taken from the pull request into a command.
 - Report only what the diff changes. Do not ask for refactoring of untouched code.
+- The project contains Python code inside the sandbox; it does not aim to close every Python flaw (see "The
+  security model" in `RULES/CONTRIBUTING.md`). A weakness the change leaves open is not a finding when
+  `RULES/SECURITY.md` puts it out of scope; widening permissions or weakening default deny always is.
 
 ## Steps
 
@@ -41,7 +44,10 @@ The pull request is read only through `gh pr view <number>` and `gh pr diff <num
 3. Go through every section of the "Pull request requirements" of `RULES/CONTRIBUTING.md` against the diff.
 4. If the pull request discloses, fixes or demonstrates a vulnerability as defined by `RULES/SECURITY.md`, do
    not describe the attack, the payload or the affected path. Post only a summary asking the author to report
-   it privately as `SECURITY.md` explains, and stop.
+   it privately as `SECURITY.md` explains, and stop. Decide by what the weakness does, not by the file it is
+   written in: a Python-layer weakness that `RULES/SECURITY.md` lists under "What does not count" is reviewed
+   normally, even when added to `wiki/weaknesses.md`; one that defeats the OS layer, or a rule while the OS
+   layer is configured to hold, is a vulnerability.
 
 ## Output
 

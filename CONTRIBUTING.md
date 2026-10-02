@@ -62,6 +62,15 @@ request.
 In one sentence: everything is denied by default, and a `.py-sandboxes` rule file grants
 what a program needs, enforced twice, by the Python layer and by the OS provider.
 
+The goal is to keep Python code contained inside the sandbox, not to remove every flaw Python has. The Python
+layer intercepts the pure-Python APIs (`open`, `socket`, imports, sensitive calls); it is friction, and
+introspection can undo it, as [`wiki/weaknesses.md`](wiki/weaknesses.md) lists. What it cannot see, such as
+`ctypes`, compiled extensions or direct syscalls, is left to the OS provider, which is the boundary. Flaws of
+CPython or of a library, unsafe code written by the sandboxed program itself, and the positions listed under
+"What does not count" in [`SECURITY.md`](SECURITY.md#what-does-not-count) are out of scope, as long as the rules
+still hold: anything that lets sandboxed code do what the rules deny while the OS layer is configured to hold
+stays in scope ([`SECURITY.md`](SECURITY.md#what-counts-as-a-vulnerability)).
+
 ## Branches
 
 - **`develop`** is the integration branch. Branch from it, and open every pull request against it.
@@ -76,6 +85,21 @@ make integration-tests # when the change touches a provider, the remote layer or
 ```
 
 `.github/prompts/pre-pr-quality-check.prompt.md` gives the same steps to a coding agent.
+
+### Pull request templates
+
+The default template fits any change. `.github/PULL_REQUEST_TEMPLATE/` holds one template per kind of
+contribution, with the checks of that kind. Pick one by adding `?template=<file>` to the compare URL, for
+example `https://github.com/pprados/pysandboxes/compare/develop...<branch>?template=fix.md`.
+
+| Template | For |
+|---|---|
+| `fix.md` | a bug fix outside the security model |
+| `feature.md` | a new option, API or behaviour outside the security model |
+| `security-model.md` | a guard, `eval_*`, an OS provider or rule parsing |
+| `tests.md` | tests only |
+| `workflow.md` | a GitHub workflow or a CI script |
+| `docs.md` | `README.md`, `wiki/`, `CHANGELOG.md`, samples' documentation |
 
 ## Pull request requirements
 
@@ -107,6 +131,9 @@ make integration-tests # when the change touches a provider, the remote layer or
 - Nothing may let sandboxed code widen its own permissions: rule files, learning-mode output, configuration
   paths.
 - A new sensitive function is registered in `guard_api` under one of its categories.
+- A change is judged on whether sandboxed code stays contained, not on whether it closes every Python flaw
+  (see [The security model](#the-security-model)). Leaving an out-of-scope weakness open is not a defect;
+  widening permissions or weakening default deny always is.
 
 ### Tests
 
