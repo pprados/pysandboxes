@@ -26,7 +26,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
 from pysandboxes.remote import tools
-from pysandboxes.learning import _configured_remote_result_mode, _generate_remote_result_mode
+from pysandboxes.learning import _update_remote_result_mode
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
     _MAX_BYTES,
@@ -133,30 +133,40 @@ class TestResultChannel:
         with pytest.raises(RestrictedUnpicklingError, match="cyclic values"):
             from_b85_restricted(to_b85(value), result_predicate, data_only=True)
 
-    def test_learning_recommends_objects_with_warning_when_observed(self) -> None:
-        generated = _generate_remote_result_mode({"remote-result-mode=data-only", "remote-result-mode=objects"})
+    def test_learning_recommends_objects_and_comments_the_previous_mode(self) -> None:
+        lines = ["remote-result-mode=data-only"]
+        generated = _update_remote_result_mode(
+            lines,
+            {"remote-result-mode=data-only", "remote-result-mode=objects"},
+            "# Add rules (2026/10/02 at 12:34)",
+        )
         assert "WARNING" in generated
         assert generated.endswith("remote-result-mode=objects")
+        assert lines == [
+            "# Previous mode superseded by learning on 2026/10/02 at 12:34:",
+            "# remote-result-mode=data-only",
+        ]
 
     def test_learning_recommends_data_only_when_no_objects_were_observed(self) -> None:
-        assert _generate_remote_result_mode({"remote-result-mode=data-only"}) == "remote-result-mode=data-only"
+        assert (
+            _update_remote_result_mode([], {"remote-result-mode=data-only"}, "# Add rules (date)")
+            == "remote-result-mode=data-only"
+        )
 
-    def test_learning_does_not_recommend_a_duplicate_of_a_configured_mode(self) -> None:
-        lines = [
-            "remote-result-mode=data-only",
-            "# <learning_remote_result>",
-            "remote-result-mode=objects",
-            "# </learning_remote_result>",
-        ]
-        assert _configured_remote_result_mode(lines) == "data-only"
+    def test_learning_does_not_add_duplicate_rules_for_an_unchanged_mode(self) -> None:
+        lines = ["remote-result-mode=data-only"]
+        assert _update_remote_result_mode(lines, {"remote-result-mode=data-only"}, "# Add rules (date)") == ""
+        assert lines == ["remote-result-mode=data-only"]
 
-    def test_learning_ignores_the_previous_generated_mode(self) -> None:
-        lines = [
-            "# <learning_remote_result>",
-            "remote-result-mode=data-only",
-            "# </learning_remote_result>",
-        ]
-        assert _configured_remote_result_mode(lines) is None
+    def test_learning_keeps_objects_mode_and_only_adds_its_warning(self) -> None:
+        lines = ["remote-result-mode=objects"]
+        generated = _update_remote_result_mode(lines, {"remote-result-mode=objects"}, "# Add rules (date)")
+        assert "WARNING" in generated
+        assert "remote-result-mode=" not in generated
+
+    def test_learning_does_not_weaken_objects_mode_from_partial_observations(self) -> None:
+        lines = ["remote-result-mode=objects"]
+        assert _update_remote_result_mode(lines, {"remote-result-mode=data-only"}, "# Add rules (date)") == ""
 
 
 class _Severity(enum.Enum):
