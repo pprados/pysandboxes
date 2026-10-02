@@ -28,14 +28,14 @@ down. The effective rights also depend on:
   accesses instead of refusing them. Deleting the file opens everything.
 
 When the rights of a program matter, remove the `./` includes from its rule file, write `os-sandbox=` without a
-variable, and add `learn=false`: the configuration is then refused if the learning mode is requested, if the rule
-file is missing, or if the command line or the code adds a rule (see [Lock the rules](configuration.md#lock-the-rules)). Only
+variable, and add `learn=false`. The configuration is then refused in three cases: the learning mode is requested,
+the rule file is missing, or the command line or the code adds a rule (see [Lock the rules](configuration.md#lock-the-rules)). Only
 `--pysandboxes-config=` remains, so pin the full command line where the program is launched.
 
 ## Contain the script of an agent skill
 
 An agent skill (`SKILL.md` and a `scripts/` directory, as used by Claude Code and other agents) often ships Python
-scripts that the agent runs with all the rights of the user: every file of the home directory, the network, the
+scripts. The agent runs them with all the rights of the user: every file of the home directory, the network, the
 API tokens of the environment. Shipping a rule file next to the scripts, and launching them with `python-sb`,
 bounds what a skill can do:
 

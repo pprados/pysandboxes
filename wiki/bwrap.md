@@ -95,3 +95,16 @@ If socket rules require the isolated network path and **`slirp4netns` is missing
 
 - The **`bwrap`** binary (e.g. `sudo apt install bubblewrap`).
 - **`slirp4netns`** when you use **socket rules** without `bwrap.share-net=yes` (e.g. `sudo apt install slirp4netns`).
+
+## Recommendations
+
+- Keep the default isolated network namespace. Use `bwrap.share-net=yes` only when you accept that the sandbox sees the whole host network, with no socket-level OS filtering.
+- Install `slirp4netns` as soon as your profile carries socket rules: without it, the daemon exits.
+- Enable the IPC, PID or UTS namespaces explicitly when you need them: the template leaves them shared with the host.
+- In a container, make sure the host can reach the SSE port. Note that `network_mode: host` is often needed with `--share-net`.
+
+## References
+
+- [bwrap documentation](https://man.archlinux.org/man/extra/bubblewrap/bwrap.1.en)
+- [bubblewrap documentation](https://github.com/containers/bubblewrap)
+- [unshare provider](unshare.md)

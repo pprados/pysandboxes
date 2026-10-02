@@ -46,11 +46,11 @@ So a ❌ means "*this technology does not deal with that concern*", never "*that
 | • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
 | Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| **Container compatible** |      |            |           |           |           |        |                  |
-| • Docker / Podman        |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
+| **Docker / Podman**      |      |            |           |           |           |        |                  |
+| • unprivileged           |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
 | • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         |
 | **Kubernetes**           |      |            |           |           |           |        |                  |
-| • kube                   |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
+| • unprivileged pod       |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
 | • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
 | • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
 | **Extra**                |      |            |           |           |           |        |                  |
@@ -110,3 +110,17 @@ Depending on your level of paranoia, you can choose a suitable approach.
 |    16    | with sandboxes() | bwrap/firejail |    Yes     |     yes      |
 |    17    | python-sb        | qemu           |    Yes     |      no      |
 |    18    | with sandboxes() | qemu           |    Yes     |      no      |
+
+## Recommendations
+
+- Nest an OS provider around the py-sandbox rather than replacing it: the union of both layers is your actual protection.
+- Keep the Python layer on. Set `py-sandbox=False` only when the sandboxed code is trusted not to attack the interpreter itself.
+- On a managed Kubernetes cluster, verify that the node kernel exposes Landlock before relying on it.
+- Leave the result guard on. Turn it off with `remote-result-guard=false` only if a legitimate return value is wrongly rejected.
+- After a learning phase, add *manually* the network rules that compiled code needs: learning runs under `subprocess` and cannot see them.
+
+## References
+
+- [bubblewrap](https://github.com/containers/bubblewrap), [firejail](https://github.com/netblue30/firejail), [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html), [landlock](https://landlock.io/), [qemu](https://www.qemu.org/)
+- Provider pages: [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [landlock](landlock.md), [qemu](qemu.md)
+- [Database drivers](database.md), [transport unpickle guard](transport-unpickle-guard.md)

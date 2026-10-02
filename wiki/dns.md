@@ -108,3 +108,10 @@ env=HTTPS_PROXY="socks5://192.168.1.10:9050"
 env=HTTP_PROXY="http://user:password@192.168.1.10:8080"
 env=HTTPS_PROXY="http://user:password@192.168.1.10:8080"
 ```
+
+# Recommendations
+- Expect the IP addresses behind a domain name to change, and plan one of the strategies above before deploying.
+- When only part of the application is sandboxed, let the sandbox stop on connection failures, so that the parent restarts it with fresh addresses.
+- When a site publishes its IP ranges, generate the rules from them and include the result in your rule file, rather than relying on a resolution.
+- When the list of sites is long or unstable, route all traffic through a SOCKS5 or HTTP proxy, and make it the only exit point allowed.
+- Note that an unresolvable rule never widens the profile: an `ALLOW` is dropped, a `DENY` stops the process.

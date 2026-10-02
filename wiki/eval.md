@@ -277,10 +277,10 @@ route through `__sb_getattr__`. A template such as
 
 **The solution.** The template is a string known before the C call, so the
 guard validates it at runtime. When `format` or `format_map` is granted,
-`__sb_getattr__` does not hand back the raw method: it returns a wrapper that
-walks every field of the template with `_string.formatter_field_name_split`,
-runs each attribute access (`{0.x}`) through `_check_attr` — the same gate as
-a dotted read — and only then delegates to the real method. Index access
+`__sb_getattr__` does not hand back the raw method: it returns a wrapper. That
+wrapper walks every field of the template with `_string.formatter_field_name_split`,
+and runs each attribute access (`{0.x}`) through `_check_attr`, the same gate as
+a dotted read. Only then does it delegate to the real method. Index access
 (`{0[0]}`) is data and left alone; nested spec fields (`{0:{1.__class__}}`) are
 walked in turn. The unbound forms `str.format(template, ...)` and
 `type('').format(template, ...)` are validated the same way.
@@ -491,9 +491,9 @@ runs in a dedicated thread; the interruption reaches the caller as
 `EvalInterrupted`.
 
 `EvalInterrupted` derives from `BaseException` **only**, and the exclusion is
-load-bearing: every other sandbox exception is a `RuntimeError`, so a bare
-`except Exception:` inside the evaluated code — reachable as soon as
-`eval-syntax=exception` opens `try` — would swallow its own interruption.
+load-bearing. Every other sandbox exception is a `RuntimeError`. A bare
+`except Exception:` inside the evaluated code would therefore swallow its own
+interruption, and it is reachable as soon as `eval-syntax=exception` opens `try`.
 
 Consequence for your code: **`except SandBoxError:` does not catch a timeout.**
 
@@ -548,8 +548,8 @@ Default `20`. Runtime call depth of functions defined inside the evaluated
 code.
 
 It exists because the iteration budget does **not** bound recursion: a
-recursive function consumes no iteration, so without this it would run to
-CPython's own `RecursionError` — which is an `Exception`, and therefore
+recursive function consumes no iteration. Without this key, it would run to
+CPython's own `RecursionError`. That is an `Exception`, and therefore
 catchable by the evaluated code itself.
 
 ```ini

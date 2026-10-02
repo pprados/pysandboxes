@@ -181,10 +181,10 @@ So the child sends the exception **twice**:
   a list of strings — plus the same traceback.
 
 The parent tries the rich form under the predicate above. If the guard refuses
-it, the parent falls back to the descriptor, resolves the class from
+it, the parent falls back to the descriptor. It resolves the class from
 `sys.modules` exactly as `find_class` does (never importing), and instantiates it
-through `__new__` — an exception's `__init__` signature is its own business, and
-replaying it with a single argument fails on any class taking more.
+through `__new__`. In effect, an exception's `__init__` signature is its own
+business, and replaying it with a single argument fails on any class taking more.
 
 The descriptor payload carries primitives only, so its predicate admits `tblib`
 and nothing else.
@@ -207,7 +207,7 @@ are lost exactly when the guard would otherwise have refused the exception
 entirely.
 
 Two failures stop being fatal along the way. An exception the child cannot
-pickle at all no longer sinks the reply, and a class the parent never imported
+pickle at all no longer sinks the reply. A class the parent never imported
 no longer raises: the refusal is reported through `SandBoxProtocolError`,
 prefixed with the original `module.qualname`, rather than being lost.
 
@@ -256,14 +256,18 @@ learning only describes the results exercised by that run.
 ## Portability
 
 Sites that depend on CPython internals carry a `# CPYTHON-COMPAT:` marker
-(`rg CPYTHON-COMPAT` to find them): the opcode alphabet (which can grow between
-versions — a corpus test reasserts that a representative sample stays within the
-allowlist, so a version bump reddens CI instead of breaking production), the
-in-house qualified-name resolution (replacing the private `pickle._getattribute`),
-and the pinned wire protocol constant (used on both ends instead of
-`HIGHEST_PROTOCOL`, so the alphabet does not drift with the interpreter and the
-two ends stay compatible across container backends). Supported range: CPython
-3.11 to 3.14.
+(`rg CPYTHON-COMPAT` to find them). There are three of them:
+
+- the opcode alphabet, which can grow between versions. A corpus test reasserts
+  that a representative sample stays within the allowlist, so a version bump
+  reddens CI instead of breaking production;
+- the in-house qualified-name resolution, replacing the private
+  `pickle._getattribute`;
+- the pinned wire protocol constant, used on both ends instead of
+  `HIGHEST_PROTOCOL`. The alphabet therefore does not drift with the
+  interpreter, and the two ends stay compatible across container backends.
+
+Supported range: CPython 3.11 to 3.14.
 
 ## Limits
 
@@ -280,3 +284,15 @@ two ends stay compatible across container backends). Supported range: CPython
 - This guard protects the parent's deserialization only. Arbitrary Python in the
   child can still reach native code by other routes; the OS-level sandbox remains
   the real barrier. See [weaknesses](weaknesses.md).
+
+## Recommendations
+
+- Leave `remote-result-guard` at its default. Turn it off only when a real regression forces it: the result channel then has no protection against the `__reduce__` vector.
+- Read the refusals of a crossed exception with `sandbox_denials`, not with its attributes: on the fallback path, the state is lost.
+- Do not rely on `__cause__` or `__context__` after the transport.
+- Review the `# CPYTHON-COMPAT:` sites before supporting a new CPython version.
+- Keep an OS-level sandbox around the child: this guard protects the parent's deserialization only.
+
+## References
+
+- [Weaknesses](weaknesses.md)
