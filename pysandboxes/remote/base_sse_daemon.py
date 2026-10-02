@@ -135,7 +135,7 @@ def _rebuild_remote_exception(payload: str, fallback_payload: str | None) -> Bas
 
 
 class BaseSSESandbox(BaseDaemon):
-    __slots__ = ("port", "host", "max_connect_retry", "_result_guard")
+    __slots__ = ("port", "host", "max_connect_retry", "_result_guard", "_result_data_only")
 
     def __init__(
         self,
@@ -148,6 +148,7 @@ class BaseSSESandbox(BaseDaemon):
         # Result-channel guard. Default on; start_daemon posts the
         # profile's `remote-result-guard` value once all_rules are parsed.
         self._result_guard = True
+        self._result_data_only = False
         self.port = 0
         # IP literal, not "localhost": aiohttp resolves with
         # AI_ADDRCONFIG, which fails an IPv4 lookup when only 'lo'
@@ -212,6 +213,7 @@ class BaseSSESandbox(BaseDaemon):
                             return from_b85_restricted(
                                 msg["result"],
                                 result_predicate if self._result_guard else None,
+                                data_only=self._result_data_only,
                             )
                         if "exception" in msg:
                             # Raised after the try block: the sandboxed function

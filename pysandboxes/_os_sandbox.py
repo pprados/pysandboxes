@@ -217,6 +217,7 @@ async def async_start_daemon(
 
             if isinstance(os_provider, BaseSSESandbox):
                 os_provider._result_guard = all_rules.remote_result_guard
+                os_provider._result_data_only = all_rules.remote_result_data_only
             _starting_daemon = os_provider
             await os_provider._start(all_rules, envs=envs, log_level=log_level, init_fn=init_fn)
             _starting_daemon = None

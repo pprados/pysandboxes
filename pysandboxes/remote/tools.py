@@ -421,6 +421,8 @@ _ALLOWED_OPCODES = frozenset(
     }
 )
 
+_DATA_ONLY_OPCODES = _ALLOWED_OPCODES - {"STACK_GLOBAL", "REDUCE", "BUILD", "NEWOBJ", "NEWOBJ_EX"}
+
 # Anti-DoS budgets: generous guard-rails, not tight limits. A legitimate result
 # may be large; these only bound the pathological shapes the predicate cannot
 # see (memo bombs, opcode floods) that would expand in the parent's RAM.
@@ -553,7 +555,7 @@ def check_sse_line(line: str) -> None:
         )
 
 
-def _prescan(data: bytes) -> None:
+def _prescan(data: bytes, *, data_only: bool = False) -> None:
     """Reject a pickle stream on opcode alphabet or size before any execution.
 
     `pickletools.genops` parses without executing (no `__reduce__` runs). This
@@ -583,7 +585,8 @@ def _prescan(data: bytes) -> None:
             if n_op > _MAX_OPCODES:
                 raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_OPCODES}-opcode transport budget.")
             name = opcode.name
-            if name not in _ALLOWED_OPCODES:
+            allowed_opcodes = _DATA_ONLY_OPCODES if data_only else _ALLOWED_OPCODES
+            if name not in allowed_opcodes:
                 raise RestrictedUnpicklingError(f"opcode {name!r} is not allowed on the sandbox transport.")
             if name == "MARK":
                 mark_depth += 1
@@ -600,6 +603,13 @@ def _prescan(data: bytes) -> None:
     except Exception as exc:
         # A malformed or truncated stream makes genops raise: refuse, don't crash.
         raise RestrictedUnpicklingError(f"unparsable pickle stream: {exc}") from exc
+
+
+def result_requires_objects(b85: str) -> bool:
+    """Return whether a result pickle uses an object-reconstruction opcode."""
+    data = base64.b85decode(b85.encode("ascii"))
+    object_opcodes = {"STACK_GLOBAL", "REDUCE", "BUILD", "NEWOBJ", "NEWOBJ_EX"}
+    return any(opcode.name in object_opcodes for opcode, _arg, _pos in pickletools.genops(data))
 
 
 class _RestrictedUnpickler(pickle.Unpickler):
@@ -765,6 +775,8 @@ def rebuild_from_descriptor(
 def from_b85_restricted(
     b85: str,
     predicate: Callable[[str, str, Any], bool] | None,
+    *,
+    data_only: bool = False,
 ) -> Any:
     """Deserialize an untrusted child->parent payload under transport guards.
 
@@ -785,10 +797,39 @@ def from_b85_restricted(
         RestrictedUnpicklingError: On a refused opcode, budget, or global.
     """
     data = base64.b85decode(b85.encode("ascii"))
-    _prescan(data)
+    _prescan(data, data_only=data_only)
+    if data_only:
+        value = _pickle_loads(data)
+        _validate_data_only(value)
+        return value
     if predicate is None:
         return _pickle_loads(data)
     return _RestrictedUnpickler(data, predicate).load()
+
+
+def _validate_data_only(value: Any, seen: set[int] | None = None, depth: int = 0) -> None:
+    """Refuse reconstructed values outside the primitive result grammar."""
+    if depth > _MAX_MARK_DEPTH:
+        raise RestrictedUnpicklingError(f"result exceeds the {_MAX_MARK_DEPTH}-level data-only nesting budget.")
+    if type(value) in (type(None), bool, int, float, complex, str, bytes):
+        return
+    if type(value) not in (list, tuple, dict, set, frozenset, bytearray):
+        raise RestrictedUnpicklingError(f"result type {type(value).__name__!r} is not allowed in data-only mode.")
+    if seen is None:
+        seen = set()
+    identity = id(value)
+    if identity in seen:
+        raise RestrictedUnpicklingError("cyclic values are not allowed in data-only mode.")
+    seen.add(identity)
+    values = value.items() if type(value) is dict else value
+    for item in values:
+        if type(value) is dict:
+            key, child = item
+            _validate_data_only(key, seen, depth + 1)
+            _validate_data_only(child, seen, depth + 1)
+        else:
+            _validate_data_only(item, seen, depth + 1)
+    seen.remove(identity)
 
 
 def _get_default_interface_via_ip() -> str | None:

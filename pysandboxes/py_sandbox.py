@@ -264,6 +264,7 @@ def parse_config(
         learning_path,
         learn,
         remote_result_guard,
+        remote_result_data_only,
         others,
     ) = guard_provider.parse_rules(config_path, others, errors)
 
@@ -316,6 +317,7 @@ def parse_config(
         learning_path=learning_path,
         learn=learn,
         remote_result_guard=remote_result_guard,
+        remote_result_data_only=remote_result_data_only,
         envs_rules=envs_rules,
         socket_rules=socket_rules,
         pin_dns=pin_dns,
