@@ -316,3 +316,32 @@ def test_patching_os_environ_leaves_the_supports_sets_alone() -> None:
     _keep_os_supports_sets(os.environ, os.environ)
 
     assert {name: set(getattr(os, name)) for name in before} == before
+
+
+def test_patching_os_functions_replaces_originals_in_supports_sets() -> None:
+    import os
+
+    from pysandboxes.guard_import import _OS_SUPPORTS_SETS, _keep_os_supports_sets
+
+    def original() -> None:
+        pass
+
+    def patched() -> None:
+        pass
+
+    before = {name: set(getattr(os, name)) for name in _OS_SUPPORTS_SETS if hasattr(os, name)}
+    try:
+        for supports in before:
+            getattr(os, supports).add(original)
+
+        _keep_os_supports_sets(original, patched)
+
+        for name in before:
+            supports_set = getattr(os, name)
+            assert original not in supports_set
+            assert patched in supports_set
+    finally:
+        for name, members in before.items():
+            supports_set = getattr(os, name)
+            supports_set.clear()
+            supports_set.update(members)
