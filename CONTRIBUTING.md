@@ -67,7 +67,9 @@ layer intercepts the pure-Python APIs (`open`, `socket`, imports, sensitive call
 introspection can undo it, as [`wiki/weaknesses.md`](wiki/weaknesses.md) lists. What it cannot see, such as
 `ctypes`, compiled extensions or direct syscalls, is left to the OS provider, which is the boundary. Flaws of
 CPython or of a library, unsafe code written by the sandboxed program itself, and the positions listed under
-"What does not count" in [`SECURITY.md`](SECURITY.md#what-does-not-count) are out of scope.
+"What does not count" in [`SECURITY.md`](SECURITY.md#what-does-not-count) are out of scope, as long as the rules
+still hold: anything that lets sandboxed code do what the rules deny while the OS layer is configured to hold
+stays in scope ([`SECURITY.md`](SECURITY.md#what-counts-as-a-vulnerability)).
 
 ## Branches
 

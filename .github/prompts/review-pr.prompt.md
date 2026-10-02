@@ -44,8 +44,10 @@ The pull request is read only through `gh pr view <number>` and `gh pr diff <num
 3. Go through every section of the "Pull request requirements" of `RULES/CONTRIBUTING.md` against the diff.
 4. If the pull request discloses, fixes or demonstrates a vulnerability as defined by `RULES/SECURITY.md`, do
    not describe the attack, the payload or the affected path. Post only a summary asking the author to report
-   it privately as `SECURITY.md` explains, and stop. A weakness that `RULES/SECURITY.md` lists under "What does
-   not count", such as an entry added to `wiki/weaknesses.md`, is not a vulnerability: review it normally.
+   it privately as `SECURITY.md` explains, and stop. Decide by what the weakness does, not by the file it is
+   written in: a Python-layer weakness that `RULES/SECURITY.md` lists under "What does not count" is reviewed
+   normally, even when added to `wiki/weaknesses.md`; one that defeats the OS layer, or a rule while the OS
+   layer is configured to hold, is a vulnerability.
 
 ## Output
 
