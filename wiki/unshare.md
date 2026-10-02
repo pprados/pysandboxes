@@ -209,3 +209,16 @@ kubectl delete pod pysandboxes-test
 ## Configuration parameters
 
 You can add unshare-specific options in `.py-sandboxes`. Any line of the form `unshare.<option>=<value>` is appended to the `unshare` invocation after the template flags: non-empty values become `--<option>=<value>`, empty values become `--<option>`. See `pysandboxes/templates/unshare.template` and `unshare_sse_daemon.py` for the default flag set and how they combine with overrides.
+
+## Recommendations
+
+- Make sure `kernel.unprivileged_userns_clone` is `1` and that AppArmor does not restrict unprivileged user namespaces before using this provider.
+- Install slirp4netns and iptables: socket rules are enforced by iptables inside the namespace, behind the user-mode network stack.
+- In Docker, Podman or Kubernetes, grant `--privileged` or the SYS_ADMIN and NET_ADMIN capabilities, often with `seccompProfile: Unconfined`.
+- Note that code runs as local `root` inside the sandbox. Test applications that behave differently under that user.
+
+## References
+
+- [unshare(2) documentation](https://man7.org/linux/man-pages/man2/unshare.2.html)
+- [slirp4netns](https://manpages.debian.org/experimental/slirp4netns/slirp4netns.1.en.html)
+- [iptables](https://man7.org/linux/man-pages/man8/iptables.8.html)

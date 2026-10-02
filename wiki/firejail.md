@@ -82,3 +82,16 @@ Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`
   - no such line: the daemon logs an error and exits.
   - `restricted-network yes` (the stock value, e.g. on GitHub runners): the daemon warns and starts **without** the network setup, on the **host network**: the socket rules are not enforced by firejail, only by the Python guard, so native code, `ctypes` or a subprocess can reach any address.
 - Without socket rules, `--net=none` is used whatever the `restricted-network` line says: firejail allows it to regular users.
+
+## Recommendations
+
+- Set `restricted-network no` in `/etc/firejail/firejail.config` and create a bridge before relying on socket rules. Under `restricted-network yes`, only the Python guard enforces them, and native code, `ctypes` or a subprocess can reach any address.
+- Do not use Firejail in Docker, Podman or Kubernetes. Use [unshare](unshare.md), [bwrap](bwrap.md) or [qemu](qemu.md) with their provider images instead.
+- Restrict system calls with `firejail.seccomp.keep=`, built from the output of the strace script shown above.
+- Note that a file under `/etc` is visible only if it belongs to the `--private-etc` copy of the template.
+
+## References
+
+- [Firejail documentation](https://man7.org/linux/man-pages/man1/firejail.1.html)
+- [Firejail documentation](https://firejail.wordpress.com/)
+- [unshare provider](unshare.md), [bwrap provider](bwrap.md), [qemu provider](qemu.md)

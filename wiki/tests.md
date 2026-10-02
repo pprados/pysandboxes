@@ -88,11 +88,11 @@ Two scenarios carry the per-backend column, and they are shaped differently.
 **`tst_usage.py`** covers files, sockets and environment variables. It is
 invoked once per backend by `test_usage_with_providers.py` and once per
 container row by `test_containers.py` — which is why those three families, and
-only those three, reach the container grid. It asserts a write inside
-`expose-rw` succeeding while a write outside it is denied and `.env` stays
-unreadable; TCP/UDP connect, bind and DNS following the `net=` rules; and the
-sandbox seeing no variable outside a known allowlist, in particular neither
-`USER` nor the planted `USAGE_SECRET`.
+only those three, reach the container grid. It asserts three things. A write
+inside `expose-rw` succeeds, while a write outside it is denied and `.env` stays
+unreadable. TCP/UDP connect, bind and DNS follow the `net=` rules. The sandbox
+sees no variable outside a known allowlist, in particular neither `USER` nor the
+planted `USAGE_SECRET`.
 
 One qualification on that envs check: the allowlist (`_EXPECTED_ENVS`) is wider
 than the profile's two `env=` rules. It also accepts the per-technology plumbing
@@ -109,10 +109,10 @@ cannot distinguish a working guard from an interpreter that never started, since
 both exit non-zero.
 
 It writes its profile per test rather than using the shared one, for two
-reasons. `py-sandbox-test.profile` carries `net=` rules whose hostnames must
-resolve at config load, which would skip the whole file on a host without DNS
-for a reason unrelated to arming; and it carries `python-import=*`, which
-disarms the very guard under test. The profile exposes the interpreter's own
+reasons. First, `py-sandbox-test.profile` carries `net=` rules whose hostnames
+must resolve at config load: on a host without DNS, that would skip the whole
+file for a reason unrelated to arming. Second, it carries `python-import=*`,
+which disarms the very guard under test. The profile exposes the interpreter's own
 library tree explicitly, since a backend with its own mount namespace otherwise
 hides it.
 
@@ -125,7 +125,7 @@ rows run like the others. Ten tests over seven rows: 70 rows.
 `test_eval_integration.py` and `test_guard_api_arming.py` stay pinned to
 `os-sandbox=subprocess`, and keep their role: depth rather than breadth. They
 cover the eval sub-language (namespaces, syntax classes, timeouts, the learning
-round trip) and each of the arming entry points — work that does not need to be
+round trip) and each of the arming entry points. That work does not need to be
 repeated per backend once arming itself is shown to survive one.
 
 `guard_provider` parses the configuration directives (`os-sandbox=`,
@@ -182,9 +182,9 @@ Each backend is also covered by a small liveness test under
 row runs the same `tst_usage.py` scenario. Counting only the four real backends
 (`none` aside), that is 48 rows.
 
-`py_sandbox=false` is what makes the grid worth running: it removes the Python
-layer and leaves the container plus the OS backend alone, which is how a row
-proves the OS layer denies on its own rather than riding on the patched
+`py_sandbox=false` is what makes the grid worth running. It removes the Python
+layer and leaves the container plus the OS backend alone. In effect, this is how
+a row proves the OS layer denies on its own rather than riding on the patched
 interpreter.
 
 | Condition | Rows | Status |

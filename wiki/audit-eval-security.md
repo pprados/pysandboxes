@@ -65,7 +65,7 @@ The `eval-*` guard exists precisely because that pattern fails.
 | **Runtime helpers** | `eval_runtime` | `__sb_getattr__`, `__sb_binop__`, tick/enter budgets, the frame-capture DENY | **No** — every attribute read, whatever its syntax, passes through `_check_attr` |
 
 The design principle: **static validation catches nothing an attacker cannot
-route around; the namespace and the runtime helpers are the real barriers.**
+route around. The namespace and the runtime helpers are the real barriers.**
 The hardening described here removed the known ways to reach an attribute
 *without* going through `_check_attr`, `string.Formatter` included (see
 [the `str.format` section](#the-strformat-blind-spot-and-how-it-was-closed)).
@@ -174,10 +174,10 @@ string. No `Attribute` node exists for static validation or for
 of `str-methods` by default and only grantable with a warning.
 
 The guard now **validates the template at runtime**. When `eval-attribute`
-grants `format`, `__sb_getattr__` does not return the raw bound method; it
-returns a wrapper that walks every field of the template with
-`_string.formatter_field_name_split`, runs each attribute access through
-`_check_attr`, and only then delegates to the real method. Index access
+grants `format`, `__sb_getattr__` does not return the raw bound method: it
+returns a wrapper. That wrapper walks every field of the template with
+`_string.formatter_field_name_split` and runs each attribute access through
+`_check_attr`. Only then does it delegate to the real method. Index access
 (`{0[0]}`) is data and left alone; nested spec fields (`{0:{1.__class__}}`) are
 walked in turn.
 
@@ -306,8 +306,21 @@ uv run pytest tests/unit_tests/guard/test_eval_hardening.py -v
 uv run pytest tests/unit_tests/guard/test_eval_security_corpus.py -v
 ```
 
-Bottom line: every attribute read — by dot, by `getattr`/`vars`/`hasattr`, by
-`str.format` on an instance or on the class, by `string.Formatter` — now passes
-through the single `_check_attr` gate, and recursion by function, lambda or
-generator is bounded by `eval-max-call-depth`. The only remaining ways through
+Bottom line: every attribute read now passes through the single `_check_attr`
+gate, whether by dot, by `getattr`/`vars`/`hasattr`, by `str.format` on an
+instance or on the class, or by `string.Formatter`. Recursion by function, lambda
+or generator is bounded by `eval-max-call-depth`. The only remaining ways through
 are denial of service, which the design states plainly are the OS layer's job.
+
+## Recommendations
+
+- Treat static validation as a courtesy to the rule author, never as a barrier: a dynamically built name is never seen.
+- Grant capability builtins such as `getattr` with care: they hand back, by their own name, a door the bounded namespace had shut.
+- Avoid wide grants such as `eval-magic=*` or `eval-attribute=*`: they reopen the class-hierarchy walk.
+- Pass through `names` only trusted callables and context managers: the guard trusts them like any callable the application provides.
+- Keep an OS sandbox around the evaluation: blocking C calls, allocations outside the rewritten operators and regex backtracking are stopped only there.
+
+## References
+
+- [The `eval-*` sub-language](eval.md)
+- [Weaknesses](weaknesses.md)

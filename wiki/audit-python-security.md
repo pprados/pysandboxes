@@ -48,7 +48,7 @@ is stated here rather than left to be inferred from the matrix.
 
 **The target is code an LLM produced while solving the wrong problem, not an
 adversary.** Such code reaches for `open`, `requests.get` or `subprocess` in the
-open, and stops at the first refusal; the layer exists to make that refusal
+open, and stops at the first refusal. The layer exists to make that refusal
 happen, to name the rule that caused it, and to record it in learning mode.
 
 Code written to break out is explicitly **out of scope**, and not for lack of
@@ -207,7 +207,7 @@ This objective is **not** in [weaknesses.md](weaknesses.md) and is specific to
 the project's design, so it is stated in full.
 
 In learning mode the verified guards do **not** enforce: they record the
-attempt and then let the real operation proceed — the sensitive-call wrapper
+attempt and then let the real operation proceed. For example, the sensitive-call wrapper
 calls the real function anyway (`guard_api._wrap_guarded`), and the file and
 import guards record instead of raising (`guard_files._apply_dest_to_src_rules`,
 `guard_import.GuardFinder.find_spec`). Every observed file, socket, import, env
@@ -232,8 +232,8 @@ as escapes.
 
 - **Pickle deserialization is covered only in part, by design.**
   `pickle.Unpickler` **is** `_pickle.Unpickler`, an immutable C type, so neither
-  its `__init__` nor its `load` can be patched, and rebinding the module name to
-  a function would break the subclassing a restricted unpickler needs — the same
+  its `__init__` nor its `load` can be patched. Rebinding the module name to
+  a function would break the subclassing a restricted unpickler needs: this is the same
   shape as `ctypes.pythonapi`. `Unpickler(fp).load()` therefore stays reachable,
   pinned as `test_guard_api.py::test_the_unpickler_route_is_guarded` (xfail).
 
@@ -256,16 +256,19 @@ as escapes.
   exception payloads, rebuilt in the **trusted parent** by
   `remote/base_sse_daemon._rebuild_remote_exception` and the result branch of the
   same module's event dispatch. A crafted payload would be arbitrary code
-  execution in the host process, outside the sandbox, so both child->parent sites
-  go through `remote/tools.py::from_b85_restricted`: an opcode prescan (allowlist
-  by family plus anti-DoS budgets), then a `find_class` that triggers no import
-  from the stream and vets each global — the exception channel fail-closed
-  (Exception subclasses, `tblib`, base data types), the result channel a
-  fail-open denylist of dangerous gadgets keyed by every C-twin (`posix.system`,
-  `_socket.socket`), plus a shape check on `tblib.Traceback` before
-  `as_traceback()`. The result guard is toggled by `remote-result-guard`
-  (default on) and, being fail-open, raises the cost of a gadget on return values
-  rather than closing the class; the exception guard is fail-closed. Because an
+  execution in the host process, outside the sandbox. Both child->parent sites
+  therefore go through `remote/tools.py::from_b85_restricted`, in two steps.
+  First, an opcode prescan (allowlist by family plus anti-DoS budgets). Then, a
+  `find_class` that triggers no import from the stream and vets each global:
+  - the exception channel is fail-closed (Exception subclasses, `tblib`, base
+    data types);
+  - the result channel is a fail-open denylist of dangerous gadgets keyed by
+    every C-twin (`posix.system`, `_socket.socket`);
+  - a shape check runs on `tblib.Traceback` before `as_traceback()`.
+
+  The result guard is toggled by `remote-result-guard` (default on). Being
+  fail-open, it raises the cost of a gadget on return values rather than closing
+  the class; the exception guard is fail-closed. Because an
   exception's state routinely holds a type that guard refuses (`httpx.Request`,
   a `Path`, an application object), the child also sends a descriptor of the
   exception — class, message, denials, all primitives — and the parent falls back
@@ -314,19 +317,37 @@ files are the open escapes: `test_escape_with_subclasses` (objective 6),
 `test_escape_with_globals_introspection` (objective 4), and
 `test_escape_with_pickle_blocked` (the pickle entry of
 [inert guards](#guards-that-are-inert-by-design): removing `pickle` from
-`sys.modules` blocks nothing). Tampering with `sys.meta_path`, a hostile pickle
-and a name built at run time are no longer listed: the import audit hook puts
-the finder back at the head once it is unhooked or overtaken, as
-`test_tampering_with_meta_path_leaves_the_next_import_guarded` shows, and once armed, guard_api refuses `pickle.loads` and the
-call a built name reaches, as `test_a_hostile_pickle_is_refused_once_armed` and
-`test_a_name_built_at_run_time_is_refused_at_the_call` show; the corpus `xfail` is `test_guard_api.py::test_the_unpickler_route_is_guarded`,
-which records that `pickle.Unpickler` is an immutable C type. All are
+`sys.modules` blocks nothing).
+
+Tampering with `sys.meta_path`, a hostile pickle and a name built at run time
+are no longer listed. The import audit hook puts the finder back at the head
+once it is unhooked or overtaken, as
+`test_tampering_with_meta_path_leaves_the_next_import_guarded` shows. Once
+armed, guard_api refuses `pickle.loads` and the call a built name reaches, as
+`test_a_hostile_pickle_is_refused_once_armed` and
+`test_a_name_built_at_run_time_is_refused_at_the_call` show. The corpus `xfail`
+is `test_guard_api.py::test_the_unpickler_route_is_guarded`, which records that
+`pickle.Unpickler` is an immutable C type. All are
 `strict=True`, so if any is ever closed, the XPASS fails the suite and this page
 must change with it.
 
 Bottom line: the Python layer denies every sensitive operation from
-cooperative code and pins each denial to a test; against hostile bytecode it
-raises cost and provides learning-mode visibility, while the class-hierarchy
+cooperative code and pins each denial to a test. Against hostile bytecode, it
+only raises cost and provides learning-mode visibility: the class-hierarchy
 walk, the wrappers' closure originals, `ctypes.pythonapi`,
 `pickle`, and the arming flag remain reachable by design. Containing those is
 the OS sandbox's role, stated plainly rather than papered over.
+
+## Recommendations
+
+- Treat the Python layer as a guardrail for code that is wrong, not hostile. Against code written to break out, use a kernel provider.
+- Never use learning mode with untrusted code: it executes unguarded and writes its own permissions into the whitelist.
+- Review every generated profile before trusting it. That review is the only barrier.
+- Grant `python-api=ALLOW:deserialization` only when a trusted payload requires it.
+- Leave `remote-result-guard` on, and rely on the OS sandbox for denial of service.
+
+## References
+
+- [Security assessment of the `eval-*` guard](audit-eval-security.md)
+- [Transport unpickle guard](transport-unpickle-guard.md), [weaknesses](weaknesses.md), [implementation](implementation.md)
+- Kernel providers: [landlock](landlock.md), [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [qemu](qemu.md)

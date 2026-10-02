@@ -255,3 +255,17 @@ qemu.virtfs_security_model=mapped-xattr
 
 See also the commented block **QEMU (os-sandbox=qemu)** in `pysandboxes/templates/py-sandboxes.template`.
 
+## Recommendations
+
+- Choose QEMU when a full VM boundary is worth a boot of several seconds and a dedicated RAM budget per sandbox.
+- Expose `/dev/kvm` whenever the host and its policy allow it. Without it, QEMU falls back to TCG, which works but is slower.
+- Size `qemu.memory` with a single suffix letter, e.g. `2G`. A form such as `2GB` is invalid and silently falls back to the default.
+- Pick a released guest image no newer than the host, so that both sides agree on glibc.
+- Keep `qemu.ld_closure_libs=full` in nested containers, unless you accept the risk of a missing DSO.
+- Set `qemu.show_boot_console=true` before investigating any boot failure or segfault.
+
+## References
+
+- [cloud.debian.org](https://cloud.debian.org/images/cloud/)
+- [unshare provider](unshare.md)
+
