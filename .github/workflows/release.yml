@@ -1,9 +1,10 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# Publishes a signed pre-release tag vX.Y.Z(a|b|rc)N: wheel to test.pypi.org, after the full test gate.
-# This file and every file of the tagged commit are attacker-controlled input: what protects the release lives in
-# the GitHub settings (tag ruleset on v*, reviewer on the testpypi environment, RELEASE_ALLOWED_SIGNERS).
+# Publishes a signed pre-release tag vX.Y.Z(a|b|rc)N: wheel to test.pypi.org after the full test gate, then the
+# container images to Docker Hub. This file and every file of the tagged commit are attacker-controlled input: what
+# protects the release lives in the GitHub settings (tag ruleset on v*, reviewer on the testpypi environment, the
+# dockerhub environment restricted to v* tags, RELEASE_ALLOWED_SIGNERS).
 name: Release
 
 on:
@@ -237,3 +238,90 @@ jobs:
       with:
         repository-url: https://test.pypi.org/legacy/
         skip-existing: true
+
+  # The images are built from the dist/ artifact, not from the index; this proves the index holds the same file.
+  verify-published:
+    needs: [verify, publish-testpypi]
+    if: ${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.publish-testpypi.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+      with:
+        python-version: "3.13"
+
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+      with:
+        name: dist
+        path: dist/
+
+    - name: Check that test.pypi.org serves the built wheel
+      run: .github/scripts/verify-published.sh "$VERSION" dist/pysandboxes-"$VERSION"-*.whl
+
+  # No reviewer of its own: the testpypi approval covers the images, and the dockerhub environment, which holds the
+  # only push credential, accepts v* tags only, which the tag ruleset reserves to the maintainer.
+  images:
+    needs: [verify, verify-published]
+    if: ${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.verify-published.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: dockerhub
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      UV_PYTHON: "3.13"
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      with:
+        fetch-depth: 0
+
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        df -h /
+
+    - name: Install build tools
+      run: sudo apt-get update && sudo apt-get install -y make build-essential
+
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+      with:
+        python-version: "3.13"
+
+    - name: Install uv
+      run: curl -LsSf https://astral.sh/uv/0.11.16/install.sh | sh
+
+    - name: Install dependencies
+      run: uv sync --locked
+
+    # Before the build, so the base image pulls are authenticated and escape the anonymous rate limit.
+    - name: Log in to Docker Hub
+      env:
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      run: echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+      with:
+        name: dist
+        path: dist/
+
+    # A fresh checkout's mtimes would make .make-dist rerun uv build, which deletes the downloaded wheel.
+    - name: Build the five images from the published wheel
+      run: |
+        touch .make-dist
+        make -o uv.lock CONTAINER_CMDS=docker PYTHON_VERSION=3.13 build-images
+
+    - name: Smoke-test the images
+      run: .github/scripts/smoke-test-images.sh "$VERSION" 3.13
+
+    - name: Push the version tags
+      run: |
+        for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu; do
+          target="docker.io/pprados/$image:$VERSION"
+          docker tag "$image:3.13" "$target"
+          docker push "$target"
+          echo "- \`$(docker inspect --format '{{index .RepoDigests 0}}' "$target")\`" >>"$GITHUB_STEP_SUMMARY"
+        done

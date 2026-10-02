@@ -3,7 +3,8 @@
 """Structure of .github/workflows/release.yml: publication waits for every gate.
 
 A guard against an honest mistake in the workflow, not against an attack: whoever can change release.yml can
-change this test too. What stops a malicious change is outside the repository (tag ruleset, testpypi reviewer).
+change this test too. What stops a malicious change is outside the repository (tag ruleset, testpypi reviewer, dockerhub
+environment).
 """
 
 from pathlib import Path
@@ -86,3 +87,57 @@ def test_the_reuse_lookup_reads_the_verified_commit() -> None:
 
 def test_the_build_waits_for_the_light_gate() -> None:
     assert _needs(_jobs()["build"]) >= {"verify", "push-checks", "validate"}
+
+
+def test_the_published_wheel_is_checked_only_after_a_publication() -> None:
+    job = _jobs()["verify-published"]
+    assert "publish-testpypi" in _needs(job)
+    assert " ".join(job["if"].split()) == (
+        "${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.publish-testpypi.result == 'success' }}"
+    )
+
+
+def test_the_published_wheel_is_compared_with_the_built_artifact() -> None:
+    steps = _jobs()["verify-published"]["steps"]
+    assert any(s.get("with", {}).get("name") == "dist" for s in steps)
+    assert any(".github/scripts/verify-published.sh" in s.get("run", "") for s in steps)
+
+
+IMAGE_JOB = "images"
+
+
+def _step_index(job: dict[str, Any], needle: str) -> int:
+    return next(i for i, s in enumerate(job["steps"]) if needle in s.get("run", ""))
+
+
+def test_the_images_follow_the_checked_publication() -> None:
+    job = _jobs()[IMAGE_JOB]
+    assert "verify-published" in _needs(job)
+    assert " ".join(job["if"].split()) == (
+        "${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.verify-published.result == 'success' }}"
+    )
+
+
+def test_the_images_push_from_the_tag_restricted_dockerhub_environment() -> None:
+    assert _jobs()[IMAGE_JOB]["environment"] == "dockerhub"
+
+
+def test_only_the_images_job_sees_the_docker_hub_secrets() -> None:
+    for name, job in _jobs().items():
+        if name != IMAGE_JOB:
+            assert "DOCKERHUB" not in yaml.safe_dump(job), name
+
+
+def test_the_images_job_asks_for_no_write_permission() -> None:
+    assert "write" not in yaml.safe_dump(_jobs()[IMAGE_JOB].get("permissions", {}))
+
+
+def test_the_smoke_test_runs_before_any_push() -> None:
+    job = _jobs()[IMAGE_JOB]
+    assert _step_index(job, "smoke-test-images.sh") < _step_index(job, "docker push")
+
+
+def test_only_the_version_tag_is_pushed() -> None:
+    push = _jobs()[IMAGE_JOB]["steps"][_step_index(_jobs()[IMAGE_JOB], "docker push")]["run"]
+    assert "docker.io/pprados/$image:$VERSION" in push
+    assert "latest" not in push

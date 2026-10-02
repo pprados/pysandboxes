@@ -51,6 +51,7 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;
+- [`release.md`](wiki/release.md): how a pre-release is published, and the settings behind it;
 - [`roadmap.md`](wiki/roadmap.md) and [`faq.md`](wiki/faq.md): where the project is going, and common
   questions.
 
