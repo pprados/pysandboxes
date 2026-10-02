@@ -119,6 +119,7 @@ def generate_config_from_learning() -> None:
             "learning_guard_socket": all_socket_rules,
             "learning_guard_api": all_api_rules,
             "learning_guard_eval": all_eval_rules,
+            "learning_remote_result": _generate_remote_result_mode(learning),
         }
 
         header = f"# Add rules ({datetime.now().strftime('%Y/%m/%d at %H:%M')})"
@@ -204,6 +205,22 @@ def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
             i += 1
         old_learning_path = Path(backup)
     return learning_path, old_learning_path
+
+
+def _generate_remote_result_mode(learning: set[Any]) -> str:
+    """Generate the result mode observed during learning."""
+    modes = {
+        rule.split("=", 1)[1] for rule in learning if isinstance(rule, str) and rule.startswith("remote-result-mode=")
+    }
+    if "objects" in modes:
+        return (
+            "# WARNING: observed return pickles reconstruct application objects. "
+            "Deserialization may execute class-defined code in the parent process.\n"
+            "remote-result-mode=objects"
+        )
+    if "data-only" in modes:
+        return "remote-result-mode=data-only"
+    return ""
 
 
 def set_learning_path(learning_path: Path) -> None:

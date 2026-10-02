@@ -25,7 +25,7 @@ def parse_rules(
     config_path: Path,
     rules: ConfigLines,
     errors: List[ErrorMsg],
-) -> Tuple[int, str, bool, Path, bool, bool, ConfigLines]:
+) -> Tuple[int, str, bool, Path, bool, bool, bool, ConfigLines]:
     from ._os_sandbox import providers_factory, unsupported_platform_reason
 
     port = -1
@@ -33,6 +33,7 @@ def parse_rules(
     parameters_multi_values: dict[str, set[Tuple[Any, ConfigLine]]] = defaultdict(set)
     use_py_sandbox = True
     remote_result_guard = True
+    remote_result_data_only = False
     learning_path = None
 
     for rule in rules:
@@ -81,6 +82,22 @@ def parse_rules(
                     )
                 )
             parameters_multi_values["remote-result-guard"].add((remote_result_guard, rule))
+        elif rule.rule.startswith("remote-result-mode="):
+            value = rule.rule.split("=", 1)[1].strip().lower()
+            if value in ("objects", "default"):
+                remote_result_data_only = False
+            elif value in ("data-only", "data_only"):
+                remote_result_data_only = True
+            else:
+                errors.append(
+                    (
+                        f"{format_ruleref(rule)}: Invalid value {value!r} for remote-result-mode. "
+                        "Use objects or data-only.",
+                        rule.path,
+                        rule.ln,
+                    )
+                )
+            parameters_multi_values["remote-result-mode"].add((remote_result_data_only, rule))
         elif rule.rule.startswith("port="):
             value = rule.rule.split("=", 1)[1].strip()
             try:
@@ -170,6 +187,7 @@ def parse_rules(
     learning_path = parameters_prioritize_single_value.get("learning_path", [config_path])[0]
     learn: bool = cast(bool, parameters_prioritize_single_value.get("learn", [False])[0])
     remote_result_guard = parameters_prioritize_single_value.get("remote-result-guard", [True])[0]
+    remote_result_data_only = parameters_prioritize_single_value.get("remote-result-mode", [False])[0]
     if learning_path is None:
         learning_path = config_path
 
@@ -194,8 +212,26 @@ def parse_rules(
         )
 
     if errors:
-        return port, "error", use_py_sandbox, learning_path, learn, remote_result_guard, other_rules
-    return port, provider, use_py_sandbox, learning_path, learn, remote_result_guard, other_rules
+        return (
+            port,
+            "error",
+            use_py_sandbox,
+            learning_path,
+            learn,
+            remote_result_guard,
+            remote_result_data_only,
+            other_rules,
+        )
+    return (
+        port,
+        provider,
+        use_py_sandbox,
+        learning_path,
+        learn,
+        remote_result_guard,
+        remote_result_data_only,
+        other_rules,
+    )
 
 
-# Tuple[int, str, bool, Path, bool, bool, ConfigLines]:
+# Tuple[int, str, bool, Path, bool, bool, bool, ConfigLines]:

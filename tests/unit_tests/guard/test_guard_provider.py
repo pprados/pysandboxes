@@ -18,7 +18,7 @@ from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
 
 # Index of each field in the tuple returned by parse_rules().
-PORT, PROVIDER, PY_SANDBOX, LEARNING_PATH, LEARN, OTHER = range(6)
+PORT, PROVIDER, PY_SANDBOX, LEARNING_PATH, LEARN, RESULT_GUARD, RESULT_DATA_ONLY, OTHER = range(8)
 
 # A rule whose path is Path(".") comes from the command line and wins over the files.
 FROM_ARG = Path(".")
@@ -71,6 +71,19 @@ def test_an_empty_port_is_rejected(existing_config: Path) -> None:
     assert len(errors) == 1
     assert "Port must be a positive value" in errors[0][0]
     assert result[PORT] == -1
+
+
+@pytest.mark.parametrize("value", ["data-only", "DATA-ONLY"])
+def test_remote_result_mode_accepts_data_only(value: str, existing_config: Path) -> None:
+    result, errors = _parse(f"remote-result-mode={value}", config_path=existing_config)
+    assert not errors
+    assert result[RESULT_DATA_ONLY] is True
+
+
+def test_remote_result_mode_defaults_to_objects(existing_config: Path) -> None:
+    result, errors = _parse(config_path=existing_config)
+    assert not errors
+    assert result[RESULT_DATA_ONLY] is False
 
 
 @pytest.mark.parametrize("value", ["false", "0", "1", "TRUE"])

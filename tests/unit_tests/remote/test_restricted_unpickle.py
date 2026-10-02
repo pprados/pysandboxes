@@ -26,6 +26,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
 from pysandboxes.remote import tools
+from pysandboxes.learning import _generate_remote_result_mode
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
     _MAX_BYTES,
@@ -111,6 +112,34 @@ class TestResultChannel:
     )
     def test_legit_results_roundtrip(self, value: object) -> None:
         assert from_b85_restricted(to_b85(value), result_predicate) == value
+
+    def test_data_only_accepts_primitive_structures(self) -> None:
+        value = {"items": [1, "two", (False, b"three")], "tags": frozenset({"a", "b"})}
+        assert from_b85_restricted(to_b85(value), result_predicate, data_only=True) == value
+
+    def test_data_only_refuses_object_reconstruction_opcodes(self) -> None:
+        class ReturnedObject:
+            def __reduce__(self) -> tuple:
+                import os
+
+                return (os.system, ("echo must-not-run",))
+
+        with pytest.raises(RestrictedUnpicklingError, match="opcode 'STACK_GLOBAL'|opcode 'REDUCE'"):
+            from_b85_restricted(to_b85(ReturnedObject()), result_predicate, data_only=True)
+
+    def test_data_only_refuses_cycles(self) -> None:
+        value: list[object] = []
+        value.append(value)
+        with pytest.raises(RestrictedUnpicklingError, match="cyclic values"):
+            from_b85_restricted(to_b85(value), result_predicate, data_only=True)
+
+    def test_learning_recommends_objects_with_warning_when_observed(self) -> None:
+        generated = _generate_remote_result_mode({"remote-result-mode=data-only", "remote-result-mode=objects"})
+        assert "WARNING" in generated
+        assert generated.endswith("remote-result-mode=objects")
+
+    def test_learning_recommends_data_only_when_no_objects_were_observed(self) -> None:
+        assert _generate_remote_result_mode({"remote-result-mode=data-only"}) == "remote-result-mode=data-only"
 
 
 class _Severity(enum.Enum):

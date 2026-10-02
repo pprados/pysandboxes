@@ -207,6 +207,9 @@ include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 
 # </learning_guard_eval>
 
+# <learning_remote_result>
+# </learning_remote_result>
+
 #######################################################################################
 # PYTHON SANDBOX ACTIVATION
 # ==========================

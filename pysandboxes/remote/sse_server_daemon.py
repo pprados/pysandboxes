@@ -47,7 +47,7 @@ from .parameters import (
     TIMEOUT_FOR_STOP_DAEMON,
     TIMEOUT_GRACEFUL_SHUTDOWN,
 )
-from .tools import check_sse_line, describe_exception, from_b85, to_b85
+from .tools import check_sse_line, describe_exception, from_b85, result_requires_objects, to_b85
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +152,11 @@ async def sandbox_daemon(
         if "result" in result:
             logger.debug("(%s) ... return %s", session_id, repr(result["result"])[:40])
             result["result"] = to_b85(result["result"])
+            from ..learning import add_learning_rule, is_learning_mode
+
+            if is_learning_mode():
+                mode = "objects" if result_requires_objects(result["result"]) else "data-only"
+                add_learning_rule(f"remote-result-mode={mode}")
         if "exception" in result:
             logger.debug("(%s) ... raise %s", session_id, repr(result["exception"]))
             exception, serial_traceback = result["exception"]
@@ -385,6 +390,7 @@ class SSEServerDaemon(BaseSSESandbox):
             learning_path=all_rules.learning_path,
             learn=all_rules.learn,
             remote_result_guard=all_rules.remote_result_guard,
+            remote_result_data_only=all_rules.remote_result_data_only,
             envs_rules=(),
             socket_rules=all_rules.socket_rules,
             pin_dns=all_rules.pin_dns,

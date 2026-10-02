@@ -228,6 +228,27 @@ With it off, the result channel has no protection against the `__reduce__`
 vector (the opcode allowlist does not see it), so leave it on unless a real
 regression forces otherwise.
 
+The result channel also accepts an opt-in structural profile:
+
+```
+remote-result-mode=objects     # default; supports application-defined classes
+remote-result-mode=data-only   # permits exact primitive types and containers
+```
+
+`data-only` rejects object reconstruction opcodes during the prescan, before
+unpickling, then checks the resulting graph contains only `None`, booleans,
+numbers, strings, bytes, bytearrays, and built-in list, tuple, dict, set, or
+frozenset containers. Cycles and subclasses are refused. The mode remains in
+force even if `remote-result-guard=false`; that switch controls only the
+denylist in `objects` mode.
+
+Learning mode inspects the emitted pickle opcodes without unpickling. It writes
+`remote-result-mode=data-only` when observed results use only data opcodes. If
+any observed result needs class reconstruction, it writes `objects` with a
+warning in the generated profile because class-defined reconstruction methods
+can execute in the parent process. Review the generated mode before deploying
+the profile; learning only describes the results exercised by that run.
+
 ## Portability
 
 Sites that depend on CPython internals carry a `# CPYTHON-COMPAT:` marker
