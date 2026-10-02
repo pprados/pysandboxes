@@ -787,10 +787,24 @@ def _body_two_filenames(
         dest = os.fsdecode(dest)
     src = cast(str, src)
     dest = cast(str, dest)
-    remapped_src, rule1 = _apply_dest_to_src_rules(src, write=in_write)
+    src_dir_fd = kwargs.get("src_dir_fd")
+    dst_dir_fd = kwargs.get("dst_dir_fd")
+    if src_dir_fd is not None:
+        _check_dir_fd(src, cast(int, src_dir_fd), write=in_write)
+        remapped_src = src
+        rule1 = None
+    else:
+        remapped_src, rule1 = _apply_dest_to_src_rules(src, write=in_write)
+
+    if dst_dir_fd is not None:
+        _check_dir_fd(dest, cast(int, dst_dir_fd), write=out_write)
+        remapped_dest = dest
+        rule2 = None
+    else:
+        remapped_dest, rule2 = _apply_dest_to_src_rules(dest, write=out_write)
+
     if rule1:
         _raise_ignore(src, rule1)
-    remapped_dest, rule2 = _apply_dest_to_src_rules(dest, write=out_write)
     if rule2:
         _raise_ignore(dest, rule2)
     if remapped_src is None and rule1 is not None:
@@ -880,6 +894,9 @@ def _wrap_os_stat(func: Callable[..., Any], *, write: bool) -> Callable[..., Any
             path = os.fsdecode(path)
         if isinstance(path, _DirEntry):
             path = str(path)
+        if dir_fd is not None:
+            _check_dir_fd(cast(str, path), dir_fd, write=write)
+            return func(path=path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
         if _check_alias.get():
             remapped, rule = _apply_dest_to_src_rules(cast(str, path), write=write, accept_dest=_check_alias.get())
         else:
@@ -1050,13 +1067,19 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
             return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
         path = cast(str, path)
         if dir_fd is not None:
-            remapped, rule = _apply_ignore_rule(path)
-            if rule:
-                _raise_ignore(path, rule)
-            return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
+            if isinstance(flags, int):
+                write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
+                write_flags |= getattr(os, "O_TMPFILE", 0)
+                need_to_write = bool(flags & write_flags)
+            else:
+                need_to_write = True
+            _check_dir_fd(path, dir_fd, write=need_to_write)
+            return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
         if isinstance(flags, int):
             # O_TRUNC empties a file even opened O_RDONLY, and O_CREAT creates one.
-            need_to_write = bool(flags & (os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC))
+            write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
+            write_flags |= getattr(os, "O_TMPFILE", 0)
+            need_to_write = bool(flags & write_flags)
             remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
             if remapped is None:
                 if is_learning_mode():
@@ -1090,6 +1113,18 @@ def _wrap_os_access(func: Callable[..., Any], *, write: bool) -> Callable[..., A
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
+        if dir_fd is not None:
+            try:
+                _check_dir_fd(path, dir_fd, write=write)
+            except (RuleFileNotFoundError, RulePermissionError):
+                return False
+            return func(
+                path=path,
+                mode=mode,
+                dir_fd=dir_fd,
+                effective_ids=effective_ids,
+                follow_symlinks=follow_symlinks,
+            )
         remapped, rule = _apply_dest_to_src_rules(path, write=write)
         if rule:
             return False
@@ -1224,6 +1259,17 @@ def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
         if isinstance(path, bytes):
             path = os.fsdecode(path)
         path = cast(str, path)
+        if dir_fd is not None:
+            _check_dir_fd(path, dir_fd, write=False)
+            target = func(path=path, dir_fd=dir_fd)
+            if not target.startswith(os.path.sep):
+                target = os.path.join(os.path.dirname(_dir_fd_path(path, dir_fd)), target)
+            remapped, rule = _apply_src_to_dest_rules(target)
+            if rule:
+                _raise_ignore(path, rule)
+            if not remapped:
+                _raise_access(path)
+            return remapped
         remapped_first, rule = _apply_dest_to_src_rules(path, write=False)
         if rule:
             _raise_ignore(path, rule)
@@ -1267,6 +1313,17 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
             dst = os.fsdecode(dst)
         src = cast(str, src)
         dst = cast(str, dst)
+        if dir_fd is not None:
+            _check_dir_fd(dst, dir_fd, write=True)
+            target = src if os.path.isabs(src) else os.path.join(os.path.dirname(_dir_fd_path(dst, dir_fd)), src)
+            checked_src, src_rule = _apply_dest_to_src_rules(target, write=False, accept_src=True)
+            if src_rule:
+                _raise_ignore(src, src_rule)
+            if not checked_src and not is_learning_mode():
+                _raise_access(src)
+            if not checked_src:
+                add_learning_rule(LearnFileRule(Path(target), False))
+            return func(src, dst, target_is_directory=target_is_directory, dir_fd=dir_fd)
         remapped, rule = _apply_dest_to_src_rules(dst, write=True)
         if rule:
             _raise_ignore(dst, rule)
@@ -1457,6 +1514,7 @@ def _wrap_os_scandir(func: Callable[..., Any]) -> Callable[..., Any]:
         if path is None:
             path = "."
         if isinstance(path, int):
+            _check_dir_fd(".", path, write=False)
             return func(path)
         if isinstance(path, bytes):
             path = os.fsdecode(path)

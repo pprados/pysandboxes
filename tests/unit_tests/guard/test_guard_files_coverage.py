@@ -550,6 +550,21 @@ def test_body_two_filenames_denies_an_ignored_destination(tmp_path: Path) -> Non
     assert src.exists()
 
 
+@pytest.mark.skipif(os.rename not in os.supports_dir_fd, reason="no dir_fd on this platform")
+def test_body_two_filenames_denies_rename_through_a_read_only_dir_fd(tmp_path: Path) -> None:
+    (tmp_path / "source.txt").write_text("source")
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+        wrapped = _wrap_two_filenames(os.rename, in_write=True, out_write=True)
+        with pytest.raises(RulePermissionError):
+            wrapped("source.txt", "target.txt", src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+    assert (tmp_path / "source.txt").read_text() == "source"
+    assert not (tmp_path / "target.txt").exists()
+
+
 def test_body_two_filenames_learns_unexposed_src_and_dest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     src = tmp_path / "src.txt"
     dest = tmp_path / "dest.txt"
@@ -613,6 +628,21 @@ def test_wrap_os_open_denies_an_ignored_path_with_dir_fd(tmp_path: Path) -> None
         os.close(dir_fd)
 
 
+@pytest.mark.skipif(os.open not in os.supports_dir_fd, reason="no dir_fd on this platform")
+def test_wrap_os_open_denies_a_write_through_a_read_only_dir_fd(tmp_path: Path) -> None:
+    target = tmp_path / "secret.txt"
+    target.write_text("keep")
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+        wrapped = _wrap_os_open(os.open)
+        with pytest.raises(RulePermissionError):
+            wrapped(target.name, os.O_WRONLY | os.O_TRUNC, dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+    assert target.read_text() == "keep"
+
+
 def test_wrap_os_open_learns_the_actual_write_intent_of_an_unexposed_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -674,6 +704,21 @@ def test_wrap_os_symlink_denies_an_ignored_destination(tmp_path: Path) -> None:
         wrapped(str(target), str(tmp_path / "link"))
 
     assert sandbox_denials(exc.value)
+
+
+@pytest.mark.skipif(os.symlink not in os.supports_dir_fd, reason="no dir_fd on this platform")
+def test_wrap_os_symlink_denies_a_read_only_dir_fd(tmp_path: Path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("x")
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+        wrapped = _wrap_os_symlink(os.symlink)
+        with pytest.raises(RulePermissionError):
+            wrapped(target.name, "link", dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+    assert not (tmp_path / "link").exists()
 
 
 def test_wrap_os_symlink_denies_an_ignored_target(tmp_path: Path) -> None:
