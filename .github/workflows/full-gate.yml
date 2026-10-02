@@ -12,9 +12,6 @@ on:
     # 20:17 UTC (22:17 in Paris in summer): done before the working day even when GitHub fires a schedule hours
     # late, as it did by 5h30 on 2026-09-30; off the hour, when scheduled runs pile up.
     - cron: "17 20 * * *"
-    # TEMPORARY, until v0.1.0b4 proves the reuse path: two runs today, since GitHub may drop a schedule. Remove after.
-    - cron: "53 9 * * *"
-    - cron: "23 10 * * *"
   workflow_dispatch:
     inputs:
       exclude-tcg:
