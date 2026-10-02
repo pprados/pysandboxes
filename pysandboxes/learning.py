@@ -119,7 +119,7 @@ def generate_config_from_learning() -> None:
             "learning_guard_socket": all_socket_rules,
             "learning_guard_api": all_api_rules,
             "learning_guard_eval": all_eval_rules,
-            "learning_remote_result": _generate_remote_result_mode(learning),
+            "learning_remote_result": "",
         }
 
         header = f"# Add rules ({datetime.now().strftime('%Y/%m/%d at %H:%M')})"
@@ -136,12 +136,7 @@ def generate_config_from_learning() -> None:
             ) as resource_path:
                 all_lines = resource_path.read_text().split("\n")
 
-        configured_result_mode = _configured_remote_result_mode(all_lines)
-        if configured_result_mode is not None:
-            observed_modes = _observed_remote_result_modes(learning)
-            replaces["learning_remote_result"] = (
-                _remote_result_warning(configured_result_mode) if "objects" in observed_modes else ""
-            )
+        replaces["learning_remote_result"] = _update_remote_result_mode(all_lines, learning, header)
 
         # Insert new rules in the file
         pattern: str
@@ -214,12 +209,23 @@ def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
     return learning_path, old_learning_path
 
 
-def _generate_remote_result_mode(learning: set[Any]) -> str:
-    """Generate the result mode observed during learning."""
+def _update_remote_result_mode(lines: list[str], learning: set[Any], date_header: str) -> str:
+    """Update the learned result mode while retaining prior values as comments."""
     modes = _observed_remote_result_modes(learning)
+    active_rules = _active_remote_result_rules(lines)
+    if "objects" in modes and not any(mode == "objects" for _, mode in active_rules):
+        if active_rules:
+            stamp = date_header.removeprefix("# Add rules (").removesuffix(")")
+            for index, _mode in reversed(active_rules):
+                old_rule = lines[index].strip()
+                lines[index] = f"# Previous mode superseded by learning on {stamp}:"
+                lines.insert(index + 1, f"# {old_rule}")
+        return _remote_result_warning() + "\nremote-result-mode=objects"
     if "objects" in modes:
-        return _remote_result_warning("objects") + "\nremote-result-mode=objects"
-    if "data-only" in modes:
+        if any("WARNING: observed return pickles reconstruct application objects." in line for line in lines):
+            return ""
+        return _remote_result_warning()
+    if "data-only" in modes and not active_rules:
         return "remote-result-mode=data-only"
     return ""
 
@@ -230,30 +236,21 @@ def _observed_remote_result_modes(learning: set[Any]) -> set[str]:
     }
 
 
-def _remote_result_warning(configured_mode: str) -> str:
+def _remote_result_warning() -> str:
     return (
         "# WARNING: observed return pickles reconstruct application objects. "
-        "Deserialization may execute class-defined code in the parent process. "
-        f"Configured mode {configured_mode!r} is retained."
+        "Deserialization may execute class-defined code in the parent process."
     )
 
 
-def _configured_remote_result_mode(lines: list[str]) -> str | None:
-    """Return a user-configured result mode outside the generated learning block."""
-    in_learning_block = False
-    for line in lines:
+def _active_remote_result_rules(lines: list[str]) -> list[tuple[int, str]]:
+    """Return active result-mode rules in the profile and generated block."""
+    rules = []
+    for index, line in enumerate(lines):
         stripped = line.strip()
-        if stripped == "# <learning_remote_result>":
-            in_learning_block = True
-            continue
-        if stripped == "# </learning_remote_result>":
-            in_learning_block = False
-            continue
-        if in_learning_block or stripped.startswith("#"):
-            continue
         if stripped.startswith("remote-result-mode="):
-            return stripped.split("=", 1)[1].strip()
-    return None
+            rules.append((index, stripped.split("=", 1)[1].strip().lower()))
+    return rules
 
 
 def set_learning_path(learning_path: Path) -> None:
