@@ -1,6 +1,7 @@
 <!--
 Target `develop`, never `master`. A vulnerability is never fixed in a public pull request: follow SECURITY.md.
 The requirements are in CONTRIBUTING.md, which the automated review applies.
+A template per kind of contribution is in .github/PULL_REQUEST_TEMPLATE/: add `?template=<file>` to the URL.
 -->
 
 ## Purpose
@@ -19,3 +20,5 @@ The requirements are in CONTRIBUTING.md, which the automated review applies.
       negative control)
 - [ ] `README.md`, the `wiki/` page concerned or `CHANGELOG.md` updated for a user-visible change
 - [ ] A new known weakness is documented in `wiki/weaknesses.md`
+- [ ] The change keeps sandboxed code contained; it does not claim to close every Python flaw (CONTRIBUTING.md,
+      "The security model")
