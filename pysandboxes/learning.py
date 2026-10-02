@@ -136,6 +136,13 @@ def generate_config_from_learning() -> None:
             ) as resource_path:
                 all_lines = resource_path.read_text().split("\n")
 
+        configured_result_mode = _configured_remote_result_mode(all_lines)
+        if configured_result_mode is not None:
+            observed_modes = _observed_remote_result_modes(learning)
+            replaces["learning_remote_result"] = (
+                _remote_result_warning(configured_result_mode) if "objects" in observed_modes else ""
+            )
+
         # Insert new rules in the file
         pattern: str
         if not DEBUG:
@@ -209,18 +216,44 @@ def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
 
 def _generate_remote_result_mode(learning: set[Any]) -> str:
     """Generate the result mode observed during learning."""
-    modes = {
-        rule.split("=", 1)[1] for rule in learning if isinstance(rule, str) and rule.startswith("remote-result-mode=")
-    }
+    modes = _observed_remote_result_modes(learning)
     if "objects" in modes:
-        return (
-            "# WARNING: observed return pickles reconstruct application objects. "
-            "Deserialization may execute class-defined code in the parent process.\n"
-            "remote-result-mode=objects"
-        )
+        return _remote_result_warning("objects") + "\nremote-result-mode=objects"
     if "data-only" in modes:
         return "remote-result-mode=data-only"
     return ""
+
+
+def _observed_remote_result_modes(learning: set[Any]) -> set[str]:
+    return {
+        rule.split("=", 1)[1] for rule in learning if isinstance(rule, str) and rule.startswith("remote-result-mode=")
+    }
+
+
+def _remote_result_warning(configured_mode: str) -> str:
+    return (
+        "# WARNING: observed return pickles reconstruct application objects. "
+        "Deserialization may execute class-defined code in the parent process. "
+        f"Configured mode {configured_mode!r} is retained."
+    )
+
+
+def _configured_remote_result_mode(lines: list[str]) -> str | None:
+    """Return a user-configured result mode outside the generated learning block."""
+    in_learning_block = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "# <learning_remote_result>":
+            in_learning_block = True
+            continue
+        if stripped == "# </learning_remote_result>":
+            in_learning_block = False
+            continue
+        if in_learning_block or stripped.startswith("#"):
+            continue
+        if stripped.startswith("remote-result-mode="):
+            return stripped.split("=", 1)[1].strip()
+    return None
 
 
 def set_learning_path(learning_path: Path) -> None:
