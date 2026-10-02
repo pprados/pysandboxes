@@ -86,3 +86,17 @@ def test_the_reuse_lookup_reads_the_verified_commit() -> None:
 
 def test_the_build_waits_for_the_light_gate() -> None:
     assert _needs(_jobs()["build"]) >= {"verify", "push-checks", "validate"}
+
+
+def test_the_published_wheel_is_checked_only_after_a_publication() -> None:
+    job = _jobs()["verify-published"]
+    assert "publish-testpypi" in _needs(job)
+    assert " ".join(job["if"].split()) == (
+        "${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.publish-testpypi.result == 'success' }}"
+    )
+
+
+def test_the_published_wheel_is_compared_with_the_built_artifact() -> None:
+    steps = _jobs()["verify-published"]["steps"]
+    assert any(s.get("with", {}).get("name") == "dist" for s in steps)
+    assert any(".github/scripts/verify-published.sh" in s.get("run", "") for s in steps)
