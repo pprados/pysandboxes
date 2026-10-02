@@ -26,7 +26,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
 from pysandboxes.remote import tools
-from pysandboxes.learning import _generate_remote_result_mode
+from pysandboxes.learning import _configured_remote_result_mode, _generate_remote_result_mode
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
     _MAX_BYTES,
@@ -140,6 +140,23 @@ class TestResultChannel:
 
     def test_learning_recommends_data_only_when_no_objects_were_observed(self) -> None:
         assert _generate_remote_result_mode({"remote-result-mode=data-only"}) == "remote-result-mode=data-only"
+
+    def test_learning_does_not_recommend_a_duplicate_of_a_configured_mode(self) -> None:
+        lines = [
+            "remote-result-mode=data-only",
+            "# <learning_remote_result>",
+            "remote-result-mode=objects",
+            "# </learning_remote_result>",
+        ]
+        assert _configured_remote_result_mode(lines) == "data-only"
+
+    def test_learning_ignores_the_previous_generated_mode(self) -> None:
+        lines = [
+            "# <learning_remote_result>",
+            "remote-result-mode=data-only",
+            "# </learning_remote_result>",
+        ]
+        assert _configured_remote_result_mode(lines) is None
 
 
 class _Severity(enum.Enum):

@@ -246,8 +246,11 @@ Learning mode inspects the emitted pickle opcodes without unpickling. It writes
 `remote-result-mode=data-only` when observed results use only data opcodes. If
 any observed result needs class reconstruction, it writes `objects` with a
 warning in the generated profile because class-defined reconstruction methods
-can execute in the parent process. Review the generated mode before deploying
-the profile; learning only describes the results exercised by that run.
+can execute in the parent process. Repeated observations collapse to one rule;
+an explicit mode already present in the profile is kept without adding a second
+key, and gets the warning if object reconstruction was observed. Review the
+generated mode before deploying the profile; learning only describes the
+results exercised by that run.
 
 ## Portability
 
