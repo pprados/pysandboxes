@@ -1,5 +1,5 @@
 [project]
-name = "{{PROJECT_NAME}}"
+name = "{{SAMPLE_NAME}}"
 version = "0.1.0"
 description = "{{DESCRIPTION}}"
 readme = "README.md"
@@ -21,20 +21,21 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "mypy",
-    "black",
+    "ipython",
+    "pyright>=1.1.379",
     "ruff>=0.6.9",
-    "pyright>=1.1",
 ]
 test = [
-    "pytest>=8.3.3",
-    "pytest-asyncio>=0.20.3",
-    "pytest-dotenv>=0.5.2",
-    "pytest-mock>=3.10.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
 ]
 codespell = [
     "codespell>=2.2.5",
 ]
+
+[project.scripts]
+{{SAMPLE_NAME}} = "{{PACKAGE_DIR}}.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -44,9 +45,13 @@ build-backend = "hatchling.build"
 packages = ["{{PACKAGE_DIR}}"]
 
 [tool.pyright]
-include = ["{{PACKAGE_DIR}}"]
+include = ["{{PACKAGE_DIR}}", "tests"]
 venvPath = "."
 venv = ".venv"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
@@ -56,11 +61,14 @@ ignore = []
 line-length = 120
 target-version = "py310"
 
+[tool.codespell]
+skip = ".git,*.pdf,*.svg,*.yaml,*.ipynb,uv.lock,./.venv"
+
 [tool.uv]
 
 [tool.uv.sources]
+# Use only inside the pysandboxes git repository
 pysandboxes = { path = "../..", editable = true }
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config -vv"
-testpaths = ["tests"]

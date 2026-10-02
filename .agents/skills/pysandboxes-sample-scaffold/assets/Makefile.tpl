@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests
+.PHONY: all format lint run learn test tests help clean init lock validate
 
 UV_GROUP?=--group dev --group test
 
@@ -7,44 +7,38 @@ all: help
 
 TEST_FILE ?= tests
 
-## Run tests
+## Run pytest (uses project venv via uv — do not run bare `pytest` on PATH)
 tests:
 	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v $(TEST_FILE)
 
-######################
-# LINTING AND FORMATTING
-######################
+test: tests
 
-PYTHON_FILES=.
-lint format: PYTHON_FILES=.
+## Start the interactive chat (Ctrl-D or /quit to leave)
+run:
+	set -a && if [ -f .env ]; then source .env; fi && uv run {{SAMPLE_NAME}}
 
-lint lint_diff:
+## Relearn both profiles, one per mode. Read learn.py first: learning only ever
+## adds, it must never run on untrusted code, and it cannot produce the `net=` rules.
+learn:
+	uv run python learn.py
+	uv run python -m pysandboxes.python_sb \
+		--pysandboxes-config=.py-sandboxes-complete \
+		--learn=.py-sandboxes-complete learn.py
+
+lint format: PYTHON_FILES={{PACKAGE_DIR}} tests
+lint:
 	uvx mypy $(PYTHON_FILES)
 	uvx black $(PYTHON_FILES) --check
 	uvx ruff check $(PYTHON_FILES)
 
-format format_diff:
+format:
 	uvx black $(PYTHON_FILES)
 	uvx ruff check --select I --fix $(PYTHON_FILES)
 
-spell_check:
-	uvx codespell --toml pyproject.toml
-
-spell_fix:
-	uvx codespell --toml pyproject.toml -w
-
-######################
-# DOCUMENTATION
-######################
-
-## Clean the environment
+## Clean caches
 clean:
 	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} \; || true
 	@rm -Rf dist/ .mypy_cache .pytest_cache .ruff_cache
-
-######################
-# HELP
-######################
 
 .DEFAULT: help
 ## Print all major targets
@@ -86,26 +80,16 @@ help:
 		printf "\n"; \
 	}' \
 	| more $(shell test $(shell uname) = Darwin && echo '--no-init --raw-control-chars')
-	@echo -e "Use '$(cyan)make -B ...$(normal)' to force the target"
-	@echo -e "Use '$(cyan)make -n ...$(normal)' to simulate the build"
 
-.PHONY: dist
-dist:
-	uv build
-
-uv.lock: pyproject.toml
+## Refresh uv.lock
+lock:
 	uv lock
-	git add uv.lock
-	uv sync $(UV_GROUP)
 
-## Refresh lock
-lock: uv.lock
-
-## Validate the code
-validate: uv.lock format lint spell_check tests
+## Validate (lint, tests)
+validate: lint tests
 
 _uv-init:
 	@uv sync $(UV_GROUP)
 
-## Initialize the environment
+## Install deps with uv
 init: _uv-init

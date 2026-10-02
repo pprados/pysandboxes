@@ -156,7 +156,8 @@ celerybeat.pid
 #.gemini/
 #.ia/
 #.opencode/
-.claude/
+.claude/*
+!.claude/skills/
 CLAUDE.local.md
 AGENTS.md
 .cursor/rules/openmemory.mdc
