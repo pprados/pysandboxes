@@ -29,8 +29,6 @@ from pysandboxes.lifecycle import arm, is_armed
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
 
-_NEEDS_312 = pytest.mark.skipif(sys.version_info < (3, 12), reason="sys._getframemodulename appeared in Python 3.12")
-
 
 def test_exception_is_a_permission_error() -> None:
     """User code catching PermissionError keeps working."""
@@ -277,7 +275,7 @@ def test_armed_denies_importlib_reload() -> None:
     "qualname",
     [
         "sys._getframe",
-        pytest.param("sys._getframemodulename", marks=_NEEDS_312),
+        "sys._getframemodulename",
         "sys._current_frames",
         "sys._current_exceptions",
         "gc.get_objects",
@@ -315,7 +313,7 @@ def test_armed_guarded_eval_can_read_its_caller_frame(monkeypatch: pytest.Monkey
         _reset_guard()
 
 
-@pytest.mark.parametrize("qualname", ["sys._getframe", pytest.param("sys._getframemodulename", marks=_NEEDS_312)])
+@pytest.mark.parametrize("qualname", ["sys._getframe", "sys._getframemodulename"])
 def test_allowed_frame_query_preserves_caller_depth(qualname: str) -> None:
     _activate(f"python-api=ALLOW:{qualname}")
     wrapped = _guarded(qualname)
