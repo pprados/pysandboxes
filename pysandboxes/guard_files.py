@@ -791,14 +791,14 @@ def _body_two_filenames(
     dst_dir_fd = kwargs.get("dst_dir_fd")
     if src_dir_fd is not None:
         _check_dir_fd(src, cast(int, src_dir_fd), write=in_write)
-        remapped_src = src
+        remapped_src: str | None = src
         rule1 = None
     else:
         remapped_src, rule1 = _apply_dest_to_src_rules(src, write=in_write)
 
     if dst_dir_fd is not None:
         _check_dir_fd(dest, cast(int, dst_dir_fd), write=out_write)
-        remapped_dest = dest
+        remapped_dest: str | None = dest
         rule2 = None
     else:
         remapped_dest, rule2 = _apply_dest_to_src_rules(dest, write=out_write)
