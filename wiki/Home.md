@@ -6,6 +6,7 @@ Index of the documentation pages.
 
 - [Implementation](implementation.md) — how the framework is put together.
 - [Roadmap](roadmap.md) — planned work and direction.
+- [Releasing](release.md) — how a pre-release reaches test.pypi.org and Docker Hub (maintainers).
 - [Use cases](use-cases.md) — agent skills, tools and MCP servers, AI coding agents, dependency updates, CI.
 - [FAQ](faq.md) — common questions.
 - [Alternatives](alternatives.md) — comparison with eighteen other sandboxes, frameworks and cloud services.
