@@ -324,6 +324,8 @@ _POSIX_ONLY = frozenset(
 _LINUX_ONLY = frozenset({"resource.prlimit"})
 
 _INTROSPECTION_VERSION_OPTIONAL = frozenset({"sys._getframemodulename", "sys._current_exceptions"})
+# sys._getframemodulename appeared in Python 3.12.
+_FROM_312 = frozenset({"sys._getframemodulename"})
 
 OPTIONAL: frozenset[str] = (
     _PRE_313 | _FROM_313 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY | _INTROSPECTION_VERSION_OPTIONAL
@@ -347,7 +349,8 @@ def _not_applicable() -> frozenset[str]:
     version = _PRE_313 if sys.version_info >= (3, 13) else _FROM_313
     platform = _POSIX_ONLY if sys.platform == "win32" else _WINDOWS_ONLY
     linux = frozenset() if sys.platform == "linux" else _LINUX_ONLY
-    return version | platform | linux
+    introspection = frozenset() if sys.version_info >= (3, 12) else _FROM_312
+    return version | platform | linux | introspection
 
 
 _CATEGORY_OF: dict[str, str] = {
