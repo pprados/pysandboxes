@@ -245,7 +245,7 @@ allow rule per human approval.
 - **Bet**: a single declarative `.py-sandboxes` whitelist, recorded by running the real application once in
   learning mode, then enforced twice. Python guards apply it inside the interpreter, and an OS provider
   translates it into a kernel boundary.
-- **Strengths**: the only solution that controls imports, a registry of 129 sensitive functions in eight
+- **Strengths**: the only solution that controls imports, a registry of 121 sensitive functions in eight
   categories (`guard_api`), and code arriving as a string (the `eval-*` sub-language: parsed, rewritten, run
   under a budget and a timeout). It is the only one granular to the function (`@sandbox`). Its results are
   unpickled under a guard ([Transport unpickle guard](transport-unpickle-guard.md)). Five interchangeable
@@ -548,7 +548,7 @@ def generic_visit(self, node: ast.AST) -> _T_visit_return:
 ## Where PySandboxes stands
 
 **What only PySandboxes does.** No other solution in this survey controls what the Python code itself does.
-That means imports, a registry of 129 sensitive functions, and code arriving as a string, which is parsed,
+That means imports, a registry of 121 sensitive functions, and code arriving as a string, which is parsed,
 rewritten and run under a budget. It is the only solution that confines one function rather than a process,
 a pod or a VM. It is one of two that write their own policy from observed behaviour; OpenShell is the other,
 with an advisor rather than a recording. Unlike most solutions, which avoid the problem by never
