@@ -58,16 +58,15 @@ git --no-pager diff --stat "${previous:-$(git hash-object -t tree /dev/null)}" H
 read -r -p "Sign and push $tag on $(git rev-parse --short HEAD)? [y/N] " answer || answer=
 [[ $answer == [yY] ]] || die "Nothing tagged."
 
+start=$(git rev-parse HEAD)
 step=
 on_error() {
     {
         echo "Release $tag failed at step '$step'. To recover:"
         case $step in
-        changelog | tag)
-            echo "  git tag -d $tag 2>/dev/null; git reset --hard origin/develop   # nothing was pushed"
-            ;;
-        push-develop)
-            echo "  git tag -d $tag && git reset --hard origin/develop   # the tag was not pushed"
+        changelog | tag | push-develop)
+            echo "  git tag -d $tag 2>/dev/null   # nothing was pushed for it"
+            [[ $mode == pre ]] || echo "  git reset --hard $start   # drops the release commit only"
             ;;
         push-tag)
             echo "  git push origin $tag"

@@ -197,11 +197,13 @@ def test_minor_without_any_final_tag_starts_from_zero(work: Path) -> None:
 
 
 def test_a_final_version_dates_the_changelog_before_the_tag_and_opens_the_next_entry(work: Path) -> None:
+    before = datetime.date.today()
     result = _release(work, "minor")
     assert result.returncode == 0, result.stderr
-    today = datetime.date.today().isoformat()
+    after = datetime.date.today()
     tagged = _git(work, "show", "v0.1.0:CHANGELOG.md")
-    assert f"## [0.1.0] - {today}" in tagged
+    today = next((d.isoformat() for d in (after, before) if f"## [0.1.0] - {d.isoformat()}" in tagged), "")
+    assert today, tagged
     assert "## [0.0.0] - 202X-XX-XX" not in tagged
     assert _git(work, "log", "-1", "--format=%s", "v0.1.0") == "chore(release): v0.1.0"
     head = (work / "CHANGELOG.md").read_text()
@@ -232,26 +234,33 @@ def test_an_unknown_mode_is_refused(work: Path) -> None:
 
 def _reject_pushes(work: Path) -> None:
     hook = work.parent / "origin.git" / "hooks" / "pre-receive"
+    hook.parent.mkdir(exist_ok=True)
     hook.write_text("#!/bin/sh\nexit 1\n")
     hook.chmod(0o755)
 
 
 def test_a_final_release_whose_develop_push_fails_says_how_to_recover(work: Path) -> None:
+    _commit(work, "unpushed")
+    unpushed = _git(work, "rev-parse", "HEAD")
     _reject_pushes(work)
     result = _release(work, "minor")
     assert result.returncode != 0
     assert "git tag -d v0.1.0" in result.stderr
-    assert "git reset --hard origin/develop" in result.stderr
+    assert f"git reset --hard {unpushed}" in result.stderr
+    assert "reset --hard origin/develop" not in result.stderr
+    assert _git(work, "merge-base", "--is-ancestor", unpushed, "HEAD") == ""
     assert _origin_tags(work) == []
 
 
 def test_a_pre_release_whose_develop_push_fails_says_how_to_recover(work: Path) -> None:
     _commit(work, "feature")
+    unpushed = _git(work, "rev-parse", "HEAD")
     _reject_pushes(work)
     result = _release(work, "pre", "0.1.0b1")
     assert result.returncode != 0
     assert "git tag -d v0.1.0b1" in result.stderr
-    assert "git reset --hard origin/develop" in result.stderr
+    assert "git reset" not in result.stderr
+    assert _git(work, "rev-parse", "HEAD") == unpushed
     assert _origin_tags(work) == []
 
 
