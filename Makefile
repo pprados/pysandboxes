@@ -555,26 +555,10 @@ else
 endif
 
 # ---------------------------------------------------------------------------------------
-# Snippet to publish the release to pypi.org.
-# clean removes dist/ and the .make-* sentinels, so the distribution is rebuilt
-# from the recipe instead of being a prerequisite: as a prerequisite it would
-# race with clean under `make -j`.
+# The local full check before a final version. The CI publishes: nothing is uploaded from this machine.
 .PHONY: release
-## Publish distribution on pypi.org
+## Run the full local check (validate and all-tests) before a final version
 release: validate all-tests
-ifeq ($(OFFLINE),True)
-	@echo "Can not release in offline mode"
-else
-	$(call _check-publish-token,pypi.org)
-	$(MAKE) clean
-	$(MAKE) dist
-	[[ $$( find dist -name "*.dev*" | wc -l ) == 0 ]] || \
-		( echo "Add a tag version in GIT before release" \
-		; exit 1 )
-	rm -f dist/*.asc
-	set -a && if [ -f .env ]; then source .env; fi && \
-	uv publish
-endif
 
 uv.lock: pyproject.toml
 	uv lock
@@ -623,181 +607,25 @@ init: _uv-init
 
 ### DEBUG ###
 
-.PHONY: get-new-version publish-pre-release publish-patch publish-minor
-
-# Helper target to calculate next version
-get-new-version:
-	@CURRENT_VERSION=$$(python -c "import importlib.metadata; print(importlib.metadata.version('pysandboxes'))"); \
-	MAJOR=$$(echo $$CURRENT_VERSION | cut -d. -f1); \
-	MINOR=$$(echo $$CURRENT_VERSION | cut -d. -f2); \
-	PATCH=$$(echo $$CURRENT_VERSION | cut -d. -f3); \
-	if [ "$(BUMP)" = "patch" ]; then \
-		echo "$$MAJOR.$$MINOR.$$((PATCH+1))"; \
-	elif [ "$(BUMP)" = "minor" ]; then \
-		echo "$$MAJOR.$$((MINOR+1)).0"; \
-	else \
-		echo "Error: BUMP variable must be 'patch' or 'minor'" >&2; \
-		exit 1; \
-	fi
-
-# Function to check if git working directory is clean
-define _check_git_status
-	@if ! git diff-index --quiet HEAD --; then \
-		echo "Git working directory is not clean. Please commit or stash your changes."; \
-		exit 1; \
-	fi
-endef
-
-# Function to check if git branch is develop
-define _check_git_branch
-	@if [ `git rev-parse --abbrev-ref HEAD` != "develop" ]; then \
-		echo "You must be on the 'develop' branch to publish a release."; \
-		exit 1; \
-	fi
-endef
-
-# Function to prepare the changelog with a specific version
-define _prepare-changelog
-	echo "Starting changelog preparation..."; \
-	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
-	TODAY_DATE=$$(date +%Y-%m-%d); \
-	echo "Updating CHANGELOG.md to version $$NEW_VERSION ($$TODAY_DATE)"; \
-	SEARCH_PATTERN="## \[0\.0\.0\] - 202.-XX-XX"; \
-	REPLACE_PATTERN="## [$$NEW_VERSION] - $$TODAY_DATE"; \
-	sed -i "s/$$SEARCH_PATTERN/$$REPLACE_PATTERN/" CHANGELOG.md; \
-	echo "CHANGELOG.md updated successfully."
-endef
-
-# Function to update version and tag
-define _update-and-tag-version
-	echo "Committing and tagging version..."; \
-	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
-	git add CHANGELOG.md; \
-	git commit -m "Release v$$NEW_VERSION"; \
-	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"; \
-	echo "Tagged version v$$NEW_VERSION"
-endef
-
-# Function to prepare future changelog entry
-define _prepare-future-changelog
-	echo "Preparing future changelog entry..."; \
-	FIRST_VERSION=$$(grep -m 1 -oP '## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md); \
-	echo "Inserting new entry before version $$FIRST_VERSION..."; \
-	SEARCH_LINE="## \[$$FIRST_VERSION\]"; \
-	NEW_ENTRY="## [0.0.0] - 202X-XX-XX\n"; \
-	sed -i "/$$SEARCH_LINE/i $$NEW_ENTRY" CHANGELOG.md; \
-	echo "Future changelog entry added."
-endef
-
-# Function to publish release on GitHub
-define _publish-github-release
-	NEW_VERSION=$$(make --no-print-directory -s get-new-version BUMP=$(1)); \
-	TAG="v$$NEW_VERSION"; \
-	rm -Rf ./dist/*; \
-	uv build ;\
-	gh release create --draft $$TAG ./dist/* --title "$(2)" --notes-file CHANGELOG.md; \
-	echo "Release $$TAG would be published on GitHub with title: $(2)"
-endef
+.PHONY: publish-pre-release publish-patch publish-minor
 
 # Tags the head of develop with a signed vX.Y.Z(a|b|rc)N and pushes develop, then the tag: release.yml verifies it,
 # builds the wheel and, once the testpypi deployment is approved, publishes it to test.pypi.org. The tag is signed
 # on this machine only; review what the head brings before confirming, a published tag is never moved.
 ## Tag and push a pre-release, which the CI publishes to test.pypi.org: make publish-pre-release VERSION=0.1.0b2
 publish-pre-release: quick-demo-gif
-	@[[ "$(VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+(a|b|rc)[0-9]+$$ ]] || \
-		{ echo "Usage: make publish-pre-release VERSION=X.Y.Z(a|b|rc)N, e.g. VERSION=0.1.0b2"; exit 1; }
-	$(call _check_git_status)
-	$(call _check_git_branch)
-	git fetch --quiet --tags origin develop
-	@git merge-base --is-ancestor origin/develop HEAD || \
-		{ echo "develop is behind or has diverged from origin/develop: pull first."; exit 1; }
-	@! git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null || { echo "Tag v$(VERSION) already exists."; exit 1; }
-	@last=$$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null); \
-	echo "Changes since $${last:-the first commit} that reach the pipeline or the wheel:"; \
-	git --no-pager diff --stat "$${last:-$$(git hash-object -t tree /dev/null)}" HEAD -- \
-		.github Makefile pyproject.toml uv.lock pysandboxes; \
-	read -r -p "Sign and push v$(VERSION) on $$(git rev-parse --short HEAD)? [y/N] " answer; \
-	[[ $$answer == [yY] ]] || { echo "Nothing tagged."; exit 1; }
-	git tag -s "v$(VERSION)" -m "Release v$(VERSION)"
-	git push origin develop
-	git push origin "v$(VERSION)"
-	@echo "Approve the testpypi deployment: https://github.com/pprados/pysandboxes/actions/workflows/release.yml"
+	@scripts/tag-release.sh pre "$(VERSION)"
 
-## Publish a patch release (complete workflow)
+# Final versions: the last final tag bumped, the CHANGELOG entry dated, a signed tag pushed after develop. Refused
+# until release.yml accepts final tags (phase 5): a published tag is never moved. RELEASE_FINAL=enabled lifts it.
+## Run the full local check, then tag and push the next patch version (not enabled yet)
 publish-patch: quick-demo-gif
-	@echo "=== Starting PATCH release workflow ==="
-	@echo ""
-	$(call _check_git_status)
-	$(call _check_git_branch)
-	@echo "Enter the release title (e.g., v0.0.1 - Bug fixes):"
-	@read -r RELEASE_TITLE; \
-	if [ -z "$$RELEASE_TITLE" ]; then \
-		echo "Title is required. Aborting release."; \
-		exit 1; \
-	fi; \
-	echo ""; \
-	echo "Step 1/7: Merge in master..."; \
-	git checkout master; \
-	git merge --allow-unrelated-histories develop -m "Merge from develop"; \
-	echo ""; \
-	echo "Step 2/7: Preparing changelog..."; \
-	$(call _prepare-changelog,patch); \
-	echo ""; \
-	echo "Step 3/7: Committing and tagging..."; \
-	$(call _update-and-tag-version,patch); \
-	echo ""; \
-	echo "Step 4/7: Publishing to GitHub..."; \
-	git push origin master; \
-	git push origin v$$NEW_VERSION; \
-	$(call _publish-github-release,patch,$$RELEASE_TITLE); \
-	echo ""; \
-	echo "Step 5/7: Return to develop..."; \
-	git checkout develop; \
-	git merge master -m "Merge from master"; \
-	echo ""; \
-	echo "Step 6/7: Preparing future changelog..."; \
-	$(call _prepare-future-changelog); \
-	echo "Step 7/7: Commit future changelog..."; \
-	git add CHANGELOG.md; \
-	git commit -m "Preparing future changelog" ; \
-	echo "=== PATCH draft release $$RELEASE_TITLE workflow completed successfully ==="
+	@[[ "$${RELEASE_FINAL:-}" == enabled ]] || { echo "Final releases are not enabled yet."; exit 1; }
+	$(MAKE) release
+	@scripts/tag-release.sh patch
 
-## Publish a minor release (complete workflow)
+## Run the full local check, then tag and push the next minor version (not enabled yet)
 publish-minor: quick-demo-gif
-	@echo "=== Starting MINOR release workflow ==="
-	@echo ""
-	$(call _check_git_status)
-	$(call _check_git_branch)
-	@echo "Enter the release title (e.g., v0.1.0 - new features):"
-	@read -r RELEASE_TITLE; \
-	if [ -z "$$RELEASE_TITLE" ]; then \
-		echo "Title is required. Aborting release."; \
-		exit 1; \
-	fi; \
-	echo ""; \
-	echo "Step 1/7: Merge in master..."; \
-	git checkout master; \
-	git merge --allow-unrelated-histories develop -m "Merge from develop"; \
-	echo ""; \
-	echo "Step 2/7: Preparing changelog..."; \
-	$(call _prepare-changelog,minor); \
-	echo ""; \
-	echo "Step 3/7: Committing and tagging..."; \
-	$(call _update-and-tag-version,minor); \
-	echo ""; \
-	echo "Step 4/7: Publishing to GitHub..."; \
-	git push origin master; \
-	git push origin v$$NEW_VERSION; \
-	$(call _publish-github-release,minor,$$RELEASE_TITLE); \
-	echo ""; \
-	echo "Step 5/7: Return to develop..."; \
-	git checkout develop; \
-	git merge master -m "Merge from master"; \
-	echo ""; \
-	echo "Step 6/7: Preparing future changelog..."; \
-	$(call _prepare-future-changelog); \
-	echo "Step 7/7: Commit future changelog..."; \
-	git add CHANGELOG.md; \
-	git commit -m "Preparing future changelog" ; \
-	echo "=== MINOR draft release $$RELEASE_TITLE workflow completed successfully ==="
-
+	@[[ "$${RELEASE_FINAL:-}" == enabled ]] || { echo "Final releases are not enabled yet."; exit 1; }
+	$(MAKE) release
+	@scripts/tag-release.sh minor

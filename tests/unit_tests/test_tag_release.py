@@ -263,3 +263,37 @@ def test_a_final_version_refuses_a_duplicated_open_entry(work: Path) -> None:
     assert result.returncode != 0
     assert "[0.0.0]" in result.stderr
     assert _git(work, "tag") == ""
+
+
+MAKEFILE = Path(__file__).parents[2] / "Makefile"
+
+
+def _recipe(target: str) -> list[str]:
+    lines = MAKEFILE.read_text().splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(f"{target}:"))
+    recipe = []
+    for line in lines[start + 1 :]:
+        if not line.startswith("\t"):
+            break
+        recipe.append(line.strip())
+    return recipe
+
+
+def test_the_publish_targets_call_the_script() -> None:
+    assert _recipe("publish-pre-release") == ['@scripts/tag-release.sh pre "$(VERSION)"']
+    for bump in ("patch", "minor"):
+        recipe = _recipe(f"publish-{bump}")
+        assert recipe[-1] == f"@scripts/tag-release.sh {bump}"
+
+
+def test_final_targets_refuse_before_the_long_local_check() -> None:
+    for bump in ("patch", "minor"):
+        recipe = _recipe(f"publish-{bump}")
+        guard = next(i for i, line in enumerate(recipe) if "RELEASE_FINAL" in line)
+        check = next(i for i, line in enumerate(recipe) if "$(MAKE) release" in line)
+        assert guard < check
+
+
+def test_release_no_longer_uploads() -> None:
+    assert "uv publish" not in "\n".join(_recipe("release"))
+    assert MAKEFILE.read_text().count("get-new-version") == 0

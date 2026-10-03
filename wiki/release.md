@@ -28,6 +28,13 @@ any other commit runs the suites itself, without the `qemu-tcg` rows, which take
 A published tag is never moved nor deleted. If a release fails after the upload, fix `develop` and publish the next
 number.
 
+## Final versions (not enabled yet)
+
+`make publish-patch` and `make publish-minor` will publish final versions once `release.yml` accepts `vX.Y.Z` tags:
+they run `make release` (`validate` and `all-tests`) first, take the last final tag (`v0.0.0` without one) bumped
+by patch or minor, date the `[0.0.0]` entry of `CHANGELOG.md` in a signed commit, tag and push, then open a new
+`[0.0.0]` entry. Until then they refuse at once, so a final tag can never be pushed by mistake and burn its number.
+
 ## What the pipeline does
 
 | Job | What it checks or does |
