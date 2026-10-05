@@ -150,6 +150,7 @@ jobs:
         path: dist-python-sb/
         if-no-files-found: error
 
+  # RELEASE_SKIP_FULL_GATE=true (repository variable) skips the suites: a temporary switch for the first final release.
   # A tag on a commit a nightly already proved reuses that run rather than repeating its suites.
   reuse-lookup:
     needs: verify
@@ -163,6 +164,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       SHA: ${{ needs.verify.outputs.sha }}
+      SKIP_FULL_GATE: ${{ vars.RELEASE_SKIP_FULL_GATE }}
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       with:
@@ -171,6 +173,11 @@ jobs:
     - name: Look for a green nightly full gate on the tagged commit
       id: lookup
       run: |
+        if [[ $SKIP_FULL_GATE == true ]]; then
+          echo "reuse=true" >>"$GITHUB_OUTPUT"
+          echo "Full gate skipped: RELEASE_SKIP_FULL_GATE=true (temporary switch)" >>"$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
         .github/scripts/find-nightly-gate.sh "$SHA" >"$RUNNER_TEMP/lookup"
         cat "$RUNNER_TEMP/lookup" >>"$GITHUB_OUTPUT"
         cat "$RUNNER_TEMP/lookup" >>"$GITHUB_STEP_SUMMARY"

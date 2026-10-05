@@ -240,3 +240,12 @@ def test_master_is_fast_forwarded_never_forced() -> None:
     runs = " ".join(s.get("run", "") for s in _jobs()["advance-master"]["steps"])
     assert 'git push origin "$SHA:refs/heads/master"' in runs
     assert "--force" not in runs and "+$SHA" not in runs and "-f " not in runs
+
+
+def test_the_temporary_switch_skips_only_the_nightly_lookup() -> None:
+    job = _jobs()["reuse-lookup"]
+    step = next(s for s in job["steps"] if s.get("id") == "lookup")
+    assert job["env"]["SKIP_FULL_GATE"] == "${{ vars.RELEASE_SKIP_FULL_GATE }}"
+    assert 'if [[ $SKIP_FULL_GATE == true ]]; then' in step["run"]
+    assert 'echo "reuse=true" >>"$GITHUB_OUTPUT"' in step["run"]
+    assert ".github/scripts/find-nightly-gate.sh" in step["run"]

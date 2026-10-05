@@ -93,6 +93,8 @@ Already in place. Recreate them only if they are lost:
 
 - repository variable `RELEASE_ALLOWED_SIGNERS`: one line, `<git user email> <public key>`, e.g.
   `gh variable set RELEASE_ALLOWED_SIGNERS --body "$(git config user.email) $(cat ~/.ssh/id_github.pub)"`;
+- repository variable `RELEASE_SKIP_FULL_GATE` (temporary): `true` skips the integration, sample and container
+  suites, as a reused nightly would; the light gate, `wheel-tests` and the approval still apply. Delete it after use;
 - tag ruleset on `refs/tags/v*`: creation, update, deletion and non-fast-forward restricted, bypass: repository admin;
 - environment `testpypi`: deployment tags `v*`, required reviewer the maintainer;
 - on test.pypi.org, a trusted publisher: owner `pprados`, repository `pysandboxes`, workflow `release.yml`,
