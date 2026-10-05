@@ -334,6 +334,45 @@ async def run_server(process_config: DaemonParameters) -> int:
     return 0
 
 
+_IPTABLES_RESTORE_PATHS = ("/usr/sbin/iptables-restore", "/sbin/iptables-restore")
+
+
+def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
+    """Apply the iptables rules in the guest (QEMU) or in the user-land namespace (bwrap --unshare-net).
+
+    Fails closed: the profile's socket rules depend on this filter, so the child stops when it cannot be applied.
+    """
+    # Bring up loopback when in a new network namespace (required before iptables)
+    for ip_cmd in ("/usr/sbin/ip", "/sbin/ip", "ip"):
+        try:
+            subprocess.run(
+                [ip_cmd, "link", "set", "lo", "up"],
+                check=False,
+                capture_output=True,
+            )
+            break
+        except FileNotFoundError:
+            continue
+    restore = next((c for c in _IPTABLES_RESTORE_PATHS if Path(c).is_file()), None)
+    if restore is None:
+        raise RuntimeError(
+            f"iptables-restore not found in {', '.join(_IPTABLES_RESTORE_PATHS)}: cannot apply the network filter. "
+            "Install iptables, or set bwrap.share-net=yes to use the host network."
+        )
+    r = subprocess.run(
+        [restore, "--noflush"],
+        input="\n".join(netfilter_rules).encode(),
+        check=False,
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"iptables-restore failed ({r.returncode}): {r.stderr.decode(errors='replace').strip()}. "
+            "For bwrap --unshare-net you may need root or cap_net_admin; "
+            "or set bwrap.share-net=yes to use the host network."
+        )
+
+
 def main() -> int:
     """Main entry point for the sandbox process.
 
@@ -392,35 +431,7 @@ def main() -> int:
             pass
 
     if netfilter_rules:
-        # Bring up loopback when in a new network namespace (required before iptables)
-        for ip_cmd in ("/usr/sbin/ip", "/sbin/ip", "ip"):
-            try:
-                subprocess.run(
-                    [ip_cmd, "link", "set", "lo", "up"],
-                    check=False,
-                    capture_output=True,
-                )
-                break
-            except FileNotFoundError:
-                continue
-        # Apply iptables rules in guest (QEMU) or in user-land namespace (bwrap --unshare-net)
-        for candidate in ("/usr/sbin/iptables-restore", "/sbin/iptables-restore"):
-            if Path(candidate).is_file():
-                r = subprocess.run(
-                    [candidate, "--noflush"],
-                    input="\n".join(netfilter_rules).encode(),
-                    check=False,
-                    capture_output=True,
-                )
-                if r.returncode != 0 and r.stderr and b"Permission denied" in r.stderr:
-                    logger.warning(
-                        "iptables-restore failed (permission denied). "
-                        "For bwrap --unshare-net you may need root or cap_net_admin; "
-                        "or set bwrap.share-net=yes to use host network."
-                    )
-                break
-        else:
-            logger.warning("iptables-restore not found at /usr/sbin or /sbin; skipping netfilter rules")
+        _apply_netfilter(netfilter_rules)
 
     # After slirp setup: loop until network is reachable (bwrap cannot pass pipe fd to inner process)
     if netfilter_rules or getattr(process_config, "wait_network", False):

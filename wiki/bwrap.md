@@ -19,7 +19,7 @@ The host runs `bwrap` with options from a template (e.g. `--clearenv`) plus **`-
 
 | Aspect | Detail |
 |--------|--------|
-| **Network** | With socket rules, you depend on **slirp4netns** and iptables inside the namespace; opting out with `bwrap.share-net=yes` gives the sandbox the whole host network. |
+| **Network** | With socket rules, you depend on **slirp4netns** and iptables inside the namespace: when `iptables-restore` is missing or rejects the rules, the sandbox refuses to start rather than run unfiltered. Opting out with `bwrap.share-net=yes` gives the sandbox the whole host network. |
 | **Containers** | In Docker/Podman, bridge networking may still block reachability to the sandbox SSE port; `network_mode: host` is often needed when using `--share-net`. |
 | **Dependencies** | Requires the `bwrap` binary. If you use **socket rules** (isolated netns path), **`slirp4netns`** must also be installed. |
 

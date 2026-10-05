@@ -61,12 +61,28 @@ def test_every_image_is_probed_for_its_version_and_its_cli(fake: Path) -> None:
         assert f"{image} python-sb --help" in calls
 
 
-def test_each_provider_image_runs_its_own_binary(fake: Path) -> None:
+# Every binary the provider invokes, not only the one it is named after: without iptables-restore, the bwrap and
+# unshare network filters are skipped with a warning.
+PROVIDER_TOOLS = [
+    "python-sb-unshare unshare --version",
+    "python-sb-unshare iptables --version",
+    "python-sb-unshare iptables-restore --version",
+    "python-sb-unshare ip -V",
+    "python-sb-unshare slirp4netns --version",
+    "python-sb-bwrap bwrap --version",
+    "python-sb-bwrap iptables-restore --version",
+    "python-sb-bwrap ip -V",
+    "python-sb-bwrap slirp4netns --version",
+    "python-sb-qemu qemu-system-x86_64 --version",
+    "python-sb-qemu genisoimage --version",
+]
+
+
+def test_each_provider_image_runs_every_tool_it_invokes(fake: Path) -> None:
     _smoke(fake)
     calls = _calls(fake)
-    assert "python-sb-unshare unshare --version" in calls
-    assert "python-sb-bwrap bwrap --version" in calls
-    assert "python-sb-qemu qemu-system-x86_64 --version" in calls
+    for call in PROVIDER_TOOLS:
+        assert call in calls
     assert any(c.startswith("python-sb-qemu sh -c") and "PYSANDBOXES_VM_IMAGES_DIR" in c for c in calls)
 
 
@@ -79,7 +95,7 @@ def test_an_image_holding_another_version_fails(fake: Path) -> None:
 
 @pytest.mark.parametrize(
     "broken",
-    ["python-sb-bwrap bwrap", "python-sb-unshare unshare", "python-sb-qemu qemu-system-x86_64", "python-sb-qemu sh"],
+    [" ".join(call.split()[:2]) for call in PROVIDER_TOOLS] + ["python-sb-qemu sh"],
 )
 def test_a_missing_provider_binary_fails(fake: Path, broken: str) -> None:
     (fake / "broken").write_text(broken + "\n")
