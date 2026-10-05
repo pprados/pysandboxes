@@ -17,7 +17,18 @@ Applications increasingly run code, or call tools, chosen by an LLM, and a manip
 [Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
 > **Not yet on pypi.org.** Until the project is published there, `pip install pysandboxes` and
-> `uvx python-sb` do not work. Install it from the sources instead:
+> `uvx python-sb` do not work. The pre-releases are on test.pypi.org: declare this alias, then use `python-sb`
+> wherever this page says `uvx python-sb`:
+>
+> ```bash
+> alias python-sb='uvx --prerelease allow \
+>   --find-links https://test.pypi.org/simple/python-sb/ \
+>   --find-links https://test.pypi.org/simple/pysandboxes/ \
+>   python-sb'
+> python-sb --help
+> ```
+>
+> Or install it from the sources:
 >
 > ```bash
 > git clone https://github.com/pprados/pysandboxes.git
