@@ -209,6 +209,16 @@ def test_a_final_version_dates_the_changelog_before_the_tag_and_opens_the_next_e
         assert _git(work, "-c", allowed, "log", "-1", "--format=%G?", rev) == "G"
 
 
+def test_the_last_line_names_the_index_of_the_release_kind(work: Path) -> None:
+    final = _release(work, "minor")
+    assert final.returncode == 0, final.stderr
+    assert "Approve the pypi deployment" in final.stdout
+    _commit(work, "feature")
+    pre = _release(work, "pre", "0.2.0b1")
+    assert pre.returncode == 0, pre.stderr
+    assert "Approve the testpypi deployment" in pre.stdout
+
+
 def test_a_final_version_needs_the_open_changelog_entry(work: Path) -> None:
     (work / "CHANGELOG.md").write_text(CHANGELOG.replace("## [0.0.0] - 202X-XX-XX", "## [0.0.9] - 2026-02-02"))
     _git(work, "commit", "-q", "-am", "dated")

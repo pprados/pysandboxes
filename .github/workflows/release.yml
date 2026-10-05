@@ -38,23 +38,32 @@ jobs:
       run: .github/scripts/verify-release-tag.sh "$GITHUB_REF" >>"$GITHUB_OUTPUT"
 
   # lint.yml and test.yml do not run on tags: wait for their runs on the develop push of the tagged commit.
-  # GitHub only runs them on the head of a push: review origin/develop, then tag its head, or this job times out.
+  # GitHub only runs them on the head of a push, and skips documentation-only pushes: the runs of the tagged commit,
+  # or of the commit below a documentation-only release commit, vouch for the code. Push develop before tagging.
   push-checks:
     needs: verify
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      contents: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       SHA: ${{ needs.verify.outputs.sha }}
     steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      with:
+        fetch-depth: 0
+
     - name: Wait for lint.yml and test.yml on the tagged commit
       run: |
+        mapfile -t commits < <(.github/scripts/checked-commits.sh "$SHA")
         deadline=$((SECONDS + 1800))
         for workflow in lint.yml test.yml; do
           while :; do
-            runs=$(gh run list --commit "$SHA" --workflow "$workflow" --event push --json status,conclusion)
+            runs=$(for c in "${commits[@]}"; do
+              gh run list --commit "$c" --workflow "$workflow" --event push --json status,conclusion
+            done | jq -s 'add')
             if jq -e 'any(.status == "completed" and .conclusion != "success")' <<<"$runs" >/dev/null; then
               echo "::error::$workflow did not succeed on $SHA"
               exit 1
@@ -176,9 +185,13 @@ jobs:
         if [[ $SKIP_FULL_GATE == true ]]; then
           echo "reuse=true" >>"$GITHUB_OUTPUT"
           echo "Full gate skipped: RELEASE_SKIP_FULL_GATE=true (temporary switch)" >>"$GITHUB_STEP_SUMMARY"
+          echo "::warning::RELEASE_SKIP_FULL_GATE=true: integration, sample and container suites skipped"
           exit 0
         fi
-        .github/scripts/find-nightly-gate.sh "$SHA" >"$RUNNER_TEMP/lookup"
+        for c in $(.github/scripts/checked-commits.sh "$SHA"); do
+          .github/scripts/find-nightly-gate.sh "$c" >"$RUNNER_TEMP/lookup"
+          if grep -q '^reuse=true$' "$RUNNER_TEMP/lookup"; then break; fi
+        done
         cat "$RUNNER_TEMP/lookup" >>"$GITHUB_OUTPUT"
         cat "$RUNNER_TEMP/lookup" >>"$GITHUB_STEP_SUMMARY"
 
@@ -439,21 +452,25 @@ jobs:
         done
 
   # Final versions only, once everything is published. Without --force: a master that is not an ancestor of the tag
-  # makes the push fail instead of being rewritten.
+  # makes the push fail instead of being rewritten. GITHUB_TOKEN cannot push workflow files and a GitHub App token
+  # cannot push workflow changes either: a deploy key with write access does, held by the master environment, which
+  # is restricted to v* tags.
   advance-master:
     needs: [verify, verify-published, images]
     if: >-
       ${{ !cancelled() && needs.verify.outputs.final == 'true' && needs.verify-published.result == 'success'
       && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
     runs-on: ubuntu-latest
+    environment: master
     permissions:
-      contents: write
+      contents: read
     env:
       SHA: ${{ needs.verify.outputs.sha }}
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       with:
         fetch-depth: 0
+        ssh-key: ${{ secrets.MASTER_DEPLOY_KEY }}
 
     - name: Fast-forward master to the tagged commit
       run: git push origin "$SHA:refs/heads/master"

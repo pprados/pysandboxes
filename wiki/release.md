@@ -45,7 +45,7 @@ yanking only hides it.
 | Job | What it checks or does |
 |---|---|
 | `verify` | The tag is a pre-release or a final version, annotated, signed by a key listed in `RELEASE_ALLOWED_SIGNERS`, on a commit of `develop` |
-| `push-checks` | `lint.yml` and `test.yml` are green on the tagged commit (waits up to 30 min for them) |
+| `push-checks` | `lint.yml` and `test.yml` are green on the tagged commit, or on the commit below a documentation-only release commit (waits up to 30 min for them) |
 | `validate` | `make validate` on Python 3.13, `pip-audit` included |
 | `build` | `uv build`; the wheel version must equal the tag; `twine check`. Also builds `python-sb` when it changed (below) |
 | `reuse-lookup` | Looks for a green `schedule` run of `full-gate.yml` on the same commit (a manual run never counts) |
@@ -102,7 +102,11 @@ Already in place. Recreate them only if they are lost:
 - environment `pypi`: deployment tags `v*`, required reviewer the maintainer;
 - on pypi.org, a trusted publisher in the `pysandboxes` and `python-sb` projects: owner `pprados`, repository
   `pysandboxes`, workflow `release.yml`, environment `pypi`;
-- GitHub Actions allowed to push to `master`, which `advance-master` fast-forwards;
+- environment `master`: deployment tags `v*`, no reviewer, secret `MASTER_DEPLOY_KEY`: the private half of a deploy
+  key with write access, which `advance-master` uses to fast-forward `master` (`GITHUB_TOKEN` cannot push workflow
+  files): `ssh-keygen -t ed25519 -N '' -C release-master -f /tmp/master-key`,
+  `gh repo deploy-key add /tmp/master-key.pub --allow-write --title release-master`,
+  `gh secret set MASTER_DEPLOY_KEY --env master < /tmp/master-key`, then `rm /tmp/master-key*`;
 - environment `dockerhub`: deployment tags `v*`, no reviewer, secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a
   Docker Hub personal access token, Read & Write). No `DOCKERHUB_*` secret may exist at repository level, where every
   branch could read it:
@@ -124,8 +128,8 @@ Already in place. Recreate them only if they are lost:
 | `push-checks`: "push checks not finished" | `lint.yml` or `test.yml` did not finish within 30 min on the tagged commit. Re-run the failed jobs once they are green |
 | `validate` fails on `pip-audit` | An advisory appeared since the last push. Relock the affected project (`uv lock --upgrade-package <pkg>`), or document an ignore in the `Makefile` when no fix exists; then tag the next number |
 | `publish-testpypi` or `publish-pypi` never starts | A gate failed, or `full-gate` was skipped by a failure rather than by a reuse. Nothing published |
-| `verify-published`: "published but not visible yet" | test.pypi.org's CDN has not served the file within 10 min. Re-run the failed jobs |
-| `verify-published`: the wheel "differs" | test.pypi.org holds another file for this version (a re-run rebuilt a different wheel; the upload is skipped when the version exists). Publish the next number |
+| `verify-published`: "published but not visible yet" | The index's CDN (test.pypi.org or pypi.org) has not served the file within 10 min. Re-run the failed jobs |
+| `verify-published`: the wheel "differs" | The index (test.pypi.org or pypi.org) holds another file for this version (a re-run rebuilt a different wheel; the upload is skipped when the version exists). Publish the next number |
 | `images` fails at the smoke test | An image lacks the version or a provider binary. Nothing pushed |
 | `images` fails while pushing | Part of the five images may be published. Re-run the failed jobs: the same tags are overwritten |
-| `advance-master` fails | `master` is not an ancestor of the tag. Merge nothing, investigate, then push the tagged commit to `master` by hand |
+| `advance-master` fails | The `master` environment lacks `MASTER_DEPLOY_KEY`, or the key is wrong or read-only, or `master` is not an ancestor of the tag. Merge nothing, investigate, then push the tagged commit to `master` by hand |

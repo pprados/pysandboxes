@@ -102,4 +102,5 @@ if [[ $mode != pre ]]; then
     git push origin develop
 fi
 trap - ERR
-echo "Approve the testpypi deployment: https://github.com/pprados/pysandboxes/actions/workflows/release.yml"
+[[ $mode == pre ]] && index=testpypi || index=pypi
+echo "Approve the $index deployment: https://github.com/pprados/pysandboxes/actions/workflows/release.yml"

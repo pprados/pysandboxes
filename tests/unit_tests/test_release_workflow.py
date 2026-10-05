@@ -106,6 +106,15 @@ def test_the_reuse_lookup_reads_the_verified_commit() -> None:
     assert "verify" in _needs(_jobs()["reuse-lookup"])
 
 
+def test_the_push_checks_cover_the_commit_below_a_documentation_only_release_commit() -> None:
+    job = _jobs()["push-checks"]
+    checkout = job["steps"][0]
+    assert checkout["uses"].startswith("actions/checkout@")
+    assert checkout["with"]["fetch-depth"] == 0
+    assert job["permissions"] == {"actions": "read", "contents": "read"}
+    assert '.github/scripts/checked-commits.sh "$SHA"' in job["steps"][1]["run"]
+
+
 def test_the_build_waits_for_the_light_gate() -> None:
     assert _needs(_jobs()["build"]) >= {"verify", "push-checks", "validate"}
 
@@ -233,7 +242,11 @@ def test_master_advances_only_after_a_final_release_is_published() -> None:
         "${{ !cancelled() && needs.verify.outputs.final == 'true' && needs.verify-published.result == 'success' "
         "&& (needs.images.result == 'success' || needs.images.result == 'skipped') }}"
     )
-    assert job["permissions"] == {"contents": "write"}
+    assert job["permissions"] == {"contents": "read"}
+    assert job["environment"] == "master"
+    checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["fetch-depth"] == 0
+    assert checkout["with"]["ssh-key"] == "${{ secrets.MASTER_DEPLOY_KEY }}"
 
 
 def test_master_is_fast_forwarded_never_forced() -> None:
@@ -246,6 +259,8 @@ def test_the_temporary_switch_skips_only_the_nightly_lookup() -> None:
     job = _jobs()["reuse-lookup"]
     step = next(s for s in job["steps"] if s.get("id") == "lookup")
     assert job["env"]["SKIP_FULL_GATE"] == "${{ vars.RELEASE_SKIP_FULL_GATE }}"
-    assert 'if [[ $SKIP_FULL_GATE == true ]]; then' in step["run"]
+    assert "if [[ $SKIP_FULL_GATE == true ]]; then" in step["run"]
     assert 'echo "reuse=true" >>"$GITHUB_OUTPUT"' in step["run"]
     assert ".github/scripts/find-nightly-gate.sh" in step["run"]
+    assert ".github/scripts/checked-commits.sh" in step["run"]
+    assert "::warning::RELEASE_SKIP_FULL_GATE=true: integration, sample and container suites skipped" in step["run"]
