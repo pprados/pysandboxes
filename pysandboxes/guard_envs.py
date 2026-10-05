@@ -281,6 +281,30 @@ class LearnEnviron(os._Environ):
             return False
 
 
+class LearnEnvironBytes(os._Environ):
+    """Bytes view of the learning environment, tracking reads like os.environ."""
+
+    def __init__(self) -> None:
+        environ = os.environ
+        assert isinstance(environ, LearnEnviron)
+        super().__init__(
+            environ._data,  # type: ignore[attr-defined]
+            os.environb.encodekey,
+            os.environb.decodekey,
+            os.environb.encodevalue,
+            os.environb.decodevalue,
+        )
+
+    def __getitem__(self, key: bytes) -> bytes:
+        value = os.environ[os.fsdecode(key)]
+        return os.fsencode(value)
+
+    def __setitem__(self, key: bytes, value: bytes) -> None:
+        os.environ[os.fsdecode(key)] = os.fsdecode(value)
+
+    def __delitem__(self, key: bytes) -> None:
+        del os.environ[os.fsdecode(key)]
+
 def generate_rules() -> list[str]:
     """Generate environment variable rules from learning data.
 
@@ -343,6 +367,16 @@ def _wrap_os_getenv(func: Callable) -> Callable:
     return wrapper
 
 
+def _wrap_os_getenvb(func: Callable) -> Callable:
+    @guard_wraps(func)
+    def wrapper(key: bytes, default: bytes | None = None) -> bytes:
+        assert isinstance(os.environ, LearnEnviron)
+        os.environ._keys_used.add(os.fsdecode(key))
+        return func(key, default)
+
+    return wrapper
+
+
 def _wrap_os_unsetenv(func: Callable) -> Callable:
     @guard_wraps(func)
     def wrapper(name: str) -> None:
@@ -372,12 +406,16 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
             os.environ = LearnEnviron()  # noqa: B003
             return os.environ
 
-        return {
+        patches = {
             "os.environ": activate_learning_env_factory,
             "os.getenv": _f(_wrap_os_getenv),
             "os.putenv": _f(_wrap_os_putenv),
             "os.unsetenv": _f(_wrap_os_unsetenv),
         }
+        if hasattr(os, "environb"):
+            patches["os.environb"] = lambda _: LearnEnvironBytes()
+            patches["os.getenvb"] = _f(_wrap_os_getenvb)
+        return patches
     else:
         return {}
 

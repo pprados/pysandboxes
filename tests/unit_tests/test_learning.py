@@ -21,12 +21,10 @@ class TestGenerateConfigFromLearning:
     @patch("pysandboxes.guard_import.generate_rules")
     @patch("pysandboxes.guard_socket.generate_rules")
     @patch("pysandboxes.learning._manage_olds_file")
-    @patch("pysandboxes.learning.resources.read_text")
     @patch("pysandboxes.learning.is_learning_mode")
     def test_generate_config_with_all_rules(
         self,
         mock_is_learning_mode: Mock,
-        mock_read_text: Mock,
         mock_manage_olds: Mock,
         mock_socket_rules: Mock,
         mock_import_rules: Mock,
@@ -46,17 +44,35 @@ class TestGenerateConfigFromLearning:
             ]
             mock_socket_rules.return_value = ["socket:tcp:80", "socket:udp:53"]
             mock_manage_olds.return_value = (test_path, None)
-            mock_read_text.return_value = "template content with ${learning_guard_envs}"
             mock_is_learning_mode.return_value = True
 
-            with patch("pysandboxes.learning._learning_path", Path("test.conf")):
+            with (
+                patch("pysandboxes.learning._learning_path", Path("test.conf")),
+                patch("pysandboxes.learning._save_learning_done", False),
+                patch("pysandboxes.eval_rules.generate_rules", return_value=["eval:dynamic"]) as mock_eval_rules,
+            ):
                 generate_config_from_learning()
+                generated = test_path.read_text()
 
-        # Verify all rule generators were called
+        assert all(
+            rule in generated
+            for rule in (
+                "env:HOME",
+                "env:PATH",
+                "import:os",
+                "import:sys",
+                "file:read:/tmp/*",
+                "file:write:/tmp/output",
+                "socket:tcp:80",
+                "socket:udp:53",
+                "eval:dynamic",
+            )
+        )
         mock_env_rules.assert_called_once()
         mock_import_rules.assert_called_once()
         mock_file_rules.assert_called_once()
         mock_socket_rules.assert_called_once()
+        mock_eval_rules.assert_called_once()
 
 
 class TestManageOldsFile:
@@ -91,7 +107,10 @@ class TestLearningModeManagement:
     def test_activate_learning(self) -> None:
         """Test activating learning mode."""
 
-        with patch("pysandboxes.learning._learning_path", None):
+        with (
+            patch("pysandboxes.learning._learning_path", None),
+            patch("pysandboxes.learning._learning_mode", False),
+        ):
             set_learning_mode(True)
 
             # Check that learning mode is activated
@@ -124,16 +143,18 @@ class TestAddLearningRule:
                 mock_learning_set.add.assert_not_called()
 
     def test_add_learning_rule_duplicate(self) -> None:
-        """Test that duplicate rules don't cause issues."""
+        """Adding the same learning rule twice keeps only one copy."""
         test_rule = "duplicate_rule"
 
-        with patch("pysandboxes.learning._learning_path", Path("test.conf")):
-            # Add the same rule multiple times
+        with (
+            patch("pysandboxes.learning._learning_path", Path("test.conf")),
+            patch("pysandboxes.learning._learning_mode", True),
+            patch("pysandboxes.learning._learning", set()) as learned,
+        ):
             add_learning_rule(test_rule)
             add_learning_rule(test_rule)
 
-            # Since _learning is a set, duplicates should be handled automatically
-            # This test mainly ensures no exceptions are raised
+        assert learned == {test_rule}
 
     def test_add_learning_rule_different_types(self) -> None:
         """Test adding different types of learning rules."""
@@ -144,9 +165,12 @@ class TestAddLearningRule:
             "env:VARIABLE_NAME",
         ]
 
-        with patch("pysandboxes.learning._learning_path", Path("test.conf")):
+        with (
+            patch("pysandboxes.learning._learning_path", Path("test.conf")),
+            patch("pysandboxes.learning._learning_mode", True),
+            patch("pysandboxes.learning._learning", set()) as learned,
+        ):
             for rule in rules:
                 add_learning_rule(rule)
 
-            # All rules should be accepted without errors
-            assert True  # If we reach here, no exceptions were raised
+        assert learned == set(rules)
