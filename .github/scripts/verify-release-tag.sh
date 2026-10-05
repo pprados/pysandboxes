@@ -2,10 +2,10 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# First job of release.yml. Usage: verify-release-tag.sh <refs/tags/vX.Y.ZbN>
+# First job of release.yml. Usage: verify-release-tag.sh <refs/tags/vX.Y.Z[(a|b|rc)N]>
 # The trusted keys come from ALLOWED_SIGNERS (the repository variable RELEASE_ALLOWED_SIGNERS),
 # never from a file of the tagged commit, which whoever writes to the repository controls.
-# Prints version=… and sha=… for $GITHUB_OUTPUT.
+# Prints version=…, sha=… and final=true|false for $GITHUB_OUTPUT.
 set -euo pipefail
 
 ref=$1
@@ -15,8 +15,12 @@ if [[ $ref != refs/tags/* ]]; then
 fi
 tag=${ref#refs/tags/}
 
-if [[ ! $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+(a|b|rc)[0-9]+$ ]]; then
-    echo "$tag: final release not enabled yet, only vX.Y.Z(a|b|rc)N tags are published" >&2
+if [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    final=true
+elif [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+(a|b|rc)[0-9]+$ ]]; then
+    final=false
+else
+    echo "$tag: not a vX.Y.Z or vX.Y.Z(a|b|rc)N tag" >&2
     exit 1
 fi
 
@@ -41,3 +45,4 @@ fi
 
 echo "version=${tag#v}"
 echo "sha=$sha"
+echo "final=$final"
