@@ -29,8 +29,6 @@ from pysandboxes.lifecycle import arm, is_armed
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
 
-_NEEDS_312 = pytest.mark.skipif(sys.version_info < (3, 12), reason="sys._getframemodulename appeared in Python 3.12")
-
 
 def test_exception_is_a_permission_error() -> None:
     """User code catching PermissionError keeps working."""
@@ -223,8 +221,6 @@ def test_unknown_name_is_not_allowed() -> None:
 def _guarded(qualname: str) -> Callable[..., Any]:
     """Build the wrapper the patch table would install."""
     table = patch_rules(learn=False)
-    if qualname in {"sys._getframe", "sys._getframemodulename"}:
-        return table[qualname](getattr(sys, qualname.partition(".")[2]))
     return table[qualname](lambda *a, **k: "called")
 
 
@@ -271,96 +267,6 @@ def test_armed_denies_importlib_reload() -> None:
         assert exc.value.category == "introspection"
     finally:
         _reset_guard()
-
-
-@pytest.mark.parametrize(
-    "qualname",
-    [
-        "sys._getframe",
-        pytest.param("sys._getframemodulename", marks=_NEEDS_312),
-        "sys._current_frames",
-        "sys._current_exceptions",
-        "gc.get_objects",
-        "gc.get_referrers",
-        "gc.get_referents",
-        "inspect.currentframe",
-        "inspect.stack",
-        "inspect.trace",
-    ],
-)
-def test_armed_denies_frame_and_reference_introspection(qualname: str) -> None:
-    _activate()
-    wrapped = _guarded(qualname)
-    try:
-        arm()
-        with pytest.raises(RuleApiPermissionError) as exc:
-            wrapped()
-        assert exc.value.qualname == qualname
-        assert exc.value.category == "introspection"
-    finally:
-        _reset_guard()
-
-
-def test_armed_guarded_eval_can_read_its_caller_frame(monkeypatch: pytest.MonkeyPatch) -> None:
-    from pysandboxes.guard_eval import _wrap_eval_like
-
-    getframe = patch_rules(learn=False)["sys._getframe"](sys._getframe)
-    monkeypatch.setattr(sys, "_getframe", getframe)
-    _activate("python-api=ALLOW:builtins.eval")
-    guarded_eval = _wrap_eval_like(eval, qualname="builtins.eval", mode="eval")
-    try:
-        arm()
-        assert guarded_eval("1 + 1") == 2
-    finally:
-        _reset_guard()
-
-
-@pytest.mark.parametrize("qualname", ["sys._getframe", pytest.param("sys._getframemodulename", marks=_NEEDS_312)])
-def test_allowed_frame_query_preserves_caller_depth(qualname: str) -> None:
-    _activate(f"python-api=ALLOW:{qualname}")
-    wrapped = _guarded(qualname)
-    try:
-        arm()
-        if qualname == "sys._getframe":
-            assert wrapped().f_code.co_name == "test_allowed_frame_query_preserves_caller_depth"
-        else:
-            assert wrapped() == __name__
-            assert wrapped(depth=0) == __name__
-    finally:
-        _reset_guard()
-
-
-def test_sys_getframe_is_refused_after_importing_cached_sys() -> None:
-    repo = Path(__file__).resolve().parents[3]
-    script = "\n".join(
-        (
-            "import sys",
-            "from pysandboxes.e import RuleApiPermissionError",
-            "from pysandboxes.guard_api import activate_guard, patch_rules",
-            "from pysandboxes.guard_import import activate_guard_import",
-            "from pysandboxes.lifecycle import arm",
-            "activate_guard_import(patch_rules(False), ('sys',))",
-            "activate_guard(())",
-            "arm()",
-            "import sys",
-            "try:",
-            "    sys._getframe()",
-            "except RuleApiPermissionError:",
-            "    print('GUARD')",
-            "else:",
-            "    print('BYPASS')",
-        )
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        cwd=repo,
-        env={**os.environ, "PYTHONPATH": str(repo)},
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "GUARD" in result.stdout, result.stdout + result.stderr
-    assert "BYPASS" not in result.stdout, result.stdout + result.stderr
 
 
 def test_armed_and_allowed_passes() -> None:

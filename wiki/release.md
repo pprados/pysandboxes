@@ -28,6 +28,13 @@ any other commit runs the suites itself, without the `qemu-tcg` rows, which take
 A published tag is never moved nor deleted. If a release fails after the upload, fix `develop` and publish the next
 number.
 
+## Final versions (not enabled yet)
+
+`make publish-patch` and `make publish-minor` will publish final versions once `release.yml` accepts `vX.Y.Z` tags:
+they run `make release` (`validate` and `all-tests`) first, take the last final tag (`v0.0.0` without one) bumped
+by patch or minor, date the `[0.0.0]` entry of `CHANGELOG.md` in a signed commit, tag and push, then open a new
+`[0.0.0]` entry. Until then they refuse at once, so a final tag can never be pushed by mistake and burn its number.
+
 ## What the pipeline does
 
 | Job | What it checks or does |
@@ -35,7 +42,7 @@ number.
 | `verify` | The tag is a pre-release, annotated, signed by a key listed in `RELEASE_ALLOWED_SIGNERS`, on a commit of `develop` |
 | `push-checks` | `lint.yml` and `test.yml` are green on the tagged commit (waits up to 30 min for them) |
 | `validate` | `make validate` on Python 3.13, `pip-audit` included |
-| `build` | `uv build`; the wheel version must equal the tag; `twine check` |
+| `build` | `uv build`; the wheel version must equal the tag; `twine check`. Also builds `python-sb` when it changed (below) |
 | `reuse-lookup` | Looks for a green `schedule` run of `full-gate.yml` on the same commit (a manual run never counts) |
 | `full-gate` | The integration, sample and container suites, skipped when `reuse-lookup` found a nightly to reuse |
 | `wheel-tests` | The unit tests against the built wheel, installed in a clean venv, on Python 3.11 to 3.14 |
@@ -46,6 +53,13 @@ number.
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap` and `python-sb-qemu`,
 `linux/amd64`, Python 3.13. Only the version tag is pushed, never `latest`. Their digests are listed in the run
 summary.
+
+`python-sb/` is a separate package, the one behind `uvx python-sb`, with its own version. A release publishes it
+too when one of its files changed since the previous tag; its version in `python-sb/pyproject.toml` must then be
+higher than at that tag, or `build` fails and asks for the bump. Otherwise it is left out. Its wheel is checked in
+`wheel-tests` and uploaded by `publish-testpypi`, under the same approval.
+If that upload fails (no trusted publisher yet, rejected approval), re-run the failed jobs of the same run: a new tag
+would compare `python-sb/` with the failed one, find no change, and never publish that version.
 
 To publish the wheel alone, set the repository variable `RELEASE_IMAGES` to `false` before tagging
 (`gh variable set RELEASE_IMAGES --body false`), and delete it afterwards (`gh variable delete RELEASE_IMAGES`).
@@ -72,7 +86,7 @@ Already in place. Recreate them only if they are lost:
 - tag ruleset on `refs/tags/v*`: creation, update, deletion and non-fast-forward restricted, bypass: repository admin;
 - environment `testpypi`: deployment tags `v*`, required reviewer the maintainer;
 - on test.pypi.org, a trusted publisher: owner `pprados`, repository `pysandboxes`, workflow `release.yml`,
-  environment `testpypi`;
+  environment `testpypi`; and the same for the project `python-sb` (a pending publisher, until its first upload);
 - environment `dockerhub`: deployment tags `v*`, no reviewer, secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a
   Docker Hub personal access token, Read & Write). No `DOCKERHUB_*` secret may exist at repository level, where every
   branch could read it:

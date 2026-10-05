@@ -141,3 +141,40 @@ def test_only_the_version_tag_is_pushed() -> None:
     push = _jobs()[IMAGE_JOB]["steps"][_step_index(_jobs()[IMAGE_JOB], "docker push")]["run"]
     assert "docker.io/pprados/$image:$VERSION" in push
     assert "latest" not in push
+
+
+PYTHON_SB = "needs.build.outputs.python-sb == 'true'"
+
+
+def _steps_running(job: str, needle: str) -> list[dict[str, Any]]:
+    return [s for s in _jobs()[job]["steps"] if needle in s.get("run", "") or needle in yaml.safe_dump(s)]
+
+
+def test_the_build_decides_whether_python_sb_is_published() -> None:
+    build = _jobs()["build"]
+    assert build["outputs"]["python-sb"] == "${{ steps.python-sb.outputs.publish }}"
+    step = next(s for s in build["steps"] if s.get("id") == "python-sb")
+    assert '.github/scripts/python-sb-changes.sh "$GITHUB_REF_NAME"' in step["run"]
+
+
+def test_python_sb_is_built_apart_from_the_pysandboxes_dist() -> None:
+    build = _steps_running("build", "uv build python-sb")
+    assert len(build) == 1
+    assert build[0]["if"] == "steps.python-sb.outputs.publish == 'true'"
+    assert "--out-dir dist-python-sb" in build[0]["run"]
+    upload = next(s for s in _jobs()["build"]["steps"] if s.get("with", {}).get("name") == "python-sb")
+    assert upload["with"]["path"] == "dist-python-sb/"
+    assert upload["if"] == "steps.python-sb.outputs.publish == 'true'"
+
+
+def test_the_python_sb_wheel_is_run_before_publication() -> None:
+    steps = _steps_running("wheel-tests", "import sys, python_sb")
+    assert len(steps) == 1
+    assert steps[0]["if"] == PYTHON_SB
+
+
+def test_python_sb_is_uploaded_only_when_it_changed() -> None:
+    uploads = [s for s in _publish()["steps"] if "gh-action-pypi-publish" in s.get("uses", "")]
+    assert [u["with"].get("packages-dir", "dist/") for u in uploads] == ["dist/", "dist-python-sb/"]
+    assert uploads[1]["if"] == PYTHON_SB
+    assert uploads[1]["with"]["repository-url"] == "https://test.pypi.org/legacy/"

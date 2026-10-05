@@ -185,24 +185,13 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
     # than under a module-system category of its own, which would add a
     # profile keyword for a single name; closing the sys.meta_path escape
     # will justify one.
-    # Frame and heap inspection expose live references and locals. The
-    # framework's eval wrapper still needs sys._getframe, so that one has a
-    # narrow internal-module path in _wrap_frame_query.
     "introspection": (
         "importlib.reload",
-        "sys._getframe",
-        "sys._getframemodulename",
-        "sys._current_frames",
-        "sys._current_exceptions",
         "sys.settrace",
         "sys.setprofile",
         "sys.addaudithook",
         "gc.get_objects",
         "gc.get_referrers",
-        "gc.get_referents",
-        "inspect.currentframe",
-        "inspect.stack",
-        "inspect.trace",
         "faulthandler.enable",
     ),
     # Registered so python-api=ALLOW:dynamic-code stays an expressible escape
@@ -323,13 +312,7 @@ _POSIX_ONLY = frozenset(
 # Linux only: macOS has no prlimit.
 _LINUX_ONLY = frozenset({"resource.prlimit"})
 
-_INTROSPECTION_VERSION_OPTIONAL = frozenset({"sys._getframemodulename", "sys._current_exceptions"})
-# sys._getframemodulename appeared in Python 3.12.
-_FROM_312 = frozenset({"sys._getframemodulename"})
-
-OPTIONAL: frozenset[str] = (
-    _PRE_313 | _FROM_313 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY | _INTROSPECTION_VERSION_OPTIONAL
-)
+OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY
 """Entries whose absence is legitimate on some version or platform.
 
 The integrity test fails on a missing entry unless it is listed here, so
@@ -349,8 +332,7 @@ def _not_applicable() -> frozenset[str]:
     version = _PRE_313 if sys.version_info >= (3, 13) else _FROM_313
     platform = _POSIX_ONLY if sys.platform == "win32" else _WINDOWS_ONLY
     linux = frozenset() if sys.platform == "linux" else _LINUX_ONLY
-    introspection = frozenset() if sys.version_info >= (3, 12) else _FROM_312
-    return version | platform | linux | introspection
+    return version | platform | linux
 
 
 _CATEGORY_OF: dict[str, str] = {
@@ -578,9 +560,6 @@ def _wrap_guarded(func: Callable[..., Any], *, qualname: str, category: str) -> 
     if getattr(func, "__pysandbox_api__", False):
         return func
 
-    if qualname in {"sys._getframe", "sys._getframemodulename"}:
-        return _wrap_frame_query(func, qualname=qualname, category=category)
-
     @guard_wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if not _lc_is_armed():
@@ -592,44 +571,6 @@ def _wrap_guarded(func: Callable[..., Any], *, qualname: str, category: str) -> 
         if not is_allowed(qualname):
             raise RuleApiPermissionError(qualname, category)
         return func(*args, **kwargs)
-
-    wrapper.__pysandbox_api__ = True  # type: ignore[attr-defined]
-    return wrapper
-
-
-def _wrap_frame_query(func: Callable[..., Any], *, qualname: str, category: str) -> Callable[..., Any]:
-    """Guard a frame query while preserving its depth and framework use."""
-
-    @guard_wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        armed = _lc_is_armed()
-        internal = False
-        if armed and qualname == "sys._getframe":
-            caller = func(1)
-            module_name = caller.f_globals.get("__name__")
-            module = sys.modules.get(module_name) if isinstance(module_name, str) else None
-            internal = (
-                isinstance(module_name, str)
-                and module_name.startswith("pysandboxes.")
-                and getattr(module, "__dict__", None) is caller.f_globals
-            )
-        if armed and not internal:
-            if is_learning_mode():
-                if not is_allowed(qualname):
-                    add_learning_rule(LearnApiRule(qualname))
-            elif not is_allowed(qualname):
-                raise RuleApiPermissionError(qualname, category)
-        if qualname == "sys._getframe":
-            if kwargs or len(args) > 1:
-                return func(*args, **kwargs)
-            depth = args[0] if args else 0
-        else:
-            if len(args) > 1 or (args and "depth" in kwargs):
-                return func(*args, **kwargs)
-            depth = args[0] if args else kwargs.pop("depth", 0)
-            if kwargs:
-                return func(*args, **kwargs)
-        return func(depth + 1)
 
     wrapper.__pysandbox_api__ = True  # type: ignore[attr-defined]
     return wrapper

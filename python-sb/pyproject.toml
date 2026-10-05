@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "python-sb"
-version = "0.0.1"  # Set with git tag
+version = "0.0.2"  # Bump to publish a change of this wrapper: release.yml requires it
 description = "Invoke python code in a sandbox"
 requires-python = ">=3.11,<4.0"
 authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
@@ -21,7 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "pysandboxes",
+    # A floor, so that the resolver accepts the pre-releases and skips the yanked 0.0.0 placeholder.
+    "pysandboxes>=0.1.0b1",
 ]
 
 [tool.hatch.build.targets.wheel]
