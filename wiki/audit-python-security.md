@@ -15,7 +15,7 @@ structured, test-pinned matrix and names the enforcing function or class for
 every row. Read [implementation](implementation.md) first if you need to know
 *how* the patching works before reasoning about *what it stops*.
 
-The separate [native guard study](native-guard-study.md) evaluates C wrappers and
+The separate [native guard study](audit-native-guard-study.md) evaluates C wrappers and
 CPython audit hooks as ways to reduce introspection of original functions. It
 records the prototype results and why a general native layer was not pursued.
 
