@@ -105,3 +105,51 @@ def test_the_first_release_publishes_python_sb(tmp_path: Path) -> None:
     _commit(tmp_path, "init")
     _git(tmp_path, "tag", "v0.1.0b1")
     assert _changes(tmp_path, "v0.1.0b1").stdout.split() == ["publish=true", "version=0.0.1"]
+
+
+def test_a_first_final_release_publishes_python_sb_whatever_the_betas_did(repo: Path) -> None:
+    _pyproject(repo, "0.0.2")
+    _commit(repo, "python-sb")
+    _git(repo, "tag", "v0.1.0b2")
+    (repo / "core.py").write_text("v2\n")
+    _commit(repo, "core")
+    _git(repo, "tag", "v0.0.1")
+    assert _changes(repo, "v0.0.1").stdout.split() == ["publish=true", "version=0.0.2"]
+
+
+def test_a_final_release_compares_with_the_last_final_tag_not_the_betas(repo: Path) -> None:
+    _git(repo, "tag", "v0.0.1")
+    _pyproject(repo, "0.0.2")
+    _commit(repo, "python-sb")
+    _git(repo, "tag", "v0.1.0b2")
+    (repo / "core.py").write_text("v2\n")
+    _commit(repo, "core")
+    _git(repo, "tag", "v0.0.2")
+    assert _changes(repo, "v0.0.2").stdout.split() == ["publish=true", "version=0.0.2"]
+
+
+def test_a_final_release_without_python_sb_change_since_the_last_final_skips_it(repo: Path) -> None:
+    _git(repo, "tag", "v0.0.1")
+    (repo / "core.py").write_text("v2\n")
+    _commit(repo, "core")
+    _git(repo, "tag", "v0.1.0b2")
+    _git(repo, "tag", "v0.0.2")
+    assert _changes(repo, "v0.0.2").stdout.split() == ["publish=false", "version=0.0.1"]
+
+
+def test_a_final_release_still_requires_a_bump_against_the_last_final(repo: Path) -> None:
+    _git(repo, "tag", "v0.0.1")
+    (repo / "python-sb" / "README.md").write_text("new\n")
+    _commit(repo, "python-sb")
+    _git(repo, "tag", "v0.0.2")
+    result = _changes(repo, "v0.0.2")
+    assert result.returncode != 0
+    assert "v0.0.1" in result.stderr
+
+
+def test_a_pre_release_after_a_final_compares_with_that_final(repo: Path) -> None:
+    _git(repo, "tag", "v0.0.1")
+    (repo / "core.py").write_text("v2\n")
+    _commit(repo, "core")
+    _git(repo, "tag", "v0.1.0b2")
+    assert _changes(repo, "v0.1.0b2").stdout.split() == ["publish=false", "version=0.0.1"]
