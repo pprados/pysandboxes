@@ -183,6 +183,7 @@ markers = [
     "requires: mark tests as requiring a specific library",
     "scheduled: mark tests to run in scheduled testing",
     "compile: mark placeholder test used to compile integration tests without running them",
-    "slow: mark tests whose cost is measured in minutes (deselect with -m 'not slow')"
+    "slow: mark tests whose cost is measured in minutes (deselect with -m 'not slow')",
+    "llm: mark tests that call a real LLM and spend tokens (skipped unless RUN_LLM_TESTS=1)"
 ]
 asyncio_mode = "auto"

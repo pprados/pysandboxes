@@ -6,8 +6,9 @@
 #   tag-release.sh pre <X.Y.Z(a|b|rc)N> | tag-release.sh patch | tag-release.sh minor
 # Tags the head of develop with a signed vX.Y.Z… and pushes develop, then the tag: release.yml verifies and publishes
 # it. A final version is the last final tag reachable from HEAD (v0.0.0 without one) bumped; it dates the CHANGELOG.md
-# entry [0.0.0] before the tag and opens a new one after, so the open entry never reaches master. A published tag is
-# never moved.
+# entry [0.0.0] before the tag and opens a new one after, so the open entry never reaches master. After the first
+# final version, changelog-draft.sh drafts what changed below the hand-written note of that entry; the maintainer
+# edits it ($VISUAL, $EDITOR, else vi, when on a terminal) and approves it with the tag. A published tag is never moved.
 set -euo pipefail
 
 die() {
@@ -54,8 +55,27 @@ previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
 echo "Changes since ${previous:-the first commit} that reach the pipeline or the wheel:"
 git --no-pager diff --stat "${previous:-$(git hash-object -t tree /dev/null)}" HEAD -- \
     .github Makefile pyproject.toml uv.lock pysandboxes
+if [[ $mode != pre && -n $last ]]; then
+    draft=$("$(dirname "$0")/changelog-draft.sh" "$last")
+    if [[ -n $draft ]]; then
+        DRAFT=$draft awk -v entry="$open_entry" '
+            $0 == entry { print; inside = 1; next }
+            inside && /^## \[/ { print ENVIRON["DRAFT"]; print ""; inside = 0 }
+            { print }
+            END { if (inside) print ENVIRON["DRAFT"] }' CHANGELOG.md >CHANGELOG.md.next
+        mv CHANGELOG.md.next CHANGELOG.md
+    fi
+    if [[ -t 0 ]]; then
+        "${VISUAL:-${EDITOR:-vi}}" CHANGELOG.md
+    fi
+    echo "CHANGELOG.md entry of $tag:"
+    awk -v entry="$open_entry" '$0 == entry { inside = 1; next } inside && /^## \[/ { exit } inside' CHANGELOG.md
+fi
 read -r -p "Sign and push $tag on $(git rev-parse --short HEAD)? [y/N] " answer || answer=
-[[ $answer == [yY] ]] || die "Nothing tagged."
+if [[ $answer != [yY] ]]; then
+    git checkout -- CHANGELOG.md
+    die "Nothing tagged."
+fi
 
 start=$(git rev-parse HEAD)
 step=

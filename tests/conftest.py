@@ -8,6 +8,7 @@ carry, and ``denied-write.probe`` only exists at all when a guard failed to deny
 it. Removing them belongs to the harness, which runs outside the sandbox.
 """
 
+import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -34,6 +35,20 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/remote/test_unshare_*.py",
 ]
 collect_ignore_glob = [] if sys.platform == "linux" else _LINUX_ONLY_TESTS
+
+# A script that calls an LLM (scripts/changelog-draft.sh) gets a command that fails, so no test spends tokens by
+# omission. Only the tests marked `llm` call the model, and only with RUN_LLM_TESTS=1.
+os.environ.setdefault("CHANGELOG_LLM", "false")
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    if os.environ.get("RUN_LLM_TESTS") == "1":
+        return
+    skip = pytest.mark.skip(reason="calls an LLM and spends tokens: set RUN_LLM_TESTS=1 to run it")
+    for item in items:
+        if "llm" in item.keywords:
+            item.add_marker(skip)
+
 
 _RESIDUES = ("tmp/test.remove", "denied-write.probe")
 
