@@ -1,4 +1,4 @@
-# bwrap provider: base + bubblewrap, and slirp4netns, iptables, iproute2 for the network filter.
+# bwrap provider: base + bubblewrap, and slirp4netns, iptables for the network filter (nsenter is in the base).
 # Build: make build-image-bwrap  =>  python-sb-bwrap:$(PYTHON_VERSION), python-sb-bwrap:latest
 ARG PYTHON_VERSION=3.11
 FROM python-sb:${PYTHON_VERSION}
@@ -7,7 +7,6 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     bubblewrap \
     iptables \
-    iproute2 \
     slirp4netns && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*

@@ -607,6 +607,22 @@ class TestMainVMBranch:
 
         assert result == 7
 
+    def test_the_guest_receives_the_network_filter_of_the_profile(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """python-sb once sent the guest no rule at all: the socket rules ran with no OS-level filter."""
+        vm = self._make_vm(
+            subprocess_cmd_return=(["qemu-fake"], {}), show_boot=False, guest_rc=0, stdout=None, stderr=None
+        )
+        vm.guest_netfilter_rules.return_value = ("*filter", "-A OUTPUT -j DROP", "COMMIT")
+        all_rules = EmptyRules._replace(os_sandbox="fake-vm-netfilter", port=5682, envs=Envs({}), learn=False)
+
+        _, launch_sandbox_mock = self._run_main(tmp_path, monkeypatch, vm=vm, all_rules=all_rules)
+
+        vm.guest_netfilter_rules.assert_called_once_with(all_rules, 5682)
+        config = launch_sandbox_mock.call_args.kwargs["process_config"]
+        assert config.netfilter_rules == ("*filter", "-A OUTPUT -j DROP", "COMMIT")
+
     def test_guest_stderr_tail_reads_from_the_shared_run_dir(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

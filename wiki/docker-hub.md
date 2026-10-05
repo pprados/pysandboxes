@@ -8,7 +8,7 @@ Each release publishes five images to Docker Hub, built from the wheel published
 | `docker.io/pprados/python-sb` | `none`, `subprocess` | Python and the `pysandboxes` wheel |
 | `docker.io/pprados/python-sb-landlock` | `landlock` | the base image; Landlock is a kernel LSM, no package needed |
 | `docker.io/pprados/python-sb-unshare` | `unshare` | the base image plus `iptables`, `iproute2` and `slirp4netns` |
-| `docker.io/pprados/python-sb-bwrap` | `bwrap` | the base image plus `bubblewrap`, `slirp4netns`, `iptables` and `iproute2` |
+| `docker.io/pprados/python-sb-bwrap` | `bwrap` | the base image plus `bubblewrap`, `slirp4netns` and `iptables` |
 | `docker.io/pprados/python-sb-qemu` | `qemu` | the base image plus QEMU, `genisoimage` and the guest VM image |
 
 Each image holds every tool its provider invokes, which is the hard part to get right by hand: without `iptables`,

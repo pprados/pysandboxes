@@ -41,3 +41,20 @@ def test_applied_rules_reach_iptables_restore(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(main_sandbox, "_IPTABLES_RESTORE_PATHS", (str(tmp_path / "absent"), str(script)))
     main_sandbox._apply_netfilter(RULES)
     assert received.read_text() == "\n".join(RULES)
+
+
+def test_a_looping_alternatives_link_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The host's /etc, exposed over the guest's, turns /usr/sbin/iptables-restore into a dead link."""
+    loop = tmp_path / "iptables-restore-loop"
+    loop.symlink_to(loop)
+    received = tmp_path / "received"
+    script = _fake_restore(tmp_path, f'cat >"{received}"')
+    monkeypatch.setattr(main_sandbox, "_IPTABLES_RESTORE_PATHS", (str(loop), str(script)))
+    main_sandbox._apply_netfilter(RULES)
+    assert received.exists()
+
+
+def test_the_backend_binaries_come_before_the_alternatives_link() -> None:
+    paths = main_sandbox._IPTABLES_RESTORE_PATHS
+    assert paths.index("/usr/sbin/iptables-nft-restore") < paths.index("/usr/sbin/iptables-restore")
+    assert paths.index("/usr/sbin/iptables-legacy-restore") < paths.index("/usr/sbin/iptables-restore")

@@ -1007,6 +1007,17 @@ class QemuSSEDaemon(VMSSEDaemon):
     def augment_rules_for_guest_run_mount(self, all_rules: AllRules) -> AllRules:
         return augment_all_rules_for_qemu_run_mount(all_rules)
 
+    def guest_netfilter_rules(self, all_rules: AllRules, port: int) -> tuple[str, ...]:
+        """Rules from the socket rules, DNS at 10.0.2.3, and the host (10.0.2.2 in user mode) allowed on ``port``."""
+        netfilter = list(rule_to_netfilter(all_rules.socket_rules, [IPv4Address("10.0.2.3")], is_ipv6=False))
+        if "COMMIT" in netfilter:
+            idx = netfilter.index("COMMIT")
+            sse_allow = (
+                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
+            )
+            netfilter = netfilter[:idx] + [sse_allow] + netfilter[idx:]
+        return tuple(netfilter)
+
     def __init__(self, token: str, *, python_args: list[str] | None = None, **kwargs: Any) -> None:
         # Force IPv4 so hostfwd (TCP only on 0.0.0.0) is used; "localhost" can resolve to ::1.
         super().__init__(
@@ -1210,16 +1221,7 @@ class QemuSSEDaemon(VMSSEDaemon):
             module, func_ref = get_callable_info(init_fn)
             init_fn_ref = f"{module}:{func_ref}"
 
-        dns_guest = [IPv4Address("10.0.2.3")]
-        netfilter_list = list(rule_to_netfilter(all_rules.socket_rules, dns_guest, is_ipv6=False))
-        # Allow host (10.0.2.2 in QEMU user mode) to reach the SSE server port.
-        if "COMMIT" in netfilter_list:
-            idx = netfilter_list.index("COMMIT")
-            sse_allow = (
-                f"-A INPUT -p tcp -s 10.0.2.2/32 --dport {port} " "-m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT"
-            )
-            netfilter_list = netfilter_list[:idx] + [sse_allow] + netfilter_list[idx:]
-        netfilter_rules: tuple[str, ...] = tuple(netfilter_list)
+        netfilter_rules = self.guest_netfilter_rules(all_rules, port)
 
         process_config = DaemonParameters(
             all_rules=all_rules,

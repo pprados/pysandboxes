@@ -76,6 +76,8 @@ PYSANDBOXES_FAIL_ON_SKIP=1 uv run pytest -rs \
     tests/integration_tests/test_guards_with_providers.py \
     tests/integration_tests/test_usage_with_providers.py \
     tests/integration_tests/remote/test_<name>.py
+# When the provider enforces net= at the OS level, with <name> in its _PROVIDERS:
+PYSANDBOXES_FAIL_ON_SKIP=1 uv run pytest -rs tests/integration_tests/test_os_netfilter.py -k <name>
 ```
 
 On a non-Linux target, run `.github/workflows/cross-os.yml` (manual dispatch) and require it green.
