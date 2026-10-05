@@ -7,7 +7,7 @@
 # Tags the head of develop with a signed vX.Y.Z… and pushes develop, then the tag: release.yml verifies and publishes
 # it. A final version is the last final tag reachable from HEAD (v0.0.0 without one) bumped; it dates the CHANGELOG.md
 # entry [0.0.0] before the tag and opens a new one after, so the open entry never reaches master. A published tag is
-# never moved: final versions stay refused while release.yml refuses them, unless RELEASE_FINAL=enabled.
+# never moved.
 set -euo pipefail
 
 die() {
@@ -24,7 +24,6 @@ pre)
         die "Usage: make publish-pre-release VERSION=X.Y.Z(a|b|rc)N, e.g. VERSION=0.1.0b2"
     ;;
 patch | minor)
-    [[ ${RELEASE_FINAL:-} == enabled ]] || die "Final releases are not enabled yet: release.yml refuses vX.Y.Z tags."
     last=$(git tag --merged HEAD -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
     IFS=. read -r major minor patch <<<"${last:-v0.0.0}"
     major=${major#v}
