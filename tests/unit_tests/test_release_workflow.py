@@ -14,6 +14,11 @@ import yaml
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "release.yml"
 GATES = {"verify", "build", "reuse-lookup", "full-gate", "wheel-tests"}
+GATE = (
+    "!cancelled() && needs.build.result == 'success' && needs.wheel-tests.result == 'success' "
+    "&& needs.reuse-lookup.result == 'success' "
+    "&& (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success')"
+)
 
 
 def _jobs() -> dict[str, Any]:
@@ -31,6 +36,10 @@ def _publish() -> dict[str, Any]:
 
 def _condition() -> str:
     return " ".join(_publish()["if"].split())
+
+
+def _condition_of(name: str) -> str:
+    return " ".join(_jobs()[name]["if"].split())
 
 
 def test_publication_needs_every_gate() -> None:
@@ -54,11 +63,23 @@ def test_a_skipped_full_gate_passes_only_through_the_reuse_lookup() -> None:
 
 
 def test_the_publication_condition_is_exactly_the_reviewed_one() -> None:
-    assert _condition() == (
-        "${{ !cancelled() && needs.build.result == 'success' && needs.wheel-tests.result == 'success' "
-        "&& needs.reuse-lookup.result == 'success' "
-        "&& (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success') }}"
-    )
+    assert _condition() == "${{ " + GATE + " && needs.verify.outputs.final == 'false' }}"
+
+
+def test_a_final_tag_publishes_to_pypi_behind_the_same_gate() -> None:
+    job = _jobs()["publish-pypi"]
+    assert _needs(job) >= GATES
+    assert job["environment"]["name"] == "pypi"
+    assert job["permissions"] == {"id-token": "write"}
+    assert _condition_of("publish-pypi") == "${{ " + GATE + " && needs.verify.outputs.final == 'true' }}"
+
+
+def test_pypi_uploads_go_to_pypi_org_and_python_sb_only_when_it_changed() -> None:
+    uploads = [s for s in _jobs()["publish-pypi"]["steps"] if "gh-action-pypi-publish" in s.get("uses", "")]
+    assert [u["with"].get("packages-dir", "dist/") for u in uploads] == ["dist/", "dist-python-sb/"]
+    assert all("repository-url" not in u["with"] for u in uploads)
+    assert all(u["with"]["skip-existing"] is True for u in uploads)
+    assert uploads[1]["if"] == PYTHON_SB
 
 
 def test_the_full_gate_is_skipped_only_when_a_nightly_is_reused() -> None:
@@ -91,9 +112,17 @@ def test_the_build_waits_for_the_light_gate() -> None:
 
 def test_the_published_wheel_is_checked_only_after_a_publication() -> None:
     job = _jobs()["verify-published"]
-    assert "publish-testpypi" in _needs(job)
-    assert " ".join(job["if"].split()) == (
-        "${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.publish-testpypi.result == 'success' }}"
+    assert _needs(job) >= {"publish-testpypi", "publish-pypi"}
+    assert _condition_of("verify-published") == (
+        "${{ !cancelled() "
+        "&& (needs.publish-testpypi.result == 'success' || needs.publish-pypi.result == 'success') }}"
+    )
+
+
+def test_a_final_release_is_checked_against_pypi_org() -> None:
+    step = next(s for s in _jobs()["verify-published"]["steps"] if "verify-published.sh" in s.get("run", ""))
+    assert step["env"]["INDEX_URL"] == (
+        "${{ needs.verify.outputs.final == 'true' && 'https://pypi.org/simple/' || 'https://test.pypi.org/simple/' }}"
     )
 
 
@@ -178,3 +207,19 @@ def test_python_sb_is_uploaded_only_when_it_changed() -> None:
     assert [u["with"].get("packages-dir", "dist/") for u in uploads] == ["dist/", "dist-python-sb/"]
     assert uploads[1]["if"] == PYTHON_SB
     assert uploads[1]["with"]["repository-url"] == "https://test.pypi.org/legacy/"
+
+
+def test_master_advances_only_after_a_final_release_is_published() -> None:
+    job = _jobs()["advance-master"]
+    assert _needs(job) >= {"verify", "verify-published", "images"}
+    assert _condition_of("advance-master") == (
+        "${{ !cancelled() && needs.verify.outputs.final == 'true' && needs.verify-published.result == 'success' "
+        "&& (needs.images.result == 'success' || needs.images.result == 'skipped') }}"
+    )
+    assert job["permissions"] == {"contents": "write"}
+
+
+def test_master_is_fast_forwarded_never_forced() -> None:
+    runs = " ".join(s.get("run", "") for s in _jobs()["advance-master"]["steps"])
+    assert 'git push origin "$SHA:refs/heads/master"' in runs
+    assert "--force" not in runs and "+$SHA" not in runs and "-f " not in runs

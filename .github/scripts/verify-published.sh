@@ -4,7 +4,7 @@
 #
 # Job verify-published of release.yml. Usage: verify-published.sh <version> <wheel>
 # Downloads pysandboxes==<version> from the index and compares its sha256 with the wheel the release built, so the
-# images embed exactly what was published. test.pypi.org sits behind a CDN: a file not visible yet is retried,
+# images embed exactly what was published. The index sits behind a CDN: a file not visible yet is retried,
 # a different file fails at once.
 set -euo pipefail
 
