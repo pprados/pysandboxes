@@ -255,10 +255,132 @@ def test_a_bytes_key_is_recorded_decoded(learning_environ: Set[str]) -> None:
     assert "BYTES_VAR" in learning_environ
 
 
+def test_bytes_names_are_recorded_by_putenv_and_unsetenv(learning_environ: Set[str]) -> None:
+    """Bytes names must be decoded for learning and passed unchanged to the OS wrappers."""
+    calls: List[Tuple[str, Any]] = []
+    table: dict[str, Callable[..., Any]] = patch_rules(learn=True)
+    putenv = table["os.putenv"](lambda name, value: calls.append(("putenv", (name, value))))
+    unsetenv = table["os.unsetenv"](lambda name: calls.append(("unsetenv", name)))
+
+    putenv(b"BYTES_SET", b"value")
+    unsetenv(b"BYTES_REMOVED")
+
+    assert learning_environ >= {"BYTES_SET", "BYTES_REMOVED"}
+    assert calls == [
+        ("putenv", (b"BYTES_SET", b"value")),
+        ("unsetenv", b"BYTES_REMOVED"),
+    ]
+
+
 def test_reading_a_variable_records_it(learning_environ: Set[str]) -> None:
     os.environ["PATH"]
 
     assert "PATH" in learning_environ
+
+
+def test_writing_a_variable_records_it(
+    learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(os.environ, "LEARNED_WRITE", "value")
+
+    assert "LEARNED_WRITE" in learning_environ
+
+
+def test_learning_environ_updates_are_visible_through_environb(monkeypatch: pytest.MonkeyPatch) -> None:
+    environb = getattr(os, "environb", None)
+    if environb is None:
+        pytest.skip("os.environb is unavailable on this platform")
+
+    monkeypatch.setitem(os.environ, "LEARNED_BYTES_VIEW", "value")
+
+    assert environb[b"LEARNED_BYTES_VIEW"] == b"value"
+
+
+def test_environb_writes_are_learned_through_putenv(
+    learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    environb = getattr(os, "environb", None)
+    if environb is None:
+        pytest.skip("os.environb is unavailable on this platform")
+
+    putenv = patch_rules(learn=True)["os.putenv"](os.putenv)
+    monkeypatch.setattr(os, "putenv", putenv)
+    monkeypatch.setitem(environb, b"LEARNED_ENVIRONB_WRITE", b"value")
+
+    assert "LEARNED_ENVIRONB_WRITE" in learning_environ
+
+
+def test_environb_reads_are_learned(learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    if not hasattr(os, "environb"):
+        pytest.skip("os.environb is unavailable on this platform")
+
+    environb = patch_rules(learn=True)["os.environb"](None)
+    monkeypatch.setattr(os, "environb", environb)
+    monkeypatch.setitem(os.environ, "LEARNED_ENVIRONB_READ", "value")
+
+    assert os.environb[b"LEARNED_ENVIRONB_READ"] == b"value"
+    assert "LEARNED_ENVIRONB_READ" in learning_environ
+
+
+def test_getenvb_reads_are_learned(learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    if not hasattr(os, "getenvb"):
+        pytest.skip("os.getenvb is unavailable on this platform")
+
+    environb = patch_rules(learn=True)["os.environb"](None)
+    monkeypatch.setattr(os, "environb", environb)
+    getenvb = patch_rules(learn=True)["os.getenvb"](os.getenvb)
+    monkeypatch.setattr(os, "getenvb", getenvb)
+    monkeypatch.setitem(os.environ, "LEARNED_GETENVB_READ", "value")
+
+    assert os.getenvb(b"LEARNED_GETENVB_READ") == b"value"
+    assert "LEARNED_GETENVB_READ" in learning_environ
+
+
+def test_getenvb_learns_missing_keys_and_preserves_default(
+    learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if not hasattr(os, "getenvb"):
+        pytest.skip("os.getenvb is unavailable on this platform")
+
+    environb = patch_rules(learn=True)["os.environb"](None)
+    monkeypatch.setattr(os, "environb", environb)
+    getenvb = patch_rules(learn=True)["os.getenvb"](os.getenvb)
+    monkeypatch.setattr(os, "getenvb", getenvb)
+
+    assert os.getenvb(b"LEARNED_GETENVB_MISSING", b"fallback") == b"fallback"
+    assert "LEARNED_GETENVB_MISSING" in learning_environ
+
+
+def test_environb_learns_keys_using_filesystem_surrogateescape(
+    learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if not hasattr(os, "environb"):
+        pytest.skip("os.environb is unavailable on this platform")
+
+    key = b"LEARNED_ENVIRONB_\xff"
+    environb = patch_rules(learn=True)["os.environb"](None)
+    monkeypatch.setattr(os, "environb", environb)
+    monkeypatch.setitem(os.environb, key, b"value")
+
+    assert os.environb[key] == b"value"
+    assert os.fsdecode(key) in learning_environ
+
+
+def test_copying_the_environment_does_not_learn_every_key(learning_environ: Set[str]) -> None:
+    expected = LearnEnviron()._clone()
+
+    assert dict(os.environ) == expected
+    assert learning_environ <= {"PYTEST_CURRENT_TEST"}
+
+
+def test_reading_a_key_after_scanning_records_the_access(learning_environ: Set[str]) -> None:
+    keys = list(os.environ)
+    assert keys
+    key = keys[0]
+
+    os.environ[key]
+
+    assert f"env={key}=${{{key}}}" in generate_rules()
 
 
 _ROOT = Path(__file__).resolve().parents[3]
@@ -321,12 +443,15 @@ def test_no_patch_without_learning() -> None:
 
 
 def test_patch_covers_the_environment_entry_points() -> None:
-    assert set(patch_rules(learn=True)) == {
+    expected = {
         "os.environ",
         "os.getenv",
         "os.putenv",
         "os.unsetenv",
     }
+    if hasattr(os, "environb"):
+        expected.update({"os.environb", "os.getenvb"})
+    assert set(patch_rules(learn=True)) == expected
 
 
 # TODO: test activate with os.environ and os.environb
