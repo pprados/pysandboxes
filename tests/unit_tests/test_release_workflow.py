@@ -137,10 +137,27 @@ def test_the_smoke_test_runs_before_any_push() -> None:
     assert _step_index(job, "smoke-test-images.sh") < _step_index(job, "docker push")
 
 
-def test_only_the_version_tag_is_pushed() -> None:
+def test_the_pushed_tags_come_only_from_image_tags_sh() -> None:
     push = _jobs()[IMAGE_JOB]["steps"][_step_index(_jobs()[IMAGE_JOB], "docker push")]["run"]
-    assert "docker.io/pprados/$image:$VERSION" in push
+    assert '.github/scripts/image-tags.sh "$VERSION" "$IMAGE_PYTHON" "$DEFAULT_PYTHON"' in push
+    assert 'docker tag "$image:$IMAGE_PYTHON" "$target"' in push
+    assert "docker.io/pprados/$image:$tag" in push
     assert "latest" not in push
+
+
+def test_the_images_are_published_for_every_claimed_interpreter() -> None:
+    job = _jobs()[IMAGE_JOB]
+    assert job["strategy"]["matrix"]["python-version"] == _jobs()["wheel-tests"]["strategy"]["matrix"]["python-version"]
+    assert job["env"]["IMAGE_PYTHON"] == "${{ matrix.python-version }}"
+    assert job["env"]["DEFAULT_PYTHON"] in job["strategy"]["matrix"]["python-version"]
+
+
+def test_each_runner_builds_and_smoke_tests_its_own_python() -> None:
+    job = _jobs()[IMAGE_JOB]
+    build = job["steps"][_step_index(job, "build-images")]["run"]
+    smoke = job["steps"][_step_index(job, "smoke-test-images.sh")]["run"]
+    assert 'PYTHON_VERSION="$IMAGE_PYTHON"' in build
+    assert '"$VERSION" "$IMAGE_PYTHON"' in smoke
 
 
 PYTHON_SB = "needs.build.outputs.python-sb == 'true'"

@@ -26,8 +26,16 @@ for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap pyth
     in_image "$image" python-sb --help >/dev/null
 done
 in_image python-sb-unshare unshare --version
+in_image python-sb-unshare iptables --version
+in_image python-sb-unshare iptables-restore --version
+in_image python-sb-unshare ip -V
+in_image python-sb-unshare slirp4netns --version
 in_image python-sb-bwrap bwrap --version
+in_image python-sb-bwrap iptables-restore --version
+in_image python-sb-bwrap ip -V
+in_image python-sb-bwrap slirp4netns --version
 in_image python-sb-qemu qemu-system-x86_64 --version
+in_image python-sb-qemu genisoimage --version
 # shellcheck disable=SC2016  # expanded inside the image, where the variable is set
 in_image python-sb-qemu sh -c 'ls "$PYSANDBOXES_VM_IMAGES_DIR"/* >/dev/null'
 echo "The five images hold pysandboxes $version"
