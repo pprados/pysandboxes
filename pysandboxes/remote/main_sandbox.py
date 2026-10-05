@@ -141,7 +141,7 @@ _NETWORK_READY_INTERVAL = 0.5
 
 
 def _wait_network_ready() -> None:
-    """Block until the slirp network is reachable (bwrap/unshare namespace).
+    """Block until the slirp network of the QEMU guest is reachable.
 
     Retries connecting to the slirp gateway for up to _NETWORK_READY_TIMEOUT
     seconds so the child does not start before the namespace is routable.
@@ -162,9 +162,7 @@ def _wait_network_ready() -> None:
             time.sleep(_NETWORK_READY_INTERVAL)
             continue
     logger.warning(
-        "Network not reachable after %.0fs; continuing anyway. "
-        "If using bwrap --unshare-net, ensure slirp4netns runs and iptables has "
-        "cap_net_admin (or use bwrap.share-net=yes).",
+        "Network not reachable after %.0fs; continuing anyway. " "Check that slirp4netns runs on the host.",
         _NETWORK_READY_TIMEOUT,
     )
 
@@ -338,7 +336,7 @@ _IPTABLES_RESTORE_PATHS = ("/usr/sbin/iptables-restore", "/sbin/iptables-restore
 
 
 def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
-    """Apply the iptables rules in the guest (QEMU) or in the user-land namespace (bwrap --unshare-net).
+    """Apply the iptables rules in the QEMU guest, where the child is root.
 
     Fails closed: the profile's socket rules depend on this filter, so the child stops when it cannot be applied.
     """
@@ -357,7 +355,7 @@ def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
     if restore is None:
         raise RuntimeError(
             f"iptables-restore not found in {', '.join(_IPTABLES_RESTORE_PATHS)}: cannot apply the network filter. "
-            "Install iptables, or set bwrap.share-net=yes to use the host network."
+            "Install iptables in the guest image."
         )
     r = subprocess.run(
         [restore, "--noflush"],
@@ -366,11 +364,7 @@ def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
         capture_output=True,
     )
     if r.returncode != 0:
-        raise RuntimeError(
-            f"iptables-restore failed ({r.returncode}): {r.stderr.decode(errors='replace').strip()}. "
-            "For bwrap --unshare-net you may need root or cap_net_admin; "
-            "or set bwrap.share-net=yes to use the host network."
-        )
+        raise RuntimeError(f"iptables-restore failed ({r.returncode}): {r.stderr.decode(errors='replace').strip()}")
 
 
 def main() -> int:
@@ -420,21 +414,10 @@ def main() -> int:
     )
 
     netfilter_rules = getattr(process_config, "netfilter_rules", ()) or ()
-    # Wait for slirp4netns readiness when in isolated network namespace (e.g. bwrap --unshare-net)
-    # Fd is passed via config when available (unshare inherits env; bwrap does not pass fds to inner process)
-    slirp_ready_fd = getattr(process_config, "slirp_ready_fd", None)
-    if slirp_ready_fd is not None:
-        try:
-            with os.fdopen(slirp_ready_fd, "rb") as f:
-                f.read(1)
-        except (ValueError, OSError):
-            pass
-
+    # Only the QEMU guest applies its own filter, then waits for its slirp network. bwrap gets no rule: the host
+    # loads its filter and waits for slirp4netns before handing the child its config.
     if netfilter_rules:
         _apply_netfilter(netfilter_rules)
-
-    # After slirp setup: loop until network is reachable (bwrap cannot pass pipe fd to inner process)
-    if netfilter_rules or getattr(process_config, "wait_network", False):
         _wait_network_ready()
 
     _qemu_show_boot_console_guest_trace(process_config, "main: after netfilter / wait_network")

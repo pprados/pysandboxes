@@ -353,8 +353,8 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
     ) -> dict[str, Any]:
         """Return process_config, pass_fds, on_launched for python_sb launch path.
 
-        When socket rules exist, injects netfilter_rules and wait_network so the
-        child runs _wait_network_ready() and slirp4netns is started via on_launched.
+        When socket rules exist, on_launched loads the filter from the host and starts slirp4netns before the
+        child gets its config (see _filtered_network).
         """
         port = self.port
         use_net_filter = self._use_network_filtering(all_rules)
@@ -367,8 +367,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             port=port,
             init_fn=init_fn,
             netfilter_rules=(),
-            slirp_ready_fd=None,
-            wait_network=False,
         )
         result: dict[str, Any] = {"process_config": process_config}
         if use_net_filter:
@@ -588,8 +586,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             port=port,
             init_fn=init_fn_ref,
             netfilter_rules=(),
-            slirp_ready_fd=None,
-            wait_network=False,
         )
 
         env: Environ = {**os.environ, **extra_envs}

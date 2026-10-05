@@ -175,6 +175,12 @@ Each backend is also covered by a small liveness test under
 `test_landlock.py`, `test_unshare.py`) that only checks a sync and an async
 `@sandbox` call round-trip — not the guards.
 
+The grid profile sets `bwrap.share-net=yes`, so its bwrap rows run on the host
+network. `remote/test_bwrap.py` and `remote/test_bwrap_netfilter.py` cover the
+filtered path instead: the second turns the Python guards off
+(`py-sandbox=false`) and proves that the kernel filter alone drops a destination
+outside the rules, with a negative control the same filter lets through.
+
 ## C. Container conditions
 
 `test_containers.py` parametrizes the full grid: `py_sandbox` {true, false} ×

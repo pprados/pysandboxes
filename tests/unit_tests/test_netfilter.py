@@ -129,11 +129,9 @@ class TestRuleToNetfilter:
         result = rule_to_netfilter(socket_rules, [], is_ipv6=False)
 
         # Check that the rule was added (with correct spacing)
-        tcp_rule_found = any(
-            "-A OUTPUT -p tcp -m conntrack--ctstate NEW -d 192.168.1.0/24 " "-m multiport --dports 80 -j ACCEPT"
-            for rule in result
+        assert (
+            "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.168.1.0/24 -m multiport --dports 80 -j ACCEPT" in result
         )
-        assert tcp_rule_found
 
     def test_rule_to_netfilter_tcp_allow_inbound(self) -> None:
         """Test rule_to_netfilter with TCP allow inbound rule."""

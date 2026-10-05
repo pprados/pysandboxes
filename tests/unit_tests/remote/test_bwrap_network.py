@@ -39,7 +39,7 @@ def test_no_socket_rule_needs_no_slirp(tmp_path: Path) -> None:
     """Nothing to filter: the child gets loopback only, no slirp4netns to start."""
     params = BWrapSSEDaemon("token").get_launch_params_for_python_sb(EmptyRules, 0, "t", "", tmp_path / "p", tmp_path)
     assert "on_launched" not in params
-    assert not params["process_config"].wait_network
+    assert params["process_config"].netfilter_rules == ()
 
 
 def test_socket_rule_unshares_the_network(tmp_path: Path) -> None:
@@ -74,13 +74,11 @@ def _filter_launch(tmp_path: Path) -> dict[str, Any]:
         )
 
 
-def test_the_child_receives_nothing_to_apply_nor_to_wait_for(tmp_path: Path) -> None:
+def test_the_child_receives_no_rule_to_apply(tmp_path: Path) -> None:
     """The sandboxed code holds no capability: the host loads the filter and waits for slirp4netns before it."""
     params = _filter_launch(tmp_path)
     config = params["process_config"]
     assert config.netfilter_rules == ()
-    assert not config.wait_network
-    assert config.slirp_ready_fd is None
     assert params["pass_fds"] == ()
 
 
