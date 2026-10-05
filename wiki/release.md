@@ -36,8 +36,9 @@ commit, tag and push, then open a new `[0.0.0]` entry.
 
 The tag starts `release.yml`, which waits for **one approval**, the `pypi` deployment. Approving publishes
 `pysandboxes` and, when `python-sb/` changed since the last final tag, `python-sb` with a higher version. The run then
-checks pypi.org, pushes the images with `X.Y.Z`, `X.Y.Z-py3.X`, `py3.X` and `latest`, and fast-forwards `master` to the
-tagged commit. A version number uploaded to pypi.org can never be reused, even after deletion; yanking only hides it.
+checks pypi.org, pushes the images with `X.Y.Z`, `py3.X` and `latest` (plus `X.Y.Z-py3.X`), and fast-forwards
+`master` to the tagged commit. A version number uploaded to pypi.org can never be reused, even after deletion;
+yanking only hides it.
 
 ## What the pipeline does
 
@@ -57,8 +58,9 @@ tagged commit. A version number uploaded to pypi.org can never be reused, even a
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap` and `python-sb-qemu`,
-`linux/amd64`, Python 3.13. A pre-release pushes the version tag only; a final version also pushes `X.Y.Z-py3.X`,
-`py3.X` and `latest`. Their digests are listed in the run summary.
+`linux/amd64`, default Python 3.13. A pre-release pushes `<version>` (default Python) and `<version>-py3.X` for each
+Python; a final version also pushes `py3.X` and, for the default Python, `latest`. Their digests are listed in the
+run summary.
 
 `python-sb/` is a separate package, the one behind `uvx python-sb`, with its own version. A release publishes it
 too when one of its files changed since the previous tag (the last final tag, for a final version); its version in
