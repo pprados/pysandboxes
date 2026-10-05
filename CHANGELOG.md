@@ -17,7 +17,7 @@
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
-## [0.0.1] - 2026-10-05
+## [0.0.0] - 202X-XX-XX
 
 ### Added
 - First stable version
