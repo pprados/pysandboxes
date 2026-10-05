@@ -36,7 +36,7 @@ commit, tag and push, then open a new `[0.0.0]` entry.
 
 The tag starts `release.yml`, which waits for **one approval**, the `pypi` deployment. Approving publishes
 `pysandboxes` and, when `python-sb/` changed since the last final tag, `python-sb` with a higher version. The run then
-checks pypi.org, pushes the images with `X.Y.Z`, `py3.X` and `latest` (plus `X.Y.Z-py3.X`), and fast-forwards
+checks pypi.org, pushes the images with `3.X`, `3`, `latest` and `X.Y.Z` (plus `3.X-X.Y.Z`), and fast-forwards
 `master` to the tagged commit. A version number uploaded to pypi.org can never be reused, even after deletion;
 yanking only hides it.
 
@@ -59,8 +59,9 @@ yanking only hides it.
 
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap` and `python-sb-qemu`,
 `linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes.
-`.github/scripts/image-tags.sh` lists their tags: `<version>-py<python>` for every release, `<version>` for Python 3.13,
-plus `py<python>` and, for Python 3.13, `latest` for a final release only (see [Images on Docker Hub](docker-hub.md)).
+`.github/scripts/image-tags.sh` lists their tags, in the manner of the official `python` images: `<python>-<version>`
+for every release, `<version>` for Python 3.14, plus `<python>` and, for Python 3.14, `3` and `latest` for a final
+release only (see [Images on Docker Hub](docker-hub.md)).
 Their digests are listed in the run summary.
 
 `python-sb/` is a separate package, the one behind `uvx python-sb`, with its own version. A release publishes it

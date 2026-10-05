@@ -3,9 +3,10 @@
 # License: Apache V2
 #
 # Run by the images job of release.yml. Usage: image-tags.sh <version> <python version> <default python version>
-# Prints the Docker Hub tags of one image, one per line. <version>-py<python> never moves, nor does <version>, given
-# to the default Python only. The moving tags, py<python> and latest (default Python only), follow final releases
-# only, so that a pre-release never reaches a plain `docker pull`.
+# Prints the Docker Hub tags of one image, one per line, in the manner of the official python images: the image is
+# Python with pysandboxes. <python>-<version> never moves, nor does <version>, given to the default Python only. The
+# moving tags, <python>, then 3 and latest (default Python only), follow final releases only, so that a pre-release
+# never reaches a plain `docker pull`.
 set -euo pipefail
 
 version=$1
@@ -24,10 +25,11 @@ fi
 if [[ $python == "$default" ]]; then
     echo "$version"
 fi
-echo "$version-py$python"
+echo "$python-$version"
 if $final; then
-    echo "py$python"
+    echo "$python"
     if [[ $python == "$default" ]]; then
+        echo "3"
         echo "latest"
     fi
 fi

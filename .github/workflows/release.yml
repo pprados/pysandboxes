@@ -393,7 +393,7 @@ jobs:
     env:
       VERSION: ${{ needs.verify.outputs.version }}
       IMAGE_PYTHON: ${{ matrix.python-version }}
-      DEFAULT_PYTHON: "3.13"
+      DEFAULT_PYTHON: "3.14"
       UV_PYTHON: "3.13"
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0

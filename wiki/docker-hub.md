@@ -17,18 +17,20 @@ firejail is a setuid program, ill-suited to a container.
 
 ## Tags
 
-The images are `linux/amd64`, published for Python 3.11, 3.12, 3.13 and 3.14. Each release pushes, for every image:
+The images are `linux/amd64`, published for Python 3.11, 3.12, 3.13 and 3.14. They are tagged in the manner of the
+official `python` images, since each is Python with pysandboxes: `pprados/python-sb:3.14` is to `python:3.14` what
+the sandbox is to Python. Each release pushes, for every image:
 
 | Tag | Example | Moves? | Pushed for |
 |---|---|---|---|
-| `<version>-py<python>` | `0.1.0b8-py3.12` | never | every release and every Python |
-| `<version>` | `0.1.0b8` | never | every release, Python 3.13 |
-| `py<python>` | `py3.12` | to each final release | final releases only, every Python |
-| `latest` | `latest` | to each final release | final releases only, Python 3.13 |
+| `<python>-<version>` | `3.12-0.1.0` | never | every release and every Python |
+| `<version>` | `0.1.0` | never | every release, Python 3.14 |
+| `<python>` | `3.12` | to each final release | final releases only, every Python |
+| `3`, `latest` | `latest` | to each final release | final releases only, Python 3.14 |
 
-A pre-release (`a`, `b`, `rc`) never moves `latest` nor `py<python>`, so a plain `docker pull` never gets one. Until
-the first final release, those tags do not exist: name a version. To be sure that what runs stays the same, use
-`<version>-py<python>`, or the digest. The qemu image matches its guest VM to its Python, so take the Python your
+A pre-release (`a`, `b`, `rc`) never moves `latest`, `3` nor `<python>`, so a plain `docker pull` never gets one.
+To be sure that what runs stays the same, use `<python>-<version>`, or the digest. Pre-releases up to `0.1.0b8` were
+tagged `<version>` only. The qemu image matches its guest VM to its Python, so take the Python your
 code needs rather than the default.
 
 ## Pulling
