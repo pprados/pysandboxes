@@ -19,10 +19,8 @@ import asyncio
 import logging
 import os
 import pickle
-import socket as _socket_mod
 import subprocess
 import sys
-import time
 import traceback
 from logging import StreamHandler
 from pathlib import Path
@@ -132,39 +130,6 @@ def _debug_log() -> None:
 
 
 # %%
-
-
-# Slirp gateway; match bwrap_sse_daemon / unshare
-_SLIRP_GW = "10.0.2.2"
-_NETWORK_READY_TIMEOUT = 15.0
-_NETWORK_READY_INTERVAL = 0.5
-
-
-def _wait_network_ready() -> None:
-    """Block until the slirp network of the QEMU guest is reachable.
-
-    Retries connecting to the slirp gateway for up to _NETWORK_READY_TIMEOUT
-    seconds so the child does not start before the namespace is routable.
-    Only a successful connect counts; connection refused or other errors are retried.
-    """
-    deadline = time.monotonic() + _NETWORK_READY_TIMEOUT
-    while time.monotonic() < deadline:
-        try:
-            s = _socket_mod.socket(_socket_mod.AF_INET, _socket_mod.SOCK_STREAM)
-            s.settimeout(2.0)
-            s.connect((_SLIRP_GW, 80))
-            s.close()
-            return
-        except OSError:
-            time.sleep(_NETWORK_READY_INTERVAL)
-            continue
-        except Exception:
-            time.sleep(_NETWORK_READY_INTERVAL)
-            continue
-    logger.warning(
-        "Network not reachable after %.0fs; continuing anyway. " "Check that slirp4netns runs on the host.",
-        _NETWORK_READY_TIMEOUT,
-    )
 
 
 def run_guest(process_config: DaemonParameters) -> int:
@@ -332,7 +297,14 @@ async def run_server(process_config: DaemonParameters) -> int:
     return 0
 
 
-_IPTABLES_RESTORE_PATHS = ("/usr/sbin/iptables-restore", "/sbin/iptables-restore")
+# The backend binaries first: /usr/sbin/iptables-restore goes through /etc/alternatives, which is the host's once a
+# profile exposes /etc over the guest's, and then resolves to nothing.
+_IPTABLES_RESTORE_PATHS = (
+    "/usr/sbin/iptables-nft-restore",
+    "/usr/sbin/iptables-legacy-restore",
+    "/usr/sbin/iptables-restore",
+    "/sbin/iptables-restore",
+)
 
 
 def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
@@ -414,11 +386,10 @@ def main() -> int:
     )
 
     netfilter_rules = getattr(process_config, "netfilter_rules", ()) or ()
-    # Only the QEMU guest applies its own filter, then waits for its slirp network. bwrap gets no rule: the host
-    # loads its filter and waits for slirp4netns before handing the child its config.
+    # Only the QEMU guest applies its own filter. bwrap gets no rule: the host loads its filter and waits for
+    # slirp4netns before handing the child its config.
     if netfilter_rules:
         _apply_netfilter(netfilter_rules)
-        _wait_network_ready()
 
     _qemu_show_boot_console_guest_trace(process_config, "main: after netfilter / wait_network")
 

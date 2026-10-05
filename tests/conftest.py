@@ -24,7 +24,6 @@ _LINUX_ONLY_TESTS = [
     "containers_tests/*",
     "integration_tests/test_slirp_cleanup.py",
     "integration_tests/remote/test_bwrap.py",
-    "integration_tests/remote/test_bwrap_netfilter.py",
     "integration_tests/remote/test_firejail.py",
     "integration_tests/remote/test_landlock.py",
     "integration_tests/remote/test_unshare.py",
