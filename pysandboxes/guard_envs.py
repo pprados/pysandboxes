@@ -305,6 +305,7 @@ class LearnEnvironBytes(os._Environ):
     def __delitem__(self, key: bytes) -> None:
         del os.environ[os.fsdecode(key)]
 
+
 def generate_rules() -> list[str]:
     """Generate environment variable rules from learning data.
 
@@ -406,7 +407,7 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
             os.environ = LearnEnviron()  # noqa: B003
             return os.environ
 
-        patches = {
+        patches: dict[str, Callable] = {
             "os.environ": activate_learning_env_factory,
             "os.getenv": _f(_wrap_os_getenv),
             "os.putenv": _f(_wrap_os_putenv),

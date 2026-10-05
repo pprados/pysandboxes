@@ -149,7 +149,7 @@ class TestAddLearningRule:
         with (
             patch("pysandboxes.learning._learning_path", Path("test.conf")),
             patch("pysandboxes.learning._learning_mode", True),
-            patch("pysandboxes.learning._learning", set()) as learned,
+            patch("pysandboxes.learning._learning", set[str]()) as learned,
         ):
             add_learning_rule(test_rule)
             add_learning_rule(test_rule)
@@ -168,7 +168,7 @@ class TestAddLearningRule:
         with (
             patch("pysandboxes.learning._learning_path", Path("test.conf")),
             patch("pysandboxes.learning._learning_mode", True),
-            patch("pysandboxes.learning._learning", set()) as learned,
+            patch("pysandboxes.learning._learning", set[str]()) as learned,
         ):
             for rule in rules:
                 add_learning_rule(rule)

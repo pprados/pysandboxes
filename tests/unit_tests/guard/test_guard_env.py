@@ -278,9 +278,7 @@ def test_reading_a_variable_records_it(learning_environ: Set[str]) -> None:
     assert "PATH" in learning_environ
 
 
-def test_writing_a_variable_records_it(
-    learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_writing_a_variable_records_it(learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(os.environ, "LEARNED_WRITE", "value")
 
     assert "LEARNED_WRITE" in learning_environ
