@@ -616,16 +616,14 @@ init: _uv-init
 publish-pre-release: quick-demo-gif
 	@scripts/tag-release.sh pre "$(VERSION)"
 
-# Final versions: the last final tag bumped, the CHANGELOG entry dated, a signed tag pushed after develop. Refused
-# until release.yml accepts final tags (phase 5): a published tag is never moved. RELEASE_FINAL=enabled lifts it.
-## Run the full local check, then tag and push the next patch version (not enabled yet)
+# Final versions: the last final tag bumped, the CHANGELOG entry dated, a signed tag pushed after develop;
+# release.yml publishes it to pypi.org once the pypi deployment is approved.
+## Run the full local check, then tag and push the next patch version
 publish-patch: quick-demo-gif
-	@[[ "$${RELEASE_FINAL:-}" == enabled ]] || { echo "Final releases are not enabled yet."; exit 1; }
 	$(MAKE) release
 	@scripts/tag-release.sh patch
 
-## Run the full local check, then tag and push the next minor version (not enabled yet)
+## Run the full local check, then tag and push the next minor version
 publish-minor: quick-demo-gif
-	@[[ "$${RELEASE_FINAL:-}" == enabled ]] || { echo "Final releases are not enabled yet."; exit 1; }
 	$(MAKE) release
 	@scripts/tag-release.sh minor

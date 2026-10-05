@@ -6,7 +6,8 @@
 # python-sb/ is a separate package with its own version. It is published when one of its files changed since the
 # previous release tag, and then its version must be higher than at that tag: a change left at the same version would
 # be skipped by the index without a word. python-sb uses final versions only (X.Y.Z): sort -V does not order
-# PEP 440 pre-releases. Prints publish=true|false and version=… for $GITHUB_OUTPUT.
+# PEP 440 pre-releases. A final tag compares with the last final tag, so that python-sb reaches pypi.org even when
+# only pre-releases carried its change. Prints publish=true|false and version=… for $GITHUB_OUTPUT.
 set -euo pipefail
 
 tag=$1
@@ -15,7 +16,12 @@ version_at() {
 }
 
 version=$(version_at "$tag")
-previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$tag^" 2>/dev/null || true)
+if [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    previous=$(git tag --merged "$tag^" -l 'v*' 2>/dev/null | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V |
+        tail -n 1 || true)
+else
+    previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$tag^" 2>/dev/null || true)
+fi
 publish=true
 if [[ -n $previous ]]; then
     if git diff --quiet "$previous" "$tag" -- python-sb/; then

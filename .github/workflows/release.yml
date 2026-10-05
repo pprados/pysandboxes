@@ -1,10 +1,11 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# Publishes a signed pre-release tag vX.Y.Z(a|b|rc)N: wheel to test.pypi.org after the full test gate, then the
-# container images to Docker Hub. This file and every file of the tagged commit are attacker-controlled input: what
-# protects the release lives in the GitHub settings (tag ruleset on v*, reviewer on the testpypi environment, the
-# dockerhub environment restricted to v* tags, RELEASE_ALLOWED_SIGNERS).
+# Publishes a signed tag: a pre-release vX.Y.Z(a|b|rc)N goes to test.pypi.org, a final vX.Y.Z to
+# pypi.org, after the full test gate; then the container images go to Docker Hub, and a final version fast-forwards
+# master. This file and every file of the tagged commit are attacker-controlled input: what
+# protects the release lives in the GitHub settings (tag ruleset on v*, reviewers on the testpypi and pypi
+# environments, the dockerhub environment restricted to v* tags, RELEASE_ALLOWED_SIGNERS).
 name: Release
 
 on:
@@ -20,6 +21,7 @@ jobs:
     outputs:
       version: ${{ steps.tag.outputs.version }}
       sha: ${{ steps.tag.outputs.sha }}
+      final: ${{ steps.tag.outputs.final }}
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       with:
@@ -36,23 +38,32 @@ jobs:
       run: .github/scripts/verify-release-tag.sh "$GITHUB_REF" >>"$GITHUB_OUTPUT"
 
   # lint.yml and test.yml do not run on tags: wait for their runs on the develop push of the tagged commit.
-  # GitHub only runs them on the head of a push: review origin/develop, then tag its head, or this job times out.
+  # GitHub only runs them on the head of a push, and skips documentation-only pushes: the runs of the tagged commit,
+  # or of the commit below a documentation-only release commit, vouch for the code. Push develop before tagging.
   push-checks:
     needs: verify
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      contents: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       SHA: ${{ needs.verify.outputs.sha }}
     steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      with:
+        fetch-depth: 0
+
     - name: Wait for lint.yml and test.yml on the tagged commit
       run: |
+        mapfile -t commits < <(.github/scripts/checked-commits.sh "$SHA")
         deadline=$((SECONDS + 1800))
         for workflow in lint.yml test.yml; do
           while :; do
-            runs=$(gh run list --commit "$SHA" --workflow "$workflow" --event push --json status,conclusion)
+            runs=$(for c in "${commits[@]}"; do
+              gh run list --commit "$c" --workflow "$workflow" --event push --json status,conclusion
+            done | jq -s 'add')
             if jq -e 'any(.status == "completed" and .conclusion != "success")' <<<"$runs" >/dev/null; then
               echo "::error::$workflow did not succeed on $SHA"
               exit 1
@@ -148,6 +159,7 @@ jobs:
         path: dist-python-sb/
         if-no-files-found: error
 
+  # RELEASE_SKIP_FULL_GATE=true (repository variable) skips the suites: a temporary switch for the first final release.
   # A tag on a commit a nightly already proved reuses that run rather than repeating its suites.
   reuse-lookup:
     needs: verify
@@ -161,6 +173,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       SHA: ${{ needs.verify.outputs.sha }}
+      SKIP_FULL_GATE: ${{ vars.RELEASE_SKIP_FULL_GATE }}
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       with:
@@ -169,7 +182,16 @@ jobs:
     - name: Look for a green nightly full gate on the tagged commit
       id: lookup
       run: |
-        .github/scripts/find-nightly-gate.sh "$SHA" >"$RUNNER_TEMP/lookup"
+        if [[ $SKIP_FULL_GATE == true ]]; then
+          echo "reuse=true" >>"$GITHUB_OUTPUT"
+          echo "Full gate skipped: RELEASE_SKIP_FULL_GATE=true (temporary switch)" >>"$GITHUB_STEP_SUMMARY"
+          echo "::warning::RELEASE_SKIP_FULL_GATE=true: integration, sample and container suites skipped"
+          exit 0
+        fi
+        for c in $(.github/scripts/checked-commits.sh "$SHA"); do
+          .github/scripts/find-nightly-gate.sh "$c" >"$RUNNER_TEMP/lookup"
+          if grep -q '^reuse=true$' "$RUNNER_TEMP/lookup"; then break; fi
+        done
         cat "$RUNNER_TEMP/lookup" >>"$GITHUB_OUTPUT"
         cat "$RUNNER_TEMP/lookup" >>"$GITHUB_STEP_SUMMARY"
 
@@ -258,7 +280,8 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.build.result == 'success' && needs.wheel-tests.result == 'success'
       && needs.reuse-lookup.result == 'success'
-      && (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success') }}
+      && (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success')
+      && needs.verify.outputs.final == 'false' }}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -290,10 +313,48 @@ jobs:
         packages-dir: dist-python-sb/
         skip-existing: true
 
+  # The pypi reviewer is the single approval of a final tag, as testpypi is for a pre-release.
+  publish-pypi:
+    needs: [verify, build, reuse-lookup, full-gate, wheel-tests]
+    if: >-
+      ${{ !cancelled() && needs.build.result == 'success' && needs.wheel-tests.result == 'success'
+      && needs.reuse-lookup.result == 'success'
+      && (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success')
+      && needs.verify.outputs.final == 'true' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pysandboxes/${{ needs.verify.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+      with:
+        name: dist
+        path: dist/
+
+    - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+      with:
+        skip-existing: true
+
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+      if: needs.build.outputs.python-sb == 'true'
+      with:
+        name: python-sb
+        path: dist-python-sb/
+
+    - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+      if: needs.build.outputs.python-sb == 'true'
+      with:
+        packages-dir: dist-python-sb/
+        skip-existing: true
+
   # The images are built from the dist/ artifact, not from the index; this proves the index holds the same file.
   verify-published:
-    needs: [verify, publish-testpypi]
-    if: ${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.publish-testpypi.result == 'success' }}
+    needs: [verify, publish-testpypi, publish-pypi]
+    if: >-
+      ${{ !cancelled()
+      && (needs.publish-testpypi.result == 'success' || needs.publish-pypi.result == 'success') }}
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.verify.outputs.version }}
@@ -311,11 +372,15 @@ jobs:
         name: dist
         path: dist/
 
-    - name: Check that test.pypi.org serves the built wheel
+    - name: Check that the index serves the built wheel
+      env:
+        INDEX_URL: >-
+          ${{ needs.verify.outputs.final == 'true' && 'https://pypi.org/simple/'
+          || 'https://test.pypi.org/simple/' }}
       run: .github/scripts/verify-published.sh "$VERSION" dist/pysandboxes-"$VERSION"-*.whl
 
-  # No reviewer of its own: the testpypi approval covers the images, and the dockerhub environment, which holds the
-  # only push credential, accepts v* tags only, which the tag ruleset reserves to the maintainer.
+  # No reviewer of its own: the testpypi or pypi approval covers the images, and the dockerhub environment,
+  # which holds the only push credential, accepts v* tags only, which the tag ruleset reserves to the maintainer.
   images:
     needs: [verify, verify-published]
     if: ${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.verify-published.result == 'success' }}
@@ -385,3 +450,27 @@ jobs:
           done
           echo "- \`$(docker inspect --format '{{index .RepoDigests 0}}' "$target")\`" >>"$GITHUB_STEP_SUMMARY"
         done
+
+  # Final versions only, once everything is published. Without --force: a master that is not an ancestor of the tag
+  # makes the push fail instead of being rewritten. GITHUB_TOKEN cannot push workflow files and a GitHub App token
+  # cannot push workflow changes either: a deploy key with write access does, held by the master environment, which
+  # is restricted to v* tags.
+  advance-master:
+    needs: [verify, verify-published, images]
+    if: >-
+      ${{ !cancelled() && needs.verify.outputs.final == 'true' && needs.verify-published.result == 'success'
+      && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment: master
+    permissions:
+      contents: read
+    env:
+      SHA: ${{ needs.verify.outputs.sha }}
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      with:
+        fetch-depth: 0
+        ssh-key: ${{ secrets.MASTER_DEPLOY_KEY }}
+
+    - name: Fast-forward master to the tagged commit
+      run: git push origin "$SHA:refs/heads/master"

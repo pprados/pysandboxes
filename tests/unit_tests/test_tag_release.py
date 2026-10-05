@@ -53,8 +53,8 @@ def work(tmp_path: Path) -> Path:
     return work
 
 
-def _release(work: Path, *args: str, answer: str = "y\n", final: bool = True) -> subprocess.CompletedProcess[str]:
-    env = {**_ENV, "RELEASE_FINAL": "enabled" if final else ""}
+def _release(work: Path, *args: str, answer: str = "y\n") -> subprocess.CompletedProcess[str]:
+    env = _ENV
     return subprocess.run(
         [str(SCRIPT), *args], cwd=work, env=env, input=answer, capture_output=True, text=True, check=False
     )
@@ -172,13 +172,6 @@ def test_the_diff_since_the_last_tag_is_shown_before_the_question(work: Path) ->
 # --- final versions -------------------------------------------------------------------------------------------------
 
 
-def test_final_versions_are_refused_until_enabled(work: Path) -> None:
-    result = _release(work, "patch", final=False)
-    assert result.returncode != 0
-    assert "not enabled" in result.stderr
-    assert _git(work, "tag") == ""
-
-
 def test_patch_bumps_the_last_final_tag_ignoring_newer_pre_releases(work: Path) -> None:
     _git(work, "tag", "-m", "x", "v0.0.1")
     _commit(work, "beta")
@@ -214,6 +207,16 @@ def test_a_final_version_dates_the_changelog_before_the_tag_and_opens_the_next_e
     for rev in ("HEAD", "HEAD~1"):
         allowed = f"gpg.ssh.allowedSignersFile={work.parent / 'allowed'}"
         assert _git(work, "-c", allowed, "log", "-1", "--format=%G?", rev) == "G"
+
+
+def test_the_last_line_names_the_index_of_the_release_kind(work: Path) -> None:
+    final = _release(work, "minor")
+    assert final.returncode == 0, final.stderr
+    assert "Approve the pypi deployment" in final.stdout
+    _commit(work, "feature")
+    pre = _release(work, "pre", "0.2.0b1")
+    assert pre.returncode == 0, pre.stderr
+    assert "Approve the testpypi deployment" in pre.stdout
 
 
 def test_a_final_version_needs_the_open_changelog_entry(work: Path) -> None:
@@ -295,12 +298,10 @@ def test_the_publish_targets_call_the_script() -> None:
         assert recipe[-1] == f"@scripts/tag-release.sh {bump}"
 
 
-def test_final_targets_refuse_before_the_long_local_check() -> None:
+def test_the_final_targets_have_no_lock_left() -> None:
     for bump in ("patch", "minor"):
-        recipe = _recipe(f"publish-{bump}")
-        guard = next(i for i, line in enumerate(recipe) if "RELEASE_FINAL" in line)
-        check = next(i for i, line in enumerate(recipe) if "$(MAKE) release" in line)
-        assert guard < check
+        assert _recipe(f"publish-{bump}") == ["$(MAKE) release", f"@scripts/tag-release.sh {bump}"]
+    assert "RELEASE_FINAL" not in SCRIPT.read_text()
 
 
 def test_release_no_longer_uploads() -> None:

@@ -78,7 +78,18 @@ def test_signed_prerelease_on_develop_passes(repo: Path, key: Path, tag: str) ->
     result = _verify(repo, f"refs/tags/{tag}", _signers(key))
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [f"version={tag[1:]}", f"sha={sha}"]
+    assert result.stdout.splitlines() == [f"version={tag[1:]}", f"sha={sha}", "final=false"]
+
+
+@pytest.mark.parametrize("tag", ["v0.0.1", "v0.1.0", "v1.20.3"])
+def test_signed_final_tag_on_develop_passes(repo: Path, key: Path, tag: str) -> None:
+    _tag(repo, tag, key)
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+
+    result = _verify(repo, f"refs/tags/{tag}", _signers(key))
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [f"version={tag[1:]}", f"sha={sha}", "final=true"]
 
 
 def test_unsigned_annotated_tag_fails(repo: Path, key: Path) -> None:
@@ -94,7 +105,7 @@ def test_tag_signed_by_unlisted_key_fails(repo: Path, key: Path, tmp_path: Path)
 
 
 @pytest.mark.parametrize(
-    "tag", ["v0.1.0", "v0.1.0-rc1", "v0.1.0.dev1", "v0.1.0b", "0.1.0b1", "v0.1b1", "v0.1.0b1.post1"]
+    "tag", ["v0.1", "v0.1.0-rc1", "v0.1.0.dev1", "v0.1.0b", "0.1.0b1", "v0.1b1", "v0.1.0b1.post1", "v0.1.0.post1"]
 )
 def test_other_tag_names_are_refused(repo: Path, key: Path, tag: str) -> None:
     _tag(repo, tag, key)
@@ -102,7 +113,7 @@ def test_other_tag_names_are_refused(repo: Path, key: Path, tag: str) -> None:
     result = _verify(repo, f"refs/tags/{tag}", _signers(key))
 
     assert result.returncode != 0
-    assert "final release not enabled yet" in result.stderr
+    assert "not a vX.Y.Z or vX.Y.Z(a|b|rc)N tag" in result.stderr
 
 
 def test_tag_not_the_commit_being_built_fails(repo: Path, key: Path) -> None:
