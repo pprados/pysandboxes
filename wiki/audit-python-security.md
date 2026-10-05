@@ -122,6 +122,10 @@ disarms everything; see
 | Read/write a path outside `expose-ro`/`expose-rw` | decision on the canonical path in `guard_files._apply_dest_to_src_rules`: `startswith` match against each `FSExposeRule` → `raise RulePermissionError` | **Blocked — demonstrated**: `test_guard_escape_fixes.py::test_symlink_leaving_the_exposed_dir_is_denied` asserts the out-of-scope secret resolves to `(None, None)` |
 | Symlink inside the scope pointing outside it | decision taken on the `guard_files._safe_realpath`-resolved path, not the raw one | **Blocked — demonstrated** (`test_symlink_leaving_the_exposed_dir_is_denied[absolute,relative]`) |
 | Create a symlink whose target is out of scope | `guard_files._wrap_os_symlink` validates the target (`os.symlink` in the guard's patch table) | **Blocked — demonstrated** (`test_creating_a_symlink_out_of_scope_is_refused`) |
+| Name the file relative to an open directory (`dir_fd`, `src_dir_fd`, `dst_dir_fd`), so a check against the current directory would see the wrong path | `guard_files._check_dir_fd` resolves the descriptor (`_dir_fd_path`: `/proc/self/fd/<n>` on Linux, `F_GETPATH` on macOS) and applies the rules to the effective path, for `os.open`, metadata and access checks, `symlink`, and one- or two-path operations (`unlink`, `rmdir`, `mkdir`, `rename`, `replace`, `link`); `unlink`, `rmdir` and `mkdir` count as writes. The call keeps its original arguments: no remapping under `dir_fd` | **Blocked — demonstrated** (`test_guard_files_coverage.py::test_a_dir_fd_removal_is_checked_against_the_directory_it_names`, `::test_body_two_filenames_denies_rename_through_a_read_only_dir_fd`, `::test_wrap_os_open_denies_a_write_through_a_read_only_dir_fd`, `::test_wrap_os_open_denies_an_ignored_path_with_dir_fd`, `::test_wrap_os_symlink_denies_a_read_only_dir_fd`; `test_guard_shutil.py::test_shutil_rmtree_cannot_empty_a_read_only_tree`) |
+| Pass a `dir_fd` the guard cannot resolve | `_dir_fd_path` denies the call instead of falling back to the current directory | **Blocked — demonstrated** (`test_guard_files_coverage.py::test_dir_fd_path_denies_a_descriptor_it_cannot_resolve`) |
+| Rename the directory between the descriptor lookup and the operation | the lookup and the syscall are two separate steps | **Open — reasoned** (time-of-check/time-of-use race, noted in [weaknesses.md](weaknesses.md)); the OS sandbox is the barrier |
+| Use a descriptor already held (`open(fd)`, `os.open`, `os.stat`, `os.listdir`, `os.chdir` on an int, or an inherited fd) | an int names no path, so the wrappers pass it through: the call that opened it was checked | **Open by design — demonstrated** (`test_guard_files_coverage.py::test_wrap_filename_passes_through_a_file_descriptor`, `::test_wrap_os_open_passes_through_a_file_descriptor`); a held descriptor is a capability, as a held `dir_fd` is |
 | Reach the original `io.open` via its closure cell | wrapper keeps a reference to the original (patch-factory closure) | **Open — demonstrated** (`test_escape_pysandbox.py::test_escape_with_closure` asserts the original is reachable) |
 
 The canonicalization is itself re-entrant-safe: `_safe_realpath` calls
@@ -309,10 +313,15 @@ uv run pytest tests/unit_tests/guard/test_guard_api.py \
               tests/unit_tests/guard/test_guard_socket.py \
               tests/unit_tests/guard/test_guard_os.py \
               tests/unit_tests/test_learning.py -v
+
+# the dir_fd and descriptor rows of objective 1
+uv run pytest tests/unit_tests/guard/test_guard_files_coverage.py \
+              tests/unit_tests/guard/test_guard_shutil.py -v -k "dir_fd or descriptor or rmtree"
 ```
 
-At the time of writing this run reports **20 passed, 3 xfailed** for the escape
-files and **197 passed, 4 skipped, 1 xfailed** for the guard corpus on Linux
+At the time of writing this run reports **21 passed, 3 xfailed** for the escape
+files, **211 passed, 4 skipped, 1 xfailed** for the guard corpus and
+**16 passed** for the `dir_fd` selection on Linux
 (three skips are the Windows-only twins of `test_armed_denies_the_windows_twins`,
 one is `test_os_chflags_and_lchflags`). The three `xfail` entries of the escape
 files are the open escapes: `test_escape_with_subclasses` (objective 6),
