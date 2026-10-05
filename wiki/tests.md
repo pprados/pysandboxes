@@ -175,6 +175,17 @@ Each backend is also covered by a small liveness test under
 `test_landlock.py`, `test_unshare.py`) that only checks a sync and an async
 `@sandbox` call round-trip — not the guards.
 
+The grid profile sets `bwrap.share-net=yes`, so its bwrap rows run on the host
+network. The Python guards also refuse what the OS filter should, so a broken
+filter leaves the grid green: that is how the bwrap filter, which could never
+load, and the qemu one, never applied under `python-sb` and not found by the
+guest once `/etc` was exposed, went unnoticed. `test_os_netfilter.py` covers the
+OS filter on its own: with the Python guards off (`py-sandbox=false`), for
+`bwrap`, `unshare` and `qemu`, under `python-sb` and in daemon mode, it proves
+that a destination outside the rules is dropped, with a negative control the
+same filter lets through. `remote/test_bwrap.py` runs the bwrap daemon on the
+filtered path.
+
 ## C. Container conditions
 
 `test_containers.py` parametrizes the full grid: `py_sandbox` {true, false} ×

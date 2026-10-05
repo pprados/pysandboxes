@@ -366,8 +366,14 @@ jobs:
     if: ${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.verify-published.result == 'success' }}
     runs-on: ubuntu-latest
     environment: dockerhub
+    # One runner per Python: the qemu image alone holds a guest disk, five images times four would not fit on one.
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      IMAGE_PYTHON: ${{ matrix.python-version }}
+      DEFAULT_PYTHON: "3.13"
       UV_PYTHON: "3.13"
     steps:
     - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
@@ -408,17 +414,20 @@ jobs:
     - name: Build the five images from the published wheel
       run: |
         touch .make-dist
-        make -o uv.lock CONTAINER_CMDS=docker PYTHON_VERSION=3.13 build-images
+        make -o uv.lock CONTAINER_CMDS=docker PYTHON_VERSION="$IMAGE_PYTHON" build-images
 
     - name: Smoke-test the images
-      run: .github/scripts/smoke-test-images.sh "$VERSION" 3.13
+      run: .github/scripts/smoke-test-images.sh "$VERSION" "$IMAGE_PYTHON"
 
-    - name: Push the version tags
+    - name: Push the tags
       run: |
+        mapfile -t tags < <(.github/scripts/image-tags.sh "$VERSION" "$IMAGE_PYTHON" "$DEFAULT_PYTHON")
         for image in python-sb python-sb-landlock python-sb-unshare python-sb-bwrap python-sb-qemu; do
-          target="docker.io/pprados/$image:$VERSION"
-          docker tag "$image:3.13" "$target"
-          docker push "$target"
+          for tag in "${tags[@]}"; do
+            target="docker.io/pprados/$image:$tag"
+            docker tag "$image:$IMAGE_PYTHON" "$target"
+            docker push "$target"
+          done
           echo "- \`$(docker inspect --format '{{index .RepoDigests 0}}' "$target")\`" >>"$GITHUB_STEP_SUMMARY"
         done
 

@@ -1,6 +1,6 @@
 # What are the weaknesses of py-sandbox?
 
-The native-extension study and its decision are summarized in [Native guard study and decision](native-guard-study.md).
+The native-extension study and its decision are summarized in [Native guard study and decision](audit-native-guard-study.md).
 
 There are several vulnerabilities in the proposed implementation. We are perfectly aware of them. The goal is not to execute unhealthy code, but to limit the malicious uses of our application.
 

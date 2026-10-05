@@ -56,6 +56,10 @@ class VMSSEDaemon(BaseSubProcessDaemon, ABC):
     def augment_rules_for_guest_run_mount(self, all_rules: AllRules) -> AllRules:
         """Return ``all_rules`` with implicit expose rule for host tmp ↔ guest run mount."""
 
+    @abstractmethod
+    def guest_netfilter_rules(self, all_rules: AllRules, port: int) -> tuple[str, ...]:
+        """Return the iptables rules the guest applies to itself, from the profile's socket rules."""
+
     @staticmethod
     def show_boot_console_truthy(all_rules: Any | None) -> bool:
         """Whether the profile requests full VM serial / verbose bootstrap (truthy ``show_boot_console``)."""

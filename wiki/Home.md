@@ -7,6 +7,7 @@ Index of the documentation pages.
 - [Implementation](implementation.md) — how the framework is put together.
 - [Roadmap](roadmap.md) — planned work and direction.
 - [Releasing](release.md) — how a pre-release reaches test.pypi.org and Docker Hub (maintainers).
+- [Images on Docker Hub](docker-hub.md) — pulling and running the published provider images.
 - [Use cases](use-cases.md) — agent skills, tools and MCP servers, AI coding agents, dependency updates, CI.
 - [FAQ](faq.md) — common questions.
 - [Alternatives](alternatives.md) — comparison with eighteen other sandboxes, frameworks and cloud services.
@@ -16,7 +17,7 @@ Index of the documentation pages.
 
 - [Weaknesses](weaknesses.md) — the known limits of the Python layer, stated plainly.
 - [Security assessment of the Python layer](audit-python-security.md) — attacks and what stops them.
-- [Native guard study and decision](native-guard-study.md) — why the general C-extension approach was not pursued.
+- [Native guard study and decision](audit-native-guard-study.md) — why the general C-extension approach was not pursued.
 - [Security assessment of the eval-* guard](audit-eval-security.md) — attacks against dynamically evaluated code.
 - [The transport unpickle guard](transport-unpickle-guard.md) — how the parent safely deserializes what the sandboxed child sends back.
 - [Dynamically evaluated code](eval.md) — the `eval-*` rules.

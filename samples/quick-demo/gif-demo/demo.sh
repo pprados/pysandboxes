@@ -60,6 +60,9 @@ run "grep -c AWS_SECRET_ACCESS_KEY .py-sandboxes"
 say "Replay in the learned context: the policy is enforced, and legitimate use still works."
 run python-sb app/demo.py --url=https://example.com --dir=data/
 
+say "The same file, now also enforced by the Linux kernel: it holds against ctypes or native code too."
+run OS_SANDBOX=landlock python-sb app/demo.py --url=https://example.com --dir=data/
+
 say "Same code, another context: this site and this directory were never learned."
 run python-sb app/demo.py --url https://www.wikipedia.org --dir '~'
 

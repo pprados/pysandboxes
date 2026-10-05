@@ -5,7 +5,12 @@
 - A test suite must never weaken the sandbox it verifies. `OS_SANDBOX=none` (in a conftest,
   an env file, or a Makefile) disarms the Python guards as well, subprocesses included:
   `py-sandbox=true` then refuses neither `Popen` nor a host outside `net=ALLOW`, while
-  `is_in_sandbox()` still answers `True`. Such a suite cannot fail.
+  `is_in_sandbox()` still answers `True`. Such a suite cannot fail. A provider opt-out in a
+  test profile does the same to one layer: `bwrap.share-net=yes` skipped the iptables filter in
+  every bwrap test, so a filter that could never load went unnoticed, the Python socket guard
+  refusing in its place; the qemu filter was likewise never applied under `python-sb`. Each OS
+  layer needs a test with the Python guards off (`py-sandbox=false`), for every provider and
+  every launch mode (`python-sb`, daemon).
 - Every blocking assertion needs a negative control proving the blocked operation succeeds
   without the sandbox -- and that control must run in its own process. A baseline block leaves
   the `is_in_sandbox()` counter above zero, so an armed block running afterwards in the same

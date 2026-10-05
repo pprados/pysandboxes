@@ -34,6 +34,7 @@ Applications increasingly run code, or call tools, chosen by an LLM, and a manip
 > git clone https://github.com/pprados/pysandboxes.git
 > cd pysandboxes
 > pip install -e .
+> python-sb --help
 > ```
 
 # Quick start

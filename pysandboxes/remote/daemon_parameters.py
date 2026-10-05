@@ -29,17 +29,14 @@ class DaemonParameters(NamedTuple):
         token: Authentication token for communication.
         port: Network port for communication.
         init_fn: Initialization function reference.
-        netfilter_rules: Optional iptables rules for the guest (e.g. VM); default empty.
+        netfilter_rules: Optional iptables rules the child applies itself: the QEMU guest, where it is root;
+            default empty. bwrap gets none: the host loads its filter.
         python_main_args: For VM guest: argv to run as main (e.g. ["-m", "module"]); default empty.
         guest_run_dir: QEMU guest path where the host run directory is
             mounted; the guest writes its exit code there.
         guest_working_dir: Host working directory at QEMU launch; the guest
             bootstrap moves there so relative rules such as ``expose-rw=./tmp``
             designate the same files on both sides.
-        slirp_ready_fd: For bwrap/unshare: file descriptor to read until
-            slirp4netns is ready.
-        wait_network: When True, the child loops until the slirp network
-            answers (``bwrap --unshare-net``).
     """
 
     all_rules: "AllRules"
@@ -55,7 +52,3 @@ class DaemonParameters(NamedTuple):
     guest_run_dir: str | None = None
     # Host cwd at QEMU launch; guest bootstrap cds here so relative paths match expose-rw=./tmp etc.
     guest_working_dir: str | None = None
-    # For bwrap/unshare: fd number to read until slirp4netns is ready (child has fd via pass_fds)
-    slirp_ready_fd: int | None = None
-    # When True, child must loop until slirp network is reachable (bwrap --unshare-net)
-    wait_network: bool = False

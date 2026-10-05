@@ -19,9 +19,10 @@ The host runs `bwrap` with options from a template (e.g. `--clearenv`) plus **`-
 
 | Aspect | Detail |
 |--------|--------|
-| **Network** | With socket rules, you depend on **slirp4netns** and iptables inside the namespace; opting out with `bwrap.share-net=yes` gives the sandbox the whole host network. |
+| **Network** | With socket rules, you depend on **slirp4netns**, and on **`nsenter`** and **`iptables-restore`** on the host, which loads the filter: when it cannot be loaded, or the network never comes up, the sandbox refuses to start rather than run unfiltered. Opting out with `bwrap.share-net=yes` gives the sandbox the whole host network. |
+| **User id** | With socket rules, the sandboxed program runs as uid 0 of its own user namespace (`--unshare-user --uid 0 --gid 0`), still the caller's uid on the host and with no capability: files it creates are the caller's. Without socket rules, it keeps the caller's uid. |
 | **Containers** | In Docker/Podman, bridge networking may still block reachability to the sandbox SSE port; `network_mode: host` is often needed when using `--share-net`. |
-| **Dependencies** | Requires the `bwrap` binary. If you use **socket rules** (isolated netns path), **`slirp4netns`** must also be installed. |
+| **Dependencies** | Requires the `bwrap` binary. If you use **socket rules** (isolated netns path), **`slirp4netns`**, **`nsenter`** (util-linux) and **`iptables`** must also be installed. |
 
 ## How it works
 
@@ -31,7 +32,7 @@ The host runs `bwrap` with options from a template (e.g. `--clearenv`) plus **`-
 2. **Optional `bwrap.*` overrides**: Other `bwrap.<option>=<value>` lines become `--<option>=<value>` (or flag-only if value is empty). **`share-net` and `unshare-net` are handled by the logic above** and are not passed through as duplicate flags.
 3. **Mounts**: Read-only bubblewrap binds for `/usr`, `/etc`, `/run` (when the directory exists, e.g. for `resolv.conf` under `/run`), `/lib`/`/lib64`, the resolved Python executable chain, `sys.path` and site-packages; then **`expose-ro` before `expose-rw`** from file rules, temp dir for the config pipe, and placeholder mounts for ignore rules (same idea as unshare).
 4. **Launch**: The host runs `bwrap [args] -- python -m pysandboxes.remote.main_sandbox --_named-pipe <path>`. The config is written to the named pipe; the child reads it on startup.
-5. **When `--unshare-net` is used**: After the bwrap child PID is known, a **background thread on the host** runs **slirp4netns** against that PID (shared helpers in `pysandboxes/remote/slirp4netns_common.py`). The child waits until the tap interface is ready, then **iptables** rules derived from socket rules are applied (DNS is expected at the usual slirp address **10.0.2.3**; inbound SSE from the host gateway **10.0.2.2** is allowed). **TCP/UDP ports** from inbound ALLOW rules (plus the SSE port) can be forwarded from host `127.0.0.1` into the namespace via the slirp API.
+5. **When `--unshare-net` is used with socket rules**: bwrap itself stays in the host namespaces to monitor its child, so the host first waits for that child to sit in its own network namespace. It then loads the **iptables** rules derived from socket rules **from the host**, with `nsenter --preserve-credentials` into the sandbox user and network namespaces, where its uid is mapped to root (DNS is expected at the usual slirp address **10.0.2.3**; inbound SSE from the host gateway **10.0.2.2** is allowed). The sandbox holds no capability, so it can neither load these rules nor flush them. Only then does a **background thread on the host** run **slirp4netns** against the child (shared helpers in `pysandboxes/remote/slirp4netns_common.py`), and the host waits for it to be ready. The child stays blocked on its config pipe all along: no sandboxed code runs before the filter and the network are in place. **TCP/UDP ports** from inbound ALLOW rules (plus the SSE port) can be forwarded from host `127.0.0.1` into the namespace via the slirp API.
 6. **Inside the sandbox**: `main_sandbox` loads the config, applies Python guards, starts the SSE server on the expected port and waits for requests.
 7. **Communication**: The host uses **`http://localhost:PORT`**; with slirp, connections to host loopback are forwarded to the guest.
 
@@ -89,12 +90,12 @@ You can add bwrap-specific options in `.py-sandboxes`. Any line of the form `bwr
 - **`bwrap.unshare-net=no`** (or `0` / `false`): disable the automatic **`--unshare-net`**; same effect as `bwrap.share-net=yes`.
 - **Any other `bwrap.<option>`**: passed to bwrap as `--<option>=<value>` or `--<option>` if the value is empty.
 
-If socket rules require the isolated network path and **`slirp4netns` is missing**, the daemon exits with an error suggesting installation or `bwrap.share-net=yes`.
+If socket rules require the isolated network path and **`slirp4netns`, `nsenter` or `iptables-restore` is missing**, the daemon exits with an error suggesting installation or `bwrap.share-net=yes`.
 
 ## Prerequisites
 
 - The **`bwrap`** binary (e.g. `sudo apt install bubblewrap`).
-- **`slirp4netns`** when you use **socket rules** without `bwrap.share-net=yes` (e.g. `sudo apt install slirp4netns`).
+- **`slirp4netns`**, **`nsenter`** and **`iptables`** when you use **socket rules** without `bwrap.share-net=yes` (e.g. `sudo apt install slirp4netns util-linux iptables`).
 
 ## Recommendations
 

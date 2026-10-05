@@ -54,13 +54,14 @@ yanking only hides it.
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
 | `publish-pypi` | Final tags only: waits for the `pypi` approval, then uploads `pysandboxes` and, when due, `python-sb` |
 | `verify-published` | Downloads the wheel back from the index of the tag kind (pypi.org for a final tag, test.pypi.org otherwise) and compares its sha256 with the one built |
-| `images` | Builds the five images from that wheel, smoke-tests them, pushes `docker.io/pprados/<image>:<version>` |
+| `images` | One runner per Python 3.11 to 3.14: builds the five images from that wheel, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap` and `python-sb-qemu`,
-`linux/amd64`, default Python 3.13. A pre-release pushes `<version>` (default Python) and `<version>-py3.X` for each
-Python; a final version also pushes `py3.X` and, for the default Python, `latest`. Their digests are listed in the
-run summary.
+`linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes.
+`.github/scripts/image-tags.sh` lists their tags: `<version>-py<python>` for every release, `<version>` for Python 3.13,
+plus `py<python>` and, for Python 3.13, `latest` for a final release only (see [Images on Docker Hub](docker-hub.md)).
+Their digests are listed in the run summary.
 
 `python-sb/` is a separate package, the one behind `uvx python-sb`, with its own version. A release publishes it
 too when one of its files changed since the previous tag (the last final tag, for a final version); its version in

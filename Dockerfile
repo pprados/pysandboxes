@@ -1,5 +1,5 @@
 # Base image: Python + wheel only. No OS provider (no unshare, bwrap, firejail, qemu).
-# Build: make build-image-base  =>  python-sb-base:$(PYTHON_VERSION), python-sb-base:latest
+# Build: make build-image-base  =>  python-sb:$(PYTHON_VERSION), python-sb:latest
 ARG PYTHON_VERSION=3.11
 FROM python:${PYTHON_VERSION}-slim
 LABEL org.opencontainers.image.version="${PYTHON_VERSION}"
@@ -7,7 +7,6 @@ LABEL org.opencontainers.image.version="${PYTHON_VERSION}"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
-    libvirt-dev \
     pkg-config && \
     pip install --upgrade pip && \
     pip install --no-cache-dir ipython && \
