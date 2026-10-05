@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "python-sb"
-version = "0.0.3"  # Bump to publish a change of this wrapper: release.yml requires it
+version = "0.0.4"  # Bump to publish a change of this wrapper: release.yml requires it
 description = "Invoke python code in a sandbox"
 requires-python = ">=3.11,<4.0"
 authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
