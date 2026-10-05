@@ -80,10 +80,6 @@
   and rebinding the module name to a function would break the
   subclassing a restricted unpickler needs.
 
-### Fixed
-- `python-sb` honours `TMPDIR` for its host-side run directory instead
-  of hardcoding `/tmp`, so it works where `/tmp` is read-only.
-
 ### Notes
 - `native` and `introspection` are detection and friction, not a
   barrier: sandboxed code can undo Python-level patches (see
