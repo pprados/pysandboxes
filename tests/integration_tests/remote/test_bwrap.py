@@ -17,10 +17,9 @@ from .._env import provider_skip_reason
 
 _BWRAP_SKIP_REASON = provider_skip_reason("bwrap") or ""
 
-# py-sandbox-test.profile includes net= rules, which would otherwise enable
-# --unshare-net + slirp4netns + iptables (needs CAP_NET_ADMIN). For a portable
-# integration test we force host network so the suite passes without root.
-_BWRAP_SHARE_NET = ImmutableDict({"share-net": "yes"})
+# py-sandbox-test.profile includes net= rules: the daemon runs with --unshare-net, slirp4netns, and the iptables
+# filter the host loads into the sandbox, without root.
+_BWRAP_PARAMS: ImmutableDict[str, str] = ImmutableDict({})
 
 
 def _bwrap_integration_ready() -> bool:
@@ -46,7 +45,7 @@ async def start_daemon_for_tests() -> AsyncGenerator[None, None]:
     all_rules = load_and_parse_config(config_path=config_path)
     all_rules = all_rules._replace(
         os_sandbox="bwrap",
-        os_sandbox_params=_BWRAP_SHARE_NET,
+        os_sandbox_params=_BWRAP_PARAMS,
     )
     await async_start_daemon(
         all_rules,

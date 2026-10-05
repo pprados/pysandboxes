@@ -61,8 +61,8 @@ def test_every_image_is_probed_for_its_version_and_its_cli(fake: Path) -> None:
         assert f"{image} python-sb --help" in calls
 
 
-# Every binary the provider invokes, not only the one it is named after: without iptables-restore, the bwrap and
-# unshare network filters are skipped with a warning.
+# Every binary the provider invokes, not only the one it is named after: without iptables-restore or nsenter, a
+# profile with socket rules cannot start.
 PROVIDER_TOOLS = [
     "python-sb-unshare unshare --version",
     "python-sb-unshare iptables --version",
@@ -71,8 +71,8 @@ PROVIDER_TOOLS = [
     "python-sb-unshare slirp4netns --version",
     "python-sb-bwrap bwrap --version",
     "python-sb-bwrap iptables-restore --version",
-    "python-sb-bwrap ip -V",
     "python-sb-bwrap slirp4netns --version",
+    "python-sb-bwrap nsenter --version",
     "python-sb-qemu qemu-system-x86_64 --version",
     "python-sb-qemu genisoimage --version",
 ]

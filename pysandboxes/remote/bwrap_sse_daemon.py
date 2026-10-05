@@ -17,13 +17,17 @@ import gc
 import importlib.resources
 import logging
 import os
+import select
 import shlex
+import signal
 import site
 import socket as socket_mod
 import subprocess
 import sys
 import tempfile
 import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -74,6 +78,68 @@ from .slirp4netns_common import (
 from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, suggest_package_installation, which_command
 
 logger = logging.getLogger(__name__)
+
+_PROC = Path("/proc")
+NETFILTER_TIMEOUT = 10.0
+
+
+def _sandbox_pid(bwrap_pid: int, timeout: float = NETFILTER_TIMEOUT) -> int:
+    """Return the PID of bwrap's child once it sits in its own network namespace, its uid map written.
+
+    bwrap itself stays in the host namespaces to monitor the child: the filter, and slirp4netns, target the child.
+    """
+    host_net = os.readlink(_PROC / "self" / "ns" / "net")
+    children = _PROC / str(bwrap_pid) / "task" / str(bwrap_pid) / "children"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            for child in children.read_text().split():
+                if (
+                    os.readlink(_PROC / child / "ns" / "net") != host_net
+                    and (_PROC / child / "uid_map").read_text().strip()
+                ):
+                    return int(child)
+        except OSError:
+            pass
+        time.sleep(0.01)
+    raise SandBoxError(f"bwrap (pid {bwrap_pid}) never started a child in its own network namespace")
+
+
+def _apply_netfilter_from_host(sandbox_pid: int, netfilter_rules: tuple[str, ...]) -> None:
+    """Load the iptables rules into the sandbox network namespace, from the host.
+
+    The sandbox holds no capability, so it cannot load them, nor flush them afterwards. The host enters the user
+    namespace bwrap created, where its uid is mapped to root, and the network namespace that user namespace owns.
+    """
+    nsenter = which_command("nsenter")
+    restore = which_command("iptables-restore")
+    if nsenter is None or restore is None:
+        raise SandBoxError("bwrap network filtering needs nsenter and iptables-restore on the host")
+    r = subprocess.run(
+        [str(nsenter), "-t", str(sandbox_pid), "-U", "-n", "--preserve-credentials", str(restore), "--noflush"],
+        input="\n".join(netfilter_rules).encode(),
+        check=False,
+        capture_output=True,
+        timeout=NETFILTER_TIMEOUT,
+    )
+    if r.returncode != 0:
+        raise SandBoxError(
+            f"iptables-restore failed in the bwrap sandbox ({r.returncode}): "
+            f"{r.stderr.decode(errors='replace').strip()}"
+        )
+
+
+def _slirp_ready(ready_fd: int, timeout: float) -> bool:
+    """True once slirp4netns writes its ready byte; False on timeout, or when it exits first and closes the pipe."""
+    readable, _, _ = select.select([ready_fd], [], [], timeout)
+    return bool(readable) and os.read(ready_fd, 1) != b""
+
+
+def _kill_quietly(pid: int) -> None:
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
 
 
 def _resolve_ignore_paths(
@@ -208,6 +274,74 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             netfilter = list(netfilter[:idx]) + [sse_allow] + list(netfilter[idx:])
         return tuple(netfilter)
 
+    def _filtered_network(
+        self,
+        all_rules: AllRules,
+        process_config: DaemonParameters,
+        pipe_path: Path,
+    ) -> tuple[DaemonParameters, tuple[int, ...], Callable[[int], None]]:
+        """Prepare the isolated network of a profile with socket rules: slirp4netns, and the filter the host loads.
+
+        The child receives no rule to apply and has nothing to wait for: it holds no capability, and it stays blocked
+        on its config pipe until on_launched has loaded the filter and slirp4netns is up. No sandboxed code runs
+        before them, and a filter that cannot be loaded, or a network that never comes up, kills the sandbox instead.
+        """
+        netfilter_rules = self._build_netfilter_rules(all_rules, process_config.port)
+        for tool in ("slirp4netns", "nsenter", "iptables-restore"):
+            if not which_command(tool):
+                logger.error(
+                    "%s not found; required for bwrap network filtering. "
+                    "Install it or use bwrap.share-net=yes to keep host network.",
+                    tool,
+                )
+                raise SystemExit(1)
+        self._slirp_shutdown_event.clear()
+        slirp_pipe_r, slirp_pipe_w = os.pipe()
+        fd, api_socket = tempfile.mkstemp()
+        os.close(fd)
+        os.unlink(api_socket)
+        self._slirp_api_socket = api_socket
+
+        def on_launched(pid: int) -> None:
+            sandbox_pid: int | None = None
+            slirp_started = False
+            try:
+                sandbox_pid = _sandbox_pid(pid)
+                _apply_netfilter_from_host(sandbox_pid, netfilter_rules)
+                threading.Thread(
+                    target=slirp_run_watcher,
+                    args=(self._slirp_shutdown_event, slirp_pipe_w, api_socket),
+                    kwargs={
+                        "child_pid": sandbox_pid,
+                        "process_holder": self._slirp_process_holder,
+                        "timeout": SLIRP_WATCHER_TIMEOUT,
+                    },
+                    daemon=True,
+                ).start()
+                slirp_started = True
+                if not _slirp_ready(slirp_pipe_r, SLIRP_WATCHER_TIMEOUT):
+                    raise SandBoxError("slirp4netns never brought up the bwrap sandbox network")
+            except Exception:
+                self._slirp_shutdown_event.set()
+                for p in (sandbox_pid, pid):
+                    if p is not None:
+                        _kill_quietly(p)
+                if not slirp_started:
+                    os.close(slirp_pipe_w)
+                pipe_path.unlink(missing_ok=True)
+                raise
+            finally:
+                os.close(slirp_pipe_r)
+            ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
+            if ports_spec:
+                threading.Thread(
+                    target=slirp_setup_port_forwarding,
+                    args=(api_socket, ports_spec),
+                    daemon=True,
+                ).start()
+
+        return process_config, (), on_launched
+
     def get_launch_params_for_python_sb(
         self,
         all_rules: AllRules,
@@ -224,16 +358,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         """
         port = self.port
         use_net_filter = self._use_network_filtering(all_rules)
-        netfilter_rules: tuple[str, ...] = ()
-        if use_net_filter:
-            netfilter_rules = self._build_netfilter_rules(all_rules, port)
-            if not which_command("slirp4netns"):
-                logger.error(
-                    "slirp4netns not found; required for bwrap network filtering. "
-                    "Install slirp4netns or use bwrap.share-net=yes to keep host network."
-                )
-                raise SystemExit(1)
-
         process_config = DaemonParameters(
             all_rules=all_rules,
             log_level=log_level,
@@ -242,41 +366,15 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             token=token,
             port=port,
             init_fn=init_fn,
-            netfilter_rules=netfilter_rules,
+            netfilter_rules=(),
             slirp_ready_fd=None,
-            wait_network=use_net_filter,
+            wait_network=False,
         )
         result: dict[str, Any] = {"process_config": process_config}
         if use_net_filter:
-            self._slirp_shutdown_event.clear()
-            slirp_pipe_r, slirp_pipe_w = os.pipe()
-            fd, api_socket = tempfile.mkstemp()
-            os.close(fd)
-            os.unlink(api_socket)
-            self._slirp_api_socket = api_socket
-            result["process_config"] = process_config._replace(slirp_ready_fd=slirp_pipe_r)
-
-            def on_launched(pid: int) -> None:
-                threading.Thread(
-                    target=slirp_run_watcher,
-                    args=(self._slirp_shutdown_event, slirp_pipe_w, api_socket),
-                    kwargs={
-                        "child_pid": pid,
-                        "process_holder": self._slirp_process_holder,
-                        "timeout": SLIRP_WATCHER_TIMEOUT,
-                    },
-                    daemon=True,
-                ).start()
-                ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
-                if ports_spec:
-                    threading.Thread(
-                        target=slirp_setup_port_forwarding,
-                        args=(api_socket, ports_spec),
-                        daemon=True,
-                    ).start()
-
-            result["pass_fds"] = (slirp_pipe_r,)
-            result["on_launched"] = on_launched
+            result["process_config"], result["pass_fds"], result["on_launched"] = self._filtered_network(
+                all_rules, process_config, pipe_path
+            )
         return result
 
     @override
@@ -375,6 +473,10 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             args.extend(["--share-net"])
         else:
             args.extend(["--unshare-net"])
+        # The host loads the filter by entering this user namespace, where only a uid mapped to root keeps its
+        # capabilities across exec. The sandbox itself gets none: bwrap drops them all unless --cap-add.
+        if self._use_network_filtering(all_rules):
+            args.extend(["--unshare-user", "--uid", "0", "--gid", "0"])
         # Optional bwrap.* params (skip share-net/unshare-net to avoid overriding)
         for k, v in all_rules.os_sandbox_params.items():
             if k in ("share-net", "unshare-net"):
@@ -477,16 +579,6 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             init_fn_ref = f"{module}:{func_ref}"
 
         use_net_filter = self._use_network_filtering(all_rules)
-        netfilter_rules: tuple[str, ...] = ()
-        if use_net_filter:
-            netfilter_rules = self._build_netfilter_rules(all_rules, port)
-            if not which_command("slirp4netns"):
-                logger.error(
-                    "slirp4netns not found; required for bwrap network filtering. "
-                    "Install slirp4netns or use bwrap.share-net=yes to keep host network."
-                )
-                raise SystemExit(1)
-
         process_config = DaemonParameters(
             all_rules=all_rules,
             log_level=log_level,
@@ -495,9 +587,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             token=self._token,
             port=port,
             init_fn=init_fn_ref,
-            netfilter_rules=netfilter_rules,
+            netfilter_rules=(),
             slirp_ready_fd=None,
-            wait_network=use_net_filter,
+            wait_network=False,
         )
 
         env: Environ = {**os.environ, **extra_envs}
@@ -510,35 +602,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         )
 
         if use_net_filter:
-            self._slirp_shutdown_event.clear()
-            slirp_pipe_r, slirp_pipe_w = os.pipe()
-            fd, api_socket = tempfile.mkstemp()
-            os.close(fd)
-            os.unlink(api_socket)
-            self._slirp_api_socket = api_socket
-            process_config = process_config._replace(slirp_ready_fd=slirp_pipe_r)
+            process_config, pass_fds, on_launched = self._filtered_network(all_rules, process_config, pipe_path)
             launch_kwargs["process_config"] = process_config
-
-            def on_launched(pid: int) -> None:
-                threading.Thread(
-                    target=slirp_run_watcher,
-                    args=(self._slirp_shutdown_event, slirp_pipe_w, api_socket),
-                    kwargs={
-                        "child_pid": pid,
-                        "process_holder": self._slirp_process_holder,
-                        "timeout": SLIRP_WATCHER_TIMEOUT,
-                    },
-                    daemon=True,
-                ).start()
-                ports_spec = slirp_extract_port_forwards(all_rules, self.port, log_wildcard=False)
-                if ports_spec:
-                    threading.Thread(
-                        target=slirp_setup_port_forwarding,
-                        args=(api_socket, ports_spec),
-                        daemon=True,
-                    ).start()
-
-            launch_kwargs["pass_fds"] = (slirp_pipe_r,)
+            launch_kwargs["pass_fds"] = pass_fds
             launch_kwargs["on_launched"] = on_launched
 
         logger.debug(

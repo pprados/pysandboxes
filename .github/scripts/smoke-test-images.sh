@@ -32,8 +32,8 @@ in_image python-sb-unshare ip -V
 in_image python-sb-unshare slirp4netns --version
 in_image python-sb-bwrap bwrap --version
 in_image python-sb-bwrap iptables-restore --version
-in_image python-sb-bwrap ip -V
 in_image python-sb-bwrap slirp4netns --version
+in_image python-sb-bwrap nsenter --version
 in_image python-sb-qemu qemu-system-x86_64 --version
 in_image python-sb-qemu genisoimage --version
 # shellcheck disable=SC2016  # expanded inside the image, where the variable is set
