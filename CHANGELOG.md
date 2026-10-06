@@ -17,7 +17,7 @@
 ¹ Docker and Podman are not providers of their own: a container runs the
 `unshare` provider, with `--privileged` for Docker.
 
-² The Python layer only, with the `none` or `subprocess` provider: every
+² The Python layer only, with the `subprocess` provider: every
 kernel boundary is a Linux technology.
 
 ## [0.0.0] - 202X-XX-XX
@@ -51,7 +51,7 @@ kernel boundary is a Linux technology.
   uses and writes the matching rules
 - Control of the life cycle of the sandbox daemon, restarted when needed
 - Seven OS providers, selected with `OS_SANDBOX=` or `--os-sandbox`:
-  - `none`: no OS boundary, the Python layer alone
+  - `none`: no sandbox at all, plain Python, for testing and debugging
   - `subprocess`: a separate interpreter process, still no OS boundary
   - `landlock`: the process restricts itself, needs no privilege
     (kernel 5.13+ for files, 6.7+ for network)
