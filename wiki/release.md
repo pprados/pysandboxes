@@ -22,8 +22,10 @@ The tag starts `.github/workflows/release.yml`. When every check has passed, the
 without a second click.
 
 Tag a commit the nightly already proved, when you can. The nightly (`full-gate.yml`, 20:17 UTC on `develop`) runs the
-integration, sample and container suites; a tag on the same commit reuses that run instead of repeating it. A tag on
-any other commit runs the suites itself, without the `qemu-tcg` rows, which takes about twenty minutes more.
+integration, sample and container suites; a tag on the same code reuses that run instead of repeating it. The lookup
+walks back over the release commit and over commits that touch only documentation, so a final version tagged right
+after a green nightly reuses it. A tag on any other code runs the suites itself, without the `qemu-tcg` rows, which
+takes about twenty minutes more.
 
 A published tag is never moved nor deleted. If a release fails after the upload, fix `develop` and publish the next
 number.
@@ -35,6 +37,15 @@ final tag (`v0.0.0` without one) bumped by patch or minor, date the `[0.0.0]` en
 commit, tag and push. `make publish-final VERSION=X.Y.Z` does the same with the version given, which must be greater
 than the last final tag: it sets the first number of a series, such as `0.5.0`. The tag holds no open entry; the
 first merge into `develop` after the release opens a new `[0.0.0]` entry.
+
+The first final version publishes the `[0.0.0]` entry as written. From the next one on, `scripts/changelog-draft.sh`
+rewrites it before the tag: an LLM (`claude -p`, without tools, from the maintainer's logged-in shell) merges the
+lines the entry holds with the `feat`, `fix`, `perf` and `security` commit subjects since the last final tag, into
+`### Added`, `### Changed`, `### Fixed` and `### Security` bullets written for users. The entry then opens in
+`$VISUAL`, `$EDITOR` or `vi`, and the confirmation question signs and tags what was saved; declining restores
+`CHANGELOG.md`. An answer of the wrong shape, a failing or missing `claude` falls back to the entry followed by the raw
+commit subjects: a release never depends on a model. `CHANGELOG_LLM` replaces the command. The tests that call a real
+model are marked `llm` and run only with `RUN_LLM_TESTS=1`.
 
 The tag starts `release.yml`, which waits for **one approval**, the `pypi` deployment. Approving publishes
 `pysandboxes` and, when `python-sb/` changed since the last final tag, `python-sb` with a higher version. The run then
@@ -50,7 +61,7 @@ yanking only hides it.
 | `push-checks` | `lint.yml` and `test.yml` are green on the tagged commit, or on the commit below a documentation-only release commit (waits up to 30 min for them) |
 | `validate` | `make validate` on Python 3.13, `pip-audit` included |
 | `build` | `uv build`; the wheel version must equal the tag; `twine check`. Also builds `python-sb` when it changed (below) |
-| `reuse-lookup` | Looks for a green `schedule` run of `full-gate.yml` on the same commit (a manual run never counts) |
+| `reuse-lookup` | Looks for a green `schedule` run of `full-gate.yml` on the same code, walking back over release and documentation-only commits (a manual run never counts) |
 | `full-gate` | The integration, sample and container suites, skipped when `reuse-lookup` found a nightly to reuse |
 | `wheel-tests` | The unit tests against the built wheel, installed in a clean venv, on Python 3.11 to 3.14 |
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
