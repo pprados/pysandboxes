@@ -46,10 +46,36 @@ def _fake_llm(tmp_path: Path, body: str, code: int = 0) -> str:
     return str(fake)
 
 
-def _draft(repo: Path, llm: str, since: str = "v0.0.1") -> subprocess.CompletedProcess[str]:
+def _draft(repo: Path, llm: str, since: str = "v0.0.1", entry: str | None = None) -> subprocess.CompletedProcess[str]:
+    args = [str(SCRIPT), since]
+    if entry is not None:
+        (repo.parent / "entry.md").write_text(entry)
+        args.append(str(repo.parent / "entry.md"))
     return subprocess.run(
-        [str(SCRIPT), since], cwd=repo, env={**_ENV, "CHANGELOG_LLM": llm}, capture_output=True, text=True, check=False
+        args, cwd=repo, env={**_ENV, "CHANGELOG_LLM": llm}, capture_output=True, text=True, check=False
     )
+
+
+def _subjects_sent(tmp_path: Path) -> list[str]:
+    return (tmp_path / "llm-input").read_text().split("Commit subjects:\n")[1].split("\n")[:-1]
+
+
+def test_the_entry_lines_and_the_commits_reach_the_llm_together(repo: Path, tmp_path: Path) -> None:
+    _commit(repo, "feat(guard): deny by default")
+    entry = "\n### Added\n- A note from a merge\n\nA hand-written paragraph.\n"
+    result = _draft(repo, _fake_llm(tmp_path, "### Added\n- Merged.\n"), entry=entry)
+    assert result.returncode == 0, result.stderr
+    sent = (tmp_path / "llm-input").read_text()
+    assert sent.startswith("Current entry:\n### Added\n- A note from a merge\n\nA hand-written paragraph.\n\n")
+    assert _subjects_sent(tmp_path) == ["feat(guard): deny by default"]
+    assert result.stdout == "### Added\n- Merged.\n"
+
+
+def test_without_a_working_llm_the_entry_is_kept_above_the_commit_list(repo: Path, tmp_path: Path) -> None:
+    _commit(repo, "fix: load the filter")
+    result = _draft(repo, str(tmp_path / "no-such-command"), entry="\n### Added\n- A note from a merge\n")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "### Added\n- A note from a merge\n\n### Fixed\n- Load the filter\n"
 
 
 def test_only_the_user_facing_commits_since_the_tag_reach_the_llm(repo: Path, tmp_path: Path) -> None:
@@ -66,7 +92,7 @@ def test_only_the_user_facing_commits_since_the_tag_reach_the_llm(repo: Path, tm
     llm = _fake_llm(tmp_path, "### Added\n- Denied by default.\n")
     result = _draft(repo, llm)
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "llm-input").read_text().split("\n")[:-1] == [
+    assert _subjects_sent(tmp_path) == [
         "perf: faster import",
         "fix(bwrap): load the filter",
         "feat(guard): deny by default",
@@ -112,7 +138,7 @@ def test_a_missing_llm_falls_back_to_the_commit_list(repo: Path, tmp_path: Path)
 def test_without_a_previous_tag_the_whole_history_counts(repo: Path, tmp_path: Path) -> None:
     llm = _fake_llm(tmp_path, "### Added\n- x\n")
     assert _draft(repo, llm, since="").returncode == 0
-    assert (tmp_path / "llm-input").read_text() == "feat: before the release\n"
+    assert _subjects_sent(tmp_path) == ["feat: before the release"]
 
 
 @pytest.mark.llm

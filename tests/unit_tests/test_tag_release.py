@@ -209,7 +209,7 @@ def test_a_final_version_dates_the_changelog_before_the_tag_and_opens_the_next_e
         assert _git(work, "-c", allowed, "log", "-1", "--format=%G?", rev) == "G"
 
 
-def test_a_later_final_version_drafts_its_changes_under_the_hand_written_note(work: Path) -> None:
+def test_a_later_final_version_keeps_the_entry_lines_with_its_changes_when_no_llm_answers(work: Path) -> None:
     _git(work, "tag", "-m", "x", "v0.0.1")
     _git(work, "commit", "-q", "--allow-empty", "-m", "feat(guard): deny by default")
     _git(work, "commit", "-q", "--allow-empty", "-m", "ci: not for users")
@@ -217,9 +217,31 @@ def test_a_later_final_version_drafts_its_changes_under_the_hand_written_note(wo
     result = _release(work, "patch")
     assert result.returncode == 0, result.stderr
     entry = _git(work, "show", "v0.0.2:CHANGELOG.md").split("## [0.0.2]")[1].split("## [0.0.1]")[0]
+    assert entry.count("- a thing") == 1
     assert entry.index("- a thing") < entry.index("- Deny by default")
     assert "not for users" not in entry
     assert "- Deny by default" in result.stdout
+
+
+def test_a_later_final_version_replaces_the_entry_with_the_llm_synthesis(work: Path, tmp_path: Path) -> None:
+    fake = tmp_path / "fake-llm"
+    fake.write_text("#!/usr/bin/env bash\ncat >/dev/null\nprintf '### Added\\n- A thing, now denied by default\\n'\n")
+    fake.chmod(0o755)
+    _git(work, "tag", "-m", "x", "v0.0.1")
+    _git(work, "commit", "-q", "--allow-empty", "-m", "feat(guard): deny by default")
+    _git(work, "push", "-q", "origin", "develop")
+    result = subprocess.run(
+        [str(SCRIPT), "patch"],
+        cwd=work,
+        env={**_ENV, "CHANGELOG_LLM": str(fake)},
+        input="y\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    entry = _git(work, "show", "v0.0.2:CHANGELOG.md").split("## [0.0.2]")[1].split("## [0.0.1]")[0]
+    assert entry.split("\n", 1)[1].strip() == "### Added\n- A thing, now denied by default"
 
 
 def test_the_first_final_version_keeps_the_hand_written_entry_alone(work: Path) -> None:
