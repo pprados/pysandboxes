@@ -1,6 +1,6 @@
 # Confining Python by Observation
 
-### Four Layers, a Composition Contract, and a Profile Nobody Had to Write
+### Policy Inference Across Three Layers
 
 **Philippe PRADOS** — [github@prados.fr](mailto:github@prados.fr)
 
@@ -10,35 +10,33 @@ September 2026
 
 ## Abstract
 
-Sandboxing Python fails when attempted *inside* the interpreter and succeeds
-*around the process*; that was settled in 2013 [[STINNER-2013]] [[LWN-574215]]. The obstacle to OS-level
-confinement is not the kernel — namespaces, seccomp-bpf [[SECCOMP]], Landlock
-[[LANDLOCK-DOC]] and virtualisation have been production-hardened for years —
-it is **the policy**.
-A least-privilege profile requires enumerating, up front and without error,
-every directory, host, port and environment variable a real application needs.
-Nobody has that list, which is why teams either skip confinement or grant far
-more than necessary.
+Python-level checks alone cannot confine hostile Python code. The practical
+problem is different: writing a least-privilege policy requires knowing which
+files, hosts, ports, imports and environment variables an application uses.
+That information is spread across the application and its dependencies.
 
-Hence an inversion: the interpreter-level layer's primary job is **not
-enforcement**, which is conceded to the kernel, but **policy inference**. At the
-Python API boundary it observes every file, socket, import and environment
-access in the operator's own terms — a path, a hostname, a module name — and
-emits one declarative profile, compiled to whichever backend the deployment
-allows.
+This paper studies an alternative: observe accesses through Python APIs during
+a learning run, produce one reviewable profile, then use that profile to
+configure Python guards and an available OS sandbox. Observation is incomplete:
+it misses unexercised paths and operations performed directly by native code.
+The profile therefore needs human review, and a kernel-backed OS sandbox is
+still required when code may bypass Python-level checks.
 
 Reference implementation:
 [`py-sandboxes`](https://github.com/pprados/pysandboxes) (Apache-2.0). Paper
 licensed CC BY-NC-SA 4.0.
 
+The implementation and its tests are evidence for feasibility and specific
+behaviors, not a measurement of policy quality or a proof against hostile code.
+
 ## Contribution — four claims, and what would refute each
 
 | | Claim | § | What would falsify it |
 |---|---|---|---|
-| **1** | A monotone **ladder of attacker capability** decides which layers are needed, because each rung has a *last* layer able to see it | [3](#3-the-ladder-and-why-layers-nest) | one layer covering two non-adjacent rungs — for instance an interpreter-level mechanism that genuinely contains native code |
-| **2** | A **four-clause contract** decides what each layer owes the others, turning a set of mechanisms into a stack | [4](#4-the-composition-contract) | a stack satisfying C1–C4 in which one layer's failure widens another's policy — most plausibly where the interpreter enforces a path *as written* and the kernel *as resolved* |
-| **3** | **One inferred artefact** configures every layer and outlives the choice of backend | [5](#5-one-profile-inferred) | four independently written configurations intersecting to the intended policy as reliably as a compiled profile; or inference coverage so low the loop never converges without manual authoring |
-| **4** | **A refusal is a typed signal** that re-enters the loop which produced the code | [6](#6-denial-as-a-signal) | measurement: if fed-back refusals do not improve the rate at which a regenerated fragment succeeds within the policy, the upper layers' value is the vocabulary alone |
+| **1** | A capability ladder helps identify which layer can observe or enforce each kind of operation | [3](#3-the-ladder-and-why-layers-nest) | a demonstrated interpreter-level control that reliably confines arbitrary native operations |
+| **2** | A four-clause contract describes how layers should compose | [4](#4-the-composition-contract) | a tested composition that violates a clause, or evidence that the clauses do not help detect policy widening |
+| **3** | One inferred profile can provide common policy inputs to several layers and backends | [5](#5-one-profile-inferred) | experiments showing that separate configurations are as accurate and easy to review, or that inferred profiles are not useful without extensive manual authoring |
+| **4** | Typed refusals could help regenerate code within the existing policy | [6](#6-denial-as-a-signal) | measurement showing that feedback does not improve successful, in-policy regeneration |
 
 ## 1. Two shapes of the same problem
 
@@ -58,25 +56,23 @@ def evaluate_expression(expression: str) -> str:
 import requests, os, subprocess          # two of these were not asked for
 ```
 
-These two lines are the whole problem. The first is a string that exists only at
-runtime, so no human will ever review it; the second is a module that will still
-be there in a year, and a diff shows what the code *says*, not what the process
-can now *reach*.
+The first example is code supplied as data at runtime. The second shows how
+ordinary application code can gain access to capabilities its author did not
+intend. Both motivate policy checks at more than one boundary.
 
-**The threat model is code that is wayward, not adversarial.** It reaches for
-`open`, `requests.get` or `subprocess` *in the open*; it does not enumerate
-`object.__subclasses__()` looking for a way to disable the guard, because it was
-never written to escape — it was written to accomplish a task, and the task was
-wrong. Three properties then matter more than absolute containment: the refusal
-happens, the refusal *names the rule*, and the attempt is recorded so policy can
-be built from observed rather than imagined behaviour.
+**The primary threat model is wayward code, not a hostile attacker.** Such code
+may call `open`, `requests.get` or `subprocess` while trying to complete the
+wrong task. The Python layer aims to refuse and explain these calls and record
+them during learning. It does not reliably stop code deliberately searching for
+a way around the guards. That stronger threat requires an active OS boundary.
 
 **Provenance is a property of a fragment, not of a program.** In one agent turn
 an application may evaluate a model-written expression (**P1**), run a
 model-written script (**P2**), call a third-party tool body with model-chosen
 arguments (**P3**), and execute its own assisted codebase (**P4**). A single
-uniform boundary — the fresh microVM [[ISOLATION-CMP]] — treats all four as equally hostile and
-equally opaque, so it can neither refuse precisely nor explain why.
+uniform boundary, such as a fresh microVM [[ISOLATION-CMP]], can isolate the
+process but does not by itself distinguish these provenance classes or explain
+refusals in Python terms.
 
 ```mermaid
 %% caption: The four provenance classes of a single agent turn, and the rung each lands on
@@ -88,14 +84,14 @@ flowchart TB
     T --> P4["<b>P4</b> · assisted codebase<br/>committed code, developer credentials"]
     P1 --> A1["<b>rung 1</b> · the language itself can be reduced<br/><i>the declared sub-language</i>"]
     P2 --> A2["<b>rung 2</b> · only the resource set can be bounded<br/><i>interpreter layer + kernel backend</i>"]
-    P3 --> A3["<b>rung 3</b> · native code may be carried in<br/><i>the kernel layer, or nothing</i>"]
+    P3 --> A3["<b>rung 3</b> · native code may be carried in<br/><i>Python checks are partial; OS coverage depends on provider</i>"]
     P4 --> A2
 ```
 
-For P4 the profile stops being only a runtime control and becomes a **review
-artefact**: a reviewer who would miss `import subprocess` will notice
-`python-api=ALLOW:process-exec` appearing in a file whose only content is
-capabilities. The profile is a regression test on privilege.
+For P4 the profile can also serve as a **review artefact**: a new
+`python-api=ALLOW:process-exec` permission is visible in a file that lists the
+application's capabilities. Whether reviewers reliably catch inappropriate
+permissions has not been measured.
 
 ## 2. Prior art, and what it leaves open
 
@@ -106,7 +102,7 @@ design tries to move past.
 | The record | What it settles | What it does not give |
 |---|---|---|
 | `rexec`, `Bastion`, `pysandbox` — each abandoned by its own author, the last as *broken by design* [[REXEC]] [[BASTION]] [[PYSANDBOX-REPO]] [[STINNER-2013]] | in-interpreter confinement fails; the recurring escape is an object-graph path from a permitted object back to an unrestricted one | any reason to build the interpreter layer as an **enforcer**. This paper takes the verdict as a premise, not as something to contest |
-| PEP 578 audit hooks [[PEP-578]] [[PEP-551]] | the interpreter can **observe without confining** — the PEP says so in its own text | a vocabulary chosen by the operator rather than by the runtime, and integrity without a native pre-init hook |
+| PEP 578 audit hooks [[PEP-578]] [[PEP-551]] | the interpreter can **observe named events** | an operator-owned policy vocabulary or complete mediation; native-hook experiments and their limits are summarized in §8 |
 | `simpleeval`, `asteval`, `RestrictedPython` [[SIMPLEEVAL]] [[ASTEVAL]] [[ASTEVAL-101]] | whitelisting by construction beats blacklisting by subtraction; `str.format` traverses the object graph and is therefore a capability — rediscovered three times, most recently as CVE-2025-24359 [[ASTEVAL-CVE]] [[RESTRICTEDPYTHON-CVE]] [[ACCESSCONTROL-CVE]]; an exception instance is itself a reference into that graph | anything above a single expression |
 | seccomp-bpf, Landlock, namespaces, gVisor, microVMs [[SECCOMP]] [[LANDLOCK-DOC]] [[ISOLATION-CMP]] | enforcement is **mature**, and the privilege each mechanism demands is a deployment fact, not a security preference | resource *identity*: seccomp-bpf cannot dereference pointer arguments by design [[SECCOMP]], so `/etc/passwd` and a scratch file are the same `openat` |
 | `aa-genprof`, `audit2allow`, *Mining Sandboxes*, *Confine* [[AA-GENPROF]] [[AUDIT2ALLOW]] [[MINING-SANDBOXES]] [[CONFINE]] | a policy **can** be learned by observation — and the dilemma is already mapped: observation under-approximates, static analysis over-approximates [[SYSCALL-LIMIT]] | a reviewable vocabulary (they learn syscalls), and an artefact not welded to one enforcement mechanism |
@@ -141,9 +137,9 @@ the last layer that can still see it".
 |---|---|---|---|
 | **1** | a source string | the `eval-*` sub-language | which constructs exist at all |
 | **2** | arbitrary Python bytecode | the Python API layer | imports and sensitive calls — and the vocabulary the profile is written in |
-| **3** | native code (`ctypes`, C extension) | the OS layer, kernel-enforced | files, sockets, processes — by resource |
+| **3** | native code (`ctypes`, C extension) | the OS layer, when a kernel-backed provider is active | resources exposed by that provider |
 | **4** | raw syscalls | the OS layer | idem |
-| **5** | kernel compromise | a separate kernel (VM / microVM) | everything, at an order of magnitude in startup and memory |
+| **5** | kernel compromise | a separate kernel (VM / microVM) | the guest boundary, with higher startup and resource costs |
 
 ```mermaid
 %% caption: Each rung of attacker capability, and the last layer able to see it
@@ -171,29 +167,30 @@ flowchart LR
     R5 --> L5
 ```
 
-The column that matters is the third one, and it is forced: a source string is
-visible only before it becomes a code object; `import` and module identity exist
-only inside the interpreter, so no syscall trace can express "`json` yes,
-`subprocess` no"; native code is invisible to the interpreter by construction;
-and a kernel vulnerability is invisible to anything sharing that kernel.
+The table is a guide to where different checks can work, not a guarantee that a
+particular deployment enforces every rung. The eval guard sees source before it
+runs. Import and module identity belong to Python. The Python API guard can
+detect or refuse selected native entry points, but cannot mediate arbitrary
+native operations. Kernel-backed OS providers can restrict many such operations
+at the process boundary; `none` and `subprocess` do not provide that boundary.
+A shared-kernel sandbox also does not protect against kernel compromise.
 
-Two corollaries. **Upward blindness**: a layer cannot see rungs above its own,
-so hardening the interpreter layer against `ctypes` is wasted effort — the same
-adversary arrives through a compiled extension. **Downward silence**: a layer
-cannot see concepts below its own, so the kernel layer cannot replace the
-interpreter layer either.
+Two useful design principles follow. **Upward blindness**: Python checks cannot
+reliably mediate operations performed directly by native code. **Downward
+silence**: a kernel policy has no concept of Python imports or syntax, so it
+cannot replace the Python guards for those decisions.
 
 ```mermaid
 %% caption: The three layers nest; none of them substitutes for another
 flowchart TB
-    subgraph OS["<b>OS layer</b> — kernel-enforced · the real boundary · rungs 3-4"]
+    subgraph OS["<b>OS layer</b> — kernel-enforced when a kernel provider is active · rungs 3-4"]
         subgraph PY["<b>Python layer</b> — legibility, inference, friction · rung 2"]
             subgraph EV["<b>eval-* layer</b> — declared sub-language · rung 1"]
                 SRC["source string<br/>produced by the model"]
             end
             BC["application bytecode<br/>import · sensitive calls"]
         end
-        NAT["native code · raw syscalls<br/><i>invisible to everything above</i>"]
+        NAT["native code · raw syscalls<br/><i>not comprehensively mediated above the OS layer</i>"]
     end
 
 style OS fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
@@ -201,9 +198,9 @@ style PY fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 style EV fill:#6e4a2c,stroke:#2f2617,stroke-width:4px,stroke-dasharray:6 4,color:#ffffff
 ```
 
-Hence **nest, never substitute**: a ❌ against a kernel backend for "import" does
-not mean imports are unprotected, it means that technology has no notion of
-imports, and the layer above does.
+Hence **compose the layers**: a kernel backend has no notion of imports, while
+the Python layer cannot reliably mediate native operations. The actual coverage
+depends on which provider is enabled and how it is configured.
 
 ## 4. The composition contract
 
@@ -238,37 +235,43 @@ output has negative security: the channel exists only because the boundary does.
 The transport carries data, not code; tracebacks are data too.
 
 **C4 — bounded claims.** Each layer declares the rung above which it claims
-nothing, in its configuration rather than in its documentation. The interpreter
-layer's claim is: *a fragment not attempting escape cannot reach an ungranted
-resource, and every attempt is named.* The *broken by design* verdict of 2013 [[PYSANDBOX-REPO]] is
-true of a layer that claimed to stop a rung-2 attacker; it does not refute that
-one.
+nothing, in its configuration rather than in its documentation. For the current
+Python layer, the supportable claim is narrower: selected calls from wayward
+code can be refused with a named rule and recorded during learning. It does not
+claim that arbitrary Python bytecode cannot reach ungranted resources. The
+*broken by design* verdict of 2013 [[PYSANDBOX-REPO]] applies to a layer claiming
+to contain a hostile rung-2 attacker; it does not refute this narrower role.
 
-Three consequences. A silent, total failure at an upper layer promotes the
-attacker one rung but widens no lower policy. No layer's guarantee is
-conditional on another holding. And the stack claims exactly its lowest layer's
-claim — never the union, read as a maximum.
+These are proposed composition rules, not a claim that every current provider
+has been proven to satisfy them. C3 remains a design goal with partial
+mitigations: the transport uses a restricted unpickler, but its default result
+mode is fail-open. Section 7 describes the remaining risk. Provider behavior
+also differs; for example, network enforcement and filesystem masking vary
+across backends. The rules are
+useful review questions: does a failure remain restrictive, does an unknown
+operation fail closed, and are claims limited to what the active layer can
+enforce?
 
 ## 5. One profile, inferred
 
 One declarative artefact in **resource terms rather than mechanism terms**
-(`expose-ro=/etc/app`, not `--ro-bind …`), reviewable, composable without
-ordering semantics, environment-parameterised. Seven rule families —
+(`expose-ro=/etc/app`, not `--ro-bind …`), reviewable and
+environment-parameterised. Seven rule families —
 environment, filesystem, network, imports, sensitive calls, dynamic code,
 backend selection — of which imports and dynamic code have no kernel analogue.
-Its singleness is not a convenience: C1 makes the effective policy an
-intersection, and an intersection across vocabularies that share no term cannot
-be checked at all if each layer is configured separately.
+Its singleness is useful because it gives an operator one place to review the
+application's declared capabilities. It does not mean that every rule has an
+equivalent in every enforcement layer.
 
-Nobody can write such a profile by inspection: not the author, whose
-dependencies read files he never considered; not an auditor, because the
-accesses are spread across a dependency tree; not a static analyser, because
-paths are computed at runtime. So it is not written — it is **observed**.
+Hand-writing a complete profile is difficult: dependencies may access files the
+application author did not consider, and some paths are computed at runtime.
+Learning mode offers a starting point by recording exercised accesses through
+the Python guards. The result still needs review and may need manual additions.
 
 ```mermaid
 %% caption: The four phases of policy inference, and the loop that closes it
 flowchart LR
-    A["<b>1 · Observe</b><br/>guards installed,<br/>non-blocking<br/><i>weakest backend only</i>"]
+    A["<b>1 · Observe</b><br/>Python guards installed<br/><i>OS provider: subprocess</i>"]
     B["<b>2 · Generalise</b><br/>observations → rules<br/><i>too specific breaks,<br/>too general over-grants</i>"]
     C["<b>3 · Review</b><br/><b>human</b><br/><i>not automatable</i>"]
     D["<b>4 · Enforce</b><br/>blocking,<br/>kernel backend"]
@@ -276,18 +279,19 @@ flowchart LR
     D -- "refusal names the rule<br/>· re-enter with the delta" --> A
 ```
 
-Learning runs with the *weakest* backend — one cannot learn through a wall. And
-refusals must name the rule, or the operator guesses, and guessing over-grants.
+Learning currently runs with the `subprocess` provider. It can record operations
+that pass through the Python guards, but it cannot observe all operations made
+by compiled extensions or other native code. Those missing requirements may
+need to be added to the profile manually. Review remains necessary because an
+overly broad learned or edited rule can grant more access than intended.
 
-**The soundness gap.** Inference is unsound by construction: unexercised paths
-are unlearned rules; compiled extensions never cross the Python API; and
-learning over hostile code learns hostile rules, so it is a development-time
-activity on trusted input. None of this is fixed by observing better. It is
-closed by *where enforcement sits relative to where observation happened*:
-observation at the Python API layer, enforcement below it, and by C2 the kernel
-denies everything the profile does not grant — including everything observation
-missed. Unsound inference therefore yields a profile that is too narrow, never
-too wide, and too narrow fails visibly.
+**The coverage gap.** Learning is an observation of exercised behavior, not a
+complete specification. It can miss unexercised paths and calls that bypass
+Python wrappers. A kernel-backed provider can still deny resources absent from
+its compiled policy, but rules that were not observed may also be absent from
+that policy; provider coverage and configuration must be checked. Learning from
+untrusted input can also record behavior the operator should not permit, so the
+generated profile needs review before enforcement.
 
 Two rules govern compilation to a backend. **Never silently downgrade**: if a
 rule cannot be expressed, rely on the layer above *and say so*, or refuse the
@@ -297,25 +301,24 @@ repeat it**: resolve hostnames once at compile time and pin the mapping inside
 the sandbox, or DNS and the packet filter will disagree on every load-balanced
 service.
 
-Which mechanism implements the kernel layer is then a deployment decision, not a
-ranking: self-restriction needs no privilege but a recent kernel *on the node*;
-namespace tooling buys filesystem views for capabilities many platforms refuse;
-a VM answers rung 5 and costs an order of magnitude. **More isolation does not
-mean more privilege required** — which is precisely why the profile must outlive
-the decision.
+The available enforcement also depends on deployment constraints. Landlock
+restricts the process without namespace capabilities but requires suitable
+kernel support on the node. Namespace-based providers may need capabilities that
+containers do not grant. QEMU places execution behind a separate kernel, with
+different startup and resource costs. The profile can remain stable while the
+operator selects a supported provider, but rule coverage is provider-specific.
 
 ## 6. Denial as a signal
 
-A denial now has two consumers, and the second one is new: the generator, acting
-within seconds. What each layer can hand it degrades monotonically — the
-dynamic-code layer names the construct, the interpreter layer names the resource
-and the permitted alternative, the kernel offers `EACCES` or `SIGSYS`, and a
-separate kernel offers only an environment that differs from the model's
-assumption — because a layer can only explain a refusal in the vocabulary it
-has.
+A denial can be useful to both an operator and a code generator. Python guards
+can attach a rule or category to some refusals; kernel errors usually expose a
+lower-level reason. The proposal is to feed actionable refusals back to a
+generator, with bounded retries and without widening policy automatically.
+Whether this improves regeneration has not been measured, and the repository
+does not implement an automatic retry loop.
 
 ```mermaid
-%% caption: What each layer can say about a refusal, and who can act on it
+%% caption: A proposed feedback loop: refusal detail varies by layer; automatic regeneration is not implemented
 flowchart TB
     subgraph V["Explanatory power degrades as enforcement descends"]
         direction TB
@@ -337,11 +340,9 @@ style V fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
 style G fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
-This answers the question the design raises against itself. **If the interpreter
-layer cannot hold, why build it?** Because some rules exist at no other
-boundary; because its vocabulary is the one the profile is written in, and
-therefore the only one that can infer it; and because it is the layer that can
-say what happened.
+The Python layer is useful because it can express rules that the kernel cannot,
+record accesses for learning, and explain some refusals in Python terms. Those
+benefits do not make it a security boundary against hostile bytecode.
 
 Three cautions, in the order in which this goes wrong. A refusal must project
 the **policy**, never the environment, or it is reconnaissance. Retries must be
@@ -367,55 +368,78 @@ flowchart LR
         C["@sandbox function"]
     end
     P -- "1 · call + arguments<br/><i>trusted → untrusted: expected</i>" --> C
-    C -- "2 · result / exception payload<br/><b>untrusted → trusted: the hole</b>" --> P
+    C -- "2 · result / exception payload<br/><b>untrusted → trusted: validate at the boundary</b>" --> P
 
 style T fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
 style U fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
-Arrow 2 is C3 made concrete. Deserialise the child's result with a mechanism
-that instantiates arbitrary objects — `pickle` — and a crafted payload is
-arbitrary code execution in the parent, outside the sandbox. The sensitive-call
-registry does *not* cover the framework's own transport if it binds its
-serialiser at import time, so the guard and the hole sit in the same codebase
-without meeting. The fix is local: a restricted deserialiser at the boundary,
-accepting only the shapes the protocol defines.
+Arrow 2 is where the parent must treat child data as untrusted. PySandboxes now
+uses a restricted pickle reader on both return channels, but their guarantees
+differ. The exception channel is fail-closed and falls back to a plain
+descriptor when an exception cannot be reconstructed. The default result mode
+uses a fail-open denylist to preserve application-defined return types; the
+optional `remote-result-mode=data-only` rejects object-reconstruction opcodes
+and accepts only primitive values and built-in containers. The default mode
+reduces risk but does not eliminate it. See [the transport guard
+analysis](../wiki/transport-unpickle-guard.md).
 
 ## 8. Limits, and what is not measured
 
-Stated as declared claims rather than as a disclaimer, because C4 makes the
-stack checkable only if each layer says where its own claim stops.
+These limits qualify the composition model above. The model is a way to state
+and review layer responsibilities; its clauses are not themselves proof that
+every provider or configuration meets them.
 
-**The interpreter layer** is open by construction against rung 2 and above:
+**The Python layer** is bypassable by construction against hostile bytecode:
 patched functions retain a reference to the original; the object graph reaches
 the guards' own state; a module global cannot be made unwritable, because a
 module's functions keep `__globals__` bound to the original dict; the arming
-flag is a single point; native code is entirely outside. It *raises the cost* of
-a sensitive call from non-hostile code and *makes it visible* in learning mode —
-no more. **No layer above the kernel prevents denial of service.**
-**Shared-kernel backends do not address rung 5.** And a misgenerated policy can
-be too permissive with no visible symptom, which is what makes human review
-load-bearing rather than decorative.
+flag can be reached; and native code can call APIs outside Python wrappers.
+The layer raises the cost of sensitive calls from wayward code and records
+some of them in learning mode. Dynamic-code budgets bound selected operations,
+but they do not provide general resource control for the process. Shared-kernel
+backends do not address rung 5. A profile can also grant too much without a
+visible failure, so human review remains necessary.
 
-The implementation establishes that the architecture runs: 748 unit tests, 52
-integration tests, a container suite, 14 sample applications with inferred
-profiles, and — the strongest single result — the *same* profile asserted to
-produce the *same* enforcement across six backends and three container
-contexts. The escape corpora are pinned including the failures: 37 dynamic-code
-cases, of which 29 must be refused and 8 must run, each blocked payload
-asserting *which layer* caught it.
+The current repository has roughly 1,410 unit tests, 135 integration tests, 60
+container test rows and about 170 sample tests (12 sample applications), when
+the sample environments are available. These are repository snapshot counts,
+not a single CI run. Integration tests exercise several guard families across
+the six available providers; the host matrix adds a seventh row for QEMU without
+KVM.
+Container tests cover filesystem, network and environment behavior; they do not
+exercise the eval, API or import guards, and some provider/container
+combinations are excluded or expected to fail.
 
-Three things are **not** measured, and they are the ones the contribution rests
-on: inference **coverage**, inference **precision**, and **reviewability** —
-whether reviewers actually find a planted over-grant. No test suite can answer
-the third. The falsification condition for each of the four claims is given in
-the table at the head of this paper; claim 4, denial-as-signal, is the one that
-falls to measurement alone.
+Tests also pin both sides of important boundaries. For example, the native
+extension import test ensures legitimate C extensions still load; separate
+security assessments record that calls such as `ctypes.pythonapi` remain an
+escape from Python interception. The native-guard study reports a disposable
+prototype that protected selected C callables, then explains why it was not
+adopted as a general layer. These results support the stated limit: native
+code is not comprehensively contained by Python guards. They do not establish
+that every OS provider confines every native operation.
+
+Policy inference **coverage**, **precision**, and **reviewability** have not
+been measured. In particular, the tests do not show whether reviewers notice
+an intentionally planted over-grant, nor whether feeding refusals back to a
+generator improves its next attempt. Those are empirical questions for future
+evaluation. The falsification conditions above are research questions, not
+results established by this implementation.
+
+Implementation evidence referenced here includes the repository's [test
+coverage map](../wiki/tests.md), [Python-layer security
+assessment](../wiki/audit-python-security.md), [native guard study and
+decision](../wiki/audit-native-guard-study.md), [known
+weaknesses](../wiki/weaknesses.md), and [transport guard
+analysis](../wiki/transport-unpickle-guard.md). Test counts and behavior vary
+by revision.
 
 ## References
 
-Every item below was verified against a primary or well-established secondary
-source. All predate December 2025.
+The references below provide background for the design. The implementation
+evidence and its limits are documented separately in the repository links at
+the end of Section 8.
 
 **In-interpreter confinement**
 
