@@ -70,7 +70,7 @@ all_container_worker: list[str] = [
 ]
 
 
-# firejail is incompatible with containers
+# firejail is excluded: inside a container it detects "an existing sandbox" and runs unconfined, even with --force
 all_os_sandbox_provider: list[str] = [
     "none",
     "landlock",

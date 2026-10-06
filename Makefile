@@ -404,7 +404,8 @@ dist: .make-dist
 #                +-- python-sb-qemu      Dockerfile-qemu ......... build-image-qemu
 #
 # Make encodes this: .make-build-image-{landlock,unshare,bwrap,qemu} all prereq .make-build-image-base.
-# PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu. (firejail not supported in Docker.)
+# PYTHON_VERSION from uv. VARIANT = base | landlock | unshare | bwrap | qemu.
+# No firejail: inside a container it runs unconfined, even with --privileged and --force.
 PYTHON_VERSION := $(shell uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3.11")
 VARIANT ?= qemu
 # Container engines the images are built with, when installed; CI builds one per runner.

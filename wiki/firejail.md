@@ -19,7 +19,7 @@ The host launches a Firejail sandbox with a generated profile: whitelist/read-on
 
 | Aspect | Detail |
 |--------|--------|
-| **Docker / Podman** | Not compatible with Docker and Podman (no Firejail in typical container images; bridge model differs). |
+| **Docker / Podman** | Not usable in Docker, Podman or Kubernetes: inside a container, firejail runs the program without any isolation (see [Using with Docker](#using-with-docker)). |
 | **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config` and a bridge must exist (e.g. `add-bridge.sh`); see [Prerequisites](#prerequisites) for the other two settings. The daemon mode always has a socket rule (its SSE port). Under an explicit `restricted-network yes`, the sandbox keeps the **host network** with a warning and only the Python layer enforces the socket rules. |
 | **`/etc`** | `/etc` inside the jail is the `--private-etc` copy of the template (`hosts`, `resolv.conf`, `nsswitch.conf`, `ssl`, `pki`, `ca-certificates`). An `expose-*` rule under `/etc/` gets no `--whitelist` (it would put a tmpfs over `/etc` and break `--dns`), so a file outside that list stays invisible. |
 | **Debug** | Profile and netfilter generation can be complex; check logs and Firejail options for troubleshooting. |
@@ -35,15 +35,19 @@ For more details, see the [Firejail documentation](https://firejail.wordpress.co
 
 ## Using with Docker
 
-Firejail is **not** compatible with Docker. The project uses **one image per OS provider** (see [unshare](unshare.md), [bwrap](bwrap.md), [qemu](qemu.md)); there is **no container image for firejail**. Use **unshare**, **bwrap**, or **qemu** for container-based workflows.
+Firejail is **not** compatible with Docker. Inside a container, it concludes it already runs in a sandbox, prints `Warning: an existing sandbox was detected. <program> will run without
+any additional sandboxing features` and starts the program unconfined. Neither `--privileged` nor `--force` changes
+this: with firejail 0.9.74 in `docker run --privileged`, the program keeps the container's mount and PID namespaces.
+The process starts and simple checks pass, but no kernel boundary applies. The project uses **one image per OS provider** (see [unshare](unshare.md), [bwrap](bwrap.md), [qemu](qemu.md)); there is **no container image for firejail**. Use **unshare**, **bwrap**, or **qemu** for container-based workflows.
 
 ## Using with Podman
 
-Firejail is **not** compatible with Podman. Use **unshare**, **bwrap**, or **qemu** with their respective provider images for container-based workflows.
+Firejail is **not** compatible with Podman, for the same reason as [Docker](#using-with-docker). Use **unshare**, **bwrap**, or **qemu** with their respective provider images for container-based workflows.
 
 ## Using with Kubernetes
 
-Firejail is **not** supported in Kubernetes (no `python-sb-firejail` image). Use **unshare** (`python-sb-unshare`), **bwrap** (`python-sb-bwrap`), or **qemu** (`python-sb-qemu`) and their documentation for Kubernetes.
+Firejail is **not** supported in Kubernetes (no `python-sb-firejail` image), for the same reason as
+[Docker](#using-with-docker). Use **unshare** (`python-sb-unshare`), **bwrap** (`python-sb-bwrap`), or **qemu** (`python-sb-qemu`) and their documentation for Kubernetes.
 
 ## Configuration parameters
 

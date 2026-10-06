@@ -13,7 +13,8 @@ Each release publishes five images to Docker Hub, built from the wheel published
 
 Each image holds every tool its provider invokes, which is the hard part to get right by hand: without `iptables`,
 for instance, a bwrap profile with socket rules refuses to start. There is no `python-sb-firejail` on purpose:
-firejail is a setuid program, ill-suited to a container.
+inside a container, firejail detects "an existing sandbox" and runs the program without any isolation, even with
+`--privileged` and `--force` (see [firejail](firejail.md#using-with-docker)).
 
 ## Tags
 
