@@ -1,25 +1,59 @@
-# What are the weaknesses of py-sandbox?
+# Security limits and residual risks
 
-The native-extension study and its decision are summarized in [Native guard study and decision](audit-native-guard-study.md).
+## Scope
 
-There are several vulnerabilities in the proposed implementation. We are perfectly aware of them. The goal is not to execute unhealthy code, but to limit the malicious uses of our application.
+The Python layer (`py-sandbox`) intercepts supported Python APIs. It is a policy
+and visibility layer, not an isolation boundary against a determined attacker.
+Use an OS provider when the threat model includes hostile code that can use
+native extensions or direct system calls. The provider comparison describes
+what each OS mechanism can enforce and its prerequisites.
 
-Here are some vulnerabilities:
+## Python-layer limits
 
-  - Each function or method patch must keep a link to the original method. An advanced introspection analysis can find it and invoke it outside of the security rules.
-  - All classes are available via `object().__subclasses__()` and therefore also all modules. By analyzing this, it is possible to find the rules and modify them.
-  - Any compiled code can have access to the entire Python memory and therefore find all secrets. A vulnerability in a Python library using compiled code can be exploited.
-  - A child process, if it has the rights to read `/proc/${PPID}/environ`, can search for tokens there. **OS-sandboxes** generally prohibit this.
-  - A direct network connection to the sandbox it's possible. A secret token, a random port and a limitation of localhost network are used.
+- **Introspection can reach guard internals.** Python code can inspect wrappers,
+  original callables, rules, or the armed state. The
+  [Python-layer assessment](audit-python-security.md) separates demonstrated
+  paths from source-based reasoning and links each finding to regression tests.
+- **Native code can bypass Python wrappers.** `ctypes`, compiled extensions,
+  and direct system calls can access capabilities the Python layer does not
+  mediate. Secrets already present in the process memory are not protected from
+  such code.
+- **Some API edge cases remain.** For example, `dir_fd` checks resolve a path
+  before the kernel operation; a concurrent rename can create a
+  time-of-check/time-of-use race. A file descriptor already held by the code is
+  itself a capability.
+- **The local transport is not an OS boundary.** A co-resident process that
+  learns the daemon's local port and token may reach it. The token and random
+  port raise the cost; they do not protect against an attacker who can read
+  them.
 
-The sensitive functions that used to be reachable as soon as their module was importable (`os.system`, `os.fork`, `os.kill`, ...) are denied by default, independently of import rights. That closes a hole; it does not close the three below, all measured while building it:
+## Return-value deserialization
 
-  - `ctypes.pythonapi` is a `ctypes.PyDLL` instance built at import time. Using it calls no `__init__`, so it escapes the guard, even though `ctypes.CDLL` itself is patched through `__init__`.
-  - The daemon's private event loop calls `_thread.interrupt_main` from its `except KeyboardInterrupt` handler around `run_forever()`, in a background thread. Its reach is narrow: CPython delivers `SIGINT` to the main thread, so this only fires on an explicit `KeyboardInterrupt` in that loop.
-  - Enforcement only starts once `arm()` has been called, and that flag can be reset the same way the rules above can be found and modified: through `object().__subclasses__()`. This is not a new class of weakness, just the existing one applied to one more flag.
+The trusted parent must deserialize values returned by the sandbox child. The
+default result guard filters known dangerous pickle gadgets, but it is a
+fail-open denylist and does not prove that every gadget is blocked. The
+`remote-result-mode=data-only` option rejects object reconstruction and accepts
+only primitive values and built-in containers; it can reject applications that
+return custom objects. See the [transport guard assessment](transport-unpickle-guard.md)
+for the result and exception channel behavior.
 
-A call that names its file relative to an open directory (`dir_fd`) is resolved by the kernel against that directory, not the current one. The file wrappers resolve that descriptor and check the effective path for `open`, metadata and access checks, symlink operations, and one- or two-path operations such as `unlink`, `rename`, `replace` and `link`. The `dir_fd` itself remains a capability: code that already holds a descriptor to a path can use it, subject to the path rules. The path lookup through `/proc/self/fd` (or `F_GETPATH` on macOS) and the eventual filesystem operation are separate operations, so concurrent renames can still create a time-of-check/time-of-use race. The OS sandbox remains the boundary against hostile code.
+## Additional measured findings
 
-Separately from patching, the SSE transport's return channel deserializes child-produced payloads in the trusted parent. That used to be an unrestricted `pickle.loads`, a direct escape: a hostile `__reduce__` in a returned object runs code in the parent, outside the sandbox. It is filtered by a restricted unpickler (see [the transport unpickle guard](transport-unpickle-guard.md)). The exception channel is fail-closed; the result channel is a fail-open denylist, so for return values it raises the cost of a gadget rather than closing the class, and can be turned off with `remote-result-guard=false`. The opt-in `remote-result-mode=data-only` refuses object reconstruction opcodes before unpickling; the default `objects` mode preserves application class return values and their associated risk.
+The development assessment also records narrower cases: `ctypes.pythonapi` is
+created before the constructor patch can intercept it; a private event-loop
+`KeyboardInterrupt` path can call `_thread.interrupt_main`; and enforcement can
+be disarmed through the same introspection weakness. These are detailed in the
+[Python-layer assessment](audit-python-security.md) and are not claims that an
+OS provider is bypassed.
 
-None of this makes patching complete against hostile code: arbitrary Python can always call native code. The layer raises the cost of a sensitive call from non-hostile code, and makes such calls visible in learning mode. The OS-sandboxes remain the real barrier.
+## Recommendations
+
+- Keep the Python layer enabled for policy feedback and supported-API checks.
+- Add an OS provider appropriate to the deployment when native or compiled code
+  is within the threat model. Review its host, kernel, network, and container
+  prerequisites before relying on it.
+- Treat learned rules as a starting policy. Exercise representative paths and
+  review the result before enforcing it.
+- Prefer `remote-result-mode=data-only` when the application can return only
+  data-only values; otherwise keep the default guard enabled and review rejected
+  object types.

@@ -15,9 +15,26 @@ structured, test-pinned matrix and names the enforcing function or class for
 every row. Read [implementation](implementation.md) first if you need to know
 *how* the patching works before reasoning about *what it stops*.
 
+**Verification date: 2026-10-06.** The focused test modules cited by this
+assessment reported 261 passed, 6 failed, 3 skipped and 4 expected failures on
+Python 3.13.5. All six failures require creating or binding sockets; the
+execution environment returns `PermissionError: [Errno 1] Operation not
+permitted`. This run therefore does not revalidate those socket rows. The
+individual evidence labels below remain scoped to their named tests and
+configurations.
+
 The separate [native guard study](audit-native-guard-study.md) evaluates C wrappers and
 CPython audit hooks as ways to reduce introspection of original functions. It
 records the prototype results and why a general native layer was not pursued.
+
+## Summary
+
+This assessment concerns the Python interception layer, not the OS boundary.
+It documents both tested refusals and routes that remain open to arbitrary
+Python code. Treat `Blocked — demonstrated` as a result for the named test and
+configuration, not as proof that every equivalent attack is blocked. Treat
+`Reasoned` as source analysis that has not been pinned by an isolated payload.
+The [weaknesses page](weaknesses.md) gives the short operational summary.
 
 ---
 

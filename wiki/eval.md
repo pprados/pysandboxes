@@ -4,7 +4,7 @@
 registry of sensitive functions. None of those layers looks at code that
 arrives as a **string** at runtime.
 
-That string is exactly what an LLM produces. A tool that does
+This is common when a tool evaluates model-generated code. For example:
 
 ```python
 result = eval(expression, {"__builtins__": {}}, {})
@@ -17,10 +17,9 @@ is not protected by the emptied `__builtins__`: the payload below reaches
 "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/sh'])"
 ```
 
-The `eval-*` rules describe a **sub-language**. A source that arrives at
-`eval`, `exec` or `compile` is parsed, checked against that sub-language,
-rewritten so the remaining risks are enforced while it runs, and executed
-under a budget and a timeout the caller can recover from.
+The `eval-*` rules define a **sub-language**. Sources passed to `eval`, `exec`
+or `compile` are parsed, checked, rewritten, then run with configured budgets
+and a timeout.
 
 Only code reaching those three builtins is transformed. Your application's own
 modules are untouched, and import time is unaffected.
@@ -50,25 +49,16 @@ modules are untouched, and import time is unaffected.
 - [Profiles](#profiles)
 - [Error reporting](#error-reporting)
 - [Learning mode](#learning-mode)
-- [Profiles you can copy](#profiles-you-can-copy)
-  - [1. Calculator tool](#1-calculator-tool)
-  - [2. Data analysis over rows you supply](#2-data-analysis-over-rows-you-supply)
-  - [3. Data analysis over a DataFrame](#3-data-analysis-over-a-dataframe)
-  - [4. Row filter / predicate](#4-row-filter--predicate)
-  - [5. Business rule engine](#5-business-rule-engine)
-  - [6. Report and message templating](#6-report-and-message-templating)
-  - [7. Agent-written snippet](#7-agent-written-snippet)
-  - [8. Development escape hatch](#8-development-escape-hatch)
-  - [Choosing between them](#choosing-between-them)
+- [Example profiles](#profiles-you-can-copy)
 - [What this does not cover](#what-this-does-not-cover)
 
 ---
 
 ## The three states of the guard
 
-`eval`, `exec` and `compile` join the sensitive-function registry under a new
-`dynamic-code` category, so the guard has an effect whether or not you write a
-single `eval-*` rule.
+`eval`, `exec` and `compile` are in the `dynamic-code` sensitive-function
+category. Without an `eval-*` rule, they are denied unless that category is
+explicitly allowed.
 
 | Configuration | `eval()` behaviour |
 |---|---|
@@ -76,26 +66,21 @@ single `eval-*` rule.
 | at least one `eval-*` key | **guarded**: parsed, validated, rewritten, run under budget |
 | `python-api=ALLOW:dynamic-code` | **unguarded**, an explicit escape hatch, warned like `process-exec` |
 
-The last row wins over the middle one: a profile that carries both runs
-unguarded. Writing that line is asking for the pre-guard behaviour, and a rule
-that silently did something else would be the worst of both.
+The explicit `dynamic-code` grant takes precedence: if both are present, code
+runs unguarded.
 
 `ast.literal_eval` is not concerned: it evaluates literals only and constructs
 no code object.
 
-Code generation performed by the runtime itself — `dataclasses`,
-`typing`, `collections`, `importlib`, and libraries installed in
-`site-packages` — is exempt. Those call sites generate code structurally, not
-on your behalf, and refusing them would mean no module could be imported at
-all. Only your application's own call sites are guarded.
+Runtime code generation in the standard library and installed `site-packages`
+is exempt; application call sites are guarded.
 
 ---
 
 ## Deny-all, and the minimal core
 
-Like every other layer, the accepted language is a **whitelist**. With at
-least one `eval-*` key present, what runs is the *minimal core* plus whatever
-the keys open.
+The accepted language is a **whitelist**. With an `eval-*` key present, only
+the minimal core and constructs opened by the rules are allowed.
 
 The minimal core is not expressible and not removable:
 
@@ -124,9 +109,8 @@ eval("1 + 1")       # REFUSED — 'BinOp' is not allowed
 
 ## How the rules combine
 
-Every list key accumulates into **two unordered sets**, allow and deny.
-Repeating a key unions its values, so rule order carries no meaning and an
-`include` cannot be defeated by placement.
+List keys accumulate into unordered allow and deny sets. Repeated keys union
+their values, so order and `include` placement do not change the result.
 
 One resolution rule: **`DENY:` wins, always, wherever it appears.** No
 specificity comparison, no precedence table, no last-one-wins.
@@ -143,8 +127,8 @@ eval-timeout=DENY:5s
 eval-namespace=adaptive*
 ```
 
-**Patterns** use the same single-`*` glob as `env=`, and apply to every list
-key except `eval-syntax`, whose vocabulary is finite and enumerated.
+Patterns use the single-`*` glob from `env=` on list keys other than
+`eval-syntax`, whose vocabulary is finite.
 
 ```ini
 # Valid
@@ -157,9 +141,8 @@ eval-import=json.*
 eval-syntax=Bin*
 ```
 
-A pattern is a silent error multiplier. Any pattern whose fixed part is
-shorter than three characters, and any bare `*`, emits a configuration warning
-naming what it expands to on the running interpreter:
+Patterns with a fixed part shorter than three characters, including `*`, emit
+a warning listing their expansion on the current interpreter:
 
 ```
 eval-attribute=ge*  expands to 47 names on this interpreter, including
@@ -268,40 +251,17 @@ Groups are computed from the running interpreter, not hardcoded.
 
 `format` and `format_map` are curated out of `str-methods` deliberately.
 
-**The risk.** `"{0.__class__}".format(o)` resolves the attribute **in C, from
-the contents of the string**: there is no `Attribute` node anywhere in that
-source, so static validation sees nothing and the rewriter has nothing to
-route through `__sb_getattr__`. A template such as
-`'{0.__class__.__base__.__subclasses__}'` would walk the type hierarchy that
-`eval-magic` keeps shut, with every check bypassed.
+**Why they are excluded.** `str.format` resolves fields such as
+`{0.__class__}` inside C, so the AST rewriter cannot see those attribute reads.
+When explicitly allowed, the guard wraps `format` and `format_map`, parses
+template fields, and checks each attribute through the normal runtime gate.
+`string.Formatter` fields receive the same check. Index fields remain data;
+nested format fields are checked recursively. Outside guarded evaluation these
+methods are unchanged.
 
-**The solution.** The template is a string known before the C call, so the
-guard validates it at runtime. When `format` or `format_map` is granted,
-`__sb_getattr__` does not hand back the raw method: it returns a wrapper. That
-wrapper walks every field of the template with `_string.formatter_field_name_split`,
-and runs each attribute access (`{0.x}`) through `_check_attr`, the same gate as
-a dotted read. Only then does it delegate to the real method. Index access
-(`{0[0]}`) is data and left alone; nested spec fields (`{0:{1.__class__}}`) are
-walked in turn. The unbound forms `str.format(template, ...)` and
-`type('').format(template, ...)` are validated the same way.
-
-`string.Formatter` resolves the same fields in Python, in its `get_field`
-method, which is where the guard checks them: during a guarded evaluation,
-every field `get_field` receives goes through `_check_attr`, whatever template
-or overridden `parse` produced it. `Formatter().format('{0.__class__}', ())` is
-refused like the `str` spelling; outside an evaluation the method is untouched.
-A `Formatter` method fetched by the evaluated code carries the evaluation with
-it, so handing it to an executor's thread does not escape the check.
-
-Granting `format` by name therefore works, and still emits a warning. Only the
-exact name grants it: a pattern such as `eval-attribute=*` or `f*` leaves
-`format` and `format_map` refused, so a wide grant never opens them by
-accident. The refusal points to the f-string, which does the same job with a
-checked attribute — the safer default.
-
-Contrast the f-string spelling `f"{o.__class__}"`, which compiles to a real
-attribute access and is validated normally. Same result to the eye, opposite
-exposure.
+Granting `format` requires an exact name; wildcard patterns do not enable
+`format` or `format_map`. A regular f-string such as `f"{o.__class__}"` is
+rewritten as a normal attribute access and follows the same gate.
 
 ```ini
 # Valid
@@ -422,14 +382,13 @@ Under `adaptive`:
 | `eval(e, {"helper": f}, {})` | the caller's, plus `__builtins__` from `eval-call` | graded |
 | `eval(e)` | built entirely from `eval-call` | none |
 
-Row 2 is the important one. When you supply globals **without** a
-`__builtins__` key, CPython injects all 159 builtins — so the author of
-`eval(e, {"helper": f}, {})` believes they passed one helper and has in fact
-passed `open`, `getattr` and `__import__`. That injection is never honoured in
-`adaptive` or `closed`; the key is filled from `eval-call` instead.
+If supplied globals omit `__builtins__`, CPython normally injects builtins.
+`adaptive` and `closed` replace that implicit namespace with the names in
+`eval-call`, so the caller does not accidentally expose `open` or
+`__import__`.
 
-Row 3 is a **deliberate behaviour change**. A bare `eval(e)` in plain Python
-sees the caller's `globals()` *and* `locals()` plus the injected builtins:
+This is a deliberate behavior change: a bare `eval(e)` no longer inherits the
+caller's globals and locals.
 
 ```python
 SECRET = "sensitive"
@@ -438,10 +397,8 @@ def caller():
     eval("SECRET")   # plain Python: "sensitive".  Guarded: NameError
 ```
 
-Reading your whole module surface into a string evaluation is the exact hazard
-this guard exists to address, so the break is the point. Pass what the
-expression needs instead: `eval(e, {"SECRET": SECRET}, {})`, which `adaptive`
-honours untouched.
+Pass required values explicitly, for example `eval(e, {"SECRET": SECRET}, {})`;
+`adaptive` honours that supplied context.
 
 Each graded name in a supplied context emits one log record on the
 `pysandboxes.guard_eval` logger, once per call site:

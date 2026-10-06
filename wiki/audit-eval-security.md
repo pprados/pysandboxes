@@ -11,11 +11,27 @@ configuration keys, and to [weaknesses](weaknesses.md), which lists the limits
 of the package as a whole. Read this one when you need to reason about *what an
 attacker can reach*, not about *how to write a rule*.
 
+**Verification date: 2026-10-06.** On Python 3.13.5, the focused eval-rule,
+transform, runtime, hardening and attack-matrix suites reported 197 passed and
+2 skipped. The skips cover template strings, a Python 3.14 syntax feature; they
+do not skip the guard's general eval tests.
+
 Every attack below is pinned as an executable test in
-`tests/unit_tests/guard/test_eval_attack_matrix.py` (blocked attacks and
-allowed payloads) and `tests/unit_tests/guard/test_eval_hardening.py`
-(per-rule regression). If a payload ever changes column, a test changes with
-it.
+[`test_eval_attack_matrix.py`](../tests/unit_tests/guard/test_eval_attack_matrix.py)
+(blocked attacks and allowed payloads) or
+[`test_eval_hardening.py`](../tests/unit_tests/guard/test_eval_hardening.py)
+(per-rule regression). A tested result applies to its payload and configuration;
+it does not establish that every equivalent attack is blocked.
+
+## Summary
+
+The `eval-*` layer is designed for a source string evaluated in a bounded
+namespace. Static validation is a usability check; the namespace and runtime
+helpers enforce the declared capabilities. The assessment demonstrates blocked
+escape attempts, allowed payloads, and residual denial-of-service risks. It is
+not an OS security boundary and does not assess arbitrary bytecode running in
+the host interpreter; see the [Python-layer assessment](audit-python-security.md)
+for that distinct threat model.
 
 ---
 

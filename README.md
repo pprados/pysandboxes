@@ -8,17 +8,17 @@
 [![Python versions](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://pypi.org/project/pysandboxes/)
 [![Status](https://img.shields.io/pypi/status/pysandboxes.svg)](https://pypi.org/project/pysandboxes/)
 [![License](https://img.shields.io/pypi/l/pysandboxes.svg)](https://github.com/pprados/pysandboxes/blob/master/LICENSE.txt)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL-lightgrey.svg)](#platform-support)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
-> Protect Python programs without their knowledge.
+> Restrict what a Python process can access, and inspect the policy that grants it access.
 
-Applications increasingly run code, or call tools, chosen by an LLM, and a manipulated model can make them read local files, reach the intranet or run commands ([LLM05:2025 Improper Output Handling](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/), [LLM06:2025 Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)). **Py-Sandboxes** restricts what the process may actually do, from a whitelist learned by watching it run.
+Applications increasingly run code or tools selected by an LLM. A manipulated model can cause those tools to read local files, reach internal services, or run commands ([OWASP LLM05:2025](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/), [OWASP LLM06:2025](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)). **Py-Sandboxes** is a Python security framework that applies an explicit policy to a process and can derive a starting policy by observing an application run.
 
 [Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
-> **Not yet on pypi.org.** Until the project is published there, `pip install pysandboxes` and
-> `uvx python-sb` do not work. The pre-releases are on test.pypi.org: declare this alias, then use `python-sb`
-> wherever this page says `uvx python-sb`:
+> **Package sources.** The release process publishes pre-releases to TestPyPI and final releases to PyPI. The
+> installation commands below target the final PyPI release. To try a pre-release that is available on TestPyPI,
+> define this alias and use `python-sb` in place of `uvx python-sb` in the examples:
 >
 > ```bash
 > alias python-sb='uvx --prerelease allow \
@@ -37,38 +37,40 @@ Applications increasingly run code, or call tools, chosen by an LLM, and a manip
 > python-sb --help
 > ```
 
-# Quick start
+## Quick start
 
-Run any module in a sandbox, without installing anything and without touching a single line of your code:
+After the release is published to PyPI, run any module in a sandbox without changing the application code:
 
 ```bash
 uvx python-sb -m my_module
 ```
 
-Or install it:
+Or install the package in the application environment:
 
 ```bash
 pip install pysandboxes
 python-sb -m my_module
 ```
 
-The first run has no rules yet, so it starts in **learning mode**: use your application normally, and a `.py-sandboxes` file is written when it stops, populated with the network, disk, module and environment accesses it actually needed. Review that file, then every later run is restricted to that whitelist.
+The TestPyPI pre-release instructions above remain available for trying the current pre-release before the PyPI release. On the first run, learning mode records observed accesses in `.py-sandboxes`. Exercise representative application paths, then review and narrow the generated policy before relying on it: behavior that was not exercised cannot be learned. Subsequent runs apply the policy.
 
 [![Quick demo: learn a policy, then enforce it](samples/quick-demo/quick-demo.gif)](samples/quick-demo/)
 
-That is the whole integration for *complete mode*. To sandbox only part of an application, see [partial mode](#apply-the-sandbox-to-a-part-of-the-application-partial-mode).
+This is complete mode: it launches the application under the sandbox. To isolate only selected functions, see [partial mode](#apply-the-sandbox-to-a-part-of-the-application-partial-mode).
+
+To understand the design, start with [the security model](#what-it-protects-against-and-what-it-does-not), then see [provider trade-offs](#os-sandbox-vs-py-sandbox), [test coverage](wiki/tests.md), and the [wiki index](wiki/Home.md).
 
 # What it protects against, and what it does not
 
-**Py-Sandboxes** is built for one threat model: *your own application, or the code an LLM makes it run, doing more than it should*. It offers three layers, with deliberately different strengths:
+**Py-Sandboxes** addresses one threat model: *your application, or code it runs, using more capabilities than intended*. It offers three layers with different roles and limits:
 
-- The **dynamic-code layer** (*the `eval-*` rules*) is the innermost and the weakest of the three, but it is the only one that looks at code arriving as a *string* — which is exactly the shape of an LLM's answer. The other two layers only see a process that has already decided to run it. A source handed to `eval()`, `exec()` or `compile()` is parsed, checked against a declared sub-language, rewritten and run under a budget and a timeout, which is what makes it possible to execute LLM-generated Python code with a stated set of capabilities. See [the `eval-*` rules](https://github.com/pprados/pysandboxes/blob/master/wiki/eval.md).
-- The **Python layer** (*py-sandbox*) is a guardrail and a readability layer. It catches LLM-generated code that goes off the rails, and it states in a single file exactly what your application is allowed to touch. It is **not** a boundary against a determined attacker: `ctypes`, compiled extensions or direct syscalls can work around API interception.
-- The **OS layer** (*os-sandbox*: landlock, bwrap, firejail, unshare, qemu) is the real security boundary. It is enforced by the kernel, so it also holds against compiled code.
+- The **dynamic-code layer** (`eval-*`) parses, checks, rewrites, and runs source passed to `eval()`, `exec()`, or `compile()` under configured limits. It applies only to those entry points; see [the `eval-*` rules](wiki/eval.md) and the [security assessment](wiki/audit-eval-security.md).
+- The **Python layer** (`py-sandbox`) intercepts selected Python APIs according to a policy. It improves visibility and limits accidental or ordinary misuse, but it is not an isolation boundary against hostile code: native extensions, `ctypes`, and direct system calls can bypass Python-level interception. See [known weaknesses](wiki/weaknesses.md).
+- The **OS isolation layer** applies Linux kernel mechanisms through `landlock`, `bwrap`, `firejail`, or `unshare`. The `qemu` provider runs the sandboxed process in a virtual machine. These providers have different capabilities and prerequisites; see [the provider comparison](wiki/os-providers.md).
 
-The Python and the OS layers feed each other. Writing an OS-level policy by hand is the tedious part of any sandboxing effort: you have to know, up front, every directory, host, port and variable the process will legitimately need. The Python layer answers exactly that question, because it observes those accesses through the standard APIs while your application runs. The `.py-sandboxes` file produced by learning mode is therefore not only the Python whitelist, it is also the inventory used to configure the OS layer, from the same declarations and without a second round of trial and error.
+Learning mode can provide an initial inventory of accesses observed through supported APIs. It does not prove that the policy is complete: unexercised paths and accesses outside those APIs may be absent. Review the policy and test the application in enforcement mode before deployment.
 
-Nest them: the dynamic-code layer for the strings an LLM produces, the Python layer for precision and legibility, the OS layer for enforcement. See [OS-sandbox vs Py-sandbox](#os-sandbox-vs-py-sandbox) for the per-technology matrix.
+Combine the dynamic-code and Python layers for policy checks and visibility; add an OS provider when the threat model requires isolation from compiled code. See [the provider matrix](#os-sandbox-vs-py-sandbox).
 
 This is **not** a defense against a malicious third-party dependency that you installed yourself.
 
@@ -79,18 +81,18 @@ written in its `.py-sandboxes` file:
 
 - **Agent skills, hooks and plugins**: the scripts of a skill run with all the rights of the user. A rule file
   shipped with the skill bounds them, and doubles as its permission manifest.
-- **Tools, CLIs and MCP servers**: a tool driven by a manipulated LLM can only reach what its function needs.
+- **Tools, CLIs and MCP servers**: a policy can constrain supported file, network, environment, import, and sensitive-API operations to declared access.
 - **AI coding agents**: the rule file is versioned, so `git diff -- '*.py-sandboxes'` shows every right the agent
   added between two commits.
 - **Dependency updates**: a run without `--learn` turns a new behavior of a dependency into a visible violation.
 - **Untrusted tests in CI**, **audit of an unknown script** with `--learn`, **LLM-generated code**.
 
-See [use cases](https://github.com/pprados/pysandboxes/blob/master/wiki/use-cases.md) for each scenario, the
+See [use cases](wiki/use-cases.md) for each scenario, the
 protection level it needs, and what the rule file does not show.
 
 # Platform support
 
-For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock, bwrap, firejail, unshare) is a Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
+The Python layer and the `none` and `subprocess` providers are available on Linux, macOS, and Windows. Kernel-backed OS providers (`landlock`, `bwrap`, `firejail`, `unshare`, and `qemu`) are Linux technologies and are also available through WSL where their kernel and tooling requirements are met. On macOS and Windows, Py-Sandboxes does not provide that OS isolation layer. See [provider platform requirements](wiki/os-providers.md).
 
 ---
 
@@ -129,32 +131,31 @@ Among these risks, some can be reduced if a part of the application code is exec
 
 The idea is to use a **defense-in-depth** approach, where multiple layers support each other to limit the capabilities and necessary privileges for each component as much as possible. Is it wise to allow every piece of Python code or every dependency to have access to all application files?
 
-The **Py-Sandboxes** solution we propose aims to address these difficulties. The idea is to offer a *Python Sandbox* mechanism, allowing the execution of Python code, but limited in its capabilities. This is a similar approach to [AppArmor](https://apparmor.net/) or *capabilities* under Linux.
+The **Py-Sandboxes** solution addresses these risks with a Python policy layer and optional OS isolation. This is a capability-oriented design; it is not equivalent to [AppArmor](https://apparmor.net/) or to another operating-system policy framework.
 
 The approach consists of filtering and strengthening standard Python APIs to limit the application's action capabilities. This API interception approach is effective but cannot guarantee that there are no workarounds. This is why our solution allows the nesting of other technologies, such as **os-sandbox**. These technologies rely on the OS's ability to limit network, disk, resource, and other accesses. Nesting an **os-sandbox** with a **py-sandbox** is an interesting combination for controlling application security.
 
-Like [TypeScript Deno](https://docs.deno.com/runtime/fundamentals/security/#permissions), our solution helps reduce the following risks:
+An appropriately configured policy can reduce these risks. The controls apply to supported APIs and depend on the selected OS provider; they are not unconditional guarantees. The Python layer can be bypassed by native code, and `eval-*` limits apply to dynamically evaluated source rather than to every process operation.
 
-- [X] **Path Traversal**: Only authorized directories can be accessed.
-- [X] **Remote Code Execution (RCE)**: Sensitive APIs are not available.
-- [X] **Reverse Shells**: Network connections are limited.
-- [X] **Excessive Permissions**: All code is under the control of the Python sandbox.
-- [X] **Token Theft**: Accessible files and environment variables are filtered.
-- [X] **Remote Access**: Network and code actions are limited.
-- [X] **Malicious Execution**: `eval()`, `exec()` and `compile()` are refused unless the profile declares the sub-language they may run, via the [`eval-*` rules](wiki/eval.md).
-- [X] **Denial of Service**: An evaluated string runs under an iteration budget, a recursion bound, an allocation ceiling and a timeout the caller can recover from (`eval-timeout=`, `eval-max-iterations=`).
-- [X] **Malicious syntax**: The syntax of a dynamically evaluated string is filtered against a declared whitelist of constructs (`eval-syntax=`)
+- **Path traversal**: guarded file APIs enforce configured path rules; use an OS provider for a boundary against native code.
+- **Sensitive process execution**: registered APIs are denied by default and require explicit `python-api=` permission.
+- **Reverse shells and remote access**: supported network operations can be constrained by `net=` rules and the selected OS provider.
+- **Excessive permissions and token exposure**: file and environment rules limit access through supported APIs. They do not hide secrets already present in process memory from native code.
+- **Dynamically evaluated code**: `eval()`, `exec()` and `compile()` are checked against the declared sub-language in the [`eval-*` rules](wiki/eval.md).
+- **Denial of service in evaluated strings**: iteration, recursion, allocation, and timeout limits apply to the `eval-*` runtime; these are not general process resource limits.
+- **Unapproved syntax in evaluated strings**: `eval-syntax=` restricts allowed syntax constructs.
 
-The approach is based on the principle of **Least Privilege** and **Defense in Depth**, with an exclusively "*whitelist*" configuration. By default, everything is forbidden. You must explicitly authorize actions.
+The configuration follows **least privilege** and **defense in depth**. Guarded operations are denied unless the corresponding rule permits them; this does not mean that every possible Python or native operation is intercepted.
 
-A learning mechanism allows for continuous improvement of security rules and rapid implementation.
+Learning mode records supported accesses observed during a run. Exercise representative paths, then review the resulting rules; unexercised behavior cannot be learned.
 
 # Usage
 
-Installation is covered in [Quick start](#quick-start). To track the development version instead:
+Installation is covered in [Quick start](#quick-start). To run the current source checkout during development:
 
 ```bash
-pip install pysandboxes
+uv sync --group test
+uv run python-sb --help
 ```
 
 We propose only four things:
@@ -190,18 +191,18 @@ style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
 style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
-This scenario is the simplest. You just need to replace the launch of your application (`python -m my_module`) with a launch in the sandbox (`uvx python-sb -m my_module`). The `@sandbox` annotation is ignored. It's possible to add some *py-sandboxes parameters*, at the beginning:
+This scenario is the simplest. Replace the launch of your application (`python -m my_module`) with a launch through `python-sb`. For a TestPyPI pre-release, use the command shown in [Quick start](#quick-start), followed by `-m my_module`. The `@sandbox` annotation is ignored in complete mode. You can add sandbox parameters before the module name:
 
 ```shell
-uvx python-sb --learn -m my_module
+python-sb --learn -m my_module
 ```
 
-> Note: if you install the module with `pip install pysandboxes`, you can use `python-sb -m ...`.
+For a source checkout, install the project environment with `uv sync --group test` and run it with `uv run python-sb -m my_module`.
 
 You can use it in interactive mode and continue to use the help shortcut.
 
 ```shell
-> uvx python-sb
+> python-sb
 SANDBOXES Python 3.13.5 | packaged by Anaconda, Inc. | [GCC 11.2.0] on linux
 **APIs are LIMITED according to the rules in '.py-sandboxes'**
 Type "help", "copyright", "credits" or "license" for more information.
@@ -224,16 +225,16 @@ If *IPython* is installed, it's used. All the standard python parameters are ava
 
 It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
 
-> For more information on using sandboxes with MCP, see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/mcp.md).
+> For more information on using sandboxes with MCP, see [the MCP integration guide](wiki/mcp.md).
 
-The first launch learns the rules, as described in [Quick start](#quick-start): exercise every feature of your application, so that nothing it legitimately needs is missing from the whitelist.
+The first launch can run in learning mode, as described in [Quick start](#quick-start). Exercise representative application paths, then review the resulting policy; an unobserved path or access outside supported APIs may not appear in the generated rules.
 
 If you want to restart a learning session to add missing rules:
 
 - activate the `learn` parameter in the configuration file
 - or add `--learn=.py-sandboxes` (or just `--learn`) when you start `python-sb`
 
-This way, only the missing rules will be added to the file.
+Learning mode adds rules for supported accesses it observes during that run. Review each addition before relying on it.
 
 This approach allows for application isolation, but requires granting privileges to the entire application, such as access to API tokens. It's likely that only a small part of the application needs these privileges, but not the rest.
 
@@ -241,7 +242,7 @@ This approach allows for application isolation, but requires granting privileges
 
 [uvx](https://docs.astral.sh/uv/guides/tools/) is a solution for running a Python tool without installing it in the project. A temporary environment is created for the duration of the tool's execution.
 
-The `python-sb` command is published on PyPI as its own package, which simply depends on the latest `pysandboxes` and launches it. So uvx can run it directly, with nothing to install and no `--from` to spell out:
+The `python-sb` wrapper is a separate package that depends on `pysandboxes`. Once the final packages are available from PyPI, `uvx` can run it without installing it into the application environment:
 
 ```bash
 uvx python-sb --help
@@ -401,7 +402,7 @@ What are the security filters offered by **Py-Sandboxes**?
 - **Network access control**: It is possible to control the direction, IP addresses, domain names, and ports available to the sandbox.
 - **Disk access control**: It is possible to map directories to their equivalents in the sandbox. The mapping can be read-only or read and write. Finally, it is possible to specify file filters that should be ignored by the sandbox (e.g., `ignore=.*`).
 - **Imported module control**: A whitelist of Python modules accessible to the sandbox must be provided. Importing other modules is rejected.
-- **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, whatever `python-import=` allows: an import right is not a call right. Permissions are granted per function or per category, and learning mode generates them from the application's real behaviour.
+- **Sensitive API call control**: A registry of sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, ...) is denied by default, regardless of `python-import=`: an import right is not a call right. Permissions can be granted per function or category. Learning mode records supported calls it observes; it does not discover calls made through native code.
 - **Dynamically evaluated code control**: a string handed to `eval()`, `exec()` or `compile()` is refused unless the profile declares the sub-language it may use. See [Dynamically evaluated code](#dynamically-evaluated-code).
 
 Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandboxes.template) generated during the first execution for more details.
@@ -435,22 +436,22 @@ Every rule of the `eval-*` family is described key by key, with a valid and an i
 
 # OS-sandbox vs Py-sandbox
 
-The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct calls to the kernel. An OS-level provider (**os-sandbox**), nested around it, closes that gap: `subprocess`, `landlock`, `unshare`, `bwrap`, `firejail` or `qemu`. Select it with the `os-sandbox` parameter of the config file, or with the `OS_SANDBOX` environment variable.
+The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct calls to the kernel. When the threat model includes those paths, select an OS-level provider (**os-sandbox**) whose mechanism and prerequisites fit the deployment: `landlock`, `unshare`, `bwrap`, `firejail`, or `qemu`. `subprocess` provides process separation without an OS security boundary. Select a provider with the `os-sandbox` configuration parameter or the `OS_SANDBOX` environment variable.
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
-What each technology enforces, its container and Kubernetes compatibility, and the paranoia levels (which Python and OS combination for which threat): see [here](https://github.com/pprados/pysandboxes/blob/master/wiki/os-providers.md)
+The [provider comparison](wiki/os-providers.md) describes enforcement mechanisms, container and Kubernetes compatibility, and the threat models each combination addresses.
 
 ---
 
 ## Samples
 
-Twelve samples, one per MCP or agent framework (LangChain, CrewAI, smolagents, ...), run the same two tools under pysandboxes: one fetches a web page, the other evaluates an expression. See [here](https://github.com/pprados/pysandboxes/blob/master/wiki/samples.md)
+The [sample suite](wiki/samples.md) contains framework integrations for MCP and agent libraries, with worked examples and test instructions.
 
 ---
 
 # Documentation
 
-The [wiki](https://github.com/pprados/pysandboxes/blob/master/wiki/Home.md) holds the rest of the documentation: FAQ, configuration files and integration in a module, implementation, weaknesses, security assessments, OS providers, roadmap and related CVEs. Its index is the menu to start from.
+The [wiki index](wiki/Home.md) groups documentation by task: getting started, configuration, security model and audits, provider selection, integrations, test coverage, and samples. For the implementation, read [the architecture page](wiki/implementation.md); for reproducible security findings, start with the [Python-layer](wiki/audit-python-security.md) and [`eval-*`](wiki/audit-eval-security.md) assessments.

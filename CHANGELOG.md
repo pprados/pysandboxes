@@ -19,6 +19,9 @@
 
 ## [0.0.0] - 202X-XX-XX
 
+### Changed
+- Clarify platform support, security limits, and provider test coverage in the README and wiki
+
 ### Added
 - First stable version
 - accept *complete* and *selected* mode

@@ -1,35 +1,47 @@
 # Test coverage map — what is exercised, where
 
-This page answers one question: **are the guard families covered by integration
-tests, for every `OS_SANDBOX` technology and in every container condition?**
+This page maps test evidence across guard families, OS providers, and container
+conditions. A provider row means that a scenario is configured for that provider;
+it does not mean the row ran successfully on every host.
 
-The short answer is **per backend, yes; per container condition, no**.
+## At a glance
 
-Six families are now parametrized over every OS backend, by two scenarios.
-`guard_files`, `guard_socket` and `guard_envs` ride on `tst_usage`, which is
-also what every container row runs. `guard_eval`, `guard_api` and
-`guard_import` are covered by `test_guards_with_providers`, which runs on the
-host only — so no container row arms them. The seventh family,
-`guard_provider`, parses configuration rather than guarding a call.
+- The host integration suite exercises six runtime guard families over six
+  distinct OS providers. QEMU has two rows: KVM and forced TCG emulation.
+- Container scenarios exercise file, socket, and environment behavior. They do
+  not exercise `guard_eval`, `guard_api`, or `guard_import`.
+- Twelve unprivileged `unshare`/`bwrap` container cases are declared
+  `xfail(run=False)`. They are not executed. This is 25% of the 48 real-provider
+  rows, or 20% of all 60 rows including `none`.
+- Test counts below are approximate collected-case counts. Provider availability,
+  workflow filters, and sample environments change how many cases actually run.
 
-QEMU is run twice on the host: the `qemu` row takes KVM when `/dev/kvm` is
-there, and the `qemu-tcg` row refuses it, so emulation is covered even on a
-machine that has KVM.
+See [Gaps](#gaps) for behaviors not represented by these matrices.
 
-The container grid is therefore narrower than the host one, and narrower still
-than its row count suggests: a quarter of its rows are declared `xfail` and
-never execute. See [Gaps](#gaps).
+## Contents
 
-Everything below is derived from the test sources, not from intent:
-`tests/unit_tests/`, `tests/integration_tests/`, `tests/containers_tests/`.
+- [Test suites and approximate size](#the-four-suites)
+- [Guard family coverage](#a-guard-families)
+- [Provider matrix](#b-os_sandbox-backends)
+- [Container conditions](#c-container-conditions)
+- [Coverage model and limitations](#d-counting-the-scenarios)
+- [Gaps](#gaps)
+
+The tables are derived from [unit tests](../tests/unit_tests/),
+[integration tests](../tests/integration_tests/),
+[container tests](../tests/containers_tests/), and the corresponding CI
+workflows. See [test workflow](../.github/workflows/test.yml),
+[integration workflow](../.github/workflows/integration.yml),
+[container workflow](../.github/workflows/containers.yml), and
+[full-gate workflow](../.github/workflows/full-gate.yml).
 
 ## The four suites
 
 | Suite | Make target | What it runs |
 |---|---|---|
-| Unit | `make unit-tests` | `tests/unit_tests/` — guards called directly, in-process, no daemon |
-| Integration | `make integration-tests` | `tests/integration_tests/` — a real `python-sb` child process per backend |
-| Containers | `make container-tests` | `tests/containers_tests/` — Docker, Podman, Kubernetes (minikube) |
+| Unit | `make unit-tests` | [`tests/unit_tests/`](../tests/unit_tests/) — guards called directly, in-process, no daemon |
+| Integration | `make integration-tests` | [`tests/integration_tests/`](../tests/integration_tests/) — real `python-sb` child processes |
+| Containers | `make container-tests` | [`tests/containers_tests/`](../tests/containers_tests/) — Docker, Podman, Kubernetes (minikube) |
 | Samples | `make sample-tests` | each sample's own test suite |
 
 `make all-tests` chains all four.
@@ -43,10 +55,10 @@ commit that adds a test; the point is the shape of the effort:
 | Suite | Target | Tests |
 |---|---|---|
 | Unit | `make unit-tests` | ~1410 |
-| Integration | `make integration-tests` | ~135 |
+| Integration | `make integration-tests` | ~139 |
 | Containers | `make container-tests` | ~60 |
 | Samples (12 demos) | `make sample-tests` | ~170 |
-| **Total, one interpreter** | `make all-tests` | **~1775** |
+| **Total, one interpreter** | `make all-tests` | **~1779** |
 
 The samples figure is the softest of the four: each sample has its own
 `pyproject.toml`, its own lock file and its own virtual environment, so the
@@ -57,10 +69,10 @@ of it:
 
 | Workflow | Suite | Versions | Executions | Fires on |
 |---|---|---|---|---|
-| `test.yml` | Unit | 3.11, 3.12, 3.13, 3.14 | ~5640 | every push and pull request |
-| `integration.yml` | Integration | 3.11, 3.12, 3.13, 3.14 | ~540 | `full-gate.yml` (nightly 20:17 UTC, release tag) or dispatch |
-| `containers.yml` | Containers | 3.13 | ~60 | `full-gate.yml` (nightly 20:17 UTC, release tag) or dispatch |
-| `samples.yml` | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | `full-gate.yml` (nightly 20:17 UTC, release tag) or dispatch |
+| [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~5640 | every push and pull request |
+| [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~540 | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`containers.yml`](../.github/workflows/containers.yml) | Containers | 3.13 | ~60 | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | `full-gate.yml` (nightly, release tag) or dispatch |
 | **Total** | | | **~6890** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
@@ -75,19 +87,21 @@ it calls have none of their own.
 
 | Family | Module | Unit | Integration (host) | Containers |
 |---|---|---|---|---|
-| Filesystem | `guard_files` | yes | all 6 backends | all conditions |
-| Network | `guard_socket` | yes | all 6 backends | all conditions |
-| Environment | `guard_envs` | yes | all 6 backends | all conditions |
-| Dynamic code | `guard_eval` | yes (largest unit block) | all 6 backends + depth on `subprocess` | **no** |
-| Sensitive API | `guard_api` | yes | all 6 backends + arming on `subprocess` | **no** |
-| Imports | `guard_import` | yes | all 6 backends | **no** |
+| Filesystem | `guard_files` | yes | all 6 providers | all container rows |
+| Network | `guard_socket` | yes | all 6 providers | all container rows |
+| Environment | `guard_envs` | yes | all 6 providers | all container rows |
+| Dynamic code | `guard_eval` | yes (largest unit block) | all 6 providers + depth on `subprocess` | **no** |
+| Sensitive API | `guard_api` | yes | all 6 providers + arming on `subprocess` | **no** |
+| Imports | `guard_import` | yes | all 6 providers | **no** |
 | Config directives | `guard_provider` | yes | indirect (every profile load) | indirect |
 
 Two scenarios carry the per-backend column, and they are shaped differently.
 
-**`tst_usage.py`** covers files, sockets and environment variables. It is
-invoked once per backend by `test_usage_with_providers.py` and once per
-container row by `test_containers.py` — which is why those three families, and
+**[`tst_usage.py`](../tests/integration_tests/tst_usage.py)** covers files,
+sockets and environment variables. It is invoked once per provider row by
+[`test_usage_with_providers.py`](../tests/integration_tests/test_usage_with_providers.py)
+and once per container row by
+[`test_containers.py`](../tests/containers_tests/test_containers.py) — which is why those three families, and
 only those three, reach the container grid. It asserts three things. A write
 inside `expose-rw` succeeds, while a write outside it is denied and `.env` stays
 unreadable. TCP/UDP connect, bind and DNS follow the `net=` rules. The sandbox
@@ -100,8 +114,8 @@ each backend re-exports (`PATH`, `PYTHONPATH`, `COLUMNS`, `PYTHONUNBUFFERED`…)
 and it grows deliberately as backends add exports. The check catches an
 *unknown* name, not every name.
 
-**`test_guards_with_providers.py`** covers the other three families, six tests
-per backend row. Each family is a deny/allow pair: `eval('40 + 2')` refused, then
+**[`test_guards_with_providers.py`](../tests/integration_tests/test_guards_with_providers.py)**
+covers the other three families with a deny/allow pair per family: `eval('40 + 2')` refused, then
 allowed by `python-api=ALLOW:dynamic-code`; `os.system` refused, then allowed by
 `python-api=ALLOW:os.system`; an unlisted module refused by name, then accepted
 once `python-import=` names it. The pairing is the point — a deny row alone
@@ -116,13 +130,17 @@ which disarms the very guard under test. The profile exposes the interpreter's o
 library tree explicitly, since a backend with its own mount namespace otherwise
 hides it.
 
-Four more tests per row cover what the guards rest on: the program's output
+Four more parametrized cases per row cover what the guards rest on: the program's output
 comes back, a profile naming its modules one by one still starts, a failure
 says why, and stdout and stderr stay apart. The first three pin the defects
 that made every QEMU row exit 1 with an empty stderr; with them fixed, the QEMU
-rows run like the others. Ten tests over seven rows: 70 rows.
+rows run like the others. The module has ten parametrized test functions across
+seven provider rows (QEMU KVM and TCG are separate rows), or about 70 collected
+cases before environment-dependent skips.
 
-`test_eval_integration.py` and `test_guard_api_arming.py` stay pinned to
+[`test_eval_integration.py`](../tests/integration_tests/test_eval_integration.py)
+and [`test_guard_api_arming.py`](../tests/integration_tests/test_guard_api_arming.py)
+stay pinned to
 `os-sandbox=subprocess`, and keep their role: depth rather than breadth. They
 cover the eval sub-language (namespaces, syntax classes, timeouts, the learning
 round trip) and each of the arming entry points. That work does not need to be
@@ -137,26 +155,26 @@ that loads a profile exercises it implicitly.
 Nine providers are registered in `pysandboxes/_os_sandbox.py`; `_task` and
 `_sse_server` are internal and not user-selectable.
 
-| Backend | Host: `tst_usage` | Host: guards | Docker | Podman | Kubernetes |
-|---|---|---|---|---|---|
-| `subprocess` | yes | yes | — | — | — |
-| `firejail` | yes | yes | **excluded** | **excluded** | **excluded** |
-| `bwrap` | yes | yes | yes (privileged) | yes (privileged) | yes (privileged) |
-| `unshare` | yes | yes | yes (privileged) | yes (privileged) | yes (privileged) |
-| `landlock` | yes | yes | yes | yes | yes |
-| `qemu` | yes | yes | yes | yes | yes |
-| `qemu-tcg` | yes | yes | — | — | — |
+| Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | Docker | Podman | Kubernetes |
+|---|---|---|---|---|---|---|
+| `subprocess` | yes | yes | — | — | — | — |
+| `firejail` | yes | yes | yes (2 modes) | **excluded** | **excluded** | **excluded** |
+| `bwrap` | yes | yes | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
+| `unshare` | yes | yes | yes (2 modes) | yes (privileged) | yes (privileged) | yes (privileged) |
+| `landlock` | yes | yes | yes (ABI v4) | yes | yes | yes |
+| `qemu` | yes | yes | yes (KVM) | yes | yes | yes |
+| `qemu-tcg` | yes | yes | — | — | — | — |
 
 "Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
 a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
 `tests/integration_tests/_env.py`). It carries the `slow` marker, which is how a
 release run leaves it out (`exclude-tcg` in `integration.yml`); the nightly runs it.
 
-`none` is left out of this page. It is the no-op provider — a development aid,
-not a confinement technology — so nothing it does or fails to do says anything
-about the guards. The container grid still parametrizes it, which is where the
-twelve `none` rows in the counts below come from; they are not coverage of
-anything and are excluded from every figure that follows.
+`none` is left out of the provider table. It is the no-op provider — a
+development aid, not a confinement technology — so nothing it does or fails to
+do says anything about the guards. The container grid still parametrizes it,
+which contributes twelve cases to the collected row count. Those cases are
+excluded from the coverage-cell arithmetic because they do not test a boundary.
 
 The two lists are deliberately disjoint at the edges. `firejail` is incompatible
 with containers and is excluded from the container matrix outright. `subprocess`
@@ -179,12 +197,21 @@ The grid profile sets `bwrap.share-net=yes`, so its bwrap rows run on the host
 network. The Python guards also refuse what the OS filter should, so a broken
 filter leaves the grid green: that is how the bwrap filter, which could never
 load, and the qemu one, never applied under `python-sb` and not found by the
-guest once `/etc` was exposed, went unnoticed. `test_os_netfilter.py` covers the
-OS filter on its own: with the Python guards off (`py-sandbox=false`), for
-`bwrap`, `unshare` and `qemu`, under `python-sb` and in daemon mode, it proves
-that a destination outside the rules is dropped, with a negative control the
-same filter lets through. `remote/test_bwrap.py` runs the bwrap daemon on the
-filtered path.
+guest once `/etc` was exposed, went unnoticed. The
+[`test_os_netfilter.py`](../tests/integration_tests/test_os_netfilter.py)
+scenario checks OS-only network enforcement with `py-sandbox=false` for
+`bwrap`, `unshare`, `qemu`, and (when Landlock ABI v4 is available) `landlock`,
+under both `python-sb` and daemon mode. It pairs a denied connection with a
+permitted control connection. [`remote/test_bwrap.py`](../tests/integration_tests/remote/test_bwrap.py)
+also exercises the bwrap daemon with the network-filtered profile.
+
+`tst_usage.py` cannot prove the Firejail filter by itself because the Python
+socket guard is also active. The host suite exercises Firejail's Python-level
+network guard, but the current OS-only network-filter scenario does not include
+Firejail. Firejail supports `--net=<bridge>` and `--netfilter` inside its
+network namespace ([Firejail manual](https://manpages.ubuntu.com/manpages/noble/man1/firejail.1.html));
+OS-only coverage requires a configured bridge and explicit handling of
+Firejail's `restricted-network` setting.
 
 ## C. Container conditions
 
@@ -204,10 +231,10 @@ interpreter.
 | `unshare`, `bwrap` — privileged | 12 | run |
 | `unshare`, `bwrap` — **unprivileged** | 12 | **`xfail(run=False)`** |
 
-The last line matters: those twelve rows are *declared*, not executed. Both
-backends build their own namespaces and mounts, which an unprivileged container
-does not grant, so the row is marked rather than silently dropped — but it is
-not coverage. A quarter of the container grid is a label.
+Those twelve cases are declared but not executed. Both backends build their own
+namespaces and mounts, which an unprivileged container does not grant. They are
+not coverage: they are 25% of real-provider rows and 20% of all rows when `none`
+is included.
 
 The host no longer has any: `qemu` in partial mode used to be `xfail`, and
 every partial-mode row of `test_usage_with_providers.py` now runs
@@ -247,7 +274,9 @@ N_ideal = V_host x P_host x M x G                    (host)
         = 504
 ```
 
-The `(G + G_os)` term is the `py_sandbox` axis written honestly. The
+This cell model counts QEMU as one provider; the KVM and TCG execution rows are
+both tested, but TCG is not counted as a separate OS technology. The
+`(G + G_os)` term is the `py_sandbox` axis written honestly. The
 `py_sandbox=true` half of the container grid can arm all six families; the
 `py_sandbox=false` half removes the Python layer, so it can only arm the three
 the OS enforces on its own. The 72 cells that difference removes are not a gap —

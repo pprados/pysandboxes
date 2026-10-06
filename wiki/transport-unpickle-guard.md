@@ -6,6 +6,27 @@ transport as pickle, base85-encoded (`to_b85` / `from_b85` in
 `pysandboxes/remote/tools.py`). This page describes the guard that protects the
 **parent** when it deserializes what the **child** sent back.
 
+## Summary
+
+The child controls its serialized return payload, so the parent checks it
+before reconstructing objects. The result channel uses a fail-open denylist by
+default; the exception channel rejects unsupported objects and can fall back to
+an exception descriptor. `remote-result-mode=data-only` is stricter, but does
+not support custom returned objects. These checks protect the parent-side
+deserialization path; they do not make the Python layer a boundary against
+native code in the child.
+
+## Contents
+
+- [Why the return channel is dangerous](#why-the-return-channel-is-dangerous)
+- [The two channels](#the-two-channels)
+- [The layers](#the-layers)
+- [`remote-result-guard`](#the-remote-result-guard-profile-key)
+- [Portability](#portability)
+- [Limits](#limits)
+- [Recommendations](#recommendations)
+- [References](#references)
+
 ## Why the return channel is dangerous
 
 The whole point of the sandbox is that the code running in the child is not

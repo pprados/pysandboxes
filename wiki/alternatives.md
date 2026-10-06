@@ -15,33 +15,26 @@ solution actually enforces, how it enforces it, and where its approach differs f
 - [The network, protocol by protocol](#the-network-protocol-by-protocol)
 - [Feature matrix](#feature-matrix)
 - [Solution by solution](#solution-by-solution)
-- [Code worth reading](#code-worth-reading)
+- [Primary source examples](#primary-source-examples)
 - [Where PySandboxes stands](#where-pysandboxes-stands)
 - [Sources and commits analysed](#sources-and-commits-analysed)
 
 ## Method
 
-The analysis ran in three steps, in this order.
+Open projects were assessed from source; closed services from vendor documentation and independent
+reviews. Findings were then checked against a common grid of 45 features in twelve families. This helps
+surface missing features as well as advertised ones.
 
-1. **Inventory.** Each solution was analysed on its own, from its code when open, from its documentation
-   otherwise. The output lists every feature found, with the mechanism and a piece of evidence.
-2. **Common grid.** The features found in step 1 were merged into a single grid of 45 features in twelve
-   families. Each solution was then analysed a second time against the whole grid. This second pass catches
-   what a solution does not do, which a free-form inventory tends to omit. It also caught several errors made
-   in the first pass.
-3. **Assessment.** The conclusions below were written only after both passes were complete.
-
-Every claim carries one of three levels of evidence:
+Evidence is identified as:
 
 - **code**: read in the source, cited by a link pinned on a commit plus the function or type name;
 - **doc**: stated by the vendor's documentation;
 - **third party**: an independent review, a disclosure or a CVE.
 
-An absence is stated as "not found at commit X", after a search, never as a bare "no". The CVE numbers quoted
-were checked against [NVD](https://nvd.nist.gov), [OSV](https://osv.dev) or the
-[GitHub Advisory Database](https://github.com/advisories). For a few recent ones, whose NVD page could not be
-read, the record was checked on [cve.org](https://www.cve.org) or [OpenCVE](https://app.opencve.io), which
-mirror it. The one that could not be confirmed at all is marked as such.
+Absence claims refer to the inspected commit. CVEs were checked against
+[NVD](https://nvd.nist.gov), [OSV](https://osv.dev), or the
+[GitHub Advisory Database](https://github.com/advisories); items confirmed only by secondary sources are
+labelled.
 
 ## The landscape
 
@@ -85,48 +78,26 @@ have no network access at all and do not name their isolation technology.
 Almost every solution adopts one of five strategies. The differences between solutions come from that choice
 far more than from any single feature.
 
-**1. Guard the language from the inside.** PySandboxes, RestrictedPython and smolagents' local executor
-change what Python itself lets the code do. RestrictedPython rewrites the AST once, at compile time, and
-routes attribute and item access through functions the host must supply. Its own documentation says it
-"is not a sandbox system". smolagents re-implements an interpreter in Python, node by node, and its
-executor's docstring states "It is not a security sandbox". PySandboxes patches the standard library at
-run time, through six guards: import, file, socket, environment, sensitive call and `eval`. Of the three, it
-is the only one that also requires a kernel boundary underneath. It treats its own Python layer as
-"friction, not a boundary" ([Weaknesses](weaknesses.md)). This family alone can tell an `import ctypes` from
-an `import json`, or a call to `os.system` from a call to `os.path.join`. In exchange, it cannot hold against
-compiled code.
+**1. Guard the language.** PySandboxes, RestrictedPython and smolagents' local executor control Python
+operations, with different mechanisms. PySandboxes also requires an OS boundary; its Python layer alone
+does not hold against compiled code ([Weaknesses](weaknesses.md)).
 
-**2. Confine an unmodified process, and police its traffic outside.** OpenShell, sandbox-runtime and the Codex
-sandbox know nothing of Python: the agent is an opaque process. The kernel, through namespaces, Landlock,
-seccomp or Seatbelt, takes away its direct network access. A proxy running outside the sandbox then decides
-which connections go out, by hostname and sometimes by HTTP method and path. This family is the most
-advanced on the network side: TLS interception, credential injection, SSRF defences and human approval. It
-is also the closest in spirit to PySandboxes: default deny, rules learned or proposed from what was denied.
-OpenShell goes furthest: the policy carries the identity of the binary making the call, and an SMT solver
-tries to prove the policy cannot exfiltrate.
+**2. Confine a process and proxy its traffic.** OpenShell, sandbox-runtime and Codex combine OS restrictions
+with an external proxy. Depending on the product, policies can inspect hostnames, HTTP fields, credentials,
+or caller identity. This adds network visibility but requires proxy integration.
 
-**3. Put a whole machine around the code.** E2B, microsandbox, Vercel, Cloudflare, Modal (gVisor), AWS, Azure
-and Docker Sandboxes give each sandbox its own kernel, or a user-space kernel in Modal's case. This is the
-strongest boundary against hostile native code, and the product competes on lifecycle: cold start, snapshot,
-pause and resume, fork, persistent volumes. Inside the machine, nothing is mediated: the code is often root,
-and the only policy left is network egress. Defaults vary a lot. Network access is open by default on E2B,
-Modal, Vercel, Cloudflare and microsandbox, and closed by default on Azure and Docker Sandboxes.
+**3. Put a machine around the code.** MicroVMs and gVisor provide a stronger boundary against hostile native
+code, with lifecycle features such as snapshots and persistent volumes. Network defaults vary by product;
+the guest may still run with broad privileges.
 
-**4. Orchestrate someone else's boundary.** The Kubernetes agent-sandbox, OpenSandbox, llm-sandbox and Daytona
-mostly manage the lifecycle of a container or a pod. The isolation comes from the runtime the operator picks.
-Their security depends on defaults, and those defaults are permissive. llm-sandbox runs as root, on the
-default bridge network, without limits. A bare `Sandbox` object in agent-sandbox gets no network policy at
-all. OpenSandbox installs its egress sidecar only when the request carries a `networkPolicy`. Daytona runs
-`--privileged` under Sysbox.
+**4. Orchestrate containers.** agent-sandbox, OpenSandbox, llm-sandbox and Daytona rely on a container
+runtime selected by the operator. Their guarantees depend on that runtime and on configured policy.
 
-**5. Change the machine the language runs on.** langchain-sandbox runs CPython compiled to WASM inside a Deno
-process whose permissions are all closed by default. There is no operating system under the interpreter to
-escape to, but there is no second line of defence either. The project is archived.
+**5. Run Python as WebAssembly.** langchain-sandbox combines Pyodide and Deno permissions; the project is
+archived.
 
-PySandboxes is the only solution that combines bets 1 and 2: a Python layer that understands the code, and a
-kernel boundary chosen from five providers. This is a deliberate trade-off. It gives up the strength of a
-whole machine (bet 3) and the traffic intelligence of an L7 proxy (bet 2). In exchange, it can confine one
-function rather than a whole process, and it can learn its own policy.
+PySandboxes combines language-aware rules with a selectable kernel boundary. It can confine one function and
+learn its policy; it does not provide a whole-machine boundary or an L7 proxy.
 
 ## The network, protocol by protocol
 
@@ -361,7 +332,7 @@ allow rule per human approval.
 
 - **Bet**: a Firecracker microVM per sandbox, restored from a snapshot, plus host-side network mediation.
 - **Strengths**: an SSRF check placed exactly between DNS resolution and `connect()` (see
-  [Code worth reading](#code-worth-reading)). Pause with a copy-on-write memory export, so the VM resumes
+  [Primary source examples](#primary-source-examples)). Pause with a copy-on-write memory export, so the VM resumes
   before its dirty pages are written. Self-hostable on AWS, GCP, Kubernetes or Compose.
 - **Weaknesses**: egress is allowed by default, and `allow_out` without `deny_out: ["0.0.0.0/0"]` restricts
   nothing. As soon as a domain rule exists, `8.8.8.8` is open on every protocol and port, and cannot be
@@ -461,89 +432,15 @@ allow rule per human approval.
   [CVE-2026-79994](https://nvd.nist.gov/vuln/detail/CVE-2026-79994) (symlink TOCTOU escapes), and
   [CVE-2026-17106](https://osv.dev/vulnerability/GO-2026-6253), a bug in the shared `moby/go-archive` library.
 
-## Code worth reading
+## Primary source examples
 
-A handful of passages are distinctive enough to be worth reading in full.
+These source locations support the key distinctions in the comparison:
 
-**OpenShell: UDP is refused at `connect()`, in a privileged broker**
-([`network_broker.rs`](https://github.com/NVIDIA/OpenShell/blob/021400be8af471f8669369e679de3e18cf0bd672/crates/openshell-sandbox/src/network_broker.rs#L840-L850)).
-After the DNS relay and loopback cases, everything else that is not TCP stops here (abridged; the comment
-is ours):
-
-```rust
-if destination.ip().is_loopback() {
-    // ... connect to the local peer, then
-    return listener.respond_value(notification.id, 0);
-}
-if kind != InetKind::Tcp {
-    return Err(io::Error::from_raw_os_error(libc::EACCES));
-}
-```
-
-**E2B: the SSRF check sits between resolution and `connect()`**
-([`handlers.go`](https://github.com/e2b-dev/runtime/blob/23f7a0f89dc3645afc5a3026c363bdd6c6f281c1/packages/orchestrator/pkg/tcpfirewall/handlers.go#L163-L184)).
-The proxy dials the host name again itself, and Go's `ControlContext` hook rejects an internal address before
-any handshake:
-
-```go
-// The ControlContext callback is called after DNS resolution but before the TCP connect()
-// syscall, so no TCP handshake occurs to internal IPs.
-ControlContext: func(_ context.Context, _, address string, rawConn syscall.RawConn) error {
-    host, _, err := net.SplitHostPort(address)
-    ...
-    resolvedIP := net.ParseIP(host)
-    if isIPInAlwaysDeniedCIDRs(resolvedIP) {
-        return fmt.Errorf("hostname resolved to internal IP %s", resolvedIP)
-    }
-    return markDSCP(rawConn, c.tos)
-},
-```
-
-**Vercel: exactly one action per network rule, enforced by the type system**
-([`network-policy.ts`](https://github.com/vercel/sandbox/blob/6fc8e16fd606beab8f99546482f11cc40c3e5a8e/packages/vercel-sandbox/src/network-policy.ts#L81-L94)):
-
-```typescript
-} & (
-  | { transform: NetworkTransformer[]; forwardURL?: never; response?: never }
-  | { transform?: never; response?: never; forwardURL: string }
-  | { transform?: never; forwardURL?: never; response: NetworkPolicyResponse }
-);
-```
-
-**Cloudflare: the whole policy engine of the example, in eleven lines**
-([`rules.ts`](https://github.com/cloudflare/sandbox-sdk/blob/f9e972a14123bef3b93e9bb337bab6e83419fe7e/examples/outbound-workspace/src/rules.ts#L28-L39)).
-Deny wins, then named handlers, then allow; anything else is denied:
-
-```typescript
-export function decide(rules: OutboundRules, hostname: string): Decision {
-  const host = hostname.replace(/\.+$/, "");
-  const denied = rules.deny.find((pattern) => matches(pattern, host));
-  if (denied !== undefined)
-    return { action: "deny", reason: `${host} matches deny rule ${denied}` };
-  const handler =
-    rules.handlers[host] ??
-    Object.entries(rules.handlers).find(([pattern]) => matches(pattern, host))?.[1];
-  if (handler !== undefined) return { action: "handle", handler };
-  if (rules.allow.some((pattern) => matches(pattern, host))) return { action: "fetch" };
-  return { action: "deny", reason: `${host} is not allowed` };
-}
-```
-
-**RestrictedPython: an unknown AST node is refused until someone reviews it**
-([`transformer.py`](https://github.com/zopefoundation/RestrictedPython/blob/c5066f7d5b2c7538c67c2f8c4635d681c2b325aa/src/RestrictedPython/transformer.py#L500-L519),
-abridged and reflowed):
-
-```python
-def generic_visit(self, node: ast.AST) -> _T_visit_return:
-    """Reject ast nodes which do not have a corresponding `visit_` method.
-
-    This is needed to prevent new ast nodes from new Python versions to be
-    trusted before any security review.
-    """
-    self.warn(node, '{0.__class__.__name__}'
-              ' statement is not known to RestrictedPython'.format(node))
-    self.not_allowed(node)
-```
+- [OpenShell network broker](https://github.com/NVIDIA/OpenShell/blob/021400be8af471f8669369e679de3e18cf0bd672/crates/openshell-sandbox/src/network_broker.rs#L840-L850): protocol-specific socket decisions.
+- [E2B TCP firewall](https://github.com/e2b-dev/runtime/blob/23f7a0f89dc3645afc5a3026c363bdd6c6f281c1/packages/orchestrator/pkg/tcpfirewall/handlers.go#L163-L184): internal-address rejection before connect.
+- [Vercel network policy types](https://github.com/vercel/sandbox/blob/6fc8e16fd606beab8f99546482f11cc40c3e5a8e/packages/vercel-sandbox/src/network-policy.ts#L81-L94): mutually exclusive rule actions.
+- [Cloudflare example policy](https://github.com/cloudflare/sandbox-sdk/blob/f9e972a14123bef3b93e9bb337bab6e83419fe7e/examples/outbound-workspace/src/rules.ts#L28-L39): deny, handler, allow, then default deny.
+- [RestrictedPython AST transformer](https://github.com/zopefoundation/RestrictedPython/blob/c5066f7d5b2c7538c67c2f8c4635d681c2b325aa/src/RestrictedPython/transformer.py#L500-L519): unknown AST nodes are refused.
 
 ## Where PySandboxes stands
 
