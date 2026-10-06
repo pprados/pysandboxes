@@ -127,6 +127,9 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
   outside a release, and compare a branch against `develop`, not `master`.
 - **`CONTRIBUTING.md`** lists what a pull request must carry, and is the checklist the automated review
   applies. A change to those rules goes there, not only here.
+- **`CHANGELOG.md`**: a merge into `develop` that brings a new feature or a user-visible fix adds one line for it to
+  the open `## [0.0.0] - 202X-XX-XX` entry, under `### Added`, `### Changed` or `### Fixed`, written for users,
+  without implementation detail. Never date that entry nor add a version: `make publish-patch` / `publish-minor` do.
 
 ### Design and Planning Documents
 - Design specs and implementation plans live in the repository tree, in a directory git excludes, so they are
