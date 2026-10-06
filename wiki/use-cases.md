@@ -108,7 +108,7 @@ expose-ro=./data
 ```
 
 See [Integrating with the MCP SDK](mcp.md) for the partial mode, where only the functions of the tools run in the
-sandbox, and [Samples](samples.md) for the same two tools under twelve agent frameworks.
+sandbox, and [Samples](samples.md) for the same two tools under ten agent frameworks.
 
 ## Review the permissions an AI coding agent adds
 

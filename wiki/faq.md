@@ -122,7 +122,7 @@ The file must also be published in the project's module directory.
 The best practice it to build a wheel, with your rules.
 ```toml
 include = [
-    { include = "my-package/.py-sanboxes" }
+    { include = "my-package/.py-sandboxes" }
 ]
 ```
 If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file. Then the user can change some rules.

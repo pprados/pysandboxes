@@ -3,7 +3,7 @@
 
 # Native guard study and decision
 
-This page records the design study of a C extension intended to make the original functions behind PySandboxes' Python guards harder to recover or call through ordinary Python introspection. The study concluded that the technique works for a narrow set of CPython C functions, but does not provide enough coverage to justify a general native guard layer. **The general implementation is abandoned.** The existing Python guards and `OS_SANDBOX` remain in place.
+This page records the design study of a C extension intended to make the original functions behind PySandboxes' Python guards harder to recover or call through ordinary Python introspection. The study concluded that the technique works for a narrow set of CPython C functions, but does not provide enough coverage to justify a general native guard layer. **The general implementation is abandoned.** The Python guards and `OS_SANDBOX` are the protection in place.
 
 For the threat model and current limitations, see [Weaknesses](weaknesses.md) and the [security assessment of the Python layer](audit-python-security.md). The `eval-*` sub-language has a different threat model; see its [security assessment](audit-eval-security.md). The OS boundary and provider differences are described in [Choosing a provider](os-providers.md).
 
@@ -17,11 +17,11 @@ The study also tested native audit hooks and GC wrappers on Python 3.11 through 
 
 ## Why the general approach was abandoned
 
-The current host had 117 names in `SENSITIVE_API`: 82 resolved to built-in/C callables, 33 to Python functions, and two to classes. Twelve platform-specific names did not resolve on that host. Across the other current patch tables there were 114 API entries, 63 filesystem entries, 11 socket entries, four eval entries, and four learning-mode environment entries. These are patch entries rather than unique implementations, and aliases overlap.
+`SENSITIVE_API` holds 121 names. On a Linux host running CPython 3.14, 107 resolve: 77 to built-in/C callables, 28 to Python functions, and two to classes. The other 14 are platform- or version-specific and do not resolve there. Across the other patch tables there are 114 API entries, 63 filesystem entries, 11 socket entries, four eval entries, and four learning-mode environment entries. These are patch entries rather than unique implementations, and aliases overlap.
 
 The pointer technique applies to selected C callables. It does not make Python functions secret: retaining a Python function in C still leaves it visible through Python references, and an exception traceback exposes its frame, code, and globals. Reconstructing a function from that code and globals reproduces the callable. Compiling Python code or shipping bytecode does not remove these objects or provide a secrecy boundary.
 
-Other limits remain outside the technique:
+Other limits lie outside the technique:
 
 - `object.__subclasses__()` is an operation on immutable built-in types. It cannot be replaced by assigning a Python wrapper and emits no audit event. Native code cannot disable it without changing CPython itself.
 - A native audit hook only sees the event CPython emits. It cannot reliably infer which public API caused a shared event: `os.popen()` and `subprocess.run()` can both emit `subprocess.Popen`. Such a hook cannot preserve distinct per-function rules for old aliases in that case.
@@ -38,12 +38,12 @@ Do not implement a general native guard layer. The prototype has a real, measura
 
 The study does **not** recommend removing `OS_SANDBOX`. The kernel-backed providers remain the boundary for hostile code. The `none` and `subprocess` providers do not supply that OS boundary and must not be described as equivalent containment. Native wrappers would not change that fact.
 
-The following smaller measures remain worthwhile independently of the abandoned native guard:
+The following smaller measures are worthwhile independently of the abandoned native guard:
 
 - Remove generic FFI use from worker startup where practical, including the `ctypes` path used for parent-death signaling and Landlock operations. Verify reachability in a fresh worker; removing `ctypes` from `sys.modules` alone is insufficient.
 - Release bootstrap module snapshots and other references that keep pre-activation modules or loaders reachable from user code.
 - Keep the direct GC, frame, reload, and import guards documented as reductions of ordinary access paths, not complete prevention of Python introspection.
-- Continue to use `OS_SANDBOX` and its provider-specific tests for confinement.
+- Use `OS_SANDBOX` and its provider-specific tests for confinement.
 
 These actions reduce reachable capabilities or make existing guard limitations clearer. They do not turn same-process Python patching into a security boundary.
 

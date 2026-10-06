@@ -5,7 +5,7 @@ tests, for every `OS_SANDBOX` technology and in every container condition?**
 
 The short answer is **per backend, yes; per container condition, no**.
 
-Six families are now parametrized over every OS backend, by two scenarios.
+Six families are parametrized over every OS backend, by two scenarios.
 `guard_files`, `guard_socket` and `guard_envs` ride on `tst_usage`, which is
 also what every container row runs. `guard_eval`, `guard_api` and
 `guard_import` are covered by `test_guards_with_providers`, which runs on the
@@ -37,16 +37,16 @@ Everything below is derived from the test sources, not from intent:
 ## Orders of magnitude
 
 How many tests that represents, in collected rows rather than in the coverage
-cells of [section D](#d-counting-the-scenarios). The figures move with every
-commit that adds a test; the point is the shape of the effort:
+cells of [section D](#d-counting-the-scenarios). The figures are approximate; the point is
+the shape of the effort:
 
 | Suite | Target | Tests |
 |---|---|---|
-| Unit | `make unit-tests` | ~1410 |
-| Integration | `make integration-tests` | ~135 |
+| Unit | `make unit-tests` | ~1670 |
+| Integration | `make integration-tests` | ~145 |
 | Containers | `make container-tests` | ~60 |
 | Samples (12 demos) | `make sample-tests` | ~170 |
-| **Total, one interpreter** | `make all-tests` | **~1775** |
+| **Total, one interpreter** | `make all-tests` | **~2045** |
 
 The samples figure is the softest of the four: each sample has its own
 `pyproject.toml`, its own lock file and its own virtual environment, so the
@@ -118,9 +118,7 @@ hides it.
 
 Four more tests per row cover what the guards rest on: the program's output
 comes back, a profile naming its modules one by one still starts, a failure
-says why, and stdout and stderr stay apart. The first three pin the defects
-that made every QEMU row exit 1 with an empty stderr; with them fixed, the QEMU
-rows run like the others. Ten tests over seven rows: 70 rows.
+says why, and stdout and stderr stay apart. Ten tests over seven rows: 70 rows.
 
 `test_eval_integration.py` and `test_guard_api_arming.py` stay pinned to
 `os-sandbox=subprocess`, and keep their role: depth rather than breadth. They
@@ -134,8 +132,8 @@ that loads a profile exercises it implicitly.
 
 ## B. OS_SANDBOX backends
 
-Nine providers are registered in `pysandboxes/_os_sandbox.py`; `_task` and
-`_sse_server` are internal and not user-selectable.
+Nine entries are registered in `pysandboxes/_os_sandbox.py`: seven providers, plus
+`_task` and `_sse_server`, which are internal and not user-selectable.
 
 | Backend | Host: `tst_usage` | Host: guards | Docker | Podman | Kubernetes |
 |---|---|---|---|---|---|
@@ -177,9 +175,7 @@ Each backend is also covered by a small liveness test under
 
 The grid profile sets `bwrap.share-net=yes`, so its bwrap rows run on the host
 network. The Python guards also refuse what the OS filter should, so a broken
-filter leaves the grid green: that is how the bwrap filter, which could never
-load, and the qemu one, never applied under `python-sb` and not found by the
-guest once `/etc` was exposed, went unnoticed. `test_os_netfilter.py` covers the
+filter leaves the grid green. `test_os_netfilter.py` covers the
 OS filter on its own: with the Python guards off (`py-sandbox=false`), for
 `bwrap`, `unshare` and `qemu`, under `python-sb` and in daemon mode, it proves
 that a destination outside the rules is dropped, with a negative control the
@@ -209,9 +205,8 @@ backends build their own namespaces and mounts, which an unprivileged container
 does not grant, so the row is marked rather than silently dropped — but it is
 not coverage. A quarter of the container grid is a label.
 
-The host no longer has any: `qemu` in partial mode used to be `xfail`, and
-every partial-mode row of `test_usage_with_providers.py` now runs
-(`_PARTIAL_MODE_XFAIL` is empty).
+The host has none: every partial-mode row of `test_usage_with_providers.py`
+runs (`_PARTIAL_MODE_XFAIL` is empty).
 
 Kubernetes rows need minikube and the per-backend images
 (`make minikube-ready`, `make minikube-build-images`); they skip otherwise.
@@ -277,7 +272,7 @@ N_run = 312 - 36 = 276
 
 Row counts, to cross-check against the sections above: 84 host rows per
 interpreter and 60 container rows, 48 of them on a real backend. Both are reproducible with
-`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1410
+`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1670
 collected, none parametrized by backend or container condition — so they scale
 with the Python version alone.
 

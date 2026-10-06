@@ -109,9 +109,9 @@ For more details, see the [QEMU documentation](https://www.qemu.org/).
 
 ### Guest Python exits with segmentation fault
 
-The guest is supposed to run the **same** interpreter as the host (path written to `python_exe` on the NoCloud image), with `PYTHONPATH` listing 9p-mounted host trees. If a 9p mount fails (see `[pysandbox-9p]` in the console) but the script fell back to the **image’s** `/usr/local/bin/python3.13`, native extensions under host `site-packages` can load with the wrong libc and **SIGSEGV**. The bootstrap script now stops with an explicit error if the recorded host `python_exe` path is missing after mounts. Fix: ensure execution-directory mounts succeed, or rebuild the QEMU image / nocloud ISO after changing mounts.
+The guest is supposed to run the **same** interpreter as the host (path written to `python_exe` on the NoCloud image), with `PYTHONPATH` listing 9p-mounted host trees. If a 9p mount fails (see `[pysandbox-9p]` in the console) but the script fell back to the **image’s** `/usr/local/bin/python3.13`, native extensions under host `site-packages` can load with the wrong libc and **SIGSEGV**. The bootstrap script stops with an explicit error if the recorded host `python_exe` path is missing after mounts. Fix: ensure execution-directory mounts succeed, or rebuild the QEMU image / nocloud ISO after changing mounts.
 
-A **segfault during `import pysandboxes.remote.main_sandbox`** (before `main()` runs) was also traced to pulling the whole guard stack at import time (`daemon_parameters` importing `all_rules`, plus heavy module-level imports in `main_sandbox`). Those imports are now deferred so the guest can start the module with minimal dependencies.
+`main_sandbox` defers its heavy imports (the guard stack, `all_rules` through `daemon_parameters`), so the guest starts the module with minimal dependencies.
 
 ## Using with Docker
 
@@ -163,7 +163,7 @@ Profile knobs **`qemu.virtfs`** and **`qemu.virtfs_security_model`** are documen
 
 **iptables / unprivileged Podman:** the outer Podman can stay **unprivileged**; **iptables** inside the **guest VM** (see profile rules) applies in the VM’s network namespace, not on the host. You still need **no extra capability** on the host for QEMU beyond what a normal user can use (e.g. `qemu-system-*` with `kvm` or TCG). **Nested KVM** (`--device /dev/kvm` in the container) is optional and accelerates the guest; without it, TCG is slower but staging should still avoid the segfault.
 
-**Host-side pipe handling:** `python-sb` no longer uses `readline()` on QEMU’s serial streams (a line without `\n` could block the host forever). It reads in chunks, splits on `\n`, and runs **`asyncio.gather`** on stdout drain, stderr drain, and **`process.wait()`** so a full **PIPE** buffer cannot deadlock QEMU’s writer.
+**Host-side pipe handling:** `python-sb` does not use `readline()` on QEMU’s serial streams (a line without `\n` could block the host forever). It reads in chunks, splits on `\n`, and runs **`asyncio.gather`** on stdout drain, stderr drain, and **`process.wait()`** so a full **PIPE** buffer cannot deadlock QEMU’s writer.
 
 **Stdin:** QEMU is started with **`stdin` closed to `/dev/null`**. With **`-nographic`**, serial I/O is tied to stdio; if QEMU **inherited** a TTY from **`podman run -it`**, it could **block forever** waiting for console input while the guest is unattended. Closing stdin avoids that hang.
 
@@ -199,9 +199,9 @@ export PYSANDBOXES_QEMU_IMAGE_URL="<full image URL>"
 
 ### Mapping: Python version → image (Ubuntu, 3.11 to 3.14)
 
-A single source covers every supported version, 3.11–3.14, with one image each: **Ubuntu Cloud Images**, all under `releases/<version>/release/`. Python 3.13 and 3.14 share **25.04**.
+A single source covers every supported version, 3.11–3.14: **Ubuntu Cloud Images**, all under `releases/<version>/release/`. Python 3.13 and 3.14 share **25.04**.
 
-Only **released** images are mapped, never a development codename. Staging mounts the host's `/lib/<triplet>` over the guest (see `qemu.ld_closure_libs` above), so the guest's own coreutils and cloud-init run against the **host's** glibc: the guest release must be no newer than the host. A codename tracks the devel series and eventually ships a glibc the host lacks — **resolute** reached **2.43**, every guest binary died with ``version `GLIBC_2.43' not found``, `cloud-final.service` failed, and the bootstrap never answered its ping, so the run hung with no output at all.
+Only **released** images are mapped, never a development codename. Staging mounts the host's `/lib/<triplet>` over the guest (see `qemu.ld_closure_libs` above), so the guest's own coreutils and cloud-init run against the **host's** glibc: the guest release must be no newer than the host. A codename tracks the devel series and eventually ships a glibc the host lacks (**resolute** reached **2.43**): every guest binary then dies with ``version `GLIBC_2.43' not found`` and the bootstrap never answers its ping.
 
 The other direction binds too: where the host's libraries are not staged, the host interpreter runs against the **image's** glibc, so it must not need a newer one. The GitHub runner's `actions/setup-python` 3.11 is built against glibc **2.38**, the 23.04 image ships **2.37**, and the bootstrap's Python probe fails with ``version `GLIBC_2.38' not found``. uv's managed interpreters target an older glibc, which is why `integration.yml` uses them. The bootstrap writes such a fatal error to the run directory's `stderr` file too, so it reaches the caller without `qemu.show_boot_console`.
 
@@ -211,26 +211,26 @@ The other direction binds too: where the host's libraries are not staged, the ho
 | 3.11   | 23.04 (Lunar)     | `ubuntu-23.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/23.04/release/` |
 | 3.12   | 24.04 LTS (Noble) | `ubuntu-24.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/24.04/release/` |
 | 3.13   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
-| 3.14   | resolute          | `resolute-server-cloudimg-<arch>.img`     | `https://cloud-images.ubuntu.com/resolute/current/`       |
+| 3.14   | 25.04 (Plucky)    | `ubuntu-25.04-server-cloudimg-<arch>.img` | `https://cloud-images.ubuntu.com/releases/25.04/release/` |
 
 
-Replace `<arch>` with `amd64`, `arm64`, `ppc64el`, `riscv64` or `s390x` for your platform.
+Replace `<arch>` with `amd64`, `arm64` or `ppc64el` for your platform.
 
 **Full URL examples (amd64):**
 
 - Python 3.11: `https://cloud-images.ubuntu.com/releases/23.04/release/ubuntu-23.04-server-cloudimg-amd64.img`
 - Python 3.12: `https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img`
 - Python 3.13: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
-- Python 3.14: `https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img`
+- Python 3.14: `https://cloud-images.ubuntu.com/releases/25.04/release/ubuntu-25.04-server-cloudimg-amd64.img`
 
 **Alternative: Debian** (project default image, 3.11 only without extra config):
 
 - Bookworm: `https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2`
-- For 3.9 or 3.13 with Debian: Bullseye or Trixie (see [cloud.debian.org](https://cloud.debian.org/images/cloud/)).
+- For 3.13 with Debian: Trixie (see [cloud.debian.org](https://cloud.debian.org/images/cloud/)).
 
 ## Configuration parameters
 
-In `.py-sandboxes`, lines use the form `qemu.<key>=<value>`. The runtime stores keys **without** the `qemu.` prefix in `os_sandbox_params`. Unlike **bwrap** or **firejail**, the QEMU provider **does not** forward arbitrary keys as extra `qemu-system-*` CLI flags: only the keys below are interpreted. Any other `qemu.*` line is parsed but currently unused for launching the VM.
+In `.py-sandboxes`, lines use the form `qemu.<key>=<value>`. The runtime stores keys **without** the `qemu.` prefix in `os_sandbox_params`. Unlike **bwrap** or **firejail**, the QEMU provider **does not** forward arbitrary keys as extra `qemu-system-*` CLI flags: only the keys below are interpreted. Any other `qemu.*` line is parsed but unused for launching the VM.
 
 | Key | Role |
 | --- | --- |
@@ -239,8 +239,8 @@ In `.py-sandboxes`, lines use the form `qemu.<key>=<value>`. The runtime stores 
 | **`qemu.show_boot_console`** | **`false`** (default): on the **daemon** path, QEMU stdout/stderr are discarded so boot noise is hidden; user output still flows over SSE. On the **`python-sb`** path, the host filters serial output to lines between guest sentinels unless set to **`true`**. **`true`**: full VM console on the host and tee to **`.pysandbox-qemu-console.log`** in the process working directory; the NoCloud **`user-data`** also uses verbose cloud-init (`debug.verbosity`), bootcmd/runcmd banners, and **`set -x`** on the bootstrap script. In the **guest**, the same flag turns on **`[PYSANDBOX_DIAG]`** breadcrumbs and **faulthandler** in **`main_sandbox`**. Truthy values: `true`, `1`, `yes`. |
 | **`qemu.virtfs`** | **Staging** of execution trees (and related workarounds) before **virtio-9p** to avoid **SIGSEGV** with overlay + mmap in nested containers. **`auto`** (default): stage only when the host looks like a container (`/.dockerenv`, `/.containerenv`, or `container` in the environment). **`on`** / **`off`**: force. Legacy alias: **`qemu.virtfs_stage`** (same values). Unknown values log a warning and behave like **`auto`**. |
 | **`qemu.virtfs_security_model`** | **`security_model`** for **`-virtfs`** on **non-staged** mounts. **Default: `mapped-xattr`**. **`auto`** (or empty) is accepted and mapped to **`mapped-xattr`** (QEMU has no literal `auto`). Staged trees under the temp copy use **`none`** regardless of this setting. |
-| **`qemu.start_timeout`** | Seconds the daemon gets to answer its first ping, boot included. The default follows the acceleration actually in use: **`90`** with KVM, ample since a whole run takes about 22s, and **`180`** when QEMU runs emulated — the same guest was measured answering at **~125s**. A container without **`/dev/kvm`**, or **`qemu.use_kvm=false`**, therefore needs nothing in the profile. Set the key only to override that, e.g. on a host slower still. The guest is pinged until this deadline and no other limit applies, so raising it is enough. Past it the start fails and the VM is killed, rather than left running. Values that are not a positive number log a warning and fall back to the default. |
-| **`qemu.ld_closure_libs`** | **Nested container / virtio-9p staging only** (when **`qemu.virtfs`** triggers exec staging). **`full`** (default): after the sparse **`ldd`** copy of the interpreter + bootstrap tools, also **`copytree`** the host’s entire **`/lib/<triplet>`** and **`/usr/lib/<triplet>`** (Debian multiarch) into the staged tree so Python C extensions rarely miss a DSO (no reliance on a growing `.so` whitelist). **`sparse`** / **`minimal`** / **`ldd`**: previous behaviour — transitive **`ldd`** closure only plus a small **compat** seed list for **`mkdir`** / **`mount`** / **`libselinux`**, etc. Use **`sparse`** for faster, smaller copies when you accept the risk of another missing **`lib*.so`**. |
+| **`qemu.start_timeout`** | Seconds the daemon gets to answer its first ping, boot included. The default follows the acceleration actually in use: **`90`** with KVM (a whole run takes about 22s), and **`180`** when QEMU runs emulated — the same guest answers at about **125s**. A container without **`/dev/kvm`**, or **`qemu.use_kvm=false`**, therefore needs nothing in the profile. Set the key only to override that, e.g. on a host slower still. The guest is pinged until this deadline and no other limit applies, so raising it is enough. Past it the start fails and the VM is killed, rather than left running. Values that are not a positive number log a warning and fall back to the default. |
+| **`qemu.ld_closure_libs`** | **Nested container / virtio-9p staging only** (when **`qemu.virtfs`** triggers exec staging). **`full`** (default): after the sparse **`ldd`** copy of the interpreter + bootstrap tools, also **`copytree`** the host’s entire **`/lib/<triplet>`** and **`/usr/lib/<triplet>`** (Debian multiarch) into the staged tree so Python C extensions rarely miss a DSO (no reliance on a growing `.so` whitelist). **`sparse`** / **`minimal`** / **`ldd`**: transitive **`ldd`** closure only plus a small **compat** seed list for **`mkdir`** / **`mount`** / **`libselinux`**, etc. Use **`sparse`** for faster, smaller copies when you accept the risk of another missing **`lib*.so`**. |
 
 Examples in `.py-sandboxes`:
 
@@ -257,7 +257,7 @@ See also the commented block **QEMU (os-sandbox=qemu)** in `pysandboxes/template
 
 ## Recommendations
 
-- Choose QEMU when a full VM boundary is worth a boot of several seconds and a dedicated RAM budget per sandbox.
+- Choose QEMU when a full VM boundary is worth a boot of tens of seconds and a dedicated RAM budget per sandbox.
 - Expose `/dev/kvm` whenever the host and its policy allow it. Without it, QEMU falls back to TCG, which works but is slower.
 - Size `qemu.memory` with a single suffix letter, e.g. `2G`. A form such as `2GB` is invalid and silently falls back to the default.
 - Pick a released guest image no newer than the host, so that both sides agree on glibc.

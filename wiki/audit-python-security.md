@@ -234,9 +234,8 @@ and **writes its own permissions into the whitelist** the next run trusts.
 
 ## Guards that are inert by design
 
-One guard module does nothing today, and one subject — pickle — is covered only
-in part, by design. Neither is a discovered vulnerability -- do not report them
-as escapes.
+One subject, pickle, is covered only in part, by design. It is not a
+discovered vulnerability -- do not report it as an escape.
 
 - **Pickle deserialization is covered only in part, by design.**
   `pickle.Unpickler` **is** `_pickle.Unpickler`, an immutable C type, so neither
@@ -257,8 +256,8 @@ as escapes.
   Like the rest of this layer, that denies the call from cooperative code and
   gives learning-mode visibility. It is not a barrier against hostile bytecode,
   which reaches `os.system` by a hundred other routes; the OS sandbox is the
-  barrier for that class. The two pickle escape tests stay `xfail` because they
-  exercise the import guard alone, without `guard_api` armed.
+  barrier for that class. `test_escape_with_pickle_blocked` stays `xfail`:
+  removing `pickle` from `sys.modules` blocks nothing.
 
   The only untrusted data this package unpickles is the child's result and
   exception payloads, rebuilt in the **trusted parent** by
@@ -321,20 +320,12 @@ uv run pytest tests/unit_tests/guard/test_guard_files_coverage.py \
               tests/unit_tests/guard/test_guard_shutil.py -v -k "dir_fd or descriptor or rmtree"
 ```
 
-At the time of writing this run reports **21 passed, 3 xfailed** for the escape
-files, **211 passed, 4 skipped, 1 xfailed** for the guard corpus and
-**16 passed** for the `dir_fd` selection on Linux
-(three skips are the Windows-only twins of `test_armed_denies_the_windows_twins`,
-one is `test_os_chflags_and_lchflags`). The three `xfail` entries of the escape
-files are the open escapes: `test_escape_with_subclasses` (objective 6),
-`test_escape_with_globals_introspection` (objective 4), and
-`test_escape_with_pickle_blocked` (the pickle entry of
-[inert guards](#guards-that-are-inert-by-design): removing `pickle` from
-`sys.modules` blocks nothing).
-
-Tampering with `sys.meta_path`, a hostile pickle and a name built at run time
-are no longer listed. The import audit hook puts the finder back at the head
-once it is unhooked or overtaken, as
+The three `xfail` entries of the escape files are the open escapes:
+`test_escape_with_subclasses` (objective 6), `test_escape_with_globals_introspection`
+(objective 4), and `test_escape_with_pickle_blocked` (the pickle entry of
+[inert guards](#guards-that-are-inert-by-design)). Tampering with `sys.meta_path`,
+a hostile pickle and a name built at run time are not among them: the import audit
+hook puts the finder back at the head once it is unhooked or overtaken, as
 `test_tampering_with_meta_path_leaves_the_next_import_guarded` shows. Once
 armed, guard_api refuses `pickle.loads` and the call a built name reaches, as
 `test_a_hostile_pickle_is_refused_once_armed` and

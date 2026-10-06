@@ -7,7 +7,7 @@
 - Standard functions are replaced by versions that will check the parameters and possibly transform them.
 For file management, names will be checked against exclusion rules and modified if there is an expose parameter indicating a new name for the directories. If a file is not found in the expose rules, an exception is raised.
 - For network connection processing, the procedure is similar. Connection settings are validated against various rules. DENY rules take priority so that a wide range of IP addresses can be ALLOWED, with certain addresses excluded. For example, accept all connections except localhost or intranet addresses.
-- Import rights and call rights are two distinct notions. A module may legitimately be importable while some of its functions must stay out of reach. A registry of 103 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, `ctypes.CDLL`, ...) is therefore denied by default, whatever `python-import=` allows, and a call right is never derived from a module being present in `python-import=`.
+- Import rights and call rights are two distinct notions. A module may legitimately be importable while some of its functions must stay out of reach. A registry of 121 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, `ctypes.CDLL`, ...) is therefore denied by default, whatever `python-import=` allows, and a call right is never derived from a module being present in `python-import=`.
 - For filtering environment variables, processing is performed before the sandbox is launched. This process is launched with only the variables that it has visibility of.
 
 
@@ -48,7 +48,7 @@ Here is a brief description of the implementation in **partial mode**. You will 
       - The sandbox is activated.
           - A Finder/Loader pair is added to `sys.meta_path`, and an audit hook that moves that finder back to the head of the list before each import, since frameworks insert their own finder there.
           - All modules (except some critical ones) are uninstalled or reloaded.
-          - From now on, when a module is loaded, it undergoes *on-the-fly* modifications.
+          - When a module is loaded, it undergoes *on-the-fly* modifications.
           - Critical functions and methods are re-implemented to follow the security rules.
       - Upon receiving an SSE request:
           - The token is verified.
@@ -77,14 +77,14 @@ Here is a brief description of the implementation in **partial mode**. You will 
 ### Sensitive API calls
 The `python-api=` rules are enforced by `pysandboxes/guard_api.py`, on top of the same patching machinery as the other guards.
 
-- The registry `SENSITIVE_API` is the single source of truth. It maps six categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`) to their qualified function names, and it drives three things at once: the patch table, the validation of the profile targets, and the documentation.
+- The registry `SENSITIVE_API` is the single source of truth. It maps eight categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`, `dynamic-code`, `deserialization`) to their qualified function names, and it drives three things at once: the patch table, the validation of the profile targets, and the documentation.
 - Low-level aliases are registered next to the name you write in your code, because `os` does `from posix import *`: `os.system` **is** `posix.system`. Whenever a function is registered, both spellings are, so the low-level one cannot be used to walk around the high-level one. A few sensitive functions stay out of this registry on purpose, because another guard covers them better: `os.chroot` and `posix.chroot` are patched by the file layer, with a path check rather than a binary allow or deny.
 - Any target absent from the registry, unknown category or unknown function, is a configuration error raised at startup. A typo such as `python-api=ALLOW:os.systemm` fails immediately, instead of silently leaving a hole.
 - The rules are flattened once into one decision per registered function. Resolution is by *specificity*, not by order: a rule on a function always beats a rule on its category, wherever the lines sit, which keeps `include` composition predictable. `DENY` wins at equal specificity, which is the fail-safe choice. The wrapper then performs a single dictionary lookup, whatever the number of rules.
 - A single parameterised wrapper is installed on every entry, rather than one function per target.
 - Enforcement is *armed* rather than exempted. The wrappers let everything through until `arm()` is called, and `arm()` is called immediately before user code takes over. Framework code therefore runs while the guard is disarmed and needs no exemption, no caller-frame check and no `original()` escape hatch, all of which would be forgeable from inside the sandbox.
 - One call can cross several guarded doors in series, because some of these functions delegate to others in the registry (`subprocess.getoutput` reaches `os.posix_spawn`, `pty.spawn` reaches `os.fork`, `threading.Thread.start` reaches `threading._start_joinable_thread`, ...). Allowing the outer name alone is then refused on the inner one. Each refusal names the door it stopped at, so iterating converges.
-- The thread launch primitive moved between the supported interpreters: 3.11 and 3.12 expose `threading._start_new_thread`, while 3.13 replaces it by `threading._start_joinable_thread`. Both spellings are registered so a profile stays portable, and only the applicable ones are patched.
+- The thread launch primitive differs between the supported interpreters: 3.11 and 3.12 expose `threading._start_new_thread`, while 3.13 and later expose `threading._start_joinable_thread`. Both spellings are registered so a profile stays portable, and only the applicable ones are patched.
 - In learning mode the wrapper records the call and never fails, like the import guard. Only calls that are not already allowed are recorded, and the category is inferred at write time: if the functions already allowed by the profile plus the functions just learned cover a category completely, the single category line is emitted, otherwise one line per function. The two forms are exclusive, so least privilege is the default outcome rather than a convention.
 - On the partial-mode path the daemon rebuilds the rule set field by field, and the API rules are propagated with it, so `@sandbox` and `sandboxes()` are subject to the same decisions as a full `python-sb` run.
 - The `native` and `introspection` categories are detection and friction, not a barrier. Sandboxed code can undo Python-level patches, as the [weaknesses](weaknesses.md) page records. The **os-sandbox** remains the real barrier.

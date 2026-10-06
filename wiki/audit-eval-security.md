@@ -26,7 +26,7 @@ it.
 - [The master lever: capability builtins](#the-master-lever-capability-builtins)
 - [Attack matrix — escapes that are blocked](#attack-matrix--escapes-that-are-blocked)
 - [Attack matrix — payloads that still run](#attack-matrix--payloads-that-still-run)
-- [The `str.format` blind spot, and how it was closed](#the-strformat-blind-spot-and-how-it-was-closed)
+- [The `str.format` blind spot](#the-strformat-blind-spot)
 - [Lambdas and the call-depth budget](#lambdas-and-the-call-depth-budget)
 - [Residual limits — denial of service](#residual-limits--denial-of-service)
 - [Things that look like holes but are not](#things-that-look-like-holes-but-are-not)
@@ -66,9 +66,8 @@ The `eval-*` guard exists precisely because that pattern fails.
 
 The design principle: **static validation catches nothing an attacker cannot
 route around. The namespace and the runtime helpers are the real barriers.**
-The hardening described here removed the known ways to reach an attribute
-*without* going through `_check_attr`, `string.Formatter` included (see
-[the `str.format` section](#the-strformat-blind-spot-and-how-it-was-closed)).
+No known way reaches an attribute *without* going through `_check_attr`,
+`string.Formatter` included (see [the `str.format` section](#the-strformat-blind-spot)).
 
 ---
 
@@ -76,16 +75,16 @@ The hardening described here removed the known ways to reach an attribute
 
 A handful of builtins hand back, *by their own name*, a door the bounded
 namespace had shut. The sharpest is `getattr`: the raw builtin reads any
-attribute in C, so binding it unguarded reopened `eval-magic`, `eval-attribute`
+attribute in C, so binding it unguarded would reopen `eval-magic`, `eval-attribute`
 **and** the frame-capture DENY at once.
 
 ```python
-# with eval-call=getattr and nothing else, the raw builtin was a full escape:
+# with eval-call=getattr and nothing else, the raw builtin would be a full escape:
 getattr((), '__class__')                       # -> <class 'tuple'>   (eval-magic bypassed)
 getattr(getattr(gen, 'gi_frame'), 'f_globals') # -> real globals      (FRAME_CAPTURE bypassed)
 ```
 
-These builtins are now **bound under their own name to a guarded shim**, so
+These builtins are **bound under their own name to a guarded shim**, so
 `eval-call=getattr` grants the *name* but not the bypass. The shims live in
 `eval_runtime.GUARDED_BUILTINS`:
 
@@ -103,7 +102,7 @@ These builtins are now **bound under their own name to a guarded shim**, so
 `open`, `eval`, `exec`, `compile` and `__import__` are **deliberately absent**
 from that table: each already reaches its own guard (the file rules, this guard
 re-entered, the import rules). Granting any sensitive builtin via `eval-call`
-now also logs a warning at configuration-parse time.
+logs a warning at configuration-parse time.
 
 ---
 
@@ -166,14 +165,14 @@ AST-level check. Pinned in `test_eval_attack_matrix.py::test_payload_runs`.
 
 ---
 
-## The `str.format` blind spot, and how it was closed
+## The `str.format` blind spot
 
 `str.format` resolves `{0.__class__}` **in C**, from the contents of the
 string. No `Attribute` node exists for static validation or for
-`__sb_getattr__` to see — so `format` was a structural blind spot, curated out
+`__sb_getattr__` to see — so `format` is a structural blind spot, curated out
 of `str-methods` by default and only grantable with a warning.
 
-The guard now **validates the template at runtime**. When `eval-attribute`
+The guard **validates the template at runtime**. When `eval-attribute`
 grants `format`, `__sb_getattr__` does not return the raw bound method: it
 returns a wrapper. That wrapper walks every field of the template with
 `_string.formatter_field_name_split` and runs each attribute access through
@@ -181,47 +180,47 @@ returns a wrapper. That wrapper walks every field of the template with
 (`{0[0]}`) is data and left alone; nested spec fields (`{0:{1.__class__}}`) are
 walked in turn.
 
-A subtle second door — reaching the method through the **class** rather than an
-instance — was found and closed during this assessment:
+A second door, reaching the method through the **class** rather than an
+instance, is closed as well:
 
 ```python
 str.format('{0.__class__}', ())        # unbound: template is the first argument
 type('').format('{0.__class__}', ())   # same, reached through type()
 ```
 
-The instance wrapper did not cover these, because the object to the left of the
-dot is the `str` *class*, not a string. Both are now validated by an unbound
+The instance wrapper does not cover these, because the object to the left of the
+dot is the `str` *class*, not a string. Both are validated by an unbound
 wrapper (`_guarded_format_unbound`), which also covers `str` subclasses.
 
-A third door was found and closed afterwards: `string.Formatter`. Its
+A third door is `string.Formatter`. Its
 `format`, `vformat` and `get_field` resolve the same fields in Python, and
 `__sb_getattr__` wraps `format` only when the object is a `str`:
 
 ```python
 F.format('{0.__class__.__base__}', ())   # names={"F": string.Formatter()}, eval-attribute=format
-# was: <class 'object'>
+# refused
 ```
 
-The same held with `eval-import=string`, `eval-call=Formatter,__import__` and
+The same holds with `eval-import=string`, `eval-call=Formatter,__import__` and
 `eval-attribute=Formatter,format`. Validating the template before the call
 would not be enough: a subclass can override `parse` and hand `get_field` a
 field the template never showed. So the guard patches the one place the
 attribute is read, `string.Formatter.get_field`: during a guarded evaluation,
 every field it receives goes through `_check_attr`; outside one, the method is
 untouched. Pinned in `test_eval_hardening.py` and, for the patch installed at
-startup, in `test_eval_integration.py`.
+startup, in `tests/integration_tests/test_eval_integration.py`.
 
-That check reads the evaluation state of the *current* thread, which opened a
+That check reads the evaluation state of the *current* thread, which leaves a
 fourth door: a `Formatter` method handed to an executor the application
 supplied runs on a thread with no state.
 
 ```python
 X.submit(F.format, '{0.__class__.__base__}', ()).result()   # names={"F": ..., "X": ThreadPoolExecutor()}
-# was: <class 'object'>
+# refused
 ```
 
 A method fetched from a `Formatter` (instance or class) by the evaluated code
-now carries the fetching evaluation's state, and pushes it on whatever thread
+carries the fetching evaluation's state, and pushes it on whatever thread
 calls it. Threads of the application that use a `Formatter` on their own stay
 untouched.
 
@@ -239,18 +238,18 @@ Two configuration rules keep the method out of reach in the first place:
 A `FunctionDef` body is rewritten with an inline `__sb_enter__()` /
 `try … finally __sb_leave__()` bracket, so recursion charges a call frame and
 is bounded by `eval-max-call-depth`. A **lambda** body is a single expression
-that admits no statement, so before the hardening a lambda charged no frame:
+that admits no statement, so it cannot carry that bracket itself:
 
 ```python
-(lambda g: g(g))(lambda f: f(f))   # was: RecursionError (max-call-depth ignored)
+(lambda g: g(g))(lambda f: f(f))   # EvalInterrupted(eval-max-call-depth)
 ```
 
-Lambdas are now wrapped at definition — `_Injector.visit_Lambda` rewrites
+Lambdas are wrapped at definition — `_Injector.visit_Lambda` rewrites
 `lambda … : body` into `__sb_func__(lambda … : body)`, and `__sb_func__`
-brackets every call with enter/leave. Lambda recursion is now bounded exactly
-like a function, raising `EvalInterrupted(eval-max-call-depth)` instead of a
-catchable `RecursionError`. Generator recursion (`yield from`) was checked and
-is already bounded, because the inline bracket's `__sb_enter__` runs on each
+brackets every call with enter/leave. Lambda recursion is bounded exactly
+like a function, raising `EvalInterrupted(eval-max-call-depth)` rather than a
+catchable `RecursionError`. Generator recursion (`yield from`) is
+bounded too, because the inline bracket's `__sb_enter__` runs on each
 `next()` as the delegation chain deepens.
 
 ---
@@ -302,14 +301,14 @@ uv run pytest tests/unit_tests/guard/test_eval_attack_matrix.py -v
 # per-rule hardening regressions
 uv run pytest tests/unit_tests/guard/test_eval_hardening.py -v
 
-# the original escape corpus, each asserting the catching layer
+# the escape corpus, each asserting the catching layer
 uv run pytest tests/unit_tests/guard/test_eval_security_corpus.py -v
 ```
 
-Bottom line: every attribute read now passes through the single `_check_attr`
+Bottom line: every attribute read passes through the single `_check_attr`
 gate, whether by dot, by `getattr`/`vars`/`hasattr`, by `str.format` on an
 instance or on the class, or by `string.Formatter`. Recursion by function, lambda
-or generator is bounded by `eval-max-call-depth`. The only remaining ways through
+or generator is bounded by `eval-max-call-depth`. The only ways through
 are denial of service, which the design states plainly are the OS layer's job.
 
 ## Recommendations

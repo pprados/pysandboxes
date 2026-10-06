@@ -30,8 +30,7 @@ the sandbox is to Python. Each release pushes, for every image:
 | `3`, `latest` | `latest` | to each final release | final releases only, Python 3.14 |
 
 A pre-release (`a`, `b`, `rc`) never moves `latest`, `3` nor `<python>`, so a plain `docker pull` never gets one.
-To be sure that what runs stays the same, use `<python>-<version>`, or the digest. Pre-releases up to `0.1.0b8` were
-tagged `<version>` only. The qemu image matches its guest VM to its Python, so take the Python your
+To be sure that what runs stays the same, use `<python>-<version>`, or the digest. The qemu image matches its guest VM to its Python, so take the Python your
 code needs rather than the default.
 
 ## Pulling
