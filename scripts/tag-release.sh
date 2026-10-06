@@ -85,6 +85,12 @@ if [[ $mode != pre && -n $last ]]; then
     echo "CHANGELOG.md entry of $tag:"
     awk -v entry="$open_entry" '$0 == entry { inside = 1; next } inside && /^## \[/ { exit } inside' CHANGELOG.md
 fi
+if [[ $mode != pre ]] &&
+    ! awk -v entry="$open_entry" '$0 == entry { inside = 1; next } inside && /^## \[/ { exit } inside && /[^ ]/ {
+        found = 1; exit } END { exit !found }' CHANGELOG.md; then
+    git checkout -- CHANGELOG.md
+    die "The '$open_entry' entry of CHANGELOG.md is empty: describe the release first."
+fi
 read -r -p "Sign and push $tag on $(git rev-parse --short HEAD)? [y/N] " answer || answer=
 if [[ $answer != [yY] ]]; then
     git checkout -- CHANGELOG.md

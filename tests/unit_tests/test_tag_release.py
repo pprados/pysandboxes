@@ -362,6 +362,32 @@ def test_a_pre_release_whose_develop_push_fails_says_how_to_recover(work: Path) 
     assert _origin_tags(work) == []
 
 
+@pytest.mark.parametrize("subject", ["ci: not for users", "build(python-sb): 0.0.4"])
+def test_a_final_version_refuses_an_empty_entry(work: Path, subject: str) -> None:
+    empty = CHANGELOG.replace("### Added\n- a thing\n\n", "")
+    (work / "CHANGELOG.md").write_text(empty)
+    _git(work, "commit", "-q", "-am", "empty entry")
+    _git(work, "tag", "-m", "x", "v0.0.1")
+    _git(work, "commit", "-q", "--allow-empty", "-m", subject)
+    _git(work, "push", "-q", "origin", "develop")
+    result = _release(work, "patch")
+    assert result.returncode != 0
+    assert "is empty" in result.stderr
+    assert _git(work, "tag") == "v0.0.1"
+    assert _origin_tags(work) == []
+    assert (work / "CHANGELOG.md").read_text() == empty
+
+
+def test_the_first_final_version_refuses_an_empty_entry(work: Path) -> None:
+    (work / "CHANGELOG.md").write_text(CHANGELOG.replace("### Added\n- a thing\n\n", ""))
+    _git(work, "commit", "-q", "-am", "empty entry")
+    _git(work, "push", "-q", "origin", "develop")
+    result = _release(work, "minor")
+    assert result.returncode != 0
+    assert "is empty" in result.stderr
+    assert _git(work, "tag") == ""
+
+
 def test_a_final_version_refuses_a_duplicated_open_entry(work: Path) -> None:
     (work / "CHANGELOG.md").write_text(CHANGELOG + "\n## [0.0.0] - 202X-XX-XX\n")
     _git(work, "commit", "-q", "-am", "twice")

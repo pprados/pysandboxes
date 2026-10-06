@@ -87,12 +87,15 @@ def test_only_the_user_facing_commits_since_the_tag_reach_the_llm(repo: Path, tm
         "chore(release): v0.0.2",
         "perf: faster import",
         "test: more",
+        "build(python-sb): 0.0.4",
+        "build(deps): raise urllib3 to 2.8.0",
     ):
         _commit(repo, subject)
     llm = _fake_llm(tmp_path, "### Added\n- Denied by default.\n")
     result = _draft(repo, llm)
     assert result.returncode == 0, result.stderr
     assert _subjects_sent(tmp_path) == [
+        "build(deps): raise urllib3 to 2.8.0",
         "perf: faster import",
         "fix(bwrap): load the filter",
         "feat(guard): deny by default",
@@ -133,6 +136,13 @@ def test_a_missing_llm_falls_back_to_the_commit_list(repo: Path, tmp_path: Path)
     result = _draft(repo, str(tmp_path / "no-such-command"))
     assert result.returncode == 0, result.stderr
     assert result.stdout == "### Changed\n- Faster import\n"
+
+
+def test_a_dependency_raise_falls_back_under_security(repo: Path, tmp_path: Path) -> None:
+    _commit(repo, "build(deps): raise urllib3 to 2.8.0 for its advisory")
+    result = _draft(repo, str(tmp_path / "no-such-command"))
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "### Security\n- Raise urllib3 to 2.8.0 for its advisory\n"
 
 
 def test_without_a_previous_tag_the_whole_history_counts(repo: Path, tmp_path: Path) -> None:
