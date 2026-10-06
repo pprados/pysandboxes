@@ -36,6 +36,7 @@ in_image python-sb-bwrap slirp4netns --version
 in_image python-sb-bwrap nsenter --version
 in_image python-sb-qemu qemu-system-x86_64 --version
 in_image python-sb-qemu genisoimage --version
+in_image python-sb-qemu iptables-restore --version
 # shellcheck disable=SC2016  # expanded inside the image, where the variable is set
 in_image python-sb-qemu sh -c 'ls "$PYSANDBOXES_VM_IMAGES_DIR"/* >/dev/null'
 echo "The five images hold pysandboxes $version"
