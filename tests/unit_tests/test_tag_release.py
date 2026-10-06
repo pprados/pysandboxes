@@ -1,6 +1,6 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
-"""Tests of scripts/tag-release.sh, behind make publish-pre-release, publish-patch and publish-minor.
+"""Tests of scripts/tag-release.sh, behind make publish-pre-release, publish-patch, publish-minor and publish-final.
 
 Each test runs the script in a throw-away clone of a throw-away bare origin, signing with a throw-away SSH key; the
 user's git configuration is kept out, so the tests neither read nor need the maintainer's key.
@@ -189,7 +189,7 @@ def test_minor_without_any_final_tag_starts_from_zero(work: Path) -> None:
     assert _tag_on_origin(work, "v0.1.0")
 
 
-def test_a_final_version_dates_the_changelog_before_the_tag_and_opens_the_next_entry(work: Path) -> None:
+def test_a_final_version_dates_the_changelog_and_leaves_the_next_entry_to_the_next_merge(work: Path) -> None:
     before = datetime.date.today()
     result = _release(work, "minor")
     assert result.returncode == 0, result.stderr
@@ -199,14 +199,32 @@ def test_a_final_version_dates_the_changelog_before_the_tag_and_opens_the_next_e
     assert today, tagged
     assert "## [0.0.0] - 202X-XX-XX" not in tagged
     assert _git(work, "log", "-1", "--format=%s", "v0.1.0") == "chore(release): v0.1.0"
-    head = (work / "CHANGELOG.md").read_text()
-    assert head.index("## [0.0.0] - 202X-XX-XX") < head.index(f"## [0.1.0] - {today}")
+    assert (work / "CHANGELOG.md").read_text() == tagged + "\n"
     assert _git(work, "rev-parse", "origin/develop") == _git(work, "rev-parse", "HEAD")
-    assert _git(work, "rev-parse", "v0.1.0^{commit}") == _git(work, "rev-parse", "HEAD~1")
+    assert _git(work, "rev-parse", "v0.1.0^{commit}") == _git(work, "rev-parse", "HEAD")
     assert _signed_by_the_key(work, "v0.1.0")
-    for rev in ("HEAD", "HEAD~1"):
-        allowed = f"gpg.ssh.allowedSignersFile={work.parent / 'allowed'}"
-        assert _git(work, "-c", allowed, "log", "-1", "--format=%G?", rev) == "G"
+    allowed = f"gpg.ssh.allowedSignersFile={work.parent / 'allowed'}"
+    assert _git(work, "-c", allowed, "log", "-1", "--format=%G?", "HEAD") == "G"
+
+
+def test_final_tags_the_version_given(work: Path) -> None:
+    _git(work, "tag", "-m", "x", "v0.0.2")
+    _commit(work, "feature")
+    _git(work, "push", "-q", "origin", "develop")
+    result = _release(work, "final", "0.5.0")
+    assert result.returncode == 0, result.stderr
+    assert _tag_on_origin(work, "v0.5.0")
+    assert "## [0.5.0] - " in _git(work, "show", "v0.5.0:CHANGELOG.md")
+
+
+@pytest.mark.parametrize("version", ["", "0.5", "0.5.0b1", "v0.5.0", "0.0.2", "0.0.1"])
+def test_final_refuses_a_malformed_or_not_greater_version(work: Path, version: str) -> None:
+    _git(work, "tag", "-m", "x", "v0.0.2")
+    result = _release(work, "final", version)
+    assert result.returncode != 0
+    assert "VERSION=" in result.stderr
+    assert _git(work, "tag") == "v0.0.2"
+    assert _origin_tags(work) == []
 
 
 def test_a_later_final_version_keeps_the_entry_lines_with_its_changes_when_no_llm_answers(work: Path) -> None:
@@ -349,11 +367,13 @@ def test_the_publish_targets_call_the_script() -> None:
     for bump in ("patch", "minor"):
         recipe = _recipe(f"publish-{bump}")
         assert recipe[-1] == f"@scripts/tag-release.sh {bump}"
+    assert _recipe("publish-final")[-1] == '@scripts/tag-release.sh final "$(VERSION)"'
 
 
 def test_the_final_targets_have_no_lock_left() -> None:
     for bump in ("patch", "minor"):
         assert _recipe(f"publish-{bump}") == ["$(MAKE) release", f"@scripts/tag-release.sh {bump}"]
+    assert _recipe("publish-final") == ["$(MAKE) release", '@scripts/tag-release.sh final "$(VERSION)"']
     assert "RELEASE_FINAL" not in SCRIPT.read_text()
 
 

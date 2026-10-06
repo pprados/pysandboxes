@@ -2,11 +2,12 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# Behind make publish-pre-release, publish-patch and publish-minor. Usage:
-#   tag-release.sh pre <X.Y.Z(a|b|rc)N> | tag-release.sh patch | tag-release.sh minor
+# Behind make publish-pre-release, publish-patch, publish-minor and publish-final. Usage:
+#   tag-release.sh pre <X.Y.Z(a|b|rc)N> | tag-release.sh patch | tag-release.sh minor | tag-release.sh final <X.Y.Z>
 # Tags the head of develop with a signed vX.Y.Z… and pushes develop, then the tag: release.yml verifies and publishes
-# it. A final version is the last final tag reachable from HEAD (v0.0.0 without one) bumped; it dates the CHANGELOG.md
-# entry [0.0.0] before the tag and opens a new one after, so the open entry never reaches master. After the first
+# it. A final version is the last final tag reachable from HEAD (v0.0.0 without one) bumped, or the version given to
+# final, which must be greater; it dates the CHANGELOG.md entry [0.0.0] before the tag. The next merge into develop
+# opens a new one, so the tagged CHANGELOG.md holds no open entry. After the first
 # final version, changelog-draft.sh rewrites that entry from its own lines and the commits since the last final tag;
 # the maintainer edits it ($VISUAL, $EDITOR, else vi, when on a terminal) and approves it with the tag. A published tag
 # is never moved.
@@ -25,20 +26,26 @@ pre)
     [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(a|b|rc)[0-9]+$ ]] ||
         die "Usage: make publish-pre-release VERSION=X.Y.Z(a|b|rc)N, e.g. VERSION=0.1.0b2"
     ;;
-patch | minor)
+patch | minor | final)
     last=$(git tag --merged HEAD -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
     IFS=. read -r major minor patch <<<"${last:-v0.0.0}"
     major=${major#v}
     if [[ $mode == patch ]]; then
         version=$major.$minor.$((patch + 1))
-    else
+    elif [[ $mode == minor ]]; then
         version=$major.$((minor + 1)).0
+    else
+        version=${2:-}
+        [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && $version != "${last#v}" &&
+            $(printf '%s\n' "${last#v}" "$version" | sort -V | tail -n 1) == "$version" ]] ||
+            die "Usage: make publish-final VERSION=X.Y.Z, greater than the last final version ${last:-v0.0.0}"
     fi
     [[ $(grep -cxF "$open_entry" CHANGELOG.md || true) == 1 ]] ||
         die "CHANGELOG.md must have exactly one '$open_entry' entry to date."
     ;;
 *)
-    die "Usage: tag-release.sh pre <X.Y.Z(a|b|rc)N> | tag-release.sh patch | tag-release.sh minor"
+    die "Usage: tag-release.sh pre <X.Y.Z(a|b|rc)N> | tag-release.sh patch | tag-release.sh minor" \
+        "| tag-release.sh final <X.Y.Z>"
     ;;
 esac
 tag=v$version
@@ -93,13 +100,6 @@ on_error() {
             ;;
         push-tag)
             echo "  git push origin $tag"
-            [[ $mode == pre ]] ||
-                echo "  then add the '$open_entry' entry above the first '## [' line of CHANGELOG.md," \
-                    "commit it signed and git push origin develop"
-            ;;
-        open-entry)
-            echo "  add the '$open_entry' entry above the first '## [' line of CHANGELOG.md if missing, commit it" \
-                "signed, then git push origin develop"
             ;;
         esac
     } >&2
@@ -117,14 +117,6 @@ step=push-develop
 git push origin develop
 step=push-tag
 git push origin "$tag"
-if [[ $mode != pre ]]; then
-    step=open-entry
-    awk -v entry="$open_entry" '!done && /^## \[/ { print entry; print ""; done = 1 } { print }' CHANGELOG.md \
-        >CHANGELOG.md.next
-    mv CHANGELOG.md.next CHANGELOG.md
-    git commit -q -S -m "chore(release): open the next changelog entry" CHANGELOG.md
-    git push origin develop
-fi
 trap - ERR
 [[ $mode == pre ]] && index=testpypi || index=pypi
 echo "Approve the $index deployment: https://github.com/pprados/pysandboxes/actions/workflows/release.yml"

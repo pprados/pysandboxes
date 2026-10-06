@@ -32,7 +32,9 @@ number.
 
 `make publish-patch` and `make publish-minor` run `make release` (`validate` and `all-tests`) first, take the last
 final tag (`v0.0.0` without one) bumped by patch or minor, date the `[0.0.0]` entry of `CHANGELOG.md` in a signed
-commit, tag and push, then open a new `[0.0.0]` entry.
+commit, tag and push. `make publish-final VERSION=X.Y.Z` does the same with the version given, which must be greater
+than the last final tag: it sets the first number of a series, such as `0.5.0`. The tag holds no open entry; the
+first merge into `develop` after the release opens a new `[0.0.0]` entry.
 
 The tag starts `release.yml`, which waits for **one approval**, the `pypi` deployment. Approving publishes
 `pysandboxes` and, when `python-sb/` changed since the last final tag, `python-sb` with a higher version. The run then

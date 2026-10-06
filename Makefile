@@ -608,7 +608,7 @@ init: _uv-init
 
 ### DEBUG ###
 
-.PHONY: publish-pre-release publish-patch publish-minor
+.PHONY: publish-pre-release publish-patch publish-minor publish-final
 
 # Tags the head of develop with a signed vX.Y.Z(a|b|rc)N and pushes develop, then the tag: release.yml verifies it,
 # builds the wheel and, once the testpypi deployment is approved, publishes it to test.pypi.org. The tag is signed
@@ -628,3 +628,8 @@ publish-patch: quick-demo-gif
 publish-minor: quick-demo-gif
 	$(MAKE) release
 	@scripts/tag-release.sh minor
+
+## Run the full local check, then tag and push a given final version: make publish-final VERSION=0.5.0
+publish-final: quick-demo-gif
+	$(MAKE) release
+	@scripts/tag-release.sh final "$(VERSION)"

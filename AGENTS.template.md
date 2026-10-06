@@ -38,6 +38,7 @@ make dist                    # Build distribution packages
 make publish-pre-release VERSION=X.Y.ZbN  # Tag and push a pre-release (published to test.pypi.org by the CI)
 make publish-minor           # Full local check, then tag and push the next minor final version (published to pypi.org by the CI)
 make publish-patch           # Full local check, then tag and push the next patch final version (published to pypi.org by the CI)
+make publish-final VERSION=X.Y.Z  # Full local check, then tag and push the given final version, greater than the last (published to pypi.org by the CI)
 make help                    # Show all commands
 ```
 
@@ -129,7 +130,9 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
   applies. A change to those rules goes there, not only here.
 - **`CHANGELOG.md`**: a merge into `develop` that brings a new feature or a user-visible fix adds one line for it to
   the open `## [0.0.0] - 202X-XX-XX` entry, under `### Added`, `### Changed` or `### Fixed`, written for users,
-  without implementation detail. Never date that entry nor add a version: `make publish-patch` / `publish-minor` do.
+  without implementation detail. A release leaves no open entry: the first merge after it adds the
+  `## [0.0.0] - 202X-XX-XX` line, followed by an empty line, above the first `## [` line. Never date that entry nor add
+  a version: `make publish-patch` / `publish-minor` / `publish-final` do.
 
 ### Design and Planning Documents
 - Design specs and implementation plans live in the repository tree, in a directory git excludes, so they are
