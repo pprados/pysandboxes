@@ -258,14 +258,6 @@ EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annota
 #   3. run `make pip-audit`: it must pass without the ignore.
 PIP_AUDIT_IGNORE_crewai = --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
 	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
-#
-# strands-agents, up to 1.57.2, pins litellm<=1.96.0, and PYSEC-2026-4066 is fixed
-# in 1.96.2. The advisory is an SSRF in the LiteLLM proxy server; the sample only
-# uses LiteLLM as a client library (LiteLLMModel), so it is ignored there only.
-# To reactivate, once strands-agents allows litellm>=1.96.2: drop the line below,
-# run `uv lock --project samples/strands-agents-demo --upgrade-package litellm`,
-# then `make pip-audit`.
-PIP_AUDIT_IGNORE_strands-agents = --ignore-vuln PYSEC-2026-4066
 ## Report the runtime dependencies with a known security vulnerability, samples included
 pip-audit:
 	@unset VIRTUAL_ENV; status=0; \
