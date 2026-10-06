@@ -16,27 +16,6 @@ Applications increasingly run code, or call tools, chosen by an LLM, and a manip
 
 [Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
-> **Not yet on pypi.org.** Until the project is published there, `pip install pysandboxes` and
-> `uvx python-sb` do not work. The pre-releases are on test.pypi.org: declare this alias, then use `python-sb`
-> wherever this page says `uvx python-sb`:
->
-> ```bash
-> alias python-sb='uvx --prerelease allow \
->   --find-links https://test.pypi.org/simple/python-sb/ \
->   --find-links https://test.pypi.org/simple/pysandboxes/ \
->   python-sb'
-> python-sb --help
-> ```
->
-> Or install it from the sources:
->
-> ```bash
-> git clone https://github.com/pprados/pysandboxes.git
-> cd pysandboxes
-> pip install -e .
-> python-sb --help
-> ```
-
 # Quick start
 
 Run any module in a sandbox, without installing anything and without touching a single line of your code:
@@ -90,7 +69,7 @@ protection level it needs, and what the rule file does not show.
 
 # Platform support
 
-For now, **Linux and WSL only** (at this time). Every OS-level backend (landlock, bwrap, firejail, unshare) is a Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
+The OS boundary is **Linux and WSL only**. Every OS-level backend (landlock, bwrap, firejail, unshare) is a Linux technology. On macOS and Windows, only the Python layer is available, without the OS boundary.
 
 ---
 
