@@ -18,6 +18,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.tag.outputs.version }}
       sha: ${{ steps.tag.outputs.sha }}
@@ -43,6 +44,7 @@ jobs:
   push-checks:
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       actions: read
       contents: read
@@ -83,6 +85,7 @@ jobs:
   validate:
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       UV_PYTHON: "3.13"
     steps:
@@ -109,6 +112,7 @@ jobs:
   build:
     needs: [verify, push-checks, validate]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       python-sb: ${{ steps.python-sb.outputs.publish }}
     env:
@@ -164,6 +168,7 @@ jobs:
   reuse-lookup:
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
@@ -208,6 +213,7 @@ jobs:
   wheel-tests:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -283,6 +289,7 @@ jobs:
       && (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success')
       && needs.verify.outputs.final == 'false' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: testpypi
       url: https://test.pypi.org/project/pysandboxes/${{ needs.verify.outputs.version }}/
@@ -322,6 +329,7 @@ jobs:
       && (needs.reuse-lookup.outputs.reuse == 'true' || needs.full-gate.result == 'success')
       && needs.verify.outputs.final == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: pypi
       url: https://pypi.org/project/pysandboxes/${{ needs.verify.outputs.version }}/
@@ -356,6 +364,7 @@ jobs:
       ${{ !cancelled()
       && (needs.publish-testpypi.result == 'success' || needs.publish-pypi.result == 'success') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       VERSION: ${{ needs.verify.outputs.version }}
     steps:
@@ -385,6 +394,7 @@ jobs:
     needs: [verify, verify-published]
     if: ${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.verify-published.result == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: dockerhub
     # One runner per Python: the qemu image alone holds a guest disk, five images times four would not fit on one.
     strategy:
@@ -461,6 +471,7 @@ jobs:
       ${{ !cancelled() && needs.verify.outputs.final == 'true' && needs.verify-published.result == 'success'
       && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: master
     permissions:
       contents: read
