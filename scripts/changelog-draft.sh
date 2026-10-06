@@ -46,11 +46,11 @@ tail -n 3 "$errors" | sed 's/^/  /' >&2
 [[ -z $entry ]] || { printf '%s\n' "$entry"; printed=1; }
 section() {
     local lines
-    lines=$(grep -E "^($2)(\([^)]*\))?!?: " <<<"$subjects" | sed -E 's/^[a-z]+(\([^)]*\))?!?: //; s/^./\U&/' || true)
+    lines=$(grep -E "^($2)(\([^)]*\))?!?: " <<<"$subjects" | sed -E 's/^[a-z]+(\([^)]*\))?!?: //; s/^./- \U&/' || true)
     [[ -z $lines ]] && return
     [[ -n ${printed:-} ]] && echo
     echo "### $1"
-    sed 's/^/- /' <<<"$lines"
+    printf '%s\n' "$lines"
     printed=1
 }
 section Added feat
