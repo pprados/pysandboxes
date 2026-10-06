@@ -58,6 +58,9 @@ git merge-base --is-ancestor origin/develop HEAD ||
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
     die "Tag $tag already exists."
 fi
+# release.yml fails validate on a new advisory, after the tag is pushed: catch it while nothing is tagged.
+make -s pip-audit >/dev/null 2>&1 ||
+    die "make pip-audit reports a vulnerability: relock the affected project (or document an ignore) first."
 
 previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
 echo "Changes since ${previous:-the first commit} that reach the pipeline or the wheel:"

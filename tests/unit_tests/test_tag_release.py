@@ -50,11 +50,23 @@ def work(tmp_path: Path) -> Path:
     _git(work, "commit", "-q", "-m", "init")
     _git(work, "remote", "add", "origin", str(origin))
     _git(work, "push", "-q", "origin", "develop")
+    _fake_make(work, 0)
     return work
 
 
+def _fake_make(work: Path, code: int) -> None:
+    make = work.parent / "bin" / "make"
+    make.parent.mkdir(exist_ok=True)
+    make.write_text(f"#!/bin/sh\necho \"$@\" >>{work.parent / 'make-calls'}\nexit {code}\n")
+    make.chmod(0o755)
+
+
+def _env(work: Path) -> dict[str, str]:
+    return {**_ENV, "PATH": f"{work.parent / 'bin'}:{_ENV['PATH']}"}
+
+
 def _release(work: Path, *args: str, answer: str = "y\n") -> subprocess.CompletedProcess[str]:
-    env = _ENV
+    env = _env(work)
     return subprocess.run(
         [str(SCRIPT), *args], cwd=work, env=env, input=answer, capture_output=True, text=True, check=False
     )
@@ -251,7 +263,7 @@ def test_a_later_final_version_replaces_the_entry_with_the_llm_synthesis(work: P
     result = subprocess.run(
         [str(SCRIPT), "patch"],
         cwd=work,
-        env={**_ENV, "CHANGELOG_LLM": str(fake)},
+        env={**_env(work), "CHANGELOG_LLM": str(fake)},
         input="y\n",
         capture_output=True,
         text=True,
@@ -298,6 +310,18 @@ def test_a_final_version_needs_the_open_changelog_entry(work: Path) -> None:
     assert result.returncode != 0
     assert "[0.0.0]" in result.stderr
     assert _git(work, "tag") == ""
+
+
+@pytest.mark.parametrize("args", [("pre", "0.1.0b1"), ("patch",)])
+def test_a_vulnerable_dependency_tags_nothing(work: Path, args: tuple[str, ...]) -> None:
+    _fake_make(work, 1)
+    result = _release(work, *args)
+    assert result.returncode != 0
+    assert "pip-audit" in result.stderr
+    assert (work.parent / "make-calls").read_text() == "-s pip-audit\n"
+    assert _git(work, "tag") == ""
+    assert _origin_tags(work) == []
+    assert (work / "CHANGELOG.md").read_text() == CHANGELOG
 
 
 def test_an_unknown_mode_is_refused(work: Path) -> None:

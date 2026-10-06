@@ -140,7 +140,7 @@ Already in place. Recreate them only if they are lost:
 |---|---|
 | `verify` fails | Tag not signed, signed by an unlisted key, or commit not on `develop`. Nothing published: fix, then tag the next number |
 | `push-checks`: "push checks not finished" | `lint.yml` or `test.yml` did not finish within 30 min on the tagged commit. Re-run the failed jobs once they are green |
-| `validate` fails on `pip-audit` | An advisory appeared since the last push. Relock the affected project (`uv lock --upgrade-package <pkg>`), or document an ignore in the `Makefile` when no fix exists; then tag the next number |
+| `validate` fails on `pip-audit` | An advisory appeared between the audit `tag-release.sh` runs before tagging and the run. Relock the affected project (`uv lock --upgrade-package <pkg>`), or document an ignore in the `Makefile` when no fix exists; then tag the next number |
 | `publish-testpypi` or `publish-pypi` never starts | A gate failed, or `full-gate` was skipped by a failure rather than by a reuse. Nothing published |
 | `verify-published`: "published but not visible yet" | The index's CDN (test.pypi.org or pypi.org) has not served the file within 10 min. Re-run the failed jobs |
 | `verify-published`: the wheel "differs" | The index (test.pypi.org or pypi.org) holds another file for this version (a re-run rebuilt a different wheel; the upload is skipped when the version exists). Publish the next number |
