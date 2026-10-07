@@ -263,6 +263,13 @@ Granting `format` requires an exact name; wildcard patterns do not enable
 `format` or `format_map`. A regular f-string such as `f"{o.__class__}"` is
 rewritten as a normal attribute access and follows the same gate.
 
+**Recommendation: write an f-string, not `str.format()`.** An f-string needs
+`eval-syntax=fstring` and no `format` grant, and each attribute it reads is
+checked statically, where a format template is only checked at runtime. Keep
+`eval-attribute=format` for code that cannot be changed. When learning mode
+observes `format` or `format_map`, it writes this advice as a comment above
+the generated `eval-attribute` line.
+
 ```ini
 # Valid
 eval-syntax=arith
