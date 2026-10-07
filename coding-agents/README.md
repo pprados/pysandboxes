@@ -28,6 +28,23 @@ Two more skills keep the rules in step with the code:
 request that changes a `.py-sandboxes` file, it posts the graded table of the added rules. Pin the `ref` of the
 pysandboxes checkout it holds to a release tag or a commit.
 
+### AI pull-request reviewers
+
+The workflow runs no model: its table is the same on every run. An AI reviewer can then explain each added rule,
+with the code that needs it. [`ci/REVIEW_INSTRUCTIONS.md`](ci/REVIEW_INSTRUCTIONS.md) holds one paragraph for that,
+the same for every reviewer; paste it into the file your reviewer reads.
+
+| Reviewer                  | Status   | File                                                                 | Documentation                                                                                   |
+|---------------------------|----------|----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| GitHub Copilot review     | untested | `.github/copilot-instructions.md`, or `AGENTS.md` at the root        | [use code review](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) |
+| Codex (`@codex review`)   | untested | `AGENTS.md`, under a `## Code Review Rules` section                  | [AGENTS.md](https://developers.openai.com/codex/guides/agents-md), [GitHub](https://developers.openai.com/codex/integrations/github) |
+| Claude Code Review        | untested | `REVIEW.md` at the root (`CLAUDE.md` findings are nits only)         | [code review](https://code.claude.com/docs/en/code-review)                                       |
+| Claude Code GitHub Action | untested | `CLAUDE.md`                                                          | [GitHub Actions](https://code.claude.com/docs/en/github-actions)                                 |
+| Gemini Code Assist        | untested | `.gemini/styleguide.md`                                              | [customize the review](https://docs.cloud.google.com/gemini/docs/code-review/customize-repo-review) |
+
+Copilot reads the file from the branch of the pull request, so a pull request can change the instructions that
+review it; the others do not say. None of the Anthropic or Google documentation mentions `AGENTS.md`.
+
 ## Install
 
 | Agent       | Status     | Files                                                     |
