@@ -11,7 +11,7 @@ TEST_FILE ?= tests
 
 ## Test the code
 tests:
-	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v $(TEST_FILE)
+	set -a && if [ -f .env ]; then source .env; fi && uv run $(UV_GROUP) pytest -v $(TEST_FILE)
 
 ######################
 # LINTING AND FORMATTING

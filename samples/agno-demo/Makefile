@@ -9,7 +9,7 @@ TEST_FILE ?= tests
 
 ## Run pytest (uses project venv via uv — do not run bare `pytest` on PATH)
 tests:
-	set -a && if [ -f .env ]; then source .env; fi && uv run pytest -v $(TEST_FILE)
+	set -a && if [ -f .env ]; then source .env; fi && uv run $(UV_GROUP) pytest -v $(TEST_FILE)
 
 test: tests
 

@@ -12,7 +12,7 @@ TEST_FILE ?= tests
 
 ## Test the code
 tests:
-	uv run pytest -v $(TEST_FILE)
+	uv run $(UV_GROUP) pytest -v $(TEST_FILE)
 
 ######################
 # LINTING AND FORMATTING
