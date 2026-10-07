@@ -80,6 +80,8 @@ from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .lifecycle import is_armed
+from .main_logger import ErrorMsg, format_ruleref
+from .sb_types import ConfigLines
 from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
@@ -796,6 +798,29 @@ def _wrap_formatter_get_field(func: Callable[..., Any]) -> Callable[..., Any]:
         return func(self, field_name, *args, **kwargs)
 
     return wrapper
+
+
+def check_api_grants(api_rules: guard_api.ApiRules, eval_lines: ConfigLines, errors: list[ErrorMsg]) -> None:
+    """Refuse the `eval-*` rules a `python-api` grant leaves unused.
+
+    A granted eval, exec or compile runs the code through the raw builtin before any `eval-*` rule is read: the
+    rules would look in force and guard nothing.
+    """
+    if not eval_lines:
+        return
+    decisions = guard_api.resolve(api_rules)
+    granted = [qualname for qualname in guard_api.SENSITIVE_API["dynamic-code"] if decisions[qualname]]
+    if not granted:
+        return
+    for rule in eval_lines:
+        errors.append(
+            (
+                f"{format_ruleref(rule)}: {rule.rule!r} is never applied, python-api grants "
+                f"{', '.join(granted)} unguarded: comment it out, or remove the grant.",
+                rule.path,
+                rule.ln,
+            )
+        )
 
 
 def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:

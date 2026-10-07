@@ -284,7 +284,9 @@ def parse_config(
     files_rules, others = guard_files.parse_rules(others, errors)
     api_rules, others = guard_api.parse_rules(others, errors)
     import_rules, others = guard_import.parse_rules(others, errors)
+    eval_lines = [rule for rule in others if rule.rule.startswith(eval_rules_module.EVAL_PREFIX)]
     eval_profiles, others = eval_rules_module.parse_rules(others, errors)
+    guard_eval.check_api_grants(api_rules, eval_lines, errors)
 
     # 2. If some line are ignored
     if others:

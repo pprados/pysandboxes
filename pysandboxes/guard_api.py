@@ -460,13 +460,23 @@ _allowed: ImmutableDict[str, bool] = ImmutableDict({})
 
 
 def activate_guard(rules: ApiRules) -> None:
+    """Apply the decision per registered function that `resolve` gives."""
+    global _allowed
+    _allowed = ImmutableDict(resolve(rules))
+    logger.debug(
+        "guard_api: %d/%d sensitive functions allowed",
+        sum(_allowed.values()),
+        len(_allowed),
+    )
+
+
+def resolve(rules: ApiRules) -> dict[str, bool]:
     """Flatten the rules into a decision per registered function.
 
     Resolution is by specificity, not by order: a function rule beats a
     category rule wherever it sits, which keeps ``include`` composition
     predictable. ``DENY`` wins at equal specificity.
     """
-    global _allowed
     decisions: dict[str, bool] = {q: False for q in all_qualnames()}
     wildcard = [r for r in rules if r.target == "*"]
     if wildcard:
@@ -485,12 +495,7 @@ def activate_guard(rules: ApiRules) -> None:
         if not rule.is_category and rule.target != "*":
             funcs[rule.target] = rule.allow and funcs.get(rule.target, True)
     decisions.update(funcs)
-    _allowed = ImmutableDict(decisions)
-    logger.debug(
-        "guard_api: %d/%d sensitive functions allowed",
-        sum(_allowed.values()),
-        len(_allowed),
-    )
+    return decisions
 
 
 def is_allowed(qualname: str) -> bool:

@@ -691,3 +691,53 @@ def test_compile_still_accepts_positional_arguments() -> None:
     wrapper = _wrap_compile(compile)
     code = wrapper("1 + 1", "<s>", "eval")
     assert eval(code) == 2  # noqa: S307
+
+
+def _grant_errors(*lines: str) -> list[str]:
+    """The errors check_api_grants reports for a profile made of these lines."""
+    config = [ConfigLine(line, pathlib.Path("p"), ln) for ln, line in enumerate(lines, 1)]
+    errors: list[Any] = []
+    api_rules, others = parse_api_rules(config, errors)
+    eval_lines = [rule for rule in others if rule.rule.startswith("eval-")]
+    guard_eval.check_api_grants(api_rules, eval_lines, errors)
+    return [error[0] for error in errors]
+
+
+@pytest.mark.parametrize(
+    "grant", ["python-api=ALLOW:dynamic-code", "python-api=ALLOW:builtins.compile", "python-api=ALLOW:*"]
+)
+def test_an_eval_rule_a_grant_bypasses_is_refused(grant: str) -> None:
+    """Whatever its place in the profile, a grant would leave the eval-* rules unused: each one is reported."""
+    errors = _grant_errors("eval-call=len", grant, "eval-syntax=core")
+    assert len(errors) == 2
+    assert all("comment it out" in error for error in errors)
+
+
+def test_eval_rules_without_a_grant_are_accepted() -> None:
+    assert _grant_errors("eval-call=len", "python-api=ALLOW:process-exec") == []
+
+
+def test_a_grant_denied_by_a_more_specific_rule_leaves_the_eval_rules_in_force() -> None:
+    assert (
+        _grant_errors(
+            "python-api=ALLOW:*",
+            "python-api=DENY:dynamic-code",
+            "eval-call=len",
+        )
+        == []
+    )
+
+
+def test_a_grant_without_eval_rules_is_accepted() -> None:
+    assert _grant_errors("python-api=ALLOW:dynamic-code") == []
+
+
+def test_loading_a_profile_with_a_bypassed_eval_rule_fails(tmp_path: pathlib.Path) -> None:
+    from pysandboxes import ConfigSyntaxError
+    from pysandboxes.py_sandbox import load_and_parse_config
+
+    profile = tmp_path / "profile"
+    profile.write_text("py-sandbox=true\nos-sandbox=none\neval-call=len\npython-api=ALLOW:builtins.eval\n")
+    with pytest.raises(ConfigSyntaxError) as caught:
+        load_and_parse_config(profile)
+    assert any("'eval-call=len' is never applied" in error for error in caught.value.errors)

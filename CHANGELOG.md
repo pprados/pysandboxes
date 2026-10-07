@@ -25,6 +25,8 @@
   local rules from the current directory is the user's decision
 - The samples' documentation no longer claims that learning mode cannot produce `net=` rules: it does, and each one
   needs review
+- A profile whose `python-api` rules grant `eval`, `exec` or `compile` while it also carries `eval-*` rules is
+  refused at load, with each `eval-*` line to comment out: the grant ran the code unguarded and left them unused
 
 ### Fixed
 - A profile no longer has to allow the sandbox daemon's own modules (uvicorn, fastapi, and the standard library

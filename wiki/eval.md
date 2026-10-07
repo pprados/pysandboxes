@@ -66,8 +66,9 @@ explicitly allowed.
 | at least one `eval-*` key | **guarded**: parsed, validated, rewritten, run under budget |
 | `python-api=ALLOW:dynamic-code` | **unguarded**, an explicit escape hatch, warned like `process-exec` |
 
-The explicit `dynamic-code` grant takes precedence: if both are present, code
-runs unguarded.
+Both at once are refused when the profile loads: the grant would run the code
+unguarded and leave the `eval-*` keys unused. Each one is reported, to comment
+out, or remove the grant.
 
 `ast.literal_eval` is not concerned: it evaluates literals only and constructs
 no code object.
