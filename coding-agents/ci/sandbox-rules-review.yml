@@ -1,0 +1,52 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+#
+# Copy to .github/workflows/ of a project protected by pysandboxes. On a pull request that changes a .py-sandboxes
+# file, it lists the rules the change adds, riskiest first, in the job summary and in a comment. Which code needs
+# each rule is the reviewer's question: the pysandboxes-review-rules skill answers it in a coding agent.
+name: Sandbox rules review
+
+on:
+  pull_request:
+    paths:
+      - "**/.py-sandboxes*"
+      - "**/*.py-sandboxes"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # The grading script, from the pysandboxes repository. Pin `ref` to a release tag or a commit.
+      - uses: actions/checkout@v5
+        with:
+          repository: pprados/pysandboxes
+          path: .pysandboxes-review
+          sparse-checkout: coding-agents/skills/pysandboxes-review-rules
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Grade the rules the pull request adds
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff "$BASE...HEAD" -- '*.py-sandboxes*' > "$RUNNER_TEMP/rules.diff"
+          {
+            echo "## Rights added to the sandbox rules"
+            echo
+            python .pysandboxes-review/coding-agents/skills/pysandboxes-review-rules/scripts/rules_diff.py \
+              < "$RUNNER_TEMP/rules.diff"
+          } > "$RUNNER_TEMP/review.md"
+          cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
+      # A pull request from a fork gets a read-only token: the summary above still holds the table.
+      - name: Comment on the pull request
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file "$RUNNER_TEMP/review.md"

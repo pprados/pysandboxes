@@ -34,6 +34,9 @@
   the profile invalid on the next run
 
 ### Added
+- Two coding-agent skills: one learns the rules a new feature needs from its tests and asks before granting them,
+  the other lists the rights a change adds to the `.py-sandboxes` files, graded by risk, with the code that needs
+  each; and a GitHub workflow to copy into a project, which comments that list on a pull request
 - `python-sb script.py` reads the `.py-sandboxes` next to the script before the one of the current directory
 - Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule
 - First stable version

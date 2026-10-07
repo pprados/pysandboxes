@@ -4,7 +4,7 @@
   "author": {
     "name": "Philippe Prados"
   },
-  "description": "Run Python through python-sb: a skill, and a hook that refuses a bare python command.",
+  "description": "Run Python through python-sb, learn the rules a feature needs from its tests, and review the rights a change adds: three skills, and a hook that refuses a bare python command.",
   "license": "Apache-2.0",
   "repository": "https://github.com/pprados/pysandboxes"
 }

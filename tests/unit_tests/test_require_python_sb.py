@@ -47,6 +47,12 @@ def test_a_direct_python_is_refused(command: str) -> None:
         "uv run python-sb script.py",
         "uvx python-sb script.py",
         "uvx python-sb --pysandboxes-config=skill/.py-sandboxes skill/scripts/report.py",
+        # The commands of the pysandboxes-review-rules and pysandboxes-rules-from-tests skills.
+        "cd skill && python-sb --pysandboxes-config=.py-sandboxes scripts/rules_diff.py < /tmp/rules.diff",
+        "cd skill && uvx --prerelease allow --find-links https://test.pypi.org/simple/python-sb/ "
+        "--find-links https://test.pypi.org/simple/pysandboxes/ python-sb --pysandboxes-config=.py-sandboxes "
+        "scripts/rules_diff.py < /tmp/rules.diff",
+        'SANDBOX_LEARN=1 pytest -p no:xdist -m sandbox_learn -k "test_export"',
         "uv run pytest -k python",
         'echo "python script.py"',
         "ls python3",

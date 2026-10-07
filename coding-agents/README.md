@@ -13,6 +13,21 @@ things that make it run that Python through `python-sb`, so the rules of `.py-sa
 The script only needs the standard library. It reads the tool call on stdin, and refuses with exit code 2 and the
 reason on stderr: every agent below honours that, and shows the reason to the model.
 
+Two more skills keep the rules in step with the code:
+
+- [`skills/pysandboxes-rules-from-tests/SKILL.md`](skills/pysandboxes-rules-from-tests/SKILL.md): when a test of a
+  new feature fails on a refusal, it learns the missing rules from the feature's tests into `tests.py-sandboxes`,
+  explains each one, and asks the user before granting it. The agent runs the learning only with the user's
+  approval, every time: learning refuses nothing, so the feature's code then runs with no barrier other than the
+  agent's own sandbox;
+- [`skills/pysandboxes-review-rules/SKILL.md`](skills/pysandboxes-review-rules/SKILL.md): before a merge, it lists
+  the rules a change adds to the `.py-sandboxes` files, graded by risk, and finds the code that needs each one. Its
+  script, `scripts/rules_diff.py`, runs under `python-sb` with the rule file of the skill.
+
+[`ci/sandbox-rules-review.yml`](ci/sandbox-rules-review.yml) is a GitHub workflow to copy into a project: on a pull
+request that changes a `.py-sandboxes` file, it posts the graded table of the added rules. Pin the `ref` of the
+pysandboxes checkout it holds to a release tag or a commit.
+
 ## Install
 
 | Agent       | Status     | Files                                                     |
