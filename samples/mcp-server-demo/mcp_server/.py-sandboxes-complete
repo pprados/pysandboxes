@@ -14,85 +14,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 06:56)
-env=COLORTERM=${COLORTERM}
-env=CONDA_HOME=${CONDA_HOME}
-env=FORCE_COLOR=${FORCE_COLOR}
-env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
-env=PWD=${PWD}
-env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
-env=PYDANTIC_VALIDATE_CORE_SCHEMAS=${PYDANTIC_VALIDATE_CORE_SCHEMAS}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
-
-# ⚠ Dangerous!
-python-import=atexit, importlib, inspect, mmap, subprocess, webbrowser
-
-# Standard Python
-python-import=_colorize
-python-import=__future__, _cffi_backend, _decimal, _hashlib, _markupbase
-python-import=_multibytecodec, _multiprocessing, _queue, _socket
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
-python-import=array, ast, asyncio, base64, binascii, calendar, codecs, collections
-python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
-python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, errno
-python-import=fnmatch, fractions, functools, getpass, gettext, hashlib, heapq, hmac
-python-import=html, http, io, ipaddress, itertools, json, keyword, linecache, locale
-python-import=logging, marshal, math, mimetypes, multiprocessing, numbers, operator
-python-import=os, pathlib, pickle, platform, pprint, queue, random, re, reprlib
-python-import=secrets, select, selectors, shlex, shutil, signal, socket
-python-import=socketserver, ssl, stat, string, stringprep, struct, sysconfig
-python-import=tempfile, termios, textwrap, threading, time, traceback, types, typing
-python-import=unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
-
-# External modules (Are you sure about the origin?)
-python-import=aiofiles
-python-import=annotated_types
-python-import=anyio
-python-import=attr
-python-import=attrs
-python-import=authlib
-python-import=bs4
-python-import=certifi
-python-import=charset_normalizer
-python-import=click
-python-import=cryptography
-python-import=dotenv
-python-import=exceptiongroup
-python-import=fastmcp
-python-import=h11
-python-import=httpcore
-python-import=httpx
-python-import=httpx_file
-python-import=httpx_sse
-python-import=idna
-python-import=jsonschema
-python-import=jsonschema_specifications
-python-import=markdownify
-python-import=mcp
-python-import=mcp_server
-python-import=pydantic
-python-import=pydantic_core
-python-import=pydantic_settings
-python-import=pygments
-python-import=python_multipart
-python-import=referencing
-python-import=rfc3339_validator
-python-import=rich
-python-import=rpds
-python-import=six
-python-import=sniffio
-python-import=soupsieve
-python-import=sse_starlette
-python-import=starlette
-python-import=typing_extensions
-python-import=typing_inspection
-python-import=uvicorn
-
 # The repository root, which uv installs as an editable dependency (see
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
@@ -114,51 +35,97 @@ eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
 
-# Add rules (2026/09/10 at 09:44)
+# threads: concurrency primitives
+python-api=ALLOW:threading._start_new_thread
+
+
+# Add rules (2026/10/07 at 16:48)
 env=ANDROID_DATA=${ANDROID_DATA}
 env=FASTMCP_ENV_FILE=${FASTMCP_ENV_FILE}
+env=HOME=${HOME}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
 env=SPHINX_BUILD=${SPHINX_BUILD}
 env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
+# ⚠ Dangerous!
+python-import=atexit, importlib, inspect, mmap, subprocess, webbrowser
+
 # Standard Python
-python-import=_codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp, _codecs_kr
-python-import=_codecs_tw, _imp, bisect, fcntl, posixpath
+python-import=__future__, _cffi_backend, _hashlib, _imp, _markupbase
+python-import=_multiprocessing, _queue, _thread, abc, argparse, array, ast, asyncio
+python-import=base64, binascii, bisect, calendar, codecs, collections, colorsys
+python-import=concurrent, configparser, contextlib, contextvars, copy, copyreg
+python-import=dataclasses, datetime, decimal, email, encodings, enum, errno, fcntl
+python-import=fnmatch, fractions, functools, gettext, hashlib, heapq, hmac, html
+python-import=http, io, ipaddress, itertools, json, keyword, linecache, locale
+python-import=logging, math, mimetypes, multiprocessing, numbers, operator, os
+python-import=pathlib, pickle, platform, posixpath, pprint, queue, random, re
+python-import=reprlib, secrets, select, selectors, shlex, shutil, signal, socket
+python-import=socketserver, ssl, stat, string, struct, tempfile, textwrap, threading
+python-import=time, traceback, types, typing, unicodedata, urllib, uuid, weakref
+python-import=zlib, zoneinfo
 
 # External modules (Are you sure about the origin?)
+python-import=aiofiles
+python-import=annotated_types
+python-import=anyio
+python-import=attr
+python-import=attrs
+python-import=backports
 python-import=beartype
+python-import=bs4
 python-import=cachetools
+python-import=certifi
+python-import=click
+python-import=cryptography
+python-import=dotenv
+python-import=exceptiongroup
+python-import=fastmcp
 python-import=griffe
+python-import=h11
+python-import=httpcore
+python-import=httpx
 python-import=httpx2
+python-import=httpx_file
+python-import=idna
+python-import=jsonschema
+python-import=jsonschema_specifications
 python-import=jwt
 python-import=key_value
+python-import=markdownify
+python-import=mcp
+python-import=mcp_server
 python-import=mcp_types
 python-import=opentelemetry
 python-import=packaging
 python-import=platformdirs
+python-import=pydantic
+python-import=pydantic_core
+python-import=pydantic_settings
+python-import=pygments
+python-import=python_multipart
+python-import=referencing
+python-import=rich
+python-import=rpds
+python-import=six
+python-import=soupsieve
+python-import=sse_starlette
+python-import=starlette
+python-import=typing_extensions
+python-import=typing_inspection
 python-import=uncalled_for
+python-import=uvicorn
 python-import=watchfiles
 
 expose-ro=/etc
 
-# Add rules (2026/09/21 at 09:08)
-env=NO_COLOR=${NO_COLOR}
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
-
+# Add rules (2026/10/07 at 16:48)
 # Standard Python
-python-import=_thread
+python-import=_socket
 
-# External modules (Are you sure about the origin?)
-python-import=backports
 
-# threads: concurrency primitives
-python-api=ALLOW:threading._start_new_thread
-
-# Add rules (2026/09/21 at 09:08)
-
-# Add rules (2026/09/21 at 09:08)
-
-# Add rules (2026/09/21 at 09:08)
+# Add rules (2026/10/07 at 16:48)
 # Standard Python
-python-import=_ast, _ast_unparse, _hmac, annotationlib, compression, glob
-
+python-import=_colorize, _hmac, annotationlib, compression, glob
 

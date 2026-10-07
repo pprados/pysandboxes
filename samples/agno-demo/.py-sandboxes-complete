@@ -7,36 +7,38 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:09)
-env=CONDA_HOME=${CONDA_HOME}
+# The calculator tool evaluates a string the model produced. `closed` rather
+# than the adaptive default: the caller already passes {"__builtins__": {}},
+# so the resulting namespace is identical, and a profile handling model output
+# should declare its surface here rather than at the call site.
+eval-namespace=closed
+eval-syntax=arith, compare
+eval-max-iterations=100_000
+eval-timeout=2s
+
+
+# Add rules (2026/10/07 at 16:46)
 env=HOME=${HOME}
 env=PWD=${PWD}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
 # ⚠ Dangerous!
-python-import=atexit, importlib, inspect, mmap, subprocess
+python-import=atexit, importlib, inspect, mmap
 
 # Standard Python
 python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
-python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, abc, array, ast
-python-import=base64, binascii, bisect, calendar, codecs, collections, colorsys
-python-import=concurrent, configparser, contextlib, contextvars, copy, copyreg
-python-import=dataclasses, datetime, decimal, email, encodings, enum, errno, fnmatch
-python-import=fractions, functools, getpass, gettext, hashlib, html, http, io
-python-import=ipaddress, itertools, json, logging, math, mimetypes, numbers
-python-import=operator, os, pathlib, pickle, random, re, reprlib, select, signal
-python-import=socket, ssl, stat, stringprep, struct, tempfile, termios, textwrap
-python-import=threading, time, types, typing, unicodedata, urllib, weakref, zipfile
-python-import=zlib
+python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, _thread, abc
+python-import=ast, base64, binascii, bisect, calendar, codecs, collections, colorsys
+python-import=contextlib, copy, copyreg, dataclasses, datetime, email, encodings
+python-import=enum, errno, fnmatch, fractions, functools, gettext, hashlib, html
+python-import=http, io, ipaddress, itertools, json, keyword, logging, math
+python-import=mimetypes, operator, os, pathlib, pickle, random, re, select, socket
+python-import=ssl, stat, struct, textwrap, threading, time, types, typing
+python-import=unicodedata, urllib, uuid, weakref, zlib
 
 # External modules (Are you sure about the origin?)
-python-import=81d243bd2c585b0f4821__mypyc
 python-import=agno_demo
 python-import=anyio
-python-import=attr
 python-import=bs4
 python-import=certifi
 python-import=charset_normalizer
@@ -52,41 +54,17 @@ python-import=markdownify
 python-import=pygments
 python-import=rich
 python-import=six
-python-import=sniffio
 python-import=soupsieve
 python-import=typing_extensions
 
 expose-ro=.
 
-# Add rules (2026/09/10 at 09:58)
-env=VIRTUAL_ENV=${VIRTUAL_ENV}
-
+# Add rules (2026/10/07 at 16:46)
 # Standard Python
-python-import=_decimal, _socket, keyword, uuid
+python-import=_socket, reprlib
 
 
-# The calculator tool evaluates a string the model produced. `closed` rather
-# than the adaptive default: the caller already passes {"__builtins__": {}},
-# so the resulting namespace is identical, and a profile handling model output
-# should declare its surface here rather than at the call site.
-eval-namespace=closed
-eval-syntax=arith, compare
-eval-max-iterations=100_000
-eval-timeout=2s
-
-# Add rules (2026/09/21 at 08:50)
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
-
+# Add rules (2026/10/07 at 16:46)
 # Standard Python
-python-import=_thread
-
-
-
-# Add rules (2026/09/21 at 08:50)
-
-# Add rules (2026/09/21 at 08:50)
-
-# Add rules (2026/09/21 at 08:50)
-# External modules (Are you sure about the origin?)
 python-import=annotationlib
 

@@ -11,91 +11,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:36)
-env=CONDA_HOME=${CONDA_HOME}
-env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
-env=PWD=${PWD}
-env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
-
-# ⚠ Dangerous!
-python-import=atexit, ctypes, importlib, inspect, mmap, subprocess
-
-# Standard Python
-python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
-python-import=_codecs_kr, _codecs_tw, _compression, _elementtree, _hashlib
-python-import=_markupbase, _multibytecodec, _multiprocessing, _posixshmem, _queue
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _thread, _zoneinfo, abc, array
-python-import=ast, asyncio, base64, binascii, bisect, calendar, codecs, collections
-python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
-python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, errno
-python-import=fnmatch, fractions, functools, getpass, gettext, gzip, hashlib, heapq
-python-import=hmac, html, http, io, ipaddress, itertools, json, keyword, locale
-python-import=logging, math, mimetypes, multiprocessing, numbers, operator, os
-python-import=pathlib, pickle, platform, posixpath, pprint, queue, random, re
-python-import=reprlib, runpy, secrets, select, selectors, shlex, shutil, signal
-python-import=socket, socketserver, ssl, stat, string, stringprep, struct, sysconfig
-python-import=tempfile, termios, textwrap, threading, time, traceback, types, typing
-python-import=unicodedata, urllib, uuid, weakref, xml, zipfile, zlib, zoneinfo
-
-# External modules (Are you sure about the origin?)
-python-import=81d243bd2c585b0f4821__mypyc
-python-import=annotated_doc
-python-import=annotated_types
-python-import=anyio
-python-import=attr
-python-import=attrs
-python-import=boto3
-python-import=botocore
-python-import=bs4
-python-import=certifi
-python-import=charset_normalizer
-python-import=click
-python-import=dateutil
-python-import=docstring_parser
-python-import=email_validator
-python-import=fastapi
-python-import=h11
-python-import=httpcore
-python-import=httpx
-python-import=idna
-python-import=importlib_metadata
-python-import=jmespath
-python-import=jsonschema
-python-import=jsonschema_specifications
-python-import=markdownify
-python-import=opentelemetry
-python-import=packaging
-python-import=pydantic
-python-import=pydantic_core
-python-import=pyexpat
-python-import=pygments
-python-import=python_multipart
-python-import=referencing
-python-import=rich
-python-import=rpds
-python-import=s3transfer
-python-import=six
-python-import=sniffio
-python-import=soupsieve
-python-import=starlette
-python-import=strands
-python-import=strands_agents_demo
-python-import=typing_extensions
-python-import=typing_inspection
-python-import=urllib3
-python-import=uvicorn
-python-import=watchdog
-python-import=websockets
-python-import=wrapt
-python-import=yaml
-python-import=zipp
-
 # The repository root, which uv installs as an editable dependency (see
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
@@ -110,17 +25,6 @@ net=ALLOW|TCP|ip6-loopback|0|IN
 # ⚠ native: native code and arbitrary memory access
 python-api=ALLOW:ctypes.CDLL
 
-# Add rules (2026/09/10 at 10:06)
-env=PSUTIL_DEBUG=${PSUTIL_DEBUG}
-env=VIRTUAL_ENV=${VIRTUAL_ENV}
-
-# Standard Python
-python-import=_decimal, _socket, glob, pwd, resource
-
-# External modules (Are you sure about the origin?)
-python-import=psutil
-
-
 # The calculator tool evaluates a string the model produced. `closed` rather
 # than the adaptive default: the caller already passes {"__builtins__": {}},
 # so the resulting namespace is identical, and a profile handling model output
@@ -130,18 +34,78 @@ eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
 
-# Add rules (2026/09/21 at 10:14)
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
+
+# Add rules (2026/10/07 at 16:50)
+env=HOME=${HOME}
+env=PSUTIL_DEBUG=${PSUTIL_DEBUG}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# ⚠ Dangerous!
+python-import=atexit, ctypes, importlib, inspect, mmap, subprocess
+
+# Standard Python
+python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
+python-import=_codecs_kr, _codecs_tw, _compression, _elementtree, _markupbase
+python-import=_multibytecodec, _multiprocessing, _posixshmem, _thread, abc, array
+python-import=ast, base64, binascii, bisect, calendar, codecs, collections
+python-import=concurrent, configparser, contextlib, contextvars, copy, copyreg
+python-import=dataclasses, datetime, decimal, email, encodings, enum, errno, fnmatch
+python-import=fractions, functools, getpass, glob, gzip, hashlib, heapq, hmac, html
+python-import=http, io, ipaddress, itertools, json, logging, math, mimetypes
+python-import=multiprocessing, numbers, operator, os, pathlib, platform, posixpath
+python-import=pprint, pwd, pyexpat, queue, random, re, reprlib, resource, runpy
+python-import=secrets, select, shlex, shutil, signal, socket, ssl, stat, string
+python-import=struct, sysconfig, tempfile, termios, textwrap, threading, time
+python-import=traceback, types, typing, unicodedata, urllib, uuid, weakref, xml
+python-import=zlib
+
+# External modules (Are you sure about the origin?)
+python-import=annotated_types
+python-import=anyio
+python-import=attr
+python-import=attrs
+python-import=boto3
+python-import=botocore
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=dateutil
+python-import=docstring_parser
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=idna
+python-import=jmespath
+python-import=jsonschema
+python-import=jsonschema_specifications
+python-import=markdownify
+python-import=opentelemetry
+python-import=packaging
+python-import=psutil
+python-import=pydantic
+python-import=pydantic_core
+python-import=pygments
+python-import=referencing
+python-import=rpds
+python-import=s3transfer
+python-import=six
+python-import=soupsieve
+python-import=strands
+python-import=strands_agents_demo
+python-import=typing_extensions
+python-import=urllib3
+python-import=watchdog
+python-import=wrapt
+python-import=yaml
 
 expose-ro=/proc
 
+remote-result-mode=data-only
 
-# Add rules (2026/09/21 at 10:15)
-
-# Add rules (2026/09/21 at 10:15)
-
-# Add rules (2026/09/21 at 10:15)
+# Add rules (2026/10/07 at 16:50)
 # Standard Python
-python-import=_ctypes, _hmac, annotationlib, compression
-
+python-import=_ctypes, compression
 

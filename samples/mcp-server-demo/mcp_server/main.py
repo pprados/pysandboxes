@@ -183,8 +183,8 @@ def run_mcp_server(
     return 0
 
 
-def main() -> int:
-    set_pdeathsig()
+def build_parser() -> argparse.ArgumentParser:
+    """The command line of the server, apart from running it."""
     parser = argparse.ArgumentParser(
         prog="mcp_server",
         description="Run a MCP-server",
@@ -243,7 +243,12 @@ def main() -> int:
         default=None,  # Use None as default value for clear checking
         help="The learning path.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    set_pdeathsig()
+    args = build_parser().parse_args()
     if not args.config_path:
         resource_path = importlib.resources.files(__package__)
         args.config_path = resource_path / ".py-sandboxes"

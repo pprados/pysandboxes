@@ -11,66 +11,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:12)
-env=CONDA_HOME=${CONDA_HOME}
-env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
-env=PWD=${PWD}
-env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
-
-# ⚠ Dangerous!
-python-import=atexit, importlib, inspect, subprocess
-
-# Standard Python
-python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
-python-import=_codecs_kr, _codecs_tw, _decimal, _hashlib, _markupbase
-python-import=_multibytecodec, _multiprocessing, _queue, _socket
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, array, ast
-python-import=asyncio, base64, binascii, bisect, calendar, codecs, collections
-python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
-python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, errno
-python-import=fnmatch, fractions, functools, gettext, hashlib, heapq, hmac, html
-python-import=http, io, ipaddress, itertools, json, keyword, locale, logging, math
-python-import=mimetypes, multiprocessing, numbers, operator, os, pathlib, pickle
-python-import=platform, queue, random, re, reprlib, secrets, select, selectors
-python-import=shlex, signal, socket, socketserver, ssl, stat, stringprep, struct
-python-import=sysconfig, tempfile, textwrap, threading, time, traceback, types
-python-import=typing, unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
-
-# External modules (Are you sure about the origin?)
-python-import=81d243bd2c585b0f4821__mypyc
-python-import=annotated_doc
-python-import=annotated_types
-python-import=anyio
-python-import=autogen_demo
-python-import=bs4
-python-import=certifi
-python-import=charset_normalizer
-python-import=click
-python-import=email_validator
-python-import=fastapi
-python-import=h11
-python-import=httpcore
-python-import=httpx
-python-import=idna
-python-import=markdownify
-python-import=pydantic
-python-import=pydantic_core
-python-import=pygments
-python-import=six
-python-import=sniffio
-python-import=soupsieve
-python-import=starlette
-python-import=typing_extensions
-python-import=typing_inspection
-python-import=uvicorn
-python-import=websockets
-
 # The repository root, which uv installs as an editable dependency (see
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
@@ -92,25 +32,45 @@ eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
 
-# Add rules (2026/09/21 at 08:51)
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
-env=VIRTUAL_ENV=${VIRTUAL_ENV}
-
-# Standard Python
-python-import=_thread
-
-
 # threads: concurrency primitives
 python-api=ALLOW:threading._start_new_thread
 
-# Add rules (2026/09/21 at 08:51)
 
-# Add rules (2026/09/21 at 08:51)
+# Add rules (2026/10/07 at 16:46)
+env=HOME=${HOME}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
-# Add rules (2026/09/21 at 08:51)
+# ⚠ Dangerous!
+python-import=atexit, importlib, inspect
+
 # Standard Python
-python-import=_hmac
+python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
+python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, base64, bisect
+python-import=calendar, codecs, collections, concurrent, contextlib, copy, copyreg
+python-import=dataclasses, datetime, email, encodings, enum, fnmatch, functools
+python-import=hashlib, html, http, io, ipaddress, itertools, json, logging
+python-import=mimetypes, operator, os, pathlib, queue, re, select, socket, ssl
+python-import=struct, textwrap, threading, time, types, typing, unicodedata, urllib
+python-import=weakref, zlib
 
 # External modules (Are you sure about the origin?)
-python-import=annotationlib
+python-import=anyio
+python-import=autogen_demo
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=idna
+python-import=markdownify
+python-import=pygments
+python-import=six
+python-import=sniffio
+python-import=soupsieve
+python-import=typing_extensions
 
+remote-result-mode=data-only

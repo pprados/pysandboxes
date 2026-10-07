@@ -95,30 +95,13 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # Generated rules from learning mode:
 # <learning_guard_envs>
 
-# Add rules (2026/09/09 at 17:53)
-env=COLORTERM=${COLORTERM}
-env=CONDA_HOME=${CONDA_HOME}
-env=FORCE_COLOR=${FORCE_COLOR}
-env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
-env=PWD=${PWD}
-env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
-env=PYDANTIC_VALIDATE_CORE_SCHEMAS=${PYDANTIC_VALIDATE_CORE_SCHEMAS}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
-env=TEMP=${TEMP}
-env=TERM=${TERM}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
-
-# Add rules (2026/09/10 at 09:44)
+# Add rules (2026/10/07 at 16:48)
 env=ANDROID_DATA=${ANDROID_DATA}
 env=FASTMCP_ENV_FILE=${FASTMCP_ENV_FILE}
+env=HOME=${HOME}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
 env=VIRTUAL_ENV=${VIRTUAL_ENV}
-
-# Add rules (2026/09/21 at 09:08)
-env=NO_COLOR=${NO_COLOR}
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
 
 # </learning_guard_envs>
 
@@ -152,7 +135,6 @@ env=SSL_CERT_FILE=${SSL_CERT_FILE}
 # Generated rules from learning mode:
 # <learning_guard_files>
 
-# Add rules (2026/09/09 at 17:53)
 # The repository root, which uv installs as an editable dependency (see
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
@@ -161,7 +143,7 @@ env=SSL_CERT_FILE=${SSL_CERT_FILE}
 # above PWD -- so `make learn` puts the absolute path back.
 expose-ro=../..
 
-# Add rules (2026/09/10 at 09:44)
+# Add rules (2026/10/07 at 16:48)
 expose-ro=/etc
 
 # </learning_guard_files>
@@ -206,7 +188,6 @@ expose-ro=/etc
 # Generated rules from learning mode:
 # <learning_guard_socket>
 
-# Add rules (2026/09/09 at 17:53)
 # The transport's own ports, which learning cannot produce: they are the
 # sandbox talking to its parent, not the application reaching out. Needed only
 # when a port is forced -- mcp-client-demo's launch configurations pass
@@ -239,103 +220,65 @@ net=ALLOW|TCP|www.google.com|443|OUT
 # Generated rules from learning mode:
 # <learning_guard_import>
 
-# Add rules (2026/09/09 at 17:53)
+# Add rules (2026/10/07 at 16:48)
 # ⚠ Dangerous!
-python-import=atexit, importlib, inspect, mmap, subprocess, webbrowser
+python-import=atexit, importlib, inspect, mmap, subprocess
 
 # Standard Python
-python-import=_colorize
-python-import=__future__, _cffi_backend, _decimal, _hashlib, _markupbase
-python-import=_multibytecodec, _multiprocessing, _queue, _socket
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
-python-import=array, ast, asyncio, base64, binascii, calendar, codecs, collections
-python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
-python-import=copyreg, dataclasses, datetime, decimal, email, encodings, enum, errno
-python-import=fnmatch, fractions, functools, getpass, gettext, hashlib, heapq, hmac
-python-import=html, http, io, ipaddress, itertools, json, keyword, linecache, locale
-python-import=logging, marshal, math, mimetypes, multiprocessing, numbers, operator
-python-import=os, pathlib, pickle, platform, posixpath, pprint, queue, random, re, reprlib
-python-import=secrets, select, selectors, shlex, shutil, signal, socket
-python-import=socketserver, ssl, stat, string, stringprep, struct, sysconfig
-python-import=tempfile, termios, textwrap, threading, time, traceback, types, typing
-python-import=unicodedata, urllib, uuid, weakref, zipfile, zlib, zoneinfo
+python-import=__future__, _cffi_backend, _markupbase, abc, argparse, ast, asyncio
+python-import=base64, binascii, bisect, calendar, codecs, collections, colorsys
+python-import=concurrent, configparser, contextlib, contextvars, copy, copyreg
+python-import=dataclasses, datetime, email, encodings, enum, fcntl, fnmatch
+python-import=fractions, functools, hashlib, hmac, html, http, io, ipaddress
+python-import=itertools, json, logging, math, mimetypes, operator, os, pathlib
+python-import=pickle, posixpath, queue, random, re, secrets, select, shlex, shutil
+python-import=signal, socket, ssl, stat, string, struct, tempfile, textwrap
+python-import=threading, time, traceback, types, typing, unicodedata, urllib, uuid
+python-import=weakref, zlib
 
 # External modules (Are you sure about the origin?)
 python-import=aiofiles
-python-import=annotated_doc
-python-import=platformdirs
 python-import=annotated_types
 python-import=anyio
-python-import=attr
-python-import=attrs
-python-import=authlib
-python-import=beartype
+python-import=backports
 python-import=bs4
-python-import=cachetools
 python-import=certifi
-python-import=charset_normalizer
 python-import=click
 python-import=cryptography
 python-import=dotenv
-python-import=email_validator
 python-import=exceptiongroup
-python-import=fastapi
 python-import=fastmcp
+python-import=griffe
 python-import=h11
 python-import=httpcore
 python-import=httpx
+python-import=httpx2
 python-import=httpx_file
-python-import=httpx_sse
 python-import=idna
-python-import=jsonschema
-python-import=jsonschema_specifications
-python-import=key_value
 python-import=markdownify
 python-import=mcp
 python-import=mcp_server
+python-import=mcp_types
+python-import=opentelemetry
+python-import=packaging
+python-import=platformdirs
 python-import=pydantic
 python-import=pydantic_core
 python-import=pydantic_settings
 python-import=pygments
-python-import=python_multipart
-python-import=referencing
-python-import=rfc3339_validator
 python-import=rich
-python-import=rpds
 python-import=six
-python-import=sniffio
 python-import=soupsieve
 python-import=sse_starlette
 python-import=starlette
 python-import=typing_extensions
 python-import=typing_inspection
+python-import=uncalled_for
 python-import=uvicorn
 
-# Add rules (2026/09/10 at 09:44)
+# Add rules (2026/10/07 at 16:48)
 # Standard Python
-python-import=_codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp, _codecs_kr
-python-import=_codecs_tw, _imp, bisect, fcntl
-
-# External modules (Are you sure about the origin?)
-python-import=griffe
-python-import=httpx2
-python-import=mcp_types
-python-import=opentelemetry
-python-import=packaging
-python-import=uncalled_for
-python-import=watchfiles
-python-import=websockets
-
-# Add rules (2026/09/21 at 09:08)
-# Standard Python
-python-import=_thread
-
-# External modules (Are you sure about the origin?)
-python-import=backports
-
-# Add rules (2026/09/21 at 09:08)
-# Standard Python
-python-import=_hmac, annotationlib, compression, glob
+python-import=annotationlib, compression, glob
 
 
 # </learning_guard_import>
@@ -374,20 +317,12 @@ python-import=_hmac, annotationlib, compression, glob
 # is common and legitimate; an ALLOW:process-exec deserves a hard look.
 # <learning_guard_api>
 
-# Add rules (2026/09/09 at 17:53)
 # threads: concurrency primitives
 python-api=ALLOW:threading.Thread.start
 python-api=ALLOW:threading._start_joinable_thread
 
-# Add rules (2026/09/21 at 09:08)
 # threads: concurrency primitives
 python-api=ALLOW:threading._start_new_thread
-
-# Add rules (2026/09/21 at 09:08)
-
-# Add rules (2026/09/21 at 09:08)
-
-# Add rules (2026/09/21 at 09:08)
 
 # </learning_guard_api>
 
@@ -510,3 +445,5 @@ eval-timeout=2s
 # ============================================================
 # No provider-specific profile keys (no subprocess.* / none.*). Configure env, file, net,
 # and import rules only; subprocess is the default isolated Python process provider.
+# Add rules (2026/10/07 at 16:48)
+remote-result-mode=data-only

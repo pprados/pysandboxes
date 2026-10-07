@@ -11,126 +11,7 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:17)
-env=*_API_KEY=${*_API_KEY}
-env=*_TOKEN=${*_TOKEN}
-env=*_BASE_URL=${*_BASE_URL}
-env=n_examples=${n_examples}
-env=n_load=${n_load}
 
-# ⚠ Dangerous!
-python-import=atexit, ctypes, importlib, inspect, mmap, pkgutil, subprocess
-python-import=webbrowser
-
-# Standard Python
-python-import=asyncio
-python-import=compression
-# annotationlib is new in 3.14 (PEP 649/749) and is pulled in by the annotation
-# machinery, so the profile needs it to cover that version.
-python-import=annotationlib
-python-import=__future__, _cffi_backend, _codecs_cn, _codecs_hk, _codecs_iso2022
-python-import=_codecs_jp, _codecs_kr, _codecs_tw, _compression, _elementtree
-python-import=_csv, _decimal, _hashlib, _markupbase, _multibytecodec, _multiprocessing, _queue, _socket
-python-import=_sqlite3, _string, _sysconfigdata__linux_x86_64-linux-gnu, _thread
-python-import=_zoneinfo, abc, argparse, array, ast, asyncio, base64, binascii
-python-import=bisect, calendar, codecs, collections, colorsys, concurrent
-python-import=configparser, contextlib, contextvars, copy, copyreg, csv, dataclasses
-python-import=datetime, decimal, difflib, dis, email, encodings, enum, errno, fcntl
-python-import=fnmatch, fractions, functools, getpass, gettext, glob, graphlib, grp, gzip
-python-import=hashlib, heapq, hmac, html, http, io, ipaddress, itertools, json
-python-import=keyword, locale, logging, marshal, math, mimetypes, multiprocessing
-python-import=numbers, operator, os, pathlib, pickle, platform, posixpath, pprint
-python-import=pwd, queue, random, re, reprlib, secrets, select, selectors, shlex
-python-import=shutil, signal, socket, socketserver, sqlite3, ssl, stat, string
-python-import=stringprep, struct, sysconfig, tarfile, tempfile, termios, textwrap
-python-import=threading, time, traceback, types, typing, unicodedata, urllib, uuid
-python-import=weakref, xml, zipfile, zipimport, zlib, zoneinfo
-
-# External modules (Are you sure about the origin?)
-python-import=81d243bd2c585b0f4821__mypyc
-python-import=aiohttp
-python-import=annotated_doc
-python-import=annotated_types
-python-import=anyio
-python-import=appdirs
-python-import=attr
-python-import=attrs
-python-import=bcrypt
-python-import=bs4
-python-import=certifi
-python-import=charset_normalizer
-python-import=chromadb
-python-import=click
-python-import=aiofiles
-python-import=aiosqlite
-python-import=crewai
-python-import=crewai_core
-python-import=jiter
-python-import=crewai_demo
-python-import=tomli
-python-import=tomllib
-python-import=cryptography
-python-import=distro
-python-import=dotenv
-python-import=email_validator
-python-import=fastapi
-python-import=fastuuid
-python-import=google
-python-import=grpc
-python-import=h11
-python-import=httpcore
-python-import=httptools
-python-import=httpx
-python-import=idna
-python-import=importlib_metadata
-python-import=jinja2
-python-import=json5
-python-import=json_repair
-python-import=jsonref
-python-import=jsonschema
-python-import=jsonschema_specifications
-python-import=jwt
-python-import=litellm
-python-import=markdownify
-python-import=markupsafe
-python-import=numpy
-python-import=openai
-python-import=opentelemetry
-python-import=orjson
-python-import=overrides
-python-import=packaging
-python-import=portalocker
-python-import=proxytypes
-python-import=pybase64
-python-import=pydantic
-python-import=pydantic_core
-python-import=pydantic_settings
-python-import=pyexpat
-python-import=pygments
-python-import=python_multipart
-python-import=referencing
-python-import=requests
-python-import=rich
-python-import=rpds
-python-import=six
-python-import=sniffio
-python-import=soupsieve
-python-import=starlette
-python-import=tenacity
-python-import=tiktoken
-python-import=tiktoken_ext
-python-import=tokenizers
-python-import=typing_extensions
-python-import=typing_inspection
-python-import=urllib3
-python-import=uvicorn
-python-import=watchfiles
-python-import=websockets
-python-import=yaml
-python-import=zipp
-
-expose-ro=~/.local/share/crewai-demo
-expose-ro=~/.local/share/crewai/credentials
 # The repository root, which uv installs as an editable dependency (see
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
@@ -161,3 +42,127 @@ eval-namespace=closed
 eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
+
+# Add rules (2026/10/07 at 16:47)
+env=CREWAI_DISABLE_TELEMETRY=${CREWAI_DISABLE_TELEMETRY}
+env=CREWAI_DISABLE_TRACKING=${CREWAI_DISABLE_TRACKING}
+env=CREWAI_PLUS_URL=${CREWAI_PLUS_URL}
+env=CREWAI_TRACING_ENABLED=${CREWAI_TRACING_ENABLED}
+env=HOME=${HOME}
+env=OPENBLAS_MAIN_FREE=${OPENBLAS_MAIN_FREE}
+env=OTEL_SDK_DISABLED=${OTEL_SDK_DISABLED}
+env=OTEL_TRACES_SAMPLER=${OTEL_TRACES_SAMPLER}
+env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=${PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION}
+env=PSUTIL_DEBUG=${PSUTIL_DEBUG}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=PYTHON_DOTENV_DISABLED=${PYTHON_DOTENV_DISABLED}
+env=SPHINX_BUILD=${SPHINX_BUILD}
+env=TEMPORARILY_DISABLE_PROTOBUF_VERSION_CHECK=${TEMPORARILY_DISABLE_PROTOBUF_VERSION_CHECK}
+env=TOKENIZERS_PARALLELISM=${TOKENIZERS_PARALLELISM}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+env=XDG_DATA_HOME=${XDG_DATA_HOME}
+
+# ⚠ Dangerous!
+python-import=atexit, ctypes, importlib, inspect, mmap, pkgutil, subprocess
+python-import=webbrowser
+
+# Standard Python
+python-import=__future__, _cffi_backend, _codecs_cn, _codecs_hk, _codecs_iso2022
+python-import=_codecs_jp, _codecs_kr, _codecs_tw, _compression, _markupbase
+python-import=_multibytecodec, _sqlite3, _thread, abc, argparse, ast, asyncio
+python-import=base64, binascii, bisect, calendar, codecs, collections, colorsys
+python-import=concurrent, contextlib, contextvars, copy, copyreg, csv, dataclasses
+python-import=datetime, decimal, difflib, dis, email, encodings, enum, errno, fcntl
+python-import=fnmatch, fractions, functools, getpass, glob, graphlib, grp, gzip
+python-import=hashlib, heapq, hmac, html, http, io, ipaddress, itertools, json
+python-import=keyword, logging, marshal, math, mimetypes, multiprocessing, numbers
+python-import=operator, os, pathlib, pickle, platform, posixpath, pprint, pwd, queue
+python-import=random, re, reprlib, resource, select, shlex, shutil, signal, socket
+python-import=sqlite3, ssl, stat, string, struct, tarfile, tempfile, termios
+python-import=textwrap, threading, time, tomllib, traceback, types, typing
+python-import=unicodedata, urllib, uuid, weakref, zipfile, zipimport, zlib
+
+# External modules (Are you sure about the origin?)
+python-import=aiofiles
+python-import=aiosqlite
+python-import=annotated_types
+python-import=anyio
+python-import=appdirs
+python-import=attr
+python-import=attrs
+python-import=bcrypt
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=chromadb
+python-import=click
+python-import=crewai
+python-import=crewai_core
+python-import=crewai_demo
+python-import=cryptography
+python-import=distro
+python-import=dotenv
+python-import=fastapi
+python-import=google
+python-import=grpc
+python-import=h11
+python-import=h2
+python-import=hpack
+python-import=httpcore
+python-import=httpx
+python-import=hyperframe
+python-import=idna
+python-import=jinja2
+python-import=jiter
+python-import=json5
+python-import=json_repair
+python-import=jsonref
+python-import=jsonschema
+python-import=jsonschema_specifications
+python-import=jwt
+python-import=markdownify
+python-import=markupsafe
+python-import=numpy
+python-import=openai
+python-import=opentelemetry
+python-import=orjson
+python-import=overrides
+python-import=packaging
+python-import=portalocker
+python-import=proxytypes
+python-import=psutil
+python-import=pybase64
+python-import=pydantic
+python-import=pydantic_core
+python-import=pydantic_settings
+python-import=pygments
+python-import=referencing
+python-import=requests
+python-import=rich
+python-import=rpds
+python-import=six
+python-import=sniffio
+python-import=soupsieve
+python-import=tenacity
+python-import=tomli
+python-import=typing_extensions
+python-import=typing_inspection
+python-import=urllib3
+python-import=yaml
+
+expose-ro=/proc
+expose-rw=~/.local/share/crewai-demo
+expose-rw=~/.local/share/crewai/credentials
+
+remote-result-mode=data-only
+
+# Add rules (2026/10/07 at 16:47)
+# Standard Python
+python-import=_csv
+
+
+# Add rules (2026/10/07 at 16:47)
+# Standard Python
+python-import=annotationlib, compression
+

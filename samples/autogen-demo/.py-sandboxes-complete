@@ -7,32 +7,44 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:13)
-env=CONDA_HOME=${CONDA_HOME}
+# threads: concurrency primitives
+python-api=ALLOW:threading.Thread.start
+python-api=ALLOW:threading._start_joinable_thread
+
+# The calculator tool evaluates a string the model produced. `closed` rather
+# than the adaptive default: the caller already passes {"__builtins__": {}},
+# so the resulting namespace is identical, and a profile handling model output
+# should declare its surface here rather than at the call site.
+eval-namespace=closed
+eval-syntax=arith, compare
+eval-max-iterations=100_000
+eval-timeout=2s
+
+# threads: concurrency primitives
+python-api=ALLOW:threading._start_new_thread
+
+
+# Add rules (2026/10/07 at 16:46)
 env=HOME=${HOME}
 env=PWD=${PWD}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
 # ⚠ Dangerous!
-python-import=atexit, importlib, inspect, subprocess
+python-import=atexit, importlib, inspect
 
 # Standard Python
 python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
-python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, _queue, _socket
-python-import=abc, array, asyncio, base64, bisect, calendar, codecs, collections
-python-import=concurrent, contextlib, contextvars, copy, copyreg, dataclasses
-python-import=datetime, email, encodings, enum, errno, fnmatch, functools, gettext
-python-import=hashlib, heapq, html, http, io, ipaddress, itertools, json, keyword
-python-import=logging, math, mimetypes, operator, os, pathlib, queue, re, reprlib
-python-import=select, signal, socket, ssl, stat, stringprep, struct, tempfile
+python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, _queue, _thread
+python-import=abc, array, ast, asyncio, base64, bisect, calendar, codecs
+python-import=collections, concurrent, contextlib, contextvars, copy, copyreg
+python-import=dataclasses, datetime, email, encodings, enum, errno, fnmatch
+python-import=functools, gettext, hashlib, heapq, html, http, io, ipaddress
+python-import=itertools, json, keyword, logging, math, mimetypes, operator, os
+python-import=pathlib, queue, re, select, signal, socket, ssl, stat, struct
 python-import=textwrap, threading, time, types, typing, unicodedata, urllib, uuid
-python-import=weakref, zipfile, zlib
+python-import=weakref, zlib
 
 # External modules (Are you sure about the origin?)
-python-import=81d243bd2c585b0f4821__mypyc
 python-import=anyio
 python-import=autogen_demo
 python-import=bs4
@@ -52,35 +64,12 @@ python-import=typing_extensions
 
 expose-ro=.
 
-# threads: concurrency primitives
-python-api=ALLOW:threading.Thread.start
-python-api=ALLOW:threading._start_joinable_thread
-
-# The calculator tool evaluates a string the model produced. `closed` rather
-# than the adaptive default: the caller already passes {"__builtins__": {}},
-# so the resulting namespace is identical, and a profile handling model output
-# should declare its surface here rather than at the call site.
-eval-namespace=closed
-eval-syntax=arith, compare
-eval-max-iterations=100_000
-eval-timeout=2s
-
-# Add rules (2026/09/21 at 08:51)
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
-env=VIRTUAL_ENV=${VIRTUAL_ENV}
-
+# Add rules (2026/10/07 at 16:46)
 # Standard Python
-python-import=_thread, ast
+python-import=_socket, reprlib
 
 
-# threads: concurrency primitives
-python-api=ALLOW:threading._start_new_thread
-
-# Add rules (2026/09/21 at 08:51)
-
-# Add rules (2026/09/21 at 08:51)
-
-# Add rules (2026/09/21 at 08:51)
-# External modules (Are you sure about the origin?)
+# Add rules (2026/10/07 at 16:46)
+# Standard Python
 python-import=annotationlib
 

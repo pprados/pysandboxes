@@ -30,6 +30,10 @@ The tools are driven through FastMCP's in-memory client so that the dispatch
 observed is the real one and the process still exits cleanly: a stdio client
 kills the server with SIGTERM, and the rules are then never written.
 
+The command line is parsed as `main()` does, without running the server: under
+`python-sb`, the server starts through it, and argparse needs `_colorize` from
+Python 3.13 on.
+
 `python-sb` runs this file as a string, and the module globals a coroutine sees
 are not the ones the top level bound: what a coroutine needs it has to import
 itself.
@@ -46,8 +50,9 @@ PARTIAL = Path(__file__).parent / "mcp_server" / ".py-sandboxes"
 async def drive() -> None:
     from fastmcp import Client
 
-    from mcp_server.main import mcp
+    from mcp_server.main import build_parser, mcp
 
+    build_parser().parse_args([])
     async with Client(mcp) as client:
         print(sorted(tool.name for tool in await client.list_tools()))
         print(await client.call_tool("evaluate_expression", {"expression": "2*(3+4)"}))

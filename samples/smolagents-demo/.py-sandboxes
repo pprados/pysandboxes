@@ -11,77 +11,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:34)
-env=*_API_KEY=${*_API_KEY}
-env=*_TOKEN=${*_TOKEN}
-env=*_BASE_URL=${*_BASE_URL}
-env=n_examples=${n_examples}
-env=n_load=${n_load}
-
-# ⚠ Dangerous!
-python-import=atexit, importlib, inspect, mmap, subprocess
-
-# Standard Python
-python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
-python-import=_codecs_kr, _codecs_tw, _hashlib, _markupbase, _multibytecodec
-python-import=_multiprocessing, _queue, _sqlite3
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
-python-import=array, ast, asyncio, base64, binascii, bisect, calendar, codecs
-python-import=collections, colorsys, concurrent, configparser, contextlib
-python-import=contextvars, copy, copyreg, dataclasses, datetime, decimal, difflib
-python-import=email, encodings, enum, errno, fcntl, fnmatch, fractions, functools
-python-import=getpass, gettext, hashlib, heapq, hmac, html, http, io, ipaddress
-python-import=itertools, json, keyword, locale, logging, marshal, math, mimetypes
-python-import=multiprocessing, numbers, operator, os, pathlib, pickle, platform
-python-import=posixpath, queue, random, re, reprlib, secrets, select, selectors
-python-import=shlex, shutil, signal, socket, socketserver, sqlite3, ssl, stat
-python-import=string, stringprep, struct, sysconfig, tempfile, termios, textwrap
-python-import=threading, time, traceback, types, typing, unicodedata, urllib, uuid
-python-import=weakref, zipfile, zipimport, zlib, zoneinfo
-
-# External modules (Are you sure about the origin?)
-python-import=81d243bd2c585b0f4821__mypyc
-python-import=PIL
-python-import=annotated_doc
-python-import=annotated_types
-python-import=anyio
-python-import=attr
-python-import=bs4
-python-import=certifi
-python-import=charset_normalizer
-python-import=click
-python-import=dotenv
-python-import=email_validator
-python-import=fastapi
-python-import=filelock
-python-import=h11
-python-import=httpcore
-python-import=httpx
-python-import=huggingface_hub
-python-import=idna
-python-import=jinja2
-python-import=markdown_it
-python-import=markdownify
-python-import=markupsafe
-python-import=mdurl
-python-import=pydantic
-python-import=pydantic_core
-python-import=pygments
-python-import=requests
-python-import=rich
-python-import=six
-python-import=smolagents
-python-import=smolagents_demo
-python-import=sniffio
-python-import=soupsieve
-python-import=starlette
-python-import=tqdm
-python-import=typing_extensions
-python-import=typing_inspection
-python-import=urllib3
-python-import=uvicorn
-python-import=yaml
-
 # The repository root, which uv installs as an editable dependency (see
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
@@ -93,17 +22,6 @@ expose-ro=../..
 net=ALLOW|TCP|ip6-localhost|0|IN
 net=ALLOW|TCP|ip6-loopback|0|IN
 
-# Add rules (2026/09/10 at 10:02)
-env=VIRTUAL_ENV=${VIRTUAL_ENV}
-
-# ⚠ Dangerous!
-python-import=ctypes
-
-# Standard Python
-python-import=_decimal, _socket, tty
-
-
-expose-ro=/proc/sys/kernel/random
 # TMPDIR is the POSIX name; TMP and TEMP are Windows conventions. None of the
 # three is set on a stock Linux shell or a CI runner, so the rule carries the
 # fallback tempfile.gettempdir() applies -- without it the rule is empty and
@@ -124,105 +42,80 @@ eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
 
-# Add rules (2026/09/21 at 10:13)
-env=ANALYSIS_DUMP_OD_SKIP=${ANALYSIS_DUMP_OD_SKIP}
-env=BROWSERBASE_PROJECT_ID=${BROWSERBASE_PROJECT_ID}
-env=CACHE_TTL=${CACHE_TTL}
-env=CHROMA_VS_URI=${CHROMA_VS_URI}
-env=CONDA_HOME=${CONDA_HOME}
-env=DO_NOT_TRACK=${DO_NOT_TRACK}
-env=ELASTIC_CLOUD_ID=${ELASTIC_CLOUD_ID}
-env=ELASTIC_HISTORY_URI=${ELASTIC_HISTORY_URI}
-env=ELASTIC_VS_URI=${ELASTIC_VS_URI}
-env=GHOST_ADMIN_API=${GHOST_ADMIN_API}
-env=GHOST_CONTENT_API=${GHOST_CONTENT_API}
-env=GH_HOST=${GH_HOST}
-env=GITHUB_PAT=${GITHUB_PAT}
-env=GLOBAL_WORKING_DIR_ENABLED=${GLOBAL_WORKING_DIR_ENABLED}
-env=GOOGLE_ACCOUNT_FILE=${GOOGLE_ACCOUNT_FILE}
-env=GROQ_CHAT_MODEL_ID=${GROQ_CHAT_MODEL_ID}
-env=GROQ_MODEL_ID=${GROQ_MODEL_ID}
-env=GROQ_OPT_MODEL_ID=${GROQ_OPT_MODEL_ID}
+
+# Add rules (2026/10/07 at 16:49)
 env=HF_ASSETS_CACHE=${HF_ASSETS_CACHE}
 env=HF_ENDPOINT=${HF_ENDPOINT}
 env=HF_HOME=${HF_HOME}
 env=HF_HUB_CACHE=${HF_HUB_CACHE}
-env=HF_HUB_DISABLE_PROGRESS_BARS=${HF_HUB_DISABLE_PROGRESS_BARS}
 env=HF_HUB_VERBOSITY=${HF_HUB_VERBOSITY}
 env=HF_TOKEN_PATH=${HF_TOKEN_PATH}
 env=HF_XET_CACHE=${HF_XET_CACHE}
-env=HISTORY_TTL=${HISTORY_TTL}
 env=HOME=${HOME}
 env=HUGGINGFACE_ASSETS_CACHE=${HUGGINGFACE_ASSETS_CACHE}
 env=HUGGINGFACE_HUB_CACHE=${HUGGINGFACE_HUB_CACHE}
-env=LANGUAGE=${LANGUAGE}
-env=LLM_CLI=${LLM_CLI}
-env=MISTRALAI_CHAT_MODEL_ID=${MISTRALAI_CHAT_MODEL_ID}
-env=MISTRALAI_EMBEDDING_MODEL_ID=${MISTRALAI_EMBEDDING_MODEL_ID}
-env=MISTRALAI_MODEL_ID=${MISTRALAI_MODEL_ID}
-env=MISTRALAI_OPT_MODEL_ID=${MISTRALAI_OPT_MODEL_ID}
-env=MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
-env=MONGODB_CACHE_URI=${MONGODB_CACHE_URI}
-env=MONGODB_HISTORY_URI=${MONGODB_HISTORY_URI}
-env=MONGODB_VS_URI=${MONGODB_VS_URI}
-env=NO_COLOR=${NO_COLOR}
-env=OCR_AGENT=${OCR_AGENT}
-env=OLLAMA_EMBEDDING_MODEL_ID=${OLLAMA_EMBEDDING_MODEL_ID}
-env=PACKMIND_LOGIN_CODE=${PACKMIND_LOGIN_CODE}
-env=PGPASSWORD=${PGPASSWORD}
-env=PGUSER=${PGUSER}
-env=PHOENIX=${PHOENIX}
-env=PHOENIX_COLLECTOR_ENDPOINT=${PHOENIX_COLLECTOR_ENDPOINT}
-env=PHOENIX_PROJECT_NAME=${PHOENIX_PROJECT_NAME}
-env=PHOENIX_SQL_DATABASE_URL=${PHOENIX_SQL_DATABASE_URL}
-env=PRE_COMMIT_VERBOSE=${PRE_COMMIT_VERBOSE}
-env=PROVIDER_VS=${PROVIDER_VS}
 env=PWD=${PWD}
 env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=RAG_INPUT_PATH=${RAG_INPUT_PATH}
-env=RAG_INPUT_URI=${RAG_INPUT_URI}
-env=RAG_KIND=${RAG_KIND}
-env=RAG_TEST_URI=${RAG_TEST_URI}
-env=REDIS_CACHE_URI=${REDIS_CACHE_URI}
-env=REDIS_HISTORY_URI=${REDIS_HISTORY_URI}
-env=REDIS_VS_URI=${REDIS_VS_URI}
-env=RUN_CLAUDE_TESTS=${RUN_CLAUDE_TESTS}
-env=SAFETY_FEATURES_INPUT=${SAFETY_FEATURES_INPUT}
-env=SAFETY_FEATURES_OUTPUT=${SAFETY_FEATURES_OUTPUT}
-env=SCARF_NO_ANALYTICS=${SCARF_NO_ANALYTICS}
-env=SQL_CACHE_URI=${SQL_CACHE_URI}
-env=SQL_HISTORY_URI=${SQL_HISTORY_URI}
-env=SQL_VS_URI=${SQL_VS_URI}
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
-env=USER_AGENT=${USER_AGENT}
+env=PYTHON_DOTENV_DISABLED=${PYTHON_DOTENV_DISABLED}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
 env=XDG_CACHE_HOME=${XDG_CACHE_HOME}
-env=_ELASTIC_PASSWORD=${_ELASTIC_PASSWORD}
-env=_ELASTIC_USERNAME=${_ELASTIC_USERNAME}
-env=_MONGODB_PASSWORD=${_MONGODB_PASSWORD}
-env=_MONGODB_URI=${_MONGODB_URI}
-env=_MONGODB_URI_CONF=${_MONGODB_URI_CONF}
-env=_MONGODB_USER=${_MONGODB_USER}
-env=_REDIS_PASSWORD=${_REDIS_PASSWORD}
-env=_REDIS_URI=${_REDIS_URI}
-env=_REDIS_URI_CONF=${_REDIS_URI_CONF}
-env=_SQL_URI=${_SQL_URI}
-env=_SQL_URI_CONF=${_SQL_URI_CONF}
+
+# ⚠ Dangerous!
+python-import=atexit, ctypes, importlib, inspect, mmap, subprocess
 
 # Standard Python
-python-import=_thread
+python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
+python-import=_codecs_kr, _codecs_tw, _markupbase, _multibytecodec, _sqlite3, abc
+python-import=argparse, ast, base64, binascii, bisect, calendar, codecs, collections
+python-import=colorsys, concurrent, configparser, contextlib, contextvars, copy
+python-import=copyreg, dataclasses, datetime, difflib, email, encodings, enum, errno
+python-import=fcntl, fnmatch, fractions, functools, hashlib, hmac, html, http, io
+python-import=ipaddress, itertools, json, keyword, logging, marshal, math, mimetypes
+python-import=numbers, operator, os, pathlib, pickle, platform, posixpath, queue
+python-import=random, re, secrets, select, shlex, shutil, socket, sqlite3, ssl, stat
+python-import=string, struct, tempfile, termios, textwrap, threading, time
+python-import=traceback, tty, types, typing, unicodedata, urllib, uuid, weakref
+python-import=zipfile, zipimport, zlib
 
+# External modules (Are you sure about the origin?)
+python-import=PIL
+python-import=anyio
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=dotenv
+python-import=filelock
+python-import=h11
+python-import=h2
+python-import=hpack
+python-import=httpcore
+python-import=httpx
+python-import=huggingface_hub
+python-import=hyperframe
+python-import=idna
+python-import=jinja2
+python-import=markdown_it
+python-import=markdownify
+python-import=markupsafe
+python-import=mdurl
+python-import=pygments
+python-import=requests
+python-import=rich
+python-import=six
+python-import=smolagents
+python-import=smolagents_demo
+python-import=soupsieve
+python-import=tqdm
+python-import=typing_extensions
+python-import=urllib3
+python-import=yaml
 
+expose-ro=/proc/sys/kernel/random
 
-# Add rules (2026/09/21 at 10:13)
+remote-result-mode=data-only
 
-# Add rules (2026/09/21 at 10:13)
-
-# Add rules (2026/09/21 at 10:13)
+# Add rules (2026/10/07 at 16:50)
 # Standard Python
-python-import=_ast, _ast_unparse, _hmac, annotationlib, compression
-
+python-import=_ast, _ast_unparse, compression
 

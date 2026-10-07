@@ -11,88 +11,6 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 
 net=ALLOW|TCP|www.google.com|443|OUT
 
-# Add rules (2026/09/10 at 07:29)
-env=CONDA_HOME=${CONDA_HOME}
-env=GRIFFE_LOG_LEVEL=${GRIFFE_LOG_LEVEL}
-env=HOME=${HOME}
-env=LANGUAGE=${LANGUAGE}
-env=OPENAI_AGENTS_DONT_LOG_MODEL_DATA=${OPENAI_AGENTS_DONT_LOG_MODEL_DATA}
-env=OPENAI_AGENTS_DONT_LOG_TOOL_DATA=${OPENAI_AGENTS_DONT_LOG_TOOL_DATA}
-env=PWD=${PWD}
-env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
-env=PYENV_ROOT=${PYENV_ROOT}
-env=PYTHONUSERBASE=${PYTHONUSERBASE}
-env=TEMP=${TEMP}
-env=TMP=${TMP}
-env=TMPDIR=${TMPDIR}
-
-# ⚠ Dangerous!
-python-import=atexit, ctypes, importlib, inspect, mmap, subprocess
-
-# Standard Python
-python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
-python-import=_codecs_kr, _codecs_tw, _hashlib, _markupbase, _multibytecodec
-python-import=_multiprocessing, _queue, _sqlite3
-python-import=_sysconfigdata__linux_x86_64-linux-gnu, _zoneinfo, abc, argparse
-python-import=array, ast, asyncio, base64, binascii, bisect, calendar, codecs
-python-import=collections, colorsys, concurrent, configparser, contextlib
-python-import=contextvars, copy, copyreg, dataclasses, datetime, decimal, email
-python-import=encodings, enum, errno, fnmatch, fractions, functools, getpass
-python-import=gettext, glob, hashlib, heapq, hmac, html, http, io, ipaddress
-python-import=itertools, json, keyword, locale, logging, math, mimetypes
-python-import=multiprocessing, numbers, operator, os, pathlib, pickle, platform
-python-import=pprint, queue, random, re, reprlib, secrets, select, selectors, shlex
-python-import=shutil, signal, socket, socketserver, sqlite3, ssl, stat, stringprep
-python-import=struct, sysconfig, tempfile, termios, textwrap, threading, time
-python-import=traceback, types, typing, unicodedata, urllib, uuid, weakref, zipfile
-python-import=zlib, zoneinfo
-
-# External modules (Are you sure about the origin?)
-python-import=81d243bd2c585b0f4821__mypyc
-python-import=agents
-python-import=annotated_doc
-python-import=annotated_types
-python-import=anyio
-python-import=attr
-python-import=attrs
-python-import=bs4
-python-import=certifi
-python-import=charset_normalizer
-python-import=click
-python-import=colorama
-python-import=distro
-python-import=dotenv
-python-import=email_validator
-python-import=fastapi
-python-import=griffe
-python-import=h11
-python-import=httpcore
-python-import=httpx
-python-import=httpx_sse
-python-import=idna
-python-import=jsonschema
-python-import=jsonschema_specifications
-python-import=markdownify
-python-import=mcp
-python-import=openai
-python-import=openai_agents_sdk_demo
-python-import=pydantic
-python-import=pydantic_core
-python-import=pydantic_settings
-python-import=pygments
-python-import=python_multipart
-python-import=referencing
-python-import=rich
-python-import=rpds
-python-import=six
-python-import=sniffio
-python-import=soupsieve
-python-import=sse_starlette
-python-import=starlette
-python-import=typing_extensions
-python-import=typing_inspection
-python-import=uvicorn
-
 # The repository root, which uv installs as an editable dependency (see
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
@@ -100,21 +18,6 @@ python-import=uvicorn
 # fails on any CI runner. Learning mode cannot emit this form -- it never walks
 # above PWD -- so `make learn` puts the absolute path back.
 expose-ro=../..
-
-# Add rules (2026/09/10 at 09:47)
-env=VIRTUAL_ENV=${VIRTUAL_ENV}
-
-# Standard Python
-python-import=_cffi_backend, _decimal, _socket, fcntl, grp, posixpath, pwd, string
-python-import=tarfile
-
-# External modules (Are you sure about the origin?)
-python-import=aiohttp
-python-import=cryptography
-python-import=httpx2
-python-import=mcp_types
-python-import=opentelemetry
-python-import=websockets
 
 # The calculator tool evaluates a string the model produced. `closed` rather
 # than the adaptive default: the caller already passes {"__builtins__": {}},
@@ -125,20 +28,67 @@ eval-syntax=arith, compare
 eval-max-iterations=100_000
 eval-timeout=2s
 
-# Add rules (2026/09/21 at 10:09)
-env=SSL_CERT_FILE=${SSL_CERT_FILE}
+
+# Add rules (2026/10/07 at 16:49)
+env=HOME=${HOME}
+env=OPENAI_AGENTS_DONT_LOG_MODEL_DATA=${OPENAI_AGENTS_DONT_LOG_MODEL_DATA}
+env=OPENAI_AGENTS_DONT_LOG_TOOL_DATA=${OPENAI_AGENTS_DONT_LOG_TOOL_DATA}
+env=PWD=${PWD}
+env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
+env=VIRTUAL_ENV=${VIRTUAL_ENV}
+
+# ⚠ Dangerous!
+python-import=atexit, importlib, inspect, subprocess
 
 # Standard Python
-python-import=_thread
+python-import=__future__, _cffi_backend, _codecs_cn, _codecs_hk, _codecs_iso2022
+python-import=_codecs_jp, _codecs_kr, _codecs_tw, _markupbase, _multibytecodec, abc
+python-import=ast, asyncio, base64, binascii, bisect, calendar, codecs, collections
+python-import=contextlib, contextvars, copy, copyreg, dataclasses, datetime, email
+python-import=encodings, enum, errno, fcntl, fnmatch, functools, grp, hashlib, hmac
+python-import=html, http, io, ipaddress, itertools, json, logging, math, mimetypes
+python-import=operator, os, pathlib, platform, posixpath, pwd, queue, random, re
+python-import=secrets, select, shlex, shutil, signal, socket, ssl, stat, string
+python-import=struct, tarfile, tempfile, textwrap, threading, time, traceback, types
+python-import=typing, unicodedata, urllib, uuid, weakref, zipfile, zlib
 
+# External modules (Are you sure about the origin?)
+python-import=agents
+python-import=aiohttp
+python-import=annotated_types
+python-import=anyio
+python-import=bs4
+python-import=certifi
+python-import=charset_normalizer
+python-import=click
+python-import=cryptography
+python-import=griffe
+python-import=h11
+python-import=httpcore
+python-import=httpx
+python-import=httpx2
+python-import=idna
+python-import=markdownify
+python-import=mcp
+python-import=mcp_types
+python-import=openai
+python-import=openai_agents_sdk_demo
+python-import=opentelemetry
+python-import=pydantic
+python-import=pydantic_core
+python-import=pygments
+python-import=six
+python-import=sniffio
+python-import=soupsieve
+python-import=sse_starlette
+python-import=starlette
+python-import=typing_extensions
+python-import=typing_inspection
+python-import=uvicorn
 
+remote-result-mode=data-only
 
-# Add rules (2026/09/21 at 10:09)
-
-# Add rules (2026/09/21 at 10:09)
-
-# Add rules (2026/09/21 at 10:09)
+# Add rules (2026/10/07 at 16:49)
 # Standard Python
-python-import=_hmac, annotationlib, compression
-
+python-import=annotationlib, compression
 
