@@ -37,6 +37,8 @@
   code to the raw builtin, past the `eval-*` rules learning proposes for it
 - Learning no longer turns a variable the code sets or removes itself into an `env=` rule, which brought the host's
   value into the sandbox: `load_dotenv()` no longer adds every name of the `.env`
+- Learning writes a path under `TRANSFORMERS_CACHE` or `TORCH_HOME` as `${TRANSFORMERS_CACHE}/...` or
+  `${TORCH_HOME}/...`, as for the other tool directories, instead of a path of the learning machine
 - Under a learned profile, a host name outside the rules is refused by the network rule, not by the import of
   `encodings.idna` the profile never carries
 - Learning into a profile that includes another one no longer adds a second `remote-result-mode` rule, which made

@@ -911,3 +911,21 @@ def test_a_dir_fd_removal_is_checked_against_the_directory_it_names(
 def test_dir_fd_path_denies_a_descriptor_it_cannot_resolve() -> None:
     with pytest.raises(RuleFileNotFoundError):
         _dir_fd_path("f.txt", 987654)
+
+
+def test_every_tool_directory_variable_is_recognised(tmp_path: Path) -> None:
+    """Each variable of the list names its own directory: a missing comma joined two of them into one name."""
+    import subprocess
+    import sys
+
+    names = ["TRANSFORMERS_CACHE", "TORCH_HOME", "KERAS_HOME"]
+    env = {**os.environ, **{name: str(tmp_path / name.lower()) for name in names}}
+    done = subprocess.run(
+        [sys.executable, "-c", "from pysandboxes import guard_files; print(*sorted(guard_files._special_home))"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert set(names) <= set(done.stdout.split())
