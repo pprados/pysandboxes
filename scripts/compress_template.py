@@ -24,7 +24,8 @@ def compress_template(template_file: str, output_file: str) -> None:
     prompt = (
         "Rewrite the Markdown file below in caveman ultra style, in English. Keep code blocks, commands, paths and "
         "identifiers unchanged. Output only the rewritten file: no surrounding code fence, no preamble, no comment "
-        f"about the changes, nothing written to disk.\n\n{content}"
+        "about the changes, nothing written to disk. Never say that the file is generated, compressed or derived from "
+        f"a template: no title, note or comment about how it was produced.\n\n{content}"
     )
 
     result = subprocess.run(
