@@ -29,7 +29,8 @@
   refused at load, with each `eval-*` line to comment out: the grant ran the code unguarded and left them unused
 
 ### Fixed
-- Under `bwrap`, a package installed in editable mode, such as a project synced by uv, can be imported again
+- Under `bwrap`, a package installed in editable mode, such as a project synced by uv, can be imported
+- Under `firejail`, a profile with an `expose-ro=/proc...` rule, which learning mode writes, no longer aborts the launch
 - A profile no longer has to allow the sandbox daemon's own modules (uvicorn, fastapi, and the standard library
   they use): learning records only the application's imports
 - In partial mode, an import made by the application is judged on its rules even when the module is already

@@ -422,7 +422,13 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             if rule.write or rule.path not in whitelist:
                 # Under /etc, --private-etc provides the entries: a --whitelist there puts a tmpfs over
                 # /etc, and --dns then fails with "fs_resolvconf: mount: No such file or directory".
-                if rule.path != "/tmp/" and not skip_path and not rule.path.startswith("/etc/"):
+                # firejail mounts its own /proc and aborts on "invalid whitelist path /proc".
+                if (
+                    rule.path != "/tmp/"
+                    and not skip_path
+                    and not rule.path.startswith("/etc/")
+                    and not rule.path.startswith("/proc/")
+                ):
                     args.append(f"--whitelist={rule.path}")
                 whitelist.add(rule.path)
             if not skip_path:
