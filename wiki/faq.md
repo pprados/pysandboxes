@@ -88,7 +88,12 @@ Indeed, new ones can be proposed. As the approach is based on *denial by default
 Use the minor version to fix the version to used (`n.m.*`). The minor version is incremented for each new rules.
 
 ## Can the test suite feed the learning mode?
-Some tests can, never the whole suite, for three reasons:
+In partial mode, the one these tests use, the test does not run in the sandbox. pytest, the test function, its
+fixtures and its assertions stay in the pytest process; only the body of each `@sandbox` function runs in a separate
+process, the sandbox, started by `with sandboxes()`. Only that body is learned: what pytest imports, reads or writes
+for itself never reaches the profile.
+
+Some tests can feed the rules, never the whole suite, for three reasons:
 - Running the test runner itself in the sandbox (`python-sb --learn -m pytest`) learns the runner. A test needing
   only `csv` added `_pytest`, `pluggy`, every installed pytest plugin, `subprocess`, `pdb`, `marshal`,
   `expose-rw=${TMPDIR:-/tmp}`, `expose-rw=/dev`, the `PYTEST_*` variables and
@@ -106,7 +111,8 @@ include ".py-sandboxes"
 ```
 Learning writes there, and only there: what it adds lands below the `include`, the shipped `.py-sandboxes` is never
 touched. Then add this `conftest.py`. A test marked `sandbox_learn` learns when `SANDBOX_LEARN` is set, every other
-test, and every test without the variable, runs strict against `.py-sandboxes`:
+test, and every test without the variable, runs strict against `.py-sandboxes`. Each test opens its own sandbox, and
+writes its name above the rules it adds:
 ```python
 # conftest.py
 import os
@@ -128,8 +134,13 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.fixture(autouse=True)
 def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
     if os.environ.get("SANDBOX_LEARN") and request.node.get_closest_marker("sandbox_learn"):
+        before = LEARNED.read_text()
+        tagged = f"{before.rstrip()}\n\n# Learned by {request.node.nodeid}\n"
+        LEARNED.write_text(tagged)  # learning appends its rules below this line
         with sandboxes(sandboxes_config=LEARNED, learn=str(LEARNED)):
             yield
+        if LEARNED.read_text() == tagged:  # the test needed nothing new
+            LEARNED.write_text(before)
     else:
         with sandboxes(sandboxes_config=PROFILE):
             yield
@@ -138,13 +149,24 @@ def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
 **For the feature:**
 1. Mark the three tests with `@pytest.mark.sandbox_learn`, provided each one exercises the feature as it should
    work. A test that checks a refusal is never marked. The marks can stay: without `SANDBOX_LEARN`, they do nothing.
-2. Learn, serially, since each sandbox rewrites `tests.py-sandboxes` when it closes:
+2. Learn, serially, since each sandbox rewrites `tests.py-sandboxes` when it closes. `-p no:xdist` turns off
+   pytest-xdist's parallel workers, and is accepted whether or not the plugin is installed:
    ```bash
-   SANDBOX_LEARN=1 pytest -m sandbox_learn
+   SANDBOX_LEARN=1 pytest -p no:xdist -m sandbox_learn
    ```
-3. Read `tests.py-sandboxes`: below the `include` are exactly the rules the feature needed. Copy into `.py-sandboxes`
-   those you accept, then put `tests.py-sandboxes` back to its single `include` line and delete the `tests.old*`
-   backups learning left beside it.
+3. Read `tests.py-sandboxes`: below the `include` are exactly the rules the feature needed, each block under the name
+   of the test that asked for it. A rule two tests need is credited to the first, the second finding it allowed:
+   ```ini
+   include ".py-sandboxes"
+
+   # Learned by tests/test_feature.py::test_export_to_csv
+
+   # Add rules (2026/10/07 at 14:00)
+   # Standard Python
+   python-import=_csv, csv
+   ```
+   Copy into `.py-sandboxes` those you accept, then put `tests.py-sandboxes` back to its single `include` line and
+   delete the `tests.old*` backups learning left beside it.
 4. Run the whole suite strict:
    ```bash
    pytest
@@ -156,8 +178,11 @@ def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
 ### Other routes
 - The samples drive the application through a scenario in a `learn.py` script, run by `make learn`, and their tests
   always run strict.
-- During early development, `python-import=*` records no import at all. Before the release, remove the wildcard,
-  relearn, review what was added. A test asserting that the shipped profile holds no `python-import=*` nor `learn=`
+- During early development, `python-import=*` in `.py-sandboxes` lets every import through, so learning records
+  none. Never put it in `tests.py-sandboxes` alone: learning would then miss the feature's imports, and the strict
+  run against `.py-sandboxes` would refuse them one by one. The learned imports need no such shortcut: the sandbox's
+  own modules are never charged to the profile, so what learning lists is what the application imports, to be
+  reviewed like any other rule. Before the release, remove the wildcard, relearn, review what was added. A test asserting that the shipped profile holds no `python-import=*` nor `learn=`
   keeps the wildcard from coming back, as in `samples/langchain-demo/tests/test_tools_sandbox.py`, and `learn=false`
   in the profile refuses any later request to learn.
 
