@@ -21,7 +21,7 @@ def test_environ() -> None:
     assert envs.get("key") is None
 
     assert envs._get("notrace") is None
-    assert envs._keys_used == {"key", "key2"}
+    assert envs._keys_used == set(), "The keys the code set itself need no rule"
 
     # Check singleton
     envs2 = LearnEnviron()
@@ -106,6 +106,7 @@ def test_iter_use_directly_detection_environ() -> None:
 def test_key_read_after_a_scan_is_learned() -> None:
     envs = LearnEnviron()  # Reset singleton
     envs["DEMO_API_KEY"] = "sk-demo"
+    envs._written.discard("DEMO_API_KEY")  # As if the host had it before learning
     envs._keys_used.clear()
 
     def scan_proxies() -> None:  # What urllib.request.getproxies_environment() does before any request

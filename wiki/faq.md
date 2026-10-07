@@ -55,8 +55,10 @@ export $(grep -v '^#' .env | xargs)
 ```
 
 Renaming is not always enough: `load_dotenv()` without a path searches upward from the file of the library that
-calls it, and stops at the first `.env` it finds, in the project or in any of its parents. Each name of that file
-then becomes an `env=` rule. The alternative is to disable the loading while learning, without renaming anything:
+calls it, and stops at the first `.env` it finds, in the project or in any of its parents. The directory holding it
+then becomes an `expose-ro=` rule, a parent of the project included. With the variables exported, each name of the
+file also becomes an `env=` rule: `load_dotenv()` checks whether each one is already set before it writes it. The
+alternative is to disable the loading while learning, without renaming anything:
 
 ```bash
 PYTHON_DOTENV_DISABLED=1 python-sb --learn=.py-sandboxes app.py

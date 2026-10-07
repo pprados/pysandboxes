@@ -170,6 +170,8 @@ class LearnEnviron(os._Environ):
             # The key a running scan just yielded
             self._yielded: WeakKeyDictionary[threading.Thread, str] = WeakKeyDictionary()
             self._keys_used: set[str] = set()
+            # Keys the code set or removed itself: reading one back needs no rule
+            self._written: set[str] = set()
             self._original_envs = os.environ
 
     def __iter__(self) -> Iterator[str]:
@@ -189,6 +191,15 @@ class LearnEnviron(os._Environ):
                 self._yielded.pop(t, None)
 
         return _catch_for_all()
+
+    def learn_read(self, key: str) -> None:
+        """Learn a read, unless the code wrote the key itself before."""
+        if key not in self._written:
+            self._keys_used.add(key)
+
+    def learn_write(self, key: str) -> None:
+        """Note a key the code set or removed: the rules never have to grant it."""
+        self._written.add(key)
 
     def _commit_unsure(self, t: threading.Thread) -> None:
         """The scan order broke: the reads kept aside were real uses."""
@@ -222,24 +233,29 @@ class LearnEnviron(os._Environ):
             scanned.pop()
         elif scanned and key == scanned[0]:
             scanned.pop(0)
-            self._unsure.setdefault(t, []).append(key)
+            if key not in self._written:
+                self._unsure.setdefault(t, []).append(key)
         else:
             self._commit_unsure(t)
-            self._keys_used.add(key)
+            self.learn_read(key)
             return result
         if not scanned:
             self._unsure.pop(t, None)  # The whole scan was read back
         return result
 
     def __setitem__(self, key: str, value: str) -> None:
-        """Set environment variable and track access in learning mode.
+        """Set environment variable, and note it is the code's own.
 
         Args:
             key: Environment variable name.
             value: Environment variable value.
         """
         super(LearnEnviron, self).__setitem__(key, value)
-        self._keys_used.add(key)
+        self.learn_write(key)
+
+    def __delitem__(self, key: str) -> None:
+        super(LearnEnviron, self).__delitem__(key)
+        self.learn_write(key)
 
     def _clone(self) -> dict[str, str]:
         """Create a copy of the environment as a regular dictionary.
@@ -348,7 +364,7 @@ def _wrap_os_putenv(func: Callable) -> Callable:
             str_name = name.decode(sys.getfilesystemencoding())
         else:
             str_name = name
-        os.environ._keys_used.add(str_name)
+        os.environ.learn_write(str_name)
         func(name, value)
 
     return wrapper
@@ -362,7 +378,7 @@ def _wrap_os_getenv(func: Callable) -> Callable:
             str_name = key.decode(sys.getfilesystemencoding())
         else:
             str_name = key
-        os.environ._keys_used.add(str_name)
+        os.environ.learn_read(str_name)
         return func(key, default)
 
     return wrapper
@@ -372,7 +388,7 @@ def _wrap_os_getenvb(func: Callable) -> Callable:
     @guard_wraps(func)
     def wrapper(key: bytes, default: bytes | None = None) -> bytes:
         assert isinstance(os.environ, LearnEnviron)
-        os.environ._keys_used.add(os.fsdecode(key))
+        os.environ.learn_read(os.fsdecode(key))
         return func(key, default)
 
     return wrapper
@@ -386,7 +402,7 @@ def _wrap_os_unsetenv(func: Callable) -> Callable:
             str_name = name.decode(sys.getfilesystemencoding())
         else:
             str_name = name
-        os.environ._keys_used.add(str_name)
+        os.environ.learn_write(str_name)
         func(name)
 
     return wrapper

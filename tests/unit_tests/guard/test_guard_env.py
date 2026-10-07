@@ -214,6 +214,12 @@ def learned_keys(monkeypatch: pytest.MonkeyPatch) -> Set[str]:
     return LearnEnviron()._keys_used
 
 
+def _set_on_the_host(monkeypatch: pytest.MonkeyPatch, key: str, value: str) -> None:
+    """Set a variable as the host's, present before learning: the code did not write it."""
+    monkeypatch.setitem(os.environ, key, value)
+    LearnEnviron()._written.discard(key)
+
+
 @pytest.fixture
 def learning_environ(learned_keys: Set[str], monkeypatch: pytest.MonkeyPatch) -> Set[str]:
     """Install the learning environment the wrappers assert on."""
@@ -238,7 +244,8 @@ def test_the_environment_wrappers_record_the_key(learning_environ: Set[str]) -> 
     putenv("WRITTEN_VAR", "value")
     unsetenv("REMOVED_VAR")
 
-    assert learning_environ >= {"READ_VAR", "WRITTEN_VAR", "REMOVED_VAR"}
+    # The code's own writes need no rule: only the read is learned.
+    assert learning_environ == {"READ_VAR"}
     assert calls == [
         ("getenv", "READ_VAR"),
         ("putenv", "WRITTEN_VAR"),
@@ -255,8 +262,8 @@ def test_a_bytes_key_is_recorded_decoded(learning_environ: Set[str]) -> None:
     assert "BYTES_VAR" in learning_environ
 
 
-def test_bytes_names_are_recorded_by_putenv_and_unsetenv(learning_environ: Set[str]) -> None:
-    """Bytes names must be decoded for learning and passed unchanged to the OS wrappers."""
+def test_bytes_names_are_passed_unchanged_by_putenv_and_unsetenv(learning_environ: Set[str]) -> None:
+    """Bytes names reach the OS wrappers unchanged, and a write learns nothing."""
     calls: List[Tuple[str, Any]] = []
     table: dict[str, Callable[..., Any]] = patch_rules(learn=True)
     putenv = table["os.putenv"](lambda name, value: calls.append(("putenv", (name, value))))
@@ -265,7 +272,7 @@ def test_bytes_names_are_recorded_by_putenv_and_unsetenv(learning_environ: Set[s
     putenv(b"BYTES_SET", b"value")
     unsetenv(b"BYTES_REMOVED")
 
-    assert learning_environ >= {"BYTES_SET", "BYTES_REMOVED"}
+    assert not learning_environ
     assert calls == [
         ("putenv", (b"BYTES_SET", b"value")),
         ("unsetenv", b"BYTES_REMOVED"),
@@ -278,10 +285,35 @@ def test_reading_a_variable_records_it(learning_environ: Set[str]) -> None:
     assert "PATH" in learning_environ
 
 
-def test_writing_a_variable_records_it(learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(os.environ, "LEARNED_WRITE", "value")
+def test_writing_a_variable_learns_nothing(learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    """The sandbox lets the code set any variable: a rule would only bring in the host's value."""
+    monkeypatch.setitem(os.environ, "WRITTEN", "value")
 
-    assert "LEARNED_WRITE" in learning_environ
+    assert "WRITTEN" not in learning_environ
+
+
+def test_reading_back_a_variable_the_code_set_learns_nothing(
+    learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What load_dotenv() does: set each name of the .env, then the code reads it."""
+    monkeypatch.setitem(os.environ, "FROM_DOTENV", "value")
+    del os.environ["FROM_DOTENV"]
+    monkeypatch.setitem(os.environ, "FROM_DOTENV", "value")
+
+    assert os.environ["FROM_DOTENV"] == "value"
+    assert os.getenv("FROM_DOTENV") == "value"
+    assert "FROM_DOTENV" in os.environ
+    assert "FROM_DOTENV" not in learning_environ
+
+
+def test_a_read_before_the_code_writes_the_variable_is_learned(
+    learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _set_on_the_host(monkeypatch, "SET_AFTER_READ", "host")
+    assert os.environ["SET_AFTER_READ"] == "host"
+    monkeypatch.setitem(os.environ, "SET_AFTER_READ", "code")
+
+    assert "SET_AFTER_READ" in learning_environ
 
 
 def test_learning_environ_updates_are_visible_through_environb(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -294,7 +326,7 @@ def test_learning_environ_updates_are_visible_through_environb(monkeypatch: pyte
     assert environb[b"LEARNED_BYTES_VIEW"] == b"value"
 
 
-def test_environb_writes_are_learned_through_putenv(
+def test_environb_writes_learn_nothing_through_putenv(
     learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     environb = getattr(os, "environb", None)
@@ -305,7 +337,7 @@ def test_environb_writes_are_learned_through_putenv(
     monkeypatch.setattr(os, "putenv", putenv)
     monkeypatch.setitem(environb, b"LEARNED_ENVIRONB_WRITE", b"value")
 
-    assert "LEARNED_ENVIRONB_WRITE" in learning_environ
+    assert "LEARNED_ENVIRONB_WRITE" not in learning_environ
 
 
 def test_environb_reads_are_learned(learning_environ: Set[str], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -314,7 +346,7 @@ def test_environb_reads_are_learned(learning_environ: Set[str], monkeypatch: pyt
 
     environb = patch_rules(learn=True)["os.environb"](None)
     monkeypatch.setattr(os, "environb", environb)
-    monkeypatch.setitem(os.environ, "LEARNED_ENVIRONB_READ", "value")
+    _set_on_the_host(monkeypatch, "LEARNED_ENVIRONB_READ", "value")
 
     assert os.environb[b"LEARNED_ENVIRONB_READ"] == b"value"
     assert "LEARNED_ENVIRONB_READ" in learning_environ
@@ -328,7 +360,7 @@ def test_getenvb_reads_are_learned(learning_environ: Set[str], monkeypatch: pyte
     monkeypatch.setattr(os, "environb", environb)
     getenvb = patch_rules(learn=True)["os.getenvb"](os.getenvb)
     monkeypatch.setattr(os, "getenvb", getenvb)
-    monkeypatch.setitem(os.environ, "LEARNED_GETENVB_READ", "value")
+    _set_on_the_host(monkeypatch, "LEARNED_GETENVB_READ", "value")
 
     assert os.getenvb(b"LEARNED_GETENVB_READ") == b"value"
     assert "LEARNED_GETENVB_READ" in learning_environ
@@ -358,7 +390,7 @@ def test_environb_learns_keys_using_filesystem_surrogateescape(
     key = b"LEARNED_ENVIRONB_\xff"
     environb = patch_rules(learn=True)["os.environb"](None)
     monkeypatch.setattr(os, "environb", environb)
-    monkeypatch.setitem(os.environb, key, b"value")
+    _set_on_the_host(monkeypatch, os.fsdecode(key), "value")
 
     assert os.environb[key] == b"value"
     assert os.fsdecode(key) in learning_environ
