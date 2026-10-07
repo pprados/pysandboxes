@@ -134,6 +134,11 @@ def parse_python_cmd_line(
                 pysandboxes_config = x
         except FileNotFoundError:
             pass  # Ignore
+    elif "/" not in str(pysandboxes_config) and python_run_args and python_run_args[0].endswith(".py"):
+        # A script carries its rules next to it, as a module does: a skill's script then
+        # finds its own rule file from whatever directory the agent runs it.
+        if (next_to_script := Path(python_run_args[0]).parent / pysandboxes_config).exists():
+            pysandboxes_config = next_to_script
 
     sandboxes_args = [
         arg

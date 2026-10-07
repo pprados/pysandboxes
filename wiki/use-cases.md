@@ -19,7 +19,8 @@ Several scenarios read the `.py-sandboxes` file as the policy of a program. It i
 down. The effective rights also depend on:
 
 - the `include` lines: a path starting with `./` is resolved from the **current directory**, so
-  `include "./.local.py-sandboxes"` lets whoever runs the command add rules. A bare name (`include "common"`)
+  `include "./.local.py-sandboxes"`, commented out in the template and active only once the user uncomments it,
+  lets whoever runs the command add rules. A bare name (`include "common"`)
   is resolved next to the including file. The `~/.config/...` and `/etc/...` profiles are outside the repository;
 - the environment: `os-sandbox=${OS_SANDBOX:-subprocess}` lets a variable downgrade the provider;
 - the command line: every `--key=value` given to `python-sb` is a rule that takes precedence over the file
@@ -37,30 +38,61 @@ the rule file is missing, or the command line or the code adds a rule (see [Lock
 An agent skill (`SKILL.md` and a `scripts/` directory, as used by Claude Code and other agents) often ships Python
 scripts. The agent runs them with all the rights of the user: every file of the home directory, the network, the
 API tokens of the environment. Shipping a rule file next to the scripts, and launching them with `python-sb`,
-bounds what a skill can do:
+bounds what a skill can do. For a script, `python-sb` reads the `.py-sandboxes` of the script's directory, whatever
+the current directory, and falls back to `./.py-sandboxes` only when there is none:
 
 ```text
 my-skill/
 ├── SKILL.md
-├── .py-sandboxes
 └── scripts/
+    ├── .py-sandboxes
     └── report.py
 ```
 
 ```markdown
 <!-- in SKILL.md -->
-Run `python-sb --pysandboxes-config=<skill dir>/.py-sandboxes <skill dir>/scripts/report.py <input>`.
+Run `<skill dir>/scripts/report.py <input>`.
 ```
 
-The author of the skill generates the rule file once, with `--learn` on their own machine, then reviews it and
-ships it. Pin the provider, and expose the directory of the skill: otherwise the script itself is hidden, and `python` reports
+A shebang puts the `python-sb` command line in the script itself, so the agent has nothing to choose, and the line
+names no path: it works wherever the skill is installed.
+
+```python
+#!/usr/bin/env -S uvx --with tabulate python-sb
+# Launched by the shebang through python-sb, never by a bare `python`.
+# Needs on the host: uv (for uvx). uvx fetches python-sb, pysandboxes and the third-party imports below.
+# Third-party imports: tabulate (the `--with tabulate` of the shebang).
+# Rules: ./.py-sandboxes, next to this script, the permission manifest of this skill.
+import csv
+import sys
+
+from tabulate import tabulate
+```
+
+- Under `uvx`, the script sees only the environment of the tool: every third-party import needs its `--with`. The
+  comments under the shebang say what has to be installed, so that an agent reading the script can tell the user
+  before running it, rather than meeting a `ModuleNotFoundError` in the sandbox.
+- `env -S` splits the line into arguments. The script needs its execute bit, and the whole first line must fit in
+  the 255 bytes Linux reads.
+- Until the final release reaches PyPI, put the TestPyPI options of the README's Quick start
+  (`--prerelease allow --find-links ...`) in the shebang, before `python-sb`: 175 bytes for this example.
+
+Launched through this shebang from another directory, with `os-sandbox=bwrap`, the script prints its report; a
+script of the same skill that tries `import socket` is stopped by the rule file, and a `.py-sandboxes` or a
+`.local.py-sandboxes` in the current directory changes nothing.
+
+The author of the skill generates the rule file once on their own machine, then reviews it and ships it. Name the
+file for learning mode, since a bare `--learn` writes into the current directory:
+`python-sb --learn=<skill dir>/scripts/.py-sandboxes <skill dir>/scripts/report.py <input>`. Pin the provider, and
+keep the exposed directory of the skill: otherwise the script itself is hidden, and `python` reports
 `can't open file`:
 
 ```ini
-# my-skill/.py-sandboxes
+# my-skill/scripts/.py-sandboxes
 py-sandbox=true
 os-sandbox=bwrap
-expose-ro=~/.claude/skills/my-skill
+learn=false
+expose-ro=~/.claude/skills/my-skill/scripts
 python-import=codecs, csv, encodings, json
 # ... the rest of what learning mode wrote
 ```
@@ -77,6 +109,42 @@ RuleModuleNotFoundError: Module named 'socket' is not allowed by a rule
 A skill shipped without its rule file is not contained: the first run on the user's machine learns, and grants,
 whatever the script does.
 
+The user and the administrator can restrict every skill at once. A rule file written by learning mode keeps the
+`include` lines of the template, among them `~/.config/py-sandboxes/user-py-sandboxes.profile` for every project of
+the user, and `/etc/py-sandboxes/global-py-sandboxes.profile` for the whole node. A `net=DENY` written there wins over
+any `net=ALLOW` of the skill, whatever the order, for instance to keep every skill away from the intranet:
+
+```ini
+# ~/.config/py-sandboxes/user-py-sandboxes.profile, or /etc/py-sandboxes/global-py-sandboxes.profile
+net=DENY|*|10.0.0.0/8|*|OUT
+net=DENY|*|172.16.0.0/12|*|OUT
+net=DENY|*|192.168.0.0/16|*|OUT
+```
+
+A skill whose rule file grants `net=ALLOW|*|*|*|OUT` is then refused the intranet, and the message names the rule
+that refused it:
+
+```text
+Connection to [10.255.255.1]:80 DENIED by explicit rule 'net=DENY|*|10.0.0.0/8|*|OUT' from ~/.config/py-sandboxes/user-py-sandboxes.profile(1)
+```
+
+Only `net=` works this way. A `python-api=DENY:` in these profiles wins only at equal specificity: a skill's
+`python-api=ALLOW:os.system` beats a user's `python-api=DENY:process-exec`. `python-import` and `expose-*` have no
+`DENY` at all.
+
+These profiles apply only through the `include` lines: a rule file that drops them escapes them. Check that they
+are still there when reading the manifest. Conversely, a skill's rule file must not uncomment the
+`include "./.local.py-sandboxes"` line: that path is resolved from the current directory, not from the skill's, so a
+repository the agent works in could add `python-import=socket` and `net=ALLOW|*|*|*|OUT` to the skill's rules with a
+`.local.py-sandboxes` of its own.
+
+This containment does not replace a static analysis of the skill, and the static analysis does not replace it. A
+scanner such as [semgrep](https://semgrep.dev/) reads the scripts before the skill is installed, and can reject an
+obvious exfiltration, but it misses what the code builds at run time (a module name in a string, an `eval`, a
+dependency whose new version behaves differently) and stops nothing. `python-sb` stops at run time what the rule
+file does not grant, but says nothing of what the granted rights are used for. Use both: the analysis to decide
+whether to install the skill, the sandbox to bound what its scripts can do.
+
 The instruction in `SKILL.md` is only a request: nothing stops the agent from running `python scripts/report.py`
 directly. The containment holds only if the agent harness enforces it, with a permission rule that allows the
 exact `python-sb` command line and refuses a bare `python` on the skill's scripts. A rule that allows any
@@ -84,6 +152,10 @@ exact `python-sb` command line and refuses a bare `python` on the skill's script
 skill's rule file refuses the other options, `--learn` included. The
 [coding-agents](https://github.com/pprados/pysandboxes/tree/master/coding-agents) directory packages a skill and a
 pre-execution hook that refuses a bare `python`, for Claude Code, Codex, Gemini CLI, Cursor and Copilot CLI.
+With the shebang above, `python scripts/report.py` ignores the first line and runs without the sandbox: the hook
+refuses it, which leaves `scripts/report.py`, and that goes through `python-sb`. A shebang is out of the
+hook's sight, though: `scripts/report.py` runs whatever interpreter its first line names, so a skill script whose
+shebang says `python3` is not contained. Read that first line when reviewing the skill.
 
 The same reasoning applies to **hooks and plugins** of an agent written in Python: they run third-party code with
 the rights of the user, and the same rule file pattern contains them.

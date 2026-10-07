@@ -11,7 +11,9 @@
 # Name without '/' may be in the same directory.
 # Missing files are silently ignored.
 
-include "./.local.py-sandboxes"  # May be add to .gitignore
+# Uncomment to accept local rules. The path is resolved from the current directory, so
+# whatever directory the program is launched from can then add rules of its own.
+#include "./.local.py-sandboxes"  # May be add to .gitignore
 include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
 include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 

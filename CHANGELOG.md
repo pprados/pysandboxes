@@ -21,6 +21,8 @@
 
 ### Changed
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
+- A new rule file no longer includes `./.local.py-sandboxes` by default: the line is commented out, and accepting
+  local rules from the current directory is the user's decision
 - The samples' documentation no longer claims that learning mode cannot produce `net=` rules: it does, and each one
   needs review
 
@@ -29,6 +31,7 @@
   the profile invalid on the next run
 
 ### Added
+- `python-sb script.py` reads the `.py-sandboxes` next to the script before the one of the current directory
 - Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule
 - First stable version
 - Require a host bridge for Firejail network filtering and test its OS-level rules in the provider matrix
