@@ -31,6 +31,8 @@
   they use): learning records only the application's imports
 - In partial mode, an import made by the application is judged on its rules even when the module is already
   loaded, by the daemon or by an earlier import
+- Learning no longer proposes `python-api=ALLOW:builtins.eval` or `exec` for a source string: that line sent the
+  code to the raw builtin, past the `eval-*` rules learning proposes for it
 - Learning into a profile that includes another one no longer adds a second `remote-result-mode` rule, which made
   the profile invalid on the next run
 

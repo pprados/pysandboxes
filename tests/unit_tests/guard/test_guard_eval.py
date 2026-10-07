@@ -14,8 +14,9 @@ from typing import Any, Callable, Iterator
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, SandBoxError
-from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, NameSet
-from pysandboxes.guard_api import SENSITIVE_API, _deactivate_guard_api
+from pysandboxes import guard_eval
+from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, LearnEvalRule, NameSet
+from pysandboxes.guard_api import SENSITIVE_API, LearnApiRule, _deactivate_guard_api
 from pysandboxes.guard_api import activate_guard as activate_api
 from pysandboxes.guard_api import parse_rules as parse_api_rules
 from pysandboxes.guard_eval import (
@@ -643,6 +644,33 @@ def test_learning_mode_forwards_eval_with_a_keyword_context() -> None:
     finally:
         set_learning_mode(False)
         _deactivate_guard_api()
+
+
+def _learned_from(monkeypatch: pytest.MonkeyPatch, source: Any, rules: Any) -> list[Any]:
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_eval, "add_learning_rule", recorded.append)
+    guard_eval._learn_from(source, "builtins.eval", "eval", rules)
+    return recorded
+
+
+def test_learning_a_source_the_profile_accepts_proposes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """python-api=ALLOW would send the source to the raw eval, past the eval-* rules that already serve it."""
+    rules = DEFAULT_RULES._replace(declared=True, syntax=_syntax("arith"))
+    assert _learned_from(monkeypatch, "2*(3+4)", rules) == []
+
+
+def test_learning_a_source_proposes_eval_rules_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    learned = _learned_from(monkeypatch, "2*(3+4)", None)
+    assert learned
+    assert all(isinstance(rule, LearnEvalRule) for rule in learned)
+
+
+def test_learning_a_foreign_code_object_proposes_the_api_right(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The guarded path refuses a code object it did not produce: only python-api=ALLOW serves it."""
+    code = compile("1", "<string>", "eval")
+    assert _learned_from(monkeypatch, code, None) == [LearnApiRule("builtins.eval")]
+    tagged = compile("1", f"{TAG_PREFIX}x>", "eval")
+    assert _learned_from(monkeypatch, tagged, None) == []
 
 
 def test_exec_accepts_globals_and_locals_by_keyword() -> None:

@@ -645,19 +645,25 @@ def _guarded_source(source: Any, qualname: str) -> str:
 
 
 def _learn_from(source: Any, qualname: str, mode: str, rules: EvalRules | None) -> None:
-    """Record what an unguarded call would have needed, without refusing it.
+    """Record what the guarded path would need, without refusing the call.
+
+    A source string is served by the `eval-*` rules: proposing
+    `python-api=ALLOW` beside them would send it to the raw builtin, past the
+    sub-language. Only a code object the guard did not produce needs that
+    right, as the guarded path refuses it.
 
     Args:
         source: What the caller passed to the patched builtin.
         qualname: The builtin reached, recorded so `generate_rules` emits the
-            `dynamic-code` line beside the `eval-*` ones.
+            `dynamic-code` line when a code object needs it.
         mode: `"eval"` or `"exec"`.
         rules: The declared profile, or None when the configuration has no
             `eval-*` key at all.
     """
-    add_learning_rule(LearnApiRule(qualname))
     if not isinstance(source, (str, bytes, bytearray)):
         # A code object carries no syntax to validate.
+        if not getattr(source, "co_filename", "").startswith(TAG_PREFIX):
+            add_learning_rule(LearnApiRule(qualname))
         return
     text = source if isinstance(source, str) else source.decode("utf-8", errors="replace")
     try:
