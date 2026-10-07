@@ -33,6 +33,8 @@
   loaded, by the daemon or by an earlier import
 - Learning no longer proposes `python-api=ALLOW:builtins.eval` or `exec` for a source string: that line sent the
   code to the raw builtin, past the `eval-*` rules learning proposes for it
+- Under a learned profile, a host name outside the rules is refused by the network rule, not by the import of
+  `encodings.idna` the profile never carries
 - Learning into a profile that includes another one no longer adds a second `remote-result-mode` rule, which made
   the profile invalid on the next run
 

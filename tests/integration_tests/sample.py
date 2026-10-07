@@ -100,3 +100,9 @@ def connect_outside_the_rules() -> str:
     finally:
         s.close()
     return "connected"
+
+
+@sandbox
+def encode_a_host_name() -> bytes:
+    """Encode a host name as getaddrinfo() does for a name outside the rules, without a resolver."""
+    return "example.com".encode("idna")

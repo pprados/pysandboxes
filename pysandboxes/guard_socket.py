@@ -36,6 +36,7 @@ Example:
     ```
 """
 
+import codecs
 import functools
 import logging
 import os
@@ -914,6 +915,11 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
     entries = (f"[{k}]:  " + ", ".join(x[4][0] for x in (v or ())) for k, v in dns.items())
     logger.debug("pin_dns=\n  " + "\n  ".join(entries))
     _pin_dns = ImmutableDict({k: (v or ()) for k, v in dns.items()})
+    # A pinned name never reaches getaddrinfo(); any other name does, and CPython encodes it with the idna codec,
+    # which imports encodings.idna and stringprep. Learning only reaches the pinned names, so a profile never
+    # carries them, and a name outside the rules would fail on that import instead of on the rule. The codec
+    # registry keeps the lookup: the application's code imports nothing to encode a name.
+    codecs.lookup("idna")
 
 
 # Not used

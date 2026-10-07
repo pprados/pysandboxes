@@ -26,6 +26,7 @@ from pysandboxes import sandbox_denials, sandboxes
 from pysandboxes.e import SandBoxError, SandBoxProtocolError
 from tests.integration_tests.sample import (
     connect_outside_the_rules,
+    encode_a_host_name,
     raise_in_sandbox,
     raise_sandbox_error_in_sandbox,
     run_in_sandbox,
@@ -99,3 +100,16 @@ def test_a_denial_is_readable_even_when_the_message_is_rewritten(
         # A call the rules allow reports nothing, so the check above cannot pass
         # by accident on an unrelated failure.
         assert sandbox_denials(ValueError("an ordinary error")) == []
+
+
+def test_a_host_name_is_encoded_under_a_learned_profile(tmp_path: Path) -> None:
+    """getaddrinfo() encodes a name outside the rules with the idna codec.
+
+    Learning reaches only the names the rules pin, which never meet the codec, so
+    the profile never allows encodings.idna: the name must still be encoded, and
+    then refused by the rule rather than by that import.
+    """
+    learned = _learn_the_happy_path(tmp_path)
+
+    with sandboxes(sandboxes_config=learned):
+        assert encode_a_host_name() == b"example.com"
