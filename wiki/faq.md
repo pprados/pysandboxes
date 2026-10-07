@@ -54,6 +54,31 @@ or
 export $(grep -v '^#' .env | xargs)
 ```
 
+Renaming is not always enough: `load_dotenv()` without a path searches upward from the file of the library that
+calls it, and stops at the first `.env` it finds, in the project or in any of its parents. Each name of that file
+then becomes an `env=` rule. The alternative is to disable the loading while learning, without renaming anything:
+
+```bash
+PYTHON_DOTENV_DISABLED=1 python-sb --learn=.py-sandboxes app.py
+```
+
+`PYTHON_DOTENV_DISABLED` (python-dotenv 1.2.0 or later, values `1`, `true`, `t`, `yes`, `y`) stops `load_dotenv()`
+only. It does not stop `dotenv_values()`, nor a library with its own parser. What the libraries met in the samples
+do:
+
+| Library                     | Loads a `.env`                              | Disabled by                                            |
+|-----------------------------|---------------------------------------------|--------------------------------------------------------|
+| litellm                     | at import                                   | `PYTHON_DOTENV_DISABLED=1`, or `LITELLM_MODE` other than `DEV` |
+| crewai                      | at import                                   | `PYTHON_DOTENV_DISABLED=1`                             |
+| smolagents                  | at import                                   | `PYTHON_DOTENV_DISABLED=1`                             |
+| google-adk                  | when the CLI loads an agent, not at import  | `ADK_DISABLE_LOAD_DOTENV=1`, or `PYTHON_DOTENV_DISABLED=1` |
+| Flask                       | when the `flask` command starts             | `FLASK_SKIP_DOTENV=1`, or `PYTHON_DOTENV_DISABLED=1`   |
+| pydantic-settings           | when a settings class sets `env_file`       | nothing: it reads with `dotenv_values()`               |
+| mcp, fastmcp                | with `--env-file` only                      | nothing: it reads with `dotenv_values()`               |
+| python-decouple             | at the first `config()` call                | nothing: it has its own parser                         |
+
+langchain, agno, openai-agents, strands-agents, pydantic-ai and autogen load no `.env` by themselves.
+
 ## How to propagate a token to an API in the sandbox?
 Replace:
 

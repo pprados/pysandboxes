@@ -17,15 +17,12 @@ test: tests
 run:
 	set -a && if [ -f .env ]; then source .env; fi && uv run crewai-demo
 
-## Relearn both profiles, one per mode. Guarded: this sample's env allowlist was
-## filtered by hand, and learning only ever adds -- an unguarded relearn would
-## restore every variable litellm probes for. Read learn.py, then pass FORCE=1.
+## Relearn both profiles, one per mode. Read learn.py first: learning only ever
+## adds, it must never run on untrusted code, and every `net=` rule it writes needs review.
+## litellm loads the first .env above it at import, and learning would record every name
+## in it: the .env is disabled while learning.
+learn: export PYTHON_DOTENV_DISABLED=1
 learn:
-ifneq ($(FORCE),1)
-	@echo "Refusing: this would restore the env rules filtered by hand." >&2
-	@echo "Re-run with: make learn FORCE=1" >&2
-	@false
-endif
 	uv run python learn.py
 	uv run python -m pysandboxes.python_sb \
 		--pysandboxes-config=.py-sandboxes-complete \

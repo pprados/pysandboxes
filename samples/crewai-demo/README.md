@@ -86,15 +86,14 @@ The expression tool is a plain `eval()`. What confines it is **pysandboxes**, ar
 ## Relearn the profiles
 
 ```bash
-make learn FORCE=1
+make learn
 ```
 
-The guard is deliberate: this sample's `env=` allowlist was filtered by hand, and learning
-only ever **adds**, so an unguarded relearn would silently restore every variable litellm
-probes for -- several hundred of them.
-
-Otherwise it learns each mode in its own mode, into its own file. Read `learn.py` first:
-learning writes only when it observed something the profile did not already allow, it must
+It learns each mode in its own mode, into its own file. litellm loads the first `.env` it
+finds above its own directory when it is imported, and learning would record every name in
+that file: `make learn` sets `PYTHON_DOTENV_DISABLED=1` while it learns. Read `learn.py` first:
+learning only ever **adds**, it writes only when it observed something the profile did not already
+allow, it must
 **never** run on untrusted code, and every `net=` rule it writes needs review -- which hosts a
 tool may reach is the author's decision, not an observation. Any
 `python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being
