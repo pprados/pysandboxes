@@ -32,7 +32,7 @@ kills the server with SIGTERM, and the rules are then never written.
 
 The command line is parsed as `main()` does, without running the server: under
 `python-sb`, the server starts through it, and argparse needs `_colorize` from
-Python 3.13 on.
+Python 3.14 on.
 
 `python-sb` runs this file as a string, and the module globals a coroutine sees
 are not the ones the top level bound: what a coroutine needs it has to import
