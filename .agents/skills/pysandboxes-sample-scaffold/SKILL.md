@@ -35,7 +35,7 @@ A sample is a self-contained subproject under `samples/<name>-demo/` with its ow
 4. **Add the sandbox files**, adapted from the closest existing sample (they are framework-specific, there is no template):
    - `env.example`: the variables the sample reads, without values.
    - `learn.py`: the script exercised by `make learn`.
-   - `.py-sandboxes` and `.py-sandboxes-complete`: generate them with `make learn`, then review them. Learning only adds rules and never produces `net=` rules.
+   - `.py-sandboxes` and `.py-sandboxes-complete`: generate them with `make learn`, then review them. Learning only adds rules; review every `net=` rule it writes, since which hosts a tool may reach is the author's decision.
 
 5. **Register the sample** in the root `Makefile`: add `<name>` (without `-demo`) to `SAMPLES`. This enables `sample-tests-<name>` and `pip-audit` for it, and therefore CI.
 

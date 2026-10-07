@@ -27,7 +27,7 @@ run:
 	uv run -m mcp_server.main -t http
 
 ## Relearn both profiles, one per mode. Read learn.py first: learning only ever
-## adds, it must never run on untrusted code, and it cannot produce the `net=` rules.
+## adds, it must never run on untrusted code, and every `net=` rule it writes needs review.
 learn:
 	uv run python learn.py
 	uv run python -m pysandboxes.python_sb \

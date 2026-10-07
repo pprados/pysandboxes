@@ -87,7 +87,7 @@ make learn
 
 It learns each mode in its own mode, into its own file. Read `learn.py` first: learning only
 ever **adds**, it writes only when it observed something the profile did not already allow, it
-must **never** run on untrusted code, and it cannot produce the `net=` rules -- which hosts a
+must **never** run on untrusted code, and every `net=` rule it writes needs review -- which hosts a
 tool may reach is the author's decision, not an observation. Any
 `python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being kept.
 

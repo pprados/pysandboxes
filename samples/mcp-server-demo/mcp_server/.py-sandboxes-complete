@@ -7,8 +7,8 @@
 #   python -m pysandboxes.python_sb --pysandboxes-config=mcp_server/.py-sandboxes-complete \
 #       --learn=mcp_server/.py-sandboxes-complete _learn_complete.py
 #
-# The net rule is not learned: which hosts a tool may reach is the author's
-# decision, not an observation.
+# Learning also writes `net=` rules, but which hosts a tool may reach is the
+# author's decision, not an observation: review each one.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 

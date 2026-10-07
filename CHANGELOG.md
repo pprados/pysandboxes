@@ -21,6 +21,8 @@
 
 ### Changed
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
+- The samples' documentation no longer claims that learning mode cannot produce `net=` rules: it does, and each one
+  needs review
 
 ### Added
 - Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule

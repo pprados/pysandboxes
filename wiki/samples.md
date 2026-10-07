@@ -75,7 +75,7 @@ call time, and a context manager opened per turn would pay the daemon's startup 
 **`make learn` must never be run on untrusted code**, and any
 `python-api=ALLOW:process-exec` a learning run produces deserves a hard look before being
 kept. Learning only ever *adds*, it writes only when it observed something the profile did not
-already allow, and it cannot produce the `net=` rules: which hosts a tool may reach is the
+already allow, and every `net=` rule it writes needs review: which hosts a tool may reach is the
 author's decision, not an observation.
 
 From the repository root, `make sample-tests` runs every sample's suite.

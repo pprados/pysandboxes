@@ -19,8 +19,8 @@ profile did not already allow -- a run that needs nothing new leaves the file
 alone and prints nothing. To shrink a profile, trim it by hand down to its
 header and its `net=` rules, then relearn.
 
-The `net=` rules are not learned: which hosts a tool may reach is the author's
-decision, not an observation.
+Learning also writes `net=` rules, but which hosts a tool may reach is the
+author's decision, not an observation: review each one.
 
 The tools are called through `.invoke()`, the framework's own path, and not
 through the inner `@sandbox` functions: in the complete mode that dispatch runs
