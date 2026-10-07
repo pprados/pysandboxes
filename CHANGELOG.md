@@ -24,8 +24,8 @@
 
 ### Added
 - Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule
-- Require a host bridge for Firejail network filtering and test its OS-level rules in the provider matrix
 - First stable version
+- Require a host bridge for Firejail network filtering and test its OS-level rules in the provider matrix
 - accept *complete* and *selected* mode
 - Control environment variables
 - Control import list
@@ -81,8 +81,6 @@
   `python-api=ALLOW:<category>|<function>` (and `DENY:`), resolved by
   specificity. Learning mode records what an application really calls
   and generates the lines.
-- `posix.chroot` is now guarded by the file layer with the same path
-  check as `os.chroot`, which was previously unguarded.
 - `pickle.loads` and `pickle.load`, with their `_pickle` twins, join the
   API registry under a new `deserialization` category: a pickle stream
   names a callable and calls it, so it reaches `os.system` without an

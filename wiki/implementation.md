@@ -40,8 +40,8 @@ Here is a brief description of the implementation in **partial mode**. You will 
 - The parameters are converted into specific parameters for **os-sandbox**.
 - The parameters may undergo modifications to take into account the specificities of the **os-sandbox** implementation. For example, applying a double `expose-ro` / `expose-rw` on directories is not relevant.
 - A free TCP port is selected
-- a classical `python` program is started in the sandbox technology, with the extracted classical python parameter and the module `-m pysandboxes.remote.main_sandbox\'
-- The sandbox\'s parameters, port, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
+- a classical `python` program is started in the sandbox technology, with the extracted classical python parameter and the module `-m pysandboxes.remote.main_sandbox
+- The sandbox's parameters, port, state, and log format, as well as a random token, are transmitted to the sandbox via a *named pipe*.
 - In the sandbox
   - An HTTP FastAPI server is launched with the selected port.
       - It implements the SSE protocol.

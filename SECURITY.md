@@ -10,7 +10,7 @@ Report privately, never in a public issue or pull request:
 
 - **Preferred**: a [GitHub security advisory](https://github.com/pprados/pysandboxes/security/advisories/new)
   on this repository.
-- **Alternative**: `github@prados.fr`.
+- **Alternative**: `github[at]prados.fr`.
 
 Please include the provider in use (`none`, `subprocess`, `landlock`, `bwrap`,
 `firejail`, `unshare`, `qemu`), the `.py-sandboxes` rules in force, the Python

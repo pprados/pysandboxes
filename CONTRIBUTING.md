@@ -117,12 +117,6 @@ example `https://github.com/pprados/pysandboxes/compare/develop...<branch>?templ
   follows the `guard_*.py` pattern).
 - Lines of at most 120 characters, formatted by `black`.
 - Dependencies through `uv` only; refresh `uv.lock` (`make lock`) when `pyproject.toml` changes.
-- Every new Python file starts with:
-
-  ```python
-  # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
-  # License: Apache V2
-  ```
 
 ### Security model
 

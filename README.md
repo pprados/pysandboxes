@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/pypi/l/pysandboxes.svg)](https://github.com/pprados/pysandboxes/blob/master/LICENSE.txt)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
-> Restrict what a Python process can access, and inspect the policy that grants it access.
+> Unbeknownst protection of Python programs.
 
 Applications increasingly run code or tools selected by an LLM. A manipulated model can cause those tools to read local files, reach internal services, or run commands ([OWASP LLM05:2025](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/), [OWASP LLM06:2025](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/)). **Py-Sandboxes** is a Python security framework that applies an explicit policy to a process and can derive a starting policy by observing an application run.
 
@@ -197,8 +197,6 @@ This scenario is the simplest. Replace the launch of your application (`python -
 python-sb --learn -m my_module
 ```
 
-For a source checkout, install the project environment with `uv sync --group test` and run it with `uv run python-sb -m my_module`.
-
 You can use it in interactive mode and continue to use the help shortcut.
 
 ```shell
@@ -223,7 +221,7 @@ Type:      function
 
 If *IPython* is installed, it's used. All the standard python parameters are available.
 
-It is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
+The complete mode is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
 
 > For more information on using sandboxes with MCP, see [the MCP integration guide](wiki/mcp.md).
 

@@ -116,7 +116,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 
 - **Python**: 3.11 to 3.14 (`requires-python = ">=3.11,<3.15"`), each covered by the lint, test, sample and
   integration CI matrices; the container and API-doc workflows run on 3.13 only
-- **Package Manager**: uv (exclusively — no poetry)
+- **Package Manager**: uv
 - **Virtual Environment**: `.venv/` directory
 - **Entry Points**: `python-sb` CLI commands for sandboxed Python execution
 
@@ -149,7 +149,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - avoid useless comments when generating code
 - For all new file, add the comment:
 ```python
-# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# Copyright (c) 2026, Philippe Prados (pprados)
 # License: Apache V2
 ```
 
