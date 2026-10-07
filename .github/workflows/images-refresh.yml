@@ -1,0 +1,42 @@
+# Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
+# License: Apache V2
+#
+# Daily: when python:<minor>-slim moves to a new Python patch, rebuilds the images of the latest final release on it.
+# This workflow holds no Docker Hub credential: it dispatches images.yml on the release tag, whose run alone gets
+# the dockerhub environment, restricted to v* tags. The tags before images.yml existed cannot be rebuilt this way.
+name: Images refresh
+
+on:
+  schedule:
+  - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Print what would be rebuilt, dispatch nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      with:
+        fetch-depth: 0
+
+    - name: Find the Pythons whose newest patch has no image
+      id: refresh
+      run: .github/scripts/refresh-images.sh 3.11 3.12 3.13 3.14 >>"$GITHUB_OUTPUT"
+
+    - name: Rebuild them from the release tag
+      if: steps.refresh.outputs.minors != '[]' && !inputs.dry-run
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ steps.refresh.outputs.tag }}
+        MINORS: ${{ steps.refresh.outputs.minors }}
+      run: gh workflow run images.yml --ref "$TAG" -f python-versions="$MINORS"

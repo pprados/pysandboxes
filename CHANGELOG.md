@@ -21,6 +21,8 @@
 
 ### Changed
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
+- Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
+  (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
 
 ### Added
 - Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule

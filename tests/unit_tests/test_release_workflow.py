@@ -141,7 +141,17 @@ def test_the_published_wheel_is_compared_with_the_built_artifact() -> None:
     assert any(".github/scripts/verify-published.sh" in s.get("run", "") for s in steps)
 
 
-IMAGE_JOB = "images"
+IMAGES_WORKFLOW = WORKFLOW.parent / "images.yml"
+REFRESH_WORKFLOW = WORKFLOW.parent / "images-refresh.yml"
+PYTHONS = '["3.11", "3.12", "3.13", "3.14"]'
+
+
+def _workflow(path: Path) -> dict[Any, Any]:
+    return yaml.safe_load(path.read_text())
+
+
+def _image_job() -> dict[str, Any]:
+    return _workflow(IMAGES_WORKFLOW)["jobs"]["images"]
 
 
 def _step_index(job: dict[str, Any], needle: str) -> int:
@@ -149,53 +159,98 @@ def _step_index(job: dict[str, Any], needle: str) -> int:
 
 
 def test_the_images_follow_the_checked_publication() -> None:
-    job = _jobs()[IMAGE_JOB]
+    job = _jobs()["images"]
     assert "verify-published" in _needs(job)
     assert " ".join(job["if"].split()) == (
         "${{ !cancelled() && vars.RELEASE_IMAGES != 'false' && needs.verify-published.result == 'success' }}"
     )
+    assert job["uses"] == "./.github/workflows/images.yml"
+    assert job["with"] == {"wheel-artifact": "dist"}
+    assert "secrets" not in job
 
 
 def test_the_images_push_from_the_tag_restricted_dockerhub_environment() -> None:
-    assert _jobs()[IMAGE_JOB]["environment"] == "dockerhub"
+    assert _image_job()["environment"] == "dockerhub"
 
 
 def test_only_the_images_job_sees_the_docker_hub_secrets() -> None:
     for name, job in _jobs().items():
-        if name != IMAGE_JOB:
+        assert "DOCKERHUB" not in yaml.safe_dump(job), name
+    for name, job in _workflow(IMAGES_WORKFLOW)["jobs"].items():
+        if name != "images":
             assert "DOCKERHUB" not in yaml.safe_dump(job), name
+    assert "DOCKERHUB" not in REFRESH_WORKFLOW.read_text()
 
 
-def test_the_images_job_asks_for_no_write_permission() -> None:
-    assert "write" not in yaml.safe_dump(_jobs()[IMAGE_JOB].get("permissions", {}))
+def test_the_images_workflow_asks_for_no_write_permission() -> None:
+    assert _workflow(IMAGES_WORKFLOW)["permissions"] == {"contents": "read"}
+    assert "write" not in yaml.safe_dump(_image_job().get("permissions", {}))
+
+
+def test_the_images_need_a_signed_tag() -> None:
+    assert _needs(_image_job()) == {"verify"}
+    step = next(s for s in _workflow(IMAGES_WORKFLOW)["jobs"]["verify"]["steps"] if s.get("id") == "tag")
+    assert step["run"] == '.github/scripts/verify-release-tag.sh "$GITHUB_REF" >>"$GITHUB_OUTPUT"'
+    assert step["env"]["ALLOWED_SIGNERS"] == "${{ vars.RELEASE_ALLOWED_SIGNERS }}"
+
+
+def test_a_dispatched_build_checks_its_rebuilt_wheel_against_the_index() -> None:
+    job = _image_job()
+    download = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/download-artifact@"))
+    assert download["if"] == "inputs.wheel-artifact != ''"
+    rebuild = job["steps"][_step_index(job, "verify-published.sh")]
+    assert rebuild["if"] == "inputs.wheel-artifact == ''"
+    assert "uv build --wheel" in rebuild["run"]
+    assert " ".join(rebuild["env"]["INDEX_URL"].split()) == (
+        "${{ needs.verify.outputs.final == 'true' && 'https://pypi.org/simple/' || 'https://test.pypi.org/simple/' }}"
+    )
+    assert _step_index(job, "verify-published.sh") < _step_index(job, "build-images")
 
 
 def test_the_smoke_test_runs_before_any_push() -> None:
-    job = _jobs()[IMAGE_JOB]
+    job = _image_job()
     assert _step_index(job, "smoke-test-images.sh") < _step_index(job, "docker push")
 
 
 def test_the_pushed_tags_come_only_from_image_tags_sh() -> None:
-    push = _jobs()[IMAGE_JOB]["steps"][_step_index(_jobs()[IMAGE_JOB], "docker push")]["run"]
-    assert '.github/scripts/image-tags.sh "$VERSION" "$IMAGE_PYTHON" "$DEFAULT_PYTHON"' in push
-    assert 'docker tag "$image:$IMAGE_PYTHON" "$target"' in push
+    push = _image_job()["steps"][_step_index(_image_job(), "docker push")]["run"]
+    assert '.github/scripts/image-tags.sh "$VERSION" "$PATCH" "$DEFAULT_PYTHON"' in push
+    assert 'docker tag "$image:$PATCH" "$target"' in push
     assert "docker.io/pprados/$image:$tag" in push
     assert "latest" not in push
 
 
 def test_the_images_are_published_for_every_claimed_interpreter() -> None:
-    job = _jobs()[IMAGE_JOB]
-    assert job["strategy"]["matrix"]["python-version"] == _jobs()["wheel-tests"]["strategy"]["matrix"]["python-version"]
+    job = _image_job()
+    claimed = _jobs()["wheel-tests"]["strategy"]["matrix"]["python-version"]
+    assert job["strategy"]["matrix"]["python-version"] == f"${{{{ fromJSON(inputs.python-versions || '{PYTHONS}') }}}}"
+    assert yaml.safe_load(PYTHONS) == claimed
+    dispatch = _workflow(IMAGES_WORKFLOW)[True]["workflow_dispatch"]["inputs"]["python-versions"]
+    assert yaml.safe_load(dispatch["default"]) == claimed
     assert job["env"]["IMAGE_PYTHON"] == "${{ matrix.python-version }}"
-    assert job["env"]["DEFAULT_PYTHON"] in job["strategy"]["matrix"]["python-version"]
+    assert job["env"]["DEFAULT_PYTHON"] in claimed
 
 
-def test_each_runner_builds_and_smoke_tests_its_own_python() -> None:
-    job = _jobs()[IMAGE_JOB]
-    build = job["steps"][_step_index(job, "build-images")]["run"]
-    smoke = job["steps"][_step_index(job, "smoke-test-images.sh")]["run"]
-    assert 'PYTHON_VERSION="$IMAGE_PYTHON"' in build
-    assert '"$VERSION" "$IMAGE_PYTHON"' in smoke
+def test_each_runner_builds_and_smoke_tests_the_patch_it_resolved() -> None:
+    job = _image_job()
+    resolve = job["steps"][_step_index(job, "python-patch.sh")]["run"]
+    assert '.github/scripts/python-patch.sh "$IMAGE_PYTHON"' in resolve
+    assert 'echo "PATCH=$patch" >>"$GITHUB_ENV"' in resolve
+    assert _step_index(job, "python-patch.sh") < _step_index(job, "build-images")
+    assert 'PYTHON_VERSION="$PATCH"' in job["steps"][_step_index(job, "build-images")]["run"]
+    assert '"$VERSION" "$PATCH"' in job["steps"][_step_index(job, "smoke-test-images.sh")]["run"]
+
+
+def test_the_refresh_dispatches_images_on_the_release_tag_only() -> None:
+    workflow = _workflow(REFRESH_WORKFLOW)
+    assert workflow["permissions"] == {"contents": "read", "actions": "write"}
+    job = workflow["jobs"]["refresh"]
+    assert "environment" not in job
+    find = next(s for s in job["steps"] if s.get("id") == "refresh")
+    assert find["run"] == f'.github/scripts/refresh-images.sh {" ".join(yaml.safe_load(PYTHONS))} >>"$GITHUB_OUTPUT"'
+    dispatch = job["steps"][_step_index(job, "gh workflow run")]
+    assert dispatch["run"] == 'gh workflow run images.yml --ref "$TAG" -f python-versions="$MINORS"'
+    assert dispatch["if"] == "steps.refresh.outputs.minors != '[]' && !inputs.dry-run"
 
 
 PYTHON_SB = "needs.build.outputs.python-sb == 'true'"

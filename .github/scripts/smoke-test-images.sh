@@ -2,7 +2,7 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# Run by the images job of release.yml before any push. Usage: smoke-test-images.sh <version> <image tag>
+# Run by images.yml before any push. Usage: smoke-test-images.sh <version> <image tag>
 # Unprivileged checks only: each image holds pysandboxes <version> and starts python-sb; each provider image has its
 # binary, and the qemu one its guest disk. The container suites of the full gate test the behaviour.
 set -euo pipefail
