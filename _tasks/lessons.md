@@ -306,3 +306,19 @@ forwarding `**kwargs`, or a keyword call collides ("got multiple values" / "take
 from the original, so introspection reports the API's own shape and hides the mismatch. Read
 `wrapper.__code__` / the AST instead, and confirm on the armed path -- an unarmed call short
 circuits before the guarded branches run.
+
+## A pickle predicate keyed on the stream's module name is bypassable
+
+`find_class(module, name)` receives two strings the hostile stream chose. A dotted `name` walks
+attributes, so an allowed module that imports `os` carries `os.system`, and an allowed class
+carries its methods (`Path.unlink`, called by `REDUCE` on an instance the stream builds). A
+`from shutil import rmtree` in an allowed module carries `shutil.rmtree` under that module's name.
+
+-> Judge the resolved object, not only the strings: refuse a dotted walk that does not end on a
+class, refuse a module object, and check the object's own `__module__` against the denylist too.
+A denied module that can parse a nested stream (`pickle`, `marshal`) or build code (`types`)
+is a full escape, not a lesser gadget.
+
+-> In unit tests, the autouse guard fixture drops modules from `sys.modules`, so `find_class`
+refuses them as "not loaded" before the predicate runs. Put the module back with
+`monkeypatch.setitem(sys.modules, ...)` and match the predicate's own refusal message.

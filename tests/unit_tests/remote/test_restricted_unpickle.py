@@ -14,19 +14,26 @@ import dataclasses
 import datetime
 import decimal
 import enum
+import fractions
 import functools
+import importlib
+import ipaddress
 import math
 import operator
 import pathlib
 import pickle
 import subprocess
+import sys
+import time
 import uuid
+import zoneinfo
+from collections.abc import Callable
 
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
-from pysandboxes.remote import tools
 from pysandboxes.learning import _update_remote_result_mode
+from pysandboxes.remote import tools
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
     _MAX_BYTES,
@@ -59,6 +66,19 @@ def _hostile(obj: object) -> str:
     return base64.b85encode(pickle.dumps(obj, protocol=5)).decode("ascii")
 
 
+def _reduce_stream(module: str, name: str, args: tuple) -> str:
+    """Build `module.name(*args)` as a pickle stream, the way a hostile child can write it by hand."""
+    out = b"\x80\x05"
+    for text in (module, name):
+        out += pickle.SHORT_BINUNICODE + bytes([len(text)]) + text.encode()
+    out += pickle.STACK_GLOBAL + pickle.MARK
+    for arg in args:
+        raw = arg if isinstance(arg, bytes) else arg.encode()
+        out += (pickle.BINBYTES if isinstance(arg, bytes) else pickle.BINUNICODE) + len(raw).to_bytes(4, "little") + raw
+    out += pickle.TUPLE + pickle.REDUCE + pickle.STOP
+    return base64.b85encode(out).decode("ascii")
+
+
 class TestResultChannel:
     """The result channel: denylist over a fail-open predicate."""
 
@@ -89,6 +109,53 @@ class TestResultChannel:
         with pytest.raises(RestrictedUnpicklingError):
             from_b85_restricted(_hostile(gadget), result_predicate)
 
+    @pytest.mark.parametrize(
+        ("module", "name", "args"),
+        [
+            ("shutil", "rmtree", ("/nonexistent",)),
+            ("shutil", "which", ("ls",)),
+            ("io", "open", ("/nonexistent", "w")),
+            ("_io", "FileIO", ("/nonexistent", "w")),
+            ("signal", "getsignal", ("2",)),
+            ("tempfile", "mkdtemp", ()),
+            ("pickle", "loads", (pickle.dumps(len),)),
+            ("types", "SimpleNamespace", ()),
+            ("codecs", "open", ("/nonexistent", "w")),
+            ("logging", "FileHandler", ("/nonexistent",)),
+            ("builtins", "exit", ()),
+            # A module re-exported as an attribute of an allowed one: the root of the stream's module is not the
+            # module of the callable.
+            ("pysandboxes.remote.tools", "os.system", ("echo pwned",)),
+            ("pysandboxes.remote.tools", "shutil.rmtree", ("/nonexistent",)),
+            # A method reached through an allowed class: called with an instance the stream builds.
+            ("pathlib", "Path.unlink", ()),
+            ("pathlib", "Path.write_text", ()),
+        ],
+    )
+    def test_parent_side_gadgets_refused(
+        self, module: str, name: str, args: tuple, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The unit-test fixture drops modules from sys.modules; the parent has them loaded, so the predicate must
+        # be what refuses, not the "not loaded" check.
+        monkeypatch.setitem(sys.modules, module, importlib.import_module(module))
+        with pytest.raises(RestrictedUnpicklingError, match="is refused by the sandbox transport guard"):
+            from_b85_restricted(_reduce_stream(module, name, args), result_predicate)
+
+    def test_callable_imported_into_an_allowed_module_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # `from shutil import rmtree` in a loaded module: the stream names that module, the callable is shutil's.
+        tools.rmtree_alias = __import__("shutil").rmtree  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "pysandboxes.remote.tools", tools)
+        try:
+            with pytest.raises(RestrictedUnpicklingError, match="refused"):
+                from_b85_restricted(
+                    _reduce_stream("pysandboxes.remote.tools", "rmtree_alias", ("/nonexistent",)), result_predicate
+                )
+        finally:
+            del tools.rmtree_alias  # type: ignore[attr-defined]
+
+    def test_nested_class_still_resolves(self) -> None:
+        assert from_b85_restricted(_hostile(_Outer.Inner("x")), exception_predicate).args == ("x",)
+
     def test_memo_indirection_refused(self) -> None:
         # os/system memoized then recalled via BINGET before STACK_GLOBAL: a
         # name-inventory prescan would miss it; find_class catches it.
@@ -117,15 +184,69 @@ class TestResultChannel:
         value = {"items": [1, "two", (False, b"three")], "tags": frozenset({"a", "b"})}
         assert from_b85_restricted(to_b85(value), result_predicate, data_only=True) == value
 
-    def test_data_only_refuses_object_reconstruction_opcodes(self) -> None:
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pathlib.Path("/tmp/x"),
+            pathlib.PurePosixPath("a/b"),
+            pathlib.PureWindowsPath("c:/x"),
+            datetime.datetime(2020, 1, 1, 12, tzinfo=datetime.timezone(datetime.timedelta(hours=2))),
+            datetime.date(2020, 1, 1),
+            datetime.time(1, 2),
+            datetime.timedelta(seconds=3),
+            decimal.Decimal("1.5"),
+            uuid.UUID("12345678-1234-5678-1234-567812345678"),
+            {"when": [datetime.date(2020, 1, 1)], "id": (uuid.UUID(int=1), pathlib.Path("p"))},
+            zoneinfo.ZoneInfo("Europe/Paris"),
+            datetime.datetime(2020, 1, 1, tzinfo=zoneinfo.ZoneInfo("Europe/Paris")),
+            fractions.Fraction(1, 3),
+            ipaddress.ip_address("10.0.0.1"),
+            ipaddress.ip_address("::1"),
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("fe80::/64"),
+            ipaddress.ip_interface("10.0.0.1/8"),
+            ipaddress.ip_interface("fe80::1/64"),
+            collections.OrderedDict(a=[1, pathlib.Path("x")]),
+            collections.Counter("abca"),
+            collections.deque([1, 2], maxlen=3),
+            time.gmtime(0),
+            range(1, 10, 2),
+        ],
+    )
+    def test_data_only_accepts_value_types(self, value: object) -> None:
+        assert from_b85_restricted(to_b85(value), result_predicate, data_only=True) == value
+
+    def test_data_only_refuses_object_reconstruction(self) -> None:
         class ReturnedObject:
             def __reduce__(self) -> tuple:
                 import os
 
                 return (os.system, ("echo must-not-run",))
 
-        with pytest.raises(RestrictedUnpicklingError, match="opcode 'STACK_GLOBAL'|opcode 'REDUCE'"):
+        with pytest.raises(RestrictedUnpicklingError, match="remote-result-mode=objects"):
             from_b85_restricted(to_b85(ReturnedObject()), result_predicate, data_only=True)
+
+    @pytest.mark.parametrize(
+        "make",
+        [lambda: _Plain(1), lambda: _Point(1, 2), lambda: collections.OrderedDict(a=_Plain(1)), lambda: _Severity.HIGH],
+    )
+    def test_data_only_refuses_an_application_object(self, make: Callable[[], object]) -> None:
+        with pytest.raises(RestrictedUnpicklingError, match="remote-result-mode=objects"):
+            from_b85_restricted(to_b85(make()), result_predicate, data_only=True)
+
+    @pytest.mark.parametrize(("target", "name"), [(pathlib.Path, "unlink"), (zoneinfo.ZoneInfo, "clear_cache")])
+    def test_data_only_getattr_reaches_only_the_zoneinfo_constructor(self, target: type, name: str) -> None:
+        with pytest.raises(RestrictedUnpicklingError, match="refused"):
+            tools._value_getattr(target, name)
+
+    def test_data_only_refuses_a_method_of_a_value_class(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "pathlib", pathlib)
+        with pytest.raises(RestrictedUnpicklingError, match="pathlib.Path.unlink is refused"):
+            from_b85_restricted(_reduce_stream("pathlib", "Path.unlink", ()), None, data_only=True)
+
+    def test_learning_sees_value_types_as_data_only(self) -> None:
+        assert not tools.result_requires_objects(to_b85({"p": pathlib.Path("/x"), "u": uuid.UUID(int=1)}))
+        assert tools.result_requires_objects(to_b85(_Plain(1)))
 
     def test_data_only_refuses_cycles(self) -> None:
         value: list[object] = []

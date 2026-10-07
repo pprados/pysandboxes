@@ -148,7 +148,7 @@ class BaseSSESandbox(BaseDaemon):
         # Result-channel guard. Default on; start_daemon posts the
         # profile's `remote-result-guard` value once all_rules are parsed.
         self._result_guard = True
-        self._result_data_only = False
+        self._result_data_only = True
         self.port = 0
         # IP literal, not "localhost": aiohttp resolves with
         # AI_ADDRCONFIG, which fails an IPv4 lookup when only 'lo'

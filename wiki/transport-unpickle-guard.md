@@ -9,10 +9,11 @@ transport as pickle, base85-encoded (`to_b85` / `from_b85` in
 ## Summary
 
 The child controls its serialized return payload, so the parent checks it
-before reconstructing objects. The result channel uses a fail-open denylist by
-default; the exception channel rejects unsupported objects and can fall back to
-an exception descriptor. `remote-result-mode=data-only` is stricter, but does
-not support custom returned objects. These checks protect the parent-side
+before reconstructing objects. By default (`remote-result-mode=data-only`) the
+result channel accepts values only, from a closed list of types; the exception
+channel rejects unsupported objects and can fall back to an exception
+descriptor. `remote-result-mode=objects` supports custom returned objects behind
+a fail-open denylist. These checks protect the parent-side
 deserialization path; they do not make the Python layer a boundary against
 native code in the child.
 
@@ -142,7 +143,11 @@ itself a bypass class. Names are left to `find_class`, during the load.
 - The dotted qualified name (protocol 4+ carries `Outer.Inner`) is resolved
   in-house by successive `getattr`, not through `pickle._getattribute`, which is
   private and whose signature and return value have changed across CPython
-  versions.
+  versions. A dotted name must end on a class: a walk that reaches anything else
+  is refused, on every channel. Otherwise a module re-exported by an allowed one
+  (`pysandboxes.remote.tools` + `os.system`) would carry `os.system` under an
+  allowed module name, and a method of an allowed class (`pathlib.Path.unlink`)
+  would run through `REDUCE` on an instance of the stream's choosing.
 
 ### 3. The result channel: a fail-open denylist
 
@@ -158,11 +163,20 @@ that can appear as `__module__` in a stream. `os.system` does not arrive as
 `os.system` — it arrives as `posix.system` on Linux, `nt.system` on Windows;
 `socket.socket` can arrive as `_socket.socket`. A denylist written against
 import names would miss the very gadget it is meant to stop. It covers OS
-execution (`posix`/`nt`/`os`, `subprocess`, `pty`), imports (`sys`, `importlib`,
+execution (`posix`/`nt`/`os`, `subprocess`, `_posixsubprocess`, `pty`,
+`multiprocessing`, `concurrent`, `asyncio`), imports (`sys`, `importlib`,
 `runpy`), networking (`socket`/`_socket`), low-level access (`ctypes`,
-`_thread`, `mmap`), callback gadgets (`operator`, `functools`), and the
-dangerous builtins (`eval`, `exec`, `compile`, `__import__`, `__build_class__`,
-`getattr`, `type`, ...).
+`_thread`, `mmap`), files (`shutil`, `io`/`_io`, `codecs`, `tempfile`,
+`logging`), signals (`signal`/`_signal`), nested streams and code objects
+(`pickle`/`_pickle`, `marshal`, `types`), callback gadgets (`operator`,
+`functools`), and the dangerous builtins (`eval`, `exec`, `compile`,
+`__import__`, `__build_class__`, `getattr`, `type`, `open`, `exit`, `quit`, ...).
+A callable is judged twice: by the module the stream names, and by its own
+`__module__`, so `from shutil import rmtree` in an allowed module does not carry
+`shutil.rmtree` past the list. A module object itself is refused.
+
+Values of these modules are refused too, so a function that returns an
+`io.BytesIO` or a `logging.LogRecord` must return its content instead.
 
 This layer is **fail-open by nature**: a module not on the list passes. That is
 a deliberate trade-off. Making it fail-closed would break legitimate results, so
@@ -249,22 +263,32 @@ With it off, the result channel has no protection against the `__reduce__`
 vector (the opcode allowlist does not see it), so leave it on unless a real
 regression forces otherwise.
 
-The result channel also accepts an opt-in structural profile:
+The result channel has two structural profiles:
 
 ```
-remote-result-mode=objects     # default; supports application-defined classes
-remote-result-mode=data-only   # permits exact primitive types and containers
+remote-result-mode=data-only   # default; values only, a closed list of types
+remote-result-mode=objects     # supports application-defined classes
 ```
 
-`data-only` rejects object reconstruction opcodes during the prescan, before
-unpickling, then checks the resulting graph contains only `None`, booleans,
-numbers, strings, bytes, bytearrays, and built-in list, tuple, dict, set, or
-frozenset containers. Cycles and subclasses are refused. The mode remains in
-force even if `remote-result-guard=false`; that switch controls only the
-denylist in `objects` mode.
+`data-only` resolves every global against a closed list of value classes
+(`pathlib` paths, `datetime` dates, times, durations and `timezone`,
+`zoneinfo.ZoneInfo`, `time.struct_time`, `decimal.Decimal`,
+`fractions.Fraction`, `complex`, `uuid.UUID` and its `SafeUUID` state,
+`ipaddress` addresses, networks and interfaces, `range`), then checks the
+resulting graph contains only `None`, booleans, numbers, strings, bytes,
+bytearrays, list, tuple, dict, set, frozenset, `OrderedDict`, `Counter` or
+`deque` containers, and those value classes. `ZoneInfo` pickles as
+`getattr(ZoneInfo, "_unpickle")`: in this mode `getattr` resolves to a stand-in
+that answers that single pair, so it cannot hand out a method such as
+`Path.unlink`. Cycles and subclasses are refused. The constructors and
+`__setstate__` of these classes only store what they receive, so the stream can
+build a wrong value but cannot act in the parent: the mode is fail-closed. A
+refusal names `remote-result-mode=objects`. The mode remains in force even if
+`remote-result-guard=false`; that switch controls only the denylist in
+`objects` mode.
 
-Learning mode inspects the emitted pickle opcodes without unpickling. It writes
-`remote-result-mode=data-only` when observed results use only data opcodes. If
+Learning mode decodes each emitted result as `data-only` would, in the child. It
+writes `remote-result-mode=data-only` when every observed result passes. If
 any observed result needs class reconstruction, it writes `objects` with a
 warning in the generated profile because class-defined reconstruction methods
 can execute in the parent process. Repeated observations collapse to one rule.

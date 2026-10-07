@@ -30,11 +30,12 @@ what each OS mechanism can enforce and its prerequisites.
 ## Return-value deserialization
 
 The trusted parent must deserialize values returned by the sandbox child. The
-default result guard filters known dangerous pickle gadgets, but it is a
-fail-open denylist and does not prove that every gadget is blocked. The
-`remote-result-mode=data-only` option rejects object reconstruction and accepts
-only primitive values and built-in containers; it can reject applications that
-return custom objects. See the [transport guard assessment](transport-unpickle-guard.md)
+default `remote-result-mode=data-only` accepts values only: primitive values,
+built-in containers, paths, dates and time zones, decimals, fractions, UUIDs
+and IP addresses, from a closed list. It
+rejects applications that return custom objects. `remote-result-mode=objects`
+rebuilds them behind a guard that filters known dangerous pickle gadgets, but it
+is a fail-open denylist and does not prove that every gadget is blocked. See the [transport guard assessment](transport-unpickle-guard.md)
 for the result and exception channel behavior.
 
 ## Additional measured findings
@@ -54,6 +55,6 @@ OS provider is bypassed.
   prerequisites before relying on it.
 - Treat learned rules as a starting policy. Exercise representative paths and
   review the result before enforcing it.
-- Prefer `remote-result-mode=data-only` when the application can return only
-  data-only values; otherwise keep the default guard enabled and review rejected
-  object types.
+- Keep the default `remote-result-mode=data-only` when the application can
+  return values; set `remote-result-mode=objects` only for the objects it must
+  return, and keep `remote-result-guard` on.

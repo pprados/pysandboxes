@@ -80,8 +80,15 @@ def test_remote_result_mode_accepts_data_only(value: str, existing_config: Path)
     assert result[RESULT_DATA_ONLY] is True
 
 
-def test_remote_result_mode_defaults_to_objects(existing_config: Path) -> None:
+def test_remote_result_mode_defaults_to_data_only(existing_config: Path) -> None:
     result, errors = _parse(config_path=existing_config)
+    assert not errors
+    assert result[RESULT_DATA_ONLY] is True
+
+
+@pytest.mark.parametrize("value", ["objects", "OBJECTS"])
+def test_remote_result_mode_accepts_objects(value: str, existing_config: Path) -> None:
+    result, errors = _parse(f"remote-result-mode={value}", config_path=existing_config)
     assert not errors
     assert result[RESULT_DATA_ONLY] is False
 

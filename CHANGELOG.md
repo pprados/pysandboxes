@@ -31,6 +31,13 @@
 - Control import list
 - Control file and network access
 - Control life cycle of the sandbox-daemon (restart if necessary)
+- The value a sandboxed function returns is decoded in the calling process under a guard. By default it accepts
+  values only: primitive data and containers, with paths, dates and time zones, decimals, fractions, UUIDs and IP
+  addresses, and rebuilds no other class. `remote-result-mode=objects` rebuilds any object, and refuses the
+  classes and functions that would act in the calling process: processes, files, signals, nested pickles, code
+  objects
+- The sandbox daemon listens on the loopback when the sandbox shares the host network, and is reached only with
+  a per-run token, compared in constant time
 - seven os-sandbox providers, selected with `OS_SANDBOX=` or
   `--os-sandbox`:
   - `none`: no OS boundary, the Python layer alone

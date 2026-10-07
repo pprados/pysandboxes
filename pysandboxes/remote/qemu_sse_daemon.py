@@ -1234,6 +1234,8 @@ class QemuSSEDaemon(VMSSEDaemon):
             netfilter_rules=netfilter_rules,
             guest_run_dir=GUEST_RUN_MOUNT,
             guest_working_dir=str(Path.cwd().resolve()),
+            # hostfwd reaches the guest on its NIC, not on the guest loopback.
+            bind_host="0.0.0.0",
         )
 
         env: dict[str, str]

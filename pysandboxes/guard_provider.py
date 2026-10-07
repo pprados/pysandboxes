@@ -33,7 +33,7 @@ def parse_rules(
     parameters_multi_values: dict[str, set[Tuple[Any, ConfigLine]]] = defaultdict(set)
     use_py_sandbox = True
     remote_result_guard = True
-    remote_result_data_only = False
+    remote_result_data_only = True
     learning_path = None
 
     for rule in rules:
@@ -84,9 +84,9 @@ def parse_rules(
             parameters_multi_values["remote-result-guard"].add((remote_result_guard, rule))
         elif rule.rule.startswith("remote-result-mode="):
             value = rule.rule.split("=", 1)[1].strip().lower()
-            if value in ("objects", "default"):
+            if value == "objects":
                 remote_result_data_only = False
-            elif value in ("data-only", "data_only"):
+            elif value in ("data-only", "data_only", "default"):
                 remote_result_data_only = True
             else:
                 errors.append(
@@ -187,7 +187,7 @@ def parse_rules(
     learning_path = parameters_prioritize_single_value.get("learning_path", [config_path])[0]
     learn: bool = cast(bool, parameters_prioritize_single_value.get("learn", [False])[0])
     remote_result_guard = parameters_prioritize_single_value.get("remote-result-guard", [True])[0]
-    remote_result_data_only = parameters_prioritize_single_value.get("remote-result-mode", [False])[0]
+    remote_result_data_only = parameters_prioritize_single_value.get("remote-result-mode", [True])[0]
     if learning_path is None:
         learning_path = config_path
 

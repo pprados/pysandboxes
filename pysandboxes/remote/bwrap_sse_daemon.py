@@ -586,6 +586,8 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             port=port,
             init_fn=init_fn_ref,
             netfilter_rules=(),
+            # slirp4netns forwards to the tap address, not to the loopback of the namespace.
+            bind_host="0.0.0.0" if use_net_filter else "127.0.0.1",
         )
 
         env: Environ = {**os.environ, **extra_envs}

@@ -14,13 +14,16 @@ Key utilities:
 """
 
 import base64
+import collections
 import datetime
 import decimal
 import errno as errno_mod
+import fractions
 import io
 import ipaddress
 import logging
 import os
+import pathlib
 import pickle
 import pickletools
 import platform
@@ -30,10 +33,14 @@ import signal
 import subprocess
 import sys  # Import the sys module to access system-specific parameters and functions
 import textwrap
+import time
+import uuid
+import zoneinfo
 from collections.abc import Callable
 from ctypes import cdll
 from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 from ..e import RestrictedUnpicklingError, SandBoxProtocolError, set_sandbox_denials
@@ -421,8 +428,6 @@ _ALLOWED_OPCODES = frozenset(
     }
 )
 
-_DATA_ONLY_OPCODES = _ALLOWED_OPCODES - {"STACK_GLOBAL", "REDUCE", "BUILD", "NEWOBJ", "NEWOBJ_EX"}
-
 # Anti-DoS budgets: generous guard-rails, not tight limits. A legitimate result
 # may be large; these only bound the pathological shapes the predicate cannot
 # see (memo bombs, opcode floods) that would expand in the parent's RAM.
@@ -476,6 +481,35 @@ _BASE_DATA_CLASSES = frozenset(
     }
 )
 
+# The classes `data-only` rebuilds, a closed list. Their constructor and `__setstate__` only store what they
+# receive, so a hostile stream can at most build a wrong value, never act in the parent. `SafeUUID` travels in
+# the state of a `UUID`. A path is only built, none of its methods runs.
+_VALUE_CLASSES = _BASE_DATA_CLASSES | {
+    pathlib.PurePath,
+    pathlib.PurePosixPath,
+    pathlib.PureWindowsPath,
+    pathlib.Path,
+    pathlib.PosixPath,
+    pathlib.WindowsPath,
+    uuid.UUID,
+    uuid.SafeUUID,
+    zoneinfo.ZoneInfo,
+    fractions.Fraction,
+    ipaddress.IPv4Address,
+    ipaddress.IPv6Address,
+    ipaddress.IPv4Network,
+    ipaddress.IPv6Network,
+    ipaddress.IPv4Interface,
+    ipaddress.IPv6Interface,
+    time.struct_time,
+    range,
+    collections.OrderedDict,
+    collections.Counter,
+    collections.deque,
+}
+_VALUE_DICTS = (dict, collections.OrderedDict, collections.Counter)
+_VALUE_SEQUENCES = (list, tuple, set, frozenset, bytearray, collections.deque)
+
 # CPYTHON-COMPAT: denylist keyed by every alias / C-twin that can appear as
 # __module__ in the stream. `os.system` arrives as `posix.system` (Linux) or
 # `nt.system` (Windows); `socket.socket` can arrive as `_socket.socket`. A
@@ -507,6 +541,27 @@ _DENIED_MODULE_ROOTS = frozenset(
         "code",
         "codeop",
         "timeit",
+        # Called in the parent, each of these deletes, creates or truncates a file: shutil.rmtree,
+        # io.open(path, "w") (`io.open` is `_io.open`), codecs.open, tempfile.mkdtemp, logging.FileHandler.
+        "shutil",
+        "io",
+        "_io",
+        "codecs",
+        "tempfile",
+        "logging",
+        # Runs a process, or changes how the parent handles a signal.
+        "_posixsubprocess",
+        "signal",
+        "_signal",
+        "multiprocessing",
+        "_multiprocessing",
+        "concurrent",
+        "asyncio",
+        # Rebuilds code, or reads a nested stream without this guard: pickle.loads is a full escape.
+        "pickle",
+        "_pickle",
+        "marshal",
+        "types",
     }
 )
 _DENIED_BUILTINS = frozenset(
@@ -526,6 +581,10 @@ _DENIED_BUILTINS = frozenset(
         "input",
         "memoryview",
         "type",
+        # site.Quitter instances: calling one raises SystemExit in the parent.
+        "exit",
+        "quit",
+        "help",
     }
 )
 
@@ -555,7 +614,7 @@ def check_sse_line(line: str) -> None:
         )
 
 
-def _prescan(data: bytes, *, data_only: bool = False) -> None:
+def _prescan(data: bytes) -> None:
     """Reject a pickle stream on opcode alphabet or size before any execution.
 
     `pickletools.genops` parses without executing (no `__reduce__` runs). This
@@ -585,8 +644,7 @@ def _prescan(data: bytes, *, data_only: bool = False) -> None:
             if n_op > _MAX_OPCODES:
                 raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_OPCODES}-opcode transport budget.")
             name = opcode.name
-            allowed_opcodes = _DATA_ONLY_OPCODES if data_only else _ALLOWED_OPCODES
-            if name not in allowed_opcodes:
+            if name not in _ALLOWED_OPCODES:
                 raise RestrictedUnpicklingError(f"opcode {name!r} is not allowed on the sandbox transport.")
             if name == "MARK":
                 mark_depth += 1
@@ -606,10 +664,12 @@ def _prescan(data: bytes, *, data_only: bool = False) -> None:
 
 
 def result_requires_objects(b85: str) -> bool:
-    """Return whether a result pickle uses an object-reconstruction opcode."""
-    data = base64.b85decode(b85.encode("ascii"))
-    object_opcodes = {"STACK_GLOBAL", "REDUCE", "BUILD", "NEWOBJ", "NEWOBJ_EX"}
-    return any(opcode.name in object_opcodes for opcode, _arg, _pos in pickletools.genops(data))
+    """Return whether a result pickle holds more than the values ``data-only`` accepts."""
+    try:
+        from_b85_restricted(b85, None, data_only=True)
+    except RestrictedUnpicklingError:
+        return True
+    return False
 
 
 class _RestrictedUnpickler(pickle.Unpickler):
@@ -658,6 +718,11 @@ class _RestrictedUnpickler(pickle.Unpickler):
                 obj = getattr(obj, part)
         except AttributeError as exc:
             raise RestrictedUnpicklingError(f"{module}.{name} could not be resolved on the transport.") from exc
+        # A dotted name is a nested class, as `Outer.Inner`. Anything else reached by the walk escapes the
+        # predicate: a module re-exported by an allowed one (`pysandboxes.remote.tools` + `os.system`), or a
+        # method of an allowed class that REDUCE calls with an instance of the stream's choosing (`Path.unlink`).
+        if "." in name and not isinstance(obj, type):
+            raise RestrictedUnpicklingError(f"{module}.{name} is refused by the sandbox transport guard.")
         if not self._predicate(module, name, obj):
             raise RestrictedUnpicklingError(f"{module}.{name} is refused by the sandbox transport guard.")
         return obj
@@ -666,6 +731,40 @@ class _RestrictedUnpickler(pickle.Unpickler):
 def _is_base_data_class(obj: Any) -> bool:
     """True for a base data class that legitimately reaches find_class."""
     return obj in _BASE_DATA_CLASSES
+
+
+def value_predicate(module: str, name: str, obj: Any) -> bool:
+    """Accept only the value classes (result channel in ``data-only`` mode). Fail-closed."""
+    return obj in _VALUE_CLASSES
+
+
+def _value_getattr(target: Any, name: str) -> Any:
+    """Stand in for `getattr` in ``data-only`` mode, which a `ZoneInfo` needs to reach its constructor.
+
+    `ZoneInfo` pickles as `getattr(ZoneInfo, "_unpickle")(key, ...)`. The real `getattr` would hand the stream any
+    method of an allowed class (`getattr(Path, "unlink")`), so this one answers that single pair only.
+    """
+    if target is zoneinfo.ZoneInfo and name == "_unpickle":
+        return zoneinfo.ZoneInfo._unpickle  # type: ignore[attr-defined]
+    raise RestrictedUnpicklingError(f"getattr({target!r}, {name!r}) is refused by the sandbox transport guard.")
+
+
+class _ValueUnpickler(_RestrictedUnpickler):
+    """Unpickler of ``data-only`` mode: resolves `builtins.getattr` to `_value_getattr`."""
+
+    def find_class(self, module: str, name: str) -> Any:
+        """Resolve a value class, or the restricted `getattr`.
+
+        Args:
+            module: The module name carried by the stream.
+            name: The (possibly dotted) qualified name carried by the stream.
+
+        Returns:
+            The value class, or `_value_getattr`.
+        """
+        if module == "builtins" and name == "getattr":
+            return _value_getattr
+        return super().find_class(module, name)
 
 
 def exception_predicate(module: str, name: str, obj: Any) -> bool:
@@ -688,8 +787,13 @@ def result_predicate(module: str, name: str, obj: Any) -> bool:
     refused, so legitimate results (pathlib, uuid, numpy, app types) pass. This
     is the layer the profile switch disables.
     """
-    root = module.split(".")[0]
-    if root in _DENIED_MODULE_ROOTS:
+    # The module the callable comes from, not only the one the stream names: `from shutil import rmtree` in an
+    # allowed module would otherwise carry shutil.rmtree under that module's name.
+    real_module = getattr(obj, "__module__", None)
+    for candidate in (module, real_module if isinstance(real_module, str) else ""):
+        if candidate.split(".")[0] in _DENIED_MODULE_ROOTS:
+            return False
+    if isinstance(obj, ModuleType):
         return False
     if module == "builtins" and name in _DENIED_BUILTINS:
         return False
@@ -797,10 +901,16 @@ def from_b85_restricted(
         RestrictedUnpicklingError: On a refused opcode, budget, or global.
     """
     data = base64.b85decode(b85.encode("ascii"))
-    _prescan(data, data_only=data_only)
+    _prescan(data)
     if data_only:
-        value = _pickle_loads(data)
-        _validate_data_only(value)
+        try:
+            value = _ValueUnpickler(data, value_predicate).load()
+            _validate_data_only(value)
+        except RestrictedUnpicklingError as exc:
+            raise RestrictedUnpicklingError(
+                f"{exc} The result channel accepts only values (remote-result-mode=data-only): return plain "
+                "data, or set remote-result-mode=objects in the profile to rebuild objects."
+            ) from exc
         return value
     if predicate is None:
         return _pickle_loads(data)
@@ -811,9 +921,9 @@ def _validate_data_only(value: Any, seen: set[int] | None = None, depth: int = 0
     """Refuse reconstructed values outside the primitive result grammar."""
     if depth > _MAX_MARK_DEPTH:
         raise RestrictedUnpicklingError(f"result exceeds the {_MAX_MARK_DEPTH}-level data-only nesting budget.")
-    if type(value) in (type(None), bool, int, float, complex, str, bytes):
+    if type(value) in (type(None), bool, int, float, complex, str, bytes) or type(value) in _VALUE_CLASSES:
         return
-    if type(value) not in (list, tuple, dict, set, frozenset, bytearray):
+    if type(value) not in _VALUE_DICTS + _VALUE_SEQUENCES:
         raise RestrictedUnpicklingError(f"result type {type(value).__name__!r} is not allowed in data-only mode.")
     if seen is None:
         seen = set()
@@ -821,9 +931,10 @@ def _validate_data_only(value: Any, seen: set[int] | None = None, depth: int = 0
     if identity in seen:
         raise RestrictedUnpicklingError("cyclic values are not allowed in data-only mode.")
     seen.add(identity)
-    values = value.items() if type(value) is dict else value
+    is_dict = type(value) in _VALUE_DICTS
+    values = value.items() if is_dict else value
     for item in values:
-        if type(value) is dict:
+        if is_dict:
             key, child = item
             _validate_data_only(key, seen, depth + 1)
             _validate_data_only(child, seen, depth + 1)

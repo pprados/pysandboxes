@@ -756,6 +756,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 token=self._token,
                 port=self.port,
                 init_fn=init_fn_ref,
+                # Always in its own network namespace: slirp4netns forwards to the tap address.
+                bind_host="0.0.0.0",
             )
 
             # Build environment (PYTHONPATH so unshare child finds pysandboxes in Docker)

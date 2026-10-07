@@ -49,3 +49,12 @@ def test_base_url_host_is_an_ip_literal() -> None:
 def test_base_url_host_is_ipv4_loopback() -> None:
     sandbox = _Sandbox(token="a-token", max_connect_retry=1)
     assert sandbox.host == "127.0.0.1"
+
+
+def test_the_server_listens_on_the_loopback_by_default() -> None:
+    # A provider without a network namespace shares the host network: only the parent must reach the daemon.
+    from pysandboxes.remote.daemon_parameters import DaemonParameters
+    from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
+
+    assert SSEServerDaemon("token", port=1).bind_host == "127.0.0.1"
+    assert DaemonParameters._field_defaults["bind_host"] == "127.0.0.1"

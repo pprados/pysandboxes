@@ -31,3 +31,17 @@ def test_a_jail_with_its_own_network_is_reached_on_its_address() -> None:
     ip = ipaddress.IPv4Address("10.10.20.2")
     with patch.object(firejail_sse_daemon, "parse_firejail_net_print", return_value=ip):
         assert _daemon().base_url == "http://10.10.20.2:{PORT}"
+
+
+def test_the_daemon_listens_on_the_loopback_when_the_jail_keeps_the_host_network() -> None:
+    # Without --net the jail shares the host network: a wildcard bind would expose the daemon to the LAN.
+    assert _daemon()._sse_bind_host(["firejail", "--noroot", "/usr/bin/env", "-i", "python"]) == "127.0.0.1"
+
+
+def test_the_daemon_listens_on_the_loopback_without_network() -> None:
+    assert _daemon()._sse_bind_host(["firejail", "--net=none", "/usr/bin/env"]) == "127.0.0.1"
+
+
+def test_the_daemon_listens_on_every_interface_behind_a_bridge() -> None:
+    # The host reaches a bridged jail on its eth0, never on its loopback.
+    assert _daemon()._sse_bind_host(["firejail", "--net=docker0", "/usr/bin/env"]) == "0.0.0.0"

@@ -104,6 +104,30 @@ def sandbox(
     Raises:
         Any exception raised by the original function is re-raised.
 
+    Return value:
+        The value travels back from the sandboxed child as a pickle the parent
+        decodes, and the child may be hostile. Two profile rules choose how:
+
+        - ``remote-result-mode=data-only`` (default): values only. ``None``,
+          ``bool``, ``int``, ``float``, ``complex``, ``str``, ``bytes``,
+          ``bytearray``, ``list``, ``tuple``, ``dict``, ``set``, ``frozenset``,
+          ``OrderedDict``, ``Counter``, ``deque``, without cycles, and the value
+          classes they may hold: ``pathlib`` paths, ``datetime`` dates, times,
+          durations and time zones (``timezone``, ``zoneinfo.ZoneInfo``),
+          ``time.struct_time``, ``decimal.Decimal``, ``fractions.Fraction``,
+          ``uuid.UUID``, ``ipaddress`` addresses, networks and interfaces, and
+          ``range``. A closed list: anything else is refused, and no code of the
+          stream's choosing runs in the parent.
+        - ``remote-result-mode=objects``: any picklable value. Objects are
+          rebuilt, and a denylist refuses the classes and functions that act when
+          called in the parent: processes, files (``shutil``, ``io``,
+          ``tempfile``, ``logging``...), signals, ``pickle``, ``types``, methods
+          reached through a dotted name. The denylist is not exhaustive. Learning
+          mode writes this rule, with a warning, when it sees an object returned.
+        - ``remote-result-guard=false``: removes the denylist from the
+          ``objects`` mode. The opcode check and the exception guard remain.
+          Use it only when the child is trusted.
+
     Examples:
         Decorating a synchronous function:
         ```python

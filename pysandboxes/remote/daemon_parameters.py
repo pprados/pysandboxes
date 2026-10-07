@@ -37,6 +37,10 @@ class DaemonParameters(NamedTuple):
         guest_working_dir: Host working directory at QEMU launch; the guest
             bootstrap moves there so relative rules such as ``expose-rw=./tmp``
             designate the same files on both sides.
+        bind_host: Address the child's SSE server listens on. Loopback when the
+            child shares the parent's network; ``0.0.0.0`` only inside a network
+            namespace or a VM, where the forwarded connection arrives on another
+            interface (slirp4netns tap, firejail bridge, QEMU NIC).
     """
 
     all_rules: "AllRules"
@@ -52,3 +56,4 @@ class DaemonParameters(NamedTuple):
     guest_run_dir: str | None = None
     # Host cwd at QEMU launch; guest bootstrap cds here so relative paths match expose-rw=./tmp etc.
     guest_working_dir: str | None = None
+    bind_host: str = "127.0.0.1"

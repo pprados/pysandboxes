@@ -279,6 +279,7 @@ async def run_server(process_config: DaemonParameters) -> int:
         providers_factory["_sse_server"](
             process_config.token,
             port=process_config.port,
+            bind_host=process_config.bind_host,
         ),
     )
     assert isinstance(server_daemon, SSEServerDaemon)
@@ -290,7 +291,8 @@ async def run_server(process_config: DaemonParameters) -> int:
         init_fn=init_fn,
     )
     logger.info(
-        "SSE server listening on 0.0.0.0:%s; joining server_daemon (blocking until shutdown)",
+        "SSE server listening on %s:%s; joining server_daemon (blocking until shutdown)",
+        process_config.bind_host,
         process_config.port,
     )
     await server_daemon.join()

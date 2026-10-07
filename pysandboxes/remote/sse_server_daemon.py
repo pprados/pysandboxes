@@ -15,6 +15,7 @@ Key components:
 
 import asyncio
 import base64
+import hmac
 import importlib
 import inspect
 import json
@@ -31,8 +32,8 @@ from uvicorn import Server
 
 from ..all_rules import AllRules
 from ..e import sandbox_denials
-from ..lifecycle import arm
 from ..immutable_dict import ImmutableDict
+from ..lifecycle import arm
 from ..private_loop import get_sandbox_loop
 from ..sb_types import Args, Envs
 from ..tools import (
@@ -237,7 +238,10 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
         from .._os_sandbox import is_accept_incoming_call
 
         # logger.debug(request.headers["Authorization"])
-        if "Authorization" not in request.headers or request.headers["Authorization"] != f"Bearer {token}":
+        # Constant-time comparison: `!=` stops at the first differing byte, so its timing would leak how much of
+        # the token a guess got right. Bytes, because compare_digest refuses a str holding a non-ASCII character.
+        authorization = request.headers.get("Authorization", "").encode()
+        if not hmac.compare_digest(authorization, f"Bearer {token}".encode()):
             logger.error("Invalid token")
             raise HTTPException(status_code=401, detail="Invalid token")
         if not is_accept_incoming_call():
@@ -336,19 +340,21 @@ class SSEServerDaemon(BaseSSESandbox):
     streaming of output via Server-Sent Events.
     """
 
-    __slots__ = ("uvicorn", "task", "port", "stopped")
+    __slots__ = ("uvicorn", "task", "port", "bind_host", "stopped")
 
-    def __init__(self, token: str, *, port: int):
+    def __init__(self, token: str, *, port: int, bind_host: str = "127.0.0.1"):
         """Initialize SSE server daemon.
 
         Args:
             token: Authentication token for API access.
             port: Port number for HTTP server.
+            bind_host: Address the HTTP server listens on (see ``DaemonParameters.bind_host``).
         """
         super().__init__(token, max_connect_retry=MAX_CONNECT_RETRY)
         self.uvicorn: Server | None = None
         self.task: Task | None = None
         self.port = port
+        self.bind_host = bind_host
         self.stopped = True
 
     @property
@@ -427,7 +433,7 @@ class SSEServerDaemon(BaseSSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            self.uvicorn = create_uvicorn_daemon(self.token, "0.0.0.0", self.port)
+            self.uvicorn = create_uvicorn_daemon(self.token, self.bind_host, self.port)
 
             start_event = asyncio.Event()
 

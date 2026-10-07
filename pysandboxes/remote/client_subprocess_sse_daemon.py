@@ -329,6 +329,10 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         """HTTP URL used to wait until the sandbox daemon accepts connections."""
         return f"http://127.0.0.1:{port}/ping"
 
+    def _sse_bind_host(self, args: Args) -> str:
+        """Address the child's SSE server listens on: the loopback, as the child shares the host network."""
+        return "127.0.0.1"
+
     def __init__(
         self,
         token: str,
@@ -583,6 +587,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             token=self._token,
             port=port,
             init_fn=init_fn_ref,
+            bind_host=self._sse_bind_host(args),
         )
 
         env: Environ

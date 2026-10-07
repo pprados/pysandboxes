@@ -219,12 +219,12 @@ in it. They are why the OS sandbox exists.
 
 ### 8. Attack the IPC channel
 
-The main process talks to the sandboxed child over SSE on localhost.
+The main process talks to the sandboxed child over SSE, on local HTTP.
 
 | Attack | Layer | Status |
 |---|---|---|
-| Call the SSE endpoint without the token | Bearer-token check, request refused on mismatch (`remote/sse_server_daemon`) | **Blocked — reasoned** (token is a per-run UUID minted in `python_sb`) |
-| Reach the endpoint from another local process | bound to `localhost` with a random free port (`remote/client_subprocess_sse_daemon.find_free_port`) + the token above | **Reasoned**: raises cost; a co-resident process that can read the port and token is not stopped by this layer ([weaknesses.md](weaknesses.md)) |
+| Call the SSE endpoint without the token | Bearer-token check, compared in constant time, request refused on mismatch (`remote/sse_server_daemon`) | **Blocked — reasoned** (token is a per-run UUID minted in `python_sb`) |
+| Reach the endpoint from another local process | the daemon listens on `127.0.0.1` when the child shares the host network (`subprocess`, `landlock`, `bwrap` with the host network, `firejail` without `--net`); on every interface only inside its own network namespace or VM (`unshare`, `bwrap` with slirp4netns, `firejail --net=<bridge>`, `qemu`), where the host reaches it through the forward. Random free port (`remote/client_subprocess_sse_daemon.find_free_port`) + the token above | **Reasoned**: raises cost; a co-resident process that can read the port and token is not stopped by this layer ([weaknesses.md](weaknesses.md)) |
 
 ### 9. Poison learning mode
 

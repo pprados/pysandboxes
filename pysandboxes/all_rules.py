@@ -45,8 +45,10 @@ class AllRules(NamedTuple):
             the result channel. Denylist layer only; the prescan and the
             exception-channel guard stay on regardless. Set by
             ``remote-result-guard`` in the profile, default on.
-        remote_result_data_only: Whether the result channel rejects pickle
-            object reconstruction and accepts only primitive data structures.
+        remote_result_data_only: Whether the result channel accepts only values:
+            primitive data structures, and the paths, dates, decimals and UUIDs
+            they hold. Set by ``remote-result-mode`` in the profile, default on
+            (``data-only``); ``objects`` rebuilds any object.
         envs_rules: Environment variable access rules.
         socket_rules: Network access rules.
         pin_dns: Host names resolved once and pinned to their addresses, so a
@@ -74,7 +76,7 @@ class AllRules(NamedTuple):
     api_rules: ApiRules = ()
     eval_rules: EvalProfiles = ImmutableDict({})
     remote_result_guard: bool = True
-    remote_result_data_only: bool = False
+    remote_result_data_only: bool = True
 
 
 EmptyRules = AllRules(
@@ -88,7 +90,7 @@ EmptyRules = AllRules(
     learning_path=Path(),
     learn=False,
     remote_result_guard=True,
-    remote_result_data_only=False,
+    remote_result_data_only=True,
     envs_rules=(),
     socket_rules=(),
     pin_dns=ImmutableDict({}),

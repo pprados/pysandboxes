@@ -291,6 +291,15 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         host = "127.0.0.1" if ip is None else str(ip)
         return f"http://{host}:{port}/ping"
 
+    @override
+    def _sse_bind_host(self, args: Args) -> str:
+        """Every interface with ``--net=<bridge>``: the host reaches the jail on its eth0, not on its loopback.
+
+        Without ``--net`` the jail keeps the host network, and ``--net=none`` leaves only the loopback.
+        """
+        net = [arg for arg in args if arg.startswith("--net=")]
+        return "0.0.0.0" if net and net[-1] != "--net=none" else "127.0.0.1"
+
     def _firejail_args(
         self,
         all_rules: AllRules,
