@@ -183,10 +183,28 @@ def _is_import_allowed(module_name: str) -> bool:
     return not _user_scope.get() and module_name in _framework_names
 
 
+# Modules the activation never evicts: the finder never sees them, so no profile has to allow them.
+_KEPT_MODULES = frozenset(
+    {
+        "warnings",
+        "tokenize",  # For assertion
+        # CPython's _bootstrap_external.get_data() reads every source file
+        # through _io.open_code(). Evicting _io makes the loader re-import it,
+        # and that import is denied by any ruleset, so no module can be loaded.
+        "_io",
+        "asyncio",
+        "sys",
+        "threadpool",
+        "builtins",
+        "__main__",
+    }
+)
+
+
 def _judge_user_import(name: str) -> None:
     """Refuse, or record in learning mode, an import by the user's code that the rules do not grant."""
     module_name = name.split(".", 1)[0]
-    if _is_import_allowed(module_name):
+    if module_name in _KEPT_MODULES or _is_import_allowed(module_name):
         return
     if is_learning_mode():
         add_learning_rule(LearnImportRule(module_name))
@@ -209,13 +227,18 @@ def _called_by_the_import_machinery() -> bool:
 _IMPORT_MACHINERY = frozenset({"importlib._bootstrap", "importlib._bootstrap_external"})
 
 
+# The import runs first, as the finder judges only a module that exists: a missing optional module is
+# neither refused by a rule nor learned. No code runs before the judgement, since a module not yet loaded
+# meets the finder, and a loaded one is only returned.
 def _wrap_import(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: Any) -> Any:
         level = kwargs.get("level", args[3] if len(args) > 3 else 0)
-        if level == 0 and _user_scope.get() and not _called_by_the_import_machinery():
+        judged = level == 0 and _user_scope.get() and not _called_by_the_import_machinery()
+        module = func(name, *args, **kwargs)
+        if judged:
             _judge_user_import(name)
-        return func(name, *args, **kwargs)
+        return module
 
     return wrapper
 
@@ -223,9 +246,10 @@ def _wrap_import(func: Callable[..., Any]) -> Callable[..., Any]:
 def _wrap_import_module(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: Any) -> Any:
+        module = func(name, *args, **kwargs)
         if not name.startswith(".") and _user_scope.get():
             _judge_user_import(name)
-        return func(name, *args, **kwargs)
+        return module
 
     return wrapper
 
@@ -745,19 +769,7 @@ def activate_guard_import(
         for module in sys.modules.copy():
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
-    keep = [
-        "warnings",
-        "tokenize",  # For assertion
-        # CPython's _bootstrap_external.get_data() reads every source file
-        # through _io.open_code(). Evicting _io makes the loader re-import it,
-        # and that import is denied by any ruleset, so no module can be loaded.
-        "_io",
-        "asyncio",
-        "sys",
-        "threadpool",
-        "builtins",
-        "__main__",
-    ]  # TODO: add in rules ?
+    keep = list(_KEPT_MODULES)
     # Whatever the framework pre-imported for itself must outlive the eviction:
     # those modules are its own, never the user's to allow.
     keep.extend(_framework_modules)

@@ -188,6 +188,33 @@ def test_in_the_user_code_learning_records_the_import(monkeypatch: pytest.Monkey
     assert recorded == [LearnImportRule("json")]
 
 
+def test_in_the_user_code_a_missing_module_is_not_learned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An optional dependency probed with ``try: import x`` stays out of the profile, as the finder does."""
+    _activate(monkeypatch, ())
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_import, "is_learning_mode", lambda: True)
+    monkeypatch.setattr(guard_import, "add_learning_rule", recorded.append)
+
+    def missing(name: str, *args: Any, **kwargs: Any) -> Any:
+        raise ModuleNotFoundError(name)
+
+    with user_code():
+        with pytest.raises(ModuleNotFoundError):
+            guard_import._wrap_import(missing)("brotli")
+        with pytest.raises(ModuleNotFoundError):
+            guard_import._wrap_import_module(missing)("brotli")
+    assert recorded == []
+
+
+def test_in_the_user_code_a_module_never_evicted_is_not_judged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The finder never sees sys, builtins or warnings: the complete mode asks no rule for them either."""
+    _activate(monkeypatch, ())
+    import_, import_module = _guarded_imports()
+    with user_code():
+        assert import_("sys") == "sys"
+        assert import_module("warnings") == "warnings"
+
+
 def test_learned_modules_are_sorted_by_danger() -> None:
     """The generated file must warn about the modules that break the sandbox."""
     lines = generate_rules({LearnImportRule("subprocess"), LearnImportRule("json"), LearnImportRule("mycompany")})
