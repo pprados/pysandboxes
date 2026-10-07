@@ -47,7 +47,7 @@ Here is a brief description of the implementation in **partial mode**. You will 
       - It implements the SSE protocol.
       - The sandbox is activated.
           - A Finder/Loader pair is added to `sys.meta_path`, and an audit hook that moves that finder back to the head of the list before each import, since frameworks insert their own finder there.
-          - All modules (except some critical ones) are uninstalled or reloaded.
+          - The modules already loaded that have a patch rule are patched in place. Then every module is evicted from `sys.modules`, except a few the interpreter needs (`sys`, `builtins`, `_io`, `warnings`, `asyncio`, `__main__`...) and those the framework loaded for itself with `preimport_framework_module()`. Nothing is reloaded: an evicted module goes through the import rules the next time it is imported.
           - From now on, when a module is loaded, it undergoes *on-the-fly* modifications.
           - Critical functions and methods are re-implemented to follow the security rules.
       - Upon receiving an SSE request:
