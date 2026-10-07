@@ -52,7 +52,7 @@ an issue, but they are not treated as vulnerabilities:
   the chosen provider's OS boundary remains.
 - **`none` and `subprocess`**, which provide no OS boundary by design.
 - **What a given technology cannot express**, as documented per provider in the
-  README table — for example `landlock` denies a path but cannot hide it.
+  [provider comparison](wiki/os-providers.md) — for example `landlock` denies a path but cannot hide it.
 - **Attacks already published** in [`wiki/audit-eval-security.md`](wiki/audit-eval-security.md)
   and [`wiki/audit-python-security.md`](wiki/audit-python-security.md), unless
   you defeat the mitigation described there.
