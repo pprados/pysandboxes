@@ -317,7 +317,6 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         "_max_attempts",
         "_reset_delay",
         "_last_reset",
-        "_is_started",
         "_python_args",
         "restart",
     )
