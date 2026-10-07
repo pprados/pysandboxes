@@ -23,6 +23,7 @@
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
 
 ### Added
+- Require a host bridge for Firejail network filtering and test its OS-level rules in the provider matrix
 - First stable version
 - accept *complete* and *selected* mode
 - Control environment variables

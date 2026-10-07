@@ -70,10 +70,10 @@ of it:
 | Workflow | Suite | Versions | Executions | Fires on |
 |---|---|---|---|---|
 | [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~5640 | every push and pull request |
-| [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~540 | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~556 | `full-gate.yml` (nightly, release tag) or dispatch |
 | [`containers.yml`](../.github/workflows/containers.yml) | Containers | 3.13 | ~60 | `full-gate.yml` (nightly, release tag) or dispatch |
 | [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | `full-gate.yml` (nightly, release tag) or dispatch |
-| **Total** | | | **~6890** | |
+| **Total** | | | **~6906** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
 excludes the matrix interpreter is *skipped*, not failed. `langgraph-demo` is
@@ -206,12 +206,17 @@ permitted control connection. [`remote/test_bwrap.py`](../tests/integration_test
 also exercises the bwrap daemon with the network-filtered profile.
 
 `tst_usage.py` cannot prove the Firejail filter by itself because the Python
-socket guard is also active. The host suite exercises Firejail's Python-level
-network guard, but the current OS-only network-filter scenario does not include
-Firejail. Firejail supports `--net=<bridge>` and `--netfilter` inside its
-network namespace ([Firejail manual](https://manpages.ubuntu.com/manpages/noble/man1/firejail.1.html));
-OS-only coverage requires a configured bridge and explicit handling of
-Firejail's `restricted-network` setting.
+socket guard is also active. The OS-only scenario now covers Firejail alongside
+the other providers. Firejail supports
+`--net=<bridge>` with an automatically assigned sandbox address and the bridge
+address as its gateway; `--netfilter` applies only inside that new network
+namespace ([Firejail manual](https://manpages.ubuntu.com/manpages/noble/man1/firejail.1.html)).
+The integration workflow creates a private bridge, binds two listeners to its
+gateway address, and checks that one TCP port is allowed while the other is
+refused. This requires network administration capabilities and
+`restricted-network no`; if Firejail is explicitly configured with
+`restricted-network yes`, it keeps the host network and skips this OS filter.
+Both denied and permitted connection controls are retained.
 
 ## C. Container conditions
 
