@@ -27,6 +27,9 @@
   needs review
 
 ### Fixed
+- A profile no longer has to allow the sandbox daemon's own modules (uvicorn, fastapi, and the standard library
+  they use): learning records only the application's imports. The daemon's modules stay importable without a rule,
+  as `wiki/weaknesses.md` lists
 - Learning into a profile that includes another one no longer adds a second `remote-result-mode` rule, which made
   the profile invalid on the next run
 

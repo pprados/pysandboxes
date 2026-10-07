@@ -22,6 +22,20 @@ what each OS mechanism can enforce and its prerequisites.
   before the kernel operation; a concurrent rename can create a
   time-of-check/time-of-use race. A file descriptor already held by the code is
   itself a capability.
+- **The daemon's own modules are importable without a rule.** In partial mode, the sandbox process runs an
+  HTTP server (uvicorn, fastapi) after the guards are active. The top-level modules it imports for itself are
+  allowed to the sandboxed code too, whatever `python-import=` says: `__future__`, `_hashlib`, `_hmac`,
+  `_multiprocessing`, `_queue`, `abc`, `annotated_doc`, `annotated_types`, `annotationlib`, `anyio`, `array`,
+  `ast`, `asyncio`, `base64`, `binascii`, `click`, `codecs`, `collections`, `colorsys`, `concurrent`,
+  `configparser`, `contextlib`, `contextvars`, `copy`, `copyreg`, `dataclasses`, `datetime`, `decimal`, `email`,
+  `enum`, `errno`, `fastapi`, `fractions`, `functools`, `gettext`, `h11`, `hashlib`, `heapq`, `hmac`, `html`,
+  `http`, `importlib`, `inspect`, `io`, `ipaddress`, `itertools`, `json`, `keyword`, `locale`, `logging`, `math`,
+  `mimetypes`, `multiprocessing`, `operator`, `os`, `pathlib`, `pickle`, `platform`, `pydantic`, `pydantic_core`,
+  `queue`, `random`, `re`, `secrets`, `selectors`, `shlex`, `signal`, `socket`, `socketserver`, `ssl`,
+  `starlette`, `stat`, `struct`, `tempfile`, `textwrap`, `threading`, `time`, `traceback`, `types`, `typing`,
+  `typing_extensions`, `typing_inspection`, `urllib`, `uuid`, `uvicorn`, `weakref`, `zoneinfo`. Importing one is
+  not calling it: the sensitive functions they hold stay behind `python-api`, and files and sockets behind
+  their own guards. `tests/integration_tests/test_framework_imports.py` fails if this list grows.
 - **The local transport is not an OS boundary.** A co-resident process that
   learns the daemon's local port and token may reach it. The token and random
   port raise the cost; they do not protect against an attacker who can read

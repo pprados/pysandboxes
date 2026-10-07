@@ -32,6 +32,7 @@ from uvicorn import Server
 
 from ..all_rules import AllRules
 from ..e import sandbox_denials
+from ..guard_import import framework_imports
 from ..immutable_dict import ImmutableDict
 from ..lifecycle import arm
 from ..private_loop import get_sandbox_loop
@@ -433,7 +434,10 @@ class SSEServerDaemon(BaseSSESandbox):
         try:
             # during server launch, accept a longer delay for the async loop.
             loop.slow_callback_duration = 1.0
-            self.uvicorn = create_uvicorn_daemon(self.token, self.bind_host, self.port)
+            with framework_imports():
+                self.uvicorn = create_uvicorn_daemon(self.token, self.bind_host, self.port)
+                # starlette resolves anyio's backend on each request, which imports it lazily.
+                importlib.import_module("anyio._backends._asyncio")
 
             start_event = asyncio.Event()
 
@@ -461,11 +465,14 @@ class SSEServerDaemon(BaseSSESandbox):
                 except SystemExit:
                     raise
 
-            self.task = loop.create_task(_run_daemon(), name="ServerTask")
+            # uvicorn loads its protocol and lifespan modules while it starts: framework
+            # imports, closed before the first request is accepted.
+            with framework_imports():
+                self.task = loop.create_task(_run_daemon(), name="ServerTask")
 
-            await start_event.wait()
-            while self.uvicorn and not self.uvicorn.started:
-                await asyncio.sleep(POLLING_DELAY)
+                await start_event.wait()
+                while self.uvicorn and not self.uvicorn.started:
+                    await asyncio.sleep(POLLING_DELAY)
             self._accept_incoming = True
             self.stopped = False
             logger.debug("Uvicorn started")

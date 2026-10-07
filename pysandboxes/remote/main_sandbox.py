@@ -232,10 +232,13 @@ async def run_server(process_config: DaemonParameters) -> int:
     Returns:
         Exit code (0 for success).
     """
-    import importlib
+    from ..guard_import import framework_imports
 
-    _qemu_show_boot_console_guest_trace(process_config, "run_server: start")
-    from pysandboxes.main_logger import pysandboxes_logger
+    with framework_imports():
+        import importlib
+
+        _qemu_show_boot_console_guest_trace(process_config, "run_server: start")
+        from pysandboxes.main_logger import pysandboxes_logger
 
     # Call init function
     # Note: the init_function is called AFTER the activation of the python sandbox
@@ -270,18 +273,19 @@ async def run_server(process_config: DaemonParameters) -> int:
     else:
         pysandboxes_logger.info(f"Start ONLY an os-sandox of type {os_sandbox!r}")
 
-    from pysandboxes._os_sandbox import _set_current_daemon, providers_factory
+    with framework_imports():
+        from pysandboxes._os_sandbox import _set_current_daemon, providers_factory
 
-    from ..remote.sse_server_daemon import SSEServerDaemon
+        from ..remote.sse_server_daemon import SSEServerDaemon
 
-    server_daemon = cast(
-        SSEServerDaemon,
-        providers_factory["_sse_server"](
-            process_config.token,
-            port=process_config.port,
-            bind_host=process_config.bind_host,
-        ),
-    )
+        server_daemon = cast(
+            SSEServerDaemon,
+            providers_factory["_sse_server"](
+                process_config.token,
+                port=process_config.port,
+                bind_host=process_config.bind_host,
+            ),
+        )
     assert isinstance(server_daemon, SSEServerDaemon)
     _set_current_daemon(server_daemon)
     await server_daemon._start(
@@ -513,7 +517,14 @@ def main() -> int:
 
     # Else _start the server
     _qemu_show_boot_console_guest_trace(process_config, "main: entering asyncio.run(run_server)")
-    return asyncio.run(run_server(process_config))
+    from ..guard_import import framework_imports
+
+    # asyncio.run(), unrolled: creating the loop imports the platform's event loop module.
+    with framework_imports():
+        runner = asyncio.Runner()
+        runner.get_loop()
+    with runner:
+        return runner.run(run_server(process_config))
 
 
 if __name__ == "__main__":

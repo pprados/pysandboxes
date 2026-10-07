@@ -20,6 +20,7 @@ import itertools
 import logging
 import os
 import sys
+from contextlib import contextmanager
 from copy import copy
 
 # Python 3.10+ only
@@ -112,6 +113,32 @@ def _conv_patch_rules(patch_rules: dict[str, Callable]) -> PatchRules:
 _rules: ImportRules = cast(ImportRules, ())
 _patch_rules: PatchRules = ImmutableDict({})
 
+# Top-level modules the sandbox daemon imported for itself, inside framework_imports().
+_framework_names: set[str] = set()
+_framework_window = False
+
+
+@contextmanager
+def framework_imports() -> Iterator[None]:
+    """Run the sandbox daemon's own imports without charging them to the user's rules.
+
+    The daemon starts its server after the guards are activated, and arming evicts
+    sys.modules, so every module the server needs -- uvicorn, fastapi, and the stdlib
+    they pull in -- goes through the import guard again. Inside this block the guard
+    records the top-level name instead of judging it, and keeps allowing it afterwards:
+    the server imports submodules lazily, per request, under names it already used.
+
+    Only framework code may run inside: what it imports becomes importable by the
+    sandboxed code without a rule. The modules allowed this way are those listed in
+    wiki/weaknesses.md.
+    """
+    global _framework_window
+    _framework_window = True
+    try:
+        yield
+    finally:
+        _framework_window = False
+
 
 def _is_import_allowed(module_name: str) -> bool:
     """Whether ``module_name`` may be imported under the active rules.
@@ -128,7 +155,7 @@ def _is_import_allowed(module_name: str) -> bool:
     """
     if _rules and _rules[0] == "*":
         return True
-    return module_name == "pysandboxes" or module_name in _rules
+    return module_name == "pysandboxes" or module_name in _rules or module_name in _framework_names
 
 
 def parse_rules(
@@ -474,8 +501,10 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     new_spec = original_spec
         if new_spec:
             module_name = fullname.split(".", 1)[0]
-            if is_learning_mode() and is_in_sandbox():
-                if "*" not in _rules and module_name not in _rules and module_name != "pysandboxes":
+            if _framework_window:
+                _framework_names.add(module_name)
+            elif is_learning_mode() and is_in_sandbox():
+                if "*" not in _rules and not _is_import_allowed(module_name):
                     add_learning_rule(LearnImportRule(module_name))
             elif not _is_import_allowed(module_name):
                 ex = RuleModuleNotFoundError(f"Module named {module_name!r} is not allowed by a rule")
