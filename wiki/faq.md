@@ -87,6 +87,68 @@ See [use cases](use-cases.md) for this scenario and the others.
 Indeed, new ones can be proposed. As the approach is based on *denial by default*, these rules are rejected. Restart a learning session to add what is necessary.
 Use the minor version to fix the version to used (`n.m.*`). The minor version is incremented for each new rules.
 
+## Can the test suite feed the learning mode?
+Not the whole suite, for three reasons:
+- Running the test runner itself in the sandbox (`python-sb --learn -m pytest`) learns the runner. A test needing
+  only `csv` added `_pytest`, `pluggy`, every installed pytest plugin, `subprocess`, `pdb`, `marshal`,
+  `expose-rw=${TMPDIR:-/tmp}`, `expose-rw=/dev`, the `PYTEST_*` variables and
+  `python-api=ALLOW:faulthandler.enable` to the profile.
+- Learning never refuses, it records. A test written to provoke a refusal fails with `DID NOT RAISE`, and adds to
+  the profile the very rule it was written to forbid, such as an `expose-ro` on the directory it tried to read.
+- Learning forces `os-sandbox=subprocess`: the OS layer is never exercised.
+
+The simplest route is the one the samples follow: a `learn.py` script drives the application through a scenario,
+`make learn` runs it, and the tests always run strict.
+
+A first approach is to start with `python-import=*`, which records no import at all, and to replace it before the
+release: remove the wildcard, relearn into a candidate file, review what was added. A test asserting that the
+shipped profile holds no `python-import=*` nor `learn=` keeps the wildcard from coming back, as in
+`samples/langchain-demo/tests/test_tools_sandbox.py`, and `learn=false` in the profile refuses any later request to
+learn.
+
+To let some tests feed the rules, tag them, opt-in: a test someone forgot to tag contributes nothing, while with an
+opt-out tag, a forgotten negative test whitelists what it was written to refuse. Each tagged test opens its own
+sandbox, learning into a candidate file, and every other test runs strict against the committed profile, in the same
+pytest process:
+```python
+# conftest.py
+import os
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+from pysandboxes import sandboxes
+
+PROFILE = Path(__file__).parent / ".py-sandboxes"
+CANDIDATE = os.environ.get("SANDBOX_LEARN")  # learning stays off unless set
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "sandbox_learn: the test may feed the learned profile")
+
+
+@pytest.fixture(autouse=True)
+def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:
+    if CANDIDATE and request.node.get_closest_marker("sandbox_learn"):
+        with sandboxes(sandboxes_config=CANDIDATE, learn=CANDIDATE):
+            yield
+    else:
+        with sandboxes(sandboxes_config=PROFILE):
+            yield
+```
+Tag only the tests exercising a nominal path, with `@pytest.mark.sandbox_learn`, never a test that expects a refusal.
+Then learn, review, and run the whole suite strict:
+```bash
+cp .py-sandboxes .py-sandboxes.candidate
+SANDBOX_LEARN=.py-sandboxes.candidate pytest -m sandbox_learn
+diff .py-sandboxes .py-sandboxes.candidate  # copy only the expected rules into .py-sandboxes
+pytest
+```
+Learn serially: each sandbox rewrites the candidate when it closes, so parallel workers race on it. The strict run is
+the safety net: a negative test that was tagged by mistake fails in the learning run, and if its rule is copied anyway,
+it fails again in the strict run, provided it asserts the refusal through `sandbox_denials()`.
+
 ## Debugging
 When using an external sandbox, two processes are launched. Your development environment is normally capable of handling this, if you use `os-sandbox=subprocess`. A breakpoint in a `@sandbox` function will interrupt the program in the sandbox process. Stack trace analysis will not be easy, as there is no complete trace of the call.
 

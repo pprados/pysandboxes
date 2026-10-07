@@ -18,7 +18,7 @@
 - A refusal must be asserted through `sandbox_denials()`, not through an error message.
   Libraries rewrite a blocked connection into wording any outage produces ("All connection
   attempts failed"), so a message assertion passes for the wrong reason.
-- A wide `pytest.raises((RuleError, NameError, TypeError, AttributeError))` is that same failure in
+- A wide `pytest.raises((SandBoxError, NameError, TypeError, AttributeError))` is that same failure in
   another shape. `NameError`, `TypeError` and `AttributeError` prove the payload broke, not that a
   rule refused it, so such a test keeps passing after the barrier it names has been removed. Name
   one exception type, or name a narrow set and assert on what was refused -- a refusal carries the
@@ -158,17 +158,6 @@ restriction and the connection falls to whatever broader `ALLOW` sits beside it.
 narrows or widens the profile. Degrade only where the result is a subset of what the author
 wrote.
 
-## A document that quotes test counts must regenerate them at commit time
-
-A security page shipped a reproduction block claiming counts nobody had re-run: the guard
-corpus was stated at 219 passed while the very commit that introduced the claim produced 184.
-Readers trust such a block precisely because it looks measured, and a wrong count hides both
-the tests that disappeared and the xfail that appeared.
-
--> Any doc quoting a pass/skip/xfail count must have it regenerated from a clean run at the
-commit that ships it. Cite enforcement points by function or class name, never by line
-number: line references rot at the next refactor while the document keeps asserting them.
-
 ## A denied file read surfaces as a missing module
 
 `guard_files` has no exemption for the interpreter's own library tree; the ambient exemption
@@ -287,25 +276,6 @@ the `~` form because it never walks above PWD, so a regenerated config reintrodu
 
 -> A sample that spawns a neighbouring sample needs that sample's venv as a declared
 prerequisite. Alphabetical order in a list is not a dependency.
-
-## A guard wrapper must preserve every documented calling form of the API it patches
-
-Each `@guard_wraps` wrapper replaces a real callable, so an application that reaches the guard
-through a valid but less common form breaks before any rule is evaluated -- in learning mode
-too, since the failure is at the signature. Two classes recur: narrowing a
-`POSITIONAL_OR_KEYWORD` parameter to positional-only (a trailing `/`), which rejects the keyword
-form the builtin accepts (`eval`/`exec` with `globals=`/`locals=`, `compile` with `source=`);
-and dropping an alternate positional form (`socket.sendto(data, flags, address)` needs a slot
-for `flags`, whose address is always the last positional).
-
--> Wrap with `*args`/`**kwargs` passthrough, or reconstruct the named parameters from them, and
-forward exactly what came in. Never re-pass a positional the caller supplied while also
-forwarding `**kwargs`, or a keyword call collides ("got multiple values" / "takes at most N").
-
--> Do not detect this with `inspect.signature(wrapper)`: `guard_wraps` forges `__signature__`
-from the original, so introspection reports the API's own shape and hides the mismatch. Read
-`wrapper.__code__` / the AST instead, and confirm on the armed path -- an unarmed call short
-circuits before the guarded branches run.
 
 ## A pickle predicate keyed on the stream's module name is bypassable
 
