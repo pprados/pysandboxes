@@ -233,6 +233,26 @@ class TestParsePythonCmdLine:
         assert sandboxes_args == ["--learn=skill/.py-sandboxes"]
         assert config == Path("skill/.py-sandboxes")
 
+    def test_a_script_uses_the_rule_file_next_to_it(self, tmp_path: Path) -> None:
+        (tmp_path / CONFIG_NAME).write_text("")
+        script = tmp_path / "report.py"
+
+        _, _, _, config = parse_python_cmd_line([str(script)])
+
+        assert config == tmp_path / CONFIG_NAME
+
+    def test_a_script_without_a_rule_file_next_to_it_uses_the_current_directory(self, tmp_path: Path) -> None:
+        _, _, _, config = parse_python_cmd_line([str(tmp_path / "report.py")])
+
+        assert config == Path(CONFIG_NAME)
+
+    def test_a_named_rule_file_with_a_path_wins_over_the_one_next_to_the_script(self, tmp_path: Path) -> None:
+        (tmp_path / CONFIG_NAME).write_text("")
+
+        _, _, _, config = parse_python_cmd_line(["--pysandboxes-config=skill/.py-sandboxes", str(tmp_path / "r.py")])
+
+        assert config == Path("skill/.py-sandboxes")
+
     def test_a_learn_with_a_file_keeps_its_file(self) -> None:
         args = ["--pysandboxes-config=skill/.py-sandboxes", "--learn=other.py-sandboxes", "script.py"]
 

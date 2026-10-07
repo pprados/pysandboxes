@@ -19,7 +19,8 @@ Several scenarios read the `.py-sandboxes` file as the policy of a program. It i
 down. The effective rights also depend on:
 
 - the `include` lines: a path starting with `./` is resolved from the **current directory**, so
-  `include "./.local.py-sandboxes"` lets whoever runs the command add rules. A bare name (`include "common"`)
+  `include "./.local.py-sandboxes"`, commented out in the template and active only once the user uncomments it,
+  lets whoever runs the command add rules. A bare name (`include "common"`)
   is resolved next to the including file. The `~/.config/...` and `/etc/...` profiles are outside the repository;
 - the environment: `os-sandbox=${OS_SANDBOX:-subprocess}` lets a variable downgrade the provider;
 - the command line: every `--key=value` given to `python-sb` is a rule that takes precedence over the file
@@ -37,58 +38,61 @@ the rule file is missing, or the command line or the code adds a rule (see [Lock
 An agent skill (`SKILL.md` and a `scripts/` directory, as used by Claude Code and other agents) often ships Python
 scripts. The agent runs them with all the rights of the user: every file of the home directory, the network, the
 API tokens of the environment. Shipping a rule file next to the scripts, and launching them with `python-sb`,
-bounds what a skill can do:
+bounds what a skill can do. For a script, `python-sb` reads the `.py-sandboxes` of the script's directory, whatever
+the current directory, and falls back to `./.py-sandboxes` only when there is none:
 
 ```text
 my-skill/
 ├── SKILL.md
-├── .py-sandboxes
 └── scripts/
+    ├── .py-sandboxes
     └── report.py
 ```
 
 ```markdown
 <!-- in SKILL.md -->
-Run `python-sb --pysandboxes-config=<skill dir>/.py-sandboxes <skill dir>/scripts/report.py <input>`.
+Run `<skill dir>/scripts/report.py <input>`.
 ```
 
-A shebang puts that command line in the script itself, so `SKILL.md` only says `Run <skill dir>/scripts/report.py
-<input>`, and the script cannot be started sandboxed with the wrong rules by mistake:
+A shebang puts the `python-sb` command line in the script itself, so the agent has nothing to choose, and the line
+names no path: it works wherever the skill is installed.
 
 ```python
-#!/usr/bin/env -S uvx --with tabulate python-sb --pysandboxes-config=${HOME}/.claude/skills/my-skill/.py-sandboxes
+#!/usr/bin/env -S uvx --with tabulate python-sb
 # Launched by the shebang through python-sb, never by a bare `python`.
 # Needs on the host: uv (for uvx). uvx fetches python-sb, pysandboxes and the third-party imports below.
 # Third-party imports: tabulate (the `--with tabulate` of the shebang).
-# Rules: ../.py-sandboxes, the permission manifest of this skill.
+# Rules: ./.py-sandboxes, next to this script, the permission manifest of this skill.
 import csv
 import sys
 
 from tabulate import tabulate
 ```
 
-- `--pysandboxes-config=` is required: for a script, `python-sb` reads the `.py-sandboxes` of the current directory,
-  not the one next to the script. `env -S` splits the line and expands `${HOME}`; it does not expand `~`.
 - Under `uvx`, the script sees only the environment of the tool: every third-party import needs its `--with`. The
   comments under the shebang say what has to be installed, so that an agent reading the script can tell the user
   before running it, rather than meeting a `ModuleNotFoundError` in the sandbox.
-- The script needs its execute bit, and the whole first line must fit in the 255 bytes Linux reads.
+- `env -S` splits the line into arguments. The script needs its execute bit, and the whole first line must fit in
+  the 255 bytes Linux reads.
 - Until the final release reaches PyPI, put the TestPyPI options of the README's Quick start
-  (`--prerelease allow --find-links ...`) in the shebang, before `python-sb`. With a short skill path the line still
-  fits: 242 bytes for this example.
+  (`--prerelease allow --find-links ...`) in the shebang, before `python-sb`: 175 bytes for this example.
 
-Launched through this shebang from another directory, with `os-sandbox=bwrap`, the script prints its report, and a
-script of the same skill that tries `import socket` is stopped by the rule file.
+Launched through this shebang from another directory, with `os-sandbox=bwrap`, the script prints its report; a
+script of the same skill that tries `import socket` is stopped by the rule file, and a `.py-sandboxes` or a
+`.local.py-sandboxes` in the current directory changes nothing.
 
-The author of the skill generates the rule file once, with `--learn` on their own machine, then reviews it and
-ships it. Pin the provider, and expose the directory of the skill: otherwise the script itself is hidden, and `python` reports
+The author of the skill generates the rule file once on their own machine, then reviews it and ships it. Name the
+file for learning mode, since a bare `--learn` writes into the current directory:
+`python-sb --learn=<skill dir>/scripts/.py-sandboxes <skill dir>/scripts/report.py <input>`. Pin the provider, and
+keep the exposed directory of the skill: otherwise the script itself is hidden, and `python` reports
 `can't open file`:
 
 ```ini
-# my-skill/.py-sandboxes
+# my-skill/scripts/.py-sandboxes
 py-sandbox=true
 os-sandbox=bwrap
-expose-ro=~/.claude/skills/my-skill
+learn=false
+expose-ro=~/.claude/skills/my-skill/scripts
 python-import=codecs, csv, encodings, json
 # ... the rest of what learning mode wrote
 ```
@@ -129,9 +133,9 @@ Only `net=` works this way. A `python-api=DENY:` in these profiles wins only at 
 `DENY` at all.
 
 These profiles apply only through the `include` lines: a rule file that drops them escapes them. Check that they
-are still there when reading the manifest. Conversely, remove the `include "./.local.py-sandboxes"` line from the
-rule file a skill ships: that path is resolved from the current directory, not from the skill's, so a repository
-the agent works in could add `python-import=socket` and `net=ALLOW|*|*|*|OUT` to the skill's rules with a
+are still there when reading the manifest. Conversely, a skill's rule file must not uncomment the
+`include "./.local.py-sandboxes"` line: that path is resolved from the current directory, not from the skill's, so a
+repository the agent works in could add `python-import=socket` and `net=ALLOW|*|*|*|OUT` to the skill's rules with a
 `.local.py-sandboxes` of its own.
 
 This containment does not replace a static analysis of the skill, and the static analysis does not replace it. A

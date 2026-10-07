@@ -2,26 +2,27 @@
 
 ## Manage config file locations
 
-By default, the program looks for the file in the root directory of the **module** that launches the sandbox. Otherwise, the `./.py-sandboxes` file is used. This can be modified before the program is launched. If you package your application in a Wheel, place your parameters within your module.
+By default, the program looks for the file in the root directory of the **module** that launches the sandbox, or, for `python-sb script.py`, in the directory of the script. Otherwise, the `./.py-sandboxes` file is used. This can be modified before the program is launched. If you package your application in a Wheel, place your parameters within your module.
 
 To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
 
 By default, you'll find this:
 
 ```text
-include "./.local.py-sandboxes"  # May be added to .gitignore
+#include "./.local.py-sandboxes"  # May be added to .gitignore
 include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
 include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
 ```
 
-The goal is to be able to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`).
+Uncomment the first line to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`). It is not active by default: its path is resolved from the current directory, so whatever directory the program is launched from could add rules of its own. Accepting it is the user's decision.
 
 Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
 
 By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is simply ignored.
 
 With **python-sb**, a special parameter can be used to select the configuration.
-Without it, `python-sb` reads `./.py-sandboxes`. Both `--pysandboxes-config=FILE` and `--pysandboxes-config FILE`
+Without it, `python-sb` reads the `.py-sandboxes` next to the script or in the directory of the `-m` module, and
+`./.py-sandboxes` when there is none. Both `--pysandboxes-config=FILE` and `--pysandboxes-config FILE`
 are accepted.
 
 ```bash
