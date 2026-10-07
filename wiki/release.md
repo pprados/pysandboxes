@@ -81,9 +81,9 @@ Their digests are listed in the run summary.
 `images-refresh.yml` runs every day on `develop`. When `python:<python>-slim` holds a patch with no image of the
 latest final release yet (`.github/scripts/refresh-images.sh`), it dispatches `images.yml` on that release tag, for
 those Pythons only. It holds no Docker Hub credential: the dispatched run gets the `dockerhub` environment because it
-runs on a `v*` tag, checks the tag signature like a release, and rebuilds the wheel at the tag, which must equal the
-one on pypi.org byte for byte (`verify-published.sh`) before any image is built. To see what it would do, run it by
-hand with `dry-run`. A tag older than `images.yml` cannot be rebuilt this way.
+runs on a `v*` tag, checks the tag signature like a release, and downloads the wheel from pypi.org, which never
+replaces a published file and which `verify-published` checked against the built wheel at release time. To see what
+it would do, run it by hand with `dry-run`. A tag older than `images.yml` cannot be rebuilt this way.
 
 `python-sb/` is a separate package, the one behind `uvx python-sb`, with its own version. A release publishes it
 too when one of its files changed since the previous tag (the last final tag, for a final version); its version in

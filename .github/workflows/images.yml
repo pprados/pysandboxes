@@ -3,10 +3,9 @@
 #
 # Builds the five container images of a signed release tag and pushes them to Docker Hub, one runner per Python, each
 # FROM the newest patch of its Python. Called by release.yml with the wheel it built and checked against the index;
-# dispatched on a final tag by images-refresh.yml when python:<minor>-slim moves to a new patch, it then rebuilds the
-# wheel at the tag (the build is reproducible) and checks it against the index, so the images always embed exactly
-# what was published. The push credential lives in the dockerhub environment, restricted to v* tags: a dispatch on
-# any other ref gets no credential.
+# dispatched on a final tag by images-refresh.yml when python:<minor>-slim moves to a new patch, it then downloads
+# the published wheel, so the images always embed exactly what was published. The push credential lives in the
+# dockerhub environment, restricted to v* tags: a dispatch on any other ref gets no credential.
 name: Images
 
 on:
@@ -104,16 +103,17 @@ jobs:
         name: ${{ inputs.wheel-artifact }}
         path: dist/
 
-    - name: Rebuild the wheel at the tag and check it against the index
+    # The index never replaces a published file, and verify-published proved at release time that it serves the
+    # wheel built from the tag.
+    - name: Download the published wheel
       if: inputs.wheel-artifact == ''
       env:
         INDEX_URL: >-
           ${{ needs.verify.outputs.final == 'true' && 'https://pypi.org/simple/'
           || 'https://test.pypi.org/simple/' }}
-        ATTEMPTS: "1"
-      run: |
-        uv build --wheel
-        .github/scripts/verify-published.sh "$VERSION" dist/pysandboxes-"$VERSION"-*.whl
+      run: >-
+        pip download "pysandboxes==$VERSION" --no-deps --no-cache-dir --only-binary :all: --index-url "$INDEX_URL"
+        --dest dist/
 
     # A fresh checkout's mtimes would make .make-dist rerun uv build, which deletes the wheel.
     - name: Build the five images from the published wheel

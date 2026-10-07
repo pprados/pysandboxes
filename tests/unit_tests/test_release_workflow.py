@@ -194,17 +194,19 @@ def test_the_images_need_a_signed_tag() -> None:
     assert step["env"]["ALLOWED_SIGNERS"] == "${{ vars.RELEASE_ALLOWED_SIGNERS }}"
 
 
-def test_a_dispatched_build_checks_its_rebuilt_wheel_against_the_index() -> None:
+def test_a_dispatched_build_takes_the_published_wheel_from_the_index() -> None:
     job = _image_job()
-    download = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/download-artifact@"))
-    assert download["if"] == "inputs.wheel-artifact != ''"
-    rebuild = job["steps"][_step_index(job, "verify-published.sh")]
-    assert rebuild["if"] == "inputs.wheel-artifact == ''"
-    assert "uv build --wheel" in rebuild["run"]
-    assert " ".join(rebuild["env"]["INDEX_URL"].split()) == (
+    artifact = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/download-artifact@"))
+    assert artifact["if"] == "inputs.wheel-artifact != ''"
+    download = job["steps"][_step_index(job, "pip download")]
+    assert download["if"] == "inputs.wheel-artifact == ''"
+    assert '"pysandboxes==$VERSION" --no-deps' in download["run"]
+    assert '--index-url "$INDEX_URL"' in download["run"]
+    assert " ".join(download["env"]["INDEX_URL"].split()) == (
         "${{ needs.verify.outputs.final == 'true' && 'https://pypi.org/simple/' || 'https://test.pypi.org/simple/' }}"
     )
-    assert _step_index(job, "verify-published.sh") < _step_index(job, "build-images")
+    assert _step_index(job, "pip download") < _step_index(job, "build-images")
+    assert "uv build" not in yaml.safe_dump(job)
 
 
 def test_the_smoke_test_runs_before_any_push() -> None:

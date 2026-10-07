@@ -49,7 +49,7 @@ Releases up to `0.5.0b1` were tagged without the `sb` prefix nor the patch: `<py
 ## Pulling
 
 ```bash
-VERSION=0.5.0b2
+VERSION=0.5.0b2  # the first release with sb tags
 docker pull docker.io/pprados/python-sb-unshare:sb$VERSION
 ```
 
