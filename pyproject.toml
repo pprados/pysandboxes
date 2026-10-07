@@ -177,6 +177,9 @@ reportInvalidTypeForm = "warning"
 #
 # https://github.com/tophat/syrupy
 addopts = "--strict-markers --strict-config --durations=5 -vv"
+# A bare `pytest` runs what `make unit-tests` runs. Each sample's tests need that sample's own venv,
+# and the integration and container suites need their providers: their make targets name them.
+testpaths = ["tests/unit_tests"]
 # Registering custom markers.
 # https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
 markers = [
