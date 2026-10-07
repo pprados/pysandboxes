@@ -33,6 +33,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
 from pysandboxes.learning import _update_remote_result_mode
+from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote import tools
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
@@ -288,6 +289,21 @@ class TestResultChannel:
     def test_learning_does_not_weaken_objects_mode_from_partial_observations(self) -> None:
         lines = ["remote-result-mode=objects"]
         assert _update_remote_result_mode(lines, {"remote-result-mode=data-only"}, "# Add rules (date)") == ""
+
+    @pytest.mark.parametrize("observed", ["data-only", "objects"])
+    def test_learning_never_duplicates_a_mode_set_by_an_included_profile(
+        self, tmp_path: pathlib.Path, observed: str
+    ) -> None:
+        (tmp_path / ".py-sandboxes").write_text("remote-result-mode=data-only\n")
+        learn_file = tmp_path / "tests.py-sandboxes"
+        lines = ['include ".py-sandboxes"']
+        generated = _update_remote_result_mode(
+            lines, {f"remote-result-mode={observed}"}, "# Add rules (date)", learn_file
+        )
+        learn_file.write_text("\n".join([*lines, generated]))
+
+        load_and_parse_config(learn_file, envs={})  # raised "Multiple remote-result-mode parameters"
+        assert lines == ['include ".py-sandboxes"']
 
 
 class _Severity(enum.Enum):

@@ -24,6 +24,10 @@
 - The samples' documentation no longer claims that learning mode cannot produce `net=` rules: it does, and each one
   needs review
 
+### Fixed
+- Learning into a profile that includes another one no longer adds a second `remote-result-mode` rule, which made
+  the profile invalid on the next run
+
 ### Added
 - Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule
 - First stable version

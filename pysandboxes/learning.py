@@ -136,7 +136,7 @@ def generate_config_from_learning() -> None:
             ) as resource_path:
                 all_lines = resource_path.read_text().split("\n")
 
-        replaces["learning_remote_result"] = _update_remote_result_mode(all_lines, learning, header)
+        replaces["learning_remote_result"] = _update_remote_result_mode(all_lines, learning, header, learning_path)
 
         # Insert new rules in the file
         pattern: str
@@ -209,11 +209,27 @@ def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
     return learning_path, old_learning_path
 
 
-def _update_remote_result_mode(lines: list[str], learning: set[Any], date_header: str) -> str:
-    """Update the learned result mode while retaining prior values as comments."""
+def _update_remote_result_mode(
+    lines: list[str], learning: set[Any], date_header: str, learning_path: Path | None = None
+) -> str:
+    """Update the learned result mode while retaining prior values as comments.
+
+    A mode set by a file the profile includes counts as set: a second rule would make the profile
+    invalid, and the included file is not rewritten.
+    """
     modes = _observed_remote_result_modes(learning)
     active_rules = _active_remote_result_rules(lines)
-    if "objects" in modes and not any(mode == "objects" for _, mode in active_rules):
+    included_modes = _included_remote_result_modes(learning_path, lines) if learning_path else []
+    if (
+        "objects" in modes
+        and not any(mode == "objects" for _, mode in active_rules)
+        and "objects" not in included_modes
+    ):
+        if included_modes:
+            return (
+                _remote_result_warning()
+                + "\n# remote-result-mode=objects is needed: set it in the included profile that sets the mode."
+            )
         if active_rules:
             stamp = date_header.removeprefix("# Add rules (").removesuffix(")")
             for index, _mode in reversed(active_rules):
@@ -225,9 +241,24 @@ def _update_remote_result_mode(lines: list[str], learning: set[Any], date_header
         if any("WARNING: observed return pickles reconstruct application objects." in line for line in lines):
             return ""
         return _remote_result_warning()
-    if "data-only" in modes and not active_rules:
+    if "data-only" in modes and not active_rules and not included_modes:
         return "remote-result-mode=data-only"
     return ""
+
+
+def _included_remote_result_modes(learning_path: Path, lines: list[str]) -> list[str]:
+    """Return the result modes set by the files the profile includes."""
+    from .py_sandbox import _parse_include
+    from .sb_types import ConfigLine
+    from .tools import remove_config_comments
+
+    learning_path = learning_path.absolute()
+    config = remove_config_comments([ConfigLine(line, learning_path, ln + 1) for ln, line in enumerate(lines)])
+    return [
+        rule.rule.split("=", 1)[1].strip().lower()
+        for rule in _parse_include(learning_path.parent, {learning_path}, config)
+        if rule.path != learning_path and rule.rule.startswith("remote-result-mode=")
+    ]
 
 
 def _observed_remote_result_modes(learning: set[Any]) -> set[str]:
