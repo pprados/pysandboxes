@@ -16,7 +16,7 @@ from pysandboxes.remote.firejail_sse_daemon import FireJailSSEDaemon
 from pysandboxes.sb_types import ConfigLine, Envs
 
 
-def _firejail_args(rules: AllRules, tmp_path: Path, config: str | None) -> list[str]:
+def _firejail_args(rules: AllRules, tmp_path: Path, config: str | None, bridges: list[str] | None = None) -> list[str]:
     config_path = tmp_path / "firejail.config"
     if config is not None:
         config_path.write_text(config, encoding="utf-8")
@@ -24,8 +24,7 @@ def _firejail_args(rules: AllRules, tmp_path: Path, config: str | None) -> list[
         patch.object(firejail_sse_daemon, "FIREJAIL_CONFIG", config_path),
         patch.object(firejail_sse_daemon, "which_command", return_value="/usr/bin/firejail"),
         patch.object(firejail_sse_daemon, "get_upstream_dns", return_value=[]),
-        patch.object(firejail_sse_daemon, "get_default_interface", return_value="eth0"),
-        patch.object(firejail_sse_daemon, "get_bridge_interfaces", return_value=[]),
+        patch.object(firejail_sse_daemon, "get_bridge_interfaces", return_value=bridges or []),
     ):
         args, _ = FireJailSSEDaemon("token")._firejail_args(rules, {}, None, tmp_path)
     return list(args)
@@ -67,9 +66,13 @@ def test_socket_rule_with_explicit_restricted_network_is_tolerated_with_a_warnin
     assert "keeps the host network" in caplog.text
 
 
-def test_socket_rule_without_restriction_gets_its_own_network(tmp_path: Path) -> None:
-    args = _firejail_args(_with_socket_rule(), tmp_path, "restricted-network no\n")
-    assert "--net=eth0" in args
+def test_socket_rule_requires_a_bridge_when_no_bridge_is_detected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="require a host bridge"):
+        _firejail_args(_with_socket_rule(), tmp_path, "restricted-network no\n")
+
+def test_socket_rule_uses_a_detected_bridge(tmp_path: Path) -> None:
+    args = _firejail_args(_with_socket_rule(), tmp_path, "restricted-network no\n", ["br0"])
+    assert "--net=br0" in args
     assert "--net=none" not in args
 
 
@@ -78,7 +81,7 @@ def test_environment_is_always_cleared_last(tmp_path: Path, with_socket_rule: bo
     """``env -i`` takes everything after it as its own argv, so it must close the firejail options."""
     rules = _with_socket_rule() if with_socket_rule else EmptyRules
     rules = rules._replace(envs=Envs({"TERM": "xterm"}))
-    args = _firejail_args(rules, tmp_path, "restricted-network no\n")
+    args = _firejail_args(rules, tmp_path, "restricted-network no\n", ["br0"] if with_socket_rule else None)
     env_at = args.index("/usr/bin/env")
     assert args[env_at:] == ["/usr/bin/env", "-i", "TERM=xterm"]
     assert all(not a.startswith("--") for a in args[env_at:])

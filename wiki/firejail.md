@@ -20,7 +20,7 @@ The host launches a Firejail sandbox with a generated profile: whitelist/read-on
 | Aspect | Detail |
 |--------|--------|
 | **Docker / Podman** | Not usable in Docker, Podman or Kubernetes: inside a container, firejail runs the program without any isolation (see [Using with Docker](#using-with-docker)). |
-| **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config` and a bridge must exist (e.g. `add-bridge.sh`); see [Prerequisites](#prerequisites) for the other two settings. The daemon mode always has a socket rule (its SSE port). Under an explicit `restricted-network yes`, the sandbox keeps the **host network** with a warning and only the Python layer enforces the socket rules. |
+| **Network** | With socket rules, `restricted-network no` must be set in `/etc/firejail/firejail.config` and a host bridge must exist. Firejail requires extra host network setup compared with bwrap, unshare and qemu; see [Prerequisites](#prerequisites). The daemon mode always has a socket rule (its SSE port). Under an explicit `restricted-network yes`, the sandbox keeps the **host network** with a warning and only the Python layer enforces the socket rules. |
 | **`/etc`** | `/etc` inside the jail is the `--private-etc` copy of the template (`hosts`, `resolv.conf`, `nsswitch.conf`, `ssl`, `pki`, `ca-certificates`). An `expose-*` rule under `/etc/` gets no `--whitelist` (it would put a tmpfs over `/etc` and break `--dns`), so a file outside that list stays invisible. |
 | **Debug** | Profile and netfilter generation can be complex; check logs and Firejail options for troubleshooting. |
 
@@ -59,7 +59,7 @@ To use a specific bridge interface (e.g. for host communication), set:
 
 - `firejail.net=my_bridge` — use the given bridge for the sandbox network.
 
-If `firejail.net` is not set and socket rules are used, the daemon picks a default (e.g. `docker0` or the first available bridge).
+If `firejail.net` is not set and socket rules are used, the daemon selects `docker0` when present, otherwise the first detected bridge. It exits with an error if no bridge exists; a default-route interface is not used as a fallback. Set `firejail.net=<bridge>` to select a bridge explicitly.
 
 ### Seccomp (firejail.seccomp, firejail.seccomp.keep, firejail.seccomp.block)
 
@@ -80,7 +80,7 @@ Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`
 ## Prerequisites
 
 - Firejail installed (e.g. `sudo apt install firejail`).
-- For network and socket rules: a bridge (e.g. `docker0`, `br0`). Check with `ip link show type bridge`. The script `scripts/add-bridge.sh` can create one if needed.
+- For socket rules (including daemon transport): set `restricted-network no` in `/etc/firejail/firejail.config` and provide a host bridge. Existing Docker (`docker0`) or libvirt (`virbr0`) bridges can be selected automatically. Otherwise, an administrator can run `sudo scripts/add-bridge.sh [bridge-name]`; the script needs `ip`, `iptables` and `sysctl`. It creates a `10.10.20.0/24` bridge, enables IPv4 forwarding, adds scoped NAT/FORWARD rules, and does not attach or change a physical interface. IPv4 forwarding is a global runtime host setting. Review the script and existing firewall policy before running it.
 - For socket rules (and so for the daemon mode), the `restricted-network` line of `/etc/firejail/firejail.config` decides:
   - `restricted-network no`: network filtering is applied (`--net`, `--dns`, `--netfilter`, `--netfilter6`).
   - no such line: the daemon logs an error and exits.
@@ -89,7 +89,7 @@ Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`
 
 ## Recommendations
 
-- Set `restricted-network no` in `/etc/firejail/firejail.config` and create a bridge before relying on socket rules. Under `restricted-network yes`, only the Python guard enforces them, and native code, `ctypes` or a subprocess can reach any address.
+- Set `restricted-network no` in `/etc/firejail/firejail.config` and configure a bridge before relying on socket rules. If no bridge exists, the daemon now stops with an actionable error instead of trying the default physical interface. Under `restricted-network yes`, only the Python guard enforces them, and native code, `ctypes` or a subprocess can reach any address.
 - Do not use Firejail in Docker, Podman or Kubernetes. Use [unshare](unshare.md), [bwrap](bwrap.md) or [qemu](qemu.md) with their provider images instead.
 - Restrict system calls with `firejail.seccomp.keep=`, built from the output of the strace script shown above.
 - Note that a file under `/etc` is visible only if it belongs to the `--private-etc` copy of the template.

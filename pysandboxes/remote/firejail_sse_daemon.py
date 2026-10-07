@@ -43,7 +43,6 @@ from ..tools import (
 from .client_subprocess_sse_daemon import BaseSubProcessDaemon
 from .tools import (
     get_bridge_interfaces,
-    get_default_interface,
     get_upstream_dns,
     suggest_package_installation,
     which_command,
@@ -478,20 +477,18 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     #         break
                     pass
                 if "net" not in all_rules.os_sandbox_params:  # type: ignore[attr-defined]
-                    default_interface = get_default_interface()
                     bridges = get_bridge_interfaces()
                     if not bridges:
-                        bridge = default_interface
+                        raise ValueError(
+                            "Firejail socket rules require a host bridge; create one or set firejail.net explicitly"
+                        )
+                    # Search "docker*" else, the first bridge
+                    for bridge in bridges:
+                        if bridge.startswith("docker"):
+                            break
                     else:
-                        # Search "docker*" else, the first bridge
-                        for bridge in bridges:
-                            if bridge.startswith("docker"):
-                                break
-                        else:
-                            bridge = bridges[0]
+                        bridge = bridges[0]
                     logger.debug(f"Select bridge {bridges}")
-                    if not default_interface:
-                        raise ValueError("Impossible to detect the default network interface")
                     args.append(f"--net={bridge}")
 
                 # The sandbox now owns a network namespace, so firejail accepts

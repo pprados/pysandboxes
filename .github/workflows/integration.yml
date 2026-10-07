@@ -75,6 +75,14 @@ jobs:
           qemu-system-x86 qemu-utils genisoimage
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
+    - name: Prepare Firejail network-filter test
+      run: |
+        sudo ip link add br-pysb-test type bridge
+        sudo ip addr add 198.18.0.1/24 dev br-pysb-test
+        sudo ip link set br-pysb-test up
+        sudo sed -i -E '/^[[:space:]]*restricted-network[[:space:]]+/d' /etc/firejail/firejail.config
+        echo 'restricted-network no' | sudo tee -a /etc/firejail/firejail.config
+
     # The rule GitHub documents for hardware-accelerated emulators. Where /dev/kvm is
     # absent, as in a container under `act`, qemu falls back to emulation by itself,
     # unless exclude-tcg asks for KVM.
@@ -122,5 +130,10 @@ jobs:
     - name: Run integration tests
       env:
         PYSANDBOXES_FAIL_ON_SKIP: "1"
+        PYSANDBOXES_FIREJAIL_TEST_BRIDGE: br-pysb-test
         PYTEST_ADDOPTS: --durations=20 ${{ inputs.exclude-tcg && '-m "not slow"' || '' }}
       run: make integration-tests
+
+    - name: Remove Firejail test bridge
+      if: always()
+      run: sudo ip link delete br-pysb-test || true
