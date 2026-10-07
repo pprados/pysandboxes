@@ -187,7 +187,7 @@ flowchart TD
     C -- "2- Return to caller" --> A
 
 %% Custom style for OSSandbox
-style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
 style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
@@ -280,7 +280,7 @@ flowchart TD
     B -- "4- Propagate to caller" --> A
 
     %% Custom style for OSSandbox
-    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+    style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
     style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 
 ```
@@ -425,7 +425,7 @@ flowchart TD
 
 
 %% Custom style for OSSandbox
-style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
 style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 style DynamicCode fill:#6e4a2c,stroke:#2f2617,stroke-width:4px,stroke-dasharray:6 4,color:#ffffff
 ```

@@ -193,7 +193,7 @@ flowchart TB
         NAT["native code · raw syscalls<br/><i>not comprehensively mediated above the OS layer</i>"]
     end
 
-style OS fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style OS fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
 style PY fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 style EV fill:#6e4a2c,stroke:#2f2617,stroke-width:4px,stroke-dasharray:6 4,color:#ffffff
 ```
@@ -217,7 +217,7 @@ flowchart LR
     Ld -- "<b>up</b> · exactly one decision,<br/>with a reason if the layer can produce one" --> Lu
 
 style Lu fill:#aa7c52,stroke:#2f2617,stroke-width:4px
-style Ld fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style Ld fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
 ```
 
 **C1 — monotone restriction.** A layer is configured as though it were the only
@@ -336,7 +336,7 @@ flowchart TB
     D4 -.-> H
     G == "regenerate within the policy<br/><b>bounded retries</b>" ==> D1
 
-style V fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style V fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
 style G fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
@@ -370,7 +370,7 @@ flowchart LR
     P -- "1 · call + arguments<br/><i>trusted → untrusted: expected</i>" --> C
     C -- "2 · result / exception payload<br/><b>untrusted → trusted: validate at the boundary</b>" --> P
 
-style T fill:#ebe0d0,stroke:#2f2617,stroke-width:4px
+style T fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
 style U fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
