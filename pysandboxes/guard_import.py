@@ -21,6 +21,7 @@ import logging
 import os
 import sys
 from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import copy
 
 # Python 3.10+ only
@@ -42,6 +43,7 @@ from typing import (
 )
 
 from .e import RuleModuleNotFoundError
+from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
 from .learning import add_learning_rule, is_learning_mode
 from .main_logger import ErrorMsg
@@ -128,9 +130,8 @@ def framework_imports() -> Iterator[None]:
     records the top-level name instead of judging it, and keeps allowing it afterwards:
     the server imports submodules lazily, per request, under names it already used.
 
-    Only framework code may run inside: what it imports becomes importable by the
-    sandboxed code without a rule. The modules allowed this way are those listed in
-    wiki/weaknesses.md.
+    Only framework code may run inside. Outside a call of the user's code (see user_code()),
+    what it imports stays importable without a rule: wiki/weaknesses.md lists those modules.
     """
     global _framework_window
     _framework_window = True
@@ -140,12 +141,34 @@ def framework_imports() -> Iterator[None]:
         _framework_window = False
 
 
+# Set while the user's code runs: the user module's import, init_fn, and each call of a @sandbox function.
+_user_scope: ContextVar[bool] = ContextVar("pysandboxes_user_scope", default=False)
+
+
+@contextmanager
+def user_code() -> Iterator[None]:
+    """Judge every import made inside on the user's rules alone.
+
+    A module the daemon already loaded never reaches the import guard's finder: Python finds it in
+    sys.modules. Inside this block the import is judged anyway, by the wrappers of ``__import__`` and
+    ``importlib.import_module``, and the daemon's own modules get no exemption. In learning mode, the
+    import is recorded instead. The scope follows the context, so the tasks a coroutine creates inherit
+    it; a thread the user's code starts does not.
+    """
+    token = _user_scope.set(True)
+    try:
+        yield
+    finally:
+        _user_scope.reset(token)
+
+
 def _is_import_allowed(module_name: str) -> bool:
     """Whether ``module_name`` may be imported under the active rules.
 
     An empty rule set is a deny-all, not a missing filter: only an explicit
     ``python-import=*`` opens everything. The package's own name is matched
-    exactly, so ``pysandboxesx`` is not this package.
+    exactly, so ``pysandboxesx`` is not this package. Outside the user's code,
+    the daemon's own modules are allowed too.
 
     Args:
         module_name: Top-level module name.
@@ -155,7 +178,56 @@ def _is_import_allowed(module_name: str) -> bool:
     """
     if _rules and _rules[0] == "*":
         return True
-    return module_name == "pysandboxes" or module_name in _rules or module_name in _framework_names
+    if module_name == "pysandboxes" or module_name in _rules:
+        return True
+    return not _user_scope.get() and module_name in _framework_names
+
+
+def _judge_user_import(name: str) -> None:
+    """Refuse, or record in learning mode, an import by the user's code that the rules do not grant."""
+    module_name = name.split(".", 1)[0]
+    if _is_import_allowed(module_name):
+        return
+    if is_learning_mode():
+        add_learning_rule(LearnImportRule(module_name))
+        return
+    raise RuleModuleNotFoundError(f"Module named {module_name!r} is not allowed by a rule")
+
+
+def _called_by_the_import_machinery() -> bool:
+    """Whether the caller of ``__import__`` is importlib's bootstrap, loading a module for the user.
+
+    C code imports through ``builtins.__import__`` too, with the Python frame that called it: the
+    bootstrap's own imports are not the user's. The frame's globals must be the module's dict itself,
+    so a function built on forged globals does not pass for the machinery.
+    """
+    caller_globals = sys._getframe(2).f_globals
+    module = sys.modules.get(caller_globals.get("__name__", ""))
+    return module is not None and module.__dict__ is caller_globals and module.__name__ in _IMPORT_MACHINERY
+
+
+_IMPORT_MACHINERY = frozenset({"importlib._bootstrap", "importlib._bootstrap_external"})
+
+
+def _wrap_import(func: Callable[..., Any]) -> Callable[..., Any]:
+    @guard_wraps(func)
+    def wrapper(name: str, *args: Any, **kwargs: Any) -> Any:
+        level = kwargs.get("level", args[3] if len(args) > 3 else 0)
+        if level == 0 and _user_scope.get() and not _called_by_the_import_machinery():
+            _judge_user_import(name)
+        return func(name, *args, **kwargs)
+
+    return wrapper
+
+
+def _wrap_import_module(func: Callable[..., Any]) -> Callable[..., Any]:
+    @guard_wraps(func)
+    def wrapper(name: str, *args: Any, **kwargs: Any) -> Any:
+        if not name.startswith(".") and _user_scope.get():
+            _judge_user_import(name)
+        return func(name, *args, **kwargs)
+
+    return wrapper
 
 
 def parse_rules(
@@ -638,7 +710,11 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
     Returns:
         Dictionary mapping module paths to patch factory functions.
     """
-    return {}
+    return {
+        "builtins.__import__": _wrap_import,
+        "importlib.__import__": _wrap_import,
+        "importlib.import_module": _wrap_import_module,
+    }
 
 
 def activate_guard_import(

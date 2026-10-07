@@ -84,6 +84,9 @@ def test_a_denial_is_readable_even_when_the_message_is_rewritten(
     any outage, so the framework reports its own denials instead.
     """
     learned = _learn_the_happy_path(tmp_path)
+    # The happy path never imports socket: grant the import, so that the network rule is the one that refuses.
+    with learned.open("a") as profile:
+        profile.write("python-import=socket\n")
 
     with sandboxes(sandboxes_config=learned):
         with pytest.raises(OSError) as caught:

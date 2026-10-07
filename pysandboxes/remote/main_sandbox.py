@@ -232,7 +232,7 @@ async def run_server(process_config: DaemonParameters) -> int:
     Returns:
         Exit code (0 for success).
     """
-    from ..guard_import import framework_imports
+    from ..guard_import import framework_imports, user_code
 
     with framework_imports():
         import importlib
@@ -250,7 +250,8 @@ async def run_server(process_config: DaemonParameters) -> int:
         # so bracketing it here changed nothing.
         try:
             # Init_fn declared by the trusted parent
-            module = importlib.import_module(module_name)
+            with user_code():
+                module = importlib.import_module(module_name)
         except ImportError:
             pysandboxes_logger.error("Impossible to import the module %s", repr(module_name))
             sys.exit(-1)

@@ -8,11 +8,12 @@ Only the pure parts are covered here. ``GuardFinder`` and ``GuardLoader`` mutate
 
 from pathlib import Path
 from types import ModuleType
-from typing import cast
+from typing import Any, Callable, cast
 
 import pytest
 
 from pysandboxes import guard_import
+from pysandboxes.e import RuleModuleNotFoundError
 from pysandboxes.guard_import import (
     LearnImportRule,
     PatchRule,
@@ -22,6 +23,7 @@ from pysandboxes.guard_import import (
     generate_rules,
     parse_rules,
     patch_rules,
+    user_code,
 )
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
@@ -127,9 +129,63 @@ def test_a_single_item_wider_than_the_limit_is_kept() -> None:
     assert _group_by_width(["a" * 20], 10) == ["a" * 20]
 
 
-def test_no_patch_rule_for_the_import_guard() -> None:
-    assert patch_rules(learn=False) == {}
-    assert patch_rules(learn=True) == {}
+def test_the_import_functions_are_patched() -> None:
+    assert set(patch_rules(learn=False)) == {"builtins.__import__", "importlib.__import__", "importlib.import_module"}
+
+
+def _imported(name: str, *args: Any, **kwargs: Any) -> str:
+    return name
+
+
+def _guarded_imports() -> tuple[Callable[..., Any], Callable[..., Any]]:
+    """The wrappers around a stand-in for the import: the guard of this process already holds the real one."""
+    return guard_import._wrap_import(_imported), guard_import._wrap_import_module(_imported)
+
+
+def test_outside_the_user_code_an_import_is_not_judged(monkeypatch: pytest.MonkeyPatch) -> None:
+    _activate(monkeypatch, ())
+    import_, import_module = _guarded_imports()
+    assert import_("json") == "json"
+    assert import_module("json") == "json"
+
+
+def test_in_the_user_code_a_module_the_daemon_loaded_is_judged(monkeypatch: pytest.MonkeyPatch) -> None:
+    _activate(monkeypatch, ())
+    monkeypatch.setattr(guard_import, "_framework_names", {"json"})
+    import_, import_module = _guarded_imports()
+    with user_code():
+        with pytest.raises(RuleModuleNotFoundError, match="'json'"):
+            import_("json.decoder", {"__name__": "uvicorn"}, None, (), 0)
+        with pytest.raises(RuleModuleNotFoundError, match="'json'"):
+            import_module("json")
+
+
+def test_in_the_user_code_a_rule_grants_the_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    _activate(monkeypatch, ("json",))
+    import_, import_module = _guarded_imports()
+    with user_code():
+        assert import_("json.decoder") == "json.decoder"
+        assert import_module("json") == "json"
+
+
+def test_in_the_user_code_a_relative_import_is_left_to_the_finder(monkeypatch: pytest.MonkeyPatch) -> None:
+    _activate(monkeypatch, ())
+    import_, import_module = _guarded_imports()
+    with user_code():
+        assert import_("decoder", {"__package__": "json"}, None, (), 1) == "decoder"
+        assert import_("decoder", level=1) == "decoder"
+        assert import_module(".decoder", "json") == ".decoder"
+
+
+def test_in_the_user_code_learning_records_the_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    _activate(monkeypatch, ())
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_import, "is_learning_mode", lambda: True)
+    monkeypatch.setattr(guard_import, "add_learning_rule", recorded.append)
+    import_, _ = _guarded_imports()
+    with user_code():
+        assert import_("json") == "json"
+    assert recorded == [LearnImportRule("json")]
 
 
 def test_learned_modules_are_sorted_by_danger() -> None:

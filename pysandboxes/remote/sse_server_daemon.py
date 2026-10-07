@@ -32,7 +32,7 @@ from uvicorn import Server
 
 from ..all_rules import AllRules
 from ..e import sandbox_denials
-from ..guard_import import framework_imports
+from ..guard_import import framework_imports, user_code
 from ..immutable_dict import ImmutableDict
 from ..lifecycle import arm
 from ..private_loop import get_sandbox_loop
@@ -111,7 +111,8 @@ async def sandbox_daemon(
         # set_is_in_sandbox(True)
         try:
             # Function_id supplied by the trusted parent process
-            module = importlib.import_module(module_name)
+            with user_code():
+                module = importlib.import_module(module_name)
             function = getattr(module, function_name)
         except ModuleNotFoundError as e:
             logger.error("Module %s not found", module_name)
@@ -424,10 +425,11 @@ class SSEServerDaemon(BaseSSESandbox):
         """
         set_is_in_sandbox(True)
         if init_fn:
-            if asyncio.iscoroutinefunction(init_fn):
-                await init_fn()
-            else:
-                init_fn()
+            with user_code():
+                if asyncio.iscoroutinefunction(init_fn):
+                    await init_fn()
+                else:
+                    init_fn()
         logging.basicConfig(level=logging.INFO)  # Set logs if it's not already set by init_fn()
         loop = get_sandbox_loop()
         initial_threshold: float = loop.slow_callback_duration

@@ -15,6 +15,7 @@ import queue
 import sys
 from typing import Any, Callable
 
+from ..guard_import import user_code
 from ..private_loop import get_sandbox_loop
 
 logger = logging.getLogger(__name__)
@@ -199,10 +200,11 @@ async def acatch_stdio(
         try:
             use_async = inspect.iscoroutinefunction(fn)
 
-            if use_async:
-                fn_result = await fn(*args, **kwargs)
-            else:
-                fn_result = fn(*args, **kwargs)
+            with user_code():
+                if use_async:
+                    fn_result = await fn(*args, **kwargs)
+                else:
+                    fn_result = fn(*args, **kwargs)
             result = {"result": fn_result}
             if sync_or_async_queue is not None:
                 if isinstance(sync_or_async_queue, asyncio.Queue):
