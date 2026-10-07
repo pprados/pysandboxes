@@ -456,6 +456,17 @@ def test_learning_marks_runtime_observed_attributes() -> None:
     assert any("runtime-observed" in line for line in lines)
 
 
+@pytest.mark.parametrize("name", ["format", "format_map"])
+def test_learning_advises_an_fstring_over_a_learned_format(name: str) -> None:
+    lines = generate_rules({LearnEvalRule("eval-attribute", name)})
+    rule = next(i for i, line in enumerate(lines) if line.startswith("eval-attribute="))
+    assert any(line.startswith("#") and "f-string" in line for line in lines[:rule])
+
+
+def test_learning_gives_no_fstring_advice_without_format() -> None:
+    assert not any("f-string" in line for line in generate_rules({LearnEvalRule("eval-attribute", "split")}))
+
+
 def test_a_honoured_caller_context_suppresses_the_eval_call_line() -> None:
     """Spec 10: a learned rule set is a sample, a caller context is intent."""
     observed = {

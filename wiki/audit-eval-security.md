@@ -248,6 +248,15 @@ Two configuration rules keep the method out of reach in the first place:
 - **The refusal points to the f-string**, whose attribute accesses are checked
   like any dotted read, rather than telling the reader to grant `format`.
 
+**Recommendation: write an f-string, not `str.format()`.** `f"{x.name}"`
+compiles to `JoinedStr` and `FormattedValue` nodes, so each attribute it reads
+is an ordinary `Attribute` node, checked statically and by `__sb_getattr__`. It
+needs `eval-syntax=fstring`, and no `format` grant. `str.format` leaves the
+fields to the runtime template walk described above, and every door closed in
+this section was a way around that walk. Keep `eval-attribute=format` for code
+that cannot be changed. When learning mode observes `format` or `format_map`, it
+writes this advice as a comment above the generated `eval-attribute` line.
+
 ---
 
 ## Lambdas and the call-depth budget

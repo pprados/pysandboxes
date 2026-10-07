@@ -23,6 +23,7 @@
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
 
 ### Added
+- Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule
 - Require a host bridge for Firejail network filtering and test its OS-level rules in the provider matrix
 - First stable version
 - accept *complete* and *selected* mode

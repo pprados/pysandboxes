@@ -531,6 +531,9 @@ def generate_rules(learn: set[Any]) -> list[str]:
             continue
         if not names:
             continue
+        if key == "eval-attribute" and names.intersection(_BLIND_ATTRIBUTES):
+            lines.append('# Prefer an f-string (f"{x}") to str.format(): its attribute accesses are checked')
+            lines.append("#   statically, where a format template is only checked at runtime.")
         tokens = _condense_syntax(names) if key == "eval-syntax" else sorted(names)
         suffix = "                    # ⚠ runtime-observed" if key in _RUNTIME_OBSERVED else ""
         lines.append(f"{key}={', '.join(tokens)}{suffix}")
