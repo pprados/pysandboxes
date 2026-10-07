@@ -1301,10 +1301,15 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 codespell = [{ name = "codespell", specifier = ">=2.2.5" }]
-dev = []
+dev = [
+    { name = "ipython" },
+    { name = "pyright", specifier = ">=1.1.379" },
+    { name = "ruff", specifier = ">=0.6.9" },
+]
 test = [
-    { name = "pytest", specifier = ">=7.3.0" },
-    { name = "pytest-asyncio", specifier = ">=0.20.3" },
+    { name = "pytest", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", specifier = ">=0.24.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
 ]
 
 [[package]]
@@ -1332,7 +1337,6 @@ dev = [
     { name = "mcp-server-demo" },
     { name = "pydevd" },
     { name = "pyright" },
-    { name = "pytest" },
     { name = "ruff" },
 ]
 test = [
@@ -1362,15 +1366,13 @@ dev = [
     { name = "mcp-server-demo", editable = "../mcp-server-demo" },
     { name = "pydevd", specifier = ">=3.4.1" },
     { name = "pyright", specifier = ">=1.1.379" },
-    { name = "pytest", specifier = ">=8.3.3" },
     { name = "ruff", specifier = ">=0.6.9" },
 ]
 test = [
-    { name = "pytest", specifier = ">=7.3.0" },
-    { name = "pytest-asyncio", specifier = ">=0.20.3" },
+    { name = "pytest", specifier = ">=8.3.3" },
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-dotenv", specifier = ">=0.5.2" },
-    { name = "pytest-mock", specifier = ">=3.10.0" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
 ]
 
 [[package]]
