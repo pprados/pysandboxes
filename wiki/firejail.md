@@ -51,7 +51,7 @@ Firejail is **not** supported in Kubernetes (no `python-sb-firejail` image), for
 
 ## Configuration parameters
 
-You can add Firejail-specific options in `.py-sandboxes`. Only four keys are recognized: `firejail.net`, `firejail.seccomp`, `firejail.seccomp.keep` and `firejail.seccomp.block`, each passed to Firejail as `--<option>=<value>` when the sandbox is started. Any other `firejail.<option>` line is not passed to Firejail.
+You can add Firejail-specific options in `.py-sandboxes`. The keys recognized are `firejail.net`, `firejail.seccomp`, `firejail.seccomp.keep`, `firejail.seccomp.block` and `firejail.rlimit-*`, each passed to Firejail as `--<option>=<value>` when the sandbox is started. Any other `firejail.<option>` line is not passed to Firejail.
 
 ### Network (firejail.net)
 
@@ -60,6 +60,14 @@ To use a specific bridge interface (e.g. for host communication), set:
 - `firejail.net=my_bridge` — use the given bridge for the sandbox network.
 
 If `firejail.net` is not set and socket rules are used, the daemon selects `docker0` when present, otherwise the first detected bridge. It exits with an error if no bridge exists; a default-route interface is not used as a fallback. Set `firejail.net=<bridge>` to select a bridge explicitly.
+
+### Limits (firejail.rlimit-*)
+
+`firejail.template` caps every sandbox: `--rlimit-as=300m`, `--rlimit-nproc=20`, `--rlimit-nofile=50`, `--rlimit-fsize` and `--rlimit-sigpending`. A profile whose libraries need more sets the limit for itself, and the template's line for that option is then left out:
+
+- `firejail.rlimit-as=600m` — address space, for a framework that maps more than 300 MB at import.
+
+The environment variables the template reads (`FIREJAIL_RELIMIT`, `FIREJAIL_NPROC`...) change the default for every sandbox of the host instead.
 
 ### Seccomp (firejail.seccomp, firejail.seccomp.keep, firejail.seccomp.block)
 

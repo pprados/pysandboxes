@@ -28,3 +28,13 @@ def test_a_proc_path_is_not_whitelisted(tmp_path: Path, path: str) -> None:
     args = _firejail_args(f"expose-ro={path}", tmp_path)
     assert not [arg for arg in args if arg.startswith("--whitelist=/proc")]
     assert f"--read-only={path}/" in args
+
+
+def test_a_profile_rlimit_replaces_the_template_one(tmp_path: Path) -> None:
+    """A library that maps more than 300 MB at import needs a larger --rlimit-as for its profile alone."""
+    params, unparsed = FireJailSSEDaemon("token").parse_rules([ConfigLine("firejail.rlimit-as=600m", Path(), 0)], [])
+    assert unparsed == []
+    rules = EmptyRules._replace(os_sandbox_params=params)
+    with patch.object(firejail_sse_daemon, "which_command", return_value="/usr/bin/firejail"):
+        args, _ = FireJailSSEDaemon("token")._firejail_args(rules, {}, None, tmp_path)
+    assert [arg for arg in args if arg.startswith("--rlimit-as=")] == ["--rlimit-as=600m"]

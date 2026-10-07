@@ -9,6 +9,14 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # nearest .env above it and copies every name into os.environ, past the env= rules.
 ignore=.env
 
+# numpy's OpenBLAS starts one thread per CPU at import: on a large machine that
+# exceeds firejail's process and address-space limits, and the import aborts.
+env=OPENBLAS_NUM_THREADS=1
+
+# The whole of crewai maps about 500 MB at import, past the 300 MB firejail allows by default:
+# a thread, such as the one the eval guard starts, then fails with "can't start new thread".
+firejail.rlimit-as=600m
+
 net=ALLOW|TCP|www.google.com|443|OUT
 
 

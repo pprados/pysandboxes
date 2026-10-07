@@ -47,6 +47,8 @@
   the profile invalid on the next run
 
 ### Added
+- A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
+  more than 300 MB at import
 - Two coding-agent skills: one learns the rules a new feature needs from its tests and asks before granting them,
   the other lists the rights a change adds to the `.py-sandboxes` files, graded by risk, with the code that needs
   each; and a GitHub workflow to copy into a project, which comments that list on a pull request
