@@ -109,6 +109,11 @@ To disable only one rule family, use the generic acceptance settings.
 - `net=ALLOW|*|*|*|*`
 - `python-import=*`
 - `python-api=ALLOW:*`
+- `eval-namespace=caller`: `eval()`, `exec()` and `compile()` run the source as is, with no validation, rewrite,
+  budget or timeout. `python-api=ALLOW:dynamic-code` does the same before any `eval-*` rule is read, so
+  `python-api=ALLOW:*` above also lifts the `eval-*` rules
+- `remote-result-mode=objects`, then `remote-result-guard=false`: the value a `@sandbox` function returns is rebuilt in
+  the caller as any object, then without the denylist of dangerous classes
 
 Or
 - Use the `py-sandbox=False` parameter. This keeps the **OS-sandbox** execution with the two-process architecture, but the security rules are not activated. The Python code is not patched. Combined with `os-sandbox=subprocess`, the OS-level sandbox is not used.
