@@ -9,6 +9,10 @@
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
 
+# A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the
+# nearest .env above it and copies every name into os.environ, past the env= rules.
+ignore=.env
+
 net=ALLOW|TCP|www.google.com|443|OUT
 
 # The repository root, which uv installs as an editable dependency (see

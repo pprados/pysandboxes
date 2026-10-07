@@ -77,7 +77,9 @@ include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 #
 # WARNING: ignore=.* blocks access to .venv, .git, and other hidden directories
 
-# Block sensitive files by default:
+# Block sensitive files by default. A library calling load_dotenv() at import (litellm,
+# crewai, smolagents...) finds the nearest readable .env above it and copies every name
+# into os.environ, past the env= rules:
 #ignore=.env
 #ignore=*.log
 
