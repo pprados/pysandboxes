@@ -67,6 +67,14 @@ include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 # - Use specific paths rather than broad patterns when possible
 # - Be careful with ignore patterns that might affect expected directories
 #
+# Paths written by learning mode: ${VAR} under a known tool directory (VIRTUAL_ENV,
+# HF_HOME...), ./... under the working directory, ~/... under the home directory,
+# ${TMPDIR:-/tmp}/... under the temporary one, absolute elsewhere. A
+# directory above the working directory therefore comes out as ~/... or absolute, which
+# only holds on this machine: for a profile shared through the repository, write it by
+# hand relative to the working directory (e.g. expose-ro=../..), and learning then adds
+# nothing for it.
+#
 # WARNING: ignore=.* blocks access to .venv, .git, and other hidden directories
 
 # Block sensitive files by default:

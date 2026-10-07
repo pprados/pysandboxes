@@ -11,8 +11,9 @@ net=ALLOW|TCP|www.google.com|443|OUT
 # `[tool.uv.sources]`), so the sandbox must be able to read it. Relative to the
 # working directory, which is this sample's own directory: an absolute `~/...`
 # form only resolves on a machine that checked the repository out there, and
-# fails on any CI runner. Learning mode cannot emit this form -- it never walks
-# above PWD -- so `make learn` puts the absolute path back.
+# fails on any CI runner. Learning mode never writes this relative form: a
+# directory above PWD comes out as `~/...` or absolute. With this line kept,
+# learning adds nothing for the repository root.
 expose-ro=../..
 
 net=ALLOW|TCP|ip6-localhost|0|IN

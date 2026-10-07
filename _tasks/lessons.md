@@ -271,8 +271,9 @@ recipe line, not a second goal on the same `$(MAKE)`: goals on one command line 
 under `-jN`.
 
 -> A path in a configuration file must be relative to the working directory or carry a default
-(`${VAR:-fallback}`). `~` and a bare `${VAR}` encode the author's machine. Learning mode emits
-the `~` form because it never walks above PWD, so a regenerated config reintroduces the bug.
+(`${VAR:-fallback}`). `~` and a bare `${VAR}` encode the author's machine. Learning mode writes a
+path above PWD as `~/...` or absolute, never relative: keep the relative line by hand, or a
+regenerated config reintroduces the bug.
 
 -> A sample that spawns a neighbouring sample needs that sample's venv as a declared
 prerequisite. Alphabetical order in a list is not a dependency.
