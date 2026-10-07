@@ -79,6 +79,20 @@ do:
 
 langchain, agno, openai-agents, strands-agents, pydantic-ai and autogen load no `.env` by themselves.
 
+## Why does learning miss an environment variable?
+Learning records a variable when the code reads it, but how the code reads it decides whether an absent variable
+is seen:
+
+| Read                                      | Variable absent while learning | Variable present |
+|-------------------------------------------|--------------------------------|------------------|
+| `os.getenv("X")`                          | learned                        | learned          |
+| `os.environ["X"]`                         | not learned (`KeyError`)       | learned          |
+| `os.environ.get("X")`, `"X" in os.environ` | not learned                    | learned          |
+
+A variable read with `os.environ.get()` and unset during learning is missing from the profile, and is then hidden
+from the code once the rules apply. Export the variables the application uses before learning, as above, and
+disable the loading of the `.env` so that only the variables the code reads become rules.
+
 ## How to propagate a token to an API in the sandbox?
 Replace:
 

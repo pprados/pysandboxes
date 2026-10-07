@@ -19,9 +19,12 @@ run:
 
 ## Relearn both profiles, one per mode. Read learn.py first: learning only ever
 ## adds, it must never run on untrusted code, and every `net=` rule it writes needs review.
+## The .env is exported first, so that learning sees the variables the code reads; its loading by
+## the libraries (litellm, crewai, smolagents...) is disabled, or every name in it would become a rule.
+learn: export PYTHON_DOTENV_DISABLED=1
 learn:
-	uv run python learn.py
-	uv run python -m pysandboxes.python_sb \
+	set -a && if [ -f .env ]; then source .env; fi && uv run python learn.py
+	set -a && if [ -f .env ]; then source .env; fi && uv run python -m pysandboxes.python_sb \
 		--pysandboxes-config=.py-sandboxes-complete \
 		--learn=.py-sandboxes-complete learn.py
 
