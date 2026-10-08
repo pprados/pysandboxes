@@ -341,7 +341,7 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
         try:
             resolved = current.resolve(strict=True)
         except FileNotFoundError as e:
-            raise RuntimeError("Impossible to resolve the sys.executable `%s`", sys.executable) from e
+            raise RuntimeError(f"Impossible to resolve the executable `{current}`") from e
         if str(resolved).startswith("/usr/bin"):
             break
         if str(resolved).startswith("/usr/local/bin"):

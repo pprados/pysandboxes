@@ -386,9 +386,13 @@ Under `adaptive`:
 
 | Call | Namespace used | Warning |
 |---|---|---|
-| `eval(e, {"__builtins__": {}}, {})` | the caller's, untouched | none |
-| `eval(e, {"helper": f}, {})` | the caller's, plus `__builtins__` from `eval-call` | graded |
+| `eval(e, {"__builtins__": {}}, {})` | the caller's, plus the guard's helpers | none |
+| `eval(e, {"helper": f}, {})` | the caller's, plus `__builtins__` from `eval-call` and the guard's helpers | graded |
 | `eval(e)` | built entirely from `eval-call` | none |
+
+The helpers, every name starting with `__sb_`, stay in the caller's dict after
+the call: a function the evaluated code defines calls them each time it runs,
+long after `eval` or `exec` returned. The evaluated code cannot name them.
 
 If supplied globals omit `__builtins__`, CPython normally injects builtins.
 `adaptive` and `closed` replace that implicit namespace with the names in
@@ -538,8 +542,9 @@ eval-max-call-depth=20KB
 ### `eval-max-depth`
 
 Default `20`. **Static** AST nesting accepted before the code runs. Distinct
-from `eval-max-call-depth`: this one bounds a deeply nested literal that would
-blow the stack inside the parser itself.
+from `eval-max-call-depth`: this one bounds a deeply nested expression before
+the guard walks it. CPython's parser refuses the deepest ones itself, with a
+`SyntaxError` (more than 200 nested brackets, for instance).
 
 ```ini
 # Valid
@@ -547,7 +552,7 @@ eval-max-depth=20
 ```
 
 ```python
-eval("[" * 5000 + "]" * 5000)   # refused before execution
+eval("-" * 3000 + "1")   # refused before execution, by eval-max-depth
 ```
 
 ---
@@ -600,7 +605,8 @@ A blocking C call — catastrophic backtracking in `re`, a native library —
 never returns to a check point. The caller gets its `EvalInterrupted` and
 **the thread keeps burning CPU**, cumulatively across calls. Counting them and
 refusing beyond a threshold is a mitigation; the real guarantee is the OS
-layer, where a timeout is a process kill.
+layer, where a timeout is a process kill. A worker whose call finally returns
+no longer counts.
 
 ```ini
 # Valid

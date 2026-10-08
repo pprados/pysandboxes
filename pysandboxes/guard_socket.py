@@ -717,8 +717,12 @@ def _check_address_with_rules(
     conn_direction: Direction,
     *,
     log: bool = True,
-) -> None:
+    family: int = 0,
+) -> list[IPv4Address | IPv6Address]:
     """Check if socket address is allowed by configured rules.
+
+    A name is allowed only when every address it resolves to is allowed: the real call is
+    handed one of them, so each must pass.
 
     Args:
         socket_rules: Active socket access rules.
@@ -726,6 +730,10 @@ def _check_address_with_rules(
         address: Target address (hostname/IP, port).
         conn_direction: Connection direction (IN or OUT).
         log: Log a refusal as an error. Learning turns it off: the refusal it catches is a missing rule.
+        family: Address family of the socket, to resolve a name to the addresses it can reach.
+
+    Returns:
+        The checked addresses, in resolution order.
 
     Raises:
         RuleSocketConnectionRefusedError: If access is denied by rules.
@@ -753,7 +761,7 @@ def _check_address_with_rules(
         try:
             # Resolve hostname to IP addresses using the socket instance's family,
             # type, and proto
-            infos = getaddrinfo(hostname, 0)
+            infos = getaddrinfo(hostname, 0, family)
             use_hostname = True
         except socket.gaierror:
             # Fallback if the specific proto causes issues, try with
@@ -761,7 +769,7 @@ def _check_address_with_rules(
             # This might happen if self.proto is something specific but
             # getaddrinfo needs a more general hint
             try:
-                infos = getaddrinfo(hostname, 0, socktype=socket_kind.value, proto=0)
+                infos = getaddrinfo(hostname, 0, family, socktype=socket_kind.value, proto=0)
             except socket.gaierror as e:
                 raise ValueError(f"Invalid hostname or IP address (resolution failed): {hostname}") from e
         # %% Analyse ips
@@ -776,8 +784,15 @@ def _check_address_with_rules(
         raise ValueError(f"Invalid hostname or IP address (resolution failed): {hostname}")
 
     # %% Analyse rules
-    for rule_type_to_check in (Action.DENY, Action.ALLOW):
-        for ip_host in unique_ips:
+    for checked_ip in unique_ips:
+        # The kernel serves ::ffff:a.b.c.d as the IPv4 address a.b.c.d, so the IPv4 rules judge it.
+        ip_host = (
+            checked_ip.ipv4_mapped if isinstance(checked_ip, IPv6Address) and checked_ip.ipv4_mapped else checked_ip
+        )
+        allowed = False
+        for rule_type_to_check in (Action.DENY, Action.ALLOW):
+            if allowed:
+                break
             for (
                 action,
                 (rule_kind, network_list, rule_ports_list),
@@ -851,7 +866,16 @@ def _check_address_with_rules(
                                                 config.rule,
                                                 format_ruleref(config),
                                             )
-                                    return
+                                    allowed = True
+                                    break
+        if not allowed:
+            _refuse_by_default_policy(hostname, destination_port, unique_ips, log)
+    return unique_ips
+
+
+def _refuse_by_default_policy(
+    hostname: str, destination_port: int, unique_ips: list[IPv4Address | IPv6Address], log: bool
+) -> None:
     try:
         ip_address(hostname)
         target = f"[{hostname}]:{destination_port}"
@@ -962,10 +986,7 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
                             return addr_info[4][0]
                     except (ValueError, TypeError):
                         continue
-            err = socket.gaierror()
-            err.errno = 3
-            err.strerror = "Temporary failure in name resolution"
-            raise err
+            raise socket.gaierror(socket.EAI_AGAIN, "Temporary failure in name resolution")
         if isinstance(name, str):
             _refuse_a_name_no_rule_can_allow(name)
         result = func(name, *args, **kwargs)
@@ -1034,6 +1055,18 @@ def _wrap_socket_socketpair(func: Callable) -> Callable:
     return wrapper
 
 
+def _port_number(port: bytes | str | int, socktype: int) -> int:
+    """The port getaddrinfo() means: a number, or a service name such as "http" looked up as the resolver does."""
+    if isinstance(port, bytes):
+        port = port.decode("utf-8")
+    if isinstance(port, int) or port.isdigit():
+        return int(port)
+    try:
+        return socket.getservbyname(port, "udp" if socktype == socket.SOCK_DGRAM else "tcp")
+    except OSError as e:
+        raise socket.gaierror(socket.EAI_SERVICE, "Servname not supported for ai_socktype") from e
+
+
 def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
     @guard_wraps(func)
     def wrapper(
@@ -1067,7 +1100,7 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
                 return addr[0], addr[1], addr[2], addr[3], cast(Any, tuple(address))
 
             if port is not None:
-                result = list(_patch_port(int(port), dns_conf) for dns_conf in result)
+                result = list(_patch_port(_port_number(port, type), dns_conf) for dns_conf in result)
         else:
             if isinstance(host, str):
                 _refuse_a_name_no_rule_can_allow(host)
@@ -1078,7 +1111,7 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
                     "getaddrinfo",
                     Kind.UNKNOWN,
                     host,
-                    int(port) if port is not None else 0,
+                    _port_number(port, type) if port is not None else 0,
                     Direction.OUT,
                     tuple({ip_address(info[4][0]) for info in result}),
                 )
@@ -1109,12 +1142,37 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
-def _check_address(self: Any, address: tuple[str, int], conn_direction: Direction, *, log: bool = True) -> None:
+def _check_address(
+    self: Any, address: tuple[str, int], conn_direction: Direction, *, log: bool = True
+) -> list[IPv4Address | IPv6Address]:
     if not _rules_loaded:
-        return
+        return []
     if getattr(_socketpair_scope, "active", False) and _is_loopback(address[0]):
-        return
-    _check_address_with_rules(_rules, Kind(self.type), _resolve_wildcard_host(self, address), conn_direction, log=log)
+        return []
+    return _check_address_with_rules(
+        _rules,
+        Kind(self.type),
+        _resolve_wildcard_host(self, address),
+        conn_direction,
+        log=log,
+        family=getattr(self, "family", 0),
+    )
+
+
+def _checked_address(self: Any, address: tuple[Any, ...], conn_direction: Direction) -> tuple[Any, ...]:
+    """Judge an address, and return the one the real call must use.
+
+    A name is handed on as the address it was judged on: the real call would resolve it a second time, outside
+    the pinned resolution, and could reach an address no rule was asked about.
+    """
+    checked = _check_address(self, (str(address[0]), int(address[1])), conn_direction)
+    if not checked or not address[0]:  # "" is the wildcard address, not a name
+        return address
+    try:
+        ip_address(address[0])
+        return address
+    except ValueError:
+        return (str(checked[0]), *address[1:])
 
 
 def _socket_add_learning_rule(
@@ -1151,18 +1209,14 @@ def _wrap_socket_bind(func: Callable) -> Callable:
                     LearnSocketRule(
                         "bind",
                         Kind(self.type),
-                        address[0],
+                        _resolve_wildcard_host(self, (str(address[0]), int(address[1])))[0],
                         int(address[1]),
                         Direction.IN,
                         (),  # pin_dns
                     ),
                 )
             else:
-                _check_address(
-                    self,
-                    (str(address[0]), int(address[1])),
-                    conn_direction=Direction.IN,
-                )
+                address = _checked_address(self, address, Direction.IN)
         elif isinstance(address, str):  # AF_UNIX
             # Binding creates a filesystem entry: require write access.
             _check_unix_socket(address, write=True, operation="bind")
@@ -1173,6 +1227,43 @@ def _wrap_socket_bind(func: Callable) -> Callable:
                 f"Guard bind to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
             )
         func(self, address)
+
+    return wrapper
+
+
+def _wrap_socket_listen(func: Callable) -> Callable:
+    """Judge the bind listen() makes on a socket that was never bound.
+
+    The kernel then binds it to the wildcard address on an ephemeral port, which is ``bind(("", 0))`` without
+    the call. accept() needs no rule of its own: a ``net=...|IN`` rule names the local endpoint, and the
+    listening socket's endpoint was judged here or at its bind().
+    """
+
+    @guard_wraps(func)
+    def wrapper(self: Any, *args: Any) -> None:
+        if getattr(self, "family", None) in (socket.AF_INET, socket.AF_INET6):
+            try:
+                unbound = self.getsockname()[1] == 0
+            except OSError:
+                unbound = True
+            if unbound:
+                if is_learning_mode():
+                    _socket_add_learning_rule(
+                        self,
+                        ("", 0),
+                        Direction.IN,
+                        LearnSocketRule(
+                            "listen",
+                            Kind(self.type),
+                            _resolve_wildcard_host(self, ("", 0))[0],
+                            0,
+                            Direction.IN,
+                            (),
+                        ),
+                    )
+                else:
+                    _check_address(self, ("", 0), Direction.IN)
+        func(self, *args)
 
     return wrapper
 
@@ -1201,13 +1292,10 @@ def _wrap_socket_connect(func: Callable) -> Callable:
                     ),
                 )
             else:
-                _check_address(
-                    self,
-                    (str(address[0]), int(address[1])),
-                    conn_direction=Direction.OUT,
-                )
+                address = _checked_address(self, address, Direction.OUT)
         elif isinstance(address, str):  # AF_UNIX
-            _check_unix_socket(address, write=False, operation="connect")
+            # The kernel asks for write permission on the socket file to connect to it.
+            _check_unix_socket(address, write=True, operation="connect")
         else:
             # Was an ``assert False``, which vanishes under ``python -O``:
             # a security check must raise unconditionally.
@@ -1243,13 +1331,9 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
                     ),
                 )
             else:
-                _check_address(
-                    self,
-                    (str(address[0]), int(address[1])),
-                    conn_direction=Direction.OUT,
-                )
+                address = _checked_address(self, address, Direction.OUT)
         elif isinstance(address, str):  # AF_UNIX
-            _check_unix_socket(address, write=False, operation="connect_ex")
+            _check_unix_socket(address, write=True, operation="connect_ex")
         else:
             raise RuleSocketConnectionRefusedError(
                 f"Guard connect_ex to {address!r} DENIED: unsupported " f"address format, no rule can be evaluated."
@@ -1257,6 +1341,45 @@ def _wrap_socket_connect_ex(func: Callable) -> Callable:
         return func(self, address)
 
     return wrapper
+
+
+def _check_send_address(self: Any, address: _Address, operation: str) -> _Address:
+    """Judge the destination a send carries, and return the address the real call must use.
+
+    A send with an address reaches it on every type: a datagram goes there, and on TCP ``MSG_FASTOPEN``
+    makes ``sendto``/``sendmsg`` connect to it.
+    """
+    if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[0], str) and isinstance(address[1], int):
+        if self.type not in (Kind.TCP.value, Kind.UDP.value):
+            # A net= rule speaks TCP or UDP only, so no rule can be evaluated
+            # for any other type -- SOCK_RAW above all -- and the whitelist
+            # refuses rather than letting the datagram out unchecked.
+            raise RuleSocketConnectionRefusedError(
+                f"Guard {operation} to {address!r} DENIED: socket type "
+                f"{self.type!r} cannot be evaluated by a net= rule."
+            )
+        if is_learning_mode():
+            _socket_add_learning_rule(
+                self,
+                (str(address[0]), int(address[1])),
+                Direction.OUT,
+                LearnSocketRule(
+                    operation,
+                    Kind(self.type),
+                    address[0],
+                    int(address[1]),
+                    Direction.OUT,
+                    (),  # pin_dns
+                ),
+            )
+            return address
+        return _checked_address(self, address, Direction.OUT)
+    if isinstance(address, str):  # AF_UNIX
+        _check_unix_socket(address, write=True, operation=operation)
+        return address
+    raise RuleSocketConnectionRefusedError(
+        f"Guard {operation} to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
+    )
 
 
 def _wrap_socket_sendto(func: Callable) -> Callable:
@@ -1267,52 +1390,28 @@ def _wrap_socket_sendto(func: Callable) -> Callable:
         # positional; flags, when present, must reach the real call untouched.
         if not args:
             return func(self, data)  # let the builtin raise its own arity error
-        address: _Address = args[-1]
-        if (
-            isinstance(address, tuple)
-            and len(address) >= 2
-            and isinstance(address[0], str)
-            and isinstance(address[1], int)
-        ):
-            if self.type == Kind.UDP.value:
-                if is_learning_mode():
-                    _socket_add_learning_rule(
-                        self,
-                        (str(address[0]), int(address[1])),
-                        Direction.OUT,
-                        LearnSocketRule(
-                            "sendto",
-                            Kind(self.type),
-                            address[0],
-                            int(address[1]),
-                            Direction.OUT,
-                            (),  # pin_dns
-                        ),
-                    )
-                else:
-                    _check_address(
-                        self,
-                        (str(address[0]), int(address[1])),
-                        conn_direction=Direction.OUT,
-                    )
-            elif self.type != Kind.TCP.value:
-                # A net= rule speaks TCP or UDP only, so no rule can be
-                # evaluated for any other type -- SOCK_RAW above all -- and
-                # the whitelist refuses rather than letting the datagram out
-                # unchecked. sendto() on a TCP socket keeps falling through:
-                # the address is ignored, the OS refuses the call, and it
-                # reaches nothing the connect rules did not already allow.
-                raise RuleSocketConnectionRefusedError(
-                    f"Guard sendto to {address!r} DENIED: socket type "
-                    f"{self.type!r} cannot be evaluated by a net= rule."
-                )
-        elif isinstance(address, str):  # AF_UNIX
-            _check_unix_socket(address, write=False, operation="sendto")
-        else:
-            raise RuleSocketConnectionRefusedError(
-                f"Guard sendto to {address!r} DENIED: unsupported address " f"format, no rule can be evaluated."
-            )
-        return func(self, data, *args)
+        return func(self, data, *args[:-1], _check_send_address(self, args[-1], "sendto"))
+
+    return wrapper
+
+
+def _wrap_socket_sendmsg(func: Callable) -> Callable:
+    """Judge the address of ``sendmsg(buffers, ancdata, flags, address)``.
+
+    ``sendmsg_afalg`` needs no wrapper: an AF_ALG socket carries no destination.
+    """
+
+    @guard_wraps(func)
+    def wrapper(self: Any, buffers: Any, *args: Any) -> int:
+        if len(args) < 3 or args[2] is None:
+            return func(self, buffers, *args)
+        return func(
+            self,
+            buffers,
+            *args[:2],
+            _check_send_address(self, args[2], "sendmsg"),
+            *args[3:],
+        )
 
     return wrapper
 
@@ -1350,7 +1449,10 @@ def _guarded_socket_class(original: Any) -> type:
         bind = _wrap_socket_bind(original.bind)
         connect = _wrap_socket_connect(original.connect)
         connect_ex = _wrap_socket_connect_ex(original.connect_ex)
+        listen = _wrap_socket_listen(original.listen)
         sendto = _wrap_socket_sendto(original.sendto)
+        if hasattr(original, "sendmsg"):
+            sendmsg = _wrap_socket_sendmsg(original.sendmsg)
 
     return _GuardedSocket
 
@@ -1365,6 +1467,7 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         "socket.socket.bind": _wrap_socket_bind,
         "socket.socket.connect": _wrap_socket_connect,
         "socket.socket.connect_ex": _wrap_socket_connect_ex,
+        "socket.socket.listen": _wrap_socket_listen,
         "socket.socket.sendto": _wrap_socket_sendto,
         "socket.gethostbyname": _wrap_socket_gethostbyname,
         "socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
@@ -1380,6 +1483,8 @@ def patch_rules(learn: bool) -> dict[str, Callable]:
         "_socket.gethostbyname_ex": _wrap_socket_gethostbyname_ex,
         "_socket.getaddrinfo": _wrap_socket_getaddrinfo,
     }
+    if hasattr(socket.socket, "sendmsg"):
+        rules["socket.socket.sendmsg"] = _wrap_socket_sendmsg
     if sys.platform == "win32":
         rules["socket.socketpair"] = _wrap_socket_socketpair
     return rules
@@ -1399,6 +1504,7 @@ def activate_guard(rules: SocketRules) -> None:
         raise RuntimeError("Guard_socket already activated.")
     _rules = rules
     _rules_loaded = True
+    getaddrinfo.cache_clear()
 
 
 def apply_pin_dns_resolution(socket_module: Any) -> None:
@@ -1568,6 +1674,8 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
         an inactive one: the socket wrappers stay installed for the rest of the
         process and refuse every connection a later test makes.
         """
-        global _rules, _rules_loaded
+        global _rules, _rules_loaded, _pin_dns
         _rules = ()
         _rules_loaded = False
+        _pin_dns = ImmutableDict({})
+        getaddrinfo.cache_clear()

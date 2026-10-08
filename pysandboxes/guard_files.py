@@ -163,6 +163,15 @@ def _safe_realpath(path: str) -> str:
         _canonicalizing.reset(token)
 
 
+def _is_link(path: str) -> bool:
+    """Tell whether ``path`` is a symbolic link, without re-entering the file guard."""
+    token = _canonicalizing.set(True)
+    try:
+        return os.path.islink(path)
+    finally:
+        _canonicalizing.reset(token)
+
+
 # System CA stores: Debian/Ubuntu (/etc/ssl, whose certs link to /usr/share/ca-certificates),
 # Fedora/RHEL (/etc/pki, /usr/share/pki), Arch (/etc/ca-certificates).
 _CA_STORES = (
@@ -528,7 +537,9 @@ def _apply_src_to_dest_rules(
                 return None, rule
         else:
             assert False, f"Invalid guard_files rules {type(rule)=}"  # noqa: B011
-    return path, None
+    # No rule exposes it: hidden, as everywhere else. Returning the path here let readlink, glob and
+    # scandir reveal names outside the exposed directories.
+    return None, None
 
 
 # Helper to resolve symlinks and apply rules
@@ -586,12 +597,24 @@ def _apply_dest_to_src_rules(
             # The canonical path catches a link, a device prefix or a short name to the ignored file.
             spellings: tuple[str, ...] = (str(original_path), fake_path, canon_path)
             if not os.path.isabs(rule.source):
-                spellings = tuple(Path(spelling).name for spelling in spellings)
+                spellings = tuple(part for spelling in spellings for part in Path(spelling).parts)
             if any(_ignore_matches(spelling, rule.source) for spelling in spellings):
                 return None, rule
         else:
             assert False, f"Invalid guard_files rules {type(rule)=}"  # noqa: B011
     return None, None
+
+
+def _apply_rules_to_entry(path: str) -> tuple[str | None, FilesRule | None]:
+    """Apply the rules to removing or moving ``path`` itself: a link is judged on the directory holding it,
+    not on its target."""
+    if not _is_link(path):
+        return _apply_dest_to_src_rules(path, write=True)
+    _, rule = _apply_dest_to_src_rules(path, write=False)
+    if rule:
+        return None, rule
+    parent, rule = _apply_dest_to_src_rules(os.path.dirname(_os_path_abspath(path)) + os.sep, write=True)
+    return (path if parent else None), rule
 
 
 def _raise_ignore(file: str | bytes | os.PathLike[str] | os.PathLike[bytes] | int, rule: FilesRule) -> NoReturn:
@@ -764,6 +787,7 @@ def _body_two_filenames(
     func: Callable[..., Any],
     in_write: bool,
     out_write: bool,
+    move: bool,
     src: str | bytes | os.PathLike[str] | os.PathLike[bytes],
     dest: str | bytes | os.PathLike[str] | os.PathLike[bytes],
     *args: Any,
@@ -782,6 +806,8 @@ def _body_two_filenames(
         _check_dir_fd(src, cast(int, src_dir_fd), write=in_write)
         remapped_src: str | None = src
         rule1 = None
+    elif move:
+        remapped_src, rule1 = _apply_rules_to_entry(src)
     else:
         remapped_src, rule1 = _apply_dest_to_src_rules(src, write=in_write)
 
@@ -816,7 +842,7 @@ def _body_two_filenames(
 
 
 def _wrap_two_filenames(
-    func: Callable[..., Any], *, in_write: bool = False, out_write: bool = True
+    func: Callable[..., Any], *, in_write: bool = False, out_write: bool = True, move: bool = False
 ) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(
@@ -825,7 +851,7 @@ def _wrap_two_filenames(
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> Any:
-        return _body_two_filenames(func, in_write, out_write, src, dest, *args, **kwargs)
+        return _body_two_filenames(func, in_write, out_write, move, src, dest, *args, **kwargs)
 
     return wrapper
 
@@ -840,11 +866,11 @@ def _wrap_shutil_copytree(
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> Any:
+        token = _check_alias.set(False)
         try:
-            _ = _check_alias.set(False)
-            return _body_two_filenames(func, False, True, src, dest, *args, **kwargs)
+            return _body_two_filenames(func, False, True, False, src, dest, *args, **kwargs)
         finally:
-            _ = _check_alias.set(True)
+            _check_alias.reset(token)
 
     return wrapper
 
@@ -959,40 +985,41 @@ def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
             abs_remapper = _os_path_realpath(remapped)
             check_alias = _check_alias.get()
             while True:
+                token = _check_alias.set(False) if check_alias else None
                 try:
-                    if check_alias:
-                        _ = _check_alias.set(False)
                     name = next(it)
-                    if check_alias:
-                        _ = _check_alias.set(True)
-                    remapped_filter, rule = _apply_src_to_dest_rules(str(name))
-                    if remapped_filter:
-                        if not os.path.isabs(str(self)):
-                            remapped_filter = remapped_filter[len(abs_remapper) + 1 :]
-                        if remapped_filter == "":
-                            remapped_filter = "."
-                        # yield Path(remapped_filter).relative_to(self)
-                        yield Path(remapped_filter)
                 except StopIteration:
-                    _ = _check_alias.set(True)
                     break
+                finally:
+                    if token is not None:
+                        _check_alias.reset(token)
+                remapped_filter, rule = _apply_src_to_dest_rules(str(name))
+                if remapped_filter:
+                    if not os.path.isabs(str(self)):
+                        remapped_filter = remapped_filter[len(abs_remapper) + 1 :]
+                    if remapped_filter == "":
+                        remapped_filter = "."
+                    # yield Path(remapped_filter).relative_to(self)
+                    yield Path(remapped_filter)
 
         extra: dict[str, Any] = {}
         if sys.version_info[:2] >= (3, 12):
             extra = {"case_sensitive": case_sensitive}
         if sys.version_info[:2] >= (3, 13):
-            extra = {"recurse_symlinks": recurse_symlinks}
+            extra["recurse_symlinks"] = recurse_symlinks
 
         if remapped and _check_alias.get():
-            _ = _check_alias.set(False)
-            do_filter = filter(
-                func(
-                    Path(remapped),
-                    pattern=pattern,
-                    **extra,
+            token = _check_alias.set(False)
+            try:
+                do_filter = filter(
+                    func(
+                        Path(remapped),
+                        pattern=pattern,
+                        **extra,
+                    )
                 )
-            )
-            _ = _check_alias.set(True)
+            finally:
+                _check_alias.reset(token)
         else:
             do_filter = filter(
                 func(
@@ -1039,13 +1066,17 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
             write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
             write_flags |= getattr(os, "O_TMPFILE", 0)
             need_to_write = bool(flags & write_flags)
-            remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
-            if remapped is None:
-                if is_learning_mode():
-                    add_learning_rule(LearnFileRule(Path(path), need_to_write))
-                    remapped = path
-                else:
-                    _raise_access(path)
+        else:
+            need_to_write = True
+        remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
+        if rule:
+            _raise_ignore(path, rule)
+        if remapped is None:
+            if is_learning_mode():
+                add_learning_rule(LearnFileRule(Path(path), need_to_write))
+                remapped = path
+            else:
+                _raise_access(path)
         return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
 
     return wrapper
@@ -1232,18 +1263,24 @@ def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
         remapped_first, rule = _apply_dest_to_src_rules(path, write=False)
         if rule:
             _raise_ignore(path, rule)
-        if not remapped_first:
-            if is_learning_mode():
-                add_learning_rule(LearnFileRule(Path(path), False))
+        # The link is read in the directory holding it, which its target does not expose.
+        holder, _ = _apply_dest_to_src_rules(os.path.dirname(_os_path_abspath(path)) + os.sep, write=False)
+        if not remapped_first or not holder:
+            if not is_learning_mode():
+                _raise_access(path)
+            add_learning_rule(LearnFileRule(Path(path), False))
             remapped_first = path
-        remapped = func(path=remapped_first, dir_fd=dir_fd)
-        if not remapped.startswith(os.path.sep):
-            remapped = os.path.dirname(remapped_first) + os.path.sep + remapped
-        remapped, rule = _apply_src_to_dest_rules(remapped)
+        target = func(path=remapped_first, dir_fd=dir_fd)
+        if not target.startswith(os.path.sep):
+            target = os.path.dirname(remapped_first) + os.path.sep + target
+        remapped, rule = _apply_src_to_dest_rules(target)
         if rule:
             _raise_ignore(path, rule)
         elif not remapped:
-            _raise_access(path)
+            if not is_learning_mode():
+                _raise_access(path)
+            add_learning_rule(LearnFileRule(Path(target), False))
+            remapped = target
         return remapped
 
     return wrapper
@@ -1327,7 +1364,7 @@ def _wrap_os_unlink(func: Callable[..., Any]) -> Callable[..., Any]:
         if dir_fd is not None:
             _check_dir_fd(path, dir_fd, write=True)
             return func(path=path, dir_fd=dir_fd)
-        remapped, rule = _apply_dest_to_src_rules(path, write=True)
+        remapped, rule = _apply_rules_to_entry(path)
         if rule:
             _raise_ignore(path, rule)
         if not remapped:
@@ -1607,18 +1644,18 @@ _default_rules: dict[str, Callable[..., Any]] = {
     # `posix.chroot` was the one twin spelled out here; `_twin_rules` now
     # mirrors every entry below, so the hand-written line is redundant.
     "os.chroot": _f(_wrap_filename, write=False),
-    "os.link": _f(_wrap_two_filenames),
+    "os.link": _f(_wrap_two_filenames, in_write=True),
     "os.listdir": _f(_wrap_os_listdir),
     "os.mkdir": _f(_wrap_filename, write=True),
     # ALLOW "os.makedirs" (indirect calls)
-    # DENY os.mkfifo
-    # DENY os.mknod
+    "os.mkfifo": _f(_wrap_filename, write=True),
+    "os.mknod": _f(_wrap_filename, write=True),
     "os.readlink": _f(_wrap_os_readlink),
-    "os.remove": _f(_wrap_filename, write=True),
+    "os.remove": _f(_wrap_os_unlink),
     # ALLOW os.removedirs (indirect calls)
-    "os.rename": _f(_wrap_two_filenames, in_write=True, out_write=True),
+    "os.rename": _f(_wrap_two_filenames, in_write=True, out_write=True, move=True),
     # ALLOW os.renames (indirect calls)
-    "os.replace": _f(_wrap_two_filenames, in_write=True, out_write=True),
+    "os.replace": _f(_wrap_two_filenames, in_write=True, out_write=True, move=True),
     "os.rmdir": _f(_wrap_os_rmdir),
     "os.scandir": _f(_wrap_os_scandir),
     "os.stat": _f(_wrap_os_stat, write=False),

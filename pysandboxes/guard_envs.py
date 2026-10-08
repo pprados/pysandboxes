@@ -80,6 +80,9 @@ def parse_rules(
         return resolve_env_variables(value_pattern, source_vars)
 
     envs_rules = set()
+    # Rule order carries no meaning: exact names beat wildcards, and unenv= beats both.
+    wildcard_vars: dict[str, str] = {}
+    unenv_patterns: list[GlobPattern] = []
     for orule in rules:
         if orule.rule.startswith("env="):
             # Remove prefix
@@ -97,16 +100,16 @@ def parse_rules(
 
             key_pattern, value_pattern = rule.rule.split("=", 1)
 
-            # Case: Wildcard rule like *_API_KEY=${*_API_KEY}
+            # Case: Wildcard rule like *_API_KEY=${*_API_KEY} or *_API_KEY=fixed
             if "*" in key_pattern:
-                # Convert wildcard to regex pattern
                 regex_key = _compile_key_pattern(key_pattern)
                 envs_rules.add(EnvRule(regex_key, False, orule))
-                for source_key, source_value in source_vars.items():
+                for source_key in source_vars:
                     if regex_key.match(source_key):
-                        # The rule implies copying the matched key-value pairs
-                        if source_value:  # Ignore empty value
-                            new_vars[source_key] = source_value
+                        # The value side is applied to each matched name, the pattern standing for that name
+                        v = substitute_value(value_pattern.replace(key_pattern, source_key))
+                        if v or "${" not in value_pattern:
+                            wildcard_vars[source_key] = v
             # Case: Simple rule like key=value or key=${VAR}
             else:
                 v = substitute_value(value_pattern)
@@ -119,12 +122,17 @@ def parse_rules(
                     new_vars[key_pattern] = v
                 envs_rules.add(EnvRule(_compile_key_pattern(key_pattern), False, orule))
         elif orule.rule.startswith("unenv="):
-            remove_key = orule.rule[len("unenv=") :]
-            new_vars.pop(remove_key, None)
-            envs_rules.add(EnvRule(_compile_key_pattern(remove_key), True, orule))
+            remove_pattern = _compile_key_pattern(orule.rule[len("unenv=") :])
+            unenv_patterns.append(remove_pattern)
+            envs_rules.add(EnvRule(remove_pattern, True, orule))
         else:
             ignore_rules.append(orule)
 
+    new_vars = {
+        key: value
+        for key, value in (wildcard_vars | new_vars).items()
+        if not any(pattern.match(key) for pattern in unenv_patterns)
+    }
     return tuple(envs_rules), Envs(new_vars), ignore_rules
 
 

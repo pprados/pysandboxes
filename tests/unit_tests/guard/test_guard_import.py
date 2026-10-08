@@ -168,13 +168,17 @@ def test_in_the_user_code_a_rule_grants_the_import(monkeypatch: pytest.MonkeyPat
         assert import_module("json") == "json"
 
 
-def test_in_the_user_code_a_relative_import_is_left_to_the_finder(monkeypatch: pytest.MonkeyPatch) -> None:
-    _activate(monkeypatch, ())
+def test_in_the_user_code_a_relative_import_is_judged_on_its_absolute_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A loaded module never meets the finder: a relative import of it is judged like an absolute one."""
+    _activate(monkeypatch, ("json",))
     import_, import_module = _guarded_imports()
     with user_code():
         assert import_("decoder", {"__package__": "json"}, None, (), 1) == "decoder"
-        assert import_("decoder", level=1) == "decoder"
         assert import_module(".decoder", "json") == ".decoder"
+        with pytest.raises(RuleModuleNotFoundError, match="'email'"):
+            import_("parser", {"__package__": "email"}, None, (), 1)
+        with pytest.raises(RuleModuleNotFoundError, match="'email'"):
+            import_module(".parser", "email")
 
 
 def test_in_the_user_code_learning_records_the_import(monkeypatch: pytest.MonkeyPatch) -> None:

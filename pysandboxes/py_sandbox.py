@@ -209,13 +209,14 @@ def _parse_include(
                         )
                         # Recursive include
                         includes.add(filename.absolute())
-                        others.extend(_parse_include(root_path, includes, include_config))
+                        others.extend(_parse_include(filename.parent, includes, include_config))
                     else:
-                        # An optional local override is a deliberate pattern, so this is
-                        # not a warning -- but say it somewhere, or a typo is invisible.
                         logger.debug("include %s: no such file, ignored", filename)
-                except PermissionError:
-                    pass  # Ignore
+                except PermissionError as e:
+                    # Skipping it could drop a restrictive line such as learn=false
+                    raise ConfigSyntaxError(
+                        "Syntax error in config files.", [f"{format_ruleref(rule)}: Unreadable include {filename}: {e}"]
+                    ) from e
         else:
             others.append(rule)
     return others
@@ -249,7 +250,7 @@ def parse_config(
     errors: list[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
-    config = _parse_include(config_path.parent, {config_path}, config)
+    config = _parse_include(config_path.parent, {config_path.absolute()}, config)
 
     # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, envs, errors)

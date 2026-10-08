@@ -670,6 +670,8 @@ def test_learning_a_foreign_code_object_proposes_the_api_right(monkeypatch: pyte
     code = compile("1", "<string>", "eval")
     assert _learned_from(monkeypatch, code, None) == [LearnApiRule("builtins.eval")]
     tagged = compile("1", f"{TAG_PREFIX}x>", "eval")
+    assert _learned_from(monkeypatch, tagged, None) == [LearnApiRule("builtins.eval")]
+    monkeypatch.setitem(guard_eval._produced, tagged, ("1", "eval"))
     assert _learned_from(monkeypatch, tagged, None) == []
 
 

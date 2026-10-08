@@ -51,7 +51,7 @@ class ImmutableDict(
     This class is compatible with the collections.abc.Mapping kind.
     """
 
-    __slot__ = ()
+    __slots__ = ()
 
     # construction accepts either a Mapping or an iterable of (key, value) pairs
     def __new__(
@@ -84,11 +84,9 @@ class ImmutableDict(
                 values = cast(tuple[ValueType, ...], tuple(data.values()))
             else:
                 # allow any iterable of (k, v) pairs
-                items = tuple(data)
-
-                # Build parallel tuples of keys and values
-                keys = tuple(item[0] for item in items if item)
-                values = tuple(item[1] if len(item) > 1 else None for item in items)  # type: ignore[misc]
+                pairs = dict(data)
+                keys = tuple(pairs.keys())
+                values = tuple(pairs.values())
 
         # Create the tuple-subclass with two items: (keys, values)
         obj = tuple.__new__(cls, (keys, values))
@@ -169,6 +167,21 @@ class ImmutableDict(
             return True
         except ValueError:
             return False
+
+    def __eq__(self, other: object) -> bool:
+        """Compare as a mapping, whatever the insertion order, plain dicts included."""
+        if isinstance(other, Mapping):
+            return dict(self.items()) == dict(other.items())
+        return NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        """Negate `__eq__`, which tuple's own `__ne__` would bypass."""
+        equal = self.__eq__(other)
+        return equal if equal is NotImplemented else not equal
+
+    def __hash__(self) -> int:
+        """Hash consistently with `__eq__`, whatever the insertion order."""
+        return hash(frozenset(self.items()))
 
     def __repr__(self) -> str:
         """String representation of the dictionary.

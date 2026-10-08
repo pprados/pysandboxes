@@ -281,6 +281,18 @@ def _add_error(errors: list[ErrorMsg], rule: ConfigLine, detail: str) -> None:
     errors.append((f"{format_ruleref(rule)}: In {rule.rule!r}, {detail}", rule.path, rule.ln))
 
 
+# Aliases the parser never produces, removed in 3.14: accepting them would make a profile valid on one version only.
+_DEPRECATED_NODES = frozenset(
+    {"Num", "Str", "Bytes", "NameConstant", "Ellipsis", "Index", "ExtSlice", "Suite", "Param"}
+)
+
+
+def _is_node(token: str) -> bool:
+    """Tell whether `token` names an AST node class, not a helper of the `ast` module (`parse`, `NodeVisitor`)."""
+    node = vars(ast).get(token)
+    return isinstance(node, type) and issubclass(node, ast.AST) and token not in _DEPRECATED_NODES
+
+
 def _suggest(token: str, known: list[str]) -> str:
     """Return `, closest known token is 'x'` when one is close enough."""
     close = difflib.get_close_matches(token, known, n=1)
@@ -360,7 +372,7 @@ def _parse_list_value(
     deny = value.startswith("DENY:")
     targets = value[len("DENY:") :] if deny else value
     groups = _GROUPS_OF_KEY.get(key, {})
-    known = sorted(groups) + (sorted(node for node in dir(ast) if node[:1].isupper()) if key == "eval-syntax" else [])
+    known = sorted(groups) + (sorted(node for node in vars(ast) if _is_node(node)) if key == "eval-syntax" else [])
     for raw in targets.split(","):
         token = raw.strip()
         if not token:
@@ -379,7 +391,7 @@ def _parse_list_value(
         if token in groups:
             (acc.deny if deny else acc.allow)[field].update(groups[token])
             continue
-        if key == "eval-syntax" and not hasattr(ast, token):
+        if key == "eval-syntax" and not _is_node(token):
             _add_error(errors, rule, f"unknown syntax token {token!r}{_suggest(token, known)}.")
             return
         if key == "eval-attribute" and token in _BLIND_ATTRIBUTES and not deny:

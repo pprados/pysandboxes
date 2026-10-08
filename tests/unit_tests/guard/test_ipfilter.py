@@ -156,14 +156,14 @@ def test_ip4_netfilter_conv() -> None:
             "-A OUTPUT -p udp -d 10.0.0.0/8 -j REJECT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.0/8 -j ACCEPT",
             "-A OUTPUT -p udp -d 127.0.0.0/8 -j ACCEPT",
-            "-A INPUT -p udp -s 192.168.0.1/32 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 192.168.0.1/32 -j ACCEPT",
+            "-A INPUT -p udp -d 192.168.0.1/32 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -d 192.168.0.1/32 -j ACCEPT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -m multiport --dports 80,443 -j ACCEPT",
             "-A OUTPUT -p udp -m multiport --dports 80,443 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",  # noqa E501
-            "-A INPUT -p udp -s 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -d 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",  # noqa E501
+            "-A INPUT -p udp -d 127.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",
             "-A INPUT -p udp -m multiport --dports 12:44  -j ACCEPT",
-            "-A INPUT -p udp -s 123.0.0.0/32 -m multiport --dports 1,3,4,5 -j ACCEPT",
+            "-A INPUT -p udp -d 123.0.0.0/32 -m multiport --dports 1,3,4,5 -j ACCEPT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 192.0.0.0/8 -m multiport --dports 80,443 -j ACCEPT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 127.0.0.1/32 -m multiport --dports 80,443 -j ACCEPT",
             "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -m multiport --dports 80 -j ACCEPT",
@@ -208,17 +208,17 @@ def test_ip6_netfilter_conv() -> None:
             "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32 -j ACCEPT",
             "-A OUTPUT -p udp -d 2001:db8::/32 -j ACCEPT",
-            "-A INPUT -p udp -s 2001:db8::/32 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 -j ACCEPT",
+            "-A INPUT -p udp -d 2001:db8::/32 -j ACCEPT",
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -d 2001:db8::/32 -j ACCEPT",
             "-A OUTPUT -p tcp -m conntrack --ctstate NEW -d 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT",
             "-A OUTPUT -p udp -d 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 "
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -d 2001:db8::/32 "
             "-m multiport --dports 80,443 -j ACCEPT",
-            "-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT",
-            "-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 12:44  -j ACCEPT",
-            "-A INPUT -p udp -s 2001:db8::/32 -m multiport --dports 1,3,4,5 -j ACCEPT",
+            "-A INPUT -p udp -d 2001:db8::/32 -m multiport --dports 80,443 -j ACCEPT",
+            "-A INPUT -p udp -d 2001:db8::/32 -m multiport --dports 12:44  -j ACCEPT",
+            "-A INPUT -p udp -d 2001:db8::/32 -m multiport --dports 1,3,4,5 -j ACCEPT",
             "-A OUTPUT -p udp -d 2001:db8::/32 -m multiport --dports 53 -j ACCEPT",
-            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -s 2001:db8::/32 "
+            "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -d 2001:db8::/32 "
             "-m multiport --dports 80 -j ACCEPT",
             "COMMIT",
         ]

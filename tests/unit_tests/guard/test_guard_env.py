@@ -141,8 +141,8 @@ def test_wildcard_skips_empty_source_values() -> None:
     assert env == Envs({"APP1_API_KEY": "123"})
 
 
-def test_unenv_only_removes_what_is_already_declared() -> None:
-    """`unenv` acts on the environment built so far, so the order of the rules matters."""
+def test_unenv_removes_a_key_declared_after_it() -> None:
+    """`unenv` wins over `env`, whatever the order of the rules."""
     errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(
         [
@@ -154,7 +154,7 @@ def test_unenv_only_removes_what_is_already_declared() -> None:
     )
 
     assert not errors
-    assert env == Envs({"FOO": "bar"})
+    assert env == Envs({})
 
 
 def test_unenv_of_an_unknown_key_is_not_an_error() -> None:
