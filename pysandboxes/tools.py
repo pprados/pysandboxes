@@ -54,6 +54,9 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
     values: list[str] = []
     marker = re.compile("(\\d+)")
 
+    if marker.pattern[0] in s or marker.pattern[-1] in s:
+        raise ValueError(f"Invalid variable reference in {s!r}: U+E000 and U+E001 are reserved")
+
     def restore(text: str) -> str:
         return marker.sub(lambda m: values[int(m.group(1))], text)
 
@@ -222,6 +225,12 @@ def set_is_in_sandbox(value: bool) -> None:
         _lc_enter()
     else:
         _lc_leave()
+
+
+def shell_status(returncode: int) -> int:
+    """The exit status a shell reports for a child: `128 + signum` for one killed by a signal, whose asyncio
+    return code is `-signum`."""
+    return returncode if returncode >= 0 else 128 - returncode
 
 
 def exit_status(e: SystemExit, report: bool = False) -> int:

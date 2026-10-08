@@ -11,6 +11,7 @@ from pysandboxes.tools import (
     _remove_comment,
     exit_status,
     find_config_for_module,
+    shell_status,
     follow_links_executable,
     resolve_env_variables,
 )
@@ -241,3 +242,13 @@ def test_exit_status_reports_a_message_only_when_asked(capsys: pytest.CaptureFix
     assert capsys.readouterr().err == ""
     assert exit_status(SystemExit("boom"), report=True) == 1
     assert capsys.readouterr().err == "boom\n"
+
+
+def test_a_reserved_marker_in_the_input_is_a_syntax_error() -> None:
+    with pytest.raises(ValueError, match="Invalid variable reference"):
+        resolve_env_variables("plain\ue0000\ue001text", {})
+
+
+@pytest.mark.parametrize(("returncode", "status"), [(0, 0), (3, 3), (-9, 137), (-15, 143)])
+def test_shell_status_follows_the_shell_convention_for_a_signal(returncode: int, status: int) -> None:
+    assert shell_status(returncode) == status

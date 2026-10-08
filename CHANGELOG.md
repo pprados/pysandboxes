@@ -115,6 +115,10 @@ kernel boundary is a Linux technology.
 - `--port` on the command line wins over any number of `port=` lines in the profile and its includes
 - A connection to an abstract Unix socket is refused with the sandbox's error instead of a `ValueError`
 - `python-sb -m <package>` finds the rule file of a namespace package
+- A function called from a sub-package finds the rule file of the nearest package that holds one, not only its top
+  package's
+- `python-sb` exits with `128 + signal` when the script is killed by a signal (137 for `SIGKILL`), as a shell reports
+  it
 - `sys.exit("message")` in a script run by `python-sb` prints the message and exits with 1, as CPython does
 - CPython's test modules (`_testinternalcapi`, `_testcapi`) no longer create a subinterpreter unless `python-api`
   allows it

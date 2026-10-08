@@ -33,7 +33,7 @@ from .remote.python_in_sb import convert_extra_rules
 from .remote.qemu_guest_console_io import GUEST_STDERR_FILE, GuestStderrTail
 from .remote.vm_sse_daemon import VMSSEDaemon
 from .sb_types import Envs
-from .tools import Environ, exit_status
+from .tools import Environ, exit_status, shell_status
 
 # Default console size when not a TTY (e.g. CI, pipes)
 _DEFAULT_COLUMNS = 80
@@ -326,7 +326,7 @@ def _main(stack: ExitStack) -> int:
                         process = await launch_sandbox(**launch_kwargs)
                         try:
                             if process.stdout is None or process.stderr is None:
-                                return await process.wait()
+                                return shell_status(await process.wait())
                             # Full VM console only when qemu.show_boot_console=true (profile).
                             forward_all = show_boot
                             return await vm.wait_process_and_filter_console(
@@ -353,7 +353,7 @@ def _main(stack: ExitStack) -> int:
                     config_writer=config_writer,
                 )
                 try:
-                    return await process.wait()
+                    return shell_status(await process.wait())
                 finally:
                     kill_slirp = getattr(os_provider, "_kill_slirp", None)
                     if callable(kill_slirp):
