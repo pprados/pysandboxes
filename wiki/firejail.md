@@ -94,6 +94,7 @@ Then add the resulting syscalls to `firejail.seccomp.keep=` (or `seccomp.block=`
   - no such line: the daemon logs an error and exits.
   - `restricted-network yes` (the stock value, e.g. on GitHub runners): the daemon warns and starts **without** the network setup, on the **host network**: the socket rules are not enforced by firejail, only by the Python guard, so native code, `ctypes` or a subprocess can reach any address.
 - Without socket rules, `--net=none` is used whatever the `restricted-network` line says: firejail allows it to regular users.
+- With `--net=<bridge>`, the daemon listens on every interface of the jail's own network namespace: the host and any other peer of that bridge (a Docker container on `docker0`, for example) can reach its port. A dedicated bridge, such as the one `scripts/add-bridge.sh` creates, keeps it away from other workloads.
 
 ## Recommendations
 

@@ -8,7 +8,7 @@ network namespace holding only ``lo``: ``--network none``, a
 restricted CI runner). A hostname would then raise
 ``ClientConnectorDNSError`` even though the daemon listens on
 loopback. An IP literal removes the lookup, and QEMU needs that same
-IPv4 literal for ``hostfwd``, which binds TCP on ``0.0.0.0`` only.
+IPv4 literal for ``hostfwd``, which listens on ``127.0.0.1`` only.
 """
 
 import ipaddress
