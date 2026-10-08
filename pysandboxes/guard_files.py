@@ -359,7 +359,9 @@ _special_env = OrderedDict(
                 "TMP",
                 "TEMP",
             ]
-            if (v := _learn_env.get(k)) is not None
+            # ``_get`` reads without recording a use: this is pysandboxes probing its own
+            # substitution table, not the sandboxed application reading the variable.
+            if (v := _learn_env._get(k)) is not None
         ),
         key=lambda x: len(x[1]),
         reverse=True,
@@ -386,7 +388,8 @@ _special_home = OrderedDict(
                 "NLTK_DATA",
                 "SPACY_DATA",
             ]
-            if (v := _learn_env.get(k)) is not None
+            # See the ``_special_env`` comment above: probing must not record a use.
+            if (v := _learn_env._get(k)) is not None
         ),
         key=lambda x: len(x[1]),
         reverse=True,
