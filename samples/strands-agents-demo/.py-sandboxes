@@ -106,8 +106,6 @@ python-import=watchdog
 python-import=wrapt
 python-import=yaml
 
-expose-ro=/proc
-
 remote-result-mode=data-only
 
 # Add rules (2026/10/07 at 16:50)

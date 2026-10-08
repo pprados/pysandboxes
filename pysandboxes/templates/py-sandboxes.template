@@ -366,6 +366,8 @@ remote-result-guard=true
 # firejail.seccomp — Path to a seccomp list file (passed as --seccomp=…).
 # firejail.seccomp.keep — Allowed syscalls (comma-separated) as --seccomp.keep=…
 # firejail.seccomp.block — Blocked syscalls as --seccomp.block=…
+# firejail.rlimit-<limit> — Replaces the firejail.template default, e.g.
+#   firejail.rlimit-as=600m for a framework that maps more than 300 MB at import.
 #
 # Socket rules require restricted-network no in /etc/firejail/firejail.config for netfilter
 # setup. Without the line the sandbox refuses to start; with an explicit 'restricted-network

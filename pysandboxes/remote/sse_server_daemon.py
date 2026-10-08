@@ -265,7 +265,9 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
     if uvicorn_logger.handlers:
         root_handler = uvicorn_logger.handlers[0]
     else:
-        root_handler = logging.StreamHandler(stream=sys.stdout)
+        # stderr: the child inherits the caller's stdout, which an MCP server on a stdio transport reads
+        # as JSON-RPC, and an "ERROR:uvicorn.error:..." line there broke it.
+        root_handler = logging.StreamHandler(stream=sys.stderr)
 
     fmt = getattr(root_handler.formatter, "_fmt", "%(levelname)s:%(name)s:%(message)s")
     if root_stream := getattr(root_handler, "stream", None):
@@ -277,9 +279,9 @@ def create_uvicorn_daemon(token: str, host: str, port: int) -> Server:
             else:
                 stream = f"ext:{root_stream.name}"
         else:
-            stream = "ext://sys.stdout"
+            stream = "ext://sys.stderr"
     else:
-        stream = "ext://sys.stdout"
+        stream = "ext://sys.stderr"
     logging_confg = {
         "version": 1,
         "disable_existing_loggers": False,

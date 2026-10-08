@@ -13,6 +13,14 @@ name: Sample Tests
 # an import on 3.11. langgraph-demo declares requires-python >=3.13 and is
 # skipped on the two lower rows by sample-tests-%.
 #
+# Every OS provider that confines a sample is covered too: each sample profile
+# reads os-sandbox=${OS_SANDBOX:-subprocess}, and a provider adds limits of its
+# own -- firejail refused a /proc whitelist and capped the address space, bwrap
+# lost editable installs and the working directory -- that no subprocess run can
+# show. A minor release must not ship a sample broken under one of them. `none`
+# confines nothing, so the confinement scenarios fail there by design; qemu boots
+# a VM per sandbox and is covered by integration.yml.
+#
 # No secret is needed: pydantic-ai drives TestModel behind a placeholder key,
 # openai-agents-sdk is mocked, and the suites that would reach a real model
 # (mcp-client, mcp-server) skip themselves when OPENAI_API_KEY / RUN_CLAUDE_TESTS
@@ -30,6 +38,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
+        os-sandbox: [subprocess, landlock, bwrap, firejail, unshare]
 
     # Pins the interpreter for every uv call in the sample Makefiles, and tells
     # sample-tests-% which version it is running: a sample whose requires-python
@@ -38,6 +47,7 @@ jobs:
     # ended up green by luck and red on another.
     env:
       UV_PYTHON: ${{ matrix.python-version }}
+      OS_SANDBOX: ${{ matrix.os-sandbox }}
 
     steps:
     - uses: actions/checkout@v5
@@ -69,6 +79,17 @@ jobs:
 
     - name: Check installation of uv
       run: uv --version
+
+    # The same preparation as integration.yml. Ubuntu 24.04 restricts unprivileged
+    # user namespaces through AppArmor, which bwrap and unshare need; firejail only
+    # filters a network with 'restricted-network no', and then joins docker0, which
+    # the runner routes to the internet the samples reach.
+    - name: Install the OS providers
+      run: |
+        sudo apt-get install -y bubblewrap firejail slirp4netns iptables iproute2
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+        sudo sed -i -E '/^[[:space:]]*restricted-network[[:space:]]+/d' /etc/firejail/firejail.config
+        echo 'restricted-network no' | sudo tee -a /etc/firejail/firejail.config
 
     # The SAMPLES list lives in the root Makefile, so a sample commented out
     # there disappears here too. Sequential on purpose: these suites arm real

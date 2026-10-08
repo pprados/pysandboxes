@@ -456,10 +456,13 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         # Name the prefix explicitly rather than let CPython derive it, then put the
         # venv's site-packages back: PYTHONHOME resets sys.path to the base
         # installation, so without this the child cannot import pysandboxes.
+        # Python reads no .pth file in a PYTHONPATH entry, so the directories those files add to sys.path
+        # (an editable install: pysandboxes in development, a project synced by uv) are named one by one.
         args.extend(["--setenv", "PYTHONHOME", sys.base_prefix])
         site_packages = [p for p in site.getsitepackages() if os.path.isdir(p)]
-        if site_packages:
-            args.extend(["--setenv", "PYTHONPATH", os.pathsep.join(site_packages)])
+        python_path = site_packages + [p for p in sys.path if p and os.path.isdir(p) and p not in site_packages]
+        if python_path:
+            args.extend(["--setenv", "PYTHONPATH", os.pathsep.join(python_path)])
 
         # Profile env vars so the child sees TERM, My_ENV, etc. (template uses --clearenv)
         for k, v in all_rules.envs.items():
@@ -526,6 +529,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         # Overlay ignore paths (e.g. .env) so they are not visible in the sandbox
         ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
         current_dir = os.getcwd()
+        # Without --chdir, bwrap retries the caller's $PWD: through a symlink that name is missing in the
+        # sandbox, and the child silently starts in $HOME. getcwd() is the resolved path the rules bind.
+        args.extend(["--chdir", current_dir])
         ignore_paths = _resolve_ignore_paths(current_dir, ignore_rules)
         exposed = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
         for i, full_host in enumerate(_ignore_mask_targets(current_dir, ignore_paths, exposed)):

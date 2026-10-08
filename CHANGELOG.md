@@ -34,6 +34,14 @@ kernel boundary is a Linux technology.
   (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
 
 ### Fixed
+- Learning mode no longer writes a rule under `/proc`: a library reading `/proc/stat` at import produced
+  `expose-ro=/proc`, which exposed every process's environment and command line
+- Under `bwrap`, a project reached through a symbolic link runs in its own directory, not silently in `$HOME`
+- The sandbox's own server logs go to stderr: on stdout they corrupted an MCP server on a stdio transport
+- A host name that no `net=` rule can allow is refused at resolution, with the sandbox's message, under every
+  provider: under `bwrap` it failed with a bare "Name or service not known", and no DNS query leaves for it
+- Under `bwrap`, a package installed in editable mode, such as a project synced by uv, can be imported
+- Under `firejail`, a profile with an `expose-ro=/proc...` rule, which learning mode writes, no longer aborts the launch
 - A profile no longer has to allow the sandbox daemon's own modules (uvicorn, fastapi, and the standard library
   they use): learning records only the application's imports
 - In partial mode, an import made by the application is judged on its rules even when the module is already
@@ -50,6 +58,8 @@ kernel boundary is a Linux technology.
   the profile invalid on the next run
 
 ### Added
+- A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
+  more than 300 MB at import
 - Two coding-agent skills: one learns the rules a new feature needs from its tests and asks before granting them,
   the other lists the rights a change adds to the `.py-sandboxes` files, graded by risk, with the code that needs
   each; and a GitHub workflow to copy into a project, which comments that list on a pull request

@@ -93,8 +93,6 @@ python-import=uuid_utils
 python-import=xxhash
 python-import=zstandard
 
-expose-ro=/proc
-
 remote-result-mode=data-only
 
 # Add rules (2026/10/07 at 16:48)

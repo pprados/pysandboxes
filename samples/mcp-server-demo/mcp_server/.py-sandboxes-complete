@@ -16,6 +16,10 @@ os-sandbox=${OS_SANDBOX:-subprocess}
 # nearest .env above it and copies every name into os.environ, past the env= rules.
 ignore=.env
 
+# The whole server maps more than the 300 MB firejail allows by default: a thread, such as
+# the one the eval guard starts, then fails with "can't start new thread".
+firejail.rlimit-as=600m
+
 net=ALLOW|TCP|www.google.com|443|OUT
 
 # The repository root, which uv installs as an editable dependency (see

@@ -244,6 +244,9 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     firejail_params["seccomp.keep"] = firejail_param.split("=")[1]
                 elif firejail_param.startswith("seccomp.block="):
                     firejail_params["seccomp.block"] = firejail_param.split("=")[1]
+                elif firejail_param.startswith("rlimit-"):
+                    key, _, value = firejail_param.partition("=")
+                    firejail_params[key] = value
 
             else:
                 ignore_rules.append(rule)
@@ -368,7 +371,11 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         firejail_conf = substitute_env_vars(firejail_conf, envs)
 
         for line in firejail_conf:
-            args.extend(shlex.split(line))
+            options = shlex.split(line)
+            # A profile's firejail.rlimit-* replaces the template's default rather than repeating the option.
+            if options and options[0].lstrip("-").split("=")[0] in all_rules.os_sandbox_params:
+                continue
+            args.extend(options)
 
         # Extend mapping if the python version use some links
         whitelist = AllowList()
@@ -422,7 +429,13 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             if rule.write or rule.path not in whitelist:
                 # Under /etc, --private-etc provides the entries: a --whitelist there puts a tmpfs over
                 # /etc, and --dns then fails with "fs_resolvconf: mount: No such file or directory".
-                if rule.path != "/tmp/" and not skip_path and not rule.path.startswith("/etc/"):
+                # firejail mounts its own /proc and aborts on "invalid whitelist path /proc".
+                if (
+                    rule.path != "/tmp/"
+                    and not skip_path
+                    and not rule.path.startswith("/etc/")
+                    and not rule.path.startswith("/proc/")
+                ):
                     args.append(f"--whitelist={rule.path}")
                 whitelist.add(rule.path)
             if not skip_path:
