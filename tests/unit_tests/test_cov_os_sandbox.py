@@ -12,6 +12,7 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes import _os_sandbox
 from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.base_daemon import FakeDaemon
+from pysandboxes.e import SandBoxError
 from pysandboxes.remote.base_sse_daemon import BaseSSESandbox
 from pysandboxes.tools import Environ, SyncOrAsyncFunc
 
@@ -286,12 +287,12 @@ async def test_async_call_in_sandbox_without_a_daemon_is_refused() -> None:
     async def fn() -> int:
         return 1
 
-    with pytest.raises(AssertionError, match="Daemon not started"):
+    with pytest.raises(SandBoxError, match="Daemon not started"):
         await _os_sandbox.async_call_in_sandbox(fn)
 
 
 def test_call_in_sandbox_without_a_daemon_is_refused() -> None:
-    with pytest.raises(AssertionError, match="Daemon not started"):
+    with pytest.raises(SandBoxError, match="Daemon not started"):
         _os_sandbox.call_in_sandbox(len, "abc")
 
 

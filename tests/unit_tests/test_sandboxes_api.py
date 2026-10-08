@@ -4,7 +4,9 @@ import inspect
 import signal
 import subprocess
 import sys
+import threading
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest  # type: ignore[import-untyped]
@@ -71,6 +73,22 @@ class TestSandboxDecorator:
             return "test"
 
         assert callable(test_func)
+
+    def test_sandbox_refuses_a_generator_function(self) -> None:
+        """A generator function cannot be sent across the sandbox boundary."""
+        with pytest.raises(TypeError, match="generator"):
+
+            @sandbox
+            def gen() -> Any:  # type: ignore[misc]
+                yield 1
+
+    def test_sandbox_refuses_an_async_generator_function(self) -> None:
+        """An asynchronous generator function cannot be sent across the sandbox boundary."""
+        with pytest.raises(TypeError, match="generator"):
+
+            @sandbox
+            async def agen() -> Any:  # type: ignore[misc]
+                yield 1
 
 
 class TestRunFunction:
@@ -186,6 +204,40 @@ class TestSandboxesContextManager:
             pass
 
         assert mock_async_start.call_args.kwargs["python_args"] == ["-X", "dev"]
+
+
+class TestExtraRulesNormalization:
+    """extra_rules values that repeat can be given as list, tuple, set or frozenset."""
+
+    def test_list_tuple_and_frozenset_are_normalized_to_a_set(self) -> None:
+        cm = sandboxes(expose_ro=["/a", "/b"], expose_rw=("/c",), env_allow=frozenset({"X"}))
+
+        assert cm.extra_rules["expose_ro"] == {"/a", "/b"}
+        assert cm.extra_rules["expose_rw"] == {"/c"}
+        assert cm.extra_rules["env_allow"] == {"X"}
+
+    def test_a_plain_string_value_is_left_untouched(self) -> None:
+        cm = sandboxes(os_sandbox="bwrap")
+
+        assert cm.extra_rules["os_sandbox"] == "bwrap"
+
+
+@pytest.mark.asyncio
+async def test_async_enter_parses_the_config_off_the_event_loop_thread() -> None:
+    """Parsing the configuration file is blocking I/O; it must not run on the event loop thread."""
+    loop_thread = threading.current_thread()
+    seen: dict[str, threading.Thread] = {}
+
+    def fake_load_and_parse_config(*args: Any, **kwargs: Any) -> Any:
+        seen["thread"] = threading.current_thread()
+        raise ConfigSyntaxError("stop before starting a daemon", [])
+
+    with patch("pysandboxes.py_sandbox.load_and_parse_config", side_effect=fake_load_and_parse_config):
+        with pytest.raises(ConfigSyntaxError):
+            async with sandboxes():
+                pass
+
+    assert seen["thread"] is not loop_thread
 
 
 class TestRunParameters:

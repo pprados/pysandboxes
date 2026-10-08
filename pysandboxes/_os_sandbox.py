@@ -19,6 +19,7 @@ from typing import Any, Callable, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
+from .e import SandBoxError
 from .private_loop import (
     _reset_sandbox_loop,
     get_sandbox_loop,
@@ -478,13 +479,14 @@ async def async_call_in_sandbox(func: Callable[..., Any], *args: Any, **kwargs: 
         The result of the function execution.
 
     Raises:
-        AssertionError: If the daemon is not started.
+        SandBoxError: If the daemon is not started.
     """
     global _current_daemon
     if is_in_sandbox():
         return await func(*args, **kwargs)
 
-    assert _current_daemon is not None, "Daemon not started"
+    if _current_daemon is None:
+        raise SandBoxError("Daemon not started. Use 'with sandboxes()' or 'pysandboxes.run()'")
     return await _current_daemon.async_call_in_sandbox(func, False, *args, **kwargs)
 
 
@@ -504,12 +506,13 @@ def call_in_sandbox(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         The result of the function execution.
 
     Raises:
-        AssertionError: If the daemon is not started.
+        SandBoxError: If the daemon is not started.
     """
     global _current_daemon
     if is_in_sandbox():
         return func(*args, **kwargs)
-    assert _current_daemon is not None, "Daemon not started. Use 'with sandboxes()' " "or 'pysandboxes.run()'"
+    if _current_daemon is None:
+        raise SandBoxError("Daemon not started. Use 'with sandboxes()' or 'pysandboxes.run()'")
     check_mixte_async_async()
 
     return _current_daemon.call_in_sandbox(func, False, *args, **kwargs)

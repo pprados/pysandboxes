@@ -55,7 +55,7 @@ Example:
     from pysandboxes import sandboxes
 
     with sandboxes():
-        # All code in this block runs sandboxed
+        # Only @sandbox-decorated calls made in this block run sandboxed
         result = some_function()
     ```
 """
@@ -75,8 +75,8 @@ if TYPE_CHECKING:
         RuleModuleNotFoundError,  # noqa: F401
         RulePermissionError,  # noqa: F401
         RuleSocketConnectionRefusedError,  # noqa: F401
-        SandBoxError,  # noqa: F401
         SandBoxBaseExceptionError,  # noqa: F401
+        SandBoxError,  # noqa: F401
         SandBoxProtocolError,  # noqa: F401
         sandbox_denials,  # noqa: F401
     )
