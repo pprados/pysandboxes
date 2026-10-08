@@ -60,6 +60,7 @@ all = [
 repository = "https://www.github.com/pprados/pysandboxes"
 homepage = "https://www.github.com/pprados/pysandboxes"
 documentation = "https://pprados.github.io/pysandboxes/"
+wiki = "https://github.com/pprados/pysandboxes/wiki"
 
 [tool.hatch.version]
 source = "vcs"
