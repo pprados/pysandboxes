@@ -161,12 +161,13 @@ def _main(stack: ExitStack) -> int:
         else:
             if lock:
                 if not any(rule.rule.startswith("env=IPYTHONDIR=") for rule in all_rules.config):
+                    # IPython then fails on its profile directory, and the shell falls back to the standard REPL.
                     print(
                         f"{format_ruleref(lock)}: {lock.rule!r} locks the rules, the IPython shell cannot get a "
-                        "private profile directory: add `expose-rw=<dir>` and `env=IPYTHONDIR=<dir>` to the profile",
+                        "private profile directory, so the standard Python REPL runs instead. For IPython, add "
+                        "`expose-rw=<dir>` and `env=IPYTHONDIR=<dir>` to the profile.",
                         file=sys.stderr,
                     )
-                    sys.exit(-1)
             else:
                 ipython_dir = stack.enter_context(tempfile.TemporaryDirectory(prefix="pysandboxes-ipython-"))
                 extra_rules.setdefault("expose-rw", set()).add(ipython_dir)

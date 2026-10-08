@@ -489,15 +489,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         prepared = Prepared(name)
         return itertools.chain.from_iterable(path.search(prepared) for path in map(FastPath, paths))
 
-    __slots__ = ("_finders",)
-
-    def __init__(self, finders: list[MetaPathFinderProtocol]):
-        """Initialize the guard finder.
-
-        Args:
-            finders: List of meta path finders to delegate to.
-        """
-        self._finders = finders
+    __slots__ = ()
 
     """
     A custom finder that locates our special module.
@@ -661,7 +653,7 @@ def preimport_framework_module(name: str) -> ModuleType:
     return module
 
 
-_guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
+_guard_finder: importlib.abc.MetaPathFinder = GuardFinder()
 
 _activated = False
 
@@ -855,7 +847,7 @@ def generate_rules(
             danger_result.add(learn_rule.name)
         elif learn_rule.name in std_modules or learn_rule.name[0] == "_":
             standard_result.add(learn_rule.name)
-        elif learn_rule.name in deprecated_modules or learn_rule.name[0] == "_":
+        elif learn_rule.name in deprecated_modules:
             deprecated_result.add(learn_rule.name)
         else:
             other_result.add(learn_rule.name)

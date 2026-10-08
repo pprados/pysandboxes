@@ -100,7 +100,6 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
                 try:
                     loop.run_forever()
                     logger.debug("Stop thread for sandbox event loop")
-                    _background_loop_ref = None
                     return
                 except KeyboardInterrupt:
                     import _thread

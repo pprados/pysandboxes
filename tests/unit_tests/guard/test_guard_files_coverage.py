@@ -27,10 +27,8 @@ from pysandboxes import RuleFileNotFoundError, RulePermissionError, guard_files,
 from pysandboxes import learning as learning_mod
 from pysandboxes.guard_files import (
     FSExposeRule,
-    IgnoreRule,
     LearnFileRule,
     _apply_dest_to_src_rules,
-    _apply_ignore_rule,
     _apply_src_to_dest_rules,
     _check_is_in_rules,
     _dir_fd_path,
@@ -200,15 +198,6 @@ def test_ignore_matches_strips_ntfs_stream_on_windows(monkeypatch: pytest.Monkey
 
 
 # %% _apply_ignore_rule / _apply_src_to_dest_rules / _apply_dest_to_src_rules
-
-
-def test_apply_ignore_rule_matches_by_name(tmp_path: Path) -> None:
-    rule = IgnoreRule("secret.*", ConfigLine("ignore=secret.*", Path(), 0))
-
-    with patch.object(guard_files, "_rules", (rule,)):
-        result = _apply_ignore_rule(str(tmp_path / "secret.txt"))
-
-    assert result == (None, rule)
 
 
 def test_apply_src_to_dest_rules_rejects_an_unknown_rule_type(tmp_path: Path) -> None:

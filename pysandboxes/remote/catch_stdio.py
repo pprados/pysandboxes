@@ -136,29 +136,6 @@ sys.stdout = WrapperIO(contextvars.ContextVar("current_stdout", default=sys.stdo
 sys.stderr = WrapperIO(contextvars.ContextVar("current_stderr", default=sys.stderr))
 
 
-def catch_stdio(
-    queue: TQueue | None,
-    fn: Callable,
-    kwargs: dict[str, Any],
-    *args: Any,
-) -> dict[str, Any]:
-    """
-    Catches stdout and stderr for a synchronous function running in the sandbox loop.
-
-    Args:
-        queue: The queue to which output and results will be sent.
-        fn: The synchronous function to execute.
-        kwargs: Keyword arguments for the function.
-        *args: Positional arguments for the function.
-
-    Returns:
-        A dictionary containing the result, stdout, and stderr.
-    """
-    assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
-    result = asyncio.run_coroutine_threadsafe(acatch_stdio(queue, fn, kwargs, *args), asyncio.get_event_loop())
-    return result.result()
-
-
 async def acatch_stdio(
     sync_or_async_queue: TQueue | None,
     fn: Callable,
@@ -239,23 +216,7 @@ async def acatch_stdio(
                     sync_or_async_queue.put(result)
         return result
 
-    async def run() -> dict[str, Any]:
-        try:
-            use_async = inspect.iscoroutinefunction(fn)
-
-            if use_async:
-                fn_result = await fn(*args, **kwargs)
-            else:
-                fn_result = fn(*args, **kwargs)
-            result = {"result": fn_result}
-        except Exception as e:
-            import tblib
-
-            result = {"exception": (e, tblib.Traceback(e.__traceback__))}
-        return result
-
     result = await run_in_context()
-    # result = await run()
     result["stdout"] = captured_stdout.getvalue()
     result["stderr"] = captured_stderr.getvalue()
 

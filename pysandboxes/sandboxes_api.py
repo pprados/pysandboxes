@@ -51,21 +51,6 @@ logger = logging.getLogger(__name__)
 importlib.import_module("multiprocessing.synchronize")
 
 
-def _check__main__coroutine(coroutine: Any) -> None:
-    """Check that a coroutine is not defined in __main__ module.
-
-    Args:
-        coroutine: The coroutine to check.
-
-    Raises:
-        ValueError: If the coroutine is defined in __main__ module.
-    """
-    module = inspect.getmodule(coroutine.cr_frame)
-    if module and hasattr(module, "__name__"):
-        if module.__name__ == "__main__":
-            raise ValueError("The coroutine must be declared in a module " "other than __main__.")
-
-
 def _refuse_locked_extra_rules(all_rules: "AllRules", extra_rules: dict[str, Any]) -> None:
     """Refuse the directives given to the API when the rule file holds `learn=false`.
 

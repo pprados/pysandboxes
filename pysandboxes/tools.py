@@ -18,7 +18,6 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Iterator,
     NamedTuple,
     cast,
 )
@@ -199,35 +198,6 @@ def _remove_comment(line: str) -> str:
 
     # Remove trailing whitespace
     return "".join(result).rstrip()
-
-
-def _walk_to_base(path: str, base: str) -> Iterator[str]:
-    """Yield directories starting from given directory up to base.
-
-    Args:
-        path: Starting directory path.
-        base: Base directory to stop at.
-
-    Yields:
-        Directory paths from starting directory up to base.
-
-    Raises:
-        IOError: If starting path is not found.
-    """
-    if not os.path.exists(path):
-        raise IOError("Starting path not found")
-
-    if os.path.isfile(path):
-        path = os.path.dirname(path)
-
-    last_dir = None
-    current_dir = os.path.abspath(path)
-    while last_dir != current_dir:
-        yield current_dir
-        if current_dir == base:
-            break
-        parent_dir = os.path.abspath(os.path.join(current_dir, os.path.pardir))
-        last_dir, current_dir = current_dir, parent_dir
 
 
 # %% -----------------------

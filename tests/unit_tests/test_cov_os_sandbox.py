@@ -112,7 +112,6 @@ def test_the_lazy_factory_lists_the_registry_and_rejects_unknown_names() -> None
 
 def test_private_providers_are_never_offered() -> None:
     assert _FAKE not in _os_sandbox.platform_providers()
-    assert "_task" not in _os_sandbox.platform_providers()
 
 
 def test_unavailable_reason_comes_from_the_provider(monkeypatch: pytest.MonkeyPatch) -> None:

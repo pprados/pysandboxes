@@ -1,21 +1,9 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
-import socket
 from ipaddress import IPv4Address, IPv4Network, IPv6Network
 from typing import Iterable, List, Union
 
 from .guard_socket import Action, Direction, Kind, SocketRules
-
-_map_netfilter_action = {"ALLOW": "ACCEPT", "DENY": "REJECT"}
-_map_netfilter_direction = {"OUT": "OUTPUT", "IN": "INPUT"}
-_map_netfilter_type = {
-    socket.IPPROTO_TCP: "tcp",
-    socket.IPPROTO_UDP: "udp",
-    socket.IPPROTO_ICMP: "icmp",
-    socket.IPPROTO_IPV6: "icmp",
-    socket.IPPROTO_ICMPV6: "icmpv6",
-    # -1: "any",  # 0 means "any
-}
 
 
 def _build_port(rule_ports_list: Union[Iterable[int], range]) -> str:

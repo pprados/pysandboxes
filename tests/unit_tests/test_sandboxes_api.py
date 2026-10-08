@@ -11,67 +11,10 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.sandboxes_api import (
-    _check__main__coroutine,
     run,
     sandbox,
     sandboxes,
 )
-
-
-class TestCheckMainCoroutine:
-    """Test cases for _check__main__coroutine function."""
-
-    def test_check_main_coroutine_with_main_module(self) -> None:
-        """Test that coroutine from __main__ raises ValueError."""
-        # Create a mock coroutine with __main__ module
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_module = Mock()
-        mock_module.__name__ = "__main__"
-
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
-            with pytest.raises(
-                ValueError,
-                match="The coroutine must be declared in a module " "other than __main__",
-            ):
-                _check__main__coroutine(mock_coroutine)
-
-    def test_check_main_coroutine_with_other_module(self) -> None:
-        """Test that coroutine from other module doesn't raise."""
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_module = Mock()
-        mock_module.__name__ = "test_module"
-
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
-            # Should not raise
-            _check__main__coroutine(mock_coroutine)
-
-    def test_check_main_coroutine_with_no_module(self) -> None:
-        """Test that coroutine with no module doesn't raise."""
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=None):
-            # Should not raise
-            _check__main__coroutine(mock_coroutine)
-
-    def test_check_main_coroutine_with_module_no_name(self) -> None:
-        """Test that coroutine with module without __name__ doesn't raise."""
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_module = Mock(spec=[])  # Module without __name__ attribute
-
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
-            # Should not raise
-            _check__main__coroutine(mock_coroutine)
 
 
 class TestSandboxDecorator:
@@ -138,10 +81,9 @@ class TestRunFunction:
         # The run function doesn't actually validate input type in the
         # real implementation so we'll just test that it doesn't crash
         # with non-coroutine input
-        with patch("pysandboxes.sandboxes_api._check__main__coroutine"):
-            with patch("asyncio.run"):
-                with pytest.raises(ValueError):
-                    run("not a coroutine")  # type: ignore
+        with patch("asyncio.run"):
+            with pytest.raises(ValueError):
+                run("not a coroutine")  # type: ignore
 
 
 class TestSandboxesContextManager:

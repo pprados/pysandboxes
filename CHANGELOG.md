@@ -81,8 +81,10 @@ kernel boundary is a Linux technology.
   the application, and an exception in the sandbox's event loop no longer ends the process
 - An application that opens `sandboxes()` many times no longer ends in a `RecursionError` on an import
 - A refusal raised through `shutil.rmtree` still names the rule that refused it
-- Under a `learn=false` profile, `ipython-sb` refuses to add its private profile directory: the profile names its
-  own with `expose-rw=<dir>` and `env=IPYTHONDIR=<dir>`
+- Under a `learn=false` profile, `ipython-sb` adds no private profile directory and runs the standard Python REPL,
+  unless the profile names its own with `expose-rw=<dir>` and `env=IPYTHONDIR=<dir>`
+- A builtin named by both `eval-call=ALLOW:` and `eval-call=DENY:` (or a `DENY` pattern) is refused to the evaluated
+  code: `DENY` already won in the rules, but the name was still handed to the code
 - Creating a subinterpreter is a `process-exec` call, denied by default: code run in a new interpreter escaped every
   Python guard, `python-import` alone allowing it
 

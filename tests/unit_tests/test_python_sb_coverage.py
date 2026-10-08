@@ -273,15 +273,15 @@ class TestMainEarlyExits:
         assert captured["existed_during_run"]
         assert not Path(ipython_dir).exists(), "the private IPython dir must be removed at exit"
 
-    @pytest.mark.parametrize("names_its_ipython_dir", [False, True], ids=["refused", "profile-names-its-dir"])
-    def test_a_learn_false_lock_refuses_the_private_ipython_dir(
+    @pytest.mark.parametrize("names_its_ipython_dir", [False, True], ids=["standard-repl", "profile-names-its-dir"])
+    def test_a_learn_false_lock_withholds_the_private_ipython_dir(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
         names_its_ipython_dir: bool,
     ) -> None:
-        """Like a command-line rule, the private profile directory is refused by a locked profile."""
+        """Like a command-line rule, a locked profile gets no private profile directory: the standard REPL runs."""
         monkeypatch.setitem(sys.modules, "IPython", types.ModuleType("IPython"))
         _patch_cmd_line(
             monkeypatch, python_parsed_args=[], sandboxes_args=[], python_cmd=[], config_path=_config_path(tmp_path)
@@ -304,13 +304,10 @@ class TestMainEarlyExits:
         monkeypatch.setattr(python_sb, "load_and_parse_config", _load)
         monkeypatch.setattr(python_sb, "providers_factory", {EmptyRules.os_sandbox: _no_start})
 
-        if names_its_ipython_dir:
-            with pytest.raises(_Started):
-                python_sb.main()
-        else:
-            with pytest.raises(SystemExit):
-                python_sb.main()
-            assert "the IPython shell cannot get a private profile directory" in capsys.readouterr().err
+        with pytest.raises(_Started):  # The shell starts either way: IPython, or the standard REPL as fallback
+            python_sb.main()
+        warning = "the standard Python REPL runs instead"
+        assert (warning in capsys.readouterr().err) is not names_its_ipython_dir
         assert len(loads) == 1 and "expose-rw" not in loads[0]
 
     @pytest.mark.parametrize(
