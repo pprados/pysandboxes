@@ -270,10 +270,10 @@ include = [
     { include = "my-package/.py-sandboxes" }
 ]
 ```
-If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file. Then the user can change some rules.
+If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file. Then the user can change some rules. The working directory's file may not exist, so this include is optional:
 ```ini
 # File my_module/.py-sandboxes
-include "./.py-sandboxes"
+include? "./.py-sandboxes"
 # ... specific rules
 ```
 

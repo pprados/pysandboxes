@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from pysandboxes.config import CONFIG_NAME
+from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.py_sandbox import _search_module_config, load_and_parse_config
 
 
@@ -48,11 +49,22 @@ class TestConfigInclude:
 
         assert rules.os_sandbox_params.get("show_boot_console") == "true"
 
-    def test_missing_include_is_ignored(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """An absent optional override leaves the rest of the profile usable."""
+    def test_missing_include_is_a_configuration_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A mandatory `include` that is missing must not drop a rule such as `learn=false` silently."""
         profile = _write(
             tmp_path / "conf" / "test.profile",
             'os-sandbox=qemu\ninclude "./absent.conf"\nqemu.memory=1G\n',
+        )
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(ConfigSyntaxError, match="absent.conf"):
+            load_and_parse_config(profile)
+
+    def test_missing_optional_include_is_ignored(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An absent `include?` override leaves the rest of the profile usable."""
+        profile = _write(
+            tmp_path / "conf" / "test.profile",
+            'os-sandbox=qemu\ninclude? "./absent.conf"\nqemu.memory=1G\n',
         )
         monkeypatch.chdir(tmp_path)
 

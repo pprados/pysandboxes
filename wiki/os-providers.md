@@ -78,11 +78,13 @@ On the exception channel the guard is fail-closed, and an exception's state rout
 
 > Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
-To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file, or set the environment variable `OS_SANDBOX`.
+To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file. `OS_SANDBOX` only takes effect where that line reads it, as the generated template does (`os-sandbox=${OS_SANDBOX:-subprocess}`):
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module
 ```
+
+To pin a provider so the environment cannot downgrade it, write it literally, e.g. `os-sandbox=bwrap` — `learn=false` does not prevent this downgrade either (see [use-cases](use-cases.md#what-the-rule-file-does-not-show)).
 
 > Need help: can you propose a PR to integrate some solution for Apple OS ?
 

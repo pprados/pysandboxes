@@ -1,4 +1,4 @@
-include ".py-sandboxes.pycharm"
+include? ".py-sandboxes.pycharm"
 #learn=mcp_simple_chatbot/.py-sandboxes
 
 py-sandbox=true

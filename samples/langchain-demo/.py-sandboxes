@@ -37,11 +37,11 @@
 # ==========================
 # You can include additional configuration files for better organization.
 # Name without '/' may be in the same directory.
-# Missing files are silently ignored.
+# `include?` is optional, a missing file is ignored. `include` is mandatory.
 
-include "./.local.py-sandboxes"  # May be add to .gitignore
-include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
-include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
+include? "./.local.py-sandboxes"  # May be add to .gitignore
+include? "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
+include? "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 
 #######################################################################################
 # PYTHON SANDBOX ACTIVATION

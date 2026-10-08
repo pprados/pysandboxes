@@ -1,4 +1,4 @@
-include ".py-sandboxes.pycharm"
+include? ".py-sandboxes.pycharm"
 #learn=google_adk_demo/.py-sandboxes
 
 py-sandbox=true
@@ -92,4 +92,4 @@ net=ALLOW|TCP|${MY_IP:-localhost}|8000|OUT
 expose-ro=.
 
 firejail.seccomp=@chown,@clock,@debug,@keyring,@memlock,@module,@mount,@obsolete,@privileged,@raw-io,@reboot,@resources,@setuid,@swap,@sync
-include ".py-sandboxes.pycharm"
+include? ".py-sandboxes.pycharm"

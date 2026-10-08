@@ -413,7 +413,7 @@ Every rule of the `eval-*` family is described key by key, with a valid and an i
 
 # OS-sandbox vs Py-sandbox
 
-The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct calls to the kernel. When the threat model includes those paths, select an OS-level provider (**os-sandbox**) whose mechanism and prerequisites fit the deployment: `landlock`, `unshare`, `bwrap`, `firejail`, or `qemu`. `subprocess` provides process separation without an OS security boundary. Select a provider with the `os-sandbox` configuration parameter or the `OS_SANDBOX` environment variable.
+The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct calls to the kernel. When the threat model includes those paths, select an OS-level provider (**os-sandbox**) whose mechanism and prerequisites fit the deployment: `landlock`, `unshare`, `bwrap`, `firejail`, or `qemu`. `subprocess` provides process separation without an OS security boundary. Select a provider with the `os-sandbox` configuration parameter; `OS_SANDBOX` only takes effect where the config's `os-sandbox` line reads it, as the generated template does (`os-sandbox=${OS_SANDBOX:-subprocess}`). A config that must pin a provider should write it literally, e.g. `os-sandbox=bwrap` — the environment can otherwise downgrade it, and `learn=false` does not prevent that.
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module
