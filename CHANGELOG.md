@@ -33,6 +33,8 @@
   `expose-ro=/proc`, which exposed every process's environment and command line
 - Under `bwrap`, a project reached through a symbolic link runs in its own directory, not silently in `$HOME`
 - The sandbox's own server logs go to stderr: on stdout they corrupted an MCP server on a stdio transport
+- A host name that no `net=` rule can allow is refused at resolution, with the sandbox's message, under every
+  provider: under `bwrap` it failed with a bare "Name or service not known", and no DNS query leaves for it
 - Under `bwrap`, a package installed in editable mode, such as a project synced by uv, can be imported
 - Under `firejail`, a profile with an `expose-ro=/proc...` rule, which learning mode writes, no longer aborts the launch
 - A profile no longer has to allow the sandbox daemon's own modules (uvicorn, fastapi, and the standard library

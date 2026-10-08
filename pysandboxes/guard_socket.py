@@ -937,6 +937,30 @@ def _get_family(ip: str) -> int:
     return family
 
 
+def _refuse_a_name_no_rule_can_allow(name: str) -> None:
+    """Refuse, before any DNS query, a name that no ALLOW rule could reach.
+
+    The names of the `net=` rules are pinned; a rule names addresses, so another name is reached only through an
+    ALLOW rule wider than the pinned addresses. Without one, the name is refused here, as the connection would be:
+    a provider that isolates the network, bwrap, does not resolve it at all, and its "Name or service not known"
+    said nothing of the rule. No query leaves for it either.
+    """
+    if not _rules_loaded or is_learning_mode() or not name or name in _LOOPBACK_HOSTS:
+        return
+    try:
+        ip_address(name)
+        return
+    except ValueError:
+        pass
+    pinned = {ip_address(addr_info[4][0]) for addr_infos in _pin_dns.values() for addr_info in addr_infos}
+    for rule in _rules:
+        if rule.action == Action.ALLOW and Direction.OUT in rule.directions:
+            if rule.mask.network.num_addresses != 1 or rule.mask.network.network_address not in pinned:
+                return
+    pysandboxes_logger.error("Resolution of %r DENIED: no net= rule names it.", name)
+    raise RuleSocketConnectionRefusedError(f"Guard network resolution of {name!r} DENIED: no net= rule names it.")
+
+
 # %%
 def _wrap_socket_gethostbyname(func: Callable) -> Callable:
     @guard_wraps(func)
@@ -956,6 +980,8 @@ def _wrap_socket_gethostbyname(func: Callable) -> Callable:
             err.errno = 3
             err.strerror = "Temporary failure in name resolution"
             raise err
+        if isinstance(name, str):
+            _refuse_a_name_no_rule_can_allow(name)
         result = func(name, *args, **kwargs)
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
@@ -984,6 +1010,8 @@ def _wrap_socket_gethostbyname_ex(func: Callable) -> Callable:
                 [],
                 [dns_conf[4][0] for dns_conf in _pin_dns[name] if dns_conf[0] == socket.AF_INET],
             )
+        if isinstance(name, str):
+            _refuse_a_name_no_rule_can_allow(name)
         result = func(name, *args, **kwargs)
         if isinstance(name, str) and name and is_learning_mode():
             add_learning_rule(
@@ -1055,6 +1083,8 @@ def _wrap_socket_getaddrinfo(func: Callable) -> Callable:
             if port is not None:
                 result = list(_patch_port(int(port), dns_conf) for dns_conf in result)
         else:
+            if isinstance(host, str):
+                _refuse_a_name_no_rule_can_allow(host)
             result = func(host, port, family, type, proto, flags, *args, **kwargs)
         if isinstance(host, str) and host and is_learning_mode():
             add_learning_rule(
