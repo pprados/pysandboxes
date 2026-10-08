@@ -166,9 +166,8 @@ def parse_rules(
         # Search the value from parameter
         for v, rule in s:
             if rule.path == Path("."):
-                if len(s) <= 2:
-                    parameters_prioritize_single_value[k] = (v, rule)
-                    break
+                parameters_prioritize_single_value[k] = (v, rule)
+                break
         else:
             if len(s) > 1:
                 all_error_lines = [format_ruleref(rule) for _, rule in s]

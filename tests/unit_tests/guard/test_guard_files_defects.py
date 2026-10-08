@@ -143,3 +143,104 @@ def test_glob_keeps_case_sensitive_beside_recurse_symlinks(tree: Path) -> None:
     _arm(tree)
     list(_wrap_pathlib_Path_glob(recording_glob)(tree / "rw", "*", case_sensitive=False, recurse_symlinks=True))
     assert seen == {"case_sensitive": False, "recurse_symlinks": True}
+
+
+def test_relative_ignore_pattern_does_not_match_a_dot_named_ancestor(tmp_path: Path) -> None:
+    # G8: the exposed root itself lives under a dot-named ancestor directory. A relative
+    # ignore pattern must only be judged against the components below the exposed root,
+    # never against ancestors above it.
+    root = Path(os.path.realpath(tmp_path)) / "x" / ".p" / "proj"
+    root.mkdir(parents=True)
+    (root / "ro").mkdir()
+    (root / "rw").mkdir()
+    (root / "ro" / "file.txt").write_text("ro")
+    (root / "rw" / "file.txt").write_text("rw")
+    _arm(root, "ignore=.*")
+    # The exposed files must still be readable: ".p" is an ancestor, not a path component
+    # below either exposed root.
+    assert open(root / "ro" / "file.txt").read() == "ro"
+    assert open(root / "rw" / "file.txt").read() == "rw"
+
+
+def test_relative_ignore_pattern_still_hides_matching_names_below_the_root(tree: Path) -> None:
+    # Keep the intended behaviour of a relative ignore= pattern.
+    (tree / "rw" / ".secrets").mkdir()
+    (tree / "rw" / ".secrets" / "key").write_text("key")
+    (tree / "rw" / "a").mkdir()
+    (tree / "rw" / "a" / ".secrets").mkdir()
+    (tree / "rw" / "a" / ".secrets" / "b").write_text("b")
+    _arm(tree, "ignore=.secrets")
+    with pytest.raises(RuleFileNotFoundError):
+        open(tree / "rw" / ".secrets" / "key").close()
+    with pytest.raises(RuleFileNotFoundError):
+        open(tree / "rw" / "a" / ".secrets" / "b").close()
+
+
+def test_unlink_with_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) -> None:
+    # G18: os.unlink(name, dir_fd=fd) must judge a link exactly like the plain-path form:
+    # on the directory holding it (read-only "ro"), not on the realpath-resolved target
+    # ("rw", writable). Without the fix this succeeds.
+    _arm(tree)
+    fd = os.open(tree / "ro", os.O_RDONLY)
+    try:
+        with pytest.raises(RulePermissionError):
+            os.unlink("link_to_rw", dir_fd=fd)
+    finally:
+        os.close(fd)
+    assert (tree / "ro" / "link_to_rw").is_symlink()
+
+
+def test_remove_with_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) -> None:
+    _arm(tree)
+    fd = os.open(tree / "ro", os.O_RDONLY)
+    try:
+        with pytest.raises(RulePermissionError):
+            os.remove("link_to_rw", dir_fd=fd)
+    finally:
+        os.close(fd)
+    assert (tree / "ro" / "link_to_rw").is_symlink()
+
+
+def test_rename_with_src_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) -> None:
+    _arm(tree)
+    fd = os.open(tree / "ro", os.O_RDONLY)
+    try:
+        with pytest.raises(RulePermissionError):
+            os.rename("link_to_rw", str(tree / "rw" / "moved"), src_dir_fd=fd)
+    finally:
+        os.close(fd)
+    assert (tree / "ro" / "link_to_rw").is_symlink()
+
+
+def test_readlink_with_dir_fd_checks_the_holder_directory_is_exposed(tree: Path) -> None:
+    # G1: os.readlink(path, dir_fd=fd) must check that the directory holding the link is
+    # exposed, exactly like the plain-path form. "out" is not exposed.
+    _arm(tree)
+    fd = os.open(tree / "rw", os.O_RDONLY)
+    try:
+        with pytest.raises(RuleFileNotFoundError):
+            os.readlink("../out/link_to_ro", dir_fd=fd)
+    finally:
+        os.close(fd)
+
+
+def test_copytree_ignore_callback_runs_with_the_alias_check_restored(tree: Path) -> None:
+    # G10: the user's ignore= callback must not be able to stat paths outside the exposed
+    # directories while copytree disables the alias check for its own internal walk.
+    import shutil
+
+    from pysandboxes.guard_files import _check_alias
+
+    (tree / "rw" / "srcdir").mkdir()
+    (tree / "rw" / "srcdir" / "a.txt").write_text("a")
+
+    seen_during_callback = []
+
+    def ignore(dirpath: str, names: list[str]) -> set[str]:
+        seen_during_callback.append(_check_alias.get())
+        return set()
+
+    _arm(tree)
+    shutil.copytree(tree / "rw" / "srcdir", tree / "rw" / "copied", ignore=ignore)
+    assert seen_during_callback
+    assert all(seen_during_callback), "ignore= callback ran with the alias check disabled"

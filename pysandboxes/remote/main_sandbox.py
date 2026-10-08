@@ -215,7 +215,9 @@ def run_guest(process_config: DaemonParameters) -> int:
         _write_exitcode(rc)
         return rc
     except SystemExit as e:
-        rc = int(e.code) if e.code is not None else 0
+        from ..tools import exit_status
+
+        rc = exit_status(e)
         _write_exitcode(rc)
         raise
     except Exception:
@@ -530,6 +532,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     # Kill this process when the parent is killed
+    from ..tools import exit_status
     from .tools import set_pdeathsig
 
     set_pdeathsig()
@@ -537,10 +540,7 @@ if __name__ == "__main__":
     try:
         rc = main()
     except SystemExit as e:
-        if e.code is not None:
-            rc = int(e.code)
-        else:
-            rc = 0
+        rc = exit_status(e, report=True)
     except KeyboardInterrupt:
         logger.debug("Except KeyboardInterrupt")
         from ..learning import generate_config_from_learning

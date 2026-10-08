@@ -64,6 +64,20 @@ def test_command_line_port_beats_profile_port(tmp_path: Path) -> None:
     assert port == 9000
 
 
+def test_command_line_port_beats_two_file_sources(tmp_path: Path) -> None:
+    # G18: CLI must win over any number of conflicting port= lines from profile and includes.
+    errors: list[ErrorMsg] = []
+    rules = [
+        ConfigLine("port=9000", Path(), 0),
+        ConfigLine("port=8000", tmp_path / "profile", 1),
+        ConfigLine("port=8001", tmp_path / "included", 1),
+    ]
+    port, provider, *_ = guard_provider.parse_rules(tmp_path / "profile", rules, errors)
+    assert errors == []
+    assert port == 9000
+    assert provider != "error"
+
+
 @pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="needs a non-root POSIX user")
 def test_unreadable_include_is_a_configuration_error(tmp_path: Path) -> None:
     unreadable = tmp_path / "locked.profile"

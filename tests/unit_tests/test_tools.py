@@ -9,6 +9,9 @@ import pytest
 from pysandboxes.tools import (
     GlobPattern,
     _remove_comment,
+    exit_status,
+    find_config_for_module,
+    shell_status,
     follow_links_executable,
     resolve_env_variables,
 )
@@ -219,3 +222,33 @@ def test_follow_links_executable_exposes_a_windows_venv_and_its_base(
 
     assert tmp_path / "venv" in found, sorted(map(str, found))
     assert base in found, sorted(map(str, found))
+
+
+def test_the_config_of_a_namespace_package_is_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package = tmp_path / "nspkg_for_config"
+    package.mkdir()
+    (package / ".py-sandboxes").write_text("learn=false\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    assert find_config_for_module("nspkg_for_config", ".py-sandboxes") == package / ".py-sandboxes"
+
+
+@pytest.mark.parametrize(("code", "status"), [(None, 0), (0, 0), (3, 3), ("boom", 1), (["x"], 1)])
+def test_exit_status_follows_cpython(code: object, status: int) -> None:
+    assert exit_status(SystemExit(code)) == status
+
+
+def test_exit_status_reports_a_message_only_when_asked(capsys: pytest.CaptureFixture[str]) -> None:
+    assert exit_status(SystemExit("boom")) == 1
+    assert capsys.readouterr().err == ""
+    assert exit_status(SystemExit("boom"), report=True) == 1
+    assert capsys.readouterr().err == "boom\n"
+
+
+def test_a_reserved_marker_in_the_input_is_a_syntax_error() -> None:
+    with pytest.raises(ValueError, match="Invalid variable reference"):
+        resolve_env_variables("plain\ue0000\ue001text", {})
+
+
+@pytest.mark.parametrize(("returncode", "status"), [(0, 0), (3, 3), (-9, 137), (-15, 143)])
+def test_shell_status_follows_the_shell_convention_for_a_signal(returncode: int, status: int) -> None:
+    assert shell_status(returncode) == status

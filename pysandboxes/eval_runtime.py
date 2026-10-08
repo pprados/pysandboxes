@@ -66,6 +66,10 @@ _BINOPS: dict[str, Callable[[Any, Any], Any]] = {
     "+=": operator.iadd,
     "*=": operator.imul,
     "**=": operator.ipow,
+    "<<": operator.lshift,
+    "<<=": operator.ilshift,
+    "%": operator.mod,
+    "%=": operator.imod,
 }
 
 
@@ -252,7 +256,60 @@ _FORMAT_HINT = (
 )
 
 
-def _validate_format_template(template: str) -> None:
+_DIGITS = re.compile(r"\d+")
+
+# A printf conversion: mapping key, flags, then the width and precision a `*` takes from the values.
+_PRINTF_SPEC = re.compile(r"%(?:\([^)]*\))?[-#0 +]*(\*|\d+)?(?:\.(\*|\d+))?")
+
+
+def _check_width(number: str | int, spec: Any) -> None:
+    """Refuse a width or precision that pads the result past `eval-max-alloc`.
+
+    `'%0100000000d' % 1` and `f'{1:0100000000d}'` allocate in C from a few
+    characters, so the number is checked before the formatting runs.
+    """
+    budget = current_state().rules.max_alloc
+    if isinstance(number, str):
+        number = int(number) if len(number) <= len(str(budget)) else budget + 1
+    if number > budget:
+        _refuse_alloc(f"the format {spec!r} pads past eval-max-alloc={budget}")
+
+
+def check_format_spec(spec: str) -> None:
+    """Check every number of a format spec (`>10.3f`): a fill digit is small, so only a width or a precision can
+    exceed the budget.
+
+    Raises:
+        RuleEvalPermissionError: A width or precision exceeds `eval-max-alloc`.
+    """
+    for number in _DIGITS.findall(spec):
+        _check_width(number, spec)
+
+
+def _check_printf(template: str | bytes | bytearray, values: Any) -> None:
+    """Check the widths and precisions of a `%` template, `*` ones read from the values."""
+    text = template if isinstance(template, str) else bytes(template).decode("latin-1")
+    star = False
+    for width, precision in _PRINTF_SPEC.findall(text):
+        for number in (width, precision):
+            if number == "*":
+                star = True
+            elif number:
+                _check_width(number, text)
+    if star:
+        for value in values if isinstance(values, tuple) else (values,):
+            if isinstance(value, int) and not isinstance(value, bool):
+                _check_width(value, text)
+
+
+def _check_format_args(args: Any, kwargs: Any, template: str) -> None:
+    """Check the integers a nested spec field (`{:{}}`) can take its width from."""
+    for value in (*args, *kwargs.values()):
+        if isinstance(value, int) and not isinstance(value, bool):
+            _check_width(value, template)
+
+
+def _validate_format_template(template: str) -> bool:
     """Run every attribute access a format template performs past `_check_attr`.
 
     `str.format` resolves `{0.__class__}` in C from the contents of the
@@ -262,14 +319,22 @@ def _validate_format_template(template: str) -> None:
     Index access (`{0[0]}`) is data and left alone; nested spec fields
     (`{0:{1.__class__}}`) are walked in turn.
 
+    Returns:
+        Whether a spec takes a field (`{:{}}`), whose width only the arguments tell.
+
     Raises:
-        RuleEvalPermissionError: A field reaches a refused attribute.
+        RuleEvalPermissionError: A field reaches a refused attribute, or a spec pads past `eval-max-alloc`.
     """
+    nested = False
     for _literal, field, spec, _conversion in string.Formatter().parse(template):
         if field is not None:
             check_format_field(field)
         if spec and "{" in spec:
             _validate_format_template(spec)
+            nested = True
+        elif spec:
+            check_format_spec(spec)
+    return nested
 
 
 def check_format_field(field: str) -> None:
@@ -288,7 +353,8 @@ def _guarded_format(template: str, name: str) -> Callable[..., str]:
     """Return a bound `str.format`/`format_map` that validates its template."""
 
     def bound(*args: Any, **kwargs: Any) -> str:
-        _validate_format_template(template)
+        if _validate_format_template(template):
+            _check_format_args(args, kwargs, template)
         return getattr(template, name)(*args, **kwargs)  # type: ignore[no-any-return]
 
     return bound
@@ -305,8 +371,8 @@ def _guarded_format_unbound(cls: type, name: str) -> Callable[..., str]:
     """
 
     def unbound(template: Any = "", *args: Any, **kwargs: Any) -> str:
-        if isinstance(template, str):
-            _validate_format_template(template)
+        if isinstance(template, str) and _validate_format_template(template):
+            _check_format_args(args, kwargs, template)
         return getattr(cls, name)(template, *args, **kwargs)  # type: ignore[no-any-return]
 
     return unbound
@@ -418,6 +484,13 @@ def __sb_b_breakpoint__(*_args: Any, **_kwargs: Any) -> Any:
     raise RuleEvalPermissionError("breakpoint", "eval-call", "the debugger is not reachable from the sub-language")
 
 
+def __sb_b_format__(value: Any, spec: str = "") -> str:
+    """Guarded `format`: the spec's width is checked against `eval-max-alloc`."""
+    if isinstance(spec, str):
+        check_format_spec(spec)
+    return format(value, spec)
+
+
 def __sb_b_globals__() -> Any:
     """Guarded `globals`: the evaluation namespace is not handed back."""
     raise RuleEvalPermissionError("globals", "eval-call", "the evaluation namespace is not exposed")
@@ -457,6 +530,7 @@ GUARDED_BUILTINS: dict[str, Callable[..., Any]] = {
     "globals": __sb_b_globals__,
     "dir": __sb_b_dir__,
     "type": __sb_b_type__,
+    "format": __sb_b_format__,
 }
 """Builtins bound under their own name but replaced by a guarded shim.
 
@@ -526,8 +600,8 @@ def __sb_binop__(op: str, left: Any, right: Any) -> Any:
     operation rather than interrupted during it.
 
     Args:
-        op: One of `+`, `*`, `**`, or its augmented form (`+=`...), checked the same way; the injector rewrites
-            no other operator.
+        op: One of `+`, `*`, `**`, `<<`, `%`, or its augmented form (`+=`...), checked the same way; the injector
+            rewrites no other operator.
         left: Left operand.
         right: Right operand.
 
@@ -544,6 +618,13 @@ def __sb_binop__(op: str, left: Any, right: Any) -> Any:
             # bit length of the result, without computing it
             if left.bit_length() * right > budget * 8:
                 _refuse_alloc(f"{left} ** {right} would allocate more than eval-max-alloc={budget}")
+    elif kind == "<<":
+        if isinstance(left, int) and isinstance(right, int) and right > 0 and left:
+            if left.bit_length() + right > budget * 8:
+                _refuse_alloc(f"{left} << {right} would allocate more than eval-max-alloc={budget}")
+    elif kind == "%":
+        if isinstance(left, (str, bytes, bytearray)):
+            _check_printf(left, right)
     elif kind == "*":
         for sequence, count in ((left, right), (right, left)):
             if isinstance(sequence, _SEQUENCES) and isinstance(count, int) and not isinstance(count, bool):
@@ -554,6 +635,26 @@ def __sb_binop__(op: str, left: Any, right: Any) -> Any:
             if len(left) + len(right) > budget:
                 _refuse_alloc(f"a {len(left) + len(right)}-element concatenation exceeds eval-max-alloc={budget}")
     return _BINOPS[op](left, right)
+
+
+_CONVERSIONS: dict[int, Callable[[Any], str]] = {ord("s"): str, ord("r"): repr, ord("a"): ascii}
+
+
+def __sb_format__(value: Any, conversion: int, spec: str) -> str:
+    """Format one f-string field whose spec the injector moved here, after checking its width.
+
+    Args:
+        value: The field's value.
+        conversion: `ord` of `!s`, `!r` or `!a`, or -1.
+        spec: The spec, already evaluated once.
+
+    Returns:
+        The formatted field.
+    """
+    check_format_spec(spec)
+    if conversion != -1:
+        value = _CONVERSIONS[conversion](value)
+    return format(value, spec)
 
 
 def __sb_iter__(iterable: Any) -> Iterator[Any]:
@@ -575,5 +676,6 @@ HELPERS: dict[str, Any] = {
     "__sb_getattr__": __sb_getattr__,
     "__sb_binop__": __sb_binop__,
     "__sb_iter__": __sb_iter__,
+    "__sb_format__": __sb_format__,
 }
 """The names bound into every guarded namespace, none reachable via eval-call."""

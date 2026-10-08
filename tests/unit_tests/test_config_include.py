@@ -98,3 +98,20 @@ def test_packaged_config_is_found_outside_the_package_parent(tmp_path: Path, mon
     exec("result = search(None)", caller_globals)
 
     assert caller_globals["result"] == packaged
+
+
+def test_a_sub_package_config_is_found_when_the_top_package_has_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The nearest package holding a profile wins: the top package of a sub-package caller may hold none."""
+    site = tmp_path / "site"
+    _write(site / "nestpkg" / "__init__.py", "")
+    _write(site / "nestpkg" / "sub" / "__init__.py", "")
+    packaged = _write(site / "nestpkg" / "sub" / CONFIG_NAME, "learn=false\n")
+    monkeypatch.syspath_prepend(str(site))
+    monkeypatch.chdir(tmp_path)
+    caller_globals: dict[str, object] = {"__name__": "nestpkg.sub.mod", "search": _search_module_config}
+
+    exec("result = search(None)", caller_globals)
+
+    assert caller_globals["result"] == packaged

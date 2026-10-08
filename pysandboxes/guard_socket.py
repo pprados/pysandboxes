@@ -910,6 +910,19 @@ def _check_unix_socket(address: str, *, write: bool, operation: str) -> None:
     Raises:
         RuleSocketConnectionRefusedError: If no file rule covers the path.
     """
+    if address.startswith("\x00"):
+        # An abstract address (Linux-only) names no filesystem path: os.path.realpath
+        # would raise ValueError on the embedded null byte, and no expose-ro=/expose-rw=
+        # rule could judge it anyway.
+        pysandboxes_logger.error(
+            "%s to abstract AF_UNIX socket %r DENIED: no rule can be evaluated.",
+            operation,
+            address,
+        )
+        raise RuleSocketConnectionRefusedError(
+            f"Guard {operation} to abstract AF_UNIX socket {address!r} DENIED: abstract sockets "
+            f"have no filesystem path, no expose-ro=/expose-rw= rule can be evaluated."
+        )
     remapped, rule = _apply_dest_to_src_rules(address, write=write)
     if rule or not remapped:
         pysandboxes_logger.error(

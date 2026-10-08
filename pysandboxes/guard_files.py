@@ -13,6 +13,7 @@ directory scanning to enforce security rules defined in the configuration.
 import contextvars
 import fnmatch
 import importlib
+import inspect
 import io
 import logging
 import ntpath
@@ -542,6 +543,16 @@ def _apply_src_to_dest_rules(
     return None, None
 
 
+def _matching_expose_root(canon_path: str) -> str | None:
+    """Return the exposed root (trailing separator) that ``canon_path`` falls under, or None."""
+    for rule in _rules:
+        if isinstance(rule, FSExposeRule) and rule.path is not None:
+            rp = rule.path
+            if canon_path.startswith(rp) or canon_path == rp[:-1]:
+                return rp
+    return None
+
+
 # Helper to resolve symlinks and apply rules
 def _apply_dest_to_src_rules(
     path: str | os.PathLike[str] | _DirEntry,
@@ -597,6 +608,12 @@ def _apply_dest_to_src_rules(
             # The canonical path catches a link, a device prefix or a short name to the ignored file.
             spellings: tuple[str, ...] = (str(original_path), fake_path, canon_path)
             if not os.path.isabs(rule.source):
+                # Only the components below the exposed root may be judged by a relative
+                # pattern: an ancestor directory above the root (e.g. a dot-named grandparent)
+                # must never be matched, or it would hide every file of the exposure.
+                root = _matching_expose_root(canon_path)
+                if root is not None:
+                    spellings = tuple(s[len(root) :] if s.startswith(root) else s for s in spellings)
                 spellings = tuple(part for spelling in spellings for part in Path(spelling).parts)
             if any(_ignore_matches(spelling, rule.source) for spelling in spellings):
                 return None, rule
@@ -666,6 +683,20 @@ def _check_dir_fd(path: str, dir_fd: int, *, write: bool, learn: bool = True) ->
         if is_learning_mode():
             if learn:
                 add_learning_rule(LearnFileRule(Path(target), write))
+        else:
+            _raise_access(target)
+
+
+def _check_dir_fd_entry(path: str, dir_fd: int, *, write: bool) -> None:
+    """Apply the rules to removing or moving an entry opened relative to ``dir_fd``: a link is
+    judged on the directory holding it, not on its target (mirrors ``_apply_rules_to_entry``)."""
+    target = _dir_fd_path(path, dir_fd)
+    remapped, rule = _apply_rules_to_entry(target)
+    if rule:
+        _raise_ignore(path, rule)
+    if not remapped:
+        if is_learning_mode():
+            add_learning_rule(LearnFileRule(Path(target), write))
         else:
             _raise_access(target)
 
@@ -803,7 +834,10 @@ def _body_two_filenames(
     src_dir_fd = kwargs.get("src_dir_fd")
     dst_dir_fd = kwargs.get("dst_dir_fd")
     if src_dir_fd is not None:
-        _check_dir_fd(src, cast(int, src_dir_fd), write=in_write)
+        if move:
+            _check_dir_fd_entry(src, cast(int, src_dir_fd), write=in_write)
+        else:
+            _check_dir_fd(src, cast(int, src_dir_fd), write=in_write)
         remapped_src: str | None = src
         rule1 = None
     elif move:
@@ -856,6 +890,21 @@ def _wrap_two_filenames(
     return wrapper
 
 
+def _wrap_user_callback(callback: Callable[..., Any]) -> Callable[..., Any]:
+    """Run a copytree user callback (``ignore=``, ``copy_function=``) with the alias check
+    restored, so it cannot stat paths outside the exposed tree while the walk disables it."""
+
+    @guard_wraps(callback)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        token = _check_alias.set(True)
+        try:
+            return callback(*args, **kwargs)
+        finally:
+            _check_alias.reset(token)
+
+    return wrapper
+
+
 def _wrap_shutil_copytree(
     func: Callable[..., Any],
 ) -> Callable[..., Any]:
@@ -866,9 +915,18 @@ def _wrap_shutil_copytree(
         *args: Any,
         **kwargs: dict[str, Any],
     ) -> Any:
+        bound = inspect.signature(func).bind(src, dest, *args, **kwargs)
+        bound.apply_defaults()
+        if bound.arguments.get("ignore") is not None:
+            bound.arguments["ignore"] = _wrap_user_callback(bound.arguments["ignore"])
+        if bound.arguments.get("copy_function") is not None:
+            bound.arguments["copy_function"] = _wrap_user_callback(bound.arguments["copy_function"])
+        new_kwargs = dict(bound.arguments)
+        new_src = new_kwargs.pop("src")
+        new_dest = new_kwargs.pop("dst")
         token = _check_alias.set(False)
         try:
-            return _body_two_filenames(func, False, True, False, src, dest, *args, **kwargs)
+            return _body_two_filenames(func, False, True, False, new_src, new_dest, **new_kwargs)
         finally:
             _check_alias.reset(token)
 
@@ -1251,9 +1309,16 @@ def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
         path = cast(str, path)
         if dir_fd is not None:
             _check_dir_fd(path, dir_fd, write=False)
+            full_path = _dir_fd_path(path, dir_fd)
+            # The link is read in the directory holding it, which its target does not expose.
+            holder, _ = _apply_dest_to_src_rules(os.path.dirname(full_path) + os.sep, write=False)
+            if not holder:
+                if not is_learning_mode():
+                    _raise_access(path)
+                add_learning_rule(LearnFileRule(Path(full_path).parent, False))
             target = func(path=path, dir_fd=dir_fd)
             if not target.startswith(os.path.sep):
-                target = os.path.join(os.path.dirname(_dir_fd_path(path, dir_fd)), target)
+                target = os.path.join(os.path.dirname(full_path), target)
             remapped, rule = _apply_src_to_dest_rules(target)
             if rule:
                 _raise_ignore(path, rule)
@@ -1362,7 +1427,7 @@ def _wrap_os_unlink(func: Callable[..., Any]) -> Callable[..., Any]:
             path = os.fsdecode(path)
         path = cast(str, path)
         if dir_fd is not None:
-            _check_dir_fd(path, dir_fd, write=True)
+            _check_dir_fd_entry(path, dir_fd, write=True)
             return func(path=path, dir_fd=dir_fd)
         remapped, rule = _apply_rules_to_entry(path)
         if rule:

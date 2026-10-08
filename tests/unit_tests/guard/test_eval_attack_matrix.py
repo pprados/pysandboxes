@@ -206,13 +206,6 @@ RUNS: list[tuple[str, str, dict[str, Any], Any, str]] = [
         5000,
         "eval",
     ),
-    (
-        "dos_percent_width",
-        "len('%0500d' % 1)",
-        dict(syntax=_syntax("arith"), call=_names("len"), max_alloc=100),
-        500,
-        "eval",
-    ),
 ]
 
 

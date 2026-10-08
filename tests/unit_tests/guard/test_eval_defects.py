@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
 import ast
+import sys
 import threading
 import time
 from pathlib import Path
@@ -14,7 +15,14 @@ from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, Nam
 from pysandboxes.eval_transform import validate
 from pysandboxes.guard_api import _deactivate_guard_api
 from pysandboxes.guard_api import activate_guard as activate_api
-from pysandboxes.guard_eval import _deactivate_guard_eval, _wrap_compile, _wrap_eval_like, guarded_eval, leaked_threads
+from pysandboxes.guard_eval import (
+    _deactivate_guard_eval,
+    _wrap_compile,
+    _wrap_eval_like,
+    classify_context_value,
+    guarded_eval,
+    leaked_threads,
+)
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.lifecycle import arm as arm_api
 from pysandboxes.sb_types import ConfigLine
@@ -186,8 +194,82 @@ def test_a_source_deeper_than_the_recursion_limit_is_refused_by_max_depth() -> N
     assert [v.remedy.split("=")[0] for v in violations] == ["eval-max-depth"]
 
 
+def test_a_max_depth_past_the_stack_still_refuses_instead_of_crashing() -> None:
+    tree = ast.parse("-" * (sys.getrecursionlimit() * 3) + "1", mode="eval")
+    violations = validate(tree, DEFAULT_RULES._replace(declared=True, max_depth=10**9))
+    assert [v.remedy.split("=")[0] for v in violations] == ["eval-max-depth"]
+
+
 @pytest.mark.parametrize("token", ["parse", "NodeVisitor", "Num"])
 def test_eval_syntax_refuses_what_is_not_a_node(token: str) -> None:
     errors: list[Any] = []
     parse_rules([ConfigLine(f"eval-syntax={token}", Path(), 0)], errors)
     assert errors
+
+
+@pytest.mark.parametrize("name", ["delattr", "hasattr"])
+def test_a_builtin_parse_rules_reports_as_sensitive_is_a_strong_context_value(name: str) -> None:
+    import builtins
+
+    assert classify_context_value(getattr(builtins, name)) == "strong"
+
+
+@pytest.mark.parametrize("source", ["a = 1 << 100000", "a = 1\na <<= 100000"])
+def test_a_left_shift_is_bounded_by_max_alloc(source: str) -> None:
+    _activate(max_alloc=1000)
+    with pytest.raises(RuleEvalPermissionError, match="eval-max-alloc"):
+        guarded_eval(source, mode="exec")
+
+
+def test_a_small_left_shift_still_works() -> None:
+    _activate(max_alloc=1000)
+    data = [1]
+    guarded_eval("d[0] <<= 3", names={"d": data}, mode="exec")
+    assert data == [8]
+    assert guarded_eval("d[0] << 1", names={"d": data}) == 16
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "'%0100000000d' % 1",
+        "b'%.100000000f' % 1.0",
+        "'%*d' % (100000000, 1)",
+        "f'{1:0100000000d}'",
+        "f'{1:{n}}'",
+        "format(1, '0100000000d')",
+        "'{:0100000000d}'.format(1)",
+        "'{:{}}'.format(1, n)",
+        "str.format('{:{}}', 1, n)",
+    ],
+)
+def test_a_format_width_is_bounded_by_max_alloc(source: str) -> None:
+    _activate(max_alloc=1000, call=_names("format", "str"), attribute=_names("format"))
+    with pytest.raises(RuleEvalPermissionError, match="eval-max-alloc"):
+        guarded_eval(source, names={"n": 100_000_000})
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("'%5d|%-3s' % (1, 'a')", "    1|a  "),
+        ("f'{s!r:>6}|{n:{w}}'", "  'ab'|  7"),
+        ("format(7, '03')", "007"),
+        ("'{:>3}{}'.format(1, 2)", "  12"),
+    ],
+)
+def test_a_narrow_format_still_works(source: str, expected: str) -> None:
+    _activate(max_alloc=1000, call=_names("format"), attribute=_names("format"))
+    assert guarded_eval(source, names={"s": "ab", "n": 7, "w": 3}) == expected
+
+
+def test_a_format_spec_is_evaluated_once() -> None:
+    calls: list[int] = []
+
+    def width() -> int:
+        calls.append(1)
+        return 3
+
+    _activate(call=_names("width"))
+    assert guarded_eval("f'{1:{width()}}'", names={"width": width}) == "  1"
+    assert calls == [1]

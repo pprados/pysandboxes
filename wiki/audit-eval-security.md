@@ -176,8 +176,7 @@ AST-level check. Pinned in `test_eval_attack_matrix.py::test_payload_runs`.
 | `'{0}-{1[0]}'.format(5, (7,))` | `eval-attribute=format` | data-only format, no attribute access |
 | `'ab'.upper()` | `eval-attribute=upper` | granted string method |
 | `sum(range(2000))` | `eval-call=sum,range` | **DoS**: a C loop charges no tick; see below |
-| `bytes(5000)` (budget 100) | `eval-call=bytes` | **DoS**: allocation outside `+`/`*`/`**` |
-| `'%0500d' % 1` (budget 100) | *(arith)* | **DoS**: `%` is not a rewritten operator |
+| `bytes(5000)` (budget 100) | `eval-call=bytes` | **DoS**: allocation by a C-level constructor |
 
 ---
 
@@ -288,7 +287,7 @@ process kill.
 | Limit | Example | Why the Python layer cannot stop it |
 |---|---|---|
 | Blocking C call | `sum(range(10**8))`, a `re` match | one opaque C call charges no tick and holds the GIL, so the watchdog cannot preempt it; `run_guarded` gives up the join and the worker leaks until it finishes |
-| Allocation outside `+`/`*`/`**` | `bytes(10**8)`, `list(range(10**8))`, `'%09999d' % 1` | `__sb_binop__` bounds only the three rewritten operators; a C-level constructor or `%` width allocates directly |
+| Allocation by a C-level constructor | `bytes(10**8)`, `list(range(10**8))` | `__sb_binop__` bounds `+`, `*`, `**`, `<<` and the widths of `%`, f-string, `format` and `str.format` specs; a constructor allocates directly |
 | Regex backtracking | `(a+)+` on a crafted subject | the engine backtracks in C, past `eval-timeout`, holding the GIL; the guard warns and suggests a linear engine (`re2`) but does not refuse |
 | Interpreter escape | a CPython segfault | out of reach of any AST-level guard |
 
