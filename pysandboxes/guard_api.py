@@ -74,6 +74,11 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "os.startfile",
         "nt.startfile",
         "_winapi.CreateProcess",
+        # A new subinterpreter starts with fresh, unpatched modules: code run in
+        # it escapes every Python guard. concurrent.interpreters.create() and
+        # InterpreterPoolExecutor look up _interpreters.create at call time.
+        "_interpreters.create",
+        "_xxsubinterpreters.create",
     ),
     # os._exit/posix._exit are not listed: they terminate only the
     # calling process, run no code outside the patched interpreter and
@@ -237,11 +242,14 @@ CATEGORIES: frozenset[str] = frozenset(SENSITIVE_API)
 # by threading._start_joinable_thread, the same object as
 # _thread.start_joinable_thread. Both spellings are registered so a
 # profile stays portable, and only the applicable ones are patched.
-_PRE_313 = frozenset({"threading._start_new_thread"})
+# The subinterpreter module moved too: _xxsubinterpreters up to 3.12,
+# _interpreters from 3.13.
+_PRE_313 = frozenset({"threading._start_new_thread", "_xxsubinterpreters.create"})
 _FROM_313 = frozenset(
     {
         "threading._start_joinable_thread",
         "_thread.start_joinable_thread",
+        "_interpreters.create",
     }
 )
 

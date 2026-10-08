@@ -77,6 +77,8 @@ kernel boundary is a Linux technology.
   without the `.py` suffix run, and a `--pysandboxes-config` without its value is a usage error
 - `python-sb -m <module>` finds the module's rule file in a fresh interpreter
 - A refused extra shutdown no longer makes a later shutdown stop a sandbox still in use
+- Creating a subinterpreter is a `process-exec` call, denied by default: code run in a new interpreter escaped every
+  Python guard, `python-import` alone allowing it
 
 ### Added
 - A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps

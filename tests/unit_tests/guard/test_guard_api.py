@@ -636,3 +636,70 @@ def test_armed_denies_the_windows_twins(qualname: str, category: str) -> None:
         assert exc.value.category == category
     finally:
         _reset_guard()
+
+
+def test_armed_denies_subinterpreter_creation() -> None:
+    """A new subinterpreter starts with fresh, unpatched modules: every guard is gone in it."""
+    qualname = "_interpreters.create" if sys.version_info >= (3, 13) else "_xxsubinterpreters.create"
+    activate_guard(())
+    wrapped = _guarded(qualname)
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            wrapped()
+        assert exc.value.qualname == qualname
+        assert exc.value.category == "process-exec"
+    finally:
+        _reset_guard()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="probe script assumes posix")
+def test_subinterpreter_creation_is_refused_end_to_end(tmp_path: Path) -> None:
+    """Every public route to a new interpreter reaches the guarded create, under a real `python-sb` start."""
+    work = tmp_path / "work"
+    work.mkdir()
+    repo = Path(__file__).resolve().parents[3]
+    (work / ".py-sandboxes").write_text(
+        "py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n" f"expose-rw={work}\nexpose-ro={repo}\n"
+    )
+    (work / "probe.py").write_text(
+        "import sys\n"
+        "from pysandboxes.e import SandBoxError\n"
+        "routes = {}\n"
+        "if sys.version_info >= (3, 13):\n"
+        "    import _interpreters\n"
+        "    routes['_interpreters.create'] = _interpreters.create\n"
+        "else:\n"
+        "    import _xxsubinterpreters\n"
+        "    routes['_xxsubinterpreters.create'] = _xxsubinterpreters.create\n"
+        "if sys.version_info >= (3, 14):\n"
+        "    from concurrent import interpreters\n"
+        "    from concurrent.futures import InterpreterPoolExecutor\n"
+        "    routes['concurrent.interpreters.create'] = interpreters.create\n"
+        "    def pool():\n"
+        "        with InterpreterPoolExecutor(1) as executor:\n"
+        "            return executor.submit(int, '1').result()\n"
+        "    routes['InterpreterPoolExecutor'] = pool\n"
+        "for tag, call in routes.items():\n"
+        "    try:\n"
+        "        call()\n"
+        "        print(tag, 'ALLOWED')\n"
+        "    except SandBoxError:\n"
+        "        print(tag, 'GUARD')\n"
+        "    except BaseException as exc:\n"
+        "        print(tag, 'OTHER', type(exc).__name__, exc)\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pysandboxes.python_sb", "probe.py"],
+        capture_output=True,
+        text=True,
+        cwd=work,
+        env={**os.environ, "TMPDIR": str(work)},
+    )
+
+    expected = ["_interpreters.create"] if sys.version_info >= (3, 13) else ["_xxsubinterpreters.create"]
+    if sys.version_info >= (3, 14):
+        expected += ["concurrent.interpreters.create", "InterpreterPoolExecutor"]
+    for tag in expected:
+        assert f"{tag} GUARD" in result.stdout, result.stdout + result.stderr
