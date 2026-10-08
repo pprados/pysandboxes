@@ -91,7 +91,7 @@ def test_apply_src_to_dest_rules() -> None:
     )
 
     refuse = _apply_src_to_dest_rules("/refuse.txt")
-    assert refuse == ("/refuse.txt", None)
+    assert refuse == (None, None)
 
 
 def test_generate_rules_gives_a_temporary_directory_a_fallback(tmp_path: Path) -> None:

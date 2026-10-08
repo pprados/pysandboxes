@@ -351,7 +351,7 @@ def test_pathlib_link_symlink_and_readlink_refused(
     new_link = pathlib.Path(files["bind_dest"] / "new_hardlink")
     with pytest.raises(RulePermissionError) as caught:
         new_link.hardlink_to(files["visible"])
-    assert [f"expose-ro={files['bind_dest']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [f"'expose-ro={files['path']}'" in d for d in sandbox_denials(caught.value)] == [True]
     assert not new_link.exists()
 
 

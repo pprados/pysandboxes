@@ -63,6 +63,9 @@ _BINOPS: dict[str, Callable[[Any, Any], Any]] = {
     "+": operator.add,
     "*": operator.mul,
     "**": operator.pow,
+    "+=": operator.iadd,
+    "*=": operator.imul,
+    "**=": operator.ipow,
 }
 
 
@@ -523,7 +526,8 @@ def __sb_binop__(op: str, left: Any, right: Any) -> Any:
     operation rather than interrupted during it.
 
     Args:
-        op: One of `+`, `*`, `**`; the injector rewrites no other operator.
+        op: One of `+`, `*`, `**`, or its augmented form (`+=`...), checked the same way; the injector rewrites
+            no other operator.
         left: Left operand.
         right: Right operand.
 
@@ -534,17 +538,18 @@ def __sb_binop__(op: str, left: Any, right: Any) -> Any:
         RuleEvalPermissionError: The result would exceed `eval-max-alloc`.
     """
     budget = current_state().rules.max_alloc
-    if op == "**":
+    kind = op.removesuffix("=")
+    if kind == "**":
         if isinstance(left, int) and isinstance(right, int) and right > 0 and abs(left) > 1:
             # bit length of the result, without computing it
             if left.bit_length() * right > budget * 8:
                 _refuse_alloc(f"{left} ** {right} would allocate more than eval-max-alloc={budget}")
-    elif op == "*":
+    elif kind == "*":
         for sequence, count in ((left, right), (right, left)):
             if isinstance(sequence, _SEQUENCES) and isinstance(count, int) and not isinstance(count, bool):
                 if len(sequence) * count > budget:
                     _refuse_alloc(f"a {len(sequence) * count}-element repetition exceeds eval-max-alloc={budget}")
-    elif op == "+":
+    elif kind == "+":
         if isinstance(left, _SEQUENCES) and isinstance(right, _SEQUENCES):
             if len(left) + len(right) > budget:
                 _refuse_alloc(f"a {len(left) + len(right)}-element concatenation exceeds eval-max-alloc={budget}")

@@ -87,6 +87,50 @@ kernel boundary is a Linux technology.
   code: `DENY` already won in the rules, but the name was still handed to the code
 - Creating a subinterpreter is a `process-exec` call, denied by default: code run in a new interpreter escaped every
   Python guard, `python-import` alone allowing it
+- `os.readlink`, `Path.glob` and `os.scandir` no longer reveal a link target or a name outside the exposed directories
+- A hard link to a read-only file, a fifo or a device node in a read-only directory, and removing or moving a link out
+  of a read-only directory are refused
+- A relative `ignore=` pattern, such as `ignore=.secrets`, also hides the files under a directory of that name
+- `Path.glob(case_sensitive=...)` is honoured on Python 3.13 and later, and `os.open` with flags that are not an
+  integer raises CPython's `TypeError`
+- `sendmsg()` with an address, and `sendto()` on a TCP socket (TCP Fast Open), are checked against the `net=` rules
+- An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) is judged by the IPv4 `net=` rules
+- `listen()` on a socket that was never bound needs an IN rule for the wildcard address, like `bind(("", 0))`
+- Connecting or sending to a Unix socket needs write access to its path, as the kernel requires
+- A connection to a host name is allowed only if every address the name resolves to is allowed, and goes to an
+  address that was checked
+- An IN rule opens its port at the OS layer as it does in the Python layer; an empty port field allows no port in
+  either layer; long port lists and IPv4 DNS servers no longer break the iptables rules
+- Learning a `bind(("", port))` no longer crashes rule generation, and pinned name resolution accepts service names
+  such as `"http"`
+- `os.setresuid`, `os.setresgid`, `os.initgroups`, `os.unshare`, `os.setns`, `threading.settrace_all_threads`,
+  `threading.setprofile_all_threads`, `sys.monitoring`, `sys.remote_exec`, `ctypes.wstring_at`, `pickle._loads`,
+  `pickle._Unpickler`, `subprocess._fork_exec` and the `multiprocessing.get_context(...).Process` classes are refused
+  unless `python-api` allows them; a function-level `ALLOW:subprocess.Popen` now also needs
+  `ALLOW:_posixsubprocess.fork_exec`
+- A relative import, and the import of a submodule of a module the sandbox always keeps (such as `asyncio.subprocess`),
+  are checked against the `python-import` rules
+- Imports from other threads or tasks are no longer let through while the sandbox loads its own modules
+- Under `python -O`, the guards are no longer applied twice when the sandbox is activated again
+- A dotted `python-import=` rule such as `os.path`, which never matches, logs a warning
+- `unenv=` accepts the same `*` patterns as `env=` and removes variables wherever it is written in the profile, and an
+  exact `env=` beats a wildcard one whatever their order
+- A wildcard `env=*_KEY=value` sets the given value on every matching variable instead of forwarding the host value
+- `--port=` on the command line takes precedence over `port=` in the profile
+- An include that exists but cannot be read is a configuration error instead of being skipped; a bare-name include
+  inside an included file is resolved next to that file, and a profile including itself is loaded once
+- The error raised when the Python executable's symlink chain cannot be resolved names the broken path
+- Evaluated code can no longer define, import, catch or bind a name starting with `__sb_`, which replaced the guard's
+  own helpers and lifted the budgets
+- `x *= n`, `x += y` and `x **= n` in evaluated code are bounded by `eval-max-alloc`, like `x * n`
+- A worker thread that finally stops no longer counts against `eval-max-leaked-threads`, which refused every later
+  evaluation for the life of the process
+- Two evaluations starting at once no longer leave the thread guard disabled
+- `exec` or `eval` of a code object accepts only one that guarded `compile` produced, whatever its file name, and runs
+  it under the budgets and the timeout; a tree from `compile(..., ast.PyCF_ONLY_AST)` compiles again
+- On Python 3.13 and later, `exec()` without a namespace no longer rewrites the caller's local variables
+- A source nested deeper than the recursion limit is refused by `eval-max-depth` instead of raising `RecursionError`
+- `eval-syntax` accepts only AST node names, not `parse` or `NodeVisitor`, nor the deprecated `Num`
 
 ### Added
 - A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
@@ -104,7 +148,7 @@ kernel boundary is a Linux technology.
 - Control of environment variables, imports, files and network access,
   denied by default and granted by whitelist
 - Control of sensitive API calls, independent of import rights: an
-  import right is not a call right. A registry of 121 sensitive
+  import right is not a call right. A registry of 145 sensitive
   functions in eight categories (`process-exec`, `process-control`,
   `privileges`, `threads`, `native`, `introspection`, `dynamic-code`,
   `deserialization`) is denied by default, and permissions are granted

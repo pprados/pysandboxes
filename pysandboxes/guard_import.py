@@ -117,7 +117,11 @@ _patch_rules: PatchRules = ImmutableDict({})
 
 # Top-level modules the sandbox daemon imported for itself, inside framework_imports().
 _framework_names: set[str] = set()
-_framework_window = False
+# Open while a framework_imports() block runs, and only for the code inside it: the context
+# variable keeps other threads and tasks out, and the counter closes it for a task created
+# inside the block, which keeps a copy of the variable after the block ends.
+_framework_window: ContextVar[bool] = ContextVar("pysandboxes_framework_window", default=False)
+_framework_windows_open = 0
 
 
 @contextmanager
@@ -133,12 +137,19 @@ def framework_imports() -> Iterator[None]:
     Only framework code may run inside. Outside a call of the user's code (see user_code()),
     what it imports stays importable without a rule: wiki/weaknesses.md lists those modules.
     """
-    global _framework_window
-    _framework_window = True
+    global _framework_windows_open
+    token = _framework_window.set(True)
+    _framework_windows_open += 1
     try:
         yield
     finally:
-        _framework_window = False
+        _framework_windows_open -= 1
+        _framework_window.reset(token)
+
+
+def _in_framework_window() -> bool:
+    """Whether the current import runs inside a framework_imports() block."""
+    return _framework_windows_open > 0 and _framework_window.get()
 
 
 # Set while the user's code runs: the user module's import, init_fn, and each call of a @sandbox function.
@@ -194,7 +205,6 @@ _KEPT_MODULES = frozenset(
         "_io",
         "asyncio",
         "sys",
-        "threadpool",
         "builtins",
         "__main__",
     }
@@ -202,9 +212,13 @@ _KEPT_MODULES = frozenset(
 
 
 def _judge_user_import(name: str) -> None:
-    """Refuse, or record in learning mode, an import by the user's code that the rules do not grant."""
+    """Refuse, or record in learning mode, an import by the user's code that the rules do not grant.
+
+    Only the kept modules themselves go unjudged: a submodule (``asyncio.subprocess``) is judged on its
+    top-level name, as the finder judges it when it is not loaded yet.
+    """
     module_name = name.split(".", 1)[0]
-    if module_name in _KEPT_MODULES or _is_import_allowed(module_name):
+    if name in _KEPT_MODULES or _is_import_allowed(module_name):
         return
     if is_learning_mode():
         add_learning_rule(LearnImportRule(module_name))
@@ -212,31 +226,51 @@ def _judge_user_import(name: str) -> None:
     raise RuleModuleNotFoundError(f"Module named {module_name!r} is not allowed by a rule")
 
 
-def _called_by_the_import_machinery() -> bool:
-    """Whether the caller of ``__import__`` is importlib's bootstrap, loading a module for the user.
+def _caller_module() -> str:
+    """The name of the module whose code called ``__import__``, or ``""`` for any other code.
 
-    C code imports through ``builtins.__import__`` too, with the Python frame that called it: the
-    bootstrap's own imports are not the user's. The frame's globals must be the module's dict itself,
-    so a function built on forged globals does not pass for the machinery.
+    C code imports through ``builtins.__import__`` too, with the Python frame that called it. The frame's
+    globals must be the module's dict itself, so a function built on forged globals passes for no module.
     """
     caller_globals = sys._getframe(2).f_globals
     module = sys.modules.get(caller_globals.get("__name__", ""))
-    return module is not None and module.__dict__ is caller_globals and module.__name__ in _IMPORT_MACHINERY
+    return module.__name__ if module is not None and module.__dict__ is caller_globals else ""
 
 
 _IMPORT_MACHINERY = frozenset({"importlib._bootstrap", "importlib._bootstrap_external"})
+
+# The kept modules whose own code is not the user's: ``__main__`` is the user's script.
+_KEPT_LIBRARIES = _KEPT_MODULES - {"__main__"}
+
+
+def _absolute_name(name: str, globals_: Any, level: int) -> str:
+    """The absolute name a relative ``__import__`` resolves to, from the same globals the import used."""
+    # The resolution __import__ itself applies: __package__, then __spec__.parent, then __name__.
+    calc_package = importlib._bootstrap._calc___package__  # type: ignore[attr-defined]
+    package = calc_package(globals_ if isinstance(globals_, dict) else {})
+    return importlib.util.resolve_name("." * level + name, package)
 
 
 # The import runs first, as the finder judges only a module that exists: a missing optional module is
 # neither refused by a rule nor learned. No code runs before the judgement, since a module not yet loaded
 # meets the finder, and a loaded one is only returned.
+#
+# The bootstrap's own imports are not the user's, and neither are the relative imports a kept package
+# makes of its own submodules (asyncio's ``from .unix_events import``).
 def _wrap_import(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: Any) -> Any:
         level = kwargs.get("level", args[3] if len(args) > 3 else 0)
-        judged = level == 0 and _user_scope.get() and not _called_by_the_import_machinery()
+        caller = _caller_module() if _user_scope.get() else ""
+        judged = (
+            _user_scope.get()
+            and caller not in _IMPORT_MACHINERY
+            and not (level > 0 and caller.split(".", 1)[0] in _KEPT_LIBRARIES)
+        )
         module = func(name, *args, **kwargs)
         if judged:
+            if level > 0:
+                name = _absolute_name(name, kwargs.get("globals", args[0] if args else None), level)
             _judge_user_import(name)
         return module
 
@@ -247,8 +281,9 @@ def _wrap_import_module(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(name: str, *args: Any, **kwargs: Any) -> Any:
         module = func(name, *args, **kwargs)
-        if not name.startswith(".") and _user_scope.get():
-            _judge_user_import(name)
+        if _user_scope.get():
+            package = kwargs.get("package", args[0] if args else None)
+            _judge_user_import(importlib.util.resolve_name(name, package) if name.startswith(".") else name)
         return module
 
     return wrapper
@@ -273,7 +308,16 @@ def parse_rules(
         if rule.rule.startswith("python-import="):
             value = rule.rule.split("=", 1)[1]
             # Accept multiple --python-import rules
-            white_list.extend([r.strip() for r in value.split(",")])
+            names = [r.strip() for r in value.split(",")]
+            for dotted in (n for n in names if "." in n):
+                logger.warning(
+                    "%s:%s: python-import rule %r never matches: a rule names a top-level module, such as %r",
+                    rule.path,
+                    rule.ln,
+                    dotted,
+                    dotted.split(".", 1)[0],
+                )
+            white_list.extend(names)
         else:
             ignore_rules.append(rule)
     if "*" in white_list:
@@ -325,9 +369,12 @@ def _apply_patch(module: ModuleType, name: str) -> None:
             if vars(original_value).get("__pysandbox__") if hasattr(original_value, "__dict__") else False:
                 continue  # Patched by an earlier activation: wrapping it again would check every call twice
             new_value = patch.patch_factory(original_value)
-            assert not hasattr(new_value, "__pysandbox__"), "Double injection"
+            # Explicit checks, not asserts: ``python -O`` removes asserts, and losing the marker there
+            # wrapped every function again on each activation.
+            if hasattr(new_value, "__pysandbox__"):
+                raise RuntimeError(f"Double injection on {name}.{patch.code_path}")
             # A class wrapper (io.FileIO) is marked too, in its own __dict__: a subclass must not read as patched.
-            if __debug__ and isinstance(new_value, (type(_apply_patch), type)):  # Fake kinds.FunctionType
+            if isinstance(new_value, (type(_apply_patch), type)):  # Fake kinds.FunctionType
                 new_value.__pysandbox__ = True  # type: ignore[attr-defined,union-attr]
             if cur_object is os:
                 _keep_os_supports_sets(original_value, new_value)
@@ -595,7 +642,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
                     new_spec = original_spec
         if new_spec:
             module_name = fullname.split(".", 1)[0]
-            if _framework_window:
+            if _in_framework_window():
                 _framework_names.add(module_name)
             elif is_learning_mode() and is_in_sandbox():
                 if "*" not in _rules and not _is_import_allowed(module_name):
@@ -754,7 +801,7 @@ def activate_guard_import(
 
     patch_rules: PatchRules = _conv_patch_rules(str_patch_rules)
     if _activated:
-        logger.debug("Guard_files was already activated.")
+        logger.debug("Guard_import was already activated.")
         return
 
     # Save the current modules BEFORE patching
@@ -899,7 +946,6 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
             "tokenize",
             "asyncio",
             "sys",
-            "threadpool",
             "builtins",
             "__main__",
         ]

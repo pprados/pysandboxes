@@ -22,6 +22,9 @@ what each OS mechanism can enforce and its prerequisites.
   before the kernel operation; a concurrent rename can create a
   time-of-check/time-of-use race. A file descriptor already held by the code is
   itself a capability.
+- **Windows: the Proactor event loop bypasses the socket methods.** asyncio's default loop on Windows calls
+  `_overlapped.ConnectEx`, `WSASendTo` and `AcceptEx` on the socket handle, which the socket guard does not
+  wrap: the destination of an asyncio connection or datagram is not judged by the `net=` rules there.
 - **The daemon's own modules escape the import rules outside a call.** In partial mode, the sandbox process runs
   an HTTP server (uvicorn, fastapi) after the guards are active, and the modules it imports for itself stay
   loaded. While the user's code runs (the import of its module, `init_fn`, each call of a `@sandbox` function and
@@ -39,8 +42,10 @@ what each OS mechanism can enforce and its prerequisites.
   `queue`, `random`, `re`, `reprlib`, `secrets`, `selectors`, `shlex`, `signal`, `socket`, `socketserver`, `ssl`,
   `starlette`, `stat`, `struct`, `tempfile`, `textwrap`, `threading`, `time`, `traceback`, `types`, `typing`,
   `typing_extensions`, `typing_inspection`, `urllib`, `uuid`, `uvicorn`, `weakref`, `zoneinfo`. The imports that
-  importlib's bootstrap makes for itself are not judged either; code that runs with the bootstrap's globals passes
-  for it, which takes `exec` or a forged function, both behind `python-api`. Importing a module is not calling
+  importlib's bootstrap makes for itself are not judged either, nor the relative imports a kept package such as
+  `asyncio` makes of its own submodules. Code that runs with the globals of one of those modules passes for it, and
+  that takes no grant: `type(lambda: 0)(code, module.__dict__)()` builds such a function without `exec` or
+  `compile`, so this route is open to any user code, for the modules already loaded. Importing a module is not calling
   it: the sensitive functions they hold stay behind `python-api`, and files and sockets behind their own guards.
   `tests/integration_tests/test_framework_imports.py` fails if this list grows.
 - **The local transport is not an OS boundary.** A co-resident process that

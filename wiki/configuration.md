@@ -18,7 +18,7 @@ Uncomment the first line to save the `./.py-sandboxes` file in the Git repositor
 
 Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
 
-By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is simply ignored.
+By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is ignored, as the template's user and node profiles usually are; if it exists but cannot be read, the configuration is refused. A bare name (`include "common"`) is resolved next to the including file.
 
 With **python-sb**, a special parameter can be used to select the configuration.
 Without it, `python-sb` reads the `.py-sandboxes` next to the script or in the directory of the `-m` module, and

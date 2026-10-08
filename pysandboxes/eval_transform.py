@@ -14,6 +14,7 @@ where the validator looks. The barriers are the bounded namespace and
 """
 
 import ast
+import copy
 import logging
 from importlib import resources
 from typing import NamedTuple
@@ -77,11 +78,24 @@ class Violation(NamedTuple):
 
 
 def _depth(node: ast.AST) -> int:
-    """Return the static nesting depth of `node`, counting itself as one."""
-    children = list(ast.iter_child_nodes(node))
-    if not children:
-        return 1
-    return 1 + max(_depth(child) for child in children)
+    """Return the static nesting depth of `node`, counting itself as one.
+
+    Iterative: the tree is measured before any recursive visit, so a source nested deeper than the interpreter's
+    recursion limit is refused instead of raising `RecursionError`.
+    """
+    deepest = 0
+    pending = [(node, 1)]
+    while pending:
+        current, depth = pending.pop()
+        deepest = max(deepest, depth)
+        pending.extend((child, depth + 1) for child in ast.iter_child_nodes(current))
+    return deepest
+
+
+# Fields holding an identifier the code binds or names: def and class names, arguments, keywords, import aliases,
+# except, global and nonlocal names, match captures, type parameters. Name and Attribute are checked by their own
+# visitors.
+_IDENTIFIER_FIELDS = ("name", "asname", "arg", "names", "rest", "kwd_attrs")
 
 
 class _Validator(ast.NodeVisitor):
@@ -124,6 +138,15 @@ class _Validator(ast.NodeVisitor):
 
     def generic_visit(self, node: ast.AST) -> None:
         name = type(node).__name__
+        for field in _IDENTIFIER_FIELDS:
+            value = getattr(node, field, None)
+            for identifier in value if isinstance(value, list) else [value]:
+                if isinstance(identifier, str) and identifier.startswith(RESERVED_PREFIX):
+                    self._add(
+                        node,
+                        f"{name} name {identifier!r} uses the reserved prefix {RESERVED_PREFIX!r}",
+                        "rename it: the prefix belongs to the guard's own helpers",
+                    )
         if not isinstance(node, _MARKERS) and name not in _ALWAYS_AVAILABLE and not self.rules.syntax.allows(name):
             group = _GROUP_OF_NODE.get(name)
             remedy = f"eval-syntax={group}" if group else f"eval-syntax={name}"
@@ -182,14 +205,15 @@ def validate(tree: ast.AST, rules: EvalRules) -> list[Violation]:
     Returns:
         The violations in source order, empty when the tree is accepted.
     """
+    depth = _depth(tree)
+    if depth > rules.max_depth:
+        # The visit below recurses as deep as the tree: it is not run on a tree already refused for its depth.
+        return [Violation(1, 0, f"the source nests {depth} levels deep", f"eval-max-depth={depth}")]
     validator = _Validator(rules)
     validator.visit(tree)
     count = sum(1 for _ in ast.walk(tree))
     if count > rules.max_nodes:
         validator.violations.append(Violation(1, 0, f"the source holds {count} nodes", f"eval-max-nodes={count}"))
-    depth = _depth(tree)
-    if depth > rules.max_depth:
-        validator.violations.append(Violation(1, 0, f"the source nests {depth} levels deep", f"eval-max-depth={depth}"))
     return sorted(validator.violations, key=lambda v: (v.lineno, v.col))
 
 
@@ -251,6 +275,14 @@ def _call(name: str, args: list[ast.expr]) -> ast.Call:
     return ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=args, keywords=[])
 
 
+def _load(name: str) -> ast.Name:
+    return ast.Name(id=name, ctx=ast.Load())
+
+
+def _store(name: str) -> ast.Name:
+    return ast.Name(id=name, ctx=ast.Store())
+
+
 def _tick() -> ast.Expr:
     return ast.Expr(value=_call("__sb_tick__", []))
 
@@ -280,6 +312,30 @@ class _Injector(ast.NodeTransformer):
             _call("__sb_binop__", [ast.Constant(value=symbol), node.left, node.right]),
             node,
         )
+
+    def visit_AugAssign(self, node: ast.AugAssign) -> ast.AST | list[ast.stmt]:
+        self.generic_visit(node)
+        symbol = _GUARDED_BINOPS.get(type(node.op))
+        if symbol is None or not isinstance(node.target, ast.Name | ast.Subscript):
+            return node
+        setup: list[ast.stmt] = []
+        if isinstance(node.target, ast.Subscript):
+            # The container and the key are evaluated once, as the augmented assignment does. A key holding a
+            # slice is no value to keep aside: its bounds are evaluated twice.
+            setup.append(ast.Assign(targets=[_store("__sb_container__")], value=node.target.value))
+            key = node.target.slice
+            if not any(isinstance(part, ast.Slice) for part in ast.walk(key)):
+                setup.append(ast.Assign(targets=[_store("__sb_key__")], value=key))
+                key = _load("__sb_key__")
+            read: ast.expr = ast.Subscript(value=_load("__sb_container__"), slice=key, ctx=ast.Load())
+            target: ast.expr = ast.Subscript(value=_load("__sb_container__"), slice=copy.deepcopy(key), ctx=ast.Store())
+        else:
+            read = _load(node.target.id)
+            target = node.target
+        assign = ast.Assign(
+            targets=[target], value=_call("__sb_binop__", [ast.Constant(value=symbol + "="), read, node.value])
+        )
+        return [ast.copy_location(statement, node) for statement in setup + [assign]]
 
     def visit_For(self, node: ast.For) -> ast.AST:
         self.generic_visit(node)

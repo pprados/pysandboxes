@@ -66,6 +66,9 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "pty.spawn",
         "pty.fork",
         "multiprocessing.Process.start",
+        # get_context("fork"|"spawn"|"forkserver").Process derive from BaseProcess, not
+        # from multiprocessing.Process: patching the latter alone left them open.
+        "multiprocessing.process.BaseProcess.start",
         "nt.system",
         "nt.execv",
         "nt.execve",
@@ -132,6 +135,9 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "resource.prlimit",
         "nt.kill",
         "nt.abort",
+        # Runs Python code in another interpreter process (3.14): it acts on another
+        # process, as kill does, rather than on this one.
+        "sys.remote_exec",
     ),
     "privileges": (
         "os.setuid",
@@ -148,6 +154,18 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "posix.setregid",
         "os.setgroups",
         "posix.setgroups",
+        "os.setresuid",
+        "posix.setresuid",
+        "os.setresgid",
+        "posix.setresgid",
+        "os.initgroups",
+        "posix.initgroups",
+        # Entering or creating a namespace changes what the process is confined to,
+        # so it belongs with the identity changes rather than with process-control.
+        "os.unshare",
+        "posix.unshare",
+        "os.setns",
+        "posix.setns",
         # os.chroot / posix.chroot: not listed here. chroot is a
         # filesystem operation, and guard_files already patches both
         # names with a path check (_wrap_filename), which is strictly
@@ -182,6 +200,7 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "ctypes.CDLL",
         "ctypes.cast",
         "ctypes.string_at",
+        "ctypes.wstring_at",
     ),
     # importlib.reload rebinds a module's attributes in place, on the very
     # module object every reference already holds: reloading ``os`` puts the
@@ -194,6 +213,16 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         "importlib.reload",
         "sys.settrace",
         "sys.setprofile",
+        # Unlike threading.settrace (category "threads"), these reach the threads
+        # already running, as sys.settrace reaches the current one.
+        "threading.settrace_all_threads",
+        "threading.setprofile_all_threads",
+        "sys._settraceallthreads",
+        "sys._setprofileallthreads",
+        # sys.monitoring (PEP 669) runs a callback on every monitored event, like a
+        # trace function. A callback needs a tool id, so both steps are refused.
+        "sys.monitoring.use_tool_id",
+        "sys.monitoring.register_callback",
         "sys.addaudithook",
         "gc.get_objects",
         "gc.get_referrers",
@@ -227,11 +256,16 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
     # the module name to a function would break subclassing, which is how a
     # restricted unpickler is written. ``Unpickler(fp).load()`` therefore stays
     # reachable; pinned as an xfail in tests/unit_tests/guard/test_guard_api.py.
+    # pickle keeps its pure-Python implementation next to the C one, under
+    # ``_loads``, ``_load`` and ``_Unpickler``: the same opcodes, so the same entries.
     "deserialization": (
         "pickle.loads",
         "pickle.load",
         "_pickle.loads",
         "_pickle.load",
+        "pickle._loads",
+        "pickle._load",
+        "pickle._Unpickler",
     ),
 }
 
@@ -245,6 +279,22 @@ CATEGORIES: frozenset[str] = frozenset(SENSITIVE_API)
 # The subinterpreter module moved too: _xxsubinterpreters up to 3.12,
 # _interpreters from 3.13.
 _PRE_313 = frozenset({"threading._start_new_thread", "_xxsubinterpreters.create"})
+# Added in 3.12: os.unshare/os.setns, the *_all_threads hooks and sys.monitoring.
+_FROM_312 = frozenset(
+    {
+        "os.unshare",
+        "posix.unshare",
+        "os.setns",
+        "posix.setns",
+        "threading.settrace_all_threads",
+        "threading.setprofile_all_threads",
+        "sys._settraceallthreads",
+        "sys._setprofileallthreads",
+        "sys.monitoring.use_tool_id",
+        "sys.monitoring.register_callback",
+    }
+)
+_FROM_314 = frozenset({"sys.remote_exec"})
 _FROM_313 = frozenset(
     {
         "threading._start_joinable_thread",
@@ -284,6 +334,7 @@ _POSIX_ONLY = frozenset(
     | {
         "os.fork",
         "os.forkpty",
+        "os.initgroups",
         "os.killpg",
         "os.nice",
         "os.posix_spawn",
@@ -317,10 +368,24 @@ _POSIX_ONLY = frozenset(
     }
 )
 
-# Linux only: macOS has no prlimit.
-_LINUX_ONLY = frozenset({"resource.prlimit"})
+# Linux only: macOS has no prlimit, setresuid, setresgid, unshare or setns.
+_LINUX_ONLY = frozenset(
+    {
+        "resource.prlimit",
+        "os.setresuid",
+        "posix.setresuid",
+        "os.setresgid",
+        "posix.setresgid",
+        "os.unshare",
+        "posix.unshare",
+        "os.setns",
+        "posix.setns",
+    }
+)
 
-OPTIONAL: frozenset[str] = _PRE_313 | _FROM_313 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY
+OPTIONAL: frozenset[str] = (
+    _PRE_313 | _FROM_313 | _FROM_312 | _FROM_314 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY
+)
 """Entries whose absence is legitimate on some version or platform.
 
 The integrity test fails on a missing entry unless it is listed here, so
@@ -338,6 +403,8 @@ def _not_applicable() -> frozenset[str]:
     never patched.
     """
     version = _PRE_313 if sys.version_info >= (3, 13) else _FROM_313
+    version |= frozenset() if sys.version_info >= (3, 12) else _FROM_312
+    version |= frozenset() if sys.version_info >= (3, 14) else _FROM_314
     platform = _POSIX_ONLY if sys.platform == "win32" else _WINDOWS_ONLY
     linux = frozenset() if sys.platform == "linux" else _LINUX_ONLY
     return version | platform | linux
@@ -602,7 +669,14 @@ def _wrap_guarded(func: Callable[..., Any], *, qualname: str, category: str) -> 
 _PATCH_TARGET: dict[str, str] = {
     "subprocess.Popen": "subprocess.Popen.__init__",
     "ctypes.CDLL": "ctypes.CDLL.__init__",
+    "pickle._Unpickler": "pickle._Unpickler.__init__",
 }
+
+# subprocess binds ``fork_exec`` under its own name when it is first imported, before
+# the guards arm: patching ``_posixsubprocess.fork_exec`` leaves that binding, which
+# Popen calls and anyone can call, on the original. Each alias is patched with the
+# wrapper of the entry it stands for, so one decision covers both names.
+_ALIASES: dict[str, str] = {"subprocess._fork_exec": "_posixsubprocess.fork_exec"}
 
 # guard_eval patches these three itself: the guarded path parses and rewrites
 # the source, which a binary allow/deny cannot express. Deliberately NOT
@@ -620,7 +694,7 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
     """
     del learn
     skip = _not_applicable()
-    return {
+    table = {
         _PATCH_TARGET.get(qualname, qualname): _f(
             _wrap_guarded,
             qualname=qualname,
@@ -629,6 +703,8 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
         for qualname, category in _CATEGORY_OF.items()
         if qualname not in skip and qualname not in _OWNED_ELSEWHERE
     }
+    table.update({alias: table[qualname] for alias, qualname in _ALIASES.items() if qualname in table})
+    return table
 
 
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:

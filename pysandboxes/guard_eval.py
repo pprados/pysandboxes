@@ -59,6 +59,7 @@ import sys
 import sysconfig
 import threading
 import types
+import weakref
 from pathlib import Path
 from typing import Any, Callable, NoReturn, cast
 
@@ -277,7 +278,11 @@ def build_namespace(
 
 
 TAG_PREFIX = "<eval:"
-"""Filename prefix guarded `compile` stamps, and guarded `exec` requires."""
+"""Filename prefix guarded `compile` stamps on its output, for tracebacks."""
+
+_produced: "weakref.WeakKeyDictionary[types.CodeType, tuple[str, str]]" = weakref.WeakKeyDictionary()
+"""Each code object guarded `compile` returned, with its source and the mode to parse it in. A filename proves
+nothing: any code object can be given the `<eval:` one with `code.replace(co_filename=...)`."""
 
 # Captured at import time, before activate_sandboxes installs the patches, so
 # these are the unpatched builtins. The guard runs its own source through
@@ -303,6 +308,9 @@ _RAW_THREAD_PRIMITIVES = {
 }
 
 
+_swap_lock = threading.Lock()
+
+
 def _start_unguarded(thread: threading.Thread) -> None:
     """Start one of the guard's own threads without charging the user's rules.
 
@@ -318,21 +326,24 @@ def _start_unguarded(thread: threading.Thread) -> None:
     Args:
         thread: The worker or the watchdog.
     """
-    patched = {name: getattr(threading, name) for name in _RAW_THREAD_PRIMITIVES}
-    for name, raw in _RAW_THREAD_PRIMITIVES.items():
-        setattr(threading, name, raw)
-    try:
-        _RAW_THREAD_START(thread)
-    finally:
-        for name, value in patched.items():
-            setattr(threading, name, value)
+    # Two evaluations swapping at once would let the second one save the raw primitives as the patched ones,
+    # and restore them for good.
+    with _swap_lock:
+        patched = {name: getattr(threading, name) for name in _RAW_THREAD_PRIMITIVES}
+        for name, raw in _RAW_THREAD_PRIMITIVES.items():
+            setattr(threading, name, raw)
+        try:
+            _RAW_THREAD_START(thread)
+        finally:
+            for name, value in patched.items():
+                setattr(threading, name, value)
 
 
 _JOIN_GRACE = 0.5
 """Seconds given to a worker to notice its flag before it is called leaked."""
 
 _profiles: EvalProfiles = ImmutableDict({})
-_leaked: int = 0
+_leaked: list[threading.Thread] = []
 _leak_lock = threading.Lock()
 
 
@@ -355,7 +366,10 @@ def activate_guard(profiles: EvalProfiles, *, learn: bool = False) -> None:
 
 def leaked_threads() -> int:
     """Return how many uncooperative workers are still burning CPU."""
-    return _leaked
+    with _leak_lock:
+        # A worker whose C call finally returned no longer burns anything.
+        _leaked[:] = [worker for worker in _leaked if worker.is_alive()]
+        return len(_leaked)
 
 
 def resolve_profile(profile: str) -> EvalRules:
@@ -466,11 +480,8 @@ def run_guarded(
         EvalInterrupted: A budget or the timeout ran out.
         Exception: Whatever the evaluated code itself raised.
     """
-    # `global` is a function-scope directive: reading `_leaked` before
-    # declaring it is a SyntaxError, so the declaration comes first.
-    global _leaked
     learn = is_learning_mode()
-    if _leaked >= rules.max_leaked_threads:
+    if leaked_threads() >= rules.max_leaked_threads:
         raise EvalInterrupted(
             f"eval-max-leaked-threads={rules.max_leaked_threads} reached: "
             "earlier evaluations blocked in a C call and are still running"
@@ -505,8 +516,8 @@ def run_guarded(
         # The real guarantee is the OS layer, where a timeout is a process
         # kill. Documented as a limit, not presented as covered.
         with _leak_lock:
-            _leaked += 1
-        logger.warning("guard_eval: %s did not stop; %d leaked thread(s)", source_ref, _leaked)
+            _leaked.append(worker)
+        logger.warning("guard_eval: %s did not stop; %d leaked thread(s)", source_ref, leaked_threads())
         raise EvalInterrupted(f"eval-timeout={rules.timeout}s exhausted, and the worker did not stop")
     if "error" in box:
         _reraise_from_worker(box["error"])
@@ -617,29 +628,33 @@ def _call_site(frame: types.FrameType) -> str:
     return f"{Path(frame.f_code.co_filename).name}:{frame.f_lineno}"
 
 
-def _guarded_source(source: Any, qualname: str) -> str:
-    """Return the source string, or refuse a code object the guard did not make.
+def _guarded_source(source: Any, qualname: str, mode: str) -> tuple[str, str]:
+    """Return the source text to validate, or refuse a code object the guard did not make.
 
-    A code object cannot be validated after the fact. Guarded `compile` stamps
-    its output with the `<eval:` filename, and only that stamp is accepted
-    here.
+    A code object cannot be validated after the fact. One guarded `compile`
+    returned is run again from its source, under the same budgets and
+    watchdog as a string. A tree, which `compile(..., ast.PyCF_ONLY_AST)`
+    returns, is validated as the source it unparses to.
 
     Args:
         source: What the caller passed as the first argument.
         qualname: The patched builtin, for the refusal message.
+        mode: The mode the builtin was called in.
 
     Returns:
-        The source text, or `""` for a code object the guard itself produced.
+        The source text, and the mode to parse it in.
 
     Raises:
         RuleApiPermissionError: A code object of unknown provenance.
     """
     if isinstance(source, str):
-        return source
+        return source, mode
     if isinstance(source, (bytes, bytearray)):
-        return source.decode("utf-8", errors="replace")
-    if getattr(source, "co_filename", "").startswith(TAG_PREFIX):
-        return ""
+        return source.decode("utf-8", errors="replace"), mode
+    if isinstance(source, ast.AST):
+        return ast.unparse(source), mode
+    if isinstance(source, types.CodeType) and source in _produced:
+        return _produced[source]
     raise RuleApiPermissionError(f"{qualname} on a code object the guard did not produce", "python-api=ALLOW")
 
 
@@ -659,12 +674,12 @@ def _learn_from(source: Any, qualname: str, mode: str, rules: EvalRules | None) 
         rules: The declared profile, or None when the configuration has no
             `eval-*` key at all.
     """
-    if not isinstance(source, (str, bytes, bytearray)):
+    if not isinstance(source, (str, bytes, bytearray, ast.AST)):
         # A code object carries no syntax to validate.
-        if not getattr(source, "co_filename", "").startswith(TAG_PREFIX):
+        if not (isinstance(source, types.CodeType) and source in _produced):
             add_learning_rule(LearnApiRule(qualname))
         return
-    text = source if isinstance(source, str) else source.decode("utf-8", errors="replace")
+    text, _ = _guarded_source(source, qualname, mode)
     try:
         tree = ast.parse(text, mode=mode if mode in ("eval", "exec") else "exec")
     except SyntaxError:
@@ -706,6 +721,10 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
         # once wrapped is this wrapper. Reconstruct before delegating.
         raw_globals = globals_ if globals_ is not None else frame.f_globals
         raw_locals = locals_ if locals_ is not None else (frame.f_locals if globals_ is None else raw_globals)
+        if not isinstance(raw_locals, dict):
+            # PEP 667 (3.13+): a function's f_locals writes through to its variables, where the native builtin
+            # works on a snapshot.
+            raw_locals = dict(raw_locals)
         if not is_armed() or is_ambient(frame) or guard_api.is_allowed(qualname):
             return func(source, raw_globals, raw_locals, *extra, **kwargs)
         rules = _profiles.get("")
@@ -727,14 +746,13 @@ def _wrap_eval_like(func: Callable[..., Any], *, qualname: str, mode: str) -> Ca
             # NameError on the first attribute read. The debugging escape
             # hatch is therefore a straight passthrough.
             return func(source, raw_globals, raw_locals, *extra, **kwargs)
-        text = _guarded_source(source, qualname)
-        if not text:
-            return func(source, raw_globals, raw_locals, *extra, **kwargs)
+        text, text_mode = _guarded_source(source, qualname, mode)
         if globals_ is not None and rules.namespace == "adaptive":
             warn_about_context(globals_, _call_site(frame))
             add_learning_rule(LearnEvalContext(_call_site(frame)))
         namespace = build_namespace(rules, caller_globals=globals_, names=None, from_wrapper=False)
-        return run_guarded(text, rules, mode=mode, namespace=namespace, source_ref=_source_ref(frame, ""))
+        result = run_guarded(text, rules, mode=text_mode, namespace=namespace, source_ref=_source_ref(frame, ""))
+        return None if mode == "exec" else result
 
     wrapper.__pysandbox_eval__ = True  # type: ignore[attr-defined]
     return wrapper
@@ -762,11 +780,18 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
             raise RuleApiPermissionError("builtins.compile", "dynamic-code")
         if rules.namespace == "caller":
             return func(source, filename, mode, *args, **kwargs)
-        text = _guarded_source(source, "builtins.compile")
+        text, text_mode = _guarded_source(source, "builtins.compile", mode)
+        text_mode = text_mode if text_mode in ("eval", "exec") else "exec"
         ref = _source_ref(frame, "")
-        tree = ast.parse(text, filename=ref, mode=mode if mode in ("eval", "exec") else "exec")
+        tree = ast.parse(text, filename=ref, mode=text_mode)
         raise_if_rejected(ref, text, validate(tree, rules))
-        return func(cast("ast.Module | ast.Expression", inject(tree)), ref, mode, *args, **kwargs)
+        flags = args[0] if args else kwargs.get("flags", 0)
+        if flags & ast.PyCF_ONLY_AST:
+            # The tree as written: compiling it later comes back here and is validated again.
+            return tree
+        code = func(cast("ast.Module | ast.Expression", inject(tree)), ref, mode, *args, **kwargs)
+        _produced[code] = (text, text_mode)
+        return code
 
     wrapper.__pysandbox_eval__ = True  # type: ignore[attr-defined]
     return wrapper
@@ -843,7 +868,7 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_eval() -> None:
         """Reset the guard between tests."""
-        global _profiles, _leaked
+        global _profiles
         _profiles = ImmutableDict({})
-        _leaked = 0
+        _leaked.clear()
         _reset_context_warnings()

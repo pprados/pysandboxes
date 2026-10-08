@@ -182,6 +182,7 @@ def parse_rules(
             else:
                 parameters_prioritize_single_value[k] = list(s)[0]
 
+    port = parameters_prioritize_single_value.get("port", [-1])[0]
     provider = parameters_prioritize_single_value.get("os-sandbox", ["subprocess"])[0]
     use_py_sandbox = parameters_prioritize_single_value.get("py-sandbox", [True])[0]
     learning_path = parameters_prioritize_single_value.get("learning_path", [config_path])[0]
