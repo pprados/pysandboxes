@@ -49,16 +49,16 @@ workflows. See [test workflow](../.github/workflows/test.yml),
 ## Orders of magnitude
 
 How many tests that represents, in collected rows rather than in the coverage
-cells of [section D](#d-counting-the-scenarios). The figures move with every
-commit that adds a test; the point is the shape of the effort:
+cells of [section D](#d-counting-the-scenarios). The figures are approximate; the point is
+the shape of the effort:
 
 | Suite | Target | Tests |
 |---|---|---|
-| Unit | `make unit-tests` | ~1410 |
-| Integration | `make integration-tests` | ~139 |
+| Unit | `make unit-tests` | ~1790 |
+| Integration | `make integration-tests` | ~165 |
 | Containers | `make container-tests` | ~60 |
 | Samples (12 demos) | `make sample-tests` | ~170 |
-| **Total, one interpreter** | `make all-tests` | **~1779** |
+| **Total, one interpreter** | `make all-tests` | **~2185** |
 
 The samples figure is the softest of the four: each sample has its own
 `pyproject.toml`, its own lock file and its own virtual environment, so the
@@ -152,8 +152,8 @@ that loads a profile exercises it implicitly.
 
 ## B. OS_SANDBOX backends
 
-Nine providers are registered in `pysandboxes/_os_sandbox.py`; `_task` and
-`_sse_server` are internal and not user-selectable.
+Nine entries are registered in `pysandboxes/_os_sandbox.py`: seven providers, plus
+`_task` and `_sse_server`, which are internal and not user-selectable.
 
 | Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | Docker | Podman | Kubernetes |
 |---|---|---|---|---|---|---|
@@ -195,9 +195,7 @@ Each backend is also covered by a small liveness test under
 
 The grid profile sets `bwrap.share-net=yes`, so its bwrap rows run on the host
 network. The Python guards also refuse what the OS filter should, so a broken
-filter leaves the grid green: that is how the bwrap filter, which could never
-load, and the qemu one, never applied under `python-sb` and not found by the
-guest once `/etc` was exposed, went unnoticed. The
+filter leaves the grid green. The
 [`test_os_netfilter.py`](../tests/integration_tests/test_os_netfilter.py)
 scenario checks OS-only network enforcement with `py-sandbox=false` for
 `bwrap`, `unshare`, `qemu`, and (when Landlock ABI v4 is available) `landlock`,
@@ -206,7 +204,7 @@ permitted control connection. [`remote/test_bwrap.py`](../tests/integration_test
 also exercises the bwrap daemon with the network-filtered profile.
 
 `tst_usage.py` cannot prove the Firejail filter by itself because the Python
-socket guard is also active. The OS-only scenario now covers Firejail alongside
+socket guard is also active. The OS-only scenario covers Firejail alongside
 the other providers. Firejail supports
 `--net=<bridge>` with an automatically assigned sandbox address and the bridge
 address as its gateway; `--netfilter` applies only inside that new network
@@ -241,9 +239,8 @@ namespaces and mounts, which an unprivileged container does not grant. They are
 not coverage: they are 25% of real-provider rows and 20% of all rows when `none`
 is included.
 
-The host no longer has any: `qemu` in partial mode used to be `xfail`, and
-every partial-mode row of `test_usage_with_providers.py` now runs
-(`_PARTIAL_MODE_XFAIL` is empty).
+The host has none: every partial-mode row of `test_usage_with_providers.py`
+runs (`_PARTIAL_MODE_XFAIL` is empty).
 
 Kubernetes rows need minikube and the per-backend images
 (`make minikube-ready`, `make minikube-build-images`); they skip otherwise.
@@ -311,7 +308,7 @@ N_run = 312 - 36 = 276
 
 Row counts, to cross-check against the sections above: 84 host rows per
 interpreter and 60 container rows, 48 of them on a real backend. Both are reproducible with
-`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1410
+`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1790
 collected, none parametrized by backend or container condition — so they scale
 with the Python version alone.
 

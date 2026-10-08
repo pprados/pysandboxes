@@ -415,7 +415,7 @@ Each graded name in a supplied context emits one log record on the
 |---|---|
 | a module (`os`, `sys`, …) | strong |
 | a capability builtin: `getattr`, `setattr`, `open`, `eval`, `exec`, `compile`, `__import__`, `type`, `vars`, `globals`, `dir`, `breakpoint` | strong |
-| a callable whose module is `os`, `subprocess`, `importlib`, `ctypes`, `socket` | strong |
+| a callable whose module is `os`, `subprocess`, `importlib`, `ctypes`, `socket` (or an implementation module such as `posix`) | strong |
 | any other callable, or any other instance | weak |
 | scalars and containers of scalars | none |
 
@@ -442,8 +442,8 @@ eval-namespace=open
 # error: unknown mode 'open', expected one of ['adaptive', 'closed', 'caller']
 ```
 
-**The price of `adaptive`, stated:** the configuration file no longer
-describes the whole reachable surface on its own — an audit must also read the
+**The price of `adaptive`, stated:** the configuration file does not
+describe the whole reachable surface on its own — an audit must also read the
 call sites. That is why the mode is a named key rather than implicit
 behaviour, and why a profile handling model output should set `closed`.
 
@@ -703,7 +703,7 @@ Two emission rules worth knowing:
 - **never a pattern**. Generalising from a sample is precisely what learning
   must not do.
 
-When `adaptive` honoured a caller-supplied context, `eval-call` was never
+When `adaptive` honours a caller-supplied context, `eval-call` is not
 consulted for the namespace, so emitting it would produce rules that are at
 once unused and misleading. The block carries a comment instead:
 
@@ -884,7 +884,7 @@ needs to call something is a predicate that has grown into a program.
 ```
 
 Each refusal is a deliberate design question, not an obstacle: if the model
-keeps reaching for `startswith`, granting it is one line — and now that grant
+keeps reaching for `startswith`, granting it is one line, and that grant
 is visible in the profile instead of buried in a helper.
 
 ---
@@ -916,7 +916,7 @@ guarded_eval(rule, profile="rules", names={"amount": 250.0, "tier": "gold", "yea
 ```
 
 No loops, no comprehensions, no function definitions: a rule that needs them
-is no longer a rule. Keeping the vocabulary this small is also what makes the
+is a program, not a rule. Keeping the vocabulary this small is also what makes the
 profile readable to the non-programmer who owns the rules.
 
 ---
@@ -995,7 +995,7 @@ Two notes on the budgets, which matter more here than anywhere else:
 
 - `eval-max-call-depth` is what stops runaway recursion. The iteration budget
   does not see it, and CPython's own `RecursionError` is an `Exception` that
-  the snippet can catch itself now that `exception` is open.
+  the snippet can catch itself once `exception` is open.
 - `eval-timeout` reaches the caller as `EvalInterrupted`, which derives from
   `BaseException` only — so a bare `except Exception:` in the snippet cannot
   swallow its own interruption, and **your** `except SandBoxError:` will not

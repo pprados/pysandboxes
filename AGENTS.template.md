@@ -166,6 +166,6 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - Seven OS providers ship today; `none` and `subprocess` give no OS boundary at all, and the kernel-backed
   ones (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) are what holds against compiled code
 - Kernel boundaries are Linux and WSL only: every kernel-backed provider is a Linux technology. On macOS and
-  Windows, the Python layer runs with `none` or `subprocess`, as `.github/workflows/cross-os.yml` proves
+  Windows, the Python layer runs with `subprocess`, as `.github/workflows/cross-os.yml` proves
 - Known weaknesses are documented, not hidden: see `wiki/weaknesses.md`, `wiki/audit-eval-security.md` and
   `wiki/audit-python-security.md`. `SECURITY.md` says which of them count as a vulnerability

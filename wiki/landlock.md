@@ -4,7 +4,7 @@
 
 [LandLock](https://landlock.io/) is an OS-level sandboxing technology that works at the process level and needs no special privilege to be activated. Its first stable version (ABI v1) has been available since Linux kernel 5.13.
 
-LandLock follows a **whitelist** approach: all access is denied by default. It can authorize read and write access to directories, and it can limit the listening or destination ports of network calls (TCP only). As of the current version (ABI v5), it cannot yet control destination IP addresses.
+LandLock follows a **whitelist** approach: all access is denied by default. It can authorize read and write access to directories, and it can limit the listening or destination ports of network calls (TCP only). It cannot control destination IP addresses.
 
 Its strength lies elsewhere: it works everywhere, without any privilege. The process itself decides which restrictions it applies, then activates them. Once they are active, it cannot escape them, and its child processes inherit the same constraints.
 

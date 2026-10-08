@@ -16,28 +16,7 @@ Applications increasingly run code or tools selected by an LLM. A manipulated mo
 
 [Home Page](https://www.github.com/pprados/pysandboxes/) | [API reference](https://pprados.github.io/pysandboxes/)
 
-> **Package sources.** The release process publishes pre-releases to TestPyPI and final releases to PyPI. The
-> installation commands below target the final PyPI release. To try a pre-release that is available on TestPyPI,
-> define this alias and use `python-sb` in place of `uvx python-sb` in the examples:
->
-> ```bash
-> alias python-sb='uvx --prerelease allow \
->   --find-links https://test.pypi.org/simple/python-sb/ \
->   --find-links https://test.pypi.org/simple/pysandboxes/ \
->   python-sb'
-> python-sb --help
-> ```
->
-> Or install it from the sources:
->
-> ```bash
-> git clone https://github.com/pprados/pysandboxes.git
-> cd pysandboxes
-> pip install -e .
-> python-sb --help
-> ```
-
-## Quick start
+# Quick start
 
 After the release is published to PyPI, run any module in a sandbox without changing the application code:
 
@@ -92,7 +71,7 @@ protection level it needs, and what the rule file does not show.
 
 # Platform support
 
-The Python layer and the `none` and `subprocess` providers are available on Linux, macOS, and Windows. Kernel-backed OS providers (`landlock`, `bwrap`, `firejail`, `unshare`, and `qemu`) are Linux technologies and are also available through WSL where their kernel and tooling requirements are met. On macOS and Windows, Py-Sandboxes does not provide that OS isolation layer. See [provider platform requirements](wiki/os-providers.md).
+The Python layer, with the `subprocess` provider, is available on Linux, macOS, and Windows. Kernel-backed OS providers (`landlock`, `bwrap`, `firejail`, `unshare`, and `qemu`) are Linux technologies and are also available through WSL where their kernel and tooling requirements are met. On macOS and Windows, Py-Sandboxes does not provide that OS isolation layer. See [provider platform requirements](wiki/os-providers.md).
 
 ---
 

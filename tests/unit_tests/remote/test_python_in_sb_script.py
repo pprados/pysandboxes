@@ -62,6 +62,25 @@ def test_the_script_is_named_main_and_knows_its_file(tmp_path: Path, capsys: pyt
     assert f"__file__: {script}" in out
 
 
+def test_a_file_the_script_cannot_open_is_not_reported_as_the_script(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Only reading the script is CPython's "can't open file": a refusal inside it propagates."""
+    script = tmp_path / "reader.py"
+    script.write_text(f"open({str(tmp_path / 'absent.txt')!r})\n")
+
+    with pytest.raises(FileNotFoundError, match="absent.txt"):
+        _python_script(_UNUSED_RULES, script, [])
+
+    assert "can't open file" not in capsys.readouterr().err
+
+
+def test_a_missing_script_is_reported_like_cpython(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    assert _python_script(_UNUSED_RULES, tmp_path / "missing.py", []) == 2
+
+    assert "can't open file" in capsys.readouterr().err
+
+
 def test_dash_c_also_gets_a_single_namespace(capsys: pytest.CaptureFixture) -> None:
     """``python-sb -c`` runs through ``_python_command`` and has the same bug."""
     assert _python_command(_UNUSED_RULES, "C = 1\ndef f():\n    return C\nassert f() == 1\n", []) == 0

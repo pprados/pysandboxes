@@ -139,5 +139,5 @@ Rules in `.py-sandboxes` files, whitelist-based:
 - Target: AI/LLM-generated code security
 - Config files: whitelist-only model
 - 7 OS providers ship. `none` + `subprocess` = no OS boundary. Kernel-backed (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) = what holds vs compiled code
-- Kernel boundaries Linux + WSL only: all kernel-backed providers = Linux tech. macOS/Windows → Python layer w/ `none` or `subprocess`, proven by `.github/workflows/cross-os.yml`
+- Kernel boundaries Linux + WSL only: all kernel-backed providers = Linux tech. macOS/Windows → Python layer w/ `subprocess`, proven by `.github/workflows/cross-os.yml`
 - Known weaknesses documented, not hidden: `wiki/weaknesses.md`, `wiki/audit-eval-security.md`, `wiki/audit-python-security.md`. `SECURITY.md` says which = vulnerability

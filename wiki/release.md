@@ -21,6 +21,19 @@ The tag starts `.github/workflows/release.yml`. When every check has passed, the
 `testpypi` deployment, in the run page or under Actions → Release. Approving publishes the wheel; the images follow
 without a second click.
 
+To qualify a pre-release before the final version, run it through this alias wherever the documentation says
+`uvx python-sb`:
+
+```bash
+alias python-sb='uvx --prerelease allow \
+  --find-links https://test.pypi.org/simple/python-sb/ \
+  --find-links https://test.pypi.org/simple/pysandboxes/ \
+  python-sb'
+```
+
+It takes the highest version found on pypi.org and on these two test.pypi.org pages. `--find-links` limits
+test.pypi.org to the two packages: every dependency still comes from pypi.org, where nobody can squat its name.
+
 Tag a commit the nightly already proved, when you can. The nightly (`full-gate.yml`, 20:17 UTC on `develop`) runs the
 integration, sample and container suites; a tag on the same code reuses that run instead of repeating it. The lookup
 walks back over the release commit and over commits that touch only documentation, so a final version tagged right

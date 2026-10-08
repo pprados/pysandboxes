@@ -288,22 +288,24 @@ def _main_globals(file: str | None) -> dict:
 
 
 def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
+    # Only reading the script is CPython's "can't open file": a FileNotFoundError the
+    # script raises, a file guard refusal among them, must keep its own traceback.
     try:
         _before_user_code()
         script_body = script.read_text()
-        sys.argv = [str(script)] + args
-        # Runs the user script by design; the OS sandbox isolates it.
-        # Compiled against the real path so a traceback names the user's file.
-        _RAW_EXEC(_RAW_COMPILE(script_body, str(script), "exec"), _main_globals(str(script)))
-        if sys.flags.inspect:
-            return _python_interactive(all_rules=all_rules, ban=False)
-        return 0
     except FileNotFoundError:
         print(
             f"python: can't open file {str(script)!r}: " f"[Errno 2] No such file or directory",
             file=sys.stderr,
         )
         return 2
+    sys.argv = [str(script)] + args
+    # Runs the user script by design; the OS sandbox isolates it.
+    # Compiled against the real path so a traceback names the user's file.
+    _RAW_EXEC(_RAW_COMPILE(script_body, str(script), "exec"), _main_globals(str(script)))
+    if sys.flags.inspect:
+        return _python_interactive(all_rules=all_rules, ban=False)
+    return 0
 
 
 def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> int:

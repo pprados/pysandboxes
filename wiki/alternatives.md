@@ -125,7 +125,7 @@ layer 7, and it grants privileges on more than the network destination alone.
 | Modal | Open | CIDR list "any protocol" (doc) | Not found | Blocked with `block_network` | SNI, port 443 only | None | Header injection per domain |
 | Vercel | `allow-all` | Not documented | Not documented | Open under `subnets.allow` (documented) | SNI; domain fronting acknowledged | Matchers on method, path, query and headers; transform, forward or respond; Postgres aware | Header transform, secret never inside |
 | Cloudflare | Open (`enableInternet` true); closed, only 80 and 443 leave, through the interception | None | None | Not documented | JavaScript written in the Worker | Anything the Worker code does | In the Worker, on fictitious host names |
-| AWS AgentCore | Three modes (sandbox, public, VPC) | DNS leaked in sandbox mode | Not documented | Was the exfiltration channel | None | None | IAM role |
+| AWS AgentCore | Three modes (sandbox, public, VPC) | DNS leaked in sandbox mode | Not documented | The exfiltration channel | None | None | IAM role |
 | Azure dynamic sessions | Deny (`EgressDisabled`) | Not documented | Not documented | Not documented | None | None | Managed identity, off by default |
 | Docker Sandboxes | Deny, with presets | Experimental, gated by policy | Blocked | Mediated by the proxy | Allow and deny per host | Host name only | Injected by the proxy |
 
@@ -143,7 +143,7 @@ Three observations follow.
   When a provider uses `iptables`, the sandbox still talks to a resolver ([DNS and iptables](dns.md)).
 - **Layer 7 belongs to the proxy-based solutions.** Rules on HTTP method and path exist only behind a proxy:
   OpenShell, Codex, Vercel, Cloudflare (as code), OpenSandbox (through addons) and sandbox-runtime (partly).
-  Credential injection, where the real secret never enters the sandbox, is now common: nine of the nineteen
+  Credential injection, where the real secret never enters the sandbox, is common: nine of the nineteen
   solutions do it fully, three more partly. PySandboxes does neither.
 
 ## Feature matrix
@@ -348,7 +348,7 @@ allow rule per human approval.
   CIDR filter.
 - **Weaknesses**: containers run `--privileged` outside GPU and Android sandboxes. No IPv6, DNS or ICMP
   handling, no L7. `domainAllowList` is validated and forwarded by the API but never read by the runner. The
-  repository's `main` now says the code "moved to a private codebase": the open source is frozen at v0.190.0.
+  repository's `main` says the code "moved to a private codebase": the open source is frozen at v0.190.0.
   A batch of advisories in June 2026, all fixed by 0.185.0:
   [CVE-2026-54320](https://nvd.nist.gov/vuln/detail/CVE-2026-54320) (invitation accepted without a verified
   e-mail), [CVE-2026-54321](https://nvd.nist.gov/vuln/detail/CVE-2026-54321) (stale preview-visibility cache),
@@ -460,7 +460,7 @@ full QEMU VM.
 - *The network above layer 4.* There is no TLS interception, no method or path rules, no protocol-aware
   rules. Nine solutions match domain rules on the live connection (SNI, `Host`, proxy). PySandboxes resolves names once, when the profile is parsed.
 - *Secrets.* The pattern "the secret never enters the sandbox" (placeholders, header injection, SigV4
-  re-signing) is now widespread. PySandboxes filters the environment, but a granted secret is passed in
+  re-signing) is widespread. PySandboxes filters the environment, but a granted secret is passed in
   clear.
 - *SSRF by default.* Most proxy-based solutions deny private ranges and the cloud metadata address without
   being asked. PySandboxes leaves it to the profile author.

@@ -118,13 +118,12 @@ n       <= (524288 - envelope) / 1.25      = 419392 with no captured output
 ```
 
 `_MAX_BYTES` is 384 KiB, which encodes to 491520 bytes and leaves 32 KiB of the
-line for the JSON envelope and for whatever the sandboxed function printed. It
-previously read 128 MiB, two orders of magnitude above anything the transport
-can carry, which made it a number that described nothing.
+line for the JSON envelope and for whatever the sandboxed function printed.
 
-A unit test pins `_SSE_LINE_LIMIT` against aiohttp's own default, so raising the
-buffer on the `ClientSession` — the only way to lift the ceiling — reddens CI
-instead of leaving the two sides silently inconsistent.
+Every `ClientSession` of the transport passes `SSE_READ_BUFSIZE` (65536)
+explicitly, so aiohttp's own default does not move the ceiling. A unit test
+pins that relation: raising the buffer, the only way to lift the ceiling,
+reddens CI instead of leaving the two sides silently inconsistent.
 
 The prescan deliberately does **not** try to inventory the `(module, name)`
 pairs the stream references. Under memo/`BINGET` indirection a stack-simulating
@@ -211,7 +210,7 @@ and a sandbox that cannot report its own refusal has lost its point.
 
 So the child sends the exception **twice**:
 
-- the **rich form**, the pickled `(exception, traceback)` pair, as before;
+- the **rich form**, the pickled `(exception, traceback)` pair;
 - the **descriptor form**, `(module, qualname, message, denials)` — strings and
   a list of strings — plus the same traceback.
 
@@ -241,10 +240,10 @@ exception carrying no state, or state made only of the base data classes. They
 are lost exactly when the guard would otherwise have refused the exception
 entirely.
 
-Two failures stop being fatal along the way. An exception the child cannot
-pickle at all no longer sinks the reply. A class the parent never imported
-no longer raises: the refusal is reported through `SandBoxProtocolError`,
-prefixed with the original `module.qualname`, rather than being lost.
+Two failures are not fatal. An exception the child cannot pickle at all does
+not sink the reply. A class the parent never imported does not raise: the
+refusal is reported through `SandBoxProtocolError`, prefixed with the original
+`module.qualname`, rather than being lost.
 
 ## The `remote-result-guard` profile key
 
@@ -301,13 +300,15 @@ learning only describes the results exercised by that run.
 ## Portability
 
 Sites that depend on CPython internals carry a `# CPYTHON-COMPAT:` marker
-(`rg CPYTHON-COMPAT` to find them). There are three of them:
+(`rg CPYTHON-COMPAT` to find them). They are:
 
 - the opcode alphabet, which can grow between versions. A corpus test reasserts
   that a representative sample stays within the allowlist, so a version bump
   reddens CI instead of breaking production;
 - the in-house qualified-name resolution, replacing the private
   `pickle._getattribute`;
+- the refusal to import a module from the stream;
+- the result denylist, keyed by every alias and C-twin of a module;
 - the pinned wire protocol constant, used on both ends instead of
   `HIGHEST_PROTOCOL`. The alphabet therefore does not drift with the
   interpreter, and the two ends stay compatible across container backends.
@@ -324,8 +325,7 @@ Supported range: CPython 3.11 to 3.14.
 - An exception that crosses on the fallback path arrives without its attributes.
   See layer 5.
 - `__cause__` and `__context__` do not survive the transport, on either path.
-  That is plain pickle behaviour and predates this guard; `sandbox_denials`
-  exists because of it.
+  That is plain pickle behaviour; `sandbox_denials` exists because of it.
 - This guard protects the parent's deserialization only. Arbitrary Python in the
   child can still reach native code by other routes; the OS-level sandbox remains
   the real barrier. See [weaknesses](weaknesses.md).

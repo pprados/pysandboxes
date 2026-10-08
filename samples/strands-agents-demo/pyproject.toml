@@ -70,6 +70,11 @@ target-version = "py310"
 skip = ".git,*.pdf,*.svg,*.yaml,*.ipynb,uv.lock,./.venv"
 
 [tool.uv]
+# strands-agents, up to 1.58.0, pins litellm<=1.96.0, and PYSEC-2026-4066 is fixed
+# in 1.96.2. The override takes the fix: a patch release of the version strands
+# pins, which the sample's test suite runs against. Re-check when strands-agents
+# next moves: if it relaxes the pin, drop this override.
+override-dependencies = ["litellm>=1.96.2,<1.97"]
 
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository
