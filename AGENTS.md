@@ -12,6 +12,7 @@ make unit-tests              # Run unit tests
 make integration-tests       # Run integration tests
 make container-tests         # Run docker/podman/kubernetes tests (needs images + minikube)
 make sample-tests            # Run the samples' own test suites
+make sample-tests-matrix     # The samples on every Python and every OS provider (before a minor release)
 make all-tests               # All four of the above
 make gh-tests                # Run the github action locally, through `gh act`
 ```
@@ -32,7 +33,7 @@ make clean                   # Clean build artifacts
 make lock                    # Refresh uv.lock, which is versioned
 make dist                    # Build distribution packages
 make publish-pre-release VERSION=X.Y.ZbN  # Tag and push a pre-release (published to test.pypi.org by the CI)
-make publish-minor           # Full local check, then tag and push the next minor final version (published to pypi.org by the CI)
+make publish-minor           # Full local check and sample-tests-matrix, then tag and push the next minor final version (published to pypi.org by the CI)
 make publish-patch           # Full local check, then tag and push the next patch final version (published to pypi.org by the CI)
 make publish-final VERSION=X.Y.Z  # Full local check, then tag and push the given final version, greater than the last (published to pypi.org by the CI)
 make help                    # Show all commands

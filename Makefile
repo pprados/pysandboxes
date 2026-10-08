@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 .PHONY: all format format_diff lint lint_diff claude-lint coverage \
-	unit-tests integration-tests container-tests sample-tests all-tests gh-tests gh-all-tests \
+	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
@@ -156,6 +156,21 @@ sample-tests-mcp-client: sample-init-mcp-server
 # `make -jN sample-tests` stays parallel.
 sample-tests:
 	@$(MAKE) -k $(addprefix sample-tests-,$(SAMPLES))
+
+# The release grid: every sample, on every Python the project claims, under every OS provider that confines it,
+# which samples.yml runs too. A provider adds limits of its own that a subprocess run cannot show. `none`
+# confines nothing, so the confinement scenarios fail there by design; qemu boots a VM per sandbox.
+# Pythons outermost: each change of UV_PYTHON rebuilds the sample venvs. Serial: mcp-client's port is fixed.
+SAMPLE_PYTHONS = 3.11 3.12 3.13 3.14
+SAMPLE_PROVIDERS = subprocess landlock bwrap firejail unshare
+## Make the samples' suites on every Python and every OS provider (run before a minor release)
+sample-tests-matrix:
+	@status=0; \
+	for py in $(SAMPLE_PYTHONS); do for provider in $(SAMPLE_PROVIDERS); do \
+		echo "=== samples on Python $$py under $$provider"; \
+		UV_PYTHON=$$py OS_SANDBOX=$$provider $(MAKE) sample-tests || status=1; \
+	done; done; \
+	exit $$status
 
 
 # `gh act push` alone runs every workflow with a push trigger, whatever its
@@ -624,9 +639,10 @@ publish-patch: quick-demo-gif
 	$(MAKE) release
 	@scripts/tag-release.sh patch
 
-## Run the full local check, then tag and push the next minor version
+## Run the full local check and the samples on every Python and provider, then tag and push the next minor version
 publish-minor: quick-demo-gif
 	$(MAKE) release
+	$(MAKE) sample-tests-matrix
 	@scripts/tag-release.sh minor
 
 ## Run the full local check, then tag and push a given final version: make publish-final VERSION=0.5.0

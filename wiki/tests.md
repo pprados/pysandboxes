@@ -72,8 +72,8 @@ of it:
 | [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~5640 | every push and pull request |
 | [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~556 | `full-gate.yml` (nightly, release tag) or dispatch |
 | [`containers.yml`](../.github/workflows/containers.yml) | Containers | 3.13 | ~60 | `full-gate.yml` (nightly, release tag) or dispatch |
-| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 | ~650 | `full-gate.yml` (nightly, release tag) or dispatch |
-| **Total** | | | **~6906** | |
+| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare | ~3250 | `full-gate.yml` (nightly, release tag) or dispatch |
+| **Total** | | | **~9506** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
 excludes the matrix interpreter is *skipped*, not failed. `langgraph-demo` is
