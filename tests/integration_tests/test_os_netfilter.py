@@ -85,9 +85,7 @@ def _target(provider: str) -> str:
 
 
 def _firejail_bridge_ip() -> str | None:
-    result = subprocess.run(
-        ["ip", "-4", "-o", "addr", "show", "dev", _FIREJAIL_BRIDGE], capture_output=True, text=True
-    )
+    result = subprocess.run(["ip", "-4", "-o", "addr", "show", "dev", _FIREJAIL_BRIDGE], capture_output=True, text=True)
     if result.returncode:
         return None
     for field in result.stdout.split():

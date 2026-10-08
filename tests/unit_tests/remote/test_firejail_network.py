@@ -70,6 +70,7 @@ def test_socket_rule_requires_a_bridge_when_no_bridge_is_detected(tmp_path: Path
     with pytest.raises(ValueError, match="require a host bridge"):
         _firejail_args(_with_socket_rule(), tmp_path, "restricted-network no\n")
 
+
 def test_socket_rule_uses_a_detected_bridge(tmp_path: Path) -> None:
     args = _firejail_args(_with_socket_rule(), tmp_path, "restricted-network no\n", ["br0"])
     assert "--net=br0" in args
