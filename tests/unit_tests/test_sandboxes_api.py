@@ -1,5 +1,6 @@
 """Unit tests for sandboxes_api module."""
 
+import asyncio
 import inspect
 import signal
 import subprocess
@@ -359,3 +360,63 @@ async def test_a_failed_async_enter_restores_the_signal_handlers(tmp_path: Path)
             pass
 
     assert signal.getsignal(signal.SIGTERM) is before
+
+
+_NO_LEARNING_RULES = "py-sandbox=true\nos-sandbox=none\n"
+
+
+@patch("pysandboxes._os_sandbox.start_daemon")
+@patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
+def test_sandboxes_entered_from_a_non_main_thread_does_not_raise(
+    mock_shutdown: Mock, mock_start: Mock, tmp_path: Path
+) -> None:
+    """B7 regression: signal.signal() only works from the main thread; a worker thread must skip it, not crash."""
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(_NO_LEARNING_RULES)
+    mock_start.return_value = Mock()
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            with sandboxes(sandboxes_config=config):
+                pass
+        except BaseException as exc:  # noqa: BLE001 - captured to report from the test thread
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+
+    assert errors == []
+    mock_start.assert_called_once()
+    mock_shutdown.assert_called_once()
+
+
+@patch("pysandboxes._os_sandbox.async_start_daemon")
+@patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
+def test_async_sandboxes_entered_from_a_non_main_thread_does_not_raise(
+    mock_shutdown: Mock, mock_async_start: Mock, tmp_path: Path
+) -> None:
+    """Same regression for `async with sandboxes()`, run on its own event loop in a worker thread."""
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(_NO_LEARNING_RULES)
+    mock_async_start.return_value = Mock()
+    errors: list[BaseException] = []
+
+    async def job() -> None:
+        async with sandboxes(sandboxes_config=config):
+            pass
+
+    def worker() -> None:
+        try:
+            asyncio.run(job())
+        except BaseException as exc:  # noqa: BLE001 - captured to report from the test thread
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+
+    assert errors == []
+    mock_async_start.assert_called_once()
+    mock_shutdown.assert_called_once()

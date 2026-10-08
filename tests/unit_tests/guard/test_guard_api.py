@@ -406,10 +406,10 @@ def test_class_entry_denies_and_allows_construction(
 
 
 def test_every_patched_entry_actually_resolves() -> None:
-    """A patched name must exist, or startup would raise."""
+    """A patched name must exist, or startup would raise -- except a test-capi one, moved or absent by version."""
     import importlib
 
-    from pysandboxes.guard_api import split_qualname
+    from pysandboxes.guard_api import _TEST_CAPI, split_qualname
 
     for qualname in patch_rules(learn=False):
         module_name, attribute_path = split_qualname(qualname)
@@ -417,8 +417,12 @@ def test_every_patched_entry_actually_resolves() -> None:
             obj: Any = importlib.import_module(module_name)
         except ImportError:
             continue
-        for node in attribute_path.split("."):
-            obj = getattr(obj, node)
+        try:
+            for node in attribute_path.split("."):
+                obj = getattr(obj, node)
+        except AttributeError:
+            assert qualname in _TEST_CAPI, f"{qualname} is missing and not listed in _TEST_CAPI"
+            continue
         assert obj is not None
 
 

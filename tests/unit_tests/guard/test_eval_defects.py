@@ -188,14 +188,29 @@ def test_exec_without_namespace_does_not_rebind_the_caller_locals() -> None:
     assert caller() == 1
 
 
+def _nested_unary_minus(depth: int) -> ast.Expression:
+    """Build `-(-(-...1...))`, `depth` levels deep, without going through `ast.parse`.
+
+    `ast.parse` itself refuses a source nested this deep on some Python versions (its own
+    C-level parser has a lower recursion ceiling than this library's own, Python-level guard),
+    so the tree is built directly to exercise `validate()` regardless of that ceiling.
+    """
+    # No `ast.fix_missing_locations`: it walks the tree recursively and would hit the same
+    # ceiling; `validate()` only reads `lineno`/`col_offset` through `getattr(..., 0)`.
+    node: ast.expr = ast.Constant(value=1)
+    for _ in range(depth):
+        node = ast.UnaryOp(op=ast.USub(), operand=node)
+    return ast.Expression(body=node)
+
+
 def test_a_source_deeper_than_the_recursion_limit_is_refused_by_max_depth() -> None:
-    tree = ast.parse("-" * 3000 + "1", mode="eval")
+    tree = _nested_unary_minus(3000)
     violations = validate(tree, DEFAULT_RULES._replace(declared=True))
     assert [v.remedy.split("=")[0] for v in violations] == ["eval-max-depth"]
 
 
 def test_a_max_depth_past_the_stack_still_refuses_instead_of_crashing() -> None:
-    tree = ast.parse("-" * (sys.getrecursionlimit() * 3) + "1", mode="eval")
+    tree = _nested_unary_minus(sys.getrecursionlimit() * 3)
     violations = validate(tree, DEFAULT_RULES._replace(declared=True, max_depth=10**9))
     assert [v.remedy.split("=")[0] for v in violations] == ["eval-max-depth"]
 

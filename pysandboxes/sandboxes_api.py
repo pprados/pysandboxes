@@ -78,8 +78,6 @@ _R = TypeVar("_R")
 
 
 @overload
-def sandbox(_func: Callable[_P, Coroutine[Any, Any, _R]]) -> Callable[_P, Coroutine[Any, Any, _R]]: ...
-@overload
 def sandbox(_func: Callable[_P, _R]) -> Callable[_P, _R]: ...
 @overload
 def sandbox(_func: None = None) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]: ...
@@ -232,15 +230,18 @@ class sandboxes:
     )
 
     def _register_signals_handlers(self) -> None:
+        self._signals: dict[signal.Signals, Any | int | signal.Handlers | None] = {}
+        if threading.current_thread() is not threading.main_thread():
+            # signal.signal() only works from the main thread of the main interpreter; signals are
+            # delivered there anyway, so a worker thread has nothing to install.
+            return
         with self._lock:
             # Windows has no SIGQUIT
             register_signal = tuple(
                 getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGQUIT") if hasattr(signal, name)
             )
 
-            self._signals: dict[signal.Signals, Any | int | signal.Handlers | None] = {
-                s: signal.getsignal(s) for s in register_signal
-            }
+            self._signals = {s: signal.getsignal(s) for s in register_signal}
 
             def signal_handler(
                 signum: int,

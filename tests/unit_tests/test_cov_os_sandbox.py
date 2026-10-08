@@ -55,10 +55,12 @@ class _Daemon(FakeDaemon):
         log_level: int,
         init_fn: SyncOrAsyncFunc | None,
     ) -> None:
-        if type(self).start_gate is not None:
-            await type(self).start_gate.wait()
-        if type(self).start_error is not None:
-            raise type(self).start_error
+        start_gate = type(self).start_gate
+        if start_gate is not None:
+            await start_gate.wait()
+        start_error = type(self).start_error
+        if start_error is not None:
+            raise start_error
         self._is_started = True
         self._accept_incoming = True
 
