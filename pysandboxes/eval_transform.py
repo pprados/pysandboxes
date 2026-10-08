@@ -210,7 +210,11 @@ def validate(tree: ast.AST, rules: EvalRules) -> list[Violation]:
         # The visit below recurses as deep as the tree: it is not run on a tree already refused for its depth.
         return [Violation(1, 0, f"the source nests {depth} levels deep", f"eval-max-depth={depth}")]
     validator = _Validator(rules)
-    validator.visit(tree)
+    try:
+        validator.visit(tree)
+    except RecursionError:
+        # An eval-max-depth set past what the interpreter's stack can walk: the tree is refused all the same.
+        return [Violation(1, 0, f"the source nests {depth} levels deep", f"eval-max-depth={depth}")]
     count = sum(1 for _ in ast.walk(tree))
     if count > rules.max_nodes:
         validator.violations.append(Violation(1, 0, f"the source holds {count} nodes", f"eval-max-nodes={count}"))
@@ -267,7 +271,7 @@ def raise_if_rejected(source_ref: str, source: str, violations: list[Violation])
     )
 
 
-_GUARDED_BINOPS: dict[type, str] = {ast.Pow: "**", ast.Mult: "*", ast.Add: "+"}
+_GUARDED_BINOPS: dict[type, str] = {ast.Pow: "**", ast.Mult: "*", ast.Add: "+", ast.LShift: "<<", ast.Mod: "%"}
 
 
 def _call(name: str, args: list[ast.expr]) -> ast.Call:
@@ -312,6 +316,14 @@ class _Injector(ast.NodeTransformer):
             _call("__sb_binop__", [ast.Constant(value=symbol), node.left, node.right]),
             node,
         )
+
+    def visit_FormattedValue(self, node: ast.FormattedValue) -> ast.AST:
+        self.generic_visit(node)
+        if node.format_spec is None:
+            return node
+        # The spec is evaluated once, then checked and applied by the helper; the field keeps no spec of its own.
+        value = _call("__sb_format__", [node.value, ast.Constant(value=node.conversion), node.format_spec])
+        return ast.copy_location(ast.FormattedValue(value=value, conversion=-1, format_spec=None), node)
 
     def visit_AugAssign(self, node: ast.AugAssign) -> ast.AST | list[ast.stmt]:
         self.generic_visit(node)

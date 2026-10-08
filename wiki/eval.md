@@ -582,9 +582,10 @@ eval("[" + ", ".join("1" for _ in range(10_000)) + "]")
 
 ### `eval-max-alloc`
 
-Default `10MB`. Bound on what the rewritten operators may allocate. `**`, `*`
-and `+` are checked **before** the operation, because the damage is done
-inside C otherwise.
+Default `10MB`. Bound on what the rewritten operators may allocate. `**`, `*`,
+`+` and `<<` are checked **before** the operation, because the damage is done
+inside C otherwise. So is the width or precision of a format spec, which pads
+the result from a few characters: `%`, f-strings, `format` and `str.format`.
 
 ```ini
 # Valid
@@ -1075,8 +1076,8 @@ Stated plainly so no one reads more into the guard than it offers.
   none returns to a check point. Mitigated by
   [`eval-max-leaked-threads`](#eval-max-leaked-threads), guaranteed only by
   the OS layer.
-- **Memory outside the rewritten operators.** `eval-max-alloc` bounds `+`, `*`
-  and `**`, not the process.
+- **Memory outside the rewritten operators.** `eval-max-alloc` bounds `+`, `*`,
+  `**`, `<<` and format widths, not the process.
 - **CPython bugs.** A segfault or an interpreter escape is out of reach of any
   AST-level guard.
 - **Side effects of allowed calls.** If `eval-call` grants a function that
