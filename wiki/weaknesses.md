@@ -30,13 +30,13 @@ what each OS mechanism can enforce and its prerequisites.
   not judged that way: a thread the user's code starts (it does not inherit the call's context), a finalizer, an
   `atexit` function, or the `__reduce__` of a returned object, run while the daemon serializes the result. There,
   the modules the daemon loaded for itself are importable without a rule: `__future__`, `_hashlib`, `_hmac`,
-  `_multiprocessing`, `_queue`, `abc`, `annotated_doc`, `annotated_types`, `annotationlib`, `anyio`, `array`,
+  `_multiprocessing`, `_queue`, `_socket`, `_thread`, `abc`, `annotated_doc`, `annotated_types`, `annotationlib`, `anyio`, `array`,
   `ast`, `asyncio`, `base64`, `binascii`, `click`, `codecs`, `collections`, `colorsys`, `concurrent`,
   `configparser`, `contextlib`, `contextvars`, `copy`, `copyreg`, `dataclasses`, `datetime`, `decimal`, `email`,
   `enum`, `errno`, `fastapi`, `fractions`, `functools`, `gettext`, `h11`, `hashlib`, `heapq`, `hmac`, `html`,
   `http`, `importlib`, `inspect`, `io`, `ipaddress`, `itertools`, `json`, `keyword`, `locale`, `logging`, `math`,
   `mimetypes`, `multiprocessing`, `operator`, `os`, `pathlib`, `pickle`, `platform`, `pydantic`, `pydantic_core`,
-  `queue`, `random`, `re`, `secrets`, `selectors`, `shlex`, `signal`, `socket`, `socketserver`, `ssl`,
+  `queue`, `random`, `re`, `reprlib`, `secrets`, `selectors`, `shlex`, `signal`, `socket`, `socketserver`, `ssl`,
   `starlette`, `stat`, `struct`, `tempfile`, `textwrap`, `threading`, `time`, `traceback`, `types`, `typing`,
   `typing_extensions`, `typing_inspection`, `urllib`, `uuid`, `uvicorn`, `weakref`, `zoneinfo`. The imports that
   importlib's bootstrap makes for itself are not judged either; code that runs with the bootstrap's globals passes

@@ -73,14 +73,16 @@ NAME = json.__name__
 """
 
 # What the daemon may import for itself: keep in step with the list in wiki/weaknesses.md.
+# The union over 3.11-3.14: which private companion of a listed module the daemon loads afresh depends on
+# what the interpreter already loaded at startup -- _thread on 3.11 and 3.12, _socket and reprlib on 3.13.
 FRAMEWORK_IMPORTS = frozenset("""
-    __future__ _hashlib _hmac _multiprocessing _queue abc annotated_doc annotated_types annotationlib anyio array
-    ast asyncio base64 binascii click codecs collections colorsys concurrent configparser contextlib contextvars
-    copy copyreg dataclasses datetime decimal email enum errno fastapi fractions functools gettext h11 hashlib
-    heapq hmac html http importlib inspect io ipaddress itertools json keyword locale logging math mimetypes
-    multiprocessing operator os pathlib pickle platform pydantic pydantic_core pysandboxes queue random re
-    secrets selectors shlex signal socket socketserver ssl starlette stat struct tempfile textwrap threading time
-    traceback types typing typing_extensions typing_inspection urllib uuid uvicorn weakref zoneinfo
+    __future__ _hashlib _hmac _multiprocessing _queue _socket _thread abc annotated_doc annotated_types
+    annotationlib anyio array ast asyncio base64 binascii click codecs collections colorsys concurrent configparser
+    contextlib contextvars copy copyreg dataclasses datetime decimal email enum errno fastapi fractions functools
+    gettext h11 hashlib heapq hmac html http importlib inspect io ipaddress itertools json keyword locale logging
+    math mimetypes multiprocessing operator os pathlib pickle platform pydantic pydantic_core pysandboxes queue
+    random re reprlib secrets selectors shlex signal socket socketserver ssl starlette stat struct tempfile textwrap
+    threading time traceback types typing typing_extensions typing_inspection urllib uuid uvicorn weakref zoneinfo
     """.split())
 
 DRIVER = """
