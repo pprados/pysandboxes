@@ -17,6 +17,7 @@ The tools name the rule themselves, which is why asserting on it here is not
 asserting on a generic error path.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -48,6 +49,9 @@ def sandboxed_server() -> Client:
                 "stdio",
             ],
             cwd=str(SAMPLE_ROOT),
+            # The stdio client passes only a few variables down: without this the profile's
+            # os-sandbox=${OS_SANDBOX:-subprocess} never sees the provider under test.
+            env={name: os.environ[name] for name in ("OS_SANDBOX",) if name in os.environ},
         )
     )
 
