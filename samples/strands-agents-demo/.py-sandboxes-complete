@@ -103,8 +103,6 @@ python-import=watchdog
 python-import=wrapt
 python-import=yaml
 
-expose-ro=/proc
-
 # Add rules (2026/10/07 at 16:50)
 # Standard Python
 python-import=_socket

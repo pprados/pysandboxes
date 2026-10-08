@@ -176,6 +176,19 @@ def test_generate_rules_skips_a_path_already_covered_by_a_broader_rule(tmp_path:
     assert rules == [f"expose-ro={parent}"]
 
 
+@pytest.mark.parametrize("path", ["/proc/stat", "/proc/sys/kernel/random/uuid", "/proc/self/status"])
+def test_generate_rules_writes_nothing_under_proc(path: str) -> None:
+    """psutil reads /proc/stat at import: widened to its directory, the rule would expose every
+    process's environ and cmdline."""
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(Path(path), False)})
+
+    assert rules == []
+
+
 # %% _ignore_matches
 
 

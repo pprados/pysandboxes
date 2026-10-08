@@ -408,6 +408,10 @@ def generate_rules(
     list_bin = list(follow_links_executable(Path(sys.executable), set()))
     for learn_rule in filter(lambda x: isinstance(x, LearnFileRule), learn):
         parent = learn_rule.path.absolute()
+        # A rule names a directory, and the directory of a file such as /proc/stat, which psutil reads at
+        # import, holds every process's environ and cmdline: learning writes nothing under /proc.
+        if parent.is_relative_to("/proc"):
+            continue
         for bin_path in list_bin:
             if parent.is_relative_to(bin_path):
                 break

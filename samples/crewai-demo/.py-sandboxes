@@ -158,7 +158,6 @@ python-import=typing_inspection
 python-import=urllib3
 python-import=yaml
 
-expose-ro=/proc
 expose-rw=~/.local/share/crewai-demo
 expose-rw=~/.local/share/crewai/credentials
 

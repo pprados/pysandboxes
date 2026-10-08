@@ -146,9 +146,6 @@ env=VIRTUAL_ENV=${VIRTUAL_ENV}
 # learning adds nothing for the repository root.
 expose-ro=../..
 
-# Add rules (2026/10/07 at 16:48)
-expose-ro=/proc
-
 # </learning_guard_files>
 
 #######################################################################################

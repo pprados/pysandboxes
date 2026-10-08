@@ -111,8 +111,6 @@ python-import=typing_extensions
 python-import=urllib3
 python-import=yaml
 
-expose-ro=/proc/sys/kernel/random
-
 # Add rules (2026/10/07 at 17:31)
 # Standard Python
 python-import=_socket, reprlib
