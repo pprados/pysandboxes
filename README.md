@@ -33,19 +33,19 @@ python-sb -m my_module
 
 The TestPyPI pre-release instructions above remain available for trying the current pre-release before the PyPI release. On the first run, learning mode records observed accesses in `.py-sandboxes`. Exercise representative application paths, then review and narrow the generated policy before relying on it: behavior that was not exercised cannot be learned. Subsequent runs apply the policy.
 
-[![Quick demo: learn a policy, then enforce it](samples/quick-demo/quick-demo.gif)](samples/quick-demo/)
+[![Quick demo: learn a policy, then enforce it](https://raw.githubusercontent.com/pprados/pysandboxes/master/samples/quick-demo/quick-demo.gif)](https://github.com/pprados/pysandboxes/tree/master/samples/quick-demo)
 
 This is complete mode: it launches the application under the sandbox. To isolate only selected functions, see [partial mode](#apply-the-sandbox-to-a-part-of-the-application-partial-mode).
 
-To understand the design, start with [the security model](#what-it-protects-against-and-what-it-does-not), then see [provider trade-offs](#os-sandbox-vs-py-sandbox), [test coverage](wiki/tests.md), and the [wiki index](wiki/Home.md).
+To understand the design, start with [the security model](#what-it-protects-against-and-what-it-does-not), then see [provider trade-offs](#os-sandbox-vs-py-sandbox), [test coverage](https://github.com/pprados/pysandboxes/wiki/tests), and the [wiki index](https://github.com/pprados/pysandboxes/wiki).
 
 # What it protects against, and what it does not
 
 **Py-Sandboxes** addresses one threat model: *your application, or code it runs, using more capabilities than intended*. It offers three layers with different roles and limits:
 
-- The **dynamic-code layer** (`eval-*`) parses, checks, rewrites, and runs source passed to `eval()`, `exec()`, or `compile()` under configured limits. It applies only to those entry points; see [the `eval-*` rules](wiki/eval.md) and the [security assessment](wiki/audit-eval-security.md).
-- The **Python layer** (`py-sandbox`) intercepts selected Python APIs according to a policy. It improves visibility and limits accidental or ordinary misuse, but it is not an isolation boundary against hostile code: native extensions, `ctypes`, and direct system calls can bypass Python-level interception. See [known weaknesses](wiki/weaknesses.md).
-- The **OS isolation layer** applies Linux kernel mechanisms through `landlock`, `bwrap`, `firejail`, or `unshare`. The `qemu` provider runs the sandboxed process in a virtual machine. These providers have different capabilities and prerequisites; see [the provider comparison](wiki/os-providers.md).
+- The **dynamic-code layer** (`eval-*`) parses, checks, rewrites, and runs source passed to `eval()`, `exec()`, or `compile()` under configured limits. It applies only to those entry points; see [the `eval-*` rules](https://github.com/pprados/pysandboxes/wiki/eval) and the [security assessment](https://github.com/pprados/pysandboxes/wiki/audit-eval-security).
+- The **Python layer** (`py-sandbox`) intercepts selected Python APIs according to a policy. It improves visibility and limits accidental or ordinary misuse, but it is not an isolation boundary against hostile code: native extensions, `ctypes`, and direct system calls can bypass Python-level interception. See [known weaknesses](https://github.com/pprados/pysandboxes/wiki/weaknesses).
+- The **OS isolation layer** applies Linux kernel mechanisms through `landlock`, `bwrap`, `firejail`, or `unshare`. The `qemu` provider runs the sandboxed process in a virtual machine. These providers have different capabilities and prerequisites; see [the provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers).
 
 Learning mode can provide an initial inventory of accesses observed through supported APIs. It does not prove that the policy is complete: unexercised paths and accesses outside those APIs may be absent. Review the policy and test the application in enforcement mode before deployment.
 
@@ -66,12 +66,12 @@ written in its `.py-sandboxes` file:
 - **Dependency updates**: a run without `--learn` turns a new behavior of a dependency into a visible violation.
 - **Untrusted tests in CI**, **audit of an unknown script** with `--learn`, **LLM-generated code**.
 
-See [use cases](wiki/use-cases.md) for each scenario, the
+See [use cases](https://github.com/pprados/pysandboxes/wiki/use-cases) for each scenario, the
 protection level it needs, and what the rule file does not show.
 
 # Platform support
 
-The Python layer, with the `subprocess` provider, is available on Linux, macOS, and Windows. Kernel-backed OS providers (`landlock`, `bwrap`, `firejail`, `unshare`, and `qemu`) are Linux technologies and are also available through WSL where their kernel and tooling requirements are met. On macOS and Windows, Py-Sandboxes does not provide that OS isolation layer. See [provider platform requirements](wiki/os-providers.md).
+The Python layer, with the `subprocess` provider, is available on Linux, macOS, and Windows. Kernel-backed OS providers (`landlock`, `bwrap`, `firejail`, `unshare`, and `qemu`) are Linux technologies and are also available through WSL where their kernel and tooling requirements are met. On macOS and Windows, Py-Sandboxes does not provide that OS isolation layer. See [provider platform requirements](https://github.com/pprados/pysandboxes/wiki/os-providers).
 
 ---
 
@@ -120,7 +120,7 @@ An appropriately configured policy can reduce these risks. The controls apply to
 - **Sensitive process execution**: registered APIs are denied by default and require explicit `python-api=` permission.
 - **Reverse shells and remote access**: supported network operations can be constrained by `net=` rules and the selected OS provider.
 - **Excessive permissions and token exposure**: file and environment rules limit access through supported APIs. They do not hide secrets already present in process memory from native code.
-- **Dynamically evaluated code**: `eval()`, `exec()` and `compile()` are checked against the declared sub-language in the [`eval-*` rules](wiki/eval.md).
+- **Dynamically evaluated code**: `eval()`, `exec()` and `compile()` are checked against the declared sub-language in the [`eval-*` rules](https://github.com/pprados/pysandboxes/wiki/eval).
 - **Denial of service in evaluated strings**: iteration, recursion, allocation, and timeout limits apply to the `eval-*` runtime; these are not general process resource limits.
 - **Unapproved syntax in evaluated strings**: `eval-syntax=` restricts allowed syntax constructs.
 
@@ -202,7 +202,7 @@ If *IPython* is installed, it's used. All the standard python parameters are ava
 
 The complete mode is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/).
 
-> For more information on using sandboxes with MCP, see [the MCP integration guide](wiki/mcp.md).
+> For more information on using sandboxes with MCP, see [the MCP integration guide](https://github.com/pprados/pysandboxes/wiki/mcp).
 
 The first launch can run in learning mode, as described in [Quick start](#quick-start). Exercise representative application paths, then review the resulting policy; an unobserved path or access outside supported APIs may not appear in the generated rules.
 
@@ -360,7 +360,7 @@ def my_function_in_sandbox(param):
 
 Once the sandbox is launched, upon invocation of this function, the component handles converting the call into a Pickle-formatted request, sending it to the sandbox, and waiting for the result or exception to be returned to the caller.
 
-> All parameters and the return type must be Pickle-compatible. By default the return value must be a value: primitive data and containers, paths, dates and time zones, decimals, fractions, UUIDs or IP addresses. Add `remote-result-mode=objects` to the rules to return other objects (see [the transport guard](wiki/transport-unpickle-guard.md)).
+> All parameters and the return type must be Pickle-compatible. By default the return value must be a value: primitive data and containers, paths, dates and time zones, decimals, fractions, UUIDs or IP addresses. Add `remote-result-mode=objects` to the rules to return other objects (see [the transport guard](https://github.com/pprados/pysandboxes/wiki/transport-unpickle-guard)).
 
 The sandbox receives the request, loads the corresponding module, finds the function, and invokes it. The response is then also converted into a Pickle-formatted response before being returned to the caller.
 
@@ -384,7 +384,7 @@ What are the security filters offered by **Py-Sandboxes**?
 
 Consult the [parameter file](https://github.com/pprados/pysandboxes/blob/master/pysandboxes/templates/py-sandboxes.template) generated during the first execution for more details.
 
-For a red-team view of these filters — attack by attack, what hostile code can and cannot reach once a profile is armed, which layer stops each attempt and what the layer does not claim to cover — see the [security assessment of the Python layer](wiki/audit-python-security.md).
+For a red-team view of these filters — attack by attack, what hostile code can and cannot reach once a profile is armed, which layer stops each attempt and what the layer does not claim to cover — see the [security assessment of the Python layer](https://github.com/pprados/pysandboxes/wiki/audit-python-security).
 
 ## Dynamically evaluated code
 
@@ -407,7 +407,7 @@ style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 style DynamicCode fill:#6e4a2c,stroke:#2f2617,stroke-width:4px,stroke-dasharray:6 4,color:#ffffff
 ```
 
-Every rule of the `eval-*` family is described key by key, with a valid and an invalid example for each, [here](wiki/eval.md). For a red-team view — attack by attack, what a hostile string can and cannot reach and which layer stops it — see the [security assessment of the `eval-*` guard](wiki/audit-eval-security.md).
+Every rule of the `eval-*` family is described key by key, with a valid and an invalid example for each, [here](https://github.com/pprados/pysandboxes/wiki/eval). For a red-team view — attack by attack, what a hostile string can and cannot reach and which layer stops it — see the [security assessment of the `eval-*` guard](https://github.com/pprados/pysandboxes/wiki/audit-eval-security).
 
 ---
 
@@ -419,16 +419,16 @@ The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
-The [provider comparison](wiki/os-providers.md) describes enforcement mechanisms, container and Kubernetes compatibility, and the threat models each combination addresses.
+The [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers) describes enforcement mechanisms, container and Kubernetes compatibility, and the threat models each combination addresses.
 
 ---
 
 ## Samples
 
-The [sample suite](wiki/samples.md) contains framework integrations for MCP and agent libraries, with worked examples and test instructions.
+The [sample suite](https://github.com/pprados/pysandboxes/wiki/samples) contains framework integrations for MCP and agent libraries, with worked examples and test instructions.
 
 ---
 
 # Documentation
 
-The [wiki index](wiki/Home.md) groups documentation by task: getting started, configuration, security model and audits, provider selection, integrations, test coverage, and samples. For the implementation, read [the architecture page](wiki/implementation.md); for reproducible security findings, start with the [Python-layer](wiki/audit-python-security.md) and [`eval-*`](wiki/audit-eval-security.md) assessments.
+The [wiki index](https://github.com/pprados/pysandboxes/wiki) groups documentation by task: getting started, configuration, security model and audits, provider selection, integrations, test coverage, and samples. For the implementation, read [the architecture page](https://github.com/pprados/pysandboxes/wiki/implementation); for reproducible security findings, start with the [Python-layer](https://github.com/pprados/pysandboxes/wiki/audit-python-security) and [`eval-*`](https://github.com/pprados/pysandboxes/wiki/audit-eval-security) assessments.
