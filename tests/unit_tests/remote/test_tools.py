@@ -12,7 +12,6 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes.remote.tools import (
     configure_logging_level,
     from_b85,
-    get_default_gateway_info,
     get_venv,
     return_level_parameter,
     suggest_package_installation,
@@ -138,47 +137,6 @@ class TestConfigureLoggingLevel:
 
         assert result == logging.NOTSET
         mock_logger.setLevel.assert_called_once_with(logging.NOTSET)
-
-
-class TestGetDefaultGatewayInfo:
-    """Test cases for get_default_gateway_info function."""
-
-    @patch("netifaces.gateways")
-    def test_get_default_gateway_info_ipv4(self, mock_gateways: Mock) -> None:
-        """Test getting IPv4 default gateway."""
-        mock_gateways.return_value = {"default": {2: ("192.168.1.1", "eth0", True)}}  # AF_INET = 2
-
-        with patch("netifaces.AF_INET", 2):
-            result = get_default_gateway_info()
-            assert result == ("192.168.1.1", "eth0", True)
-
-    @patch("netifaces.gateways")
-    def test_get_default_gateway_info_ipv6(self, mock_gateways: Mock) -> None:
-        """Test getting IPv6 default gateway when IPv4 not available."""
-        mock_gateways.return_value = {"default": {10: ("fe80::1", "eth0", True)}}  # AF_INET6 = 10
-
-        with patch("netifaces.AF_INET", 2):
-            with patch("netifaces.AF_INET6", 10):
-                result = get_default_gateway_info()
-                assert result == ("fe80::1", "eth0", True)
-
-    @patch("netifaces.gateways")
-    def test_get_default_gateway_info_no_gateway(self, mock_gateways: Mock) -> None:
-        """Test no default gateway returns None."""
-        mock_gateways.return_value = {"default": {}}
-
-        with patch("netifaces.AF_INET", 2):
-            with patch("netifaces.AF_INET6", 10):
-                result = get_default_gateway_info()
-                assert result is None
-
-    @patch("netifaces.gateways")
-    def test_get_default_gateway_info_key_error(self, mock_gateways: Mock) -> None:
-        """Test KeyError handling returns None."""
-        mock_gateways.return_value = {}
-
-        result = get_default_gateway_info()
-        assert result is None
 
 
 class TestSuggestPackageInstallation:

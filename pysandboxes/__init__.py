@@ -29,6 +29,8 @@ built-in exception the same failure would raise without a sandbox:
   the `eval-*` rules, or refused by a runtime guard
 - `ConfigSyntaxError`: a malformed configuration file
 - `SandBoxProtocolError`: a failed dialogue with the sandbox process, not the code it ran
+- `SandBoxBaseExceptionError`: the sandboxed function raised `SystemExit`, `KeyboardInterrupt`
+  or another `BaseException`, which is never re-raised as itself in the caller
 - `RestrictedUnpicklingError`: a result or exception from the sandbox that the transport
   refuses to deserialize
 
@@ -74,6 +76,7 @@ if TYPE_CHECKING:
         RulePermissionError,  # noqa: F401
         RuleSocketConnectionRefusedError,  # noqa: F401
         SandBoxError,  # noqa: F401
+        SandBoxBaseExceptionError,  # noqa: F401
         SandBoxProtocolError,  # noqa: F401
         sandbox_denials,  # noqa: F401
     )
@@ -87,6 +90,7 @@ _eval = {"guarded_eval"}
 _exception = {
     "SandBoxError",
     "SandBoxProtocolError",
+    "SandBoxBaseExceptionError",
     "sandbox_denials",
     "ConfigSyntaxError",
     "RuleFileNotFoundError",
@@ -115,6 +119,7 @@ __all__ = [
     "RuleModuleNotFoundError",
     "RuleApiPermissionError",
     "SandBoxProtocolError",
+    "SandBoxBaseExceptionError",
     "sandbox_denials",
     "guarded_eval",
     "EvalSyntaxRejected",

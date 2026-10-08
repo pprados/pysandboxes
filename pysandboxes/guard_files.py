@@ -49,9 +49,6 @@ from .sb_types import ConfigLine, ConfigLines
 from .tools import follow_links_executable
 from .tools import patch_factory as _f
 
-if io or os:
-    pass
-
 if TYPE_CHECKING:
     import pathlib
 
@@ -499,20 +496,9 @@ def _ignore_matches(name: str, pattern: str) -> bool:
     return fnmatch.fnmatch(name, pattern)
 
 
-def _apply_ignore_rule(
-    path: str | os.PathLike[str] | os.PathLike[bytes],
-) -> tuple[str | None, FilesRule | None]:
-    for rule in _rules:
-        if isinstance(rule, IgnoreRule):
-            assert rule.source is not None
-            if _ignore_matches(Path(str(path)).name, rule.source):
-                return None, rule
-    return str(path), None
-
-
 # Helper to resolve symlinks and apply rules
 def _apply_src_to_dest_rules(
-    path: str, accept_src: bool = False, accept_dest: bool = False
+    path: str,
 ) -> tuple[str | None, FilesRule | None]:
     """
     Applies the rules to a file path.
@@ -550,8 +536,6 @@ def _apply_dest_to_src_rules(
     path: str | os.PathLike[str] | _DirEntry,
     *,
     write: bool,
-    accept_src: bool = False,
-    accept_dest: bool = True,
 ) -> tuple[str | None, FilesRule | None]:
     """
     Change destination file, ask by the program, to the real source file.
@@ -903,7 +887,7 @@ def _wrap_os_stat(func: Callable[..., Any], *, write: bool) -> Callable[..., Any
             _check_dir_fd(cast(str, path), dir_fd, write=write)
             return func(path=path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
         if _check_alias.get():
-            remapped, rule = _apply_dest_to_src_rules(cast(str, path), write=write, accept_dest=_check_alias.get())
+            remapped, rule = _apply_dest_to_src_rules(cast(str, path), write=write)
         else:
             remapped, rule = str(path), None
         if rule:
@@ -915,36 +899,6 @@ def _wrap_os_stat(func: Callable[..., Any], *, write: bool) -> Callable[..., Any
             else:
                 _raise_access(str(path))
         return func(path=remapped, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
-
-    return wrapper
-
-
-def _wrap_os_path_samefile(func: Callable[..., Any]) -> Callable[..., Any]:
-    @guard_wraps(func)
-    def wrapper(
-        f1: str | bytes | os.PathLike[str] | os.PathLike[bytes],
-        f2: str | bytes | os.PathLike[str] | os.PathLike[bytes],
-    ) -> Any:
-        if isinstance(f1, int) or isinstance(f2, int):
-            return func(f1, f2)
-        if isinstance(f1, bytes):
-            f1 = os.fsdecode(f1)
-        if isinstance(f2, bytes):
-            f2 = os.fsdecode(f2)
-        f1 = cast(str, f1)
-        f2 = cast(str, f2)
-        # Detect call from posixpath
-        remapped_src, rule1 = _apply_dest_to_src_rules(f1, write=False)
-        if rule1:
-            _raise_ignore(f1, rule1)
-        remapped_dest = None
-        if remapped_src is not None:
-            remapped_dest, rule2 = _apply_dest_to_src_rules(f2, write=False)
-            if rule2:
-                _raise_ignore(f2, rule2)
-        if remapped_dest is None:
-            remapped_dest = f2
-        return func(str(remapped_src), str(remapped_dest))
 
     return wrapper
 
@@ -1011,7 +965,7 @@ def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
                     name = next(it)
                     if check_alias:
                         _ = _check_alias.set(True)
-                    remapped_filter, rule = _apply_src_to_dest_rules(str(name), accept_src=False, accept_dest=True)
+                    remapped_filter, rule = _apply_src_to_dest_rules(str(name))
                     if remapped_filter:
                         if not os.path.isabs(str(self)):
                             remapped_filter = remapped_filter[len(abs_remapper) + 1 :]
@@ -1171,7 +1125,7 @@ def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
         dir: str = func()
         new_dir = _dir_path(os.fsdecode(os.fspath(dir)))
 
-        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_src=True)
+        remapped, rule = _apply_src_to_dest_rules(new_dir)
         if remapped is None:
             if is_learning_mode():
                 # add_learning_rule(LearnFileRule(Path(new_dir), False))
@@ -1195,7 +1149,7 @@ def _wrap_os_getcwdb(func: Callable[..., Any]) -> Callable[..., Any]:
         dir: bytes = func()
         new_dir: str = _dir_path(os.fspath(dir.decode()))
 
-        remapped, rule = _apply_src_to_dest_rules(new_dir, accept_dest=True)
+        remapped, rule = _apply_src_to_dest_rules(new_dir)
         if remapped is None:
             if is_learning_mode():
                 # add_learning_rule(LearnFileRule(Path(new_dir), False))
@@ -1226,7 +1180,7 @@ def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]
         if path is None:
             path = "."
         path = cast(str, path)
-        if new_path_and_rule := _apply_dest_to_src_rules(path, write=False, accept_src=False, accept_dest=True):
+        if new_path_and_rule := _apply_dest_to_src_rules(path, write=False):
             remapped, rule = new_path_and_rule
             if rule:
                 _raise_ignore(path, rule)
@@ -1241,7 +1195,7 @@ def _wrap_os_listdir(func: Callable[..., list[str]]) -> Callable[..., list[str]]
                 filtered: list[str] = []
                 for entry in entries:
                     full_path = os.path.join(path, entry)
-                    remapped_file, _ = _apply_dest_to_src_rules(full_path, write=False, accept_dest=True)
+                    remapped_file, _ = _apply_dest_to_src_rules(full_path, write=False)
                     if remapped_file and remapped_file not in filtered:
                         filtered.append(entry)
                 return filtered
@@ -1321,7 +1275,7 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
         if dir_fd is not None:
             _check_dir_fd(dst, dir_fd, write=True)
             target = src if os.path.isabs(src) else os.path.join(os.path.dirname(_dir_fd_path(dst, dir_fd)), src)
-            checked_src, src_rule = _apply_dest_to_src_rules(target, write=False, accept_src=True)
+            checked_src, src_rule = _apply_dest_to_src_rules(target, write=False)
             if src_rule:
                 _raise_ignore(src, src_rule)
             if not checked_src and not is_learning_mode():
@@ -1343,7 +1297,7 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
         # exactly like an absolute one. A relative target resolves against
         # the link directory, not the current one.
         target = src if os.path.isabs(src) else os.path.join(os.path.dirname(remapped), src)
-        checked_src, src_rule = _apply_dest_to_src_rules(target, write=False, accept_src=True)
+        checked_src, src_rule = _apply_dest_to_src_rules(target, write=False)
         if src_rule:
             _raise_ignore(src, src_rule)
         if not checked_src:
@@ -1495,7 +1449,7 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
                 while True:
                     entry: os.DirEntry[str] = self.scanner.__next__()  # type: ignore
                     if _check_alias.get():
-                        dest_path, rule = _apply_src_to_dest_rules(entry.path, accept_src=False, accept_dest=True)
+                        dest_path, rule = _apply_src_to_dest_rules(entry.path)
                     else:
                         dest_path, rule = entry.path, None
                     if rule:
@@ -1636,7 +1590,6 @@ def _wrap_io_FileIO(func: Callable[..., Any]) -> Callable[..., Any]:
 def _wrap__io(module: ModuleType) -> ModuleType:
     if "io" in sys.modules:
         del sys.modules["io"]
-    import io
 
     assert io.open.__pysandbox__  # type: ignore [attr-defined]
     return io
@@ -1773,29 +1726,6 @@ _default_rules: dict[str, Callable[..., Any]] = {
 }
 
 
-def _wrap_pathlib_3_10(normal_accessor: Any) -> Callable[..., Any]:
-    # set to the patched version
-    normal_accessor.stat = os.stat
-    normal_accessor.open = io.open
-    normal_accessor.listdir = os.listdir
-    normal_accessor.scandir = os.scandir
-    normal_accessor.chmod = os.chmod
-    normal_accessor.mkdir = os.mkdir
-    normal_accessor.unlink = os.unlink
-    if hasattr(os, "link"):
-        normal_accessor.link = os.link
-    normal_accessor.rmdir = os.rmdir
-    normal_accessor.rename = os.rename
-    normal_accessor.replace = os.replace
-    if hasattr(os, "symlink"):
-        normal_accessor.symlink = os.symlink
-    if hasattr(os, "readlink"):
-        normal_accessor.readlink = os.readlink
-    normal_accessor.getcwd = os.getcwd
-    normal_accessor.realpath = os.path.realpath
-    return normal_accessor
-
-
 def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
     """Provide file system patching rules for guard activation.
 
@@ -1803,8 +1733,6 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
         Dictionary of file system module patches.
     """
     rules: dict[str, Callable[..., Any]] = dict(_default_rules)
-    if sys.version_info[:2] == (3, 10):
-        rules |= {"pathlib._normal_accessor": _f(_wrap_pathlib_3_10)}
     if sys.platform != "win32" and sys.platform != "linux":
         rules |= {
             "os.chflags": _f(_wrap_filename, write=True),

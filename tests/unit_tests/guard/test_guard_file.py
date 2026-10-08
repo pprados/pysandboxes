@@ -78,19 +78,19 @@ def test_apply_src_to_dest_rules() -> None:
     assert ignore_result[0] is None
     assert ignore_result[1] is not None
 
-    assert _apply_src_to_dest_rules(f"{cwd}", accept_dest=False) == (f"{cwd}", None)
-    assert _apply_src_to_dest_rules(f"{cwd}/", accept_dest=False) == (
+    assert _apply_src_to_dest_rules(f"{cwd}") == (f"{cwd}", None)
+    assert _apply_src_to_dest_rules(f"{cwd}/") == (
         os.path.abspath(cwd),
         None,
     )
-    assert _apply_src_to_dest_rules(f"{src_dir}", accept_src=True, accept_dest=False) == (f"{src_dir}", None)
+    assert _apply_src_to_dest_rules(f"{src_dir}") == (f"{src_dir}", None)
 
-    assert _apply_src_to_dest_rules(f"{dst_dir}/", accept_dest=False) == (
+    assert _apply_src_to_dest_rules(f"{dst_dir}/") == (
         os.path.abspath(dst_dir),
         None,
     )
 
-    refuse = _apply_src_to_dest_rules("/refuse.txt", accept_dest=False)
+    refuse = _apply_src_to_dest_rules("/refuse.txt")
     assert refuse == ("/refuse.txt", None)
 
 

@@ -62,7 +62,7 @@ make tests
 ### Security Model
 - **Default deny-all**, explicit whitelist via `.py-sandboxes` config files
 - **Multi-layer**: Python API patching + kernel-enforced OS boundary
-- **Import right ≠ call right**: `guard_api` registry = 121 sensitive fns, 8 categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`, `dynamic-code`, `deserialization`). Default deny; grant w/ `python-api=ALLOW:<category>|<function>`
+- **Import right ≠ call right**: `guard_api` registry = 123 sensitive fns, 8 categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`, `dynamic-code`, `deserialization`). Default deny; grant w/ `python-api=ALLOW:<category>|<function>`
 - **String code = own layer**: source → `eval()`/`exec()`/`compile()` → parsed, checked vs `eval-*` sub-language, rewritten, run under budget + timeout. Emptied `__builtins__` alone stops nothing
 - **Process isolation**: main app ↔ sandboxed child procs via SSE over local HTTP
 - **Learning mode**: auto rule gen from app behavior
@@ -125,7 +125,7 @@ Rules in `.py-sandboxes` files, whitelist-based:
 - No useless comments in generated code
 - Every new file → add:
 ```python
-# Copyright (c) 2026, Philippe Prados (pprados)
+# Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
 ```
 

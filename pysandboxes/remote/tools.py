@@ -160,39 +160,6 @@ def configure_logging_level(verbose_count: int) -> int:
     return log_level
 
 
-def get_default_gateway_info() -> tuple[str, str] | None:
-    """Get default network gateway information.
-
-    netifaces is imported lazily: its C extension can segfault on some minimal
-    VM/guest stacks; nothing in the daemon import path needs gateways at module load.
-
-    Returns:
-        Tuple of (gateway_ip, interface_name) or None if no gateway found.
-    """
-    import netifaces
-
-    gws: dict[Any, Any] = netifaces.gateways()
-
-    # Retrieve default IPv4 gateway
-    try:
-        if netifaces.AF_INET in gws["default"]:
-            # The structure for default gateway
-            # is (gateway_ip, interface_name, is_primary)
-            ipv4_gateway_data = gws["default"][netifaces.AF_INET]
-            return ipv4_gateway_data
-
-        # Retrieve default IPv6 gateway
-        if netifaces.AF_INET6 in gws["default"]:
-            # The structure for default gateway
-            # is (gateway_ip, interface_name, is_primary)
-            ipv6_gateway_data = gws["default"][netifaces.AF_INET6]
-            return ipv6_gateway_data
-    except KeyError:
-        # No default gateway found for the specified address family
-        pass
-    return None
-
-
 def suggest_package_installation(package_name: str) -> str:
     """Suggest package installation command based on detected OS.
 
@@ -435,15 +402,15 @@ _MAX_OPCODES = 5_000_000
 _MAX_MEMO = 2_000_000
 _MAX_MARK_DEPTH = 256
 
-# The payload travels as one SSE line, and aiohttp caps a line at
-# 8 * ClientSession(read_bufsize=...), i.e. 8 * 65536 = 512 KiB.
-# Measured end to end: a line of 524240 bytes crosses, 524242 raises
-# aiohttp LineTooLong -- so the real ceiling is the HTTP reader, not this
+# The payload travels as one SSE line, and aiohttp caps a line at the high
+# water mark of its StreamReader, 2 * ClientSession(read_bufsize=...)
+# (StreamReader.readuntil, max_size defaults to _high_water = 2 * limit),
+# i.e. 2 * 262144 = 512 KiB. So the real ceiling is the HTTP reader, not this
 # budget. It used to read 128 MiB, two orders of magnitude above what the
 # transport can carry, which made it a number that described nothing.
 #
 # Derivation, in the direction the wire imposes:
-#   line   <= 8 * read_bufsize                       = 524288
+#   line   <= 2 * read_bufsize                       = 524288
 #   line    = b85(pickle) + SSE/JSON envelope + captured stdout/stderr
 #   b85(n)  = ceil(n / 4) * 5                        = 1.25 * n
 #   n      <= (524288 - envelope) / 1.25             = 419392 with no output
@@ -453,13 +420,13 @@ _MAX_MARK_DEPTH = 256
 #
 # CPYTHON-COMPAT-ADJACENT: keyed to an aiohttp buffer size, not to CPython.
 # aiohttp moved its own read_bufsize default (65536 up to 3.13, 262144 from
-# 3.14), which would have quadrupled the budget without anyone deciding it, so
+# 3.14), which would have moved the ceiling without anyone deciding it, so
 # every ClientSession of the transport passes SSE_READ_BUFSIZE explicitly and
 # the line ceiling depends on this file alone. Raising SSE_READ_BUFSIZE is what
-# would let the budget grow; a test pins the relation so a change on either
-# side reddens CI.
-SSE_READ_BUFSIZE = 65536
-_SSE_LINE_LIMIT = 8 * SSE_READ_BUFSIZE
+# would let the budget grow; a test measures the ceiling on a real aiohttp
+# reader, so a change on either side reddens CI.
+SSE_READ_BUFSIZE = 262144
+_SSE_LINE_LIMIT = 2 * SSE_READ_BUFSIZE
 _B85_EXPANSION = 1.25
 _MAX_BYTES = 384 * 1024
 

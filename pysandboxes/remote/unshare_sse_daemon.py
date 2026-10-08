@@ -269,11 +269,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # Verify unshare availability
         if not which_command("unshare"):
             logger.error("unshare not found.")
-            sys.exit(1)
+            raise SandBoxError("unshare not found.")
 
         if not which_command("iptables"):
             logger.error("iptables not found.")
-            sys.exit(1)
+            raise SandBoxError("iptables not found.")
 
         # Check unprivileged user namespaces
         try:
@@ -621,37 +621,40 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         init_fn: SyncOrAsyncFunc | None,
     ) -> None:
         """Monitor subprocess and restart on failure."""
-        errorlevel = -1
         if self._process is None:
             return
         try:
             self._attempts = 0
-            while errorlevel != 0:
+            while True:
                 errorlevel = await self._process.wait()
                 if not self._accept_incoming:
                     break
-                if errorlevel != 0:
-                    logger.info("watchdog: subprocess exited with %s", errorlevel)
-                    if time.time() - self._last_reset > self._reset_delay:
-                        self._attempts = 0
-                    self._attempts += 1
-                    if self._attempts > self._max_attempts:
-                        logger.error("Too many daemon shutdowns")
-                        os._exit(-2)
-                    current_base_backoff: float = min(
-                        self._max_delay,
-                        self._base_delay * (self._factor ** (self._attempts - 1)),
-                    )
-                    wait_time: float = random.uniform(current_base_backoff * 0.9, current_base_backoff)
-                    logger.debug("watchdog sleep %i", wait_time)
-                    await asyncio.sleep(wait_time)
-                    self._last_reset = time.time()
-                    await self._launch(
-                        all_rules,
-                        envs=envs,
-                        log_level=log_level,
-                        init_fn=init_fn,
-                    )
+                # Any exit while accepting calls is a crash, 0 included: nobody would answer the next call.
+                logger.info("watchdog: subprocess exited with %s", errorlevel)
+                if time.time() - self._last_reset > self._reset_delay:
+                    self._attempts = 0
+                self._attempts += 1
+                if self._attempts > self._max_attempts:
+                    # Fail closed: ending the host application is not the sandbox's call to make.
+                    logger.error("Too many daemon shutdowns")
+                    self._failure = f"The sandbox process died {self._attempts} times; it is no longer restarted."
+                    self._accept_incoming = False
+                    self._is_started = False
+                    return
+                current_base_backoff: float = min(
+                    self._max_delay,
+                    self._base_delay * (self._factor ** (self._attempts - 1)),
+                )
+                wait_time: float = random.uniform(current_base_backoff * 0.9, current_base_backoff)
+                logger.debug("watchdog sleep %i", wait_time)
+                await asyncio.sleep(wait_time)
+                self._last_reset = time.time()
+                await self._launch(
+                    all_rules,
+                    envs=envs,
+                    log_level=log_level,
+                    init_fn=init_fn,
+                )
         except CancelledError:
             pass
 

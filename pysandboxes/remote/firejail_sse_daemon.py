@@ -28,6 +28,7 @@ from typing import Any, Iterator, MutableSet, cast
 
 from ..all_rules import AllRules
 from ..config import DEBUG
+from ..e import SandBoxError
 from ..guard_files import FSExposeRule, IgnoreRule
 from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
@@ -328,7 +329,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         if not which_command("firejail"):
             logger.error("firejail not found. Install it with:")
             logger.error(suggest_package_installation("firejail"))
-            sys.exit(1)
+            raise SandBoxError("firejail not found.")
         firejail_config = FIREJAIL_CONFIG
         restricted_network = True
         # True when the admin wrote 'restricted-network yes': tolerated, see below.
@@ -467,7 +468,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                     "Set 'restricted-network no' in %s " "to use firejail with networks rules.",
                     repr(str(firejail_config)),
                 )
-                sys.exit(1)
+                raise SandBoxError(f"Set 'restricted-network no' in {str(firejail_config)!r} to use network rules.")
 
             # An explicit 'restricted-network yes' is tolerated, as on a GitHub runner: the
             # jail then keeps the HOST network and the socket rules are enforced by the

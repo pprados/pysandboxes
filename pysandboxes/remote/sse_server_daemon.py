@@ -140,12 +140,14 @@ async def sandbox_daemon(
             return rc
 
         async_fut = asyncio.create_task(_async_set_sandbox_and_catch_stdio(), name="catch_stdio")
+        # A task ending without posting its outcome (cancelled) must not leave this loop waiting forever.
+        async_fut.add_done_callback(lambda _: stdio_queue.put_nowait({"done": True}))
         while stdio_queue:
             msg = await stdio_queue.get()
             if "result" in msg:
                 result = msg
                 break
-            elif "exception" in msg:
+            elif "exception" in msg or "done" in msg:
                 break
             elif "stdout" in msg:
                 yield _sse_msg(json.dumps(msg))

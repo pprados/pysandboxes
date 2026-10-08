@@ -1,6 +1,7 @@
 """Unit tests for sandboxes_api module."""
 
 import inspect
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -10,67 +11,10 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.sandboxes_api import (
-    _check__main__coroutine,
     run,
     sandbox,
     sandboxes,
 )
-
-
-class TestCheckMainCoroutine:
-    """Test cases for _check__main__coroutine function."""
-
-    def test_check_main_coroutine_with_main_module(self) -> None:
-        """Test that coroutine from __main__ raises ValueError."""
-        # Create a mock coroutine with __main__ module
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_module = Mock()
-        mock_module.__name__ = "__main__"
-
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
-            with pytest.raises(
-                ValueError,
-                match="The coroutine must be declared in a module " "other than __main__",
-            ):
-                _check__main__coroutine(mock_coroutine)
-
-    def test_check_main_coroutine_with_other_module(self) -> None:
-        """Test that coroutine from other module doesn't raise."""
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_module = Mock()
-        mock_module.__name__ = "test_module"
-
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
-            # Should not raise
-            _check__main__coroutine(mock_coroutine)
-
-    def test_check_main_coroutine_with_no_module(self) -> None:
-        """Test that coroutine with no module doesn't raise."""
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=None):
-            # Should not raise
-            _check__main__coroutine(mock_coroutine)
-
-    def test_check_main_coroutine_with_module_no_name(self) -> None:
-        """Test that coroutine with module without __name__ doesn't raise."""
-        mock_coroutine = Mock()
-        mock_frame = Mock()
-        mock_module = Mock(spec=[])  # Module without __name__ attribute
-
-        mock_coroutine.cr_frame = mock_frame
-
-        with patch("pysandboxes.sandboxes_api.inspect.getmodule", return_value=mock_module):
-            # Should not raise
-            _check__main__coroutine(mock_coroutine)
 
 
 class TestSandboxDecorator:
@@ -137,10 +81,9 @@ class TestRunFunction:
         # The run function doesn't actually validate input type in the
         # real implementation so we'll just test that it doesn't crash
         # with non-coroutine input
-        with patch("pysandboxes.sandboxes_api._check__main__coroutine"):
-            with patch("asyncio.run"):
-                with pytest.raises(ValueError):
-                    run("not a coroutine")  # type: ignore
+        with patch("asyncio.run"):
+            with pytest.raises(ValueError):
+                run("not a coroutine")  # type: ignore
 
 
 class TestSandboxesContextManager:
@@ -316,3 +259,51 @@ def test_a_locked_rule_file_without_api_rules_starts(mock_shutdown: Mock, mock_s
         pass
 
     mock_start.assert_called_once()
+
+
+_SIGTERM_INSIDE_SANDBOXES = """
+import os, signal
+from unittest.mock import AsyncMock, Mock, patch
+
+from pysandboxes.sandboxes_api import sandboxes
+
+shutdown = AsyncMock(side_effect=lambda *_: print("stopped", flush=True))
+with patch("pysandboxes._os_sandbox.start_daemon", return_value=Mock()):
+    with patch("pysandboxes.sandboxes_api.async_shutdown_daemon", shutdown):
+        with sandboxes(os_sandbox="subprocess"):
+            os.kill(os.getpid(), signal.SIGTERM)
+            print("survived", flush=True)
+"""
+
+
+def test_sigterm_inside_sandboxes_stops_the_daemon_then_kills_the_process() -> None:
+    result = subprocess.run([sys.executable, "-c", _SIGTERM_INSIDE_SANDBOXES], capture_output=True, text=True)
+
+    assert result.returncode == -signal.SIGTERM, result.stderr
+    assert "stopped" in result.stdout
+    assert "survived" not in result.stdout
+
+
+def test_a_failed_enter_restores_the_signal_handlers(tmp_path: Path) -> None:
+    config = tmp_path / ".py-sandboxes"
+    config.write_text("not a directive\n")
+    before = signal.getsignal(signal.SIGTERM)
+
+    with pytest.raises(ConfigSyntaxError):
+        with sandboxes(sandboxes_config=config):
+            pass
+
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
+@pytest.mark.asyncio
+async def test_a_failed_async_enter_restores_the_signal_handlers(tmp_path: Path) -> None:
+    config = tmp_path / ".py-sandboxes"
+    config.write_text("not a directive\n")
+    before = signal.getsignal(signal.SIGTERM)
+
+    with pytest.raises(ConfigSyntaxError):
+        async with sandboxes(sandboxes_config=config):
+            pass
+
+    assert signal.getsignal(signal.SIGTERM) is before

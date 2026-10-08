@@ -72,7 +72,7 @@ make tests
 ### Security Model
 - **Default deny-all** with explicit whitelisting via `.py-sandboxes` configuration files
 - **Multi-layered protection**: Python API patching + an OS boundary enforced by the kernel
-- **An import right is not a call right**: `guard_api` holds a registry of 121 sensitive functions in eight
+- **An import right is not a call right**: `guard_api` holds a registry of 123 sensitive functions in eight
   categories (`process-exec`, `process-control`, `privileges`, `threads`, `native`, `introspection`,
   `dynamic-code`, `deserialization`), denied by default and granted with `python-api=ALLOW:<category>|<function>`
 - **Code arriving as a string is a layer of its own**: a source reaching `eval()`, `exec()` or `compile()` is
@@ -149,7 +149,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - avoid useless comments when generating code
 - For all new file, add the comment:
 ```python
-# Copyright (c) 2026, Philippe Prados (pprados)
+# Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
 ```
 

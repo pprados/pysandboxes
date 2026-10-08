@@ -146,7 +146,7 @@ def test_find_spec_denies_a_module_outside_the_rules(import_rules: None) -> None
     """
     guard_import._rules = ("os",)
     # The deny branch raises before delegating, so it needs no real finder.
-    finder = guard_import.GuardFinder([])
+    finder = guard_import.GuardFinder()
 
     for module_name in ("ctypes", "subprocess", "socket"):
         with pytest.raises(RuleModuleNotFoundError):

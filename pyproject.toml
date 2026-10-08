@@ -34,7 +34,6 @@ dependencies = [
     "aiohttp (>=3.14.3)",            # the SSE daemons
     "aiohttp-sse-client (>=0.2.1)",  # remote/base_sse_daemon.py
     "typing_extensions (>=4.0.0)",   # override_compat.py
-    "netifaces (>=0.11.0)",          # remote/tools.py
     # "httpcore (>=1.0.9)",          # never imported; aiohttp is the client here
     # "python-dotenv (>=1.2.2)",     # only the samples read a .env, and they declare it themselves
     # "email-validator>=2.3.0",      # never imported
@@ -71,11 +70,25 @@ fallback-version = "0.0.0"
 # unpacked sdist, without .git, still report the version it was cut from.
 version-file = "pysandboxes/_version.py"
 
+[tool.hatch.build.targets.sdist]
+# An explicit list: a local build must never ship a stray or untracked file. The tests are left out, they need the
+# samples, the OS providers and the repository layout, so they cannot run from an unpacked sdist.
+include = [
+    "/pysandboxes",
+    "/README.md",
+    "/LICENSE.txt",
+    "/CHANGELOG.md",
+    "/SECURITY.md",
+    "/pyproject.toml",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["pysandboxes"]
 
 [tool.uv]
 package = true
+# `uv run` and `uv sync` install the test tools too: on a fresh environment `make unit-tests` failed to collect.
+default-groups = ["dev", "test"]
 exclude-newer = "7 days"
 #executable-path = "~/workspace.bda/langgraph-codeagent/.venv/bin/python-sb"
 #executable-name = "python-sb"
@@ -104,7 +117,6 @@ test = [
     "pytest-asyncio>=1.2.0",
     #    "pytest-cov>=4.0.0",
     "pytest-dotenv>=0.5.2",
-    "pytest-asyncio>=0.20.3",
     "pytest-mock>=3.10.0",
     "requests>=2.33.0",
     "types-requests>=2.28.11.5",

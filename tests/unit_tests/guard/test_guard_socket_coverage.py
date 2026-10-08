@@ -35,7 +35,6 @@ from pysandboxes.guard_socket import (
     _check_address_with_rules,
     _convert_ports_range,
     _flatten_ports,
-    _get_family,
     _is_loopback,
     activate_guard,
     generate_rules,
@@ -115,11 +114,6 @@ def test_flatten_ports_rejects_an_unsupported_element_type() -> None:
 
 def test_is_loopback_returns_false_for_a_name_that_is_not_an_ip() -> None:
     assert _is_loopback("not-an-ip-address") is False
-
-
-def test_get_family_returns_the_matching_socket_family() -> None:
-    assert _get_family("127.0.0.1") == socket.AF_INET
-    assert _get_family("::1") == socket.AF_INET6
 
 
 # %% pin_dns installation

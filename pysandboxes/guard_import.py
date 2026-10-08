@@ -347,6 +347,7 @@ class GuardLoader(Loader):
     """
 
     __slots__ = ("fullname", "original_spec", "original_loader", "original_module")
+    original_loader: Loader | None
 
     def __init__(
         self,
@@ -365,7 +366,12 @@ class GuardLoader(Loader):
         # Store the _original spec and loader
         self.fullname = fullname
         self.original_spec = original_spec
-        self.original_loader = original_spec.loader if original_spec else None
+        loader = original_spec.loader if original_spec else None
+        # A module loaded under an earlier activation keeps that activation's GuardLoader: wrapping it again
+        # grew one level per activation until delegating overflowed the stack.
+        while isinstance(loader, GuardLoader):
+            loader = loader.original_loader
+        self.original_loader = loader
         self.original_module = module
 
     def create_module(self, spec: ModuleSpec) -> ModuleType | None:
@@ -483,15 +489,7 @@ class GuardFinder(importlib.abc.MetaPathFinder):
         prepared = Prepared(name)
         return itertools.chain.from_iterable(path.search(prepared) for path in map(FastPath, paths))
 
-    __slots__ = ("_finders",)
-
-    def __init__(self, finders: list[MetaPathFinderProtocol]):
-        """Initialize the guard finder.
-
-        Args:
-            finders: List of meta path finders to delegate to.
-        """
-        self._finders = finders
+    __slots__ = ()
 
     """
     A custom finder that locates our special module.
@@ -655,7 +653,7 @@ def preimport_framework_module(name: str) -> ModuleType:
     return module
 
 
-_guard_finder: importlib.abc.MetaPathFinder = GuardFinder(sys.meta_path)
+_guard_finder: importlib.abc.MetaPathFinder = GuardFinder()
 
 _activated = False
 
@@ -849,7 +847,7 @@ def generate_rules(
             danger_result.add(learn_rule.name)
         elif learn_rule.name in std_modules or learn_rule.name[0] == "_":
             standard_result.add(learn_rule.name)
-        elif learn_rule.name in deprecated_modules or learn_rule.name[0] == "_":
+        elif learn_rule.name in deprecated_modules:
             deprecated_result.add(learn_rule.name)
         else:
             other_result.add(learn_rule.name)

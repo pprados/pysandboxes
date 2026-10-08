@@ -227,9 +227,6 @@ def _builtins_from(rules: EvalRules) -> dict[str, Any]:
     for name in dir(builtins):
         if rules.call.allows(name):
             allowed[name] = GUARDED_BUILTINS.get(name) or getattr(builtins, name)
-    for name in rules.call.allow:
-        if name not in allowed and hasattr(builtins, name):
-            allowed[name] = GUARDED_BUILTINS.get(name) or getattr(builtins, name)
     return allowed
 
 

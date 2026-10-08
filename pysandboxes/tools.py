@@ -18,7 +18,6 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Iterator,
     NamedTuple,
     cast,
 )
@@ -51,25 +50,30 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
         '8000'
     """
     pattern = re.compile(r"\$\{([^{}:-]+)(?::-([^{}]*))?\}")
+    # A substituted value is parked behind a marker, so a value holding "${...}" is never expanded again.
+    values: list[str] = []
+    marker = re.compile("(\\d+)")
+
+    def restore(text: str) -> str:
+        return marker.sub(lambda m: values[int(m.group(1))], text)
 
     def replace(match: re.Match[str]) -> str:
-        var_name = match.group(1)
-        default_value = match.group(2)
+        var_name = restore(match.group(1))
+        default_value = restore(match.group(2) or "")
+        values.append(envs.get(var_name, default_value))
+        return f"{len(values) - 1}"
 
-        while "${" in var_name:
-            var_name = resolve_env_variables(var_name, envs)
-        if default_value is not None:
-            while "${" in default_value:
-                default_value = resolve_env_variables(default_value, envs)
-
-        if default_value is None:
-            default_value = ""
-        value = envs.get(var_name, default_value)
-        return value
-
-    while re.search(r"\${.*}", s):
-        s = pattern.sub(replace, s)
-    return s
+    while True:
+        resolved = pattern.sub(replace, s)
+        if resolved == s:
+            break
+        s = resolved
+    invalid = re.search(r"\$\{[^}]*\}", s)
+    if invalid:
+        raise ValueError(
+            f"Invalid variable reference {restore(invalid.group(0))!r}, use ${{NAME}} or ${{NAME:-default}}"
+        )
+    return restore(s)
 
 
 def substitute_env_vars(lines: list[str], env_vars: Environ | Envs) -> list[str]:
@@ -95,7 +99,16 @@ def substitute_config_env_vars(lines: ConfigLines, env_vars: Environ) -> ConfigL
     Returns:
         Configuration lines with environment variables resolved.
     """
-    return [ConfigLine(resolve_env_variables(line, env_vars), path, ln) for line, path, ln in lines]
+    resolved: ConfigLines = []
+    for line in lines:
+        try:
+            resolved.append(ConfigLine(resolve_env_variables(line.rule, env_vars), line.path, line.ln))
+        except ValueError as e:
+            from .e import ConfigSyntaxError
+            from .main_logger import format_ruleref
+
+            raise ConfigSyntaxError("Syntax error in config files.", [f"{format_ruleref(line)}: {e}"]) from None
+    return resolved
 
 
 def remove_config_comments(config: ConfigLines) -> ConfigLines:
@@ -187,35 +200,6 @@ def _remove_comment(line: str) -> str:
     return "".join(result).rstrip()
 
 
-def _walk_to_base(path: str, base: str) -> Iterator[str]:
-    """Yield directories starting from given directory up to base.
-
-    Args:
-        path: Starting directory path.
-        base: Base directory to stop at.
-
-    Yields:
-        Directory paths from starting directory up to base.
-
-    Raises:
-        IOError: If starting path is not found.
-    """
-    if not os.path.exists(path):
-        raise IOError("Starting path not found")
-
-    if os.path.isfile(path):
-        path = os.path.dirname(path)
-
-    last_dir = None
-    current_dir = os.path.abspath(path)
-    while last_dir != current_dir:
-        yield current_dir
-        if current_dir == base:
-            break
-        parent_dir = os.path.abspath(os.path.join(current_dir, os.path.pardir))
-        last_dir, current_dir = current_dir, parent_dir
-
-
 # %% -----------------------
 
 
@@ -241,7 +225,7 @@ def set_is_in_sandbox(value: bool) -> None:
 
 
 def find_config_for_module(module: str, config_name: str) -> Path | None:
-    import importlib
+    import importlib.util
 
     # The importlib.resources.files() approach requires importing the file. We don't want to do that when
     # invoking it via python-sb. It's too soon. The alternative is to search for the file itself.

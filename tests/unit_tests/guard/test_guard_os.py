@@ -6,7 +6,7 @@ from typing import Dict
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleFileNotFoundError, RulePermissionError
+from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_denials
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -113,8 +113,10 @@ def test_os_xattr(files: Dict[str, Path]) -> None:  # noqa: F811
     with pytest.raises(RuleFileNotFoundError):
         os.getxattr(files["ignore"], "user.comment")
 
-    with pytest.raises(OSError):
+    # Exposed directory without the attribute: the OS's ENODATA passes through, no rule is involved.
+    with pytest.raises(OSError) as missing:
         os.getxattr(files["bind_src"], "user.comment")
+    assert sandbox_denials(missing.value) == []
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows readlink returns \\\\?\\ paths")
@@ -150,8 +152,16 @@ def test_os_link_symlink_and_readlink(files: Dict[str, Path]) -> None:  # noqa: 
     assert os.path.exists(files["new_link_to_bind"])
     os.unlink(files["new_link_to_bind"])
 
-    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
+    # A missing source is the OS's answer, not a refusal.
+    with pytest.raises(FileNotFoundError) as missing:
         os.link(files["bind_src"] / "toto", files["new_link"])
+    assert sandbox_denials(missing.value) == []
+
+    # An ignored source exists: only the guard can refuse the link.
+    with pytest.raises(RuleFileNotFoundError) as caught:
+        os.link(files["ignore"], files["new_link"])
+    assert [str(files["ignore"]) in d and "ignore=*.log" in d for d in sandbox_denials(caught.value)] == [True]
+    assert not files["new_link"].exists()
 
     os.symlink(files["visible"], files["new_link"])
     assert files["new_link"].exists()
@@ -230,31 +240,40 @@ def test_os_mkdir_removedirs_and_rmdir(files: Dict[str, Path]) -> None:  # noqa:
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
+    assert d.is_dir()
     os.rmdir(d)
+    assert not d.exists()
 
     d = files["bind_dest"] / "dir_to_remove"
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
+    assert d.is_dir()
     os.rmdir(d)
+    assert not d.exists()
 
     os.mkdir(files["bind_src"] / "dir_to_remove")
+    assert (files["bind_src"] / "dir_to_remove").is_dir()
     os.rmdir(files["bind_src"] / "dir_to_remove")
+    assert not (files["bind_src"] / "dir_to_remove").exists()
 
     d = files["path"] / "dir_to_remove"
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
     os.removedirs(files["path"] / "dir_to_remove")
+    assert not d.exists()
 
     d = files["bind_dest"] / "dir_to_remove"
     if d.exists():
         shutil.rmtree(d)
     os.mkdir(d)
     os.removedirs(files["bind_dest"] / "dir_to_remove")
+    assert not d.exists()
 
     os.mkdir(files["bind_src"] / "dir_to_remove")
     os.removedirs(files["bind_src"] / "dir_to_remove")
+    assert not (files["bind_src"] / "dir_to_remove").exists()
 
 
 def test_os_mkdir_removedirs_and_rmdir_refused(
@@ -273,7 +292,9 @@ def test_os_mkdir_removedirs_and_rmdir_refused(
     os.rmdir(files["bind_dest"] / "dir_to_remove")
 
     os.mkdir(files["bind_src"] / "dir_to_remove")
+    assert (files["bind_src"] / "dir_to_remove").is_dir()
     os.rmdir(files["bind_src"] / "dir_to_remove")
+    assert not (files["bind_src"] / "dir_to_remove").exists()
 
     # The name says "refused", so something must be: files["path"] is exposed
     # by no rule here.
@@ -329,8 +350,10 @@ def test_os_rename(files: Dict[str, Path]) -> None:  # noqa: F811
     os.rename(files["bind_to_rename"], files["new_bind_rename"])
     os.unlink(files["new_bind_rename"])
 
-    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
+    # A missing source is the OS's answer, not a refusal.
+    with pytest.raises(FileNotFoundError) as missing:
         os.rename(files["bind_src"] / "toto", files["visible"])
+    assert sandbox_denials(missing.value) == []
 
     with pytest.raises(RuleFileNotFoundError):
         os.rename(files["ignore"], str(files["ignore"]) + "-back")
@@ -504,11 +527,13 @@ def test_os_open_readwrite(files: Dict[str, Path]) -> None:  # noqa: F811
     fd = -1
     try:
         fd = os.open(files["visible"], os.O_RDWR)
+        assert os.read(fd, 16) == b"Visible"
     finally:
         if fd != -1:
             os.close(fd)
     try:
         fd = os.open(files["bind_dest"], os.O_RDONLY)
+        assert stat.S_ISDIR(os.fstat(fd).st_mode)
     finally:
         if fd != -1:
             os.close(fd)
@@ -592,9 +617,11 @@ def test_os_access_read_only(files: Dict[str, Path]) -> None:  # noqa: F811
     assert os.access(files["bound_file"], os.R_OK | os.W_OK)
     assert os.access(files["bind_dest"], os.R_OK | os.W_OK)
     assert os.access(files["bind_src"], os.R_OK)
-    with pytest.raises((PermissionError, RulePermissionError)):
+    with pytest.raises(RulePermissionError) as caught:
         with open(files["bound_file"], "a", encoding="utf-8") as f:
             f.write("x")
+    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert files["bound_file"].read_text() == "Content"
 
 
 @pytest.mark.skipif(
@@ -636,6 +663,7 @@ def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:  # noqa: F811
     mode = os.stat(files["path"]).st_mode
     os.chmod(files["path"], mode | stat.S_IREAD | stat.S_IWRITE)
     os.chmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
+    assert stat.S_IMODE(os.stat(files["bound_file"]).st_mode) == stat.S_IMODE(mode | stat.S_IREAD | stat.S_IWRITE)
     os.chmod(files["bind_dest"], mode | stat.S_IREAD | stat.S_IWRITE)
     os.chmod(files["bind_src"], mode | stat.S_IREAD | stat.S_IWRITE)
 
@@ -923,13 +951,19 @@ def test_os_makedirs_and_removedirs(files: Dict[str, Path]) -> None:  # noqa: F8
     import os
 
     os.makedirs(files["path"] / "dir_to_remove" / "inner")
+    assert (files["path"] / "dir_to_remove" / "inner").is_dir()
     os.removedirs(files["path"] / "dir_to_remove" / "inner")
+    assert not (files["path"] / "dir_to_remove").exists()
 
     os.makedirs(files["bind_dest"] / "dir_to_remove" / "inner")
+    assert (files["bind_dest"] / "dir_to_remove" / "inner").is_dir()
     os.removedirs(files["bind_dest"] / "dir_to_remove" / "inner")
+    assert not (files["bind_dest"] / "dir_to_remove").exists()
 
     os.makedirs(files["bind_src"] / "dir_to_remove" / "inner")
+    assert (files["bind_src"] / "dir_to_remove" / "inner").is_dir()
     os.removedirs(files["bind_src"] / "dir_to_remove" / "inner")
+    assert not (files["bind_src"] / "dir_to_remove").exists()
 
 
 def test_os_renames(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -947,6 +981,8 @@ def test_os_renames(files: Dict[str, Path]) -> None:  # noqa: F811
     with io.open(files["to_rename"], "w") as f:
         f.write("To rename")
     os.renames(files["to_rename"], files["new_rename"])
+    assert not files["to_rename"].exists()
+    assert files["new_rename"].read_text() == "To rename"
     os.unlink(files["new_rename"])
 
 

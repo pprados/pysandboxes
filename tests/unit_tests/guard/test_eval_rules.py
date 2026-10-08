@@ -263,6 +263,17 @@ def test_deny_wins_from_any_position() -> None:
     assert not after[""].call.allows("range")
 
 
+def test_a_denied_builtin_is_not_in_the_evaluated_code_builtins() -> None:
+    """DENY must win in the namespace the code gets, not only in `allows()`: a second pass once put `range` back."""
+    from pysandboxes.guard_eval import _builtins_from
+
+    profiles, _ = _parse("eval-call=len, range", "eval-call=DENY:range")
+    builtins_given = _builtins_from(profiles[""])
+
+    assert "len" in builtins_given
+    assert "range" not in builtins_given
+
+
 def test_a_pattern_grants_every_matching_name() -> None:
     profiles, errors = _parse("eval-attribute=get*, is*")
     assert not errors

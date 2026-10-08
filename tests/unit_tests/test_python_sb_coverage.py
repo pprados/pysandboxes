@@ -9,6 +9,7 @@ providers) and its environment-building logic directly, with the sandbox launche
 the OS provider it drives replaced by fakes so no real sandbox is ever started.
 """
 
+import importlib.util
 import logging
 import sys
 import types
@@ -29,7 +30,7 @@ from pysandboxes.sb_types import ConfigLine, Envs
 
 @pytest.fixture(autouse=True)
 def _isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """``main()`` probes ``~/.ipython``; pin HOME (and Windows' USERPROFILE) so it is deterministic."""
+    """``main()`` must never grant ``~/.ipython``; pin HOME (and Windows' USERPROFILE) so it is deterministic."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
 
@@ -232,15 +233,97 @@ class TestMainEarlyExits:
         assert captured["extra_rules"]["expose-ro"] == {"/x"}
         assert captured["extra_rules"]["env"] == {"TERM=${TERM}"}
 
-    def test_ipython_dir_adds_an_expose_rw_rule(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize(
+        "python_parsed_args, python_cmd",
+        [([], []), (["-i"], ["-c", "print(1)"])],
+        ids=["repl", "inspect-after-command"],
+    )
+    def test_interactive_ipython_gets_a_private_profile_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, python_parsed_args: list[str], python_cmd: list[str]
+    ) -> None:
         # A stub module, not a reliance on IPython actually being installed in this venv.
+        monkeypatch.setitem(sys.modules, "IPython", types.ModuleType("IPython"))
+        (tmp_path / ".ipython").mkdir()
+        _patch_cmd_line(
+            monkeypatch,
+            python_parsed_args=python_parsed_args,
+            sandboxes_args=[],
+            python_cmd=python_cmd,
+            config_path=_config_path(tmp_path),
+        )
+        captured: dict[str, Any] = {}
+
+        def _stop(config_path: Path, *, envs: Any, **extra_rules: Any) -> AllRules:
+            if "expose-rw" not in extra_rules:  # The first load, which finds no learn=false lock
+                return EmptyRules
+            captured["extra_rules"] = extra_rules
+            (ipython_dir,) = extra_rules["expose-rw"]
+            captured["existed_during_run"] = Path(ipython_dir).is_dir()
+            raise ConfigSyntaxError("stop-here", [])
+
+        monkeypatch.setattr(python_sb, "load_and_parse_config", _stop)
+
+        with pytest.raises(SystemExit):
+            python_sb.main()
+
+        (ipython_dir,) = captured["extra_rules"]["expose-rw"]
+        assert "~/.ipython" not in captured["extra_rules"]["expose-rw"]
+        assert not Path(ipython_dir).is_relative_to(tmp_path)
+        assert f"IPYTHONDIR={ipython_dir}" in captured["extra_rules"]["env"]
+        assert captured["existed_during_run"]
+        assert not Path(ipython_dir).exists(), "the private IPython dir must be removed at exit"
+
+    @pytest.mark.parametrize("names_its_ipython_dir", [False, True], ids=["standard-repl", "profile-names-its-dir"])
+    def test_a_learn_false_lock_withholds_the_private_ipython_dir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        names_its_ipython_dir: bool,
+    ) -> None:
+        """Like a command-line rule, a locked profile gets no private profile directory: the standard REPL runs."""
+        monkeypatch.setitem(sys.modules, "IPython", types.ModuleType("IPython"))
+        _patch_cmd_line(
+            monkeypatch, python_parsed_args=[], sandboxes_args=[], python_cmd=[], config_path=_config_path(tmp_path)
+        )
+        config = [ConfigLine("learn=false", Path("p.conf"), 1)]
+        if names_its_ipython_dir:
+            config.append(ConfigLine(f"env=IPYTHONDIR={tmp_path}", Path("p.conf"), 2))
+        loads: list[dict[str, Any]] = []
+
+        def _load(config_path: Path, *, envs: Any, **extra_rules: Any) -> AllRules:
+            loads.append(extra_rules)
+            return EmptyRules._replace(config=config)
+
+        class _Started(Exception):
+            pass
+
+        def _no_start(*args: Any, **kwargs: Any) -> Any:
+            raise _Started
+
+        monkeypatch.setattr(python_sb, "load_and_parse_config", _load)
+        monkeypatch.setattr(python_sb, "providers_factory", {EmptyRules.os_sandbox: _no_start})
+
+        with pytest.raises(_Started):  # The shell starts either way: IPython, or the standard REPL as fallback
+            python_sb.main()
+        warning = "the standard Python REPL runs instead"
+        assert (warning in capsys.readouterr().err) is not names_its_ipython_dir
+        assert len(loads) == 1 and "expose-rw" not in loads[0]
+
+    @pytest.mark.parametrize(
+        "python_cmd", [["-c", "print(1)"], ["-m", "my_module"], ["script.py"]], ids=["command", "module", "script"]
+    )
+    def test_non_interactive_run_gets_no_ipython_grant(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, python_cmd: list[str]
+    ) -> None:
+        """Regression: a script once got ``expose-rw=~/.ipython``, so it could plant a startup file."""
         monkeypatch.setitem(sys.modules, "IPython", types.ModuleType("IPython"))
         (tmp_path / ".ipython").mkdir()
         _patch_cmd_line(
             monkeypatch,
             python_parsed_args=[],
             sandboxes_args=[],
-            python_cmd=["-c", "print(1)"],
+            python_cmd=python_cmd,
             config_path=_config_path(tmp_path),
         )
         captured: dict[str, Any] = {}
@@ -254,7 +337,8 @@ class TestMainEarlyExits:
         with pytest.raises(SystemExit):
             python_sb.main()
 
-        assert "~/.ipython" in captured["extra_rules"]["expose-rw"]
+        assert "expose-rw" not in captured["extra_rules"]
+        assert captured["extra_rules"]["env"] == {"TERM=${TERM}"}
 
     def test_ipython_import_error_is_silently_ignored(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         (tmp_path / ".ipython").mkdir()
@@ -263,7 +347,7 @@ class TestMainEarlyExits:
             monkeypatch,
             python_parsed_args=[],
             sandboxes_args=[],
-            python_cmd=["-c", "print(1)"],
+            python_cmd=[],
             config_path=_config_path(tmp_path),
         )
         captured: dict[str, Any] = {}
@@ -649,3 +733,15 @@ class TestMainVMBranch:
 
         assert len(seen_paths) == 1
         assert seen_paths[0].name == GUEST_STDERR_FILE
+
+
+def test_python_sb_wrapper_propagates_the_exit_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ``python-sb`` wrapper package must hand back the code ``main()`` returns, not exit 0."""
+    wrapper = Path(__file__).parents[2] / "python-sb" / "python_sb" / "__init__.py"
+    spec = importlib.util.spec_from_file_location("_python_sb_wrapper_under_test", wrapper)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(python_sb, "main", lambda: 3)
+
+    assert module.main() == 3

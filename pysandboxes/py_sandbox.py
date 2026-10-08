@@ -62,14 +62,13 @@ def _search_module_config(config_path: Path | None) -> Path:
     caller_modules = frame.f_globals.get("__name__", "__main__").split(".")
     resource_config: Path | None = None
     if caller_modules[0] != "__main__":
-        pos = 1
-        while True:
+        for pos in range(1, len(caller_modules) + 1):
             try:
-                resource_path = files(".".join(caller_modules[0:pos]))
-                resource_config = Path(resource_path.name) / config_path
+                resource_path = files(".".join(caller_modules[0:pos])) / str(config_path)
+                resource_config = Path(str(resource_path))
                 break
-            except TypeError:  # For python 3.10
-                pos += 1
+            except TypeError:  # A plain module, not a package
+                pass
     if resource_config and resource_config.exists():
         config_path = resource_config
         logger.info("Use the resource %s from the caller module", config_path)

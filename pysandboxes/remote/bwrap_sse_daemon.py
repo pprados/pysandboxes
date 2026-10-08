@@ -294,7 +294,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
                     "Install it or use bwrap.share-net=yes to keep host network.",
                     tool,
                 )
-                raise SystemExit(1)
+                raise SandBoxError(f"{tool} not found, required for bwrap network filtering.")
         self._slirp_shutdown_event.clear()
         slirp_pipe_r, slirp_pipe_w = os.pipe()
         fd, api_socket = tempfile.mkstemp()
@@ -428,7 +428,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         if bwrap_cmd is None:
             logger.error("bwrap not found. Install it with:")
             logger.error(suggest_package_installation("bubblewrap"))
-            sys.exit(1)
+            raise SandBoxError("bwrap not found.")
 
         args: Args = [str(bwrap_cmd)]
 

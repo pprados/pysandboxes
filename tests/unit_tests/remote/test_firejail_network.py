@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from pysandboxes.all_rules import AllRules, EmptyRules
+from pysandboxes.e import SandBoxError
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.remote import firejail_sse_daemon
@@ -52,7 +53,7 @@ def test_explicit_net_param_is_kept(tmp_path: Path) -> None:
 
 
 def test_socket_rule_without_restricted_network_line_refuses_to_start(tmp_path: Path) -> None:
-    with pytest.raises(SystemExit):
+    with pytest.raises(SandBoxError):
         _firejail_args(_with_socket_rule(), tmp_path, None)
 
 

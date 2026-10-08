@@ -79,18 +79,29 @@ def parse_python_cmd_line(
         "--check-hash-based-pycs",
     ]
 
-    # Split args before '--', '-c', '-m'
+    # Split where CPython stops reading its options: '--', the first argument that is not an option (the script),
+    # or a -c/-m switch, possibly glued to its value (-mjson.tool) or grouped after flags (-Im json.tool).
     split_pos = -1
-    for i, arg in enumerate(args):
-        if arg in ("--", "-c", "-m"):
+    i = 0
+    while i < len(args) and split_pos == -1:
+        arg = args[i]
+        if arg == "--" or not arg.startswith("-"):
             split_pos = i
-            break
-    if split_pos == -1:
-        # split with the first *.py parameter
-        for i, arg in enumerate(args):
-            if arg.endswith(".py"):
-                split_pos = i
-                break
+        elif arg.startswith("--"):
+            i += 2 if arg == "--pysandboxes-config" else 1
+        else:
+            for j, flag in enumerate(arg[1:], start=1):
+                if flag in "cm":
+                    flags, value = arg[:j], arg[j + 1 :]
+                    head = [flags] if flags != "-" else []
+                    args = args[:i] + head + [f"-{flag}"] + ([value] if value else []) + args[i + 1 :]
+                    split_pos = i + len(head)
+                    break
+                if flag in "WX":
+                    if j == len(arg) - 1:
+                        i += 1  # The value is the next argument
+                    break
+            i += 1
 
     python_run_args = []
     if split_pos != -1:
@@ -115,6 +126,9 @@ def parse_python_cmd_line(
             pysandboxes_config = Path(pysandboxes_config_p)
             remove_index.append(i)
         if arg == "--pysandboxes-config":
+            if i + 1 >= len(args):
+                print("python-sb: error: argument --pysandboxes-config: expected one argument", file=sys.stderr)
+                raise SystemExit(2)
             # Accept full name or relative name of the module
             pysandboxes_config_p = args[i + 1]
             pysandboxes_config = Path(pysandboxes_config_p)

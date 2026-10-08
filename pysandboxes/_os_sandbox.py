@@ -42,7 +42,6 @@ _ANY_OS = frozenset({"linux", "darwin", "win32"})
 # the provider, whose module may not even import elsewhere (``fcntl`` does not exist on Windows).
 # A tag is a claim: the CI job of that OS must run the provider suites before a value is added.
 _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
-    "_task": ("remote.task_daemon", "TaskDaemon", _ANY_OS),
     "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon", _ANY_OS),
     "none": ("remote.none_daemon", "NoneDaemon", _ANY_OS),
     "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon", _ANY_OS),
@@ -266,9 +265,9 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
     async with _async_start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when daemon_shutdown")
-            _startup_counter -= 1
-            if _startup_counter < 0:
+            if _startup_counter <= 0:
                 raise ValueError("Daemon daemon_shutdown more times than started")
+            _startup_counter -= 1
             return
 
         if _startup_counter > 1:
@@ -417,9 +416,9 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
     with _start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when daemon_shutdown")
-            _startup_counter -= 1
-            if _startup_counter < 0:
+            if _startup_counter <= 0:
                 raise ValueError("Daemon daemon_shutdown more times than started")
+            _startup_counter -= 1
             return
         loop = get_sandbox_loop()
         stop_event = threading.Event()

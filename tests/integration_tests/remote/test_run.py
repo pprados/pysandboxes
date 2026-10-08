@@ -22,8 +22,9 @@ def test_run() -> None:
 
 
 def test_run_and_async_sanboxes() -> None:
-    # An async method, call a async method with sandboxes resource manager
-    pysandboxes.run(async_sanboxes(config_path), sandboxes_config=config_path)
+    # An async method, call a async method with sandboxes resource manager.
+    # `async_sanboxes` returns nothing, so `run()` must hand back exactly that.
+    assert pysandboxes.run(async_sanboxes(config_path), sandboxes_config=config_path) is None
 
 
 def test_run_and_sync_sanboxes() -> None:

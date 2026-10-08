@@ -923,20 +923,6 @@ def set_pin_dns(dns: ImmutableDict[str, tuple[AddrInfoType, ...]]) -> None:
 
 
 # Not used
-def _get_family(ip: str) -> int:
-    ip_object = ip_address(ip)
-    # Annotated, not inferred: the first branch would otherwise fix the variable
-    # as AddressFamily and the 0 fallback would not fit it.
-    family: int
-    if ip_object.version == 4:
-        family = socket.AF_INET
-    elif ip_object.version == 6:
-        family = socket.AF_INET6
-    else:
-        family = 0
-    return family
-
-
 def _refuse_a_name_no_rule_can_allow(name: str) -> None:
     """Refuse, before any DNS query, a name that no ALLOW rule could reach.
 

@@ -91,10 +91,11 @@ class WrapperIO(io.TextIOBase):
         Args:
             new_textio: The new stream to be used for the current context.
         """
+        # Each call runs in its own task, hence its own context: set it every time, keep the first original stream.
         if not self._old:
             self._old = self._context.get()
-            self._context.set(new_textio)
             assert not isinstance(self._old, WrapperIO)
+        self._context.set(new_textio)
 
     def __getattr__(self, name: str) -> Any:
         # Called only if attribute not found the usual way
@@ -133,29 +134,6 @@ class WrapperIO(io.TextIOBase):
 
 sys.stdout = WrapperIO(contextvars.ContextVar("current_stdout", default=sys.stdout))
 sys.stderr = WrapperIO(contextvars.ContextVar("current_stderr", default=sys.stderr))
-
-
-def catch_stdio(
-    queue: TQueue | None,
-    fn: Callable,
-    kwargs: dict[str, Any],
-    *args: Any,
-) -> dict[str, Any]:
-    """
-    Catches stdout and stderr for a synchronous function running in the sandbox loop.
-
-    Args:
-        queue: The queue to which output and results will be sent.
-        fn: The synchronous function to execute.
-        kwargs: Keyword arguments for the function.
-        *args: Positional arguments for the function.
-
-    Returns:
-        A dictionary containing the result, stdout, and stderr.
-    """
-    assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
-    result = asyncio.run_coroutine_threadsafe(acatch_stdio(queue, fn, kwargs, *args), asyncio.get_event_loop())
-    return result.result()
 
 
 async def acatch_stdio(
@@ -211,13 +189,25 @@ async def acatch_stdio(
                     sync_or_async_queue.put_nowait(result)
                 elif isinstance(sync_or_async_queue, queue.Queue):
                     sync_or_async_queue.put(result)
-        except Exception as e:
+        except (asyncio.CancelledError, GeneratorExit):
+            raise
+        except BaseException as e:
             import tblib
 
-            from ..e import attach_sandbox_denials
+            from ..e import SandBoxBaseExceptionError, attach_sandbox_denials
 
             attach_sandbox_denials(e)
-            result = {"exception": (e, tblib.Traceback(e.__traceback__))}
+            transported: BaseException = e
+            if not isinstance(e, Exception):
+                # The transport refuses to rebuild SystemExit and the like in the caller; escaping here, they ended the
+                # sandbox process instead of failing the call.
+                code = e.code if isinstance(e, SystemExit) else None
+                transported = SandBoxBaseExceptionError(
+                    f"{type(e).__module__}.{type(e).__qualname__}",
+                    code if code is None or isinstance(code, int) else repr(code),
+                    str(e),
+                )
+            result = {"exception": (transported, tblib.Traceback(e.__traceback__))}
 
             if sync_or_async_queue is not None:
                 if isinstance(sync_or_async_queue, asyncio.Queue):
@@ -226,23 +216,7 @@ async def acatch_stdio(
                     sync_or_async_queue.put(result)
         return result
 
-    async def run() -> dict[str, Any]:
-        try:
-            use_async = inspect.iscoroutinefunction(fn)
-
-            if use_async:
-                fn_result = await fn(*args, **kwargs)
-            else:
-                fn_result = fn(*args, **kwargs)
-            result = {"result": fn_result}
-        except Exception as e:
-            import tblib
-
-            result = {"exception": (e, tblib.Traceback(e.__traceback__))}
-        return result
-
     result = await run_in_context()
-    # result = await run()
     result["stdout"] = captured_stdout.getvalue()
     result["stderr"] = captured_stderr.getvalue()
 

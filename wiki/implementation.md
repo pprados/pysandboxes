@@ -7,7 +7,7 @@
 - Standard functions are replaced by versions that will check the parameters and possibly transform them.
 For file management, names will be checked against exclusion rules and modified if there is an expose parameter indicating a new name for the directories. If a file is not found in the expose rules, an exception is raised.
 - For network connection processing, the procedure is similar. Connection settings are validated against various rules. DENY rules take priority so that a wide range of IP addresses can be ALLOWED, with certain addresses excluded. For example, accept all connections except localhost or intranet addresses.
-- Import rights and call rights are two distinct notions. A module may legitimately be importable while some of its functions must stay out of reach. A registry of 121 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, `ctypes.CDLL`, ...) is therefore denied by default, whatever `python-import=` allows, and a call right is never derived from a module being present in `python-import=`.
+- Import rights and call rights are two distinct notions. A module may legitimately be importable while some of its functions must stay out of reach. A registry of 123 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, `ctypes.CDLL`, ...) is therefore denied by default, whatever `python-import=` allows, and a call right is never derived from a module being present in `python-import=`.
 - For filtering environment variables, processing is performed before the sandbox is launched. This process is launched with only the variables that it has visibility of.
 
 
@@ -60,6 +60,9 @@ Here is a brief description of the implementation in **partial mode**. You will 
           - A message stream goes up to the client with the uses of *stdout* and *stderr*.
           - The function\'s return or exception goes back to the caller.
           - If an exception is raised, the remote stack trace is injected, and the exception is propagated again.
+          - A `SystemExit`, `KeyboardInterrupt` or other `BaseException` that is not an `Exception` is never
+            re-raised as itself in the caller: the call raises `SandBoxBaseExceptionError` instead, and the
+            child keeps serving the next calls.
           - The connection is terminated.
       - If an SSE request fails, it is retried after a delay.
       - If the sandbox falls (the process dies)
@@ -72,6 +75,9 @@ Here is a brief description of the implementation in **partial mode**. You will 
         - Start to *shutdown* the daemon
   - If the daemon is stopped, a watchdog can detect this situation
     - The child process is restarted
+    - An exit with code 0 counts as a crash too
+    - After too many deaths in a row, the daemon fails closed: every further call raises
+      `SandBoxProtocolError`; the host application is never terminated
     - The current requests are retry multiple times to be reconnected to the new child process.
 
 ### Sensitive API calls
