@@ -33,7 +33,7 @@ from .remote.python_in_sb import convert_extra_rules
 from .remote.qemu_guest_console_io import GUEST_STDERR_FILE, GuestStderrTail
 from .remote.vm_sse_daemon import VMSSEDaemon
 from .sb_types import Envs
-from .tools import Environ
+from .tools import Environ, exit_status
 
 # Default console size when not a TTY (e.g. CI, pipes)
 _DEFAULT_COLUMNS = 80
@@ -393,10 +393,7 @@ if __name__ == "__main__":
     try:
         rc = main()
     except SystemExit as e:
-        if e.code is not None:
-            rc = int(e.code)
-        else:
-            rc = 0
+        rc = exit_status(e, report=True)
     except KeyboardInterrupt:
         rc = 0
     except Exception as e:

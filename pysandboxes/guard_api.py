@@ -82,6 +82,11 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
         # InterpreterPoolExecutor look up _interpreters.create at call time.
         "_interpreters.create",
         "_xxsubinterpreters.create",
+        # CPython's test modules create one too, in the builds that ship them.
+        "_testinternalcapi.create_interpreter",
+        "_testinternalcapi.run_in_subinterp_with_config",
+        "_testcapi.run_in_subinterp",
+        "_testcapi.run_in_subinterp_with_config",
     ),
     # os._exit/posix._exit are not listed: they terminate only the
     # calling process, run no code outside the patched interpreter and
@@ -303,6 +308,18 @@ _FROM_313 = frozenset(
     }
 )
 
+# CPython's test modules are optional: many builds leave them out, and their content moves between versions
+# (run_in_subinterp_with_config left _testcapi for _testinternalcapi in 3.13). A missing attribute is skipped
+# when patching.
+_TEST_CAPI = frozenset(
+    {
+        "_testinternalcapi.create_interpreter",
+        "_testinternalcapi.run_in_subinterp_with_config",
+        "_testcapi.run_in_subinterp",
+        "_testcapi.run_in_subinterp_with_config",
+    }
+)
+
 # The C accelerator is not part of the language: an interpreter built without
 # it, or a non-CPython one, exposes pickle's pure-Python implementation and no
 # `_pickle` module at all. The twins are then absent rather than mistyped.
@@ -384,7 +401,7 @@ _LINUX_ONLY = frozenset(
 )
 
 OPTIONAL: frozenset[str] = (
-    _PRE_313 | _FROM_313 | _FROM_312 | _FROM_314 | _NO_C_PICKLE | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY
+    _PRE_313 | _FROM_313 | _FROM_312 | _FROM_314 | _NO_C_PICKLE | _TEST_CAPI | _WINDOWS_ONLY | _POSIX_ONLY | _LINUX_ONLY
 )
 """Entries whose absence is legitimate on some version or platform.
 

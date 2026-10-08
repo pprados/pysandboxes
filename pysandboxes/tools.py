@@ -224,6 +224,25 @@ def set_is_in_sandbox(value: bool) -> None:
         _lc_leave()
 
 
+def exit_status(e: SystemExit, report: bool = False) -> int:
+    """The process exit status CPython gives a `SystemExit`: `None` is 0, an int is itself, anything else is 1.
+
+    Args:
+        e: The exception.
+        report: Print a non-integer code on stderr, as CPython does when the exception ends the process.
+
+    Returns:
+        The exit status.
+    """
+    if e.code is None:
+        return 0
+    if isinstance(e.code, int):
+        return e.code
+    if report:
+        print(e.code, file=sys.stderr)
+    return 1
+
+
 def find_config_for_module(module: str, config_name: str) -> Path | None:
     import importlib.util
 
@@ -231,8 +250,15 @@ def find_config_for_module(module: str, config_name: str) -> Path | None:
     # invoking it via python-sb. It's too soon. The alternative is to search for the file itself.
     try:
         spec_module: ModuleSpec = cast(ModuleSpec, importlib.util.find_spec(module))  # type: ignore[attr-defined]
-        if spec_module and spec_module.origin:
-            config = Path(spec_module.origin).parent / config_name
+        if not spec_module:
+            return None
+        # A namespace package (PEP 420) has no origin, only the directories it spans.
+        if spec_module.origin:
+            directories = [Path(spec_module.origin).parent]
+        else:
+            directories = [Path(d) for d in spec_module.submodule_search_locations or ()]
+        for directory in directories:
+            config = directory / config_name
             if config.exists():
                 return config
         return None

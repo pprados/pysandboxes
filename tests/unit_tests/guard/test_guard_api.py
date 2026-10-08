@@ -653,6 +653,32 @@ def test_armed_denies_subinterpreter_creation() -> None:
         _reset_guard()
 
 
+@pytest.mark.parametrize(
+    "qualname",
+    [
+        "_testinternalcapi.create_interpreter",
+        "_testinternalcapi.run_in_subinterp_with_config",
+        "_testcapi.run_in_subinterp",
+        "_testcapi.run_in_subinterp_with_config",
+    ],
+)
+def test_armed_denies_subinterpreter_creation_through_the_test_modules(qualname: str) -> None:
+    """CPython's test modules create a subinterpreter too, when the build ships them."""
+    module_name, name = qualname.split(".")
+    module = pytest.importorskip(module_name)
+    if not hasattr(module, name):
+        pytest.skip(f"{qualname} is absent from this build")
+    activate_guard(())
+    wrapped = _guarded(qualname)
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            wrapped()
+        assert exc.value.category == "process-exec"
+    finally:
+        _reset_guard()
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="probe script assumes posix")
 def test_subinterpreter_creation_is_refused_end_to_end(tmp_path: Path) -> None:
     """Every public route to a new interpreter reaches the guarded create, under a real `python-sb` start."""
