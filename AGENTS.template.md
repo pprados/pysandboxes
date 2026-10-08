@@ -149,7 +149,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - avoid useless comments when generating code
 - For all new file, add the comment:
 ```python
-# Copyright (c) 2026, Philippe Prados (pprados)
+# Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
 ```
 

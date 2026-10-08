@@ -135,7 +135,7 @@ def _rebuild_remote_exception(payload: str, fallback_payload: str | None) -> Bas
 
 
 class BaseSSESandbox(BaseDaemon):
-    __slots__ = ("port", "host", "max_connect_retry", "_result_guard", "_result_data_only")
+    __slots__ = ("port", "host", "max_connect_retry", "_result_guard", "_result_data_only", "_failure")
 
     def __init__(
         self,
@@ -156,6 +156,8 @@ class BaseSSESandbox(BaseDaemon):
         # also needs IPv4, being TCP on 0.0.0.0 only.
         self.host = "127.0.0.1"
         self.max_connect_retry = max_connect_retry
+        # Set when the sandbox died for good: every call then raises it instead of waiting for an answer.
+        self._failure: str | None = None
 
     @property
     def base_url(self) -> str:
@@ -170,6 +172,8 @@ class BaseSSESandbox(BaseDaemon):
     ) -> Any:
         if is_in_sandbox():
             return await func(*args, **kwargs)
+        if self._failure:
+            raise SandBoxProtocolError(self._failure)
         if not _force_incomming and not self._accept_incoming:
             raise SandBoxProtocolError("The sandbox daemon is being stopped.")
 
@@ -260,6 +264,8 @@ class BaseSSESandbox(BaseDaemon):
     ) -> Any:
         if is_in_sandbox():
             return func(*args, **kwargs)
+        if self._failure:
+            raise SandBoxProtocolError(self._failure)
         if not _force_incomming and not self._accept_incoming:
             raise SandBoxProtocolError("The sandbox daemon is being stopped.")
 

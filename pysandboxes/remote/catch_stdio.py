@@ -91,10 +91,11 @@ class WrapperIO(io.TextIOBase):
         Args:
             new_textio: The new stream to be used for the current context.
         """
+        # Each call runs in its own task, hence its own context: set it every time, keep the first original stream.
         if not self._old:
             self._old = self._context.get()
-            self._context.set(new_textio)
             assert not isinstance(self._old, WrapperIO)
+        self._context.set(new_textio)
 
     def __getattr__(self, name: str) -> Any:
         # Called only if attribute not found the usual way
@@ -211,13 +212,25 @@ async def acatch_stdio(
                     sync_or_async_queue.put_nowait(result)
                 elif isinstance(sync_or_async_queue, queue.Queue):
                     sync_or_async_queue.put(result)
-        except Exception as e:
+        except (asyncio.CancelledError, GeneratorExit):
+            raise
+        except BaseException as e:
             import tblib
 
-            from ..e import attach_sandbox_denials
+            from ..e import SandBoxBaseExceptionError, attach_sandbox_denials
 
             attach_sandbox_denials(e)
-            result = {"exception": (e, tblib.Traceback(e.__traceback__))}
+            transported: BaseException = e
+            if not isinstance(e, Exception):
+                # The transport refuses to rebuild SystemExit and the like in the caller; escaping here, they ended the
+                # sandbox process instead of failing the call.
+                code = e.code if isinstance(e, SystemExit) else None
+                transported = SandBoxBaseExceptionError(
+                    f"{type(e).__module__}.{type(e).__qualname__}",
+                    code if code is None or isinstance(code, int) else repr(code),
+                    str(e),
+                )
+            result = {"exception": (transported, tblib.Traceback(e.__traceback__))}
 
             if sync_or_async_queue is not None:
                 if isinstance(sync_or_async_queue, asyncio.Queue):

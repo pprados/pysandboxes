@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from pysandboxes.py_sandbox import load_and_parse_config
+from pysandboxes.config import CONFIG_NAME
+from pysandboxes.py_sandbox import _search_module_config, load_and_parse_config
 
 
 def _write(path: Path, text: str) -> Path:
@@ -59,3 +60,41 @@ class TestConfigInclude:
 
         assert rules.os_sandbox_params.get("memory") == "1G"
         assert "show_boot_console" not in rules.os_sandbox_params
+
+
+def test_plain_module_caller_without_resources_falls_back_to_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A plain top-level caller module, rejected by `files()`, ends the search instead of looping."""
+    calls: list[str] = []
+
+    def files_rejecting_plain_modules(anchor: str) -> Path:
+        calls.append(anchor)
+        if len(calls) > 10:
+            raise RuntimeError(f"unbounded lookup: {calls[:3]}...")
+        raise TypeError(f"{anchor!r} is not a package")
+
+    monkeypatch.setattr("importlib.resources.files", files_rejecting_plain_modules)
+    monkeypatch.chdir(tmp_path)
+    caller_globals: dict[str, object] = {"__name__": "plainmod", "search": _search_module_config}
+
+    exec("result = search(None)", caller_globals)
+
+    assert caller_globals["result"] == tmp_path / CONFIG_NAME
+    assert calls == ["plainmod"]
+
+
+def test_packaged_config_is_found_outside_the_package_parent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The caller package's own profile is used wherever the CWD is, and a same-named CWD decoy is not."""
+    site = tmp_path / "site"
+    packaged = _write(site / "auditpkg" / CONFIG_NAME, "learn=false\n")
+    _write(site / "auditpkg" / "__init__.py", "")
+    cwd = tmp_path / "elsewhere"
+    _write(cwd / "auditpkg" / CONFIG_NAME, "learn=true\n")
+    monkeypatch.syspath_prepend(str(site))
+    monkeypatch.chdir(cwd)
+    caller_globals: dict[str, object] = {"__name__": "auditpkg.mod", "search": _search_module_config}
+
+    exec("result = search(None)", caller_globals)
+
+    assert caller_globals["result"] == packaged

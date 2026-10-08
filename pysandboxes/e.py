@@ -31,6 +31,39 @@ class SandBoxProtocolError(SandBoxError):
     """
 
 
+class SandBoxBaseExceptionError(SandBoxError):
+    """Raised when the sandboxed function raised a BaseException that is not an Exception.
+
+    `SystemExit`, `KeyboardInterrupt`, an `EvalInterrupted` the function let
+    through, or an application's own `BaseException` subclass. The transport
+    never rebuilds those classes in the caller: a sandboxed `SystemExit` would
+    otherwise end the trusted application. The call fails with this error
+    instead, and the sandbox process stays alive for the next call.
+
+    Attributes:
+        exception_type: The qualified name of the class raised in the sandbox.
+        code: The `SystemExit` code when it is an int or None, else its repr;
+            None for any other class.
+    """
+
+    def __init__(self, exception_type: str, code: int | str | None, message: str) -> None:
+        """Initialize the error from the primitives of the original exception.
+
+        Args:
+            exception_type: The qualified name of the class raised in the sandbox.
+            code: The `SystemExit` code, or None.
+            message: `str()` of the original exception.
+        """
+        super().__init__(f"the sandboxed function raised {exception_type}: {message}")
+        self.exception_type = exception_type
+        self.code = code
+        self.message = message
+
+    def __reduce__(self) -> tuple[type, tuple[str, int | str | None, str]]:
+        """Rebuild the error from its own attributes across the transport."""
+        return self.__class__, (self.exception_type, self.code, self.message)
+
+
 class ConfigSyntaxError(SandBoxError):
     """Exception raised when configuration file has syntax errors.
 

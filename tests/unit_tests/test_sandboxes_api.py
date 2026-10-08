@@ -1,6 +1,7 @@
 """Unit tests for sandboxes_api module."""
 
 import inspect
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -316,3 +317,51 @@ def test_a_locked_rule_file_without_api_rules_starts(mock_shutdown: Mock, mock_s
         pass
 
     mock_start.assert_called_once()
+
+
+_SIGTERM_INSIDE_SANDBOXES = """
+import os, signal
+from unittest.mock import AsyncMock, Mock, patch
+
+from pysandboxes.sandboxes_api import sandboxes
+
+shutdown = AsyncMock(side_effect=lambda *_: print("stopped", flush=True))
+with patch("pysandboxes._os_sandbox.start_daemon", return_value=Mock()):
+    with patch("pysandboxes.sandboxes_api.async_shutdown_daemon", shutdown):
+        with sandboxes(os_sandbox="subprocess"):
+            os.kill(os.getpid(), signal.SIGTERM)
+            print("survived", flush=True)
+"""
+
+
+def test_sigterm_inside_sandboxes_stops_the_daemon_then_kills_the_process() -> None:
+    result = subprocess.run([sys.executable, "-c", _SIGTERM_INSIDE_SANDBOXES], capture_output=True, text=True)
+
+    assert result.returncode == -signal.SIGTERM, result.stderr
+    assert "stopped" in result.stdout
+    assert "survived" not in result.stdout
+
+
+def test_a_failed_enter_restores_the_signal_handlers(tmp_path: Path) -> None:
+    config = tmp_path / ".py-sandboxes"
+    config.write_text("not a directive\n")
+    before = signal.getsignal(signal.SIGTERM)
+
+    with pytest.raises(ConfigSyntaxError):
+        with sandboxes(sandboxes_config=config):
+            pass
+
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
+@pytest.mark.asyncio
+async def test_a_failed_async_enter_restores_the_signal_handlers(tmp_path: Path) -> None:
+    config = tmp_path / ".py-sandboxes"
+    config.write_text("not a directive\n")
+    before = signal.getsignal(signal.SIGTERM)
+
+    with pytest.raises(ConfigSyntaxError):
+        async with sandboxes(sandboxes_config=config):
+            pass
+
+    assert signal.getsignal(signal.SIGTERM) is before

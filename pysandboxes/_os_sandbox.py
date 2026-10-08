@@ -266,9 +266,9 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
     async with _async_start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when daemon_shutdown")
-            _startup_counter -= 1
-            if _startup_counter < 0:
+            if _startup_counter <= 0:
                 raise ValueError("Daemon daemon_shutdown more times than started")
+            _startup_counter -= 1
             return
 
         if _startup_counter > 1:
@@ -417,9 +417,9 @@ def shutdown_daemon(graceful_shutdown: bool = True) -> None:
     with _start_lock:
         if not _current_daemon:
             logger.info("Daemon not started when daemon_shutdown")
-            _startup_counter -= 1
-            if _startup_counter < 0:
+            if _startup_counter <= 0:
                 raise ValueError("Daemon daemon_shutdown more times than started")
+            _startup_counter -= 1
             return
         loop = get_sandbox_loop()
         stop_event = threading.Event()

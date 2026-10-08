@@ -50,6 +50,32 @@ def test_remove_comment_with_quotes() -> None:
         assert result == expected
 
 
+@pytest.mark.parametrize("reference", ["${A:B}", "${MY-VAR}", "${}", "x${A:B}y${C}"])
+def test_resolve_env_variables_rejects_an_invalid_reference(reference: str) -> None:
+    """A reference the syntax does not cover is refused instead of looping forever."""
+    with pytest.raises(ValueError, match="Invalid variable reference"):
+        resolve_env_variables(reference, {"A": "a", "C": "c"})
+
+
+def test_resolve_env_variables_never_expands_a_value() -> None:
+    """A value holding "${...}" is inserted as is: neither expanded again nor taken for a bad reference."""
+    envs = {"A": "${B}", "B": "secret", "C": "${A:B}"}
+    assert resolve_env_variables("x${A}y", envs) == "x${B}y"
+    assert resolve_env_variables("[${C}]", envs) == "[${A:B}]"
+
+
+def test_substitute_config_env_vars_reports_the_line_of_an_invalid_reference() -> None:
+    from pysandboxes.e import ConfigSyntaxError
+    from pysandboxes.sb_types import ConfigLine
+    from pysandboxes.tools import substitute_config_env_vars
+
+    lines = [ConfigLine("expose-ro=${HOME}", Path("p.conf"), 1), ConfigLine("expose-ro=${A:B}", Path("p.conf"), 2)]
+    with pytest.raises(ConfigSyntaxError) as raised:
+        substitute_config_env_vars(lines, {"HOME": "/h"})
+    [error] = raised.value.errors
+    assert "p.conf(2)" in error and "${A:B}" in error
+
+
 def test_resolve_env_variables() -> None:
     assert resolve_env_variables("[${A}]", {"A": "val_a"}) == "[val_a]"
     # Without ref

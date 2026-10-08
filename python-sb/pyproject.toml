@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "python-sb"
-version = "0.0.5"  # Bump to publish a change of this wrapper: release.yml requires it
+version = "0.0.6"  # Bump to publish a change of this wrapper: release.yml requires it
 description = "Invoke python code in a sandbox"
 requires-python = ">=3.11,<4.0"
 authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
@@ -24,6 +24,10 @@ dependencies = [
     # A floor, so that the resolver skips the yanked 0.0.0 placeholder.
     "pysandboxes>=0.0.1",
 ]
+
+[tool.hatch.build.targets.sdist]
+# An explicit list, as for pysandboxes: a local build must never ship a stray or untracked file.
+include = ["/python_sb", "/README.md", "/pyproject.toml"]
 
 [tool.hatch.build.targets.wheel]
 packages = [

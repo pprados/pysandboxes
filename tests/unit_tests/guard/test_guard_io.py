@@ -6,7 +6,7 @@ from typing import Dict, Iterator, List
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleFileNotFoundError
+from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_denials
 from pysandboxes.guard_files import FSExposeRule, activate_guard, parse_rules
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine, ConfigLines
@@ -236,7 +236,9 @@ def test_io_open_write(files: Dict[str, Path]) -> None:
 
     with io.open(target_path, "w") as f:
         f.write("sample")
+    assert target_path.read_text() == "sample"
     os.remove(str(target_path))
+    assert not target_path.exists()
 
 
 def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
@@ -246,9 +248,11 @@ def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
 
     import io
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(RulePermissionError) as caught:
         with io.open(target_path, "w") as f:
             f.write("sample")
+    assert [f"expose-ro={files['path']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert not target_path.exists()
 
 
 def test_io_open_accepts_a_file_descriptor(files: Dict[str, Path]) -> None:
@@ -296,9 +300,11 @@ def test_io_open_visible_and_invisible_files(files: Dict[str, Path]) -> None:
     with io.open(files["bind_src"] / "bound_file.txt") as f:
         assert f.read() == "Content"
 
-    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
+    # A missing file under an exposed directory is the OS's answer, not a refusal.
+    with pytest.raises(FileNotFoundError) as missing:
         with io.open(files["bind_dest"] / "missing-bound.txt"):
             pass
+    assert sandbox_denials(missing.value) == []
 
 
 def test_io_FileIO(files: Dict[str, Path]) -> None:
@@ -320,6 +326,8 @@ def test_io_FileIO(files: Dict[str, Path]) -> None:
         with io.FileIO(files["ignore"], "r"):
             pass
 
-    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
+    # A missing file under an exposed directory is the OS's answer, not a refusal.
+    with pytest.raises(FileNotFoundError) as missing:
         with io.FileIO(files["bind_dest"] / "missing-bound.txt", "r"):
             pass
+    assert sandbox_denials(missing.value) == []

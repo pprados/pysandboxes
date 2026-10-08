@@ -125,7 +125,7 @@ Rules in `.py-sandboxes` files, whitelist-based:
 - No useless comments in generated code
 - Every new file → add:
 ```python
-# Copyright (c) 2026, Philippe Prados (pprados)
+# Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
 ```
 

@@ -7,6 +7,7 @@ result channels: opcode prescan, find_class predicates, the tblib shape guard,
 and the profile switch.
 """
 
+import asyncio
 import base64
 import collections
 import copyreg
@@ -18,6 +19,7 @@ import fractions
 import functools
 import importlib
 import ipaddress
+import json
 import math
 import operator
 import pathlib
@@ -28,13 +30,17 @@ import time
 import uuid
 import zoneinfo
 from collections.abc import Callable
+from unittest.mock import MagicMock
 
+import aiohttp
 import pytest  # type: ignore[import-untyped]
+from aiohttp.http_exceptions import LineTooLong
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError, sandbox_denials
 from pysandboxes.learning import _update_remote_result_mode
 from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote import tools
+from pysandboxes.remote.sse_server_daemon import _sse_msg
 from pysandboxes.remote.tools import (
     _ALLOWED_OPCODES,
     _MAX_BYTES,
@@ -707,7 +713,7 @@ class TestPayloadBudget:
         """A payload at the budget must still encode to a line aiohttp accepts.
 
         The ceiling is the HTTP reader, not this budget: aiohttp caps a line at
-        8 * read_bufsize. If either side moves, this reddens instead of failing
+        2 * read_bufsize. If either side moves, this reddens instead of failing
         in production as an opaque LineTooLong.
         """
         encoded = math.ceil(_MAX_BYTES / 4) * 5
@@ -716,9 +722,34 @@ class TestPayloadBudget:
         # Room left on the line for the JSON envelope and captured stdout/stderr.
         assert _SSE_LINE_LIMIT - encoded >= 32 * 1024
 
-    def test_the_budget_matches_the_client_read_buffer(self) -> None:
-        """_SSE_LINE_LIMIT tracks the read_bufsize the transport pins."""
-        assert _SSE_LINE_LIMIT == 8 * SSE_READ_BUFSIZE
+    async def test_every_line_the_check_accepts_the_client_reader_reads(self) -> None:
+        """Measured on the reader aiohttp builds for read_bufsize=SSE_READ_BUFSIZE.
+
+        The reply just under the limit must be read; the first one aiohttp
+        refuses with LineTooLong must already have been refused by the child.
+        """
+
+        def reply(size: int) -> str:
+            empty = _sse_msg(json.dumps({"result": ""}))
+            return _sse_msg(json.dumps({"result": "x" * (size - len(empty))}))
+
+        def reader_for(line: str) -> aiohttp.StreamReader:
+            reader = aiohttp.StreamReader(MagicMock(), SSE_READ_BUFSIZE, loop=asyncio.get_running_loop())
+            data = line.encode()
+            for start in range(0, len(data), 16384):
+                reader.feed_data(data[start : start + 16384])
+            reader.feed_eof()
+            return reader
+
+        largest = reply(_SSE_LINE_LIMIT)
+        check_sse_line(largest)
+        assert await reader_for(largest).readline() == largest[:-1].encode()
+
+        refused = reply(reader_for("").get_read_buffer_limits()[1] + 2)
+        with pytest.raises(LineTooLong):
+            await reader_for(refused).readline()
+        with pytest.raises(SandBoxProtocolError, match="limit of the transport"):
+            check_sse_line(refused)
 
     def test_every_transport_session_pins_the_read_buffer(self) -> None:
         """A session left on the aiohttp default would widen the line ceiling.

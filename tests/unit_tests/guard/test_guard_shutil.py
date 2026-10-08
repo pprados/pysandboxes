@@ -1,10 +1,12 @@
+import os
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleFileNotFoundError, RulePermissionError
+from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_denials
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -48,8 +50,10 @@ def test_shutil_copy(files: Dict[str, Path]) -> None:  # noqa: F811
     import shutil
 
     shutil.copy(files["visible"], files["new_replace"])
+    assert files["new_replace"].read_text() == "Visible"
     files["new_replace"].unlink()
     shutil.copy(files["bound_file"], files["new_replace"])
+    assert files["new_replace"].read_text() == "Content"
     files["new_replace"].unlink()
 
 
@@ -103,11 +107,14 @@ def test_shutil_copymode(files: Dict[str, Path]) -> None:  # noqa: F811
         ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
         ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
+    files["visible"].chmod(0o640)
+    files["bound_file"].chmod(0o600)
     activate_guard_files_rules(rules)
 
     import shutil
 
     shutil.copymode(files["visible"], files["bound_file"])
+    assert files["bound_file"].stat().st_mode & 0o777 == 0o640
     shutil.copymode(files["bound_file"], files["bound_file"])
 
 
@@ -118,12 +125,16 @@ def test_shutil_copystat(files: Dict[str, Path]) -> None:  # noqa: F811
         ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
         ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
     ]
+    os.utime(files["visible"], ns=(1_000_000_000, 1_000_000_000))
     activate_guard_files_rules(rules)
 
     import shutil
 
     shutil.copystat(files["visible"], files["bound_file"])
+    assert files["bound_file"].stat().st_mtime_ns == 1_000_000_000
+    os.utime(files["bound_file"], ns=(2_000_000_000, 2_000_000_000))
     shutil.copystat(files["bound_file"], files["visible"])
+    assert files["visible"].stat().st_mtime_ns == 2_000_000_000
 
 
 def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -142,8 +153,12 @@ def test_shutil_copytree_and_move(files: Dict[str, Path]) -> None:  # noqa: F811
     if (files["path"] / "tmp2").exists():
         shutil.rmtree(files["path"] / "tmp2")
     shutil.copytree(files["bind_src"], files["path"] / "tmp")
+    assert (files["path"] / "tmp" / "bound_file.txt").read_text() == "Content"
     shutil.move(files["path"] / "tmp", files["path"] / "tmp2")
+    assert not (files["path"] / "tmp").exists()
+    assert (files["path"] / "tmp2" / "bound_file.txt").read_text() == "Content"
     shutil.rmtree(files["path"] / "tmp2")
+    assert not (files["path"] / "tmp2").exists()
 
 
 def test_shutil_copytree_outside_the_rules_is_denied(
@@ -173,7 +188,7 @@ def test_shutil_disk_usage(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import shutil
 
-    shutil.disk_usage(files["bind_dest"])
+    assert shutil.disk_usage(files["bind_dest"]).total > 0
 
 
 def test_shutil_make_archive(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -187,11 +202,13 @@ def test_shutil_make_archive(files: Dict[str, Path]) -> None:  # noqa: F811
 
     import shutil
 
-    shutil.make_archive(
+    archive = shutil.make_archive(
         base_name=str(files["path"] / "arch"),
         format="zip",
         root_dir=files["bind_dest"],  # dossier à compressor
     )
+    with zipfile.ZipFile(archive) as zf:
+        assert zf.read("bound_file.txt") == b"Content"
 
 
 def test_shutil_rmtree(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -212,11 +229,13 @@ def test_shutil_rmtree(files: Dict[str, Path]) -> None:  # noqa: F811
     if sys.version_info[:2] > (3, 11):
         extra = {"onexc": None, "dir_fd": None}
     shutil.rmtree(d, ignore_errors=False, onerror=None, **extra)
+    assert not d.exists()
 
     d = files["bind_dest"] / "dir_to_remove"
     d.mkdir()
     (d / "inner").mkdir()
     shutil.rmtree(d, ignore_errors=False, onerror=None, **extra)
+    assert not d.exists()
 
 
 def test_shutil_rmtree_cannot_empty_a_read_only_tree(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -230,8 +249,10 @@ def test_shutil_rmtree_cannot_empty_a_read_only_tree(files: Dict[str, Path]) -> 
     activate_guard_files_rules([ConfigLine(f"expose-ro={files['path']}", Path(), 0)])
 
     assert shutil._use_fd_functions or sys.platform == "win32"  # type: ignore[attr-defined]
-    with pytest.raises(OSError):
+    with pytest.raises(RulePermissionError) as caught:
         shutil.rmtree(tree)
+    # rmtree sets ``filename`` on the error, which replaces the message: only the target is left to check.
+    assert [str(tree / "inner") in d for d in sandbox_denials(caught.value)] == [True]
     assert (tree / "inner" / "f.txt").exists()
 
     activate_guard_files_rules([ConfigLine(f"expose-rw={files['path']}", Path(), 0)])
@@ -263,6 +284,8 @@ def test_shutil_move(files: Dict[str, Path]) -> None:  # noqa: F811
     s.mkdir()
     (s / "inner").mkdir()
     shutil.move(s, d, copy_function=shutil.copy2)
+    assert not s.exists()
+    assert (d / "inner").is_dir()
 
 
 def test_the_guarded_os_functions_keep_their_supports_sets(files: Dict[str, Path]) -> None:  # noqa: F811

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Mapping, TextIO, cast
 
@@ -106,6 +107,11 @@ def main() -> int:
     """
     Parses command-line arguments and run the cpython in sandbox
     """
+    with ExitStack() as stack:
+        return _main(stack)
+
+
+def _main(stack: ExitStack) -> int:
     if DEBUG:
         _debug_log()
 
@@ -113,22 +119,26 @@ def main() -> int:
 
     extra_rules = convert_extra_rules(sandboxes_args)
 
-    # Add extra to manage ipython
-    try:
-        import IPython  # noqa: F401
+    # The interactive IPython shell needs a writable profile directory. It gets a private, empty one
+    # removed at exit, never the user's ~/.ipython: a write there (profile_default/startup/*.py) would run
+    # unsandboxed in the user's next IPython session. Like TERM below, the learn=false lock check, which
+    # refuses command-line rules, does not apply on purpose: it opens nothing that existed before the run.
+    if not python_cmd or "-i" in python_parsed_args:
+        try:
+            import IPython  # noqa: F401
 
-        expose_rw = extra_rules.get("expose-rw", set())
-        if Path("~/.ipython").expanduser().is_dir():
-            expose_rw.add("~/.ipython")
-            extra_rules["expose-rw"] = expose_rw
-    except ImportError:
-        pass  # Ignore. IPython not found
+            ipython_dir = stack.enter_context(tempfile.TemporaryDirectory(prefix="pysandboxes-ipython-"))
+            extra_rules.setdefault("expose-rw", set()).add(ipython_dir)
+            extra_rules.setdefault("env", set()).add(f"IPYTHONDIR={ipython_dir}")
+        except ImportError:
+            pass  # Ignore. IPython not found
 
     # If --learn and --pysandboxes-config=xxx, use --learn=xxx
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
     # If -m module  use resource module/.py-sandboxes
     try:
         envs = extra_rules.get("env", set())
+        # Not subject to the learn=false lock: it only forwards the terminal type, for the REPL's colors.
         envs.add("TERM=${TERM}")
         extra_rules["env"] = envs
         all_rules = load_and_parse_config(

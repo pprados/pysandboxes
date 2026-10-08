@@ -96,9 +96,11 @@ parses without running it (no `__reduce__` is called). Two checks:
 #### The byte budget, and the ceiling that really applies
 
 The byte budget is not a free choice. The payload travels as a single SSE line,
-and aiohttp refuses a line longer than `8 * ClientSession(read_bufsize=...)` —
-512 KiB on the default buffer. Measured end to end: a line of 524240 bytes
-crosses, 524242 raises `aiohttp.http_exceptions.LineTooLong`.
+and aiohttp refuses a line longer than the high water mark of its
+`StreamReader`, `2 * ClientSession(read_bufsize=...)`: `readline()` passes no
+`max_line_length`, so `readuntil` falls back to `_high_water = 2 * limit`. With
+the transport's 262144-byte buffer that is 512 KiB; a longer line raises
+`aiohttp.http_exceptions.LineTooLong`.
 
 That reader is the ceiling, and it applies **before** this prescan: the refusal
 happens while the response is being read, so an oversized result never reaches
@@ -111,7 +113,7 @@ function printed, all sharing one budget.
 The budget is derived from that ceiling rather than chosen:
 
 ```
-line    <= 8 * read_bufsize                = 524288
+line    <= 2 * read_bufsize                = 524288
 line     = b85(pickle) + envelope + stdout/stderr
 b85(n)   = ceil(n / 4) * 5                 = 1.25 * n
 n       <= (524288 - envelope) / 1.25      = 419392 with no captured output
@@ -120,10 +122,13 @@ n       <= (524288 - envelope) / 1.25      = 419392 with no captured output
 `_MAX_BYTES` is 384 KiB, which encodes to 491520 bytes and leaves 32 KiB of the
 line for the JSON envelope and for whatever the sandboxed function printed.
 
-Every `ClientSession` of the transport passes `SSE_READ_BUFSIZE` (65536)
+Every `ClientSession` of the transport passes `SSE_READ_BUFSIZE` (262144)
 explicitly, so aiohttp's own default does not move the ceiling. A unit test
-pins that relation: raising the buffer, the only way to lift the ceiling,
-reddens CI instead of leaving the two sides silently inconsistent.
+measures that relation on a real aiohttp `StreamReader` built with the same
+buffer: the largest reply `check_sse_line` accepts must be read, and the first
+one aiohttp refuses must already be refused by the child. Changing the buffer,
+or an aiohttp release deriving the line limit differently, reddens CI instead
+of leaving the two sides silently inconsistent.
 
 The prescan deliberately does **not** try to inventory the `(module, name)`
 pairs the stream references. Under memo/`BINGET` indirection a stack-simulating

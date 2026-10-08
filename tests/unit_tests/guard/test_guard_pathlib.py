@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleFileNotFoundError
+from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_denials
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -29,9 +29,9 @@ def test_pathlib_open(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     import pathlib
 
     with pathlib.Path(files["visible"]).open() as f:  # Need to use new Path() implementation
-        f.read()
+        assert f.read() == "Visible"
     with pathlib.Path(files["bound_file"]).open() as f:
-        f.read()
+        assert f.read() == "Content"
 
 
 def test_pathlib_read_write_text(files: Dict[str, opl.Path]) -> None:  # noqa: F811
@@ -219,6 +219,7 @@ def test_pathlib_chmod_and_lchmod(files: Dict[str, opl.Path]) -> None:  # noqa: 
     mode = pathlib.Path(files["path"]).stat().st_mode
     pathlib.Path(files["path"]).chmod(mode | stat.S_IREAD)
     pathlib.Path(files["bound_file"]).chmod(mode | stat.S_IREAD)
+    assert stat.S_IMODE(pathlib.Path(files["bound_file"]).stat().st_mode) == stat.S_IMODE(mode | stat.S_IREAD)
     pathlib.Path(files["path"]).lchmod(mode | stat.S_IREAD)
     pathlib.Path(files["bound_file"]).lchmod(mode | stat.S_IREAD)
 
@@ -260,10 +261,14 @@ def test_pathlib_mkdir_removedirs_and_rmdir(
     import pathlib
 
     pathlib.Path(files["path"] / "dir_to_remove").mkdir()
+    assert (files["path"] / "dir_to_remove").is_dir()
     pathlib.Path(files["path"] / "dir_to_remove").rmdir()
+    assert not (files["path"] / "dir_to_remove").exists()
 
     pathlib.Path(files["bind_dest"] / "dir_to_remove").mkdir()
+    assert (files["bind_dest"] / "dir_to_remove").is_dir()
     pathlib.Path(files["bind_dest"] / "dir_to_remove").rmdir()
+    assert not (files["bind_dest"] / "dir_to_remove").exists()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows readlink returns \\\\?\\ paths")
@@ -302,8 +307,16 @@ def test_pathlib_link_symlink_and_readlink(
     assert pathlib.Path(files["new_link_to_bind"]).exists() is True
     pathlib.Path(files["new_link_to_bind"]).unlink()
 
-    with pytest.raises((RuleFileNotFoundError, FileNotFoundError)):
+    # A missing source is the OS's answer, not a refusal.
+    with pytest.raises(FileNotFoundError) as missing:
         pathlib.Path(files["new_link"]).hardlink_to(files["bind_src"] / "toto")
+    assert sandbox_denials(missing.value) == []
+
+    # An ignored source exists: only the guard can refuse the link.
+    with pytest.raises(RuleFileNotFoundError) as caught:
+        pathlib.Path(files["new_link"]).hardlink_to(files["ignore"])
+    assert [str(files["ignore"]) in d and "ignore=*.log" in d for d in sandbox_denials(caught.value)] == [True]
+    assert not files["new_link"].exists()
 
     files["new_link"].unlink(missing_ok=True)
     pathlib.Path(files["new_link"]).symlink_to(files["visible"])
@@ -334,8 +347,11 @@ def test_pathlib_link_symlink_and_readlink_refused(
 
     import pathlib
 
-    with pytest.raises(PermissionError):
-        pathlib.Path(files["bound_file"]).hardlink_to(files["visible"])
+    new_link = pathlib.Path(files["bind_dest"] / "new_hardlink")
+    with pytest.raises(RulePermissionError) as caught:
+        new_link.hardlink_to(files["visible"])
+    assert [f"expose-ro={files['bind_dest']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert not new_link.exists()
 
 
 def test_pathlib_touch(files: Dict[str, opl.Path]) -> None:  # noqa: F811
@@ -367,8 +383,11 @@ def test_pathlib_touch_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F81
 
     import pathlib
 
-    with pytest.raises(PermissionError):
+    before = files["bound_file"].stat().st_mtime_ns
+    with pytest.raises(RulePermissionError) as caught:
         pathlib.Path(files["bound_file"]).touch()
+    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert files["bound_file"].stat().st_mtime_ns == before
 
 
 def test_pathlib_rename(files: Dict[str, opl.Path]) -> None:  # noqa: F811
@@ -409,8 +428,10 @@ def test_pathlib_rename_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F8
 
     import pathlib
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(RulePermissionError) as caught:
         pathlib.Path(files["bound_file"]).rename(files["bind_dest"] / "new_rename")
+    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert files["bound_file"].exists()
 
 
 def test_pathlib_replace(files: Dict[str, opl.Path]) -> None:  # noqa: F811
@@ -447,8 +468,10 @@ def test_pathlib_replace_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F
 
     import pathlib
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(RulePermissionError) as caught:
         pathlib.Path(files["bound_file"]).replace(files["bind_dest"] / "new_replace")
+    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert files["bound_file"].exists()
 
 
 def test_pathlib_resolve(files: Dict[str, opl.Path]) -> None:  # noqa: F811

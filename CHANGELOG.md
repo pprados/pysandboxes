@@ -56,6 +56,27 @@ kernel boundary is a Linux technology.
   `encodings.idna` the profile never carries
 - Learning into a profile that includes another one no longer adds a second `remote-result-mode` rule, which made
   the profile invalid on the next run
+- The `.py-sandboxes` shipped inside the calling package is found wherever the current directory is: only a same-named
+  directory under the current directory was searched
+- On Python 3.11, a plain top-level module calling the API no longer freezes the search for its rule file
+- A `${...}` the syntax does not cover, such as `${A:B}`, is a configuration error with its file and line instead of
+  freezing the start, and a variable's value is never expanded again
+- A sandboxed function raising `SystemExit`, `KeyboardInterrupt` or another `BaseException` fails that call with
+  `SandBoxBaseExceptionError`: it no longer kills the sandbox, nor after repeated crashes the application itself
+- A sandbox that keeps crashing refuses further calls with an error instead of exiting the application
+- `SIGTERM` or `SIGQUIT` inside `with sandboxes()` stops the sandbox then ends the process, instead of being ignored,
+  and a failed start leaves the signal handlers untouched
+- `uvx python-sb` returns the script's exit code
+- `ipython-sb` gives IPython a private, temporary profile directory: `~/.ipython`, whose startup scripts run outside
+  the sandbox, is no longer writable from it
+- A reply up to the documented 512 KiB crosses the transport: above 128 KiB it failed with a bare `LineTooLong`
+- The source distribution ships only the package and its top-level documents, not the whole repository
+- `netifaces`, unused, is no longer a dependency: installing no longer compiles a C extension
+- The output a sandboxed function prints is captured on every call, not only the first one of the sandbox
+- `python-sb` reads its command line as CPython does: `-mjson.tool`, `-cprint(1)`, `-Im json.tool` and a script
+  without the `.py` suffix run, and a `--pysandboxes-config` without its value is a usage error
+- `python-sb -m <module>` finds the module's rule file in a fresh interpreter
+- A refused extra shutdown no longer makes a later shutdown stop a sandbox still in use
 
 ### Added
 - A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
