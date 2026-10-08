@@ -840,9 +840,9 @@ def generate_rules(
     danger_result = set()
     # The package, not this module: Python 3.11 refuses a non-package anchor.
     package = __package__ or "pysandboxes"
-    black_list = set(resources.read_text(package, "modules_blacklist.txt").split())
-    std_modules = set(resources.read_text(package, "modules_standard.txt").split())
-    deprecated_modules = set(resources.read_text(package, "modules_deprecated.txt").split())
+    black_list = set(resources.files(package).joinpath("modules_blacklist.txt").read_text().split())
+    std_modules = set(resources.files(package).joinpath("modules_standard.txt").read_text().split())
+    deprecated_modules = set(resources.files(package).joinpath("modules_deprecated.txt").read_text().split())
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
         if learn_rule.name in black_list:

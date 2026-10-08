@@ -132,7 +132,7 @@ def test_eval_warns_about_every_module_guard_import_warns_about() -> None:
     """
     from importlib import resources
 
-    blacklist = set(resources.read_text("pysandboxes", "modules_blacklist.txt").split())
+    blacklist = set(resources.files("pysandboxes").joinpath("modules_blacklist.txt").read_text().split())
     assert blacklist <= _WARNED_MODULES
     assert [v for v in _check("import subprocess", syntax=_syntax("import")) if v.warning]
 
@@ -147,7 +147,7 @@ def test_eval_warns_about_more_than_guard_import_does() -> None:
     """
     from importlib import resources
 
-    blacklist = set(resources.read_text("pysandboxes", "modules_blacklist.txt").split())
+    blacklist = set(resources.files("pysandboxes").joinpath("modules_blacklist.txt").read_text().split())
     assert {"os", "sys", "socket", "builtins", "shutil"} <= _WARNED_MODULES
     assert not {"os", "sys"} & blacklist, "guard_import now flags these; drop them from the eval-only set"
     for module in ("os", "sys", "socket"):

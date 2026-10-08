@@ -69,6 +69,7 @@ def test_pathlib_read_write_bytes(files: Dict[str, opl.Path]) -> None:  # noqa: 
     assert pathlib.Path(files["bind_dest"] / "to_write.txt").read_text() == "To write"
 
 
+@pytest.mark.filterwarnings("ignore:pathlib.PurePath.is_reserved:DeprecationWarning")
 def test_pathlib_is(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),

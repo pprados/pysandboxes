@@ -31,6 +31,7 @@ def test_escape_with_closure() -> None:
     "target (wiki/audit-python-security.md#the-design-target-wayward-llm-generated-code) -- "
     "documented, not scheduled",
 )
+@pytest.mark.filterwarnings("ignore:'_UnionGenericAlias' is deprecated:DeprecationWarning")
 def test_escape_with_subclasses() -> None:
     # Walking the class hierarchy to reach a guard module and reset its state takes an
     # intent the target reader does not have. Kept strict so that closing it anywhere

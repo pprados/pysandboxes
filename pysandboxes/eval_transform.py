@@ -53,7 +53,8 @@ _EVAL_WARNED_MODULES = frozenset({"os", "sys", "socket", "builtins", "shutil"})
 # reads as an oversight. Loaded at import time, before arming, so the read is
 # never charged to the user's own `python-import` rules.
 _WARNED_MODULES = (
-    frozenset(resources.read_text(__package__ or "pysandboxes", "modules_blacklist.txt").split()) | _EVAL_WARNED_MODULES
+    frozenset(resources.files(__package__ or "pysandboxes").joinpath("modules_blacklist.txt").read_text().split())
+    | _EVAL_WARNED_MODULES
 )
 
 
