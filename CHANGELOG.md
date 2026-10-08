@@ -36,6 +36,9 @@ kernel boundary is a Linux technology.
   (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
 
 ### Fixed
+- `qemu` forwards its port on the host loopback only, no longer on every host interface.
+- The `python-sb` REPL starts when the configuration file lies outside the working directory.
+- `with sandboxes()` and `async with sandboxes()` work from a thread other than the main one.
 - Learning mode no longer writes a rule under `/proc`: a library reading `/proc/stat` at import produced
   `expose-ro=/proc`, which exposed every process's environment and command line
 - Under `bwrap`, a project reached through a symbolic link runs in its own directory, not silently in `$HOME`
