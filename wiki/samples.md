@@ -80,7 +80,7 @@ author's decision, not an observation.
 
 From the repository root, `make sample-tests` runs every sample's suite, under the provider `OS_SANDBOX` names
 (`subprocess` when unset). `make sample-tests-matrix` runs them on every Python and under every OS provider that
-confines them, as `samples.yml` does in CI and `make publish-minor` before a release.
+confines them, as `samples.yml` does in CI and `make publish-minor` and `make publish-final` before a release.
 
 ## MCP
 

@@ -422,15 +422,19 @@ def test_the_publish_targets_call_the_script() -> None:
 
 def test_the_final_targets_have_no_lock_left() -> None:
     assert _recipe("publish-patch") == ["$(MAKE) release", "@scripts/tag-release.sh patch"]
-    assert _recipe("publish-final") == ["$(MAKE) release", '@scripts/tag-release.sh final "$(VERSION)"']
     assert "RELEASE_FINAL" not in SCRIPT.read_text()
 
 
-def test_a_minor_release_first_runs_the_samples_under_every_python_and_provider() -> None:
+def test_a_minor_or_final_release_first_runs_the_samples_under_every_python_and_provider() -> None:
     assert _recipe("publish-minor") == [
         "$(MAKE) release",
         "$(MAKE) sample-tests-matrix",
         "@scripts/tag-release.sh minor",
+    ]
+    assert _recipe("publish-final") == [
+        "$(MAKE) release",
+        "$(MAKE) sample-tests-matrix",
+        '@scripts/tag-release.sh final "$(VERSION)"',
     ]
 
 

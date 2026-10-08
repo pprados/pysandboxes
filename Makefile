@@ -163,7 +163,7 @@ sample-tests:
 # Pythons outermost: each change of UV_PYTHON rebuilds the sample venvs. Serial: mcp-client's port is fixed.
 SAMPLE_PYTHONS = 3.11 3.12 3.13 3.14
 SAMPLE_PROVIDERS = subprocess landlock bwrap firejail unshare
-## Make the samples' suites on every Python and every OS provider (run before a minor release)
+## Make the samples' suites on every Python and every OS provider (run before a minor or a given final release)
 sample-tests-matrix:
 	@status=0; \
 	for py in $(SAMPLE_PYTHONS); do for provider in $(SAMPLE_PROVIDERS); do \
@@ -645,7 +645,8 @@ publish-minor: quick-demo-gif
 	$(MAKE) sample-tests-matrix
 	@scripts/tag-release.sh minor
 
-## Run the full local check, then tag and push a given final version: make publish-final VERSION=0.5.0
+## Run the full local check and the samples on every Python and provider, then tag and push a given final version: make publish-final VERSION=0.5.0
 publish-final: quick-demo-gif
 	$(MAKE) release
+	$(MAKE) sample-tests-matrix
 	@scripts/tag-release.sh final "$(VERSION)"
