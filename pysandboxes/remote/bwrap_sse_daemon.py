@@ -529,6 +529,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         # Overlay ignore paths (e.g. .env) so they are not visible in the sandbox
         ignore_rules = [r for r in all_rules.file_rules if isinstance(r, IgnoreRule)]
         current_dir = os.getcwd()
+        # Without --chdir, bwrap retries the caller's $PWD: through a symlink that name is missing in the
+        # sandbox, and the child silently starts in $HOME. getcwd() is the resolved path the rules bind.
+        args.extend(["--chdir", current_dir])
         ignore_paths = _resolve_ignore_paths(current_dir, ignore_rules)
         exposed = [r.path for r in all_rules.file_rules if isinstance(r, FSExposeRule)]
         for i, full_host in enumerate(_ignore_mask_targets(current_dir, ignore_paths, exposed)):

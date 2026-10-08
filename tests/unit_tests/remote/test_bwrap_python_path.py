@@ -2,6 +2,7 @@
 # License: Apache V2
 """Regression: under ``bwrap`` the child must import what the parent imports, editable installs included."""
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -27,3 +28,11 @@ def test_a_path_added_by_a_pth_file_reaches_the_child(tmp_path: Path, monkeypatc
     with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", return_value="/usr/bin/bwrap"):
         args = list(BWrapSSEDaemon("token")._bwrap_args(EmptyRules, {}, tmp_path / "pipe", tmp_path))
     assert str(editable_root) in _setenv(args, "PYTHONPATH").split(":")
+
+
+def test_the_child_starts_in_the_resolved_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without --chdir, bwrap retries the caller's $PWD, and under a symlink falls back to $HOME silently."""
+    monkeypatch.chdir(tmp_path)
+    with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", return_value="/usr/bin/bwrap"):
+        args = list(BWrapSSEDaemon("token")._bwrap_args(EmptyRules, {}, tmp_path / "pipe", tmp_path))
+    assert args[args.index("--chdir") + 1] == os.getcwd()
