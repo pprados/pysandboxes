@@ -239,8 +239,9 @@ _BLIND_ATTRIBUTES = ("format", "format_map")
 # `getattr`, `vars`, `setattr`, `delattr`, `type`, `dir`, `globals` and
 # `breakpoint` are neutralised by a guarded shim; `open`, `eval`, `exec`,
 # `compile` and `__import__` reach their own guard. Either way, granting one is
-# a real widening a reader should see reported.
-_SENSITIVE_CALL = frozenset(
+# a real widening a reader should see reported, and a caller handing one in an
+# eval context hands over a strong capability (`guard_eval.classify_context_value`).
+CAPABILITY_BUILTINS = frozenset(
     {
         "getattr", "setattr", "delattr", "vars", "hasattr", "dir", "globals",
         "type", "breakpoint", "open", "eval", "exec", "compile", "__import__",
@@ -402,7 +403,7 @@ def _parse_list_value(
                 token,
             )
         if key == "eval-call" and not deny and hasattr(builtins, token):
-            if token in _SENSITIVE_CALL:
+            if token in CAPABILITY_BUILTINS:
                 logger.warning(
                     "eval-call=%s grants a sensitive builtin: it is neutralised by a guarded shim or "
                     "reaches its own guard, but it widens the reachable surface — grant it only if the "

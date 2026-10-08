@@ -14,7 +14,14 @@ from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, Nam
 from pysandboxes.eval_transform import validate
 from pysandboxes.guard_api import _deactivate_guard_api
 from pysandboxes.guard_api import activate_guard as activate_api
-from pysandboxes.guard_eval import _deactivate_guard_eval, _wrap_compile, _wrap_eval_like, guarded_eval, leaked_threads
+from pysandboxes.guard_eval import (
+    _deactivate_guard_eval,
+    _wrap_compile,
+    classify_context_value,
+    _wrap_eval_like,
+    guarded_eval,
+    leaked_threads,
+)
 from pysandboxes.immutable_dict import ImmutableDict
 from pysandboxes.lifecycle import arm as arm_api
 from pysandboxes.sb_types import ConfigLine
@@ -191,3 +198,10 @@ def test_eval_syntax_refuses_what_is_not_a_node(token: str) -> None:
     errors: list[Any] = []
     parse_rules([ConfigLine(f"eval-syntax={token}", Path(), 0)], errors)
     assert errors
+
+
+@pytest.mark.parametrize("name", ["delattr", "hasattr"])
+def test_a_builtin_parse_rules_reports_as_sensitive_is_a_strong_context_value(name: str) -> None:
+    import builtins
+
+    assert classify_context_value(getattr(builtins, name)) == "strong"

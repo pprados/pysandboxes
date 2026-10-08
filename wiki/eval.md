@@ -182,6 +182,12 @@ name of an `ast` node class**, mixed freely — the same shape as
 Async is neither privileged nor special-cased: `eval-syntax=async` opens it,
 its absence closes it, exactly like `loop`.
 
+Some statements belong to no group and are granted only by their node name:
+`match` (`Match`, `match_case` and the `Match*` patterns), type aliases and
+parameters (`TypeAlias`, `TypeVar`, `ParamSpec`, `TypeVarTuple`), `Global`,
+`Nonlocal`, `Delete` and `Assert`. `Starred` sits in `subscript`, so granting
+that group also grants unpacking (`f(*args)`, `a, *b = c`).
+
 A new Python release that adds a node makes that node **refused by default** —
 the safe direction.
 
@@ -708,6 +714,10 @@ Two emission rules worth knowing:
   observed**, so learning never grants more than it saw;
 - **never a pattern**. Generalising from a sample is precisely what learning
   must not do.
+
+Learn only over trusted, representative input. Learning grants whatever the
+evaluated code used, so a learning run fed untrusted input writes into the
+profile what that input asked for.
 
 When `adaptive` honours a caller-supplied context, `eval-call` is not
 consulted for the namespace, so emitting it would produce rules that are at

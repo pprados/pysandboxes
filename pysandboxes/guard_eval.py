@@ -65,7 +65,7 @@ from typing import Any, Callable, NoReturn, cast
 
 from . import guard_api
 from .e import EvalInterrupted, RuleApiPermissionError
-from .eval_rules import DEFAULT_RULES, EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
+from .eval_rules import CAPABILITY_BUILTINS, DEFAULT_RULES, EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
 from .eval_runtime import (
     GUARDED_BUILTINS,
     HELPERS,
@@ -86,24 +86,6 @@ from .sb_types import ConfigLines
 from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
-
-CAPABILITY_BUILTINS = frozenset(
-    {
-        "getattr",
-        "setattr",
-        "open",
-        "eval",
-        "exec",
-        "compile",
-        "__import__",
-        "type",
-        "vars",
-        "globals",
-        "dir",
-        "breakpoint",
-    }
-)
-"""Builtins that reopen by name a door the bounded namespace had shut."""
 
 STRONG_MODULES = frozenset({"os", "subprocess", "importlib", "ctypes", "socket", "posix", "nt", "_socket"})
 """Modules whose callables hand over the host.
