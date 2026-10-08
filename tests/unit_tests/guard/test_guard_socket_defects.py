@@ -184,6 +184,24 @@ def test_unix_connect_passes_with_write_access(monkeypatch: pytest.MonkeyPatch, 
             client.connect(path)
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="abstract AF_UNIX addresses are a Linux-only namespace")
+def test_connect_to_an_abstract_unix_address_is_refused_not_crashed() -> None:
+    # G13: an abstract address has no filesystem path, so file rules cannot judge it.
+    # It must be refused with the guard's socket refusal, not crash in os.path.realpath.
+    _arm()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        with pytest.raises(RuleSocketConnectionRefusedError):
+            client.connect("\x00pysandboxes-test-abstract")
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="abstract AF_UNIX addresses are a Linux-only namespace")
+def test_sendto_an_abstract_unix_address_is_refused_not_crashed() -> None:
+    _arm()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sender:
+        with pytest.raises(RuleSocketConnectionRefusedError):
+            sender.sendto(b"x", "\x00pysandboxes-test-abstract")
+
+
 # %% 5. Name resolution
 
 
