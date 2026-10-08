@@ -187,9 +187,7 @@ def _parse_include(
 ) -> ConfigLines:
     # includes parameter is to detect the recursive includes
     others: ConfigLines = []
-    # `include?` is optional: a missing file is ignored. A plain `include` is mandatory: skipping
-    # a missing file could drop a restrictive line such as learn=false.
-    pattern = re.compile(r'^include(\?)?\s+"(.+)"\s*$')
+    pattern = re.compile(r'^include\s+"(.+)"\s*$')
     for rule in rules:
         match = pattern.match(rule.rule)
         if match:
@@ -197,8 +195,7 @@ def _parse_include(
             # include written relative to the current directory looked like a bare
             # name and was searched next to the including file instead -- where it
             # is not, so the include was dropped without a word.
-            optional = match[1] == "?"
-            raw_filename = match[2]
+            raw_filename = match[1]
             filename = Path(raw_filename)
             if "/" not in raw_filename:
                 filename = root_path / filename
@@ -216,12 +213,8 @@ def _parse_include(
                         # Recursive include
                         includes.add(filename.absolute())
                         others.extend(_parse_include(filename.parent, includes, include_config))
-                    elif optional:
-                        logger.debug("include? %s: no such file, ignored", filename)
                     else:
-                        raise ConfigSyntaxError(
-                            "Syntax error in config files.", [f"{format_ruleref(rule)}: Missing include {filename}"]
-                        )
+                        logger.debug("include %s: no such file, ignored", filename)
                 except PermissionError as e:
                     # Skipping it could drop a restrictive line such as learn=false
                     raise ConfigSyntaxError(

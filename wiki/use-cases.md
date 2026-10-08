@@ -18,8 +18,8 @@ Two levels of protection must be kept apart, because the scenarios below do not 
 Several scenarios read the `.py-sandboxes` file as the policy of a program. It is only the part that is written
 down. The effective rights also depend on:
 
-- the `include`/`include?` lines: a path starting with `./` is resolved from the **current directory**, so
-  `include? "./.local.py-sandboxes"`, commented out in the template and active only once the user uncomments it,
+- the `include` lines: a path starting with `./` is resolved from the **current directory**, so
+  `include "./.local.py-sandboxes"`, commented out in the template and active only once the user uncomments it,
   lets whoever runs the command add rules. A bare name (`include "common"`)
   is resolved next to the including file. The `~/.config/...` and `/etc/...` profiles are outside the repository;
 - the environment: `os-sandbox=${OS_SANDBOX:-subprocess}` lets a variable downgrade the provider;
@@ -110,7 +110,7 @@ A skill shipped without its rule file is not contained: the first run on the use
 whatever the script does.
 
 The user and the administrator can restrict every skill at once. A rule file written by learning mode keeps the
-`include?` lines of the template, among them `~/.config/py-sandboxes/user-py-sandboxes.profile` for every project of
+`include` lines of the template, among them `~/.config/py-sandboxes/user-py-sandboxes.profile` for every project of
 the user, and `/etc/py-sandboxes/global-py-sandboxes.profile` for the whole node. A `net=DENY` written there wins over
 any `net=ALLOW` of the skill, whatever the order, for instance to keep every skill away from the intranet:
 
@@ -132,9 +132,9 @@ Only `net=` works this way. A `python-api=DENY:` in these profiles wins only at 
 `python-api=ALLOW:os.system` beats a user's `python-api=DENY:process-exec`. `python-import` and `expose-*` have no
 `DENY` at all.
 
-These profiles apply only through the `include?` lines: a rule file that drops them escapes them. Check that they
+These profiles apply only through the `include` lines: a rule file that drops them escapes them. Check that they
 are still there when reading the manifest. Conversely, a skill's rule file must not uncomment the
-`include? "./.local.py-sandboxes"` line: that path is resolved from the current directory, not from the skill's, so a
+`include "./.local.py-sandboxes"` line: that path is resolved from the current directory, not from the skill's, so a
 repository the agent works in could add `python-import=socket` and `net=ALLOW|*|*|*|OUT` to the skill's rules with a
 `.local.py-sandboxes` of its own.
 

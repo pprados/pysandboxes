@@ -92,26 +92,11 @@ def test_unreadable_include_is_a_configuration_error(tmp_path: Path) -> None:
         unreadable.chmod(0o600)
 
 
-def test_missing_include_is_a_configuration_error(tmp_path: Path) -> None:
-    with pytest.raises(ConfigSyntaxError, match="absent"):
-        _parse_include(tmp_path, {tmp_path / "root"}, [ConfigLine('include "absent"', tmp_path / "root", 1)])
-
-
-def test_missing_optional_include_is_ignored_quietly(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_missing_include_is_ignored_quietly(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.DEBUG, logger="pysandboxes.py_sandbox"):
-        result = _parse_include(tmp_path, {tmp_path / "root"}, [ConfigLine('include? "absent"', tmp_path / "root", 1)])
+        result = _parse_include(tmp_path, {tmp_path / "root"}, [ConfigLine('include "absent"', tmp_path / "root", 1)])
     assert result == []
     assert [r.levelno for r in caplog.records if "absent" in r.getMessage()] == [logging.DEBUG]
-
-
-def test_missing_optional_include_nested_is_ignored(tmp_path: Path) -> None:
-    """A nested `include?` of a missing file does not break the chain carrying it."""
-    (tmp_path / "sub").mkdir()
-    (tmp_path / "sub" / "middle").write_text('include? "leaf"\nenv=DUMMY_KEY=abc\n')
-    rules = _parse_include(
-        tmp_path, {tmp_path / "root"}, [ConfigLine(f'include "{tmp_path}/sub/middle"', tmp_path / "root", 1)]
-    )
-    assert [r.rule for r in rules] == ["env=DUMMY_KEY=abc"]
 
 
 def test_nested_bare_include_is_resolved_next_to_the_including_file(tmp_path: Path) -> None:

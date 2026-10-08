@@ -9,15 +9,13 @@
 # ==========================
 # You can include additional configuration files for better organization.
 # Name without '/' may be in the same directory.
-# `include? "..."` is optional: a missing file is ignored. `include "..."` is mandatory:
-# a missing or unreadable file is a configuration error. Use the mandatory form for a
-# file that must carry a lock such as learn=false.
+# Missing files are silently ignored.
 
 # Uncomment to accept local rules. The path is resolved from the current directory, so
 # whatever directory the program is launched from can then add rules of its own.
-#include? "./.local.py-sandboxes"  # May be add to .gitignore
-include? "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
-include? "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
+#include "./.local.py-sandboxes"  # May be add to .gitignore
+include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For all project for user
+include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 
 #######################################################################################
 # ENVIRONMENT VARIABLES

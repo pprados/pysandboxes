@@ -6,21 +6,19 @@ By default, the program looks for the file in the root directory of the **module
 
 To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
 
-Two forms exist: `include "path"` is mandatory, a missing or unreadable file is a configuration error; `include? "path"` is optional, a missing file is silently ignored (an unreadable one is still a configuration error either way). Use the mandatory form for a file that must carry a lock such as `learn=false`, so a typo in its path cannot drop the lock without a word; use `include?` for a personalization layer that may legitimately not exist yet.
-
 By default, you'll find this:
 
 ```text
-#include? "./.local.py-sandboxes"  # May be added to .gitignore
-include? "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
-include? "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
+#include "./.local.py-sandboxes"  # May be added to .gitignore
+include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
+include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
 ```
 
 Uncomment the first line to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`). It is not active by default: its path is resolved from the current directory, so whatever directory the program is launched from could add rules of its own. Accepting it is the user's decision.
 
-Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`. These two are `include?`, since they usually do not exist.
+Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
 
-By adding or removing `include`/`include?` statements, you can select the different personalization scenarios you want. A bare name (`include "common"`) is resolved next to the including file.
+By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is ignored, as the template's user and node profiles usually are; if it exists but cannot be read, the configuration is refused. A bare name (`include "common"`) is resolved next to the including file.
 
 With **python-sb**, a special parameter can be used to select the configuration.
 Without it, `python-sb` reads the `.py-sandboxes` next to the script or in the directory of the `-m` module, and
@@ -62,8 +60,7 @@ which can be far broader than anything replay requires. Always review and narrow
 
 Every `--key=value` given to `python-sb` is a rule, and it takes precedence over the file: `--expose-ro=/etc`,
 `--os-sandbox=none` or `--py-sandbox=false` widen what the program may do, and `--learn` makes it allowed to do
-anything. Once a rule file is reviewed, write in it, or in a file it reaches through a mandatory `include` (never
-`include?`: a missing optional file is ignored, which would silently drop the lock):
+anything. Once a rule file is reviewed, write in it, or in a file it includes:
 
 ```ini
 learn=false
@@ -86,11 +83,11 @@ It is possible to use the solution to integrate it into a module, when you insta
 
 When the sandbox is activated, the code searches for the caller's module and checks whether the resource exists. If so, it is used to apply the security rules. Otherwise, the same file is searched for in the working directory.
 
-If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file. The working directory's `.py-sandboxes` may not exist, so this include is optional:
+If you want to allow rules from the working directory to be added when using your module, add the following instructions to your `my_module/.py-sandboxes` file
 
 ```ini
 # File my_module/.py-sandboxes
-include? "./.py-sandboxes"
+include "./.py-sandboxes"
 # ... specific rules
 ```
 
