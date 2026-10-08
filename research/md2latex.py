@@ -48,6 +48,8 @@ from pathlib import Path
 #: Stem of every generated file, taken from the paper's title rather than a
 #: generic "paper", so a downloaded PDF still says what it is.
 DOCUMENT_NAME = "confining-python-by-observation"
+#: Author address printed in the generated paper; the markdown keeps its own.
+ARXIV_EMAIL = "arxiv@prados.fr"
 
 # --------------------------------------------------------------------------- #
 # Bibliography
@@ -886,6 +888,9 @@ def main() -> int:
     parser.add_argument(
         "--name", default=DOCUMENT_NAME, help=f"stem for the generated files (default: {DOCUMENT_NAME})"
     )
+    parser.add_argument(
+        "--email", default=ARXIV_EMAIL, help=f"author email printed in the paper (default: {ARXIV_EMAIL})"
+    )
     args = parser.parse_args()
 
     if not args.input.exists():
@@ -910,6 +915,7 @@ def main() -> int:
         return 0
 
     markdown, meta = extract_metadata(markdown)
+    meta.email = args.email
     markdown = strip_toc(markdown)
     markdown = strip_references(markdown)
     markdown = break_page_before_appendices(markdown)
