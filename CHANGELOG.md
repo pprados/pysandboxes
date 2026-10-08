@@ -108,6 +108,23 @@ kernel boundary is a Linux technology.
   `pickle._Unpickler`, `subprocess._fork_exec` and the `multiprocessing.get_context(...).Process` classes are refused
   unless `python-api` allows them; a function-level `ALLOW:subprocess.Popen` now also needs
   `ALLOW:_posixsubprocess.fork_exec`
+- `os.readlink`, `os.unlink`, `os.remove`, `os.rename` and `os.replace` with `dir_fd=` judge a link as the path form
+  does, on the directory holding it
+- A relative `ignore=` pattern no longer hides a whole exposed directory that lies under a directory of that name
+- The `ignore=` and `copy_function=` callbacks of `shutil.copytree` run under the file rules
+- `--port` on the command line wins over any number of `port=` lines in the profile and its includes
+- A connection to an abstract Unix socket is refused with the sandbox's error instead of a `ValueError`
+- `python-sb -m <package>` finds the rule file of a namespace package
+- `sys.exit("message")` in a script run by `python-sb` prints the message and exits with 1, as CPython does
+- CPython's test modules (`_testinternalcapi`, `_testcapi`) no longer create a subinterpreter unless `python-api`
+  allows it
+- The samples no longer compile `netifaces`
+- `eval-max-alloc` also bounds `<<` and the width or precision of a format (`%`, f-string, `format`, `str.format`):
+  `'%0100000000d' % 1` allocated 100 MB whatever the budget
+- An `eval-max-depth` above what the interpreter's stack can walk refuses the source instead of raising
+  `RecursionError`
+- `delattr` and `hasattr` handed to the evaluated code in a context are graded as strong capabilities, as
+  `eval-call` already reported them
 - A relative import, and the import of a submodule of a module the sandbox always keeps (such as `asyncio.subprocess`),
   are checked against the `python-import` rules
 - Imports from other threads or tasks are no longer let through while the sandbox loads its own modules
