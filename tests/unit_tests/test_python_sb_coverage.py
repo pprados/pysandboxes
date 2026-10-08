@@ -254,6 +254,8 @@ class TestMainEarlyExits:
         captured: dict[str, Any] = {}
 
         def _stop(config_path: Path, *, envs: Any, **extra_rules: Any) -> AllRules:
+            if "expose-rw" not in extra_rules:  # The first load, which finds no learn=false lock
+                return EmptyRules
             captured["extra_rules"] = extra_rules
             (ipython_dir,) = extra_rules["expose-rw"]
             captured["existed_during_run"] = Path(ipython_dir).is_dir()
@@ -270,6 +272,46 @@ class TestMainEarlyExits:
         assert f"IPYTHONDIR={ipython_dir}" in captured["extra_rules"]["env"]
         assert captured["existed_during_run"]
         assert not Path(ipython_dir).exists(), "the private IPython dir must be removed at exit"
+
+    @pytest.mark.parametrize("names_its_ipython_dir", [False, True], ids=["refused", "profile-names-its-dir"])
+    def test_a_learn_false_lock_refuses_the_private_ipython_dir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        names_its_ipython_dir: bool,
+    ) -> None:
+        """Like a command-line rule, the private profile directory is refused by a locked profile."""
+        monkeypatch.setitem(sys.modules, "IPython", types.ModuleType("IPython"))
+        _patch_cmd_line(
+            monkeypatch, python_parsed_args=[], sandboxes_args=[], python_cmd=[], config_path=_config_path(tmp_path)
+        )
+        config = [ConfigLine("learn=false", Path("p.conf"), 1)]
+        if names_its_ipython_dir:
+            config.append(ConfigLine(f"env=IPYTHONDIR={tmp_path}", Path("p.conf"), 2))
+        loads: list[dict[str, Any]] = []
+
+        def _load(config_path: Path, *, envs: Any, **extra_rules: Any) -> AllRules:
+            loads.append(extra_rules)
+            return EmptyRules._replace(config=config)
+
+        class _Started(Exception):
+            pass
+
+        def _no_start(*args: Any, **kwargs: Any) -> Any:
+            raise _Started
+
+        monkeypatch.setattr(python_sb, "load_and_parse_config", _load)
+        monkeypatch.setattr(python_sb, "providers_factory", {EmptyRules.os_sandbox: _no_start})
+
+        if names_its_ipython_dir:
+            with pytest.raises(_Started):
+                python_sb.main()
+        else:
+            with pytest.raises(SystemExit):
+                python_sb.main()
+            assert "the IPython shell cannot get a private profile directory" in capsys.readouterr().err
+        assert len(loads) == 1 and "expose-rw" not in loads[0]
 
     @pytest.mark.parametrize(
         "python_cmd", [["-c", "print(1)"], ["-m", "my_module"], ["script.py"]], ids=["command", "module", "script"]

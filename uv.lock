@@ -2908,7 +2908,6 @@ lint = [
 ]
 test = [
     { name = "pytest", specifier = ">=7.3.0" },
-    { name = "pytest-asyncio", specifier = ">=0.20.3" },
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-dotenv", specifier = ">=0.5.2" },
     { name = "pytest-mock", specifier = ">=3.10.0" },

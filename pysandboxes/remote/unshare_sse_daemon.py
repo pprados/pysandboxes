@@ -269,11 +269,11 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         # Verify unshare availability
         if not which_command("unshare"):
             logger.error("unshare not found.")
-            sys.exit(1)
+            raise SandBoxError("unshare not found.")
 
         if not which_command("iptables"):
             logger.error("iptables not found.")
-            sys.exit(1)
+            raise SandBoxError("iptables not found.")
 
         # Check unprivileged user namespaces
         try:

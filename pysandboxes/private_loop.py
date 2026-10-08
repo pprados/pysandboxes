@@ -94,29 +94,25 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
 
         def _start_background_loop() -> None:
             """Target for the thread; runs the event loop forever."""
-            try:
-                start_event.set()
-                logger.debug("Start thread for sandbox event loop")
-                loop.run_forever()
-                logger.debug("Stop thread for sandbox event loop")
-                _background_loop_ref = None
-            except KeyboardInterrupt:
-                import _thread
-                import os
-                import signal
+            start_event.set()
+            logger.debug("Start thread for sandbox event loop")
+            while True:
+                try:
+                    loop.run_forever()
+                    logger.debug("Stop thread for sandbox event loop")
+                    _background_loop_ref = None
+                    return
+                except KeyboardInterrupt:
+                    import _thread
+                    import signal
 
-                logger.exception("")
-                _thread.interrupt_main(signal.SIGINT)
-            except SystemExit as e:
-                import os
-
-                logger.error("Exit sandbox")
-                os._exit(e.args[0])
-            except Exception:
-                import os
-
-                logger.exception("Exception unknown in run_forever")
-                os._exit(-1)
+                    logger.exception("")
+                    _thread.interrupt_main(signal.SIGINT)
+                    return
+                except BaseException:
+                    # The failing task already holds its exception for its caller. Ending the
+                    # application here (os._exit) is not this library's call: keep serving the others.
+                    logger.exception("Exception in the sandbox event loop, which keeps running")
 
         global _thread
         _thread = threading.Thread(target=_start_background_loop, daemon=True, name="Sandbox Private loop")

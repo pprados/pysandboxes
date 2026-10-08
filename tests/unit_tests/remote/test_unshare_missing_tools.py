@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from pysandboxes.e import SandBoxError
 from pysandboxes.remote import unshare_sse_daemon
 from pysandboxes.remote.unshare_sse_daemon import UnshareSSEDaemon
 
@@ -30,7 +31,7 @@ def _prepare_with(monkeypatch: pytest.MonkeyPatch, installed: set[str]) -> None:
 def test_missing_iptables_is_reported_as_iptables(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.ERROR), pytest.raises(SystemExit):
+    with caplog.at_level(logging.ERROR), pytest.raises(SandBoxError):
         _prepare_with(monkeypatch, installed={"unshare"})
 
     assert "iptables not found." in caplog.text
@@ -38,7 +39,7 @@ def test_missing_iptables_is_reported_as_iptables(
 
 
 def test_missing_unshare_is_reported_first(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.ERROR), pytest.raises(SystemExit):
+    with caplog.at_level(logging.ERROR), pytest.raises(SandBoxError):
         _prepare_with(monkeypatch, installed=set())
 
     assert "unshare not found." in caplog.text

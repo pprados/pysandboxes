@@ -347,6 +347,7 @@ class GuardLoader(Loader):
     """
 
     __slots__ = ("fullname", "original_spec", "original_loader", "original_module")
+    original_loader: Loader | None
 
     def __init__(
         self,
@@ -365,7 +366,12 @@ class GuardLoader(Loader):
         # Store the _original spec and loader
         self.fullname = fullname
         self.original_spec = original_spec
-        self.original_loader = original_spec.loader if original_spec else None
+        loader = original_spec.loader if original_spec else None
+        # A module loaded under an earlier activation keeps that activation's GuardLoader: wrapping it again
+        # grew one level per activation until delegating overflowed the stack.
+        while isinstance(loader, GuardLoader):
+            loader = loader.original_loader
+        self.original_loader = loader
         self.original_module = module
 
     def create_module(self, spec: ModuleSpec) -> ModuleType | None:

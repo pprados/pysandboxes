@@ -100,8 +100,9 @@ def test_pathlib_is(files: Dict[str, opl.Path]) -> None:  # noqa: F811
         assert not pathlib.Path(files["bind_dest"]).is_junction()  # type: ignore[attr-defined]
     assert pathlib.Path(files["path"]).is_relative_to(files["path"])
     assert pathlib.Path(files["bind_dest"]).is_relative_to(files["bind_dest"])
-    assert not pathlib.Path(files["path"]).is_reserved()
-    assert not pathlib.Path(files["bind_dest"]).is_reserved()
+    if sys.version_info < (3, 15):  # Removed in 3.15
+        assert not pathlib.Path(files["path"]).is_reserved()
+        assert not pathlib.Path(files["bind_dest"]).is_reserved()
     assert not pathlib.Path(files["path"]).is_socket()
     assert not pathlib.Path(files["bind_dest"]).is_socket()
     assert pathlib.Path(files["home_link"]).is_symlink()

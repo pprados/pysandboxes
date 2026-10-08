@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Mapping, TextIO, cast
 
 from ._os_sandbox import providers_factory
+from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import DEBUG
 from .e import ConfigSyntaxError
@@ -111,6 +112,18 @@ def main() -> int:
         return _main(stack)
 
 
+def _load_rules(config_path: Path, extra_rules: dict[str, set[str]]) -> AllRules:
+    try:
+        return load_and_parse_config(
+            config_path=config_path,
+            envs=os.environ,  # Use current environ
+            **cast(Mapping[str, Any], extra_rules),
+        )
+    except ConfigSyntaxError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(-1)
+
+
 def _main(stack: ExitStack) -> int:
     if DEBUG:
         _debug_log()
@@ -119,43 +132,46 @@ def _main(stack: ExitStack) -> int:
 
     extra_rules = convert_extra_rules(sandboxes_args)
 
-    # The interactive IPython shell needs a writable profile directory. It gets a private, empty one
-    # removed at exit, never the user's ~/.ipython: a write there (profile_default/startup/*.py) would run
-    # unsandboxed in the user's next IPython session. Like TERM below, the learn=false lock check, which
-    # refuses command-line rules, does not apply on purpose: it opens nothing that existed before the run.
-    if not python_cmd or "-i" in python_parsed_args:
-        try:
-            import IPython  # noqa: F401
-
-            ipython_dir = stack.enter_context(tempfile.TemporaryDirectory(prefix="pysandboxes-ipython-"))
-            extra_rules.setdefault("expose-rw", set()).add(ipython_dir)
-            extra_rules.setdefault("env", set()).add(f"IPYTHONDIR={ipython_dir}")
-        except ImportError:
-            pass  # Ignore. IPython not found
-
     # If --learn and --pysandboxes-config=xxx, use --learn=xxx
     # If --learn and not --pysandboxes-config, use --learn=CONFIG_NAME
     # If -m module  use resource module/.py-sandboxes
-    try:
-        envs = extra_rules.get("env", set())
-        # Not subject to the learn=false lock: it only forwards the terminal type, for the REPL's colors.
-        envs.add("TERM=${TERM}")
-        extra_rules["env"] = envs
-        all_rules = load_and_parse_config(
-            config_path=config_path,
-            envs=os.environ,  # Use current environ
-            **cast(Mapping[str, Any], extra_rules),
-        )
-    except ConfigSyntaxError as e:
-        print(str(e), file=sys.stderr)
-        sys.exit(-1)
-    if sandboxes_args and (lock := learn_lock(all_rules.config)):
+    envs = extra_rules.get("env", set())
+    # Not subject to the learn=false lock: it only forwards the terminal type, for the REPL's colors.
+    envs.add("TERM=${TERM}")
+    extra_rules["env"] = envs
+    all_rules = _load_rules(config_path, extra_rules)
+    lock = learn_lock(all_rules.config)
+    if sandboxes_args and lock:
         print(
             f"{format_ruleref(lock)}: {lock.rule!r} locks the rules, the command line cannot add "
             f"{' '.join(sandboxes_args)}",
             file=sys.stderr,
         )
         sys.exit(-1)
+
+    # The interactive IPython shell needs a writable profile directory. It gets a private, empty one
+    # removed at exit, never the user's ~/.ipython: a write there (profile_default/startup/*.py) would run
+    # unsandboxed in the user's next IPython session. Like a command-line rule, it is refused by a
+    # learn=false lock: such a profile names its own IPython directory.
+    if not python_cmd or "-i" in python_parsed_args:
+        try:
+            import IPython  # noqa: F401
+        except ImportError:
+            pass  # Ignore. IPython not found
+        else:
+            if lock:
+                if not any(rule.rule.startswith("env=IPYTHONDIR=") for rule in all_rules.config):
+                    print(
+                        f"{format_ruleref(lock)}: {lock.rule!r} locks the rules, the IPython shell cannot get a "
+                        "private profile directory: add `expose-rw=<dir>` and `env=IPYTHONDIR=<dir>` to the profile",
+                        file=sys.stderr,
+                    )
+                    sys.exit(-1)
+            else:
+                ipython_dir = stack.enter_context(tempfile.TemporaryDirectory(prefix="pysandboxes-ipython-"))
+                extra_rules.setdefault("expose-rw", set()).add(ipython_dir)
+                extra_rules["env"].add(f"IPYTHONDIR={ipython_dir}")
+                all_rules = _load_rules(config_path, extra_rules)
 
     token = str(uuid.uuid4())
     log_level = logging.getLogger().getEffectiveLevel()

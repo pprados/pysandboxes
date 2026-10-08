@@ -292,3 +292,18 @@ def test_a_function_missing_on_this_platform_is_left_unpatched(monkeypatch: pyte
 
     assert module.present() == "patched"  # type: ignore[attr-defined]
     assert not hasattr(module, "absent")
+
+
+def test_a_guard_loader_never_wraps_another_guard_loader() -> None:
+    """Re-wrapping the previous activation's loader grew one level per activation, until the stack overflowed."""
+    import importlib.machinery
+    import sys
+
+    real_loader = importlib.machinery.SourceFileLoader("fake", "/nonexistent/fake.py")
+    spec = importlib.machinery.ModuleSpec("fake", real_loader)
+    for _ in range(sys.getrecursionlimit() + 10):
+        spec = importlib.machinery.ModuleSpec("fake", guard_import.GuardLoader("fake", spec))
+
+    loader = cast(guard_import.GuardLoader, spec.loader)
+    assert loader.original_loader is real_loader
+    assert loader.get_resource_reader("fake") is not None  # Delegates in one step, no RecursionError

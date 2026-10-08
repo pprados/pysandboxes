@@ -77,6 +77,12 @@ kernel boundary is a Linux technology.
   without the `.py` suffix run, and a `--pysandboxes-config` without its value is a usage error
 - `python-sb -m <module>` finds the module's rule file in a fresh interpreter
 - A refused extra shutdown no longer makes a later shutdown stop a sandbox still in use
+- A missing `bwrap`, `firejail`, `unshare`, `slirp4netns` or `iptables` raises a `SandBoxError` instead of exiting
+  the application, and an exception in the sandbox's event loop no longer ends the process
+- An application that opens `sandboxes()` many times no longer ends in a `RecursionError` on an import
+- A refusal raised through `shutil.rmtree` still names the rule that refused it
+- Under a `learn=false` profile, `ipython-sb` refuses to add its private profile directory: the profile names its
+  own with `expose-rw=<dir>` and `env=IPYTHONDIR=<dir>`
 - Creating a subinterpreter is a `process-exec` call, denied by default: code run in a new interpreter escaped every
   Python guard, `python-import` alone allowing it
 

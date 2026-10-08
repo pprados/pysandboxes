@@ -101,7 +101,19 @@ class ConfigSyntaxError(SandBoxError):
         return self.__class__, (self.message, self.errors)
 
 
-class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
+class _RuleOSError(OSError):
+    """Keeps the rule's message when a caller sets ``filename``, as ``shutil.rmtree`` does.
+
+    ``OSError.__str__`` would otherwise print ``[Errno None] None: '<path>'`` and lose the rule.
+    """
+
+    def __str__(self) -> str:
+        if len(self.args) == 1:
+            return str(self.args[0])
+        return super().__str__()
+
+
+class RuleFileNotFoundError(_RuleOSError, FileNotFoundError, SandBoxError):
     """Raised when a path is not exposed to the sandbox, or is hidden from it.
 
     Two rules end here: no `expose-ro=` or `expose-rw=` covers the path, or an
@@ -115,7 +127,7 @@ class RuleFileNotFoundError(FileNotFoundError, SandBoxError):
     """
 
 
-class RulePermissionError(PermissionError, SandBoxError):
+class RulePermissionError(_RuleOSError, PermissionError, SandBoxError):
     """Raised when the sandbox writes to a path it may only read.
 
     The path is exposed, so it is visible and readable, but the rule covering
@@ -126,7 +138,7 @@ class RulePermissionError(PermissionError, SandBoxError):
     """
 
 
-class RuleSocketConnectionRefusedError(ConnectionRefusedError, SandBoxError):
+class RuleSocketConnectionRefusedError(_RuleOSError, ConnectionRefusedError, SandBoxError):
     """Raised when a network connection is not allowed to the sandbox.
 
     Covers every stage the socket guard checks -- name resolution, connect,
@@ -148,7 +160,7 @@ class RuleModuleNotFoundError(ModuleNotFoundError, SandBoxError):
     """
 
 
-class RuleApiPermissionError(PermissionError, SandBoxError):
+class RuleApiPermissionError(_RuleOSError, PermissionError, SandBoxError):
     """Raised when a sensitive API call is denied by the API guard."""
 
     def __init__(self, qualname: str, category: str) -> None:
@@ -256,7 +268,7 @@ class EvalInterrupted(BaseException):
         return self.__class__, (self.reason,)
 
 
-class RuleEvalPermissionError(PermissionError, SandBoxError):
+class RuleEvalPermissionError(_RuleOSError, PermissionError, SandBoxError):
     """Raised when a runtime guard refuses an attribute or an allocation."""
 
     def __init__(self, target: str, rule_key: str, hint: str | None = None) -> None:
