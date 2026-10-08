@@ -80,15 +80,23 @@ yanking only hides it.
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
 | `publish-pypi` | Final tags only: waits for the `pypi` approval, then uploads `pysandboxes` and, when due, `python-sb` |
 | `verify-published` | Downloads the wheel back from the index of the tag kind (pypi.org for a final tag, test.pypi.org otherwise) and compares its sha256 with the one built |
-| `images` | One runner per Python 3.11 to 3.14: builds the five images from that wheel, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
+| `images` | Calls `images.yml`: checks the tag again, then one runner per Python 3.11 to 3.14 resolves the newest patch of `python:<python>-slim`, builds the five images from that wheel on it, smoke-tests them, pushes them to `docker.io/pprados/<image>` |
 | `advance-master` | Final tags only: fast-forwards `master` to the tagged commit, never forced |
 
 The images are `python-sb`, `python-sb-landlock`, `python-sb-unshare`, `python-sb-bwrap` and `python-sb-qemu`,
 `linux/amd64`. The smoke test checks that each provider image runs every tool its provider invokes.
-`.github/scripts/image-tags.sh` lists their tags, in the manner of the official `python` images: `<python>-<version>`
-for every release, `<version>` for Python 3.14, plus `<python>` and, for Python 3.14, `3` and `latest` for a final
-release only (see [Images on Docker Hub](docker-hub.md)).
+`.github/scripts/image-tags.sh` lists their tags, in the manner of the official `python` images, the pysandboxes
+version prefixed with `sb`: `<patch>-sb<version>` and `<python>-sb<version>` for every release, `sb<version>` for
+Python 3.14, plus `<patch>`, `<python>` and, for Python 3.14, `3` and `latest` for a final release only (see
+[Images on Docker Hub](docker-hub.md)).
 Their digests are listed in the run summary.
+
+`images-refresh.yml` runs every day on `develop`. When `python:<python>-slim` holds a patch with no image of the
+latest final release yet (`.github/scripts/refresh-images.sh`), it dispatches `images.yml` on that release tag, for
+those Pythons only. It holds no Docker Hub credential: the dispatched run gets the `dockerhub` environment because it
+runs on a `v*` tag, checks the tag signature like a release, and downloads the wheel from pypi.org, which never
+replaces a published file and which `verify-published` checked against the built wheel at release time. To see what
+it would do, run it by hand with `dry-run`. A tag older than `images.yml` cannot be rebuilt this way.
 
 `python-sb/` is a separate package, the one behind `uvx python-sb`, with its own version. A release publishes it
 too when one of its files changed since the previous tag (the last final tag, for a final version); its version in

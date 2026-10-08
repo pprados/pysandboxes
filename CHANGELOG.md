@@ -30,6 +30,8 @@ kernel boundary is a Linux technology.
   needs review
 - A profile whose `python-api` rules grant `eval`, `exec` or `compile` while it also carries `eval-*` rules is
   refused at load, with each `eval-*` line to comment out: the grant ran the code unguarded and left them unused
+- Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
+  (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
 
 ### Fixed
 - A profile no longer has to allow the sandbox daemon's own modules (uvicorn, fastapi, and the standard library
