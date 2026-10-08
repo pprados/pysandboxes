@@ -149,21 +149,18 @@ def _python_interactive(
         RED = ""
         RESET = " ***"
 
+    conf_path = all_rules.learning_path
+    try:
+        conf_path = conf_path.absolute().relative_to(Path.cwd())
+    except ValueError:
+        pass
     if all_rules.learn:
-        conf_path = all_rules.learning_path
-        try:
-            conf_path = conf_path.relative_to(Path.cwd())
-        except ValueError:
-            pass
         sb_mode = (
             f"{BOLD}API calls are LEARNED and saved in " f"{str(conf_path)!r} at the " f"end of the session.{RESET}\n"
         )
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
-        sb_mode = (
-            f"{BOLD}APIs are LIMITED according to the rules in "
-            f"{str(all_rules.learning_path.absolute().relative_to(Path().absolute()))!r} "
-        )
+        sb_mode = f"{BOLD}APIs are LIMITED according to the rules in " f"{str(conf_path)!r} "
         if all_rules.os_sandbox != "subprocess":
             sb_mode += f"and by the os-sandbox={all_rules.os_sandbox!r}"
         sb_mode += f"{RESET}\n"
