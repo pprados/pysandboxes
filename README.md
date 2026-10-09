@@ -31,7 +31,7 @@ pip install pysandboxes
 python-sb -m my_module
 ```
 
-The TestPyPI pre-release instructions above remain available for trying the current pre-release before the PyPI release. On the first run, learning mode records observed accesses in `.py-sandboxes`. Exercise representative application paths, then review and narrow the generated policy before relying on it: behavior that was not exercised cannot be learned. Subsequent runs apply the policy.
+The TestPyPI pre-release instructions above remain available for trying the current pre-release before the PyPI release. On the first run, learning mode records observed accesses in `.py-sandboxes`: every access is allowed and recorded rather than blocked, and that run has no OS boundary (it always runs under `subprocess`): only run trusted code on it. Exercise representative application paths, then review and narrow the generated policy before relying on it: behavior that was not exercised cannot be learned. Subsequent runs apply the policy, under `landlock` when the Linux kernel supports it (`subprocess` otherwise, with a warning).
 
 [![Quick demo: learn a policy, then enforce it](https://raw.githubusercontent.com/pprados/pysandboxes/master/samples/quick-demo/quick-demo.gif)](https://github.com/pprados/pysandboxes/tree/master/samples/quick-demo)
 
@@ -413,7 +413,7 @@ Every rule of the `eval-*` family is described key by key, with a valid and an i
 
 # OS-sandbox vs Py-sandbox
 
-The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct calls to the kernel. When the threat model includes those paths, select an OS-level provider (**os-sandbox**) whose mechanism and prerequisites fit the deployment: `landlock`, `unshare`, `bwrap`, `firejail`, or `qemu`. `subprocess` provides process separation without an OS security boundary. Select a provider with the `os-sandbox` configuration parameter; `OS_SANDBOX` only takes effect where the config's `os-sandbox` line reads it, as the generated template does (`os-sandbox=${OS_SANDBOX:-subprocess}`). A config that must pin a provider should write it literally, e.g. `os-sandbox=bwrap` — the environment can otherwise downgrade it, and `learn=false` does not prevent that.
+The Python layer (**py-sandbox**) cannot stop compiled C/C++/Rust code or direct calls to the kernel. When the threat model includes those paths, select an OS-level provider (**os-sandbox**) whose mechanism and prerequisites fit the deployment: `landlock`, `unshare`, `bwrap`, `firejail`, or `qemu`. `subprocess` provides process separation without an OS security boundary. Select a provider with the `os-sandbox` configuration parameter; `OS_SANDBOX` only takes effect where the config's `os-sandbox` line reads it, as the generated template does (`os-sandbox=${OS_SANDBOX:-auto}`). A config that must pin a provider should write it literally, e.g. `os-sandbox=bwrap` — the environment can otherwise downgrade it, and `learn=false` does not prevent that.
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module

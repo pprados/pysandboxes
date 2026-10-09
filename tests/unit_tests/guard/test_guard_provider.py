@@ -52,6 +52,33 @@ def test_os_sandbox_is_case_and_space_insensitive(
     assert result[PROVIDER] == value.strip().lower()
 
 
+@pytest.mark.parametrize("value", ["auto", "AUTO", "  auto  "])
+def test_os_sandbox_auto_is_resolved_via_the_resolver(
+    value: str, existing_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("pysandboxes._os_sandbox.resolve_auto_os_sandbox", lambda *, learning: "landlock")
+    result, errors = _parse(f"os-sandbox={value}", config_path=existing_config)
+    assert not errors
+    assert result[PROVIDER] == "landlock"
+
+
+def test_os_sandbox_auto_resolution_sees_learn_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing config file forces learn=True; `auto` must be resolved against it, not a stale default."""
+    seen: list[bool] = []
+
+    def fake_resolve(*, learning: bool) -> str:
+        seen.append(learning)
+        return "subprocess"
+
+    monkeypatch.setattr("pysandboxes._os_sandbox.resolve_auto_os_sandbox", fake_resolve)
+    missing_config = tmp_path / CONFIG_NAME  # does not exist -> learn forced True
+    result, errors = _parse("os-sandbox=auto", config_path=missing_config)
+    assert not errors
+    assert seen == [True]
+    assert result[LEARN] is True
+    assert result[PROVIDER] == "subprocess"
+
+
 @pytest.mark.parametrize("value", ["", "true", "TRUE", "1"])
 def test_py_sandbox_accepted_truthy_values(value: str, existing_config: Path) -> None:
     result, errors = _parse(f"py-sandbox={value}", config_path=existing_config)

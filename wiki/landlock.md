@@ -8,6 +8,8 @@ LandLock follows a **whitelist** approach: all access is denied by default. It c
 
 Its strength lies elsewhere: it works everywhere, without any privilege. The process itself decides which restrictions it applies, then activates them. Once they are active, it cannot escape them, and its child processes inherit the same constraints.
 
+It needs no extra binary, which is why `os-sandbox=auto` (the template's default) picks it on Linux when the kernel supports it, falling back to `subprocess` otherwise. See [provider comparison](os-providers.md#os-sandbox-vs-py-sandbox).
+
 ## How the provider works
 
 Unlike the other providers, nothing is set up on the host: the sandbox process restricts **itself**. For this, `LandlockSSEDaemon` starts an ordinary child process. Before running your code, that process translates the **`expose-ro` / `expose-rw`** file rules into `path_beneath` rules and the **`net=`** socket rules into port rules, then applies the ruleset to itself with the `landlock_*` syscalls. From that point, the restrictions are irrevocable and inherited by any child. The host talks to the sandbox over SSE, as with the other providers.

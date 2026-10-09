@@ -78,13 +78,15 @@ On the exception channel the guard is fail-closed, and an exception's state rout
 
 > Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
-To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file. `OS_SANDBOX` only takes effect where that line reads it, as the generated template does (`os-sandbox=${OS_SANDBOX:-subprocess}`):
+To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file. `OS_SANDBOX` only takes effect where that line reads it, as the generated template does (`os-sandbox=${OS_SANDBOX:-auto}`):
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
-To pin a provider so the environment cannot downgrade it, write it literally, e.g. `os-sandbox=bwrap` — `learn=false` does not prevent this downgrade either (see [use-cases](use-cases.md#what-the-rule-file-does-not-show)).
+`auto` resolves at startup: `landlock` on Linux when the kernel supports it (no extra binary needed), otherwise `subprocess` — logged as a warning when the fallback is due to the kernel rather than the platform. `auto` never applies during learning, which is always `subprocess` regardless (see above).
+
+To pin a provider so the environment cannot downgrade it, write it literally, e.g. `os-sandbox=bwrap` — `learn=false` does not prevent this downgrade either (see [use-cases](use-cases.md#what-the-rule-file-does-not-show)). A literal provider, including `landlock`, is never routed through `auto`'s fallback: if it is unavailable, the sandboxed process fails closed instead of silently dropping to `subprocess`.
 
 > Need help: can you propose a PR to integrate some solution for Apple OS ?
 
@@ -115,6 +117,7 @@ Depending on your level of paranoia, you can choose a suitable approach.
 
 ## Recommendations
 
+- Leave `os-sandbox=auto` (the default) unless you need a specific provider: it already picks `landlock` on Linux when the kernel supports it, and `subprocess` otherwise.
 - Nest an OS provider around the py-sandbox rather than replacing it: the union of both layers is your actual protection.
 - Keep the Python layer on. Set `py-sandbox=False` only when the sandboxed code is trusted not to attack the interpreter itself.
 - On a managed Kubernetes cluster, verify that the node kernel exposes Landlock before relying on it.

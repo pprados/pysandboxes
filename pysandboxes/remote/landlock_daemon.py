@@ -108,7 +108,7 @@ ACCESS_RW = (
 # Syscall numbers (Linux x86_64 and aarch64 common)
 try:
 
-    libc = ctypes.CDLL(None)
+    libc = ctypes.CDLL(None, use_errno=True)
     syscall = libc.syscall
     syscall.restype = c_int
     # argtypes left unset for variadic (create_ruleset / add_rule / restrict_self)
@@ -163,16 +163,9 @@ def _landlock_available() -> bool:
         return False
     if sys.platform != "linux":
         return False
-    # Quick probe: landlock_restrict_self with invalid fd returns EBADF, not ENOSYS
-    try:
-        err = syscall(_LANDLOCK_RESTRICT_SELF, -1, 0)
-        if err == -1:
-            errno = ctypes.get_errno()
-            if errno == 38:  # ENOSYS
-                return False
-    except Exception:
-        return False
-    return True
+    # The ABI version query fails (ENOSYS: no syscall, EOPNOTSUPP: disabled at boot) whenever Landlock cannot
+    # enforce; probing landlock_restrict_self instead only ever sees EPERM before no_new_privs is set.
+    return _get_landlock_abi_version() > 0
 
 
 def _get_landlock_abi_version() -> int:

@@ -22,7 +22,7 @@ down. The effective rights also depend on:
   `include "./.local.py-sandboxes"`, commented out in the template and active only once the user uncomments it,
   lets whoever runs the command add rules. A bare name (`include "common"`)
   is resolved next to the including file. The `~/.config/...` and `/etc/...` profiles are outside the repository;
-- the environment: `os-sandbox=${OS_SANDBOX:-subprocess}` lets a variable downgrade the provider;
+- the environment: `os-sandbox=${OS_SANDBOX:-auto}` lets a variable downgrade the provider;
 - the command line: every `--key=value` given to `python-sb` is a rule that takes precedence over the file
   (`--learn`, `--expose-ro=/etc`, `--os-sandbox=none`), and `--pysandboxes-config=` chooses the file itself;
 - the absence of the file: a missing rule file starts the **learning mode**, where the Python layer records

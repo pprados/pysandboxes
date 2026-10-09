@@ -239,14 +239,20 @@ py-sandbox=true
 # OS-level sandboxing provides additional isolation through system namespaces.
 #
 # Available providers:
-# - subprocess: Isolates code in separate Python process (default, safest)
-# - firejail, unshare, bwrap, qemu, etc: Advanced Linux sandboxing with syscall filtering,
-#   network isolation
+# - auto (default): landlock on Linux when the kernel supports it (no extra binary
+#   required), with a logged fallback to subprocess when it does not; subprocess
+#   everywhere else
+# - subprocess: isolates code in a separate Python process. Most portable (Linux,
+#   macOS, Windows), but no OS boundary: a compiled extension or a direct syscall
+#   is not confined
+# - landlock, firejail, unshare, bwrap, qemu, etc: Linux kernel-backed sandboxing with
+#   syscall filtering, network isolation
 # - none: Disables @sandbox decorator (for testing/debugging only)
 #
 # Note: Some providers may not work in containers without additional privileges.
+# During learning, os-sandbox is always forced to subprocess, whatever is set here.
 
-os-sandbox=${OS_SANDBOX:-subprocess}
+os-sandbox=${OS_SANDBOX:-auto}
 
 #######################################################################################
 # TRANSPORT RESULT GUARD
@@ -398,4 +404,5 @@ remote-result-guard=true
 # Subprocess / none (os-sandbox=subprocess | os-sandbox=none)
 # ============================================================
 # No provider-specific profile keys (no subprocess.* / none.*). Configure env, file, net,
-# and import rules only; subprocess is the default isolated Python process provider.
+# and import rules only; subprocess is the most portable isolated Python process provider,
+# and the fallback os-sandbox=auto picks when landlock is unavailable.

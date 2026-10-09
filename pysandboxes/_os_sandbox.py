@@ -115,6 +115,39 @@ def provider_unavailable_reason(name: str) -> str | None:
     return unsupported_platform_reason(name) or providers_factory[name].unavailable_reason()
 
 
+# The pseudo-provider name ``os-sandbox=`` accepts for a resolved-at-startup default.
+# It is never stored in ``AllRules.os_sandbox`` or looked up in ``providers_factory``.
+AUTO_OS_SANDBOX = "auto"
+
+
+def resolve_auto_os_sandbox(*, learning: bool) -> str:
+    """Resolve the ``auto`` os-sandbox value to a concrete provider name.
+
+    Picks ``landlock`` on Linux when the kernel supports it: no extra binary is
+    needed, and it confines the process from the inside. Falls back to
+    ``subprocess`` -- which adds no OS boundary -- on every other platform, and
+    when the kernel does not support it (logged as a warning, since that fallback
+    silently drops the OS boundary a reader of ``auto`` would expect).
+
+    During learning, ``subprocess`` is returned without probing landlock at all:
+    ``load_and_parse_config`` already forces ``subprocess`` once ``learn`` is set
+    (see ``py_sandbox.py``), so resolving to ``landlock`` here would only log a
+    choice that is overridden right after.
+    """
+    if learning:
+        return "subprocess"
+    if unsupported_platform_reason("landlock") is not None:
+        return "subprocess"
+    reason = providers_factory["landlock"].unavailable_reason()
+    if reason is not None:
+        logger.warning(
+            "os-sandbox=auto: %s. Falling back to 'subprocess', which adds no OS boundary.",
+            reason,
+        )
+        return "subprocess"
+    return "landlock"
+
+
 # Singleton with the current daemon used by the sandbox
 _current_daemon: BaseDaemon | None = None
 # Number of times the daemon has been started. Used for reference counting.
