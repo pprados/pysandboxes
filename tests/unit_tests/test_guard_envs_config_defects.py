@@ -145,6 +145,15 @@ def test_immutable_dict_equals_a_plain_dict() -> None:
     assert d != {"DUMMY_KEY": "abc"}
 
 
+def test_immutable_dict_never_equals_its_internal_tuple() -> None:
+    """The storage tuple is an implementation detail: equal objects must hash alike."""
+    d = ImmutableDict({"a": 1})
+    raw = (("a",), (1,))
+    assert d != raw
+    assert raw != d
+    assert not d == raw
+
+
 def test_unresolvable_executable_error_is_formatted(tmp_path: Path) -> None:
     missing = tmp_path / "python"
     missing.symlink_to(tmp_path / "absent")

@@ -172,12 +172,12 @@ class ImmutableDict(
         """Compare as a mapping, whatever the insertion order, plain dicts included."""
         if isinstance(other, Mapping):
             return dict(self.items()) == dict(other.items())
-        return NotImplemented
+        # Not NotImplemented: Python would then fall back on tuple equality with the storage tuple.
+        return False
 
     def __ne__(self, other: object) -> bool:
         """Negate `__eq__`, which tuple's own `__ne__` would bypass."""
-        equal = self.__eq__(other)
-        return equal if equal is NotImplemented else not equal
+        return not self.__eq__(other)
 
     def __hash__(self) -> int:
         """Hash consistently with `__eq__`, whatever the insertion order."""
