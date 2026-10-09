@@ -29,6 +29,8 @@ include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For all the node
 # - env=VAR=${HOST_VAR:-default}     Copy with fallback default
 # - env=PATTERN_*=${PATTERN_*}       Pattern matching for multiple vars, each one given the value
 #                                    with the pattern replaced by its name
+#                                    An exact name wins over a pattern; between patterns, the one
+#                                    with more fixed characters wins, a tie on two values is an error
 # - unenv=VAR or unenv=PATTERN_*     Remove variables, wherever the line is in the file
 #
 # Security considerations:

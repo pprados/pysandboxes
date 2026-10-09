@@ -39,6 +39,8 @@ kernel boundary is a Linux technology.
 - A generated `.py-sandboxes` names `landlock` as its default provider (`os-sandbox=${OS_SANDBOX:-landlock}`) on
   Linux when the kernel supports it, and `subprocess` otherwise, with a warning when Linux lacks Landlock; learning
   itself still always runs under `subprocess`
+- When two `env=` patterns match the same variable, the one with more fixed characters wins, whatever the line
+  order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
 - Under `landlock`, on a kernel with Landlock ABI 6 or later, the sandbox can no longer reach an abstract Unix
