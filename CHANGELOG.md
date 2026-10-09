@@ -43,6 +43,8 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- Under `landlock`, the current working directory no longer receives implicit write access; writes require
+  an explicit file rule
 - An `os-sandbox` the host cannot run (a missing `bwrap`, `firejail` or QEMU, a kernel without Landlock or user
   namespaces) is refused when the sandbox starts, with the reason, before anything is launched
 - Under `landlock`, on a kernel with Landlock ABI 6 or later, the sandbox can no longer reach an abstract Unix

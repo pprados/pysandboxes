@@ -412,8 +412,7 @@ def _collect_landlock_paths(all_rules: AllRules, temp: Path, cwd: str) -> list[t
             if p and os.path.exists(p):
                 add(p, "ro")
 
-    # Current directory and temp (for pipe) - read-write
-    add(cwd, "rw")
+    # Grant write access to the current directory only through an explicit file rule.
     add(str(temp), "rw")
 
     # File rules: FSExposeRule paths as read-only or read-write

@@ -51,9 +51,15 @@ def _paths(tmp_path: Path, *rules: FSExposeRule) -> dict[str, str]:
     cwd.mkdir()
     temp = tmp_path / "pipe-dir-not-created-yet"
     granted = dict(_collect_landlock_paths(EmptyRules._replace(file_rules=rules), temp, str(cwd)))
-    assert granted[str(cwd)] == "rw"
     assert granted[str(temp)] == "rw"
     return granted
+
+
+@pytest.mark.parametrize(("write", "expected"), [(False, "ro"), (True, "rw")])
+def test_current_directory_access_matches_explicit_rule(tmp_path: Path, write: bool, expected: str) -> None:
+    cwd = tmp_path / "cwd"
+
+    assert _paths(tmp_path, _rule(cwd, write))[str(cwd)] == expected
 
 
 def test_an_exposed_path_gets_the_access_its_rule_names(tmp_path: Path) -> None:
