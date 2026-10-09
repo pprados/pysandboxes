@@ -43,6 +43,11 @@ If the ruleset cannot be applied at all (for example `ENOSYS` on a kernel withou
 - **UDP is not covered**: Landlock network rules are TCP-only (`BIND_TCP` / `CONNECT_TCP` are the only two network rights).
 - `chmod` and `chown` are not restricted by Landlock; standard DAC permissions still apply.
 - **No process, IPC or PID isolation**: Landlock restricts the filesystem and TCP ports, nothing else.
+- **Named Unix sockets of the host stay reachable.** Landlock filters file access, not `connect()` on a Unix
+  socket: native code can reach `/run/user/<uid>/bus` (the session D-Bus bus, which starts commands through
+  `systemd --user`), `docker.sock`, the ssh and gpg agents, an X11 or Wayland display, a tmux server. The Python
+  layer refuses it (a Unix connection needs `expose-rw` on the socket), `ctypes` or a compiled extension does not.
+  From ABI 6, abstract Unix sockets created outside the sandbox are refused.
 
 ## Running the provider
 
@@ -87,6 +92,8 @@ This tells you whether the LSM is active, not which ABI it exposes. The provider
 - Make sure the host kernel is **6.7+** before relying on the `net=` rules at OS level. Below that version, only the py-sandbox layer enforces them.
 - Do not count on LandLock to filter by host, by IP address, or over UDP. When you need IP-level filtering at OS level, use [unshare](unshare.md), [bwrap](bwrap.md) or [firejail](firejail.md).
 - Keep the `DENY` exceptions to a minimum: LandLock does not see them.
+- For code that may run native code you do not trust, prefer [bwrap](bwrap.md) or [unshare](unshare.md): their
+  root holds none of the host's sockets.
 
 ## References
 

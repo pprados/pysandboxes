@@ -64,6 +64,7 @@ LANDLOCK_ACCESS_NET_CONNECT_TCP = 1 << 1
 HANDLED_ACCESS_NET = LANDLOCK_ACCESS_NET_BIND_TCP | LANDLOCK_ACCESS_NET_CONNECT_TCP
 LANDLOCK_RULE_NET_PORT = 2  # LANDLOCK_RULE_PATH_BENEATH = 1
 LANDLOCK_CREATE_RULESET_VERSION = 1
+LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET = 1 << 0  # ABI 6
 
 # Handled access: all FS rights we may allow (ABI v1, REFER v2, TRUNCATE v3)
 HANDLED_ACCESS_FS = (
@@ -279,7 +280,9 @@ def _apply_landlock(
     attr = LandlockRulesetAttr(
         handled_access_fs=handled_fs,
         handled_access_net=handled_net,
-        scoped=0,
+        # Landlock does not filter connect() on a named Unix socket; from ABI 6 it at least keeps the
+        # abstract ones created outside the sandbox (an X11 display, some D-Bus buses) out of reach.
+        scoped=LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET if abi >= 6 else 0,
     )
     fd = syscall(
         _LANDLOCK_CREATE_RULESET,

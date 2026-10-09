@@ -3,6 +3,7 @@
 """Profile rules -> what the Landlock launcher is told to allow, without a Landlock kernel."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -115,3 +116,21 @@ def test_landlock_is_unavailable_without_the_syscalls_or_off_linux(monkeypatch: 
     monkeypatch.setattr(landlock_daemon, "_LANDLOCK_RESTRICT_SELF", 446)
     monkeypatch.setattr(landlock_daemon.sys, "platform", "darwin")
     assert landlock_daemon._landlock_available() is False
+
+
+@pytest.mark.parametrize(("abi", "scoped"), [(6, 1), (8, 1), (5, 0)])
+def test_abstract_unix_sockets_outside_the_sandbox_are_scoped_out(
+    monkeypatch: pytest.MonkeyPatch, abi: int, scoped: int
+) -> None:
+    """From ABI 6, the ruleset forbids connecting to an abstract Unix socket created outside the sandbox."""
+    seen: list[int] = []
+
+    def fake_syscall(_nr: int, attr: Any, *_args: Any) -> int:
+        seen.append(attr._obj.scoped)
+        return -1
+
+    monkeypatch.setattr(landlock_daemon, "_get_landlock_abi_version", lambda: abi)
+    monkeypatch.setattr(landlock_daemon, "syscall", fake_syscall)
+    with pytest.raises(OSError):
+        landlock_daemon._apply_landlock([])
+    assert seen == [scoped]

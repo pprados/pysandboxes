@@ -84,7 +84,7 @@ To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the con
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
-`auto` resolves at startup: `landlock` on Linux when the kernel supports it (no extra binary needed), otherwise `subprocess` — logged as a warning when the fallback is due to the kernel rather than the platform. `auto` never applies during learning, which is always `subprocess` regardless (see above).
+`auto` resolves at startup: `landlock` on Linux when the kernel supports it (no extra binary needed), otherwise `subprocess` — logged as a warning when the fallback is due to the kernel rather than the platform. `auto` never applies during learning, which is always `subprocess` regardless (see above). `landlock` protects files and TCP ports but not the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)): against untrusted native code, write `os-sandbox=bwrap` or `os-sandbox=unshare`.
 
 To pin a provider so the environment cannot downgrade it, write it literally, e.g. `os-sandbox=bwrap` — `learn=false` does not prevent this downgrade either (see [use-cases](use-cases.md#what-the-rule-file-does-not-show)). A literal provider, including `landlock`, is never routed through `auto`'s fallback: if it is unavailable, the sandboxed process fails closed instead of silently dropping to `subprocess`.
 
@@ -101,9 +101,10 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 - `unshare` builds a fresh root that has no `/run` from the host.
 - `firejail` refuses the creation of any Unix socket; the distribution's `disable-common.inc` blacklist of
   `docker.sock` is only a second line.
-- `landlock` does **not** keep them out: Landlock filters file access, not `connect()` on a Unix socket, so native
-  code can reach the session D-Bus bus or `docker.sock` (the Python guard still refuses it, see G13). Open, under
-  study.
+- `landlock` does **not** keep the named ones out: Landlock filters file access, not `connect()` on a Unix socket,
+  so native code can reach the session D-Bus bus or `docker.sock`; the Python guard still refuses it. From ABI 6
+  the abstract ones created outside the sandbox are refused. A documented limit: for untrusted native code, use
+  `bwrap` or `unshare`.
 - `qemu` runs a separate kernel: the host's `/run` is not visible.
 
 An `expose-ro` or `expose-rw` rule naming a directory under `/run` gives those sockets back: write one only for a

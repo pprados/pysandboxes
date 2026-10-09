@@ -71,6 +71,11 @@ and its arguments and attributes are chosen by the sandboxed code. An exception 
 values the sandbox picked. No such class was found in the current dependency tree; this is a residual risk that
 grows with the classes an application loads.
 
+Under `landlock`, the host's named Unix sockets remain reachable from native code: the kernel filters file
+access, not `connect()` on a socket. The session D-Bus bus, which can start commands through `systemd --user`,
+is among them, so `landlock` is no boundary against native code that wants to leave. See
+[landlock](landlock.md#limits).
+
 ## Additional measured findings
 
 The development assessment also records narrower cases: `ctypes.pythonapi` is

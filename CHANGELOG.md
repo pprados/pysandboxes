@@ -41,6 +41,8 @@ kernel boundary is a Linux technology.
   runs under `subprocess`
 
 ### Fixed
+- Under `landlock`, on a kernel with Landlock ABI 6 or later, the sandbox can no longer reach an abstract Unix
+  socket created outside it; named Unix sockets of the host remain reachable from native code, as documented
 - `ImmutableDict` is no longer equal to the tuple it stores its keys and values in.
 - A module run with `python -m pkg.mod` finds the `.py-sandboxes` of its package, as when it is imported.
 - Learning writes its rule file through a temporary file with an unpredictable name, which another local user
