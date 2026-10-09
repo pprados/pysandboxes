@@ -96,31 +96,16 @@ def test_a_path_is_granted_in_its_normal_form(tmp_path: Path) -> None:
     assert f"{data}/./" not in granted
 
 
-@pytest.mark.parametrize(("probe_errno", "available"), [(9, True), (38, False), (95, False), (1, False)])
-def test_landlock_availability_depends_on_the_probe_errno(
-    monkeypatch: pytest.MonkeyPatch, probe_errno: int, available: bool
+@pytest.mark.parametrize(("abi", "available"), [(8, True), (1, True), (-1, False)])
+def test_landlock_is_available_only_when_the_abi_query_succeeds(
+    monkeypatch: pytest.MonkeyPatch, abi: int, available: bool
 ) -> None:
-    """landlock_restrict_self(-1, 0) fails on purpose; only its errno says whether Landlock works.
-
-    EBADF (9) is the expected failure of a deliberately bad fd on a kernel where Landlock answers:
-    available. Any other errno -- ENOSYS (38, no such syscall), EOPNOTSUPP (95, disabled via the
-    `lsm=` boot parameter), EPERM (1, blocked by a seccomp filter) -- means it cannot be used, not
-    just that this probe call was malformed. ``ctypes.get_errno()`` itself is mocked (not just the
-    syscall's return value) so the case is not at the mercy of whatever errno a previous, unrelated
-    ctypes call left in the thread-local slot.
-    """
+    """Landlock disabled at boot (EOPNOTSUPP) or missing (ENOSYS) fails the ABI query: it cannot enforce."""
     monkeypatch.setattr(landlock_daemon, "_LANDLOCK_RESTRICT_SELF", 446)
+    monkeypatch.setattr(landlock_daemon, "_LANDLOCK_CREATE_RULESET", 444)
     monkeypatch.setattr(landlock_daemon.sys, "platform", "linux")
-    monkeypatch.setattr(landlock_daemon, "syscall", lambda *_: -1)
-    monkeypatch.setattr(landlock_daemon.ctypes, "get_errno", lambda: probe_errno)
+    monkeypatch.setattr(landlock_daemon, "syscall", lambda *_: abi)
     assert landlock_daemon._landlock_available() is available
-
-
-def test_landlock_is_available_when_the_restrict_self_probe_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(landlock_daemon, "_LANDLOCK_RESTRICT_SELF", 446)
-    monkeypatch.setattr(landlock_daemon.sys, "platform", "linux")
-    monkeypatch.setattr(landlock_daemon, "syscall", lambda *_: 0)
-    assert landlock_daemon._landlock_available() is True
 
 
 def test_landlock_is_unavailable_without_the_syscalls_or_off_linux(monkeypatch: pytest.MonkeyPatch) -> None:
