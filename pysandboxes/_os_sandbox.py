@@ -115,6 +115,16 @@ def provider_unavailable_reason(name: str) -> str | None:
     return unsupported_platform_reason(name) or providers_factory[name].unavailable_reason()
 
 
+def check_provider_available(name: str) -> None:
+    """Raise ValueError when provider ``name`` cannot run on this host, before anything of it is built."""
+    if reason := unsupported_platform_reason(name):
+        raise ValueError(reason)
+    if reason := providers_factory[name].unavailable_reason():
+        raise ValueError(
+            f"os-sandbox {name!r} cannot start: {reason}. Set up the host for it, or choose another os-sandbox."
+        )
+
+
 # Stands for the default provider in the template; replaced before the template is read as rules.
 DEFAULT_OS_SANDBOX_MARK = "@DEFAULT_OS_SANDBOX@"
 
@@ -227,8 +237,7 @@ async def async_start_daemon(
 
         if all_rules.os_sandbox not in providers_factory:
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
-        if reason := unsupported_platform_reason(all_rules.os_sandbox):
-            raise ValueError(reason)
+        check_provider_available(all_rules.os_sandbox)
         os_provider: BaseDaemon | None = None
         try:
             token = str(uuid.uuid4())
@@ -342,8 +351,7 @@ def start_daemon(
 
         if all_rules.os_sandbox not in providers_factory:
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
-        if reason := unsupported_platform_reason(all_rules.os_sandbox):
-            raise ValueError(reason)
+        check_provider_available(all_rules.os_sandbox)
 
         loop = get_sandbox_loop()
         start_event = threading.Event()

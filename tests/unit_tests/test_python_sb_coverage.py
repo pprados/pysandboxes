@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import pysandboxes.python_sb as python_sb
+from pysandboxes import _os_sandbox
 from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.e import ConfigSyntaxError
 from pysandboxes.remote.none_daemon import NoneDaemon
@@ -76,8 +77,9 @@ def _stub_config_loader(
 
 
 def _stub_providers_factory(monkeypatch: pytest.MonkeyPatch, name: str, factory: Callable[..., Any]) -> None:
-    """Replace the OS-provider registry with a single-entry mapping to ``factory``."""
+    """Replace the OS-provider registry with a single-entry mapping to ``factory``, taken as available."""
     monkeypatch.setattr(python_sb, "providers_factory", {name: factory})
+    monkeypatch.setattr(python_sb, "check_provider_available", lambda provider: None)
 
 
 class TestGetTerminalSize:
@@ -182,6 +184,31 @@ class TestMainEarlyExits:
         err = capsys.readouterr().err
         assert "bad rule" in err
         assert "line 3: unknown key" in err
+
+    def test_a_provider_the_host_lacks_stops_before_it_is_built(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _patch_cmd_line(
+            monkeypatch,
+            python_parsed_args=[],
+            sandboxes_args=[],
+            python_cmd=["-c", "print(1)"],
+            config_path=_config_path(tmp_path),
+        )
+        _stub_config_loader(monkeypatch, EmptyRules._replace(os_sandbox="bwrap"))
+        monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: None)
+        monkeypatch.setattr(
+            _os_sandbox.providers_factory["bwrap"], "unavailable_reason", classmethod(lambda cls: "bwrap not installed")
+        )
+        factory = MagicMock()
+        monkeypatch.setattr(python_sb, "providers_factory", {"bwrap": factory})
+
+        with pytest.raises(SystemExit) as exc_info:
+            python_sb.main()
+
+        assert exc_info.value.code == -1
+        assert "os-sandbox 'bwrap' cannot start: bwrap not installed" in capsys.readouterr().err
+        factory.assert_not_called()
 
     def test_learn_lock_refuses_a_rule_from_the_command_line(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]

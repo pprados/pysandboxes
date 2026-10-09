@@ -151,6 +151,23 @@ def test_an_unknown_provider_is_refused_by_the_sync_start() -> None:
         _os_sandbox.start_daemon(_rules("nope"), envs={}, log_level=0)
 
 
+async def test_a_provider_the_host_lacks_is_refused_before_it_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_Daemon, "unavailable_reason", classmethod(lambda cls: "fake not installed"))
+
+    with pytest.raises(ValueError, match=f"os-sandbox {_FAKE!r} cannot start: fake not installed"):
+        await _start()
+    assert not _Daemon.instances
+    assert _os_sandbox._current_daemon is None
+
+
+def test_a_provider_the_host_lacks_is_refused_by_the_sync_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_Daemon, "unavailable_reason", classmethod(lambda cls: "fake not installed"))
+
+    with pytest.raises(ValueError, match=f"os-sandbox {_FAKE!r} cannot start: fake not installed"):
+        _os_sandbox.start_daemon(_rules(), envs={}, log_level=0)
+    assert not _Daemon.instances
+
+
 async def test_starts_are_counted_and_only_the_last_shutdown_stops_the_daemon() -> None:
     first = await _start()
     second = await _start()

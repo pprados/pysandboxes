@@ -43,6 +43,8 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- An `os-sandbox` the host cannot run (a missing `bwrap`, `firejail` or QEMU, a kernel without Landlock or user
+  namespaces) is refused when the sandbox starts, with the reason, before anything is launched
 - Under `landlock`, on a kernel with Landlock ABI 6 or later, the sandbox can no longer reach an abstract Unix
   socket created outside it; named Unix sockets of the host remain reachable from native code, as documented
 - `ImmutableDict` is no longer equal to the tuple it stores its keys and values in.
