@@ -493,7 +493,12 @@ def run_guarded(
         tree = ast.parse(source, filename=source_ref, mode=mode)
     except (RecursionError, MemoryError):
         _raise_parse_overflow(source_ref, source)
-    state = EvalState(rules, learn=learn)
+    supplied = {
+        id(value): value
+        for key, value in namespace.items()
+        if key not in HELPERS and key != "__builtins__" and hasattr(type(value), "__setitem__")
+    }
+    state = EvalState(rules, learn=learn, supplied=supplied)
     violations = validate(tree, rules)
     if learn:
         for key, name in learn_targets(violations):

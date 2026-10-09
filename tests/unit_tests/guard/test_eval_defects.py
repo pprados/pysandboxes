@@ -42,6 +42,14 @@ def _activate(**kwargs: Any) -> None:
     guard_eval.activate_guard(ImmutableDict({"": rules}))
 
 
+def _exec_namespace(source: str, names: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Run `source` in exec mode and return its namespace, to read what the evaluated code built itself."""
+    rules = DEFAULT_RULES._replace(declared=True, syntax=_all_syntax(), namespace="closed", **kwargs)
+    namespace = guard_eval.build_namespace(rules, caller_globals=None, names=names, from_wrapper=True)
+    guard_eval.run_guarded(source, rules, mode="exec", namespace=namespace, source_ref="<test>")
+    return namespace
+
+
 @pytest.fixture(autouse=True)
 def _clean() -> Iterator[None]:
     yield
@@ -95,18 +103,15 @@ def test_an_augmented_subscript_evaluates_its_container_and_key_once() -> None:
         calls.append(1)
         return "k"
 
-    data = {"k": [1]}
     _activate(call=_names("key"))
-    guarded_eval("d[key()] += [2]", names={"d": data, "key": key}, mode="exec")
-    assert data == {"k": [1, 2]}
+    namespace = _exec_namespace("d = {'k': [1]}\nd[key()] += [2]", {"key": key}, call=_names("key"))
+    assert namespace["d"] == {"k": [1, 2]}
     assert calls == [1]
 
 
 def test_an_augmented_slice_still_works() -> None:
-    data = [1, 2, 3]
     _activate()
-    guarded_eval("d[0:2] *= 2", names={"d": data}, mode="exec")
-    assert data == [1, 2, 1, 2, 3]
+    assert _exec_namespace("d = [1, 2, 3]\nd[0:2] *= 2")["d"] == [1, 2, 1, 2, 3]
 
 
 def test_a_leaked_worker_that_finished_no_longer_counts() -> None:
@@ -252,10 +257,8 @@ def test_a_left_shift_is_bounded_by_max_alloc(source: str) -> None:
 
 def test_a_small_left_shift_still_works() -> None:
     _activate(max_alloc=1000)
-    data = [1]
-    guarded_eval("d[0] <<= 3", names={"d": data}, mode="exec")
-    assert data == [8]
-    assert guarded_eval("d[0] << 1", names={"d": data}) == 16
+    assert _exec_namespace("d = [1]\nd[0] <<= 3", max_alloc=1000)["d"] == [8]
+    assert guarded_eval("d[0] << 1", names={"d": [8]}) == 16
 
 
 @pytest.mark.parametrize(

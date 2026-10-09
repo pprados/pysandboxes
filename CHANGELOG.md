@@ -23,6 +23,8 @@ kernel boundary is a Linux technology.
 ## [0.0.0] - 202X-XX-XX
 
 ### Changed
+- `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
+  object the application passed in, as it already could not set its attributes
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
 - The README and wiki no longer imply `OS_SANDBOX` selects the provider on its own: it only takes effect where the
   config's `os-sandbox` line reads it, and `learn=false` does not prevent an environment downgrade
@@ -39,6 +41,7 @@ kernel boundary is a Linux technology.
   runs under `subprocess`
 
 ### Fixed
+- `ImmutableDict` is no longer equal to the tuple it stores its keys and values in.
 - A module run with `python -m pkg.mod` finds the `.py-sandboxes` of its package, as when it is imported.
 - Learning writes its rule file through a temporary file with an unpredictable name, which another local user
   can no longer plant as a link to overwrite one of the user's files.

@@ -188,6 +188,12 @@ parameters (`TypeAlias`, `TypeVar`, `ParamSpec`, `TypeVarTuple`), `Global`,
 `Nonlocal`, `Delete` and `Assert`. `Starred` sits in `subscript`, so granting
 that group also grants unpacking (`f(*args)`, `a, *b = c`).
 
+Writing never reaches the data the application hands in. `obj.x = v` and `del obj.x` are refused whatever the
+rules. `obj[k] = v`, `obj[k] += v` and `del obj[k]` are refused at runtime on an object passed through `names=`
+or present in the namespace when the evaluation starts; a list or dict the evaluated code builds itself stays
+writable. An object nested in a supplied one (`data["rows"][0] = v`) is not covered: hand in a copy when that
+matters.
+
 A new Python release that adds a node makes that node **refused by default** —
 the safe direction.
 
