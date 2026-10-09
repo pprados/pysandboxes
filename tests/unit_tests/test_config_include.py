@@ -115,3 +115,30 @@ def test_a_sub_package_config_is_found_when_the_top_package_has_none(
     exec("result = search(None)", caller_globals)
 
     assert caller_globals["result"] == packaged
+
+
+def test_a_module_run_with_dash_m_finds_its_package_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`python -m pkg.mod` names the module `__main__`: its spec still carries the package."""
+    import importlib.util
+
+    site = tmp_path / "site"
+    _write(site / "mainpkg" / "__init__.py", "")
+    _write(site / "mainpkg" / "mod.py", "")
+    packaged = _write(site / "mainpkg" / CONFIG_NAME, "learn=false\n")
+    monkeypatch.syspath_prepend(str(site))
+    monkeypatch.chdir(tmp_path)
+    spec = importlib.util.find_spec("mainpkg.mod")
+    caller_globals: dict[str, object] = {"__name__": "__main__", "__spec__": spec, "search": _search_module_config}
+
+    exec("result = search(None)", caller_globals)
+
+    assert caller_globals["result"] == packaged
+
+
+def test_a_plain_script_still_uses_the_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    caller_globals: dict[str, object] = {"__name__": "__main__", "__spec__": None, "search": _search_module_config}
+
+    exec("result = search(None)", caller_globals)
+
+    assert caller_globals["result"] == tmp_path / CONFIG_NAME

@@ -59,7 +59,12 @@ def _search_module_config(config_path: Path | None) -> Path:
     # Python 3.10+ only
     from importlib.resources import files
 
-    caller_modules = frame.f_globals.get("__name__", "__main__").split(".")
+    caller_name = frame.f_globals.get("__name__", "__main__")
+    caller_spec = frame.f_globals.get("__spec__")
+    if caller_name == "__main__" and caller_spec is not None:
+        # `python -m pkg.mod` names the module __main__; its spec keeps the real name.
+        caller_name = caller_spec.name
+    caller_modules = caller_name.split(".")
     resource_config: Path | None = None
     if caller_modules[0] != "__main__":
         # The nearest package holding the file wins: the top package of a sub-package may hold none.
