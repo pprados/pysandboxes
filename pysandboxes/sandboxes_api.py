@@ -27,6 +27,9 @@ from typing import (
     Any,
     Callable,
     Coroutine,
+    ParamSpec,
+    TypeVar,
+    overload,
 )
 
 from ._os_sandbox import async_shutdown_daemon
@@ -70,14 +73,30 @@ def _refuse_locked_extra_rules(all_rules: "AllRules", extra_rules: dict[str, Any
         )
 
 
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+@overload
+def sandbox(_func: Callable[_P, _R]) -> Callable[_P, _R]: ...
+@overload
+def sandbox(_func: None = None) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]: ...
 def sandbox(
     _func: Callable[..., Any] | None = None,
-) -> Callable[..., Any]:
+) -> Any:
     """Decorator to run a function in a sandbox.
 
     This decorator can be applied to both synchronous and asynchronous functions.
     The decorated function will execute in an isolated sandbox environment with
-    restricted access to system resources.
+    restricted access to system resources. It keeps the decorated function's
+    signature for type checkers.
+
+    A method decorated with ``@sandbox`` is sent to the sandboxed child the same
+    way a plain function is: by reference, resolved there through its module and
+    qualified name. It works for a method of a class defined in an importable
+    module, but not for one defined interactively or in ``__main__``, which the
+    child cannot import back; this is the same restriction `multiprocessing`
+    places on its own targets.
 
     Args:
         _func: The function to be decorated (used when decorator is called
@@ -87,6 +106,8 @@ def sandbox(
         The decorated function that will run in a sandbox.
 
     Raises:
+        TypeError: If `_func` is a generator or asynchronous generator function;
+            neither can be sent across the sandbox boundary.
         Any exception raised by the original function is re-raised.
 
     Return value:
@@ -131,6 +152,11 @@ def sandbox(
     from pysandboxes._os_sandbox import async_call_in_sandbox, call_in_sandbox
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        if inspect.isgeneratorfunction(func) or inspect.isasyncgenfunction(func):
+            raise TypeError(
+                f"@sandbox cannot decorate {func.__qualname__!r}: generator and asynchronous "
+                "generator functions cannot be sent across the sandbox boundary."
+            )
 
         if inspect.iscoroutinefunction(func):
 
@@ -173,7 +199,7 @@ class sandboxes:
         Basic usage:
         ```python
         with sandboxes():
-            # Code runs in sandbox
+            # Only @sandbox-decorated calls made in this block run in the sandbox.
             result = some_function()
         ```
 
@@ -204,15 +230,18 @@ class sandboxes:
     )
 
     def _register_signals_handlers(self) -> None:
+        self._signals: dict[signal.Signals, Any | int | signal.Handlers | None] = {}
+        if threading.current_thread() is not threading.main_thread():
+            # signal.signal() only works from the main thread of the main interpreter; signals are
+            # delivered there anyway, so a worker thread has nothing to install.
+            return
         with self._lock:
             # Windows has no SIGQUIT
             register_signal = tuple(
                 getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGQUIT") if hasattr(signal, name)
             )
 
-            self._signals: dict[signal.Signals, Any | int | signal.Handlers | None] = {
-                s: signal.getsignal(s) for s in register_signal
-            }
+            self._signals = {s: signal.getsignal(s) for s in register_signal}
 
             def signal_handler(
                 signum: int,
@@ -266,7 +295,7 @@ class sandboxes:
         envs: Environ | None = None,
         python_args: list[str] | None = None,
         graceful_shutdown: bool = True,
-        **extra_rules: dict[str, Any],
+        **extra_rules: Any,
     ) -> None:
         """Initialize the sandbox context manager.
 
@@ -279,9 +308,9 @@ class sandboxes:
             graceful_shutdown: Whether to shut down gracefully on exit.
             **extra_rules: Configuration directives, added in front of those of the configuration file. The
                 keyword is the directive with its dashes written as underscores, the value is the directive's
-                value, or a set of values for a directive that repeats: `learn=".py-sandboxes"` starts the
-                learning mode and writes the rules it discovers to that file, `os_sandbox="bwrap"` selects
-                the OS provider, `py_sandbox="true"` arms the Python layer.
+                value, or a `list`, `tuple`, `set` or `frozenset` of values for a directive that repeats:
+                `learn=".py-sandboxes"` starts the learning mode and writes the rules it discovers to that
+                file, `os_sandbox="bwrap"` selects the OS provider, `py_sandbox="true"` arms the Python layer.
         """
         self.init_fn = init_fn
         self.sandboxes_config = (
@@ -292,7 +321,9 @@ class sandboxes:
         if envs is None:
             envs = os.environ
         self.envs = envs
-        self.extra_rules = extra_rules
+        self.extra_rules: dict[str, Any] = {
+            k: set(v) if isinstance(v, (list, tuple, frozenset)) else v for k, v in extra_rules.items()
+        }
         self.learning_path: Path | None = None
         self.python_args = python_args
         self.graceful_shutdown = graceful_shutdown
@@ -375,7 +406,8 @@ class sandboxes:
 
             log_level = logging.root.getEffectiveLevel()
             try:
-                all_rules = load_and_parse_config(
+                all_rules = await asyncio.to_thread(
+                    load_and_parse_config,
                     self.sandboxes_config,
                     envs=self.envs,
                     **self.extra_rules,
@@ -423,7 +455,7 @@ def run(
     envs: Environ | None = None,
     python_args: list[str] | None = None,
     graceful_shutdown: bool = True,
-    **extra_rules: dict[str, Any],
+    **extra_rules: Any,
 ) -> Any:
     """Run a coroutine in a new event loop, with the sandbox started around it.
 

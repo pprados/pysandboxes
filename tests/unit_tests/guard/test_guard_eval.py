@@ -13,8 +13,8 @@ from typing import Any, Callable, Iterator
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, SandBoxError
 from pysandboxes import guard_eval
+from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, RuleEvalPermissionError, SandBoxError
 from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, LearnEvalRule, NameSet
 from pysandboxes.guard_api import SENSITIVE_API, LearnApiRule, _deactivate_guard_api
 from pysandboxes.guard_api import activate_guard as activate_api
@@ -322,9 +322,39 @@ def test_a_native_syntax_error_propagates_as_itself() -> None:
     assert not isinstance(caught.value, EvalSyntaxRejected)
 
 
+def test_a_source_that_overflows_the_parser_is_rejected_not_raised_raw() -> None:
+    """`ast.parse` can itself exhaust the interpreter's stack before `validate()`
+    ever sees a tree to measure: `RecursionError` on CPython's recursive-descent
+    builds (3.11), `MemoryError` ("Parser stack overflowed") on the PEG parser
+    (3.14 here). Either way it must come out as the documented
+    `EvalSyntaxRejected`, not escape raw.
+    """
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    with pytest.raises(EvalSyntaxRejected) as caught:
+        guarded_eval("-" * 20000 + "1")
+    assert "eval-max-depth=parse" in str(caught.value)
+
+
 def test_names_are_merged_into_the_namespace() -> None:
     _activate(syntax=_syntax("arith"), namespace="closed")
     assert guarded_eval("data + 1", names={"data": 41}) == 42
+
+
+@pytest.mark.parametrize("source", ["data['k'] = 1", "data['k'] += 1", "a, data['k'] = 1, 2", "del data['k']"])
+def test_an_object_the_application_supplied_is_not_written_by_subscript(source: str) -> None:
+    """`data.x = v` is refused whatever the rules; `data[k] = v` on supplied data is refused alike."""
+    syntax = _syntax("arith", "assign", "subscript")
+    _activate(syntax=syntax._replace(allow=syntax.allow | {"Delete"}), namespace="closed")
+    data = {"k": 0}
+    with pytest.raises(RuleEvalPermissionError):
+        guarded_eval(source, names={"data": data}, mode="exec")
+    assert data == {"k": 0}
+
+
+def test_a_container_the_evaluated_code_builds_stays_writable() -> None:
+    syntax = _syntax("arith", "assign", "subscript")
+    _activate(syntax=syntax._replace(allow=syntax.allow | {"Delete", "List"}), namespace="closed")
+    assert guarded_eval("x = [0, 0]\nx[0] = 5\nx[1] += 2\ndel x[0]", mode="exec") is None
 
 
 def test_an_unknown_profile_is_an_error_not_a_silent_fallback() -> None:
@@ -663,6 +693,16 @@ def test_learning_a_source_proposes_eval_rules_only(monkeypatch: pytest.MonkeyPa
     learned = _learned_from(monkeypatch, "2*(3+4)", None)
     assert learned
     assert all(isinstance(rule, LearnEvalRule) for rule in learned)
+
+
+def test_learning_a_source_that_overflows_the_parser_does_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same parser ceiling as the enforced path, but learning only observes: no crash, nothing proposed.
+
+    The real builtin, called right after by the wrapper regardless of what
+    learning records, hits the same ceiling and raises it itself.
+    """
+    rules = DEFAULT_RULES._replace(declared=True, syntax=_syntax("arith"))
+    assert _learned_from(monkeypatch, "-" * 20000 + "1", rules) == []
 
 
 def test_learning_a_foreign_code_object_proposes_the_api_right(monkeypatch: pytest.MonkeyPatch) -> None:

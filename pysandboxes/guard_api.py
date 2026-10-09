@@ -24,6 +24,10 @@ from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
 
+# Maintained by hand: nothing detects a sensitive function that CPython adds. Review this registry against
+# every new CPython release ("What's New", and new functions in os, sys, ctypes, _ctypes, _posixsubprocess,
+# _interpreters, pickle, marshal, threading, signal...) and register what spawns, loads native code, changes
+# privileges, introspects frames or runs code. An unregistered function stays callable by sandboxed code.
 SENSITIVE_API: dict[str, tuple[str, ...]] = {
     "process-exec": (
         "os.system",
@@ -201,11 +205,32 @@ SENSITIVE_API: dict[str, tuple[str, ...]] = {
     # it in a plain function would drop its restype/argtypes/errcheck
     # configuration attributes. Both trade-offs are acceptable because
     # "native" is documented as detection and friction, not a barrier.
+    #
+    # ctypes.CDLL.__init__ is not the only route to a loaded library:
+    # ``CDLL.__new__(CDLL)`` then setting ``_name``, ``_FuncPtr`` and
+    # ``_handle = _ctypes.dlopen(...)`` by hand builds a working instance
+    # without ever calling the guarded __init__. _ctypes.dlopen (posix) and
+    # its Windows twin _ctypes.LoadLibrary close that route; ctypes/__init__.py
+    # also holds each behind a module-level alias (``_dlopen``/
+    # ``_LoadLibrary``) that CDLL._load_library calls at runtime, so both the
+    # canonical name and the alias need patching — see _ALIASES. ctypes.cdll
+    # and the other LibraryLoader instances (pydll, windll, oledll) construct
+    # their class through the normal, guarded __init__ and need no entry of
+    # their own. _ctypes.dlsym resolves a symbol to a callable address on a
+    # handle obtained any other way (e.g. one already open under an allowed
+    # CDLL) — the same operation CDLL performs internally for its own
+    # attributes — so it is listed for the same reason as ctypes.cast.
+    # dlclose only releases a handle, granting no call capability, and is not
+    # listed; _ctypes exposes no Windows FreeLibrary to parallel it
+    # (ctypes/__init__.py never calls one either).
     "native": (
         "ctypes.CDLL",
         "ctypes.cast",
         "ctypes.string_at",
         "ctypes.wstring_at",
+        "_ctypes.dlopen",
+        "_ctypes.dlsym",
+        "_ctypes.LoadLibrary",
     ),
     # importlib.reload rebinds a module's attributes in place, on the very
     # module object every reference already holds: reloading ``os`` puts the
@@ -341,6 +366,7 @@ _WINDOWS_ONLY = frozenset(
         "nt.kill",
         "nt.abort",
         "nt.umask",
+        "_ctypes.LoadLibrary",
     }
 )
 
@@ -382,6 +408,8 @@ _POSIX_ONLY = frozenset(
         "_signal.pthread_kill",
         "signal.setitimer",
         "_signal.setitimer",
+        "_ctypes.dlopen",
+        "_ctypes.dlsym",
     }
 )
 
@@ -690,10 +718,15 @@ _PATCH_TARGET: dict[str, str] = {
 }
 
 # subprocess binds ``fork_exec`` under its own name when it is first imported, before
-# the guards arm: patching ``_posixsubprocess.fork_exec`` leaves that binding, which
-# Popen calls and anyone can call, on the original. Each alias is patched with the
+# the guards arm; ctypes does the same for dlopen/LoadLibrary, as ``_dlopen``/
+# ``_LoadLibrary``. Patching only the canonical name leaves that binding, which the
+# facade calls and anyone can call, on the original. Each alias is patched with the
 # wrapper of the entry it stands for, so one decision covers both names.
-_ALIASES: dict[str, str] = {"subprocess._fork_exec": "_posixsubprocess.fork_exec"}
+_ALIASES: dict[str, str] = {
+    "subprocess._fork_exec": "_posixsubprocess.fork_exec",
+    "ctypes._dlopen": "_ctypes.dlopen",
+    "ctypes._LoadLibrary": "_ctypes.LoadLibrary",
+}
 
 # guard_eval patches these three itself: the guarded path parses and rewrites
 # the source, which a binary allow/deny cannot express. Deliberately NOT

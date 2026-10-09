@@ -6,6 +6,7 @@ Only the pure parts are covered here. ``GuardFinder`` and ``GuardLoader`` mutate
 ``sys.meta_path`` and ``sys.modules``, so they belong to the integration tests.
 """
 
+import logging
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, cast
@@ -251,6 +252,31 @@ def test_generated_lines_parse_back_without_error() -> None:
 
     assert "json" in parsed
     assert "mycompany" in parsed
+
+
+def test_a_module_name_with_a_newline_is_skipped_not_injected(caplog: pytest.LogCaptureFixture) -> None:
+    """NA2: ``importlib.import_module()`` accepts a name that is not a valid Python
+    identifier, and a real package directory can be named that way on disk
+    (``evilpkg\\nos-sandbox=none\\n#``). Writing it unescaped into
+    ``python-import=<name>`` would reload as three lines -- a real
+    ``python-import=evilpkg`` rule, then a free-standing ``os-sandbox=none``, then
+    a comment -- instead of the single rule that was observed."""
+    evil_name = "evilpkg\nos-sandbox=none\n#"
+    with caplog.at_level(logging.WARNING, logger="pysandboxes.guard_import"):
+        lines = generate_rules({LearnImportRule(evil_name), LearnImportRule("json")})
+
+    assert all("\n" not in line for line in lines)
+    assert not any(evil_name in line or "evilpkg" in line for line in lines)
+    assert any(line.startswith("python-import=json") for line in lines)
+    assert any("unsafe module name" in r.getMessage() for r in caplog.records)
+
+
+def test_a_module_name_with_a_hash_is_skipped() -> None:
+    """A name with no newline still corrupts the line: ``#`` is an unquoted
+    end-of-line comment marker, so ``python-import=evil#pkg`` would reload as
+    ``python-import=evil``, a different, wider rule than what was observed."""
+    lines = generate_rules({LearnImportRule("evil#pkg")})
+    assert lines == []
 
 
 def test_packaged_resources_stay_readable_while_the_guard_is_armed() -> None:

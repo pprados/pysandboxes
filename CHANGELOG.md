@@ -23,7 +23,11 @@ kernel boundary is a Linux technology.
 ## [0.0.0] - 202X-XX-XX
 
 ### Changed
+- `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
+  object the application passed in, as it already could not set its attributes
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
+- The README and wiki no longer imply `OS_SANDBOX` selects the provider on its own: it only takes effect where the
+  config's `os-sandbox` line reads it, and `learn=false` does not prevent an environment downgrade
 - A new rule file no longer includes `./.local.py-sandboxes` by default: the line is commented out, and accepting
   local rules from the current directory is the user's decision
 - The samples' documentation no longer claims that learning mode cannot produce `net=` rules: it does, and each one
@@ -32,8 +36,25 @@ kernel boundary is a Linux technology.
   refused at load, with each `eval-*` line to comment out: the grant ran the code unguarded and left them unused
 - Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
   (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
+- A generated `.py-sandboxes` names `landlock` as its default provider (`os-sandbox=${OS_SANDBOX:-landlock}`) on
+  Linux when the kernel supports it, and `subprocess` otherwise, with a warning when Linux lacks Landlock; learning
+  itself still always runs under `subprocess`
+- When two `env=` patterns match the same variable, the one with more fixed characters wins, whatever the line
+  order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- An `os-sandbox` the host cannot run (a missing `bwrap`, `firejail` or QEMU, a kernel without Landlock or user
+  namespaces) is refused when the sandbox starts, with the reason, before anything is launched
+- Under `landlock`, on a kernel with Landlock ABI 6 or later, the sandbox can no longer reach an abstract Unix
+  socket created outside it; named Unix sockets of the host remain reachable from native code, as documented
+- `ImmutableDict` is no longer equal to the tuple it stores its keys and values in.
+- A module run with `python -m pkg.mod` finds the `.py-sandboxes` of its package, as when it is imported.
+- Learning writes its rule file through a temporary file with an unpredictable name, which another local user
+  can no longer plant as a link to overwrite one of the user's files.
+- A kernel where Landlock is disabled at boot is detected as such, instead of being reported available.
+- `qemu` forwards its port on the host loopback only, no longer on every host interface.
+- The `python-sb` REPL starts when the configuration file lies outside the working directory.
+- `with sandboxes()` and `async with sandboxes()` work from a thread other than the main one.
 - Learning mode no longer writes a rule under `/proc`: a library reading `/proc/stat` at import produced
   `expose-ro=/proc`, which exposed every process's environment and command line
 - Under `bwrap`, a project reached through a symbolic link runs in its own directory, not silently in `$HOME`
@@ -138,6 +159,12 @@ kernel boundary is a Linux technology.
   exact `env=` beats a wildcard one whatever their order
 - A wildcard `env=*_KEY=value` sets the given value on every matching variable instead of forwarding the host value
 - `--port=` on the command line takes precedence over `port=` in the profile
+- Learning writes the rule file atomically, names its backup after the full file name, does not add a rule the
+  target file already holds when run again, and no longer grants environment variables only probed internally
+- `@sandbox` refuses generator and async generator functions when decorating; a sandboxed call outside a
+  `sandboxes()` session raises `SandBoxError`; a decorated function keeps its signature for type checkers, and
+  `sandboxes(expose_ro=[...])` accepts a list or a tuple
+- `async with sandboxes()` reads its rule files off the event loop
 - An include that exists but cannot be read is a configuration error instead of being skipped; a bare-name include
   inside an included file is resolved next to that file, and a profile including itself is loaded once
 - The error raised when the Python executable's symlink chain cannot be resolved names the broken path
@@ -152,6 +179,20 @@ kernel boundary is a Linux technology.
 - On Python 3.13 and later, `exec()` without a namespace no longer rewrites the caller's local variables
 - A source nested deeper than the recursion limit is refused by `eval-max-depth` instead of raising `RecursionError`
 - `eval-syntax` accepts only AST node names, not `parse` or `NodeVisitor`, nor the deprecated `Num`
+- Under `bwrap`, the sandbox no longer has read access to the whole of `/run`, which exposed `/run/docker.sock`
+  and every user's session sockets, including the D-Bus bus
+- A `net=` rule written against an IPv4 address now also judges the IPv4-translated, IPv4-compatible and NAT64
+  encodings of that same address, not only the plain and IPv4-mapped forms
+- A sandboxed function raising `GeneratorExit` fails that call with `SandBoxBaseExceptionError`, instead of an
+  opaque "No result received from the sandbox"
+- `ctypes.CDLL.__new__` followed by a hand-built `_handle` no longer skips the native-code guard: `_ctypes.dlopen`,
+  `_ctypes.dlsym` and the Windows `_ctypes.LoadLibrary` are refused unless `python-api` allows them
+- A deeply nested source no longer crashes `eval`, `exec` or `compile` with a raw `RecursionError` or `MemoryError`
+  from the parser itself: it is refused by `eval-max-depth`, like a source whose parsed tree is too deep
+- Sandboxed code can no longer widen its own permissions by writing to, renaming, or removing the active
+  `.py-sandboxes`, a file it `include`s, or the learning output file, even from a directory exposed read-write
+- Learning mode no longer writes a path or an imported module name containing a newline, a `#`, or another
+  character that would break the rule file's line format into the generated profile
 
 ### Added
 - A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps

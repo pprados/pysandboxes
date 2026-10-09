@@ -78,13 +78,37 @@ On the exception channel the guard is fail-closed, and an exception's state rout
 
 > Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
-To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file, or set the environment variable `OS_SANDBOX`.
+To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file. `OS_SANDBOX` only takes effect where that line reads it, as a generated profile does (`os-sandbox=${OS_SANDBOX:-landlock}`):
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
+A generated profile names its default in clear: `landlock` on Linux when the kernel supports it (no extra binary needed), otherwise `subprocess`, with a warning when Linux lacks Landlock. The choice is made once, when the file is written, and read as written afterwards; learning always runs under `subprocess` regardless (see above). `landlock` protects files and TCP ports but not the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)): against untrusted native code, write `os-sandbox=bwrap` or `os-sandbox=unshare`.
+
+To pin a provider so the environment cannot downgrade it, write it literally, e.g. `os-sandbox=bwrap` — `learn=false` does not prevent this downgrade either (see [use-cases](use-cases.md#what-the-rule-file-does-not-show)). A named provider, `landlock` included, is never downgraded: if it is unavailable, the sandboxed process fails closed instead of silently dropping to `subprocess`.
+
 > Need help: can you propose a PR to integrate some solution for Apple OS ?
+
+### Host sockets under `/run`
+
+`/run` holds sockets that reach the host: `/run/docker.sock`, and under `/run/user/<uid>` the session D-Bus bus
+(which can start commands through `systemd --user`), the ssh and gpg agents. A read-only mount does not prevent
+`connect()` on them. Each kernel provider keeps them out of reach in its own way:
+
+- `bwrap` does not bind `/run`; it binds only the target of `/etc/resolv.conf` when that file points under `/run`
+  (systemd-resolved).
+- `unshare` builds a fresh root that has no `/run` from the host.
+- `firejail` refuses the creation of any Unix socket; the distribution's `disable-common.inc` blacklist of
+  `docker.sock` is only a second line.
+- `landlock` does **not** keep the named ones out: Landlock filters file access, not `connect()` on a Unix socket,
+  so native code can reach the session D-Bus bus or `docker.sock`; the Python guard still refuses it. From ABI 6
+  the abstract ones created outside the sandbox are refused. A documented limit: for untrusted native code, use
+  `bwrap` or `unshare`.
+- `qemu` runs a separate kernel: the host's `/run` is not visible.
+
+An `expose-ro` or `expose-rw` rule naming a directory under `/run` gives those sockets back: write one only for a
+socket the program really needs.
 
 ## Paranoia level
 Depending on your level of paranoia, you can choose a suitable approach.
@@ -113,6 +137,7 @@ Depending on your level of paranoia, you can choose a suitable approach.
 
 ## Recommendations
 
+- Keep the generated default (`landlock` where the kernel supports it, `subprocess` otherwise) unless you need a specific provider; for untrusted native code, prefer `bwrap` or `unshare`.
 - Nest an OS provider around the py-sandbox rather than replacing it: the union of both layers is your actual protection.
 - Keep the Python layer on. Set `py-sandbox=False` only when the sandboxed code is trusted not to attack the interpreter itself.
 - On a managed Kubernetes cluster, verify that the node kernel exposes Landlock before relying on it.

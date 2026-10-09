@@ -75,7 +75,7 @@ from .eval_runtime import (
     pop_state,
     push_state,
 )
-from .eval_transform import inject, learn_targets, raise_if_rejected, validate
+from .eval_transform import Violation, inject, learn_targets, raise_if_rejected, validate
 from .guard_api import LearnApiRule
 from .guard_wraps import guard_wraps
 from .immutable_dict import ImmutableDict
@@ -436,6 +436,27 @@ def _interrupt(state: EvalState, timeout: float) -> None:
     state.reason = f"eval-timeout={timeout}s"
 
 
+def _raise_parse_overflow(source_ref: str, source: str) -> NoReturn:
+    """Reject source that overflows the parser before there is a tree to measure.
+
+    `ast.parse` recurses with the grammar, so deeply nested input can exhaust
+    the interpreter's C stack before returning a tree for `validate`'s
+    `_depth` check to measure -- `RecursionError` on CPython's
+    recursive-descent builds (3.11), `MemoryError` ("Parser stack
+    overflowed") on the PEG parser (3.14 here). Same refusal `validate`
+    already gives a tree too deep to walk, one step earlier.
+
+    Raises:
+        EvalSyntaxRejected: Always.
+    """
+    raise_if_rejected(
+        source_ref,
+        source,
+        [Violation(1, 0, "the source defeats the parser before it can be measured", "eval-max-depth=parse")],
+    )
+    raise AssertionError("unreachable: raise_if_rejected always raises for a non-empty violation list")
+
+
 def run_guarded(
     source: str,
     rules: EvalRules,
@@ -468,8 +489,16 @@ def run_guarded(
             f"eval-max-leaked-threads={rules.max_leaked_threads} reached: "
             "earlier evaluations blocked in a C call and are still running"
         )
-    tree = ast.parse(source, filename=source_ref, mode=mode)
-    state = EvalState(rules, learn=learn)
+    try:
+        tree = ast.parse(source, filename=source_ref, mode=mode)
+    except (RecursionError, MemoryError):
+        _raise_parse_overflow(source_ref, source)
+    supplied = {
+        id(value): value
+        for key, value in namespace.items()
+        if key not in HELPERS and key != "__builtins__" and hasattr(type(value), "__setitem__")
+    }
+    state = EvalState(rules, learn=learn, supplied=supplied)
     violations = validate(tree, rules)
     if learn:
         for key, name in learn_targets(violations):
@@ -664,7 +693,7 @@ def _learn_from(source: Any, qualname: str, mode: str, rules: EvalRules | None) 
     text, _ = _guarded_source(source, qualname, mode)
     try:
         tree = ast.parse(text, mode=mode if mode in ("eval", "exec") else "exec")
-    except SyntaxError:
+    except (SyntaxError, RecursionError, MemoryError):
         # The application's own problem, and it is about to raise it itself.
         return
     for key, name in learn_targets(validate(tree, rules or DEFAULT_RULES)):
@@ -765,7 +794,10 @@ def _wrap_compile(func: Callable[..., Any]) -> Callable[..., Any]:
         text, text_mode = _guarded_source(source, "builtins.compile", mode)
         text_mode = text_mode if text_mode in ("eval", "exec") else "exec"
         ref = _source_ref(frame, "")
-        tree = ast.parse(text, filename=ref, mode=text_mode)
+        try:
+            tree = ast.parse(text, filename=ref, mode=text_mode)
+        except (RecursionError, MemoryError):
+            _raise_parse_overflow(ref, text)
         raise_if_rejected(ref, text, validate(tree, rules))
         flags = args[0] if args else kwargs.get("flags", 0)
         if flags & ast.PyCF_ONLY_AST:

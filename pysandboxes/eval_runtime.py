@@ -90,16 +90,19 @@ class EvalState:
         depth: Current runtime call depth of evaluated functions.
         attributes: Ordinary attribute names observed, for learning mode.
         magic: Dunder names observed, for learning mode.
+        supplied: The writable objects the application handed in, by id; kept
+            alive here so an id is never reused during the evaluation.
     """
 
-    __slots__ = ("rules", "learn", "interrupted", "reason", "iterations", "depth", "attributes", "magic")
+    __slots__ = ("rules", "learn", "interrupted", "reason", "iterations", "depth", "attributes", "magic", "supplied")
 
-    def __init__(self, rules: EvalRules, *, learn: bool = False) -> None:
+    def __init__(self, rules: EvalRules, *, learn: bool = False, supplied: dict[int, Any] | None = None) -> None:
         """Initialize a fresh budget for one evaluation.
 
         Args:
             rules: The resolved profile.
             learn: Whether to record refusals rather than raise them.
+            supplied: The objects `__sb_writable__` refuses to write through.
         """
         self.rules = rules
         self.learn = learn
@@ -109,6 +112,7 @@ class EvalState:
         self.depth = 0
         self.attributes: set[str] = set()
         self.magic: set[str] = set()
+        self.supplied: dict[int, Any] = supplied or {}
 
 
 _current = threading.local()
@@ -668,6 +672,23 @@ def __sb_iter__(iterable: Any) -> Iterator[Any]:
         yield item
 
 
+def __sb_writable__(container: Any) -> Any:
+    """Guarded subscript store and delete: an object the application supplied is not written through.
+
+    The same rule as for attributes, which are never written: the evaluated code computes over the data
+    it was given. A container it builds itself stays writable. An object nested in a supplied one is not
+    covered.
+    """
+    state = current_state()
+    if state.supplied.get(id(container)) is container and not state.learn:
+        raise RuleEvalPermissionError(
+            f"{type(container).__name__}[...] =",
+            "eval-syntax",
+            "an object the application passed in is read-only to the evaluated code, as its attributes are",
+        )
+    return container
+
+
 HELPERS: dict[str, Any] = {
     "__sb_tick__": __sb_tick__,
     "__sb_enter__": __sb_enter__,
@@ -677,5 +698,6 @@ HELPERS: dict[str, Any] = {
     "__sb_binop__": __sb_binop__,
     "__sb_iter__": __sb_iter__,
     "__sb_format__": __sb_format__,
+    "__sb_writable__": __sb_writable__,
 }
 """The names bound into every guarded namespace, none reachable via eval-call."""

@@ -126,6 +126,33 @@ def test_ipv4_mapped_address_is_judged_by_the_ipv4_rules() -> None:
         _check_address_with_rules(rules, Kind.TCP, ("::ffff:127.0.0.1", 80), Direction.OUT)
 
 
+def test_ipv4_translated_address_is_judged_by_the_ipv4_rules() -> None:
+    """``::ffff:0:a.b.c.d`` (RFC 2765) must not bypass the rule ``::ffff:a.b.c.d`` is judged by."""
+    rules = _parse("net=ALLOW|*|*|*|OUT", "net=DENY|*|127.0.0.1/32|*|OUT")
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, ("::ffff:0:127.0.0.1", 80), Direction.OUT)
+
+
+def test_ipv4_compatible_address_is_judged_by_the_ipv4_rules() -> None:
+    """``::a.b.c.d`` (deprecated IPv4-compatible form) must not bypass the IPv4 rule either."""
+    rules = _parse("net=ALLOW|*|*|*|OUT", "net=DENY|*|127.0.0.1/32|*|OUT")
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, ("::127.0.0.1", 80), Direction.OUT)
+
+
+def test_unspecified_and_loopback_ipv6_are_not_judged_as_ipv4() -> None:
+    """``::`` and ``::1`` are excluded from the IPv4-compatible form: they are IPv6 addresses in their own right."""
+    rules = _parse("net=ALLOW|*|*|*|OUT", "net=DENY|*|127.0.0.1/32|*|OUT")
+    _check_address_with_rules(rules, Kind.TCP, ("::1", 80), Direction.OUT)
+
+
+def test_nat64_well_known_prefix_address_is_judged_by_the_ipv4_rules() -> None:
+    """``64:ff9b::a.b.c.d`` (RFC 6052 NAT64 well-known prefix) must not bypass the IPv4 rule either."""
+    rules = _parse("net=ALLOW|*|*|*|OUT", "net=DENY|*|127.0.0.1/32|*|OUT")
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, ("64:ff9b::127.0.0.1", 80), Direction.OUT)
+
+
 # %% 3. listen() without bind()
 
 

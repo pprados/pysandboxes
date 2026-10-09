@@ -59,7 +59,12 @@ def _search_module_config(config_path: Path | None) -> Path:
     # Python 3.10+ only
     from importlib.resources import files
 
-    caller_modules = frame.f_globals.get("__name__", "__main__").split(".")
+    caller_name = frame.f_globals.get("__name__", "__main__")
+    caller_spec = frame.f_globals.get("__spec__")
+    if caller_name == "__main__" and caller_spec is not None:
+        # `python -m pkg.mod` names the module __main__; its spec keeps the real name.
+        caller_name = caller_spec.name
+    caller_modules = caller_name.split(".")
     resource_config: Path | None = None
     if caller_modules[0] != "__main__":
         # The nearest package holding the file wins: the top package of a sub-package may hold none.
@@ -112,7 +117,7 @@ def load_and_parse_config(
     config_path: Path | None = None,
     *,
     envs: Environ | None = None,
-    **extra_rules: dict[str, Any],
+    **extra_rules: Any,
 ) -> AllRules:
     """Reads and parses the configuration file for the sandbox.
 
@@ -127,8 +132,9 @@ def load_and_parse_config(
     Args:
         config_path: Path to the configuration file. Defaults to "./.py-sandboxes".
         envs: Environment variables for substitution. Defaults to os.environ.
-        **extra_rules: Additional rule strings to parse. Values can be strings
-            or iterables of strings for the same key.
+        **extra_rules: Additional rule strings to parse. Values can be a string or a
+            set of strings for the same key; the caller normalizes other iterables
+            (list, tuple, frozenset) to a set before calling.
 
     Returns:
         An AllRules object containing the parsed configuration.
@@ -169,7 +175,14 @@ def load_and_parse_config(
         with resources.as_file(
             resources.files(pysb_module_name + ".templates") / "py-sandboxes.template"
         ) as resource_path:
-            config = extra_lines + _read_config_and_remove_comments(resource_path)
+            from pysandboxes._os_sandbox import DEFAULT_OS_SANDBOX_MARK
+
+            # No rule file means a learning run, and learning always runs under subprocess.
+            template = [
+                line._replace(rule=line.rule.replace(DEFAULT_OS_SANDBOX_MARK, "subprocess"))
+                for line in _read_config_and_remove_comments(resource_path)
+            ]
+            config = extra_lines + template
     else:
         config = extra_lines + _read_config_and_remove_comments(config_path)
     return parse_config(
@@ -252,7 +265,8 @@ def parse_config(
     errors: list[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
-    config = _parse_include(config_path.parent, {config_path.absolute()}, config)
+    config_files = {config_path.absolute()}
+    config = _parse_include(config_path.parent, config_files, config)
 
     # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, envs, errors)
@@ -310,6 +324,12 @@ def parse_config(
         # Force os_sandbox to subprocess
         os_sandbox = "subprocess"
 
+    # The main profile, every file it includes, and the learning output file:
+    # none of these may be written to, renamed over, or removed by sandboxed
+    # code, whatever rule a profile grants (NA1). The learning output defaults
+    # to config_path itself when unset (guard_provider.parse_rules).
+    protected_config_files = frozenset(config_files) | {learning_path.absolute()}
+
     return AllRules(
         root_path=config_path,
         config=config,
@@ -329,6 +349,7 @@ def parse_config(
         import_rules=import_rules,
         api_rules=api_rules,
         eval_rules=eval_profiles,
+        config_files=protected_config_files,
     )
 
 
@@ -395,6 +416,7 @@ def activate_sandboxes(
 
         guard_envs.activate_guard(all_rules.envs_rules)
         guard_socket.activate_guard(all_rules.socket_rules)
+        guard_files.set_protected_config_paths(all_rules.config_files)
         guard_files.activate_guard(all_rules.file_rules)
         guard_api.activate_guard(all_rules.api_rules)
         guard_eval.activate_guard(all_rules.eval_rules, learn=all_rules.learn)

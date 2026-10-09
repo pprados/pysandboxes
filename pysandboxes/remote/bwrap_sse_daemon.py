@@ -168,6 +168,34 @@ def _resolve_ignore_paths(
     return result
 
 
+def _dns_run_paths(
+    resolv_conf: Path = Path("/etc/resolv.conf"),
+    run_root: Path = Path("/run"),
+) -> list[str]:
+    """Real path under ``run_root`` that DNS resolution needs, if any.
+
+    ``/etc`` is bound whole, so a plain ``/etc/resolv.conf`` needs nothing extra. systemd-resolved
+    publishes it as a symlink into ``/run`` instead (e.g. ``/run/systemd/resolve/stub-resolv.conf``),
+    and that target must be bound on its own: binding ``/run`` outright would also expose
+    ``/run/docker.sock`` and every ``/run/user/<uid>``, including another user's session D-Bus bus,
+    which answers ``AUTH EXTERNAL OK`` from inside the sandbox -- a host escape.
+    """
+    if not resolv_conf.is_symlink():
+        return []
+    try:
+        target = resolv_conf.resolve()
+        resolved_run_root = run_root.resolve()
+    except OSError:
+        return []
+    if not target.exists():
+        return []
+    try:
+        target.relative_to(resolved_run_root)
+    except ValueError:
+        return []
+    return [str(target)]
+
+
 def _is_inside_exposed(path: str, exposed: list[str]) -> bool:
     """True when path is covered by one of the exposed prefixes.
 
@@ -487,11 +515,12 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             else:
                 args.append(f"--{k}")
 
-        # Minimal binds: /usr, /etc, /run (for resolv.conf when it points into /run)
+        # Minimal binds: /usr, /etc, and only the /run path resolv.conf resolves to, if any --
+        # never the whole of /run (see _dns_run_paths).
         args.extend(["--ro-bind", "/usr", "/usr"])
         args.extend(["--ro-bind", "/etc", "/etc"])
-        if Path("/run").is_dir():
-            args.extend(["--ro-bind", "/run", "/run"])
+        for run_path in _dns_run_paths():
+            args.extend(["--ro-bind-try", run_path, run_path])
         for lib_dir in ("/lib", "/lib64"):
             if Path(lib_dir).is_dir():
                 args.extend(["--ro-bind", lib_dir, lib_dir])

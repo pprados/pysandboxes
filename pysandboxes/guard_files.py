@@ -29,6 +29,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Iterable,
     Iterator,
     NamedTuple,
     NoReturn,
@@ -137,6 +138,14 @@ class _DirEntry:
 # Internal state for the file filter
 _rules: FilesRules = cast(FilesRules, ())
 
+# Resolved paths of the active profile, every file it `include`s, and the learning
+# output file (NA1): denied to any write, independently of `_rules`, so an
+# expose-rw directory that happens to hold the config cannot be used to widen it
+# from inside the sandbox. Not a FilesRule: it is checked ahead of, not inside,
+# the `_rules` loop, and every loop over `_rules` ends in `assert False` on an
+# unknown rule type.
+_protected_config_paths: frozenset[str] = frozenset()
+
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 _os_readlink = os.readlink
@@ -171,6 +180,33 @@ def _is_link(path: str) -> bool:
         return os.path.islink(path)
     finally:
         _canonicalizing.reset(token)
+
+
+def set_protected_config_paths(paths: "Iterable[Path]") -> None:
+    """Register the configuration files sandboxed code may never write to, rename
+    over, or remove (NA1).
+
+    ``paths`` is the active profile, every file it ``include``s, and the learning
+    output file (``AllRules.config_files``). Stored resolved, so a symlink cannot
+    dodge the check, and compared against the same realpath-resolved form the
+    guard already checks every other write against.
+    """
+    global _protected_config_paths
+    _protected_config_paths = frozenset(_safe_realpath(str(p)) for p in paths)
+
+
+def _protected_path(canon_path: str) -> str | None:
+    """Return the protected path ``canon_path`` would write to or through, or None.
+
+    Matches the protected file itself, and any ancestor directory of it: renaming
+    or removing the directory a protected file lives in relocates or deletes it
+    just as effectively as touching it directly.
+    """
+    stripped = canon_path.rstrip(os.sep)
+    for protected in _protected_config_paths:
+        if stripped == protected or protected.startswith(stripped + os.sep):
+            return protected
+    return None
 
 
 # System CA stores: Debian/Ubuntu (/etc/ssl, whose certs link to /usr/share/ca-certificates),
@@ -359,7 +395,9 @@ _special_env = OrderedDict(
                 "TMP",
                 "TEMP",
             ]
-            if (v := _learn_env.get(k)) is not None
+            # ``_get`` reads without recording a use: this is pysandboxes probing its own
+            # substitution table, not the sandboxed application reading the variable.
+            if (v := _learn_env._get(k)) is not None
         ),
         key=lambda x: len(x[1]),
         reverse=True,
@@ -386,12 +424,33 @@ _special_home = OrderedDict(
                 "NLTK_DATA",
                 "SPACY_DATA",
             ]
-            if (v := _learn_env.get(k)) is not None
+            # See the ``_special_env`` comment above: probing must not record a use.
+            if (v := _learn_env._get(k)) is not None
         ),
         key=lambda x: len(x[1]),
         reverse=True,
     )
 )
+
+
+# Characters that would make a generated rule reload as something other than
+# what was observed: C0 controls and DEL split it into several lines (NA2, the
+# `\n`/`\r` case) or truncate it where a line-based reader stops; `#` is an
+# unquoted end-of-line comment marker (`tools._remove_comment`) and truncates the
+# value there instead; `$` starts a `${...}` substitution (`substitute_config_env_vars`)
+# the generated line never intended.
+_UNSAFE_RULE_CHARS = frozenset(chr(c) for c in range(0x20)) | {"\x7f", "#", "$"}
+
+
+def _is_unsafe_rule_path(path: Path) -> bool:
+    """Tell whether ``path`` would not survive being written as a rule value and
+    read back: a character from ``_UNSAFE_RULE_CHARS`` anywhere, or a path
+    component with leading or trailing whitespace (the full line is stripped on
+    reload, same as a plain write-then-read of the generated file)."""
+    text = str(path)
+    if any(ch in _UNSAFE_RULE_CHARS for ch in text):
+        return True
+    return any(part != part.strip() for part in path.parts)
 
 
 def generate_rules(
@@ -436,6 +495,13 @@ def generate_rules(
 
     allready_added: list[LearnFileRule] = []
     for path in sorted(parent_level.keys()):
+        if _is_unsafe_rule_path(path):
+            # NA2: a learned path is written into the rule unescaped; one that embeds a
+            # newline (or another control character, `#`, or `$`) would reload as several
+            # directives instead of the single expose-ro/rw it observed. Checked on the raw
+            # path, before any `${special-var}` substitution below adds its own `$`.
+            logger.warning("Skip learned file rule with a path that cannot be safely re-encoded: %r", str(path))
+            continue
         if path.exists() and (path.is_file() or path.is_dir()) and os.access(path, os.R_OK):
             write = parent_level[path]
             value = None
@@ -587,6 +653,19 @@ def _apply_dest_to_src_rules(
         canon_path = canon_path + os.sep
     original_path = path
 
+    # NA1: the active profile, its includes and the learning output file may never
+    # be written to, whatever `_rules` says -- an expose-rw directory that happens
+    # to hold the config must not let sandboxed code widen it for the next
+    # activation. Checked ahead of the rules loop, so no expose-rw entry can
+    # override it. Not enforced while learning: that mode already grants every
+    # write (see the `is_learning_mode()` branches below), is meant to be
+    # reviewed before being trusted, and the framework's own flush of the learned
+    # rules to this same path must go through.
+    if write and not is_learning_mode() and (protected := _protected_path(canon_path)):
+        raise RulePermissionError(
+            f"Cannot write to {path!r}: {protected!r} is part of the active sandbox configuration."
+        )
+
     for rule in _rules:
         if isinstance(rule, FSExposeRule):
             if rule.path is None:
@@ -625,6 +704,13 @@ def _apply_dest_to_src_rules(
 def _apply_rules_to_entry(path: str) -> tuple[str | None, FilesRule | None]:
     """Apply the rules to removing or moving ``path`` itself: a link is judged on the directory holding it,
     not on its target."""
+    # NA1: covers the link case too, where the non-link branch below checks the
+    # link's target (write=False) and its parent directory, never the link's own
+    # path -- a symlinked config file must not be removable or renameable either.
+    if not is_learning_mode() and (protected := _protected_path(_safe_realpath(path))):
+        raise RulePermissionError(
+            f"Cannot remove or rename {path!r}: {protected!r} is part of the active sandbox configuration."
+        )
     if not _is_link(path):
         return _apply_dest_to_src_rules(path, write=True)
     _, rule = _apply_dest_to_src_rules(path, write=False)
@@ -1908,6 +1994,7 @@ def activate_guard(rules: FilesRules) -> None:
 if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
 
     def _deactivate_guard_files() -> None:
-        global _rules
+        global _rules, _protected_config_paths
         # "" prefixes every path, on every drive; "/" covers POSIX only.
         _rules = (FSExposeRule(path="", write=True, config=ConfigLine("pytest", Path(), 0)),)
+        _protected_config_paths = frozenset()

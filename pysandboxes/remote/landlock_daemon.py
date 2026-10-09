@@ -64,6 +64,7 @@ LANDLOCK_ACCESS_NET_CONNECT_TCP = 1 << 1
 HANDLED_ACCESS_NET = LANDLOCK_ACCESS_NET_BIND_TCP | LANDLOCK_ACCESS_NET_CONNECT_TCP
 LANDLOCK_RULE_NET_PORT = 2  # LANDLOCK_RULE_PATH_BENEATH = 1
 LANDLOCK_CREATE_RULESET_VERSION = 1
+LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET = 1 << 0  # ABI 6
 
 # Handled access: all FS rights we may allow (ABI v1, REFER v2, TRUNCATE v3)
 HANDLED_ACCESS_FS = (
@@ -108,7 +109,7 @@ ACCESS_RW = (
 # Syscall numbers (Linux x86_64 and aarch64 common)
 try:
 
-    libc = ctypes.CDLL(None)
+    libc = ctypes.CDLL(None, use_errno=True)
     syscall = libc.syscall
     syscall.restype = c_int
     # argtypes left unset for variadic (create_ruleset / add_rule / restrict_self)
@@ -163,16 +164,9 @@ def _landlock_available() -> bool:
         return False
     if sys.platform != "linux":
         return False
-    # Quick probe: landlock_restrict_self with invalid fd returns EBADF, not ENOSYS
-    try:
-        err = syscall(_LANDLOCK_RESTRICT_SELF, -1, 0)
-        if err == -1:
-            errno = ctypes.get_errno()
-            if errno == 38:  # ENOSYS
-                return False
-    except Exception:
-        return False
-    return True
+    # The ABI version query fails (ENOSYS: no syscall, EOPNOTSUPP: disabled at boot) whenever Landlock cannot
+    # enforce; probing landlock_restrict_self instead only ever sees EPERM before no_new_privs is set.
+    return _get_landlock_abi_version() > 0
 
 
 def _get_landlock_abi_version() -> int:
@@ -286,7 +280,9 @@ def _apply_landlock(
     attr = LandlockRulesetAttr(
         handled_access_fs=handled_fs,
         handled_access_net=handled_net,
-        scoped=0,
+        # Landlock does not filter connect() on a named Unix socket; from ABI 6 it at least keeps the
+        # abstract ones created outside the sandbox (an X11 display, some D-Bus buses) out of reach.
+        scoped=LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET if abi >= 6 else 0,
     )
     fd = syscall(
         _LANDLOCK_CREATE_RULESET,

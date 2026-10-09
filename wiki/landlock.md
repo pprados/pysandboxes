@@ -8,6 +8,8 @@ LandLock follows a **whitelist** approach: all access is denied by default. It c
 
 Its strength lies elsewhere: it works everywhere, without any privilege. The process itself decides which restrictions it applies, then activates them. Once they are active, it cannot escape them, and its child processes inherit the same constraints.
 
+It needs no extra binary, which is why a generated profile names it as its default on Linux when the kernel supports it, and `subprocess` otherwise. See [provider comparison](os-providers.md#os-sandbox-vs-py-sandbox).
+
 ## How the provider works
 
 Unlike the other providers, nothing is set up on the host: the sandbox process restricts **itself**. For this, `LandlockSSEDaemon` starts an ordinary child process. Before running your code, that process translates the **`expose-ro` / `expose-rw`** file rules into `path_beneath` rules and the **`net=`** socket rules into port rules, then applies the ruleset to itself with the `landlock_*` syscalls. From that point, the restrictions are irrevocable and inherited by any child. The host talks to the sandbox over SSE, as with the other providers.
@@ -41,6 +43,11 @@ If the ruleset cannot be applied at all (for example `ENOSYS` on a kernel withou
 - **UDP is not covered**: Landlock network rules are TCP-only (`BIND_TCP` / `CONNECT_TCP` are the only two network rights).
 - `chmod` and `chown` are not restricted by Landlock; standard DAC permissions still apply.
 - **No process, IPC or PID isolation**: Landlock restricts the filesystem and TCP ports, nothing else.
+- **Named Unix sockets of the host stay reachable.** Landlock filters file access, not `connect()` on a Unix
+  socket: native code can reach `/run/user/<uid>/bus` (the session D-Bus bus, which starts commands through
+  `systemd --user`), `docker.sock`, the ssh and gpg agents, an X11 or Wayland display, a tmux server. The Python
+  layer refuses it (a Unix connection needs `expose-rw` on the socket), `ctypes` or a compiled extension does not.
+  From ABI 6, abstract Unix sockets created outside the sandbox are refused.
 
 ## Running the provider
 
@@ -85,6 +92,8 @@ This tells you whether the LSM is active, not which ABI it exposes. The provider
 - Make sure the host kernel is **6.7+** before relying on the `net=` rules at OS level. Below that version, only the py-sandbox layer enforces them.
 - Do not count on LandLock to filter by host, by IP address, or over UDP. When you need IP-level filtering at OS level, use [unshare](unshare.md), [bwrap](bwrap.md) or [firejail](firejail.md).
 - Keep the `DENY` exceptions to a minimum: LandLock does not see them.
+- For code that may run native code you do not trust, prefer [bwrap](bwrap.md) or [unshare](unshare.md): their
+  root holds none of the host's sockets.
 
 ## References
 

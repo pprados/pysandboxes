@@ -142,6 +142,20 @@ async def test_a_keyboard_interrupt_carries_no_code(stdio: _Stdio) -> None:
     assert transported.code is None
 
 
+async def test_a_generator_exit_is_turned_into_a_sandbox_error(stdio: _Stdio) -> None:
+    """The sandboxed function's own ``GeneratorExit`` must fail the call, not this coroutine's own close."""
+
+    def leave() -> None:
+        raise GeneratorExit("boom")
+
+    result = await _call(stdio, None, leave, {})
+
+    transported, _ = result["exception"]
+    assert type(transported) is SandBoxBaseExceptionError
+    assert transported.exception_type == "builtins.GeneratorExit"
+    assert transported.code is None
+
+
 async def test_a_cancellation_is_not_swallowed(stdio: _Stdio) -> None:
     async def cancelled() -> None:
         raise asyncio.CancelledError()

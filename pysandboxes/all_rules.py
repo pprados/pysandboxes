@@ -57,6 +57,10 @@ class AllRules(NamedTuple):
         import_rules: Python import rules.
         api_rules: Sensitive API call rules.
         eval_rules: Dynamically evaluated code rules, by profile name.
+        config_files: Every configuration file actually loaded (the main profile
+            plus every file an ``include`` pulled in) and the learning output
+            file, resolved. Sandboxed code may never write to, rename over, or
+            remove these: see ``guard_files.set_protected_config_paths``.
     """
 
     root_path: Path
@@ -77,6 +81,7 @@ class AllRules(NamedTuple):
     eval_rules: EvalProfiles = ImmutableDict({})
     remote_result_guard: bool = True
     remote_result_data_only: bool = True
+    config_files: frozenset[Path] = frozenset()
 
 
 EmptyRules = AllRules(
@@ -98,4 +103,5 @@ EmptyRules = AllRules(
     import_rules=(),
     api_rules=(),
     eval_rules=ImmutableDict({}),
+    config_files=frozenset(),
 )

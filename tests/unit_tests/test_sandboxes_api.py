@@ -1,10 +1,13 @@
 """Unit tests for sandboxes_api module."""
 
+import asyncio
 import inspect
 import signal
 import subprocess
 import sys
+import threading
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest  # type: ignore[import-untyped]
@@ -71,6 +74,22 @@ class TestSandboxDecorator:
             return "test"
 
         assert callable(test_func)
+
+    def test_sandbox_refuses_a_generator_function(self) -> None:
+        """A generator function cannot be sent across the sandbox boundary."""
+        with pytest.raises(TypeError, match="generator"):
+
+            @sandbox
+            def gen() -> Any:  # type: ignore[misc]
+                yield 1
+
+    def test_sandbox_refuses_an_async_generator_function(self) -> None:
+        """An asynchronous generator function cannot be sent across the sandbox boundary."""
+        with pytest.raises(TypeError, match="generator"):
+
+            @sandbox
+            async def agen() -> Any:  # type: ignore[misc]
+                yield 1
 
 
 class TestRunFunction:
@@ -186,6 +205,40 @@ class TestSandboxesContextManager:
             pass
 
         assert mock_async_start.call_args.kwargs["python_args"] == ["-X", "dev"]
+
+
+class TestExtraRulesNormalization:
+    """extra_rules values that repeat can be given as list, tuple, set or frozenset."""
+
+    def test_list_tuple_and_frozenset_are_normalized_to_a_set(self) -> None:
+        cm = sandboxes(expose_ro=["/a", "/b"], expose_rw=("/c",), env_allow=frozenset({"X"}))
+
+        assert cm.extra_rules["expose_ro"] == {"/a", "/b"}
+        assert cm.extra_rules["expose_rw"] == {"/c"}
+        assert cm.extra_rules["env_allow"] == {"X"}
+
+    def test_a_plain_string_value_is_left_untouched(self) -> None:
+        cm = sandboxes(os_sandbox="bwrap")
+
+        assert cm.extra_rules["os_sandbox"] == "bwrap"
+
+
+@pytest.mark.asyncio
+async def test_async_enter_parses_the_config_off_the_event_loop_thread() -> None:
+    """Parsing the configuration file is blocking I/O; it must not run on the event loop thread."""
+    loop_thread = threading.current_thread()
+    seen: dict[str, threading.Thread] = {}
+
+    def fake_load_and_parse_config(*args: Any, **kwargs: Any) -> Any:
+        seen["thread"] = threading.current_thread()
+        raise ConfigSyntaxError("stop before starting a daemon", [])
+
+    with patch("pysandboxes.py_sandbox.load_and_parse_config", side_effect=fake_load_and_parse_config):
+        with pytest.raises(ConfigSyntaxError):
+            async with sandboxes():
+                pass
+
+    assert seen["thread"] is not loop_thread
 
 
 class TestRunParameters:
@@ -307,3 +360,63 @@ async def test_a_failed_async_enter_restores_the_signal_handlers(tmp_path: Path)
             pass
 
     assert signal.getsignal(signal.SIGTERM) is before
+
+
+_NO_LEARNING_RULES = "py-sandbox=true\nos-sandbox=none\n"
+
+
+@patch("pysandboxes._os_sandbox.start_daemon")
+@patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
+def test_sandboxes_entered_from_a_non_main_thread_does_not_raise(
+    mock_shutdown: Mock, mock_start: Mock, tmp_path: Path
+) -> None:
+    """B7 regression: signal.signal() only works from the main thread; a worker thread must skip it, not crash."""
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(_NO_LEARNING_RULES)
+    mock_start.return_value = Mock()
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            with sandboxes(sandboxes_config=config):
+                pass
+        except BaseException as exc:  # noqa: BLE001 - captured to report from the test thread
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+
+    assert errors == []
+    mock_start.assert_called_once()
+    mock_shutdown.assert_called_once()
+
+
+@patch("pysandboxes._os_sandbox.async_start_daemon")
+@patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
+def test_async_sandboxes_entered_from_a_non_main_thread_does_not_raise(
+    mock_shutdown: Mock, mock_async_start: Mock, tmp_path: Path
+) -> None:
+    """Same regression for `async with sandboxes()`, run on its own event loop in a worker thread."""
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(_NO_LEARNING_RULES)
+    mock_async_start.return_value = Mock()
+    errors: list[BaseException] = []
+
+    async def job() -> None:
+        async with sandboxes(sandboxes_config=config):
+            pass
+
+    def worker() -> None:
+        try:
+            asyncio.run(job())
+        except BaseException as exc:  # noqa: BLE001 - captured to report from the test thread
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+
+    assert errors == []
+    mock_async_start.assert_called_once()
+    mock_shutdown.assert_called_once()

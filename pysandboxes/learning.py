@@ -11,7 +11,10 @@ application through typical usage scenarios and capturing required permissions.
 """
 
 import logging
+import os
 import re
+import secrets
+import shutil
 import threading
 from datetime import datetime
 
@@ -129,12 +132,28 @@ def generate_config_from_learning() -> None:
         if old_learning_path:
             # Current lines
             all_lines = learning_path.read_text().split("\n")
+            # A rerun on a file already written by a previous run must not insert the
+            # same rules again: drop any generated line already present in the file.
+            existing_lines = {ln.strip() for ln in all_lines if ln.strip()}
+            for key in (
+                "learning_guard_envs",
+                "learning_guard_import",
+                "learning_guard_files",
+                "learning_guard_socket",
+                "learning_guard_api",
+                "learning_guard_eval",
+            ):
+                if replaces.get(key):
+                    kept = [ln for ln in replaces[key].split("\n") if ln.strip() not in existing_lines]
+                    replaces[key] = "\n".join(kept)
         else:
             # Load template
+            from ._os_sandbox import DEFAULT_OS_SANDBOX_MARK, default_os_sandbox
+
             with resources.as_file(
                 resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates") / "py-sandboxes.template"
             ) as resource_path:
-                all_lines = resource_path.read_text().split("\n")
+                all_lines = resource_path.read_text().replace(DEFAULT_OS_SANDBOX_MARK, default_os_sandbox()).split("\n")
 
         replaces["learning_remote_result"] = _update_remote_result_mode(all_lines, learning, header, learning_path)
 
@@ -177,13 +196,35 @@ def generate_config_from_learning() -> None:
             msg = f"\nWrite all learning rules in '{relative_lerning_path}'. {find_learning}"
             if old_learning_path:
                 msg += f"\nThe old version is here '{old_learning_path}'. "
-                learning_path.rename(old_learning_path)
+                shutil.copy2(learning_path, old_learning_path)
 
             msg += "\nCheck and update this file to validate the rules."
             pysandboxes_logger.info(msg)
             pysandboxes_logger.setLevel(old_level)
-            learning_path.write_text("\n".join(all_lines))
+            _write_atomic(learning_path, "\n".join(all_lines))
         _save_learning_done = True
+
+
+def _write_atomic(path: Path, content: str) -> None:
+    """Write ``content`` to ``path`` so a reader never observes a partial file.
+
+    Writes to a temporary file in the same directory, then ``os.replace`` it onto
+    ``path``: a crash or error mid-write leaves the previous file untouched instead
+    of a truncated or missing one.
+    """
+    # Not tempfile.mkstemp, so the file gets the usual umask-based permissions instead
+    # of mkstemp's private 0600. An unpredictable name created with O_EXCL never follows
+    # a file or link another user planted in a shared directory.
+    tmp_path = path.with_name(f"{path.name}.{secrets.token_hex(8)}.tmp")
+    try:
+        with os.fdopen(os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666), "w") as tmp_file:
+            tmp_file.write(content)
+        if path.exists():
+            shutil.copymode(path, tmp_path)
+        os.replace(tmp_path, path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
@@ -201,7 +242,10 @@ def _manage_olds_file(learning_path: Path) -> tuple[Path, Path | None]:
         i = 0
         while True:
             suffix = f".old_{i}" if i else ".old"
-            backup = learning_path.with_suffix(suffix)
+            # Append rather than ``with_suffix``: replacing the suffix drops the part of the
+            # name that tells two different config files apart (e.g. "x.py-sandboxes" and
+            # "x.toml" would both back up to "x.old").
+            backup = learning_path.with_name(learning_path.name + suffix)
             if not backup.exists():
                 break
             i += 1

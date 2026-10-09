@@ -81,7 +81,9 @@ def parse_rules(
 
     envs_rules = set()
     # Rule order carries no meaning: exact names beat wildcards, and unenv= beats both.
-    wildcard_vars: dict[str, str] = {}
+    # Between wildcards, the one with more fixed characters wins; a tie on different values is an error.
+    wildcard_vars: dict[str, tuple[int, str | None, ConfigLine]] = {}
+    wildcard_ties: dict[str, tuple[ConfigLine, ConfigLine]] = {}
     unenv_patterns: list[GlobPattern] = []
     for orule in rules:
         if orule.rule.startswith("env="):
@@ -104,12 +106,18 @@ def parse_rules(
             if "*" in key_pattern:
                 regex_key = _compile_key_pattern(key_pattern)
                 envs_rules.add(EnvRule(regex_key, False, orule))
+                specificity = len(key_pattern.replace("*", ""))
                 for source_key in source_vars:
                     if regex_key.match(source_key):
                         # The value side is applied to each matched name, the pattern standing for that name
                         v = substitute_value(value_pattern.replace(key_pattern, source_key))
-                        if v or "${" not in value_pattern:
-                            wildcard_vars[source_key] = v
+                        value = v if v or "${" not in value_pattern else None
+                        previous = wildcard_vars.get(source_key)
+                        if previous is None or specificity > previous[0]:
+                            wildcard_vars[source_key] = (specificity, value, orule)
+                            wildcard_ties.pop(source_key, None)
+                        elif specificity == previous[0] and value != previous[1]:
+                            wildcard_ties.setdefault(source_key, (previous[2], orule))
             # Case: Simple rule like key=value or key=${VAR}
             else:
                 v = substitute_value(value_pattern)
@@ -128,9 +136,21 @@ def parse_rules(
         else:
             ignore_rules.append(orule)
 
+    for key, (first, second) in wildcard_ties.items():
+        if key not in new_vars and not any(pattern.match(key) for pattern in unenv_patterns):
+            errors.append(
+                (
+                    f"{format_ruleref(second)}: {second.rule!r} and {format_ruleref(first)}: {first.rule!r} "
+                    f"give {key} different values and are as specific. Make one more specific, "
+                    f"or add an exact env={key}=... rule.",
+                    second.path,
+                    second.ln,
+                )
+            )
+    wildcard_values = {key: value for key, (_, value, _) in wildcard_vars.items() if value is not None}
     new_vars = {
         key: value
-        for key, value in (wildcard_vars | new_vars).items()
+        for key, value in (wildcard_values | new_vars).items()
         if not any(pattern.match(key) for pattern in unenv_patterns)
     }
     return tuple(envs_rules), Envs(new_vars), ignore_rules

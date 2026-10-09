@@ -10,7 +10,7 @@ from typing import Any, Iterator
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import guard_eval
-from pysandboxes.e import EvalInterrupted, RuleApiPermissionError, RuleEvalPermissionError
+from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, RuleApiPermissionError, RuleEvalPermissionError
 from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, NameSet, parse_rules
 from pysandboxes.eval_transform import validate
 from pysandboxes.guard_api import _deactivate_guard_api
@@ -40,6 +40,14 @@ def _all_syntax() -> NameSet:
 def _activate(**kwargs: Any) -> None:
     rules = DEFAULT_RULES._replace(declared=True, syntax=_all_syntax(), namespace="closed", **kwargs)
     guard_eval.activate_guard(ImmutableDict({"": rules}))
+
+
+def _exec_namespace(source: str, names: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Run `source` in exec mode and return its namespace, to read what the evaluated code built itself."""
+    rules = DEFAULT_RULES._replace(declared=True, syntax=_all_syntax(), namespace="closed", **kwargs)
+    namespace = guard_eval.build_namespace(rules, caller_globals=None, names=names, from_wrapper=True)
+    guard_eval.run_guarded(source, rules, mode="exec", namespace=namespace, source_ref="<test>")
+    return namespace
 
 
 @pytest.fixture(autouse=True)
@@ -95,18 +103,15 @@ def test_an_augmented_subscript_evaluates_its_container_and_key_once() -> None:
         calls.append(1)
         return "k"
 
-    data = {"k": [1]}
     _activate(call=_names("key"))
-    guarded_eval("d[key()] += [2]", names={"d": data, "key": key}, mode="exec")
-    assert data == {"k": [1, 2]}
+    namespace = _exec_namespace("d = {'k': [1]}\nd[key()] += [2]", {"key": key}, call=_names("key"))
+    assert namespace["d"] == {"k": [1, 2]}
     assert calls == [1]
 
 
 def test_an_augmented_slice_still_works() -> None:
-    data = [1, 2, 3]
     _activate()
-    guarded_eval("d[0:2] *= 2", names={"d": data}, mode="exec")
-    assert data == [1, 2, 1, 2, 3]
+    assert _exec_namespace("d = [1, 2, 3]\nd[0:2] *= 2")["d"] == [1, 2, 1, 2, 3]
 
 
 def test_a_leaked_worker_that_finished_no_longer_counts() -> None:
@@ -177,6 +182,20 @@ def test_a_tree_from_guarded_compile_compiles_again() -> None:
     assert patched_eval(guarded_compile(tree, "<s>", "eval")) == 42
 
 
+def test_a_compiled_source_that_overflows_the_parser_is_refused_not_raised() -> None:
+    """Same `ast.parse` ceiling as `run_guarded`, reached through the `compile()` route.
+
+    `RecursionError` on CPython's recursive-descent builds (3.11), `MemoryError`
+    ("Parser stack overflowed") on the PEG parser (3.14 here); either way the
+    guarded `compile()` must refuse it as `EvalSyntaxRejected`, not raise it raw.
+    """
+    _arm()
+    _activate()
+    guarded_compile = _wrap_compile(compile)
+    with pytest.raises(EvalSyntaxRejected, match="eval-max-depth=parse"):
+        guarded_compile("-" * 20000 + "1", "<s>", "eval")
+
+
 def test_exec_without_namespace_does_not_rebind_the_caller_locals() -> None:
     patched_exec = _wrap_eval_like(exec, qualname="builtins.exec", mode="exec")
 
@@ -188,14 +207,29 @@ def test_exec_without_namespace_does_not_rebind_the_caller_locals() -> None:
     assert caller() == 1
 
 
+def _nested_unary_minus(depth: int) -> ast.Expression:
+    """Build `-(-(-...1...))`, `depth` levels deep, without going through `ast.parse`.
+
+    `ast.parse` itself refuses a source nested this deep on some Python versions (its own
+    C-level parser has a lower recursion ceiling than this library's own, Python-level guard),
+    so the tree is built directly to exercise `validate()` regardless of that ceiling.
+    """
+    # No `ast.fix_missing_locations`: it walks the tree recursively and would hit the same
+    # ceiling; `validate()` only reads `lineno`/`col_offset` through `getattr(..., 0)`.
+    node: ast.expr = ast.Constant(value=1)
+    for _ in range(depth):
+        node = ast.UnaryOp(op=ast.USub(), operand=node)
+    return ast.Expression(body=node)
+
+
 def test_a_source_deeper_than_the_recursion_limit_is_refused_by_max_depth() -> None:
-    tree = ast.parse("-" * 3000 + "1", mode="eval")
+    tree = _nested_unary_minus(3000)
     violations = validate(tree, DEFAULT_RULES._replace(declared=True))
     assert [v.remedy.split("=")[0] for v in violations] == ["eval-max-depth"]
 
 
 def test_a_max_depth_past_the_stack_still_refuses_instead_of_crashing() -> None:
-    tree = ast.parse("-" * (sys.getrecursionlimit() * 3) + "1", mode="eval")
+    tree = _nested_unary_minus(sys.getrecursionlimit() * 3)
     violations = validate(tree, DEFAULT_RULES._replace(declared=True, max_depth=10**9))
     assert [v.remedy.split("=")[0] for v in violations] == ["eval-max-depth"]
 
@@ -223,10 +257,8 @@ def test_a_left_shift_is_bounded_by_max_alloc(source: str) -> None:
 
 def test_a_small_left_shift_still_works() -> None:
     _activate(max_alloc=1000)
-    data = [1]
-    guarded_eval("d[0] <<= 3", names={"d": data}, mode="exec")
-    assert data == [8]
-    assert guarded_eval("d[0] << 1", names={"d": data}) == 16
+    assert _exec_namespace("d = [1]\nd[0] <<= 3", max_alloc=1000)["d"] == [8]
+    assert guarded_eval("d[0] << 1", names={"d": [8]}) == 16
 
 
 @pytest.mark.parametrize(

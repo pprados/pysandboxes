@@ -11,7 +11,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Mapping, TextIO, cast
 
-from ._os_sandbox import providers_factory
+from ._os_sandbox import check_provider_available, providers_factory
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
 from .config import DEBUG
@@ -147,6 +147,11 @@ def _main(stack: ExitStack) -> int:
             f"{' '.join(sandboxes_args)}",
             file=sys.stderr,
         )
+        sys.exit(-1)
+    try:
+        check_provider_available(all_rules.os_sandbox)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
         sys.exit(-1)
 
     # The interactive IPython shell needs a writable profile directory. It gets a private, empty one

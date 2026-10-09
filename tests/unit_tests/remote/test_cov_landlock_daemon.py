@@ -3,10 +3,14 @@
 """Profile rules -> what the Landlock launcher is told to allow, without a Landlock kernel."""
 
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.guard_socket import parse_rules
+from pysandboxes.remote import landlock_daemon
 from pysandboxes.remote.landlock_daemon import _collect_landlock_net_ports, _collect_landlock_paths
 from pysandboxes.sb_types import ConfigLine
 
@@ -91,3 +95,42 @@ def test_a_path_is_granted_in_its_normal_form(tmp_path: Path) -> None:
 
     assert granted[str(data)] == "ro"
     assert f"{data}/./" not in granted
+
+
+@pytest.mark.parametrize(("abi", "available"), [(8, True), (1, True), (-1, False)])
+def test_landlock_is_available_only_when_the_abi_query_succeeds(
+    monkeypatch: pytest.MonkeyPatch, abi: int, available: bool
+) -> None:
+    """Landlock disabled at boot (EOPNOTSUPP) or missing (ENOSYS) fails the ABI query: it cannot enforce."""
+    monkeypatch.setattr(landlock_daemon, "_LANDLOCK_RESTRICT_SELF", 446)
+    monkeypatch.setattr(landlock_daemon, "_LANDLOCK_CREATE_RULESET", 444)
+    monkeypatch.setattr(landlock_daemon.sys, "platform", "linux")
+    monkeypatch.setattr(landlock_daemon, "syscall", lambda *_: abi)
+    assert landlock_daemon._landlock_available() is available
+
+
+def test_landlock_is_unavailable_without_the_syscalls_or_off_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(landlock_daemon, "_LANDLOCK_RESTRICT_SELF", -1)
+    assert landlock_daemon._landlock_available() is False
+
+    monkeypatch.setattr(landlock_daemon, "_LANDLOCK_RESTRICT_SELF", 446)
+    monkeypatch.setattr(landlock_daemon.sys, "platform", "darwin")
+    assert landlock_daemon._landlock_available() is False
+
+
+@pytest.mark.parametrize(("abi", "scoped"), [(6, 1), (8, 1), (5, 0)])
+def test_abstract_unix_sockets_outside_the_sandbox_are_scoped_out(
+    monkeypatch: pytest.MonkeyPatch, abi: int, scoped: int
+) -> None:
+    """From ABI 6, the ruleset forbids connecting to an abstract Unix socket created outside the sandbox."""
+    seen: list[int] = []
+
+    def fake_syscall(_nr: int, attr: Any, *_args: Any) -> int:
+        seen.append(attr._obj.scoped)
+        return -1
+
+    monkeypatch.setattr(landlock_daemon, "_get_landlock_abi_version", lambda: abi)
+    monkeypatch.setattr(landlock_daemon, "syscall", fake_syscall)
+    with pytest.raises(OSError):
+        landlock_daemon._apply_landlock([])
+    assert seen == [scoped]

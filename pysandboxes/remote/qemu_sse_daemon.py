@@ -1019,7 +1019,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         return tuple(netfilter)
 
     def __init__(self, token: str, *, python_args: list[str] | None = None, **kwargs: Any) -> None:
-        # Force IPv4 so hostfwd (TCP only on 0.0.0.0) is used; "localhost" can resolve to ::1.
+        # Force IPv4: hostfwd listens on 127.0.0.1 only, and "localhost" can resolve to ::1.
         super().__init__(
             token,
             python_args=python_args or [],
@@ -1114,7 +1114,7 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         net = [
             "-nic",
-            f"user,hostfwd=tcp::{port}-:{port},model=virtio-net-pci",
+            f"user,hostfwd=tcp:127.0.0.1:{port}-:{port},model=virtio-net-pci",
         ]
 
         virtfs_args: Args = []
@@ -1334,7 +1334,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         import aiohttp
         from aiohttp import ClientConnectorError, ClientOSError, ClientTimeout, ServerDisconnectedError
 
-        # Force IPv4 so QEMU hostfwd is used (hostfwd is TCP on 0.0.0.0, not IPv6).
+        # Force IPv4: QEMU hostfwd listens on 127.0.0.1, not on IPv6.
         connector = aiohttp.TCPConnector(family=socket.AF_INET)
         async with aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE) as session:
             count_loop = 0

@@ -405,11 +405,110 @@ def test_class_entry_denies_and_allows_construction(
         _reset_guard()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="dlopen/_handle construction assumes posix")
+def test_ctypes_new_bypass_of_cdll_init_is_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``CDLL.__new__`` + a hand-built ``_handle`` must not skip the guard.
+
+    ``ctypes.CDLL.__init__`` is guarded, but an instance can be built without
+    ever calling it: ``CDLL.__new__(CDLL)``, then setting ``_name``,
+    ``_FuncPtr`` and ``_handle = _ctypes.dlopen(...)`` by hand reproduces what
+    ``__init__`` does and reaches ``libc.system`` with no call to the guarded
+    method at all. Patches both the canonical name and the ``ctypes._dlopen``
+    alias ``CDLL._load_library`` calls at runtime, as the real pipeline does
+    (``guard_api._ALIASES``).
+    """
+    import _ctypes
+    import ctypes
+
+    table = patch_rules(learn=False)
+    original_init = ctypes.CDLL.__init__
+    original_dlopen = _ctypes.dlopen
+    wrapped_init = table["ctypes.CDLL.__init__"](original_init)
+    wrapped_dlopen = table["_ctypes.dlopen"](original_dlopen)
+    monkeypatch.setattr(ctypes.CDLL, "__init__", wrapped_init)
+    monkeypatch.setattr(_ctypes, "dlopen", wrapped_dlopen)
+    monkeypatch.setattr(ctypes, "_dlopen", wrapped_dlopen)
+
+    def bypass_cdll_init() -> int:
+        obj = ctypes.CDLL.__new__(ctypes.CDLL)
+        obj._name = "libc.so.6"
+
+        class _FuncPtr(ctypes._CFuncPtr):  # type: ignore[misc]
+            _flags_ = obj._func_flags_
+            _restype_ = obj._func_restype_
+
+        obj._FuncPtr = _FuncPtr
+        obj._handle = _ctypes.dlopen("libc.so.6", 2)  # RTLD_NOW
+        return obj.system(b"true")
+
+    activate_guard(())
+    try:
+        arm()
+        with pytest.raises(RuleApiPermissionError) as exc:
+            bypass_cdll_init()
+        assert exc.value.qualname == "_ctypes.dlopen"
+    finally:
+        _reset_guard()
+
+    _activate("python-api=ALLOW:native")
+    try:
+        arm()
+        assert bypass_cdll_init() == 0
+    finally:
+        _reset_guard()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="probe script assumes posix")
+def test_ctypes_new_bypass_is_refused_end_to_end(tmp_path: Path) -> None:
+    """The `__new__` bypass, under a real `python-sb` start.
+
+    Run out of process: the patches are posted by the import hook, so a table
+    inspection would prove nothing about what an interpreter actually does.
+    """
+    work = tmp_path / "work"
+    work.mkdir()
+    repo = Path(__file__).resolve().parents[3]
+    (work / ".py-sandboxes").write_text(
+        "py-sandbox=true\nos-sandbox=subprocess\npython-import=*\n" f"expose-rw={work}\nexpose-ro={repo}\n"
+    )
+    (work / "probe.py").write_text(
+        "import _ctypes\n"
+        "import ctypes\n"
+        "from pysandboxes.e import SandBoxError\n"
+        "obj = ctypes.CDLL.__new__(ctypes.CDLL)\n"
+        "obj._name = 'libc.so.6'\n"
+        "class _FuncPtr(ctypes._CFuncPtr):\n"
+        "    _flags_ = obj._func_flags_\n"
+        "    _restype_ = obj._func_restype_\n"
+        "obj._FuncPtr = _FuncPtr\n"
+        "try:\n"
+        "    obj._handle = _ctypes.dlopen('libc.so.6', 2)\n"
+        "    obj.system(b'true')\n"
+        "    print('bypass ALLOWED')\n"
+        "except SandBoxError:\n"
+        "    print('bypass GUARD')\n"
+        "except BaseException as exc:\n"
+        "    print('bypass OTHER', type(exc).__name__)\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pysandboxes.python_sb", "probe.py"],
+        capture_output=True,
+        text=True,
+        cwd=work,
+        env={**os.environ, "TMPDIR": str(work)},
+    )
+
+    assert "bypass GUARD" in result.stdout, result.stdout + result.stderr
+
+
 def test_every_patched_entry_actually_resolves() -> None:
-    """A patched name must exist, or startup would raise."""
+    """A patched name must exist, or startup would raise -- except a test-capi one, moved or absent by version."""
     import importlib
 
-    from pysandboxes.guard_api import split_qualname
+    from pysandboxes.guard_api import _TEST_CAPI, split_qualname
 
     for qualname in patch_rules(learn=False):
         module_name, attribute_path = split_qualname(qualname)
@@ -417,8 +516,12 @@ def test_every_patched_entry_actually_resolves() -> None:
             obj: Any = importlib.import_module(module_name)
         except ImportError:
             continue
-        for node in attribute_path.split("."):
-            obj = getattr(obj, node)
+        try:
+            for node in attribute_path.split("."):
+                obj = getattr(obj, node)
+        except AttributeError:
+            assert qualname in _TEST_CAPI, f"{qualname} is missing and not listed in _TEST_CAPI"
+            continue
         assert obj is not None
 
 

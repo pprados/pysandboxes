@@ -56,6 +56,51 @@ def test_exact_env_beats_wildcard_whatever_the_order() -> None:
     assert _envs("env=DUMMY_KEY=fixed", "env=*_KEY=${*_KEY}") == {"DUMMY_KEY": "fixed", "OTHER_KEY": "def"}
 
 
+def _env_errors(*lines: str) -> list[str]:
+    errors: list[ErrorMsg] = []
+    guard_envs.parse_rules([ConfigLine(line, Path("profile"), ln) for ln, line in enumerate(lines, 1)], _SOURCE, errors)
+    return [msg for msg, _, _ in errors]
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ("env=*_KEY=${*_KEY}", "env=DUMMY_*=fixed"),
+        ("env=DUMMY_*=fixed", "env=*_KEY=${*_KEY}"),
+    ],
+)
+def test_the_more_specific_wildcard_wins_whatever_the_order(lines: tuple[str, str]) -> None:
+    assert _envs(*lines) == {"DUMMY_KEY": "fixed", "DUMMY_NAME": "fixed", "OTHER_KEY": "def"}
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ("env=*_KEY=one", "env=DUMM*=two"),
+        ("env=DUMM*=two", "env=*_KEY=one"),
+    ],
+)
+def test_two_wildcards_as_specific_with_different_values_are_an_error(lines: tuple[str, str]) -> None:
+    errors = _env_errors(*lines)
+    assert len(errors) == 1
+    assert "DUMMY_KEY" in errors[0]
+    assert "profile(1)" in errors[0] and "profile(2)" in errors[0]
+
+
+def test_two_wildcards_as_specific_with_the_same_value_agree() -> None:
+    assert _envs("env=*_KEY=same", "env=DUMM*=same") == {
+        "DUMMY_KEY": "same",
+        "DUMMY_NAME": "same",
+        "OTHER_KEY": "same",
+    }
+
+
+@pytest.mark.parametrize("settle", ["env=DUMMY_KEY=exact", "unenv=DUMMY_KEY"])
+def test_an_exact_rule_or_unenv_settles_two_wildcards_as_specific(settle: str) -> None:
+    envs = _envs("env=*_KEY=one", "env=DUMM*=two", settle)
+    assert envs.get("DUMMY_KEY") == ("exact" if settle.startswith("env=") else None)
+
+
 def test_command_line_port_beats_profile_port(tmp_path: Path) -> None:
     errors: list[ErrorMsg] = []
     rules = [ConfigLine("port=9000", Path(), 0), ConfigLine("port=8000", tmp_path / "profile", 1)]
@@ -143,6 +188,15 @@ def test_immutable_dict_equals_a_plain_dict() -> None:
     assert d == ImmutableDict({"OTHER_KEY": "def", "DUMMY_KEY": "abc"})
     assert hash(d) == hash(ImmutableDict({"OTHER_KEY": "def", "DUMMY_KEY": "abc"}))
     assert d != {"DUMMY_KEY": "abc"}
+
+
+def test_immutable_dict_never_equals_its_internal_tuple() -> None:
+    """The storage tuple is an implementation detail: equal objects must hash alike."""
+    d = ImmutableDict({"a": 1})
+    raw = (("a",), (1,))
+    assert d != raw
+    assert raw != d
+    assert not d == raw
 
 
 def test_unresolvable_executable_error_is_formatted(tmp_path: Path) -> None:

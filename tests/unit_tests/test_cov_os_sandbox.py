@@ -12,6 +12,7 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes import _os_sandbox
 from pysandboxes.all_rules import AllRules, EmptyRules
 from pysandboxes.base_daemon import FakeDaemon
+from pysandboxes.e import SandBoxError
 from pysandboxes.remote.base_sse_daemon import BaseSSESandbox
 from pysandboxes.tools import Environ, SyncOrAsyncFunc
 
@@ -54,10 +55,12 @@ class _Daemon(FakeDaemon):
         log_level: int,
         init_fn: SyncOrAsyncFunc | None,
     ) -> None:
-        if type(self).start_gate is not None:
-            await type(self).start_gate.wait()
-        if type(self).start_error is not None:
-            raise type(self).start_error
+        start_gate = type(self).start_gate
+        if start_gate is not None:
+            await start_gate.wait()
+        start_error = type(self).start_error
+        if start_error is not None:
+            raise start_error
         self._is_started = True
         self._accept_incoming = True
 
@@ -146,6 +149,23 @@ async def test_an_unknown_provider_is_refused() -> None:
 def test_an_unknown_provider_is_refused_by_the_sync_start() -> None:
     with pytest.raises(ValueError, match="Unknown daemon name: nope"):
         _os_sandbox.start_daemon(_rules("nope"), envs={}, log_level=0)
+
+
+async def test_a_provider_the_host_lacks_is_refused_before_it_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_Daemon, "unavailable_reason", classmethod(lambda cls: "fake not installed"))
+
+    with pytest.raises(ValueError, match=f"os-sandbox {_FAKE!r} cannot start: fake not installed"):
+        await _start()
+    assert not _Daemon.instances
+    assert _os_sandbox._current_daemon is None
+
+
+def test_a_provider_the_host_lacks_is_refused_by_the_sync_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_Daemon, "unavailable_reason", classmethod(lambda cls: "fake not installed"))
+
+    with pytest.raises(ValueError, match=f"os-sandbox {_FAKE!r} cannot start: fake not installed"):
+        _os_sandbox.start_daemon(_rules(), envs={}, log_level=0)
+    assert not _Daemon.instances
 
 
 async def test_starts_are_counted_and_only_the_last_shutdown_stops_the_daemon() -> None:
@@ -286,12 +306,12 @@ async def test_async_call_in_sandbox_without_a_daemon_is_refused() -> None:
     async def fn() -> int:
         return 1
 
-    with pytest.raises(AssertionError, match="Daemon not started"):
+    with pytest.raises(SandBoxError, match="Daemon not started"):
         await _os_sandbox.async_call_in_sandbox(fn)
 
 
 def test_call_in_sandbox_without_a_daemon_is_refused() -> None:
-    with pytest.raises(AssertionError, match="Daemon not started"):
+    with pytest.raises(SandBoxError, match="Daemon not started"):
         _os_sandbox.call_in_sandbox(len, "abc")
 
 
@@ -349,3 +369,40 @@ def test_a_sync_start_that_times_out_kills_what_it_launched(monkeypatch: pytest.
         loop.call_soon_threadsafe(lambda: loop.create_task(_wait_start_end()))
         assert released.wait(5)
     assert _os_sandbox._current_daemon is None
+
+
+def test_a_generated_profile_names_landlock_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: None)
+    monkeypatch.setattr(_os_sandbox.providers_factory["landlock"], "unavailable_reason", classmethod(lambda cls: None))
+
+    assert _os_sandbox.default_os_sandbox() == "landlock"
+
+
+def test_a_generated_profile_names_subprocess_with_a_warning_when_landlock_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: None)
+    monkeypatch.setattr(
+        _os_sandbox.providers_factory["landlock"],
+        "unavailable_reason",
+        classmethod(lambda cls: "no kernel support"),
+    )
+
+    with caplog.at_level("WARNING"):
+        provider = _os_sandbox.default_os_sandbox()
+
+    assert provider == "subprocess"
+    assert "no kernel support" in caplog.text
+
+
+def test_a_generated_profile_names_subprocess_without_a_warning_on_an_unsupported_platform(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Non-Linux has no landlock at all: subprocess is expected, not a warning-worthy surprise."""
+    monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: f"{name!r} does not run here")
+
+    with caplog.at_level("WARNING"):
+        provider = _os_sandbox.default_os_sandbox()
+
+    assert provider == "subprocess"
+    assert not caplog.records

@@ -890,6 +890,14 @@ def generate_rules(
     deprecated_modules = set(resources.files(package).joinpath("modules_deprecated.txt").read_text().split())
     # Classify rules
     for learn_rule in filter(lambda x: isinstance(x, LearnImportRule), learn):
+        # NA2: the name is written into `python-import=<name>` unescaped. An
+        # allowlist, not a denylist of control characters: `importlib.import_module`
+        # accepts a name that is not a valid Python identifier (a `\n`, a `#`, ...),
+        # and such a name would reload as more than one directive. Every module
+        # actually reachable through a normal `import` has identifier segments.
+        if not all(part.isidentifier() for part in learn_rule.name.split(".")):
+            logger.warning("Skip learned import rule with an unsafe module name: %r", learn_rule.name)
+            continue
         if learn_rule.name in black_list:
             danger_result.add(learn_rule.name)
         elif learn_rule.name in std_modules or learn_rule.name[0] == "_":

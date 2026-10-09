@@ -64,6 +64,18 @@ rebuilds them behind a guard that filters known dangerous pickle gadgets, but it
 is a fail-open denylist and does not prove that every gadget is blocked. See the [transport guard assessment](transport-unpickle-guard.md)
 for the result and exception channel behavior.
 
+The exception channel is wider than the result channel. When sandboxed code raises, the parent rebuilds the
+exception: its class must already be loaded in the parent and derive from `Exception`, but no denylist applies,
+and its arguments and attributes are chosen by the sandboxed code. An exception class whose constructor or
+`__setstate__` has a side effect (writes a file, starts something) would run that effect in the trusted parent with
+values the sandbox picked. No such class was found in the current dependency tree; this is a residual risk that
+grows with the classes an application loads.
+
+Under `landlock`, the host's named Unix sockets remain reachable from native code: the kernel filters file
+access, not `connect()` on a socket. The session D-Bus bus, which can start commands through `systemd --user`,
+is among them, so `landlock` is no boundary against native code that wants to leave. See
+[landlock](landlock.md#limits).
+
 ## Additional measured findings
 
 The development assessment also records narrower cases: `ctypes.pythonapi` is

@@ -294,9 +294,17 @@ def _tick() -> ast.Expr:
 class _Injector(ast.NodeTransformer):
     """Rewrite the accepted tree into one that enforces at runtime.
 
-    Only reads are rewritten: `Attribute` in `Store` or `Del` context was
-    already refused by phase 1, so a fourth helper would have nothing to do.
+    Attribute reads are rewritten: `Attribute` in `Store` or `Del` context was
+    already refused by phase 1. A subscript store or delete goes through
+    `__sb_writable__`, which refuses to write into an object the application
+    supplied.
     """
+
+    def visit_Subscript(self, node: ast.Subscript) -> ast.AST:
+        self.generic_visit(node)
+        if not isinstance(node.ctx, ast.Load):
+            node.value = _call("__sb_writable__", [node.value])
+        return node
 
     def visit_Attribute(self, node: ast.Attribute) -> ast.AST:
         self.generic_visit(node)

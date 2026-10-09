@@ -19,6 +19,7 @@ from typing import Any, Callable, cast
 
 from .all_rules import AllRules
 from .base_daemon import BaseDaemon
+from .e import SandBoxError
 from .private_loop import (
     _reset_sandbox_loop,
     get_sandbox_loop,
@@ -114,6 +115,36 @@ def provider_unavailable_reason(name: str) -> str | None:
     return unsupported_platform_reason(name) or providers_factory[name].unavailable_reason()
 
 
+def check_provider_available(name: str) -> None:
+    """Raise ValueError when provider ``name`` cannot run on this host, before anything of it is built."""
+    if reason := unsupported_platform_reason(name):
+        raise ValueError(reason)
+    if reason := providers_factory[name].unavailable_reason():
+        raise ValueError(
+            f"os-sandbox {name!r} cannot start: {reason}. Set up the host for it, or choose another os-sandbox."
+        )
+
+
+# Stands for the default provider in the template; replaced before the template is read as rules.
+DEFAULT_OS_SANDBOX_MARK = "@DEFAULT_OS_SANDBOX@"
+
+
+def default_os_sandbox() -> str:
+    """Return the provider a newly generated profile names.
+
+    ``landlock`` on Linux when the kernel supports it: no extra binary is needed. ``subprocess``,
+    which adds no OS boundary, everywhere else, with a warning when Linux lacks Landlock. The name is
+    written in the profile, so a later run never downgrades it.
+    """
+    if unsupported_platform_reason("landlock") is not None:
+        return "subprocess"
+    reason = providers_factory["landlock"].unavailable_reason()
+    if reason is not None:
+        logger.warning("%s: the generated profile names 'subprocess', which adds no OS boundary.", reason)
+        return "subprocess"
+    return "landlock"
+
+
 # Singleton with the current daemon used by the sandbox
 _current_daemon: BaseDaemon | None = None
 # Number of times the daemon has been started. Used for reference counting.
@@ -206,8 +237,7 @@ async def async_start_daemon(
 
         if all_rules.os_sandbox not in providers_factory:
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
-        if reason := unsupported_platform_reason(all_rules.os_sandbox):
-            raise ValueError(reason)
+        check_provider_available(all_rules.os_sandbox)
         os_provider: BaseDaemon | None = None
         try:
             token = str(uuid.uuid4())
@@ -321,8 +351,7 @@ def start_daemon(
 
         if all_rules.os_sandbox not in providers_factory:
             raise ValueError(f"Unknown daemon name: {all_rules.os_sandbox}")
-        if reason := unsupported_platform_reason(all_rules.os_sandbox):
-            raise ValueError(reason)
+        check_provider_available(all_rules.os_sandbox)
 
         loop = get_sandbox_loop()
         start_event = threading.Event()
@@ -478,13 +507,14 @@ async def async_call_in_sandbox(func: Callable[..., Any], *args: Any, **kwargs: 
         The result of the function execution.
 
     Raises:
-        AssertionError: If the daemon is not started.
+        SandBoxError: If the daemon is not started.
     """
     global _current_daemon
     if is_in_sandbox():
         return await func(*args, **kwargs)
 
-    assert _current_daemon is not None, "Daemon not started"
+    if _current_daemon is None:
+        raise SandBoxError("Daemon not started. Use 'with sandboxes()' or 'pysandboxes.run()'")
     return await _current_daemon.async_call_in_sandbox(func, False, *args, **kwargs)
 
 
@@ -504,12 +534,13 @@ def call_in_sandbox(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         The result of the function execution.
 
     Raises:
-        AssertionError: If the daemon is not started.
+        SandBoxError: If the daemon is not started.
     """
     global _current_daemon
     if is_in_sandbox():
         return func(*args, **kwargs)
-    assert _current_daemon is not None, "Daemon not started. Use 'with sandboxes()' " "or 'pysandboxes.run()'"
+    if _current_daemon is None:
+        raise SandBoxError("Daemon not started. Use 'with sandboxes()' or 'pysandboxes.run()'")
     check_mixte_async_async()
 
     return _current_daemon.call_in_sandbox(func, False, *args, **kwargs)

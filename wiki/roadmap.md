@@ -16,6 +16,10 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
 - [ ] OS-sandboxes
   - [ ] Basic
     - [ ] sub interpreter
+  - [ ] Landlock: refuse `connect()` to a named Unix socket not covered by an `expose-rw` rule, the rule every
+    other provider applies. Landlock cannot filter it, so a seccomp user-notification filter sends each Unix
+    `connect()` to the parent, which checks the path, connects itself and hands the descriptor back
+    (`SECCOMP_IOCTL_NOTIF_ADDFD`), leaving no window to change the path after the check.
   - [ ] Sandbox utilities
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: filtering by domain, not only by IP)
   - [ ] Container
