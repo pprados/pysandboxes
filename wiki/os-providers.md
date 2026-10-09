@@ -78,15 +78,15 @@ On the exception channel the guard is fail-closed, and an exception's state rout
 
 > Note that a network constraint may not be detected during learning if the call is made by compiled code. The **OS-sandbox** configuration will not allow the connection. Simply add the missing rule *manually*. It will be added when the **os-sandbox** is launched.
 
-To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file. `OS_SANDBOX` only takes effect where that line reads it, as the generated template does (`os-sandbox=${OS_SANDBOX:-auto}`):
+To select the **OS-sandbox** provider, set the parameter `os-sandbox` in the config file. `OS_SANDBOX` only takes effect where that line reads it, as a generated profile does (`os-sandbox=${OS_SANDBOX:-landlock}`):
 
 ```shell
 OS_SANDBOX=unshare python-sb -m my-module
 ```
 
-`auto` resolves at startup: `landlock` on Linux when the kernel supports it (no extra binary needed), otherwise `subprocess` — logged as a warning when the fallback is due to the kernel rather than the platform. `auto` never applies during learning, which is always `subprocess` regardless (see above). `landlock` protects files and TCP ports but not the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)): against untrusted native code, write `os-sandbox=bwrap` or `os-sandbox=unshare`.
+A generated profile names its default in clear: `landlock` on Linux when the kernel supports it (no extra binary needed), otherwise `subprocess`, with a warning when Linux lacks Landlock. The choice is made once, when the file is written, and read as written afterwards; learning always runs under `subprocess` regardless (see above). `landlock` protects files and TCP ports but not the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)): against untrusted native code, write `os-sandbox=bwrap` or `os-sandbox=unshare`.
 
-To pin a provider so the environment cannot downgrade it, write it literally, e.g. `os-sandbox=bwrap` — `learn=false` does not prevent this downgrade either (see [use-cases](use-cases.md#what-the-rule-file-does-not-show)). A literal provider, including `landlock`, is never routed through `auto`'s fallback: if it is unavailable, the sandboxed process fails closed instead of silently dropping to `subprocess`.
+To pin a provider so the environment cannot downgrade it, write it literally, e.g. `os-sandbox=bwrap` — `learn=false` does not prevent this downgrade either (see [use-cases](use-cases.md#what-the-rule-file-does-not-show)). A named provider, `landlock` included, is never downgraded: if it is unavailable, the sandboxed process fails closed instead of silently dropping to `subprocess`.
 
 > Need help: can you propose a PR to integrate some solution for Apple OS ?
 
@@ -137,7 +137,7 @@ Depending on your level of paranoia, you can choose a suitable approach.
 
 ## Recommendations
 
-- Leave `os-sandbox=auto` (the default) unless you need a specific provider: it already picks `landlock` on Linux when the kernel supports it, and `subprocess` otherwise.
+- Keep the generated default (`landlock` where the kernel supports it, `subprocess` otherwise) unless you need a specific provider; for untrusted native code, prefer `bwrap` or `unshare`.
 - Nest an OS provider around the py-sandbox rather than replacing it: the union of both layers is your actual protection.
 - Keep the Python layer on. Set `py-sandbox=False` only when the sandboxed code is trusted not to attack the interpreter itself.
 - On a managed Kubernetes cluster, verify that the node kernel exposes Landlock before relying on it.

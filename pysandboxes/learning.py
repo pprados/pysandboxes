@@ -148,10 +148,12 @@ def generate_config_from_learning() -> None:
                     replaces[key] = "\n".join(kept)
         else:
             # Load template
+            from ._os_sandbox import DEFAULT_OS_SANDBOX_MARK, default_os_sandbox
+
             with resources.as_file(
                 resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates") / "py-sandboxes.template"
             ) as resource_path:
-                all_lines = resource_path.read_text().split("\n")
+                all_lines = resource_path.read_text().replace(DEFAULT_OS_SANDBOX_MARK, default_os_sandbox()).split("\n")
 
         replaces["learning_remote_result"] = _update_remote_result_mode(all_lines, learning, header, learning_path)
 

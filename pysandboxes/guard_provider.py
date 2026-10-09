@@ -26,7 +26,7 @@ def parse_rules(
     rules: ConfigLines,
     errors: List[ErrorMsg],
 ) -> Tuple[int, str, bool, Path, bool, bool, bool, ConfigLines]:
-    from ._os_sandbox import AUTO_OS_SANDBOX, providers_factory, resolve_auto_os_sandbox, unsupported_platform_reason
+    from ._os_sandbox import providers_factory, unsupported_platform_reason
 
     port = -1
     other_rules: ConfigLines = []
@@ -39,10 +39,7 @@ def parse_rules(
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
             provider = rule.rule[len("os-sandbox=") :].strip().lower()
-            if provider == AUTO_OS_SANDBOX:
-                # Resolved later, once `learn` is known: see below.
-                parameters_multi_values["os-sandbox"].add((provider, rule))
-            elif provider not in providers_factory:
+            if provider not in providers_factory:
                 errors.append(
                     (
                         f"{format_ruleref(rule)}: " f"Invalid os-sandbox {provider!r}.",
@@ -185,9 +182,6 @@ def parse_rules(
                 parameters_prioritize_single_value[k] = list(s)[0]
 
     port = parameters_prioritize_single_value.get("port", [-1])[0]
-    # A profile with no os-sandbox= line at all (not generated from the template) keeps
-    # the old default: only the template, which every "no config file" run and every
-    # learned profile go through, opts into the auto-resolved default below.
     provider = parameters_prioritize_single_value.get("os-sandbox", ["subprocess"])[0]
     use_py_sandbox = parameters_prioritize_single_value.get("py-sandbox", [True])[0]
     learning_path = parameters_prioritize_single_value.get("learning_path", [config_path])[0]
@@ -203,11 +197,6 @@ def parse_rules(
     # Force learn mode if the file not exists
     elif not learning_path.exists():
         learn = True
-
-    if provider == AUTO_OS_SANDBOX:
-        # `learn` is known from here on: resolving against it avoids picking landlock
-        # only to have it overridden to subprocess right after, further down the pipeline.
-        provider = resolve_auto_os_sandbox(learning=learn)
 
     if learn and (lock := learn_lock(rules)):
         if "learn" in parameters_prioritize_single_value:

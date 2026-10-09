@@ -36,9 +36,9 @@ kernel boundary is a Linux technology.
   refused at load, with each `eval-*` line to comment out: the grant ran the code unguarded and left them unused
 - Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
   (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
-- The generated `.py-sandboxes` now defaults to `os-sandbox=${OS_SANDBOX:-auto}`: `auto` resolves to `landlock` on
-  Linux when the kernel supports it, with a logged fallback to `subprocess` otherwise; learning itself still always
-  runs under `subprocess`
+- A generated `.py-sandboxes` names `landlock` as its default provider (`os-sandbox=${OS_SANDBOX:-landlock}`) on
+  Linux when the kernel supports it, and `subprocess` otherwise, with a warning when Linux lacks Landlock; learning
+  itself still always runs under `subprocess`
 
 ### Fixed
 - Under `landlock`, on a kernel with Landlock ABI 6 or later, the sandbox can no longer reach an abstract Unix

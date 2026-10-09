@@ -8,7 +8,7 @@ LandLock follows a **whitelist** approach: all access is denied by default. It c
 
 Its strength lies elsewhere: it works everywhere, without any privilege. The process itself decides which restrictions it applies, then activates them. Once they are active, it cannot escape them, and its child processes inherit the same constraints.
 
-It needs no extra binary, which is why `os-sandbox=auto` (the template's default) picks it on Linux when the kernel supports it, falling back to `subprocess` otherwise. See [provider comparison](os-providers.md#os-sandbox-vs-py-sandbox).
+It needs no extra binary, which is why a generated profile names it as its default on Linux when the kernel supports it, and `subprocess` otherwise. See [provider comparison](os-providers.md#os-sandbox-vs-py-sandbox).
 
 ## How the provider works
 

@@ -384,3 +384,36 @@ def test_atomic_write_never_follows_a_planted_temporary_link(tmp_path: Path, mon
     assert victim.read_text() == "untouched"
     assert target.read_text() == "learned=rules\n"
     assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp") and not p.is_symlink()] == []
+
+
+@pytest.mark.parametrize("provider", ["landlock", "subprocess"])
+def test_a_generated_profile_names_the_default_provider_in_clear(tmp_path: Path, provider: str) -> None:
+    cfg = tmp_path / ".py-sandboxes"
+    patches = _patched_rule_generators(["env=FOO=${FOO}"])
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patch("pysandboxes.learning._learning_path", cfg),
+        patch("pysandboxes.learning._save_learning_done", False),
+        patch("pysandboxes.learning.is_learning_mode", return_value=True),
+        patch("pysandboxes.learning._learning", set()),
+        patch("pysandboxes._os_sandbox.default_os_sandbox", return_value=provider),
+    ):
+        generate_config_from_learning()
+
+    text = cfg.read_text()
+    assert f"os-sandbox=${{OS_SANDBOX:-{provider}}}" in text
+    assert "@DEFAULT_OS_SANDBOX@" not in text
+
+
+def test_a_run_without_a_rule_file_learns_under_subprocess(tmp_path: Path) -> None:
+    from pysandboxes.py_sandbox import load_and_parse_config
+
+    all_rules = load_and_parse_config(config_path=tmp_path / ".py-sandboxes")
+
+    assert all_rules.learn
+    assert all_rules.os_sandbox == "subprocess"

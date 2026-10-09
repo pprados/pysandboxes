@@ -175,7 +175,14 @@ def load_and_parse_config(
         with resources.as_file(
             resources.files(pysb_module_name + ".templates") / "py-sandboxes.template"
         ) as resource_path:
-            config = extra_lines + _read_config_and_remove_comments(resource_path)
+            from pysandboxes._os_sandbox import DEFAULT_OS_SANDBOX_MARK
+
+            # No rule file means a learning run, and learning always runs under subprocess.
+            template = [
+                line._replace(rule=line.rule.replace(DEFAULT_OS_SANDBOX_MARK, "subprocess"))
+                for line in _read_config_and_remove_comments(resource_path)
+            ]
+            config = extra_lines + template
     else:
         config = extra_lines + _read_config_and_remove_comments(config_path)
     return parse_config(

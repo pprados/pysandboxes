@@ -354,14 +354,14 @@ def test_a_sync_start_that_times_out_kills_what_it_launched(monkeypatch: pytest.
     assert _os_sandbox._current_daemon is None
 
 
-def test_auto_resolves_to_landlock_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_generated_profile_names_landlock_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: None)
     monkeypatch.setattr(_os_sandbox.providers_factory["landlock"], "unavailable_reason", classmethod(lambda cls: None))
 
-    assert _os_sandbox.resolve_auto_os_sandbox(learning=False) == "landlock"
+    assert _os_sandbox.default_os_sandbox() == "landlock"
 
 
-def test_auto_falls_back_to_subprocess_with_a_warning_when_landlock_is_unavailable(
+def test_a_generated_profile_names_subprocess_with_a_warning_when_landlock_is_unavailable(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: None)
@@ -372,35 +372,20 @@ def test_auto_falls_back_to_subprocess_with_a_warning_when_landlock_is_unavailab
     )
 
     with caplog.at_level("WARNING"):
-        provider = _os_sandbox.resolve_auto_os_sandbox(learning=False)
+        provider = _os_sandbox.default_os_sandbox()
 
     assert provider == "subprocess"
     assert "no kernel support" in caplog.text
 
 
-def test_auto_resolves_to_subprocess_without_a_warning_on_an_unsupported_platform(
+def test_a_generated_profile_names_subprocess_without_a_warning_on_an_unsupported_platform(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Non-Linux has no landlock at all: the fallback is expected, not a warning-worthy surprise."""
+    """Non-Linux has no landlock at all: subprocess is expected, not a warning-worthy surprise."""
     monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: f"{name!r} does not run here")
 
     with caplog.at_level("WARNING"):
-        provider = _os_sandbox.resolve_auto_os_sandbox(learning=False)
+        provider = _os_sandbox.default_os_sandbox()
 
     assert provider == "subprocess"
     assert not caplog.records
-
-
-def test_auto_resolves_to_subprocess_during_learning_without_probing_landlock(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Learning always runs under subprocess (py_sandbox.py forces it); resolving to landlock
-    here would only log a choice overridden right after."""
-
-    def _must_not_be_called(name: str) -> str | None:
-        raise AssertionError("auto must not probe landlock during learning")
-
-    monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", _must_not_be_called)
-
-    assert _os_sandbox.resolve_auto_os_sandbox(learning=True) == "subprocess"
-    assert _os_sandbox._current_daemon is None

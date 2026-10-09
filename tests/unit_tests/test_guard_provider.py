@@ -124,25 +124,6 @@ def test_os_sandbox_bwrap_valid(mocker: MagicMock) -> None:
     assert errors == []
 
 
-def test_os_sandbox_auto_valid(mocker: MagicMock) -> None:
-    mocker.patch("pysandboxes._os_sandbox.resolve_auto_os_sandbox", return_value="landlock")
-    mock_path_class = mocker.patch("pysandboxes.guard_provider.Path", autospec=True)
-
-    config_path_mock = create_mock_path("/fake/pysandbox.conf", exists_val=True)
-    cli_path_mock = create_mock_path(".", exists_val=True)
-
-    mock_path_class.side_effect = lambda p: {
-        "/fake/pysandbox.conf": config_path_mock,
-        ".": cli_path_mock,
-    }.get(str(p), create_mock_path(str(p)))
-
-    rules = [ConfigLine("os-sandbox=auto", cli_path_mock, 1)]
-    errors: list[ErrorMsg] = []
-    _, provider, _, _, _, _, _, _ = parse_rules(config_path_mock, rules, errors)
-    assert provider == "landlock"
-    assert errors == []
-
-
 def test_os_sandbox_invalid(mocker: MagicMock) -> None:
     mock_path_class = mocker.patch("pysandboxes.guard_provider.Path", autospec=True)
 
