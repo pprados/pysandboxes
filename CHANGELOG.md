@@ -34,8 +34,12 @@ kernel boundary is a Linux technology.
   refused at load, with each `eval-*` line to comment out: the grant ran the code unguarded and left them unused
 - Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
   (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
+- The generated `.py-sandboxes` now defaults to `os-sandbox=${OS_SANDBOX:-auto}`: `auto` resolves to `landlock` on
+  Linux when the kernel supports it, with a logged fallback to `subprocess` otherwise; learning itself still always
+  runs under `subprocess`
 
 ### Fixed
+- A kernel where Landlock is disabled at boot is detected as such, instead of being reported available.
 - `qemu` forwards its port on the host loopback only, no longer on every host interface.
 - The `python-sb` REPL starts when the configuration file lies outside the working directory.
 - `with sandboxes()` and `async with sandboxes()` work from a thread other than the main one.
@@ -163,6 +167,20 @@ kernel boundary is a Linux technology.
 - On Python 3.13 and later, `exec()` without a namespace no longer rewrites the caller's local variables
 - A source nested deeper than the recursion limit is refused by `eval-max-depth` instead of raising `RecursionError`
 - `eval-syntax` accepts only AST node names, not `parse` or `NodeVisitor`, nor the deprecated `Num`
+- Under `bwrap`, the sandbox no longer has read access to the whole of `/run`, which exposed `/run/docker.sock`
+  and every user's session sockets, including the D-Bus bus
+- A `net=` rule written against an IPv4 address now also judges the IPv4-translated, IPv4-compatible and NAT64
+  encodings of that same address, not only the plain and IPv4-mapped forms
+- A sandboxed function raising `GeneratorExit` fails that call with `SandBoxBaseExceptionError`, instead of an
+  opaque "No result received from the sandbox"
+- `ctypes.CDLL.__new__` followed by a hand-built `_handle` no longer skips the native-code guard: `_ctypes.dlopen`,
+  `_ctypes.dlsym` and the Windows `_ctypes.LoadLibrary` are refused unless `python-api` allows them
+- A deeply nested source no longer crashes `eval`, `exec` or `compile` with a raw `RecursionError` or `MemoryError`
+  from the parser itself: it is refused by `eval-max-depth`, like a source whose parsed tree is too deep
+- Sandboxed code can no longer widen its own permissions by writing to, renaming, or removing the active
+  `.py-sandboxes`, a file it `include`s, or the learning output file, even from a directory exposed read-write
+- Learning mode no longer writes a path or an imported module name containing a newline, a `#`, or another
+  character that would break the rule file's line format into the generated profile
 
 ### Added
 - A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
