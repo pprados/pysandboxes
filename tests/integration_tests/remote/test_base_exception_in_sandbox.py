@@ -46,6 +46,11 @@ def raise_application_base_exception() -> NoReturn:
     raise ApplicationBaseException("raised by the application")
 
 
+@sandbox
+def raise_generator_exit() -> NoReturn:
+    raise GeneratorExit("raised by the sandboxed function")
+
+
 @pytest.fixture(autouse=True)
 def _short_rpc_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     """A hang must fail the test in seconds, not after the default RPC timeout."""
@@ -79,6 +84,16 @@ def test_an_application_base_exception_fails_the_call_and_keeps_the_sandbox() ->
         with pytest.raises(SandBoxBaseExceptionError) as caught:
             raise_application_base_exception()
         assert caught.value.exception_type.endswith(".ApplicationBaseException")
+        assert sandbox_pid() == pid
+
+
+def test_a_generator_exit_fails_the_call_and_keeps_the_sandbox() -> None:
+    """The sandboxed function's own `GeneratorExit` must not surface as an opaque transport error."""
+    with sandboxes(sandboxes_config=config_path):
+        pid = sandbox_pid()
+        with pytest.raises(SandBoxBaseExceptionError) as caught:
+            raise_generator_exit()
+        assert caught.value.exception_type == "builtins.GeneratorExit"
         assert sandbox_pid() == pid
 
 

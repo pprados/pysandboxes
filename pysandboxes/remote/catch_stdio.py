@@ -189,9 +189,15 @@ async def acatch_stdio(
                     sync_or_async_queue.put_nowait(result)
                 elif isinstance(sync_or_async_queue, queue.Queue):
                     sync_or_async_queue.put(result)
-        except (asyncio.CancelledError, GeneratorExit):
+        except asyncio.CancelledError:
+            # Task cancellation: must keep propagating, or the task never actually cancels.
             raise
         except BaseException as e:
+            # A GeneratorExit raised here is the sandboxed function's own (it cannot itself be a
+            # generator -- @sandbox refuses one), not this coroutine being closed: it is always
+            # awaited to completion by the caller, never dropped pending. Falls through below and is
+            # wrapped like SystemExit/KeyboardInterrupt, instead of surfacing as an opaque
+            # "No result received from the sandbox".
             import tblib
 
             from ..e import SandBoxBaseExceptionError, attach_sandbox_denials

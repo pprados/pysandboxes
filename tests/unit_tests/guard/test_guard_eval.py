@@ -13,8 +13,8 @@ from typing import Any, Callable, Iterator
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, SandBoxError
 from pysandboxes import guard_eval
+from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, SandBoxError
 from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, LearnEvalRule, NameSet
 from pysandboxes.guard_api import SENSITIVE_API, LearnApiRule, _deactivate_guard_api
 from pysandboxes.guard_api import activate_guard as activate_api
@@ -320,6 +320,19 @@ def test_a_native_syntax_error_propagates_as_itself() -> None:
     with pytest.raises(SyntaxError) as caught:
         guarded_eval("1 +")
     assert not isinstance(caught.value, EvalSyntaxRejected)
+
+
+def test_a_source_that_overflows_the_parser_is_rejected_not_raised_raw() -> None:
+    """`ast.parse` can itself exhaust the interpreter's stack before `validate()`
+    ever sees a tree to measure: `RecursionError` on CPython's recursive-descent
+    builds (3.11), `MemoryError` ("Parser stack overflowed") on the PEG parser
+    (3.14 here). Either way it must come out as the documented
+    `EvalSyntaxRejected`, not escape raw.
+    """
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    with pytest.raises(EvalSyntaxRejected) as caught:
+        guarded_eval("-" * 20000 + "1")
+    assert "eval-max-depth=parse" in str(caught.value)
 
 
 def test_names_are_merged_into_the_namespace() -> None:
@@ -663,6 +676,16 @@ def test_learning_a_source_proposes_eval_rules_only(monkeypatch: pytest.MonkeyPa
     learned = _learned_from(monkeypatch, "2*(3+4)", None)
     assert learned
     assert all(isinstance(rule, LearnEvalRule) for rule in learned)
+
+
+def test_learning_a_source_that_overflows_the_parser_does_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same parser ceiling as the enforced path, but learning only observes: no crash, nothing proposed.
+
+    The real builtin, called right after by the wrapper regardless of what
+    learning records, hits the same ceiling and raises it itself.
+    """
+    rules = DEFAULT_RULES._replace(declared=True, syntax=_syntax("arith"))
+    assert _learned_from(monkeypatch, "-" * 20000 + "1", rules) == []
 
 
 def test_learning_a_foreign_code_object_proposes_the_api_right(monkeypatch: pytest.MonkeyPatch) -> None:

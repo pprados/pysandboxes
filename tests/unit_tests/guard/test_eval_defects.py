@@ -10,7 +10,7 @@ from typing import Any, Iterator
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import guard_eval
-from pysandboxes.e import EvalInterrupted, RuleApiPermissionError, RuleEvalPermissionError
+from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, RuleApiPermissionError, RuleEvalPermissionError
 from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, NameSet, parse_rules
 from pysandboxes.eval_transform import validate
 from pysandboxes.guard_api import _deactivate_guard_api
@@ -175,6 +175,20 @@ def test_a_tree_from_guarded_compile_compiles_again() -> None:
     assert isinstance(tree, ast.Expression)
     patched_eval = _wrap_eval_like(eval, qualname="builtins.eval", mode="eval")
     assert patched_eval(guarded_compile(tree, "<s>", "eval")) == 42
+
+
+def test_a_compiled_source_that_overflows_the_parser_is_refused_not_raised() -> None:
+    """Same `ast.parse` ceiling as `run_guarded`, reached through the `compile()` route.
+
+    `RecursionError` on CPython's recursive-descent builds (3.11), `MemoryError`
+    ("Parser stack overflowed") on the PEG parser (3.14 here); either way the
+    guarded `compile()` must refuse it as `EvalSyntaxRejected`, not raise it raw.
+    """
+    _arm()
+    _activate()
+    guarded_compile = _wrap_compile(compile)
+    with pytest.raises(EvalSyntaxRejected, match="eval-max-depth=parse"):
+        guarded_compile("-" * 20000 + "1", "<s>", "eval")
 
 
 def test_exec_without_namespace_does_not_rebind_the_caller_locals() -> None:
