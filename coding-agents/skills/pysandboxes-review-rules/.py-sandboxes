@@ -1,8 +1,0 @@
-# Rule file of the pysandboxes-review-rules skill. scripts/rules_diff.py reads a diff on stdin and prints a
-# table on stdout: it needs to read itself, and three modules of the standard library. Nothing else.
-# Run it from the skill directory, so that ./scripts is this skill's.
-learn=false
-py-sandbox=true
-os-sandbox=${OS_SANDBOX:-subprocess}
-expose-ro=./scripts
-python-import=json, re, typing

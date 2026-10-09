@@ -43,6 +43,7 @@ and verify the scenarios your application needs.
 ## Maintain and explore the project
 
 - [Implementation](implementation.md) — framework architecture and execution flow.
+- [Coding-agent skills and plugin](coding-agents.md) — learn and review rules from tests with a human approval gate.
 - [Roadmap](roadmap.md) — planned work and project direction.
 - [Releasing](release.md) — release and publication process for maintainers.
 - [Confining Python by observation](../research/confining-python-by-observation.md) — research background for the policy-learning approach.

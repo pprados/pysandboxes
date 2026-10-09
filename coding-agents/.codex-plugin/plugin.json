@@ -1,6 +1,0 @@
-{
-  "name": "python-sb",
-  "version": "0.1.0",
-  "description": "Run Python through python-sb, learn the rules a feature needs from its tests, and review the rights a change adds: three skills, and a hook that refuses a bare python command.",
-  "hooks": "./hooks/hooks.json"
-}

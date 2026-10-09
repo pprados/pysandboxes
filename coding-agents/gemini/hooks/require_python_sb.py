@@ -1,1 +1,0 @@
-../../hooks/require_python_sb.py

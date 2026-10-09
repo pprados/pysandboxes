@@ -1,5 +1,6 @@
 {
   "name": "pysandboxes",
+  "description": "Skills for learning and reviewing PySandboxes rules from tests.",
   "owner": {
     "name": "Philippe Prados"
   },
@@ -7,7 +8,7 @@
     {
       "name": "python-sb",
       "source": "./coding-agents",
-      "description": "Run Python through python-sb: a skill, and a hook that refuses a bare python command."
+      "description": "Learn and review PySandboxes rules from tests with human approval gates."
     }
   ]
 }
