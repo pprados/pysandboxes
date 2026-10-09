@@ -37,6 +37,7 @@ and verify the scenarios your application needs.
 ## Test and evaluate
 
 - [Test coverage map](tests.md) — test suites, provider matrix, skipped scenarios, and approximate counts.
+- [Learning from tests](learning-from-tests.md) — use full or partial test runs to discover and review sandbox permissions.
 - [Alternative sandboxes](alternatives.md) — comparison with other sandboxes, frameworks, and hosted services.
 - [Use cases](use-cases.md) — threat scenarios and suitable isolation levels.
 

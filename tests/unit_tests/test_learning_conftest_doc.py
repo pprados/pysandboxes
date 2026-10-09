@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 FAQ = ROOT / "wiki" / "faq.md"
-SKILL = ROOT / "coding-agents" / "skills" / "pysandboxes-rules-from-tests" / "SKILL.md"
+SKILL = ROOT / "skills" / "skills" / "pysandboxes-rules-from-tests" / "SKILL.md"
 
 
 def conftest_block(page: Path) -> str:

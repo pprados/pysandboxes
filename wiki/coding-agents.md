@@ -7,14 +7,14 @@ These animations are scripted illustrations, not recordings of live agents.
 
 ### Full mode
 
-![Full mode: pytest runs inside python-sb; runner and application candidates are separated](../coding-agents/demo/coding-agents-full.gif)
+![Full mode: pytest runs inside python-sb; runner and application candidates are separated](../skills/demo/coding-agents-full.gif)
 
 The full-mode example captures an empty-test baseline, compares it with test learning, keeps runner permissions in
 `.py-sandboxes.tests`, and proposes only application permissions for `.py-sandboxes`.
 
 ### Partial mode
 
-![Partial mode: pytest stays on the host and only the @sandbox call learns](../coding-agents/demo/coding-agents-partial.gif)
+![Partial mode: pytest stays on the host and only the @sandbox call learns](../skills/demo/coding-agents-partial.gif)
 
 The partial-mode example runs pytest on the host, learns from one marked test that calls `@sandbox`, and keeps only
 the application candidates for review. It does not run `python-sb -m pytest`, which would move pytest into the
@@ -49,7 +49,7 @@ Permission candidates for external access come from tests that exercise those in
 tests that perform real network or filesystem operations. Unit tests that mock those interactions do not execute
 the external access and therefore cannot reveal the corresponding sandbox rules.
 
-See [Can the test suite feed the learning mode?](faq.md#can-the-test-suite-feed-the-learning-mode) for the setup,
+See [Learning from tests](learning-from-tests.md) for the setup,
 profiles, examples and strict verification for both modes.
 
 ## Example interaction
@@ -81,7 +81,7 @@ The [Skills CLI](https://skills.sh/docs/cli) can install these two skills direct
 requires Node.js with `npx`; select the target coding agent when prompted:
 
 ```bash
-npx skills add pprados/pysandboxes/coding-agents --skill '*'
+npx skills add pprados/pysandboxes/skills --skill '*'
 ```
 
 By default, the CLI installs skills for the current project. Add `--global` to install them for the current user

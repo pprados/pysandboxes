@@ -13,7 +13,7 @@ import pytest
 from pysandboxes import guard_api
 
 SCRIPT = (
-    Path(__file__).parents[2] / "coding-agents" / "skills" / "pysandboxes-review-rules" / "scripts" / "rules_diff.py"
+    Path(__file__).parents[2] / "skills" / "skills" / "pysandboxes-review-rules" / "scripts" / "rules_diff.py"
 )
 BLACKLIST = Path(__file__).parents[2] / "pysandboxes" / "modules_blacklist.txt"
 
