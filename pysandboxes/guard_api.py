@@ -24,6 +24,10 @@ from .tools import patch_factory as _f
 
 logger = logging.getLogger(__name__)
 
+# Maintained by hand: nothing detects a sensitive function that CPython adds. Review this registry against
+# every new CPython release ("What's New", and new functions in os, sys, ctypes, _ctypes, _posixsubprocess,
+# _interpreters, pickle, marshal, threading, signal...) and register what spawns, loads native code, changes
+# privileges, introspects frames or runs code. An unregistered function stays callable by sandboxed code.
 SENSITIVE_API: dict[str, tuple[str, ...]] = {
     "process-exec": (
         "os.system",

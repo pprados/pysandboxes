@@ -39,6 +39,9 @@ kernel boundary is a Linux technology.
   runs under `subprocess`
 
 ### Fixed
+- A module run with `python -m pkg.mod` finds the `.py-sandboxes` of its package, as when it is imported.
+- Learning writes its rule file through a temporary file with an unpredictable name, which another local user
+  can no longer plant as a link to overwrite one of the user's files.
 - A kernel where Landlock is disabled at boot is detected as such, instead of being reported available.
 - `qemu` forwards its port on the host loopback only, no longer on every host interface.
 - The `python-sb` REPL starts when the configuration file lies outside the working directory.
