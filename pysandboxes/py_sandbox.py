@@ -253,7 +253,8 @@ def parse_config(
     errors: list[ErrorMsg] = []  # Aggregate all errors
 
     # 1. Parse includes
-    config = _parse_include(config_path.parent, {config_path.absolute()}, config)
+    config_files = {config_path.absolute()}
+    config = _parse_include(config_path.parent, config_files, config)
 
     # 2. Parse the rules, step by step
     envs_rules, sandbox_env, others = guard_envs.parse_rules(config, envs, errors)
@@ -311,6 +312,12 @@ def parse_config(
         # Force os_sandbox to subprocess
         os_sandbox = "subprocess"
 
+    # The main profile, every file it includes, and the learning output file:
+    # none of these may be written to, renamed over, or removed by sandboxed
+    # code, whatever rule a profile grants (NA1). The learning output defaults
+    # to config_path itself when unset (guard_provider.parse_rules).
+    protected_config_files = frozenset(config_files) | {learning_path.absolute()}
+
     return AllRules(
         root_path=config_path,
         config=config,
@@ -330,6 +337,7 @@ def parse_config(
         import_rules=import_rules,
         api_rules=api_rules,
         eval_rules=eval_profiles,
+        config_files=protected_config_files,
     )
 
 
@@ -396,6 +404,7 @@ def activate_sandboxes(
 
         guard_envs.activate_guard(all_rules.envs_rules)
         guard_socket.activate_guard(all_rules.socket_rules)
+        guard_files.set_protected_config_paths(all_rules.config_files)
         guard_files.activate_guard(all_rules.file_rules)
         guard_api.activate_guard(all_rules.api_rules)
         guard_eval.activate_guard(all_rules.eval_rules, learn=all_rules.learn)

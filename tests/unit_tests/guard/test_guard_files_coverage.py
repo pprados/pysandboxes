@@ -16,6 +16,7 @@ rules disarmed first, since a post-condition check goes through the very
 guard the test just armed, and a hidden file reads as absent to `exists()`.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Any, Callable
@@ -183,6 +184,42 @@ def test_generate_rules_writes_nothing_under_proc(path: str) -> None:
         patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
     ):
         rules = generate_rules({LearnFileRule(Path(path), False)})
+
+    assert rules == []
+
+
+def test_generate_rules_skips_a_path_containing_a_newline(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """NA2: a directory name containing a newline -- valid on POSIX, and this is a real
+    directory created on disk, not a crafted string -- must not be written unescaped into
+    an ``expose-rw=`` line: reloaded line by line, it would become three directives
+    (``expose-rw=.../evil``, a free-standing ``os-sandbox=none``, then a comment) instead
+    of the single rule that was observed."""
+    evil = tmp_path / "evil\nos-sandbox=none\n#"
+    evil.mkdir()
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+        caplog.at_level(logging.WARNING, logger="pysandboxes.guard_files"),
+    ):
+        rules = generate_rules({LearnFileRule(evil, False)})
+
+    assert rules == []
+    assert any("cannot be safely re-encoded" in r.getMessage() for r in caplog.records)
+
+
+def test_generate_rules_skips_a_path_containing_a_hash(tmp_path: Path) -> None:
+    """A ``#`` with no newline still corrupts the line: ``tools._remove_comment`` treats it as
+    an unquoted end-of-line comment marker and would truncate the rule to a shorter, different
+    path than the one observed."""
+    evil = tmp_path / "evil#dir"
+    evil.mkdir()
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(evil, False)})
 
     assert rules == []
 
