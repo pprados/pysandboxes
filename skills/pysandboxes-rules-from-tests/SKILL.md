@@ -190,8 +190,22 @@ Use a shared `sandboxes()` fixture. Strict runs load `.py-sandboxes`; a marked t
 loads that same profile and writes new candidates to `.py-sandboxes.learn`:
 
 ```python
-PROFILE = Path(".py-sandboxes")
-LEARNED = Path(".py-sandboxes.learn")
+# conftest.py
+import os
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+from pysandboxes import sandboxes
+
+PROFILE = Path(".py-sandboxes")  # paths relative to the project root, where pytest runs
+LEARNED = Path(".py-sandboxes.learn")  # candidate output; not an execution profile
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "sandbox_learn: the test may feed the learned profile")
+
 
 @pytest.fixture(autouse=True)
 def sandbox_profile(request: pytest.FixtureRequest) -> Iterator[None]:

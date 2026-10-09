@@ -7,8 +7,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
-FAQ = ROOT / "wiki" / "faq.md"
-SKILL = ROOT / "skills" / "skills" / "pysandboxes-rules-from-tests" / "SKILL.md"
+LEARNING_FROM_TESTS = ROOT / "wiki" / "learning-from-tests.md"
+SKILL = ROOT / "skills" / "pysandboxes-rules-from-tests" / "SKILL.md"
 
 
 def conftest_block(page: Path) -> str:
@@ -16,8 +16,8 @@ def conftest_block(page: Path) -> str:
     return block
 
 
-def test_the_faq_and_the_skill_print_the_same_conftest() -> None:
-    assert conftest_block(FAQ) == conftest_block(SKILL)
+def test_the_wiki_page_and_the_skill_print_the_same_conftest() -> None:
+    assert conftest_block(LEARNING_FROM_TESTS) == conftest_block(SKILL)
 
 
 def test_the_printed_conftest_is_valid_python() -> None:
