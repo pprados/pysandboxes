@@ -77,6 +77,19 @@ full command line where the program is launched.
 
 ---
 
+### Interactive sessions and IPython
+
+When `python-sb` (or `ipython-sb`) opens an interactive session and IPython is installed, it gives the session a
+private, temporary `IPYTHONDIR`, removed at exit. IPython runs every file of
+`<IPYTHONDIR>/profile_default/startup/` when it starts: a session allowed to write into the user's own
+`~/.ipython` could drop a file there, and that file would run later, outside the sandbox, in the next plain
+`ipython`. The private directory keeps that persistence out of reach.
+
+A profile may still set its own `env=IPYTHONDIR=...`: that line wins over the private directory, which is how a
+locked profile (`learn=false`) declares one, since `python-sb` then adds no rule of its own. Do not point it at
+`~/.ipython` while also exposing that directory read-write: the session could then plant a startup file that the
+next unsandboxed IPython runs.
+
 ## Integration in a module
 
 It is possible to use the solution to integrate it into a module, when you install your *wheel*. To do this, the `.py-sandboxes` file must be placed at the root of your module, as a resource.

@@ -90,6 +90,25 @@ To pin a provider so the environment cannot downgrade it, write it literally, e.
 
 > Need help: can you propose a PR to integrate some solution for Apple OS ?
 
+### Host sockets under `/run`
+
+`/run` holds sockets that reach the host: `/run/docker.sock`, and under `/run/user/<uid>` the session D-Bus bus
+(which can start commands through `systemd --user`), the ssh and gpg agents. A read-only mount does not prevent
+`connect()` on them. Each kernel provider keeps them out of reach in its own way:
+
+- `bwrap` does not bind `/run`; it binds only the target of `/etc/resolv.conf` when that file points under `/run`
+  (systemd-resolved).
+- `unshare` builds a fresh root that has no `/run` from the host.
+- `firejail` refuses the creation of any Unix socket; the distribution's `disable-common.inc` blacklist of
+  `docker.sock` is only a second line.
+- `landlock` does **not** keep them out: Landlock filters file access, not `connect()` on a Unix socket, so native
+  code can reach the session D-Bus bus or `docker.sock` (the Python guard still refuses it, see G13). Open, under
+  study.
+- `qemu` runs a separate kernel: the host's `/run` is not visible.
+
+An `expose-ro` or `expose-rw` rule naming a directory under `/run` gives those sockets back: write one only for a
+socket the program really needs.
+
 ## Paranoia level
 Depending on your level of paranoia, you can choose a suitable approach.
 
