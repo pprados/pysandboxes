@@ -710,6 +710,37 @@ def getaddrinfo(
     return socket.getaddrinfo(host=host, port=port, family=family, type=socktype, proto=proto, flags=flags)
 
 
+# Addresses excluded from the deprecated IPv4-compatible form (``::a.b.c.d``): ``::`` is the
+# unspecified address and ``::1`` the IPv6 loopback, neither an IPv4 host wrapped in IPv6.
+_IPV4_COMPATIBLE_EXCLUDED = (IPv6Address("::"), IPv6Address("::1"))
+
+
+def _embedded_ipv4(addr: IPv6Address) -> IPv4Address | None:
+    """The IPv4 address ``addr`` carries, under any legacy or transitional IPv6 encoding of it.
+
+    A ``net=`` rule written for an IPv4 host must judge every IPv6 encoding of that same address the
+    kernel, a resolver or a NAT64/SIIT gateway can hand back, not only one of them:
+
+    - IPv4-mapped (``::ffff:a.b.c.d``): what a dual-stack socket hands back for an IPv4 peer.
+    - IPv4-translated (``::ffff:0:a.b.c.d``, RFC 2765).
+    - IPv4-compatible (``::a.b.c.d``, deprecated, excluding ``::`` and ``::1``).
+    - The NAT64 well-known prefix (``64:ff9b::a.b.c.d``, RFC 6052).
+
+    Returns None when ``addr`` carries none of them: a rule against the IPv6 address itself still
+    judges it in that case.
+    """
+    packed = addr.packed
+    if packed[:10] == b"\x00" * 10 and packed[10:12] == b"\xff\xff":
+        return IPv4Address(packed[12:16])
+    if packed[:8] == b"\x00" * 8 and packed[8:10] == b"\xff\xff" and packed[10:12] == b"\x00\x00":
+        return IPv4Address(packed[12:16])
+    if packed[:12] == b"\x00" * 12 and addr not in _IPV4_COMPATIBLE_EXCLUDED:
+        return IPv4Address(packed[12:16])
+    if packed[:12] == b"\x00\x64\xff\x9b\x00\x00\x00\x00\x00\x00\x00\x00":
+        return IPv4Address(packed[12:16])
+    return None
+
+
 def _check_address_with_rules(
     socket_rules: SocketRules,
     socket_kind: Kind,
@@ -785,10 +816,13 @@ def _check_address_with_rules(
 
     # %% Analyse rules
     for checked_ip in unique_ips:
-        # The kernel serves ::ffff:a.b.c.d as the IPv4 address a.b.c.d, so the IPv4 rules judge it.
-        ip_host = (
-            checked_ip.ipv4_mapped if isinstance(checked_ip, IPv6Address) and checked_ip.ipv4_mapped else checked_ip
-        )
+        # The kernel, a resolver or a NAT64/SIIT gateway can serve an IPv4 address under several IPv6
+        # encodings (see _embedded_ipv4): the IPv4 rules judge whichever one comes back.
+        ip_host: IPv4Address | IPv6Address = checked_ip
+        if isinstance(checked_ip, IPv6Address):
+            embedded = _embedded_ipv4(checked_ip)
+            if embedded is not None:
+                ip_host = embedded
         allowed = False
         for rule_type_to_check in (Action.DENY, Action.ALLOW):
             if allowed:
