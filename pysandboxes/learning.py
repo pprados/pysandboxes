@@ -13,6 +13,7 @@ application through typical usage scenarios and capturing required permissions.
 import logging
 import os
 import re
+import secrets
 import shutil
 import threading
 from datetime import datetime
@@ -209,11 +210,13 @@ def _write_atomic(path: Path, content: str) -> None:
     ``path``: a crash or error mid-write leaves the previous file untouched instead
     of a truncated or missing one.
     """
-    # A plain Path.write_text, not tempfile.mkstemp, so the file gets the usual
-    # umask-based permissions instead of mkstemp's private 0600.
-    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    # Not tempfile.mkstemp, so the file gets the usual umask-based permissions instead
+    # of mkstemp's private 0600. An unpredictable name created with O_EXCL never follows
+    # a file or link another user planted in a shared directory.
+    tmp_path = path.with_name(f"{path.name}.{secrets.token_hex(8)}.tmp")
     try:
-        tmp_path.write_text(content)
+        with os.fdopen(os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666), "w") as tmp_file:
+            tmp_file.write(content)
         if path.exists():
             shutil.copymode(path, tmp_path)
         os.replace(tmp_path, path)

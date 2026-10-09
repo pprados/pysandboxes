@@ -207,10 +207,10 @@ class TestAtomicWrite:
             original = "py-sandbox=true\n# </learning_guard_envs>\n"
             cfg.write_text(original)
 
-            def boom_write_text(_self: Path, *_args: object, **_kwargs: object) -> int:
+            def boom_fdopen(*_args: object, **_kwargs: object) -> None:
                 raise OSError("boom")
 
-            monkeypatch.setattr(Path, "write_text", boom_write_text)
+            monkeypatch.setattr("pysandboxes.learning.os.fdopen", boom_fdopen)
 
             patches = _patched_rule_generators(["env=FOO=${FOO}"])
             with (
@@ -365,3 +365,22 @@ class TestExposeRoGranularity:
         assert any(
             rule.startswith("expose-ro=") and root.name in rule for rule in rules
         ), "reading one file exposes its whole parent directory"
+
+
+def test_atomic_write_never_follows_a_planted_temporary_link(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Another local user could plant `<file>.<pid>.tmp` as a link to a file of ours: the write must not follow it."""
+    import os
+
+    from pysandboxes import learning
+
+    victim = tmp_path / "victim"
+    victim.write_text("untouched")
+    target = tmp_path / ".py-sandboxes"
+    monkeypatch.setattr(os, "getpid", lambda: 4242)
+    (tmp_path / ".py-sandboxes.4242.tmp").symlink_to(victim)
+
+    learning._write_atomic(target, "learned=rules\n")
+
+    assert victim.read_text() == "untouched"
+    assert target.read_text() == "learned=rules\n"
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp") and not p.is_symlink()] == []
