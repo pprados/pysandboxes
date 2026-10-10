@@ -675,15 +675,29 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         self._is_started = True
         self._accept_incoming = True
 
+    async def _cancel_watchdog(self) -> None:
+        """Cancel and drain the subprocess watchdog task."""
+        watchdog = self._watchdog
+        if watchdog is None:
+            return
+        if not watchdog.done():
+            watchdog.cancel()
+        try:
+            await watchdog
+        except CancelledError:
+            if not watchdog.cancelled():
+                raise
+        finally:
+            if self._watchdog is watchdog:
+                self._watchdog = None
+
     async def _stop(self, max_pending: int) -> None:
         """Stop the subprocess daemon.
 
         Args:
             max_pending: Maximum pending operations to wait for.
         """
-        if self._watchdog:
-            self._watchdog.cancel()
-            self._watchdog = None
+        await self._cancel_watchdog()
 
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
         """Shutdown the subprocess daemon.
@@ -691,6 +705,8 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         Args:
             graceful_shutdown: Whether to perform graceful shutdown.
         """
+        self._accept_incoming = False
+        await self._cancel_watchdog()
         await super()._shutdown(graceful_shutdown)
         self.max_connect_retry = 1  # Try only one time for remote _shutdown
 

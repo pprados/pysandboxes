@@ -9,6 +9,7 @@ calls that nobody answered. Both must leave the daemon in a closed state where
 every call raises at once.
 """
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -29,6 +30,17 @@ class _DeadProcess:
 
     async def wait(self) -> int:
         return self.returncode
+
+
+class _PendingProcess:
+    returncode = None
+
+    async def wait(self) -> int:
+        await asyncio.Event().wait()
+        return 0
+
+    def kill(self) -> None:
+        pass
 
 
 async def _run_watchdog(daemon: Any, restart_name: str, returncode: int) -> AsyncMock:
@@ -66,3 +78,30 @@ async def test_a_child_that_keeps_dying_closes_the_daemon(daemon: Any, restart_n
     assert not daemon._accept_incoming
     with pytest.raises(SandBoxProtocolError):
         await daemon.async_call_in_sandbox(print, False)
+
+
+@pytest.mark.parametrize(
+    "daemon,watchdog_method",
+    [
+        pytest.param(SubProcessDaemon("token"), "watchdog", id="subprocess"),
+        pytest.param(UnshareSSEDaemon("token"), "_watchdog_loop", id="unshare"),
+    ],
+)
+async def test_shutdown_waits_for_the_watchdog_to_finish(daemon: Any, watchdog_method: str) -> None:
+    daemon._process = _PendingProcess()
+    daemon._is_started = False
+    watchdog = asyncio.create_task(
+        getattr(daemon, watchdog_method)(None, envs={}, log_level=0, init_fn=None),
+        name="ControlDaemon",
+    )
+    daemon._watchdog = watchdog
+    await asyncio.sleep(0)
+
+    try:
+        await daemon._shutdown(graceful_shutdown=False)
+
+        assert watchdog.done()
+    finally:
+        if not watchdog.done():
+            watchdog.cancel()
+            await watchdog
