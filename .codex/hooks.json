@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/format_modified.py\"",
+            "timeout": 300,
+            "statusMessage": "Formatting modified Python files with make format"
+          }
+        ]
+      }
+    ]
+  }
+}

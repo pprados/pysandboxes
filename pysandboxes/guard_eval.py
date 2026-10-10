@@ -63,7 +63,7 @@ import weakref
 from pathlib import Path
 from typing import Any, Callable, NoReturn, cast
 
-from . import guard_api
+from . import guard_api, guard_files
 from .e import EvalInterrupted, RuleApiPermissionError
 from .eval_rules import CAPABILITY_BUILTINS, DEFAULT_RULES, EvalProfiles, EvalRules, LearnEvalContext, LearnEvalRule
 from .eval_runtime import (
@@ -622,7 +622,10 @@ def is_ambient(frame: types.FrameType) -> bool:
         return False
     if filename.startswith("<frozen "):
         return True
-    resolved = str(Path(filename).resolve())
+    # Path.resolve() calls os.path.realpath(), whose lstat/readlink calls are
+    # patched by guard_files. Use its guarded canonicalizer to avoid re-entering
+    # those wrappers while deciding whether this is framework-generated code.
+    resolved = guard_files._safe_realpath(filename)
     if _STDLIB_ROOTS and resolved.startswith(_STDLIB_ROOTS):
         return True
     return any(segment in Path(resolved).parts for segment in _VENDOR_SEGMENTS)

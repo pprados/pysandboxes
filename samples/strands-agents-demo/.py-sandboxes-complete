@@ -25,6 +25,7 @@ net=ALLOW|TCP|ip6-loopback|0|IN
 
 # ⚠ native: native code and arbitrary memory access
 python-api=ALLOW:ctypes.CDLL
+python-api=ALLOW:_ctypes.dlopen
 
 # The calculator tool evaluates a string the model produced. `closed` rather
 # than the adaptive default: the caller already passes {"__builtins__": {}},

@@ -179,6 +179,7 @@ class BaseSSESandbox(BaseDaemon):
 
         retry = self.max_connect_retry
         while retry > 0:
+            session: aiohttp.ClientSession | None = None
             try:
                 from pysandboxes._os_sandbox import get_token
 
@@ -189,7 +190,6 @@ class BaseSSESandbox(BaseDaemon):
                 logger.info("Calling sandbox at %s", sandbox_server_url)
                 logger.debug("Try to call %s", sandbox_server_url)
                 # Force IPv4 for localhost/127.0.0.1 so QEMU hostfwd is used.
-                session = None
                 if self.host in ("127.0.0.1", "localhost"):
                     connector = aiohttp.TCPConnector(family=socket.AF_INET)
                     session = aiohttp.ClientSession(connector=connector, read_bufsize=SSE_READ_BUFSIZE)
@@ -249,8 +249,12 @@ class BaseSSESandbox(BaseDaemon):
                 continue
             except SystemExit:
                 raise
-            # Other exceptions are from the called function
-            raise raised
+            else:
+                # Other exceptions are from the called function.
+                raise raised
+            finally:
+                if session is not None:
+                    await session.close()
 
         raise SandBoxProtocolError("No result received from the sandbox")
 

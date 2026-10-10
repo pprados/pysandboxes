@@ -16,14 +16,14 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from types import FunctionType, ModuleType
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, cast
 
 import pytest
 
 from pysandboxes import guard_api, guard_import
 from pysandboxes.e import RuleApiPermissionError, RuleModuleNotFoundError, sandbox_denials
 from pysandboxes.guard_api import SENSITIVE_API, _not_applicable, activate_guard, patch_rules
-from pysandboxes.guard_import import _conv_patch_rules, framework_imports, user_code
+from pysandboxes.guard_import import PatchRule, _conv_patch_rules, framework_imports, user_code
 from pysandboxes.lifecycle import arm
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
@@ -53,7 +53,7 @@ def _import_rules(*names: str) -> Iterator[None]:
         guard_import._rules = saved
 
 
-def _refused_call(call: Callable[[], Any]) -> RuleApiPermissionError:
+def _refused_call(call: Callable[..., object]) -> RuleApiPermissionError:
     with pytest.raises(RuleApiPermissionError) as exc:
         call()
     assert sandbox_denials(exc.value), "the refusal must be recorded as a sandbox denial"
@@ -130,16 +130,17 @@ def test_the_pure_python_unpickler_is_refused(monkeypatch: pytest.MonkeyPatch, a
 
 @pytest.mark.skipif(not hasattr(subprocess, "_fork_exec"), reason="subprocess calls _posixsubprocess directly here")
 def test_the_subprocess_alias_of_fork_exec_is_wrapped(monkeypatch: pytest.MonkeyPatch, armed: None) -> None:
-    rules = [
-        rule for rule in _conv_patch_rules(patch_rules(learn=False))["subprocess"] if rule.code_path == "_fork_exec"
-    ]
+    subprocess_rules = cast(tuple[PatchRule, ...], _conv_patch_rules(patch_rules(learn=False))["subprocess"])
+    rules = [rule for rule in subprocess_rules if rule.code_path == "_fork_exec"]
     assert rules, "subprocess._fork_exec is not in the patch table"
-    monkeypatch.setattr(subprocess, "_fork_exec", subprocess._fork_exec)  # restored by monkeypatch
+    fork_exec = cast(Callable[..., object], getattr(subprocess, "_fork_exec"))  # noqa: B009
+    monkeypatch.setattr(subprocess, "_fork_exec", fork_exec)  # restored by monkeypatch
     monkeypatch.setattr(guard_import, "_patch_rules", {"subprocess": tuple(rules)})
     guard_import._apply_patch(subprocess, "subprocess")
 
-    assert getattr(subprocess._fork_exec, "__pysandbox_api__", False), "subprocess._fork_exec is not the wrapper"
-    refusal = _refused_call(subprocess._fork_exec)
+    wrapped_fork_exec = cast(Callable[..., object], getattr(subprocess, "_fork_exec"))  # noqa: B009
+    assert getattr(wrapped_fork_exec, "__pysandbox_api__", False), "subprocess._fork_exec is not the wrapper"
+    refusal = _refused_call(wrapped_fork_exec)
     assert (refusal.qualname, refusal.category) == ("_posixsubprocess.fork_exec", "process-exec")
 
 
@@ -175,7 +176,7 @@ def test_a_kept_package_still_imports_its_own_submodules() -> None:
     import asyncio.events
 
     code = compile("from . import events as found", "<asyncio>", "exec")
-    own_code = FunctionType(code, vars(asyncio.events))
+    own_code = FunctionType(code, dict(vars(asyncio.events)))
     with _import_rules(), user_code():
         own_code()
 

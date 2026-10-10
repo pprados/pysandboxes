@@ -11,7 +11,7 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import _os_sandbox
 from pysandboxes.all_rules import AllRules, EmptyRules
-from pysandboxes.base_daemon import FakeDaemon
+from pysandboxes.base_daemon import BaseDaemon, FakeDaemon
 from pysandboxes.e import SandBoxError
 from pysandboxes.remote.base_sse_daemon import BaseSSESandbox
 from pysandboxes.tools import Environ, SyncOrAsyncFunc
@@ -98,7 +98,7 @@ def _rules(name: str = _FAKE, **kwargs: Any) -> AllRules:
     return EmptyRules._replace(os_sandbox=name, **kwargs)
 
 
-async def _start(rules: AllRules | None = None) -> Any:
+async def _start(rules: AllRules | None = None) -> BaseDaemon:
     return await _os_sandbox.async_start_daemon(rules or _rules(), envs={}, log_level=0, init_fn=None)
 
 
@@ -170,6 +170,7 @@ def test_a_provider_the_host_lacks_is_refused_by_the_sync_start(monkeypatch: pyt
 
 async def test_starts_are_counted_and_only_the_last_shutdown_stops_the_daemon() -> None:
     first = await _start()
+    assert isinstance(first, _Daemon)
     second = await _start()
 
     assert second is first
@@ -182,6 +183,7 @@ async def test_starts_are_counted_and_only_the_last_shutdown_stops_the_daemon() 
     await _os_sandbox.async_shutdown_daemon()
     assert first.shutdowns == []
     assert _os_sandbox._current_daemon is first
+    assert isinstance(first, _Daemon)
 
     await _os_sandbox.async_shutdown_daemon(graceful_shutdown=False)
     assert first.shutdowns == [False]
@@ -197,6 +199,7 @@ async def test_a_refused_extra_shutdown_does_not_corrupt_the_refcount() -> None:
         await _os_sandbox.async_shutdown_daemon()
 
     daemon = await _start()
+    assert isinstance(daemon, _Daemon)
     await _start()
     await _os_sandbox.async_shutdown_daemon()
 
@@ -208,12 +211,14 @@ async def test_python_args_reach_the_provider() -> None:
     daemon = await _os_sandbox.async_start_daemon(
         _rules(), envs={}, log_level=0, init_fn=None, python_args=["-X", "dev"]
     )
+    assert isinstance(daemon, _Daemon)
 
     assert daemon.kwargs == {"python_args": ["-X", "dev"]}
 
 
 async def test_stop_incoming_call_closes_the_door_and_stop_reaches_the_provider() -> None:
     daemon = await _start()
+    assert isinstance(daemon, _Daemon)
 
     await _os_sandbox.stop_incoming_call()
     await _os_sandbox.async_stop_daemon(max_pending=3)
@@ -324,6 +329,7 @@ def test_sync_start_and_shutdown_count_the_same_way() -> None:
 
     _os_sandbox.shutdown_daemon()
     assert _os_sandbox._current_daemon is first
+    assert isinstance(first, _Daemon)
     assert first.shutdowns == []
 
     _os_sandbox.shutdown_daemon()

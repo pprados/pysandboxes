@@ -51,10 +51,9 @@ async def _run_watchdog(daemon: Any, restart_name: str, returncode: int) -> Asyn
 
 
 def _daemons() -> list[tuple[Any, str]]:
-    retry = {"max_attempts": 2, "base_delay": 0.0, "max_delay": 0.0}
     return [
-        (SubProcessDaemon("token", **retry), "_re_start"),
-        (UnshareSSEDaemon("token", **retry), "_launch"),
+        (SubProcessDaemon("token", max_attempts=2, base_delay=0.0, max_delay=0.0), "_re_start"),
+        (UnshareSSEDaemon("token", max_attempts=2, base_delay=0.0, max_delay=0.0), "_launch"),
     ]
 
 

@@ -435,7 +435,7 @@ def test_ctypes_new_bypass_of_cdll_init_is_blocked(
         obj = ctypes.CDLL.__new__(ctypes.CDLL)
         obj._name = "libc.so.6"
 
-        class _FuncPtr(ctypes._CFuncPtr):  # type: ignore[misc]
+        class _FuncPtr(ctypes._CFuncPtr):  # type: ignore[name-defined]
             _flags_ = obj._func_flags_
             _restype_ = obj._func_restype_
 

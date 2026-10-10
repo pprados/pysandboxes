@@ -63,7 +63,7 @@ def _worker(thread_id: int) -> None:
     processing_time: float = random.uniform(0.01, 0.05)
     time.sleep(processing_time)
     for _ in range(10):
-        result_sync = sync_function("a", b=thread_id)
+        result_sync = sync_function("a", b=str(thread_id))
         assert result_sync == f"a {thread_id}"
 
 
