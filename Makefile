@@ -143,7 +143,7 @@ sample-tests-%:
 		echo "skip $*-demo: requires-python >= $$req, running $(UV_PYTHON)"; \
 	else \
 		$(MAKE) -C samples/$*-demo init && \
-		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run pytest -p no:dotenv -v tests; \
+		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) PYTHONUTF8=1 uv run pytest -p no:dotenv -v tests; \
 	fi
 
 # mcp-client spawns the neighbouring server sample as a subprocess, through that

@@ -232,7 +232,14 @@ def test_the_report_is_exhaustive_actionable_and_honest() -> None:
     assert "eval-import=os" in report
     assert "eval-magic=__class__" in report
     assert "^" in report
-    assert "⚠" in report
+    assert "WARNING:" in report
+
+
+def test_the_report_can_be_written_to_a_legacy_windows_console() -> None:
+    source = "().__class__"
+    report = render_report("<eval:test>", source, _check(source, syntax=_syntax()))
+
+    assert report.encode("cp1252").decode("cp1252") == report
 
 
 def test_raise_if_rejected_carries_the_syntax_error_fields() -> None:
