@@ -17,6 +17,7 @@ Scenarios B and C run armed, against the real network. Nothing is mocked: a
 mocked transport proves the mock, not the rule.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -50,10 +51,14 @@ DENIED_URL = "https://example.com/"
 # Reaches Popen through the subclass tree, which an emptied __builtins__ does
 # not hide. The tool is a plain eval() on purpose: whatever stops this is the
 # sandbox, not a parser.
-POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
+POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0]([{!r}, '-c', 'pass'])"
+POPEN_ESCAPE = POPEN_ESCAPE.format(sys.executable)
 
 
 def armed_kwargs() -> dict[str, object]:
+    (Path(os.environ.get("LOCALAPPDATA", Path.cwd())) / "CrewAI").mkdir(parents=True, exist_ok=True)
+    (Path.home() / ".local/share/crewai-demo").mkdir(parents=True, exist_ok=True)
+    (Path.home() / ".local/share/crewai/credentials").mkdir(parents=True, exist_ok=True)
     return {"sandboxes_config": CONFIG, "py_sandbox": "true", "os_sandbox": "subprocess"}
 
 
@@ -168,6 +173,9 @@ def test_scenario_d_the_complete_mode_confines_the_same_calls() -> None:
     calls the inner function directly and the bridge is never used. A tool
     verified only in partial mode says nothing about this path.
     """
+    (Path.home() / ".local/share/crewai-demo").mkdir(parents=True, exist_ok=True)
+    (Path.home() / ".local/share/crewai/credentials").mkdir(parents=True, exist_ok=True)
+    (Path(os.environ.get("LOCALAPPDATA", Path.cwd())) / "CrewAI").mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [
             sys.executable,

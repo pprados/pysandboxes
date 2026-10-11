@@ -65,6 +65,7 @@ py-sandbox=true
 # Note: Some providers may not work in containers without additional privileges.
 
 os-sandbox=${OS_SANDBOX:-subprocess}
+include "../windows-standard-imports.profile"
 
 # A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the
 # nearest .env above it and copies every name into os.environ, past the env= rules.

@@ -8,6 +8,7 @@
 # author's decision, not an observation: review each one.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
+include "../windows-standard-imports.profile"
 
 # A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the
 # nearest .env above it and copies every name into os.environ, past the env= rules.
@@ -172,3 +173,5 @@ python-import=_csv
 # Standard Python
 python-import=annotationlib, compression
 
+# Add rules
+expose-rw=${LOCALAPPDATA:-.}/CrewAI
