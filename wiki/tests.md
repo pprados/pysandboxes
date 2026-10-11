@@ -165,6 +165,11 @@ Nine entries are registered in `pysandboxes/_os_sandbox.py`: seven providers, pl
 | `qemu` | yes | yes | yes (KVM) | yes | yes | yes |
 | `qemu-tcg` | yes | yes | — | — | — | — |
 
+The Windows AppContainer provider is implemented on the feature branch. Its release claim is gated on Windows
+shared-suite and provider integration results in `cross-os.yml`; `make windows-tests` has passed locally as both
+administrator and standard user. The Windows test job sets `PYSANDBOXES_FAIL_ON_SKIP=1`; a skipped Windows
+scenario is not a pass. See [AppContainer](appcontainer.md) for the validation setup and security limits.
+
 "Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
 a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
 `tests/integration_tests/_env.py`). It carries the `slow` marker, which is how a

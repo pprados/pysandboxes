@@ -4,10 +4,14 @@
 
 import logging
 import sys
+from types import SimpleNamespace
+from typing import cast
+from unittest.mock import AsyncMock
 
 import pytest
+from uvicorn import Server
 
-from pysandboxes.remote.sse_server_daemon import create_uvicorn_daemon
+from pysandboxes.remote.sse_server_daemon import create_uvicorn_daemon, serve_uvicorn
 
 
 def test_uvicorn_logs_to_stderr_when_nothing_configured_it(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -21,3 +25,13 @@ def test_uvicorn_logs_to_stderr_when_nothing_configured_it(monkeypatch: pytest.M
     log_config = server.config.log_config
     assert isinstance(log_config, dict)
     assert {handler["stream"] for handler in log_config["handlers"].values()} == {"ext://sys.stderr"}
+
+
+async def test_serve_uvicorn_uses_prebound_socket() -> None:
+    serve = AsyncMock()
+    server = cast(Server, SimpleNamespace(serve=serve))
+    shared_socket = object()
+
+    await serve_uvicorn(server, shared_socket)
+
+    serve.assert_awaited_once_with(sockets=[shared_socket])

@@ -26,6 +26,7 @@ and verify the scenarios your application needs.
 ## Choose and operate an OS provider
 
 - [Provider comparison](os-providers.md) — enforcement mechanisms, prerequisites, compatibility, and trade-offs.
+- [AppContainer for Windows](appcontainer.md) — provider implementation, validation status, and limits.
 - [Landlock](landlock.md)
 - [Bubblewrap (`bwrap`)](bwrap.md)
 - [Firejail](firejail.md)

@@ -225,7 +225,7 @@ def run_guest(process_config: DaemonParameters) -> int:
         raise
 
 
-async def run_server(process_config: DaemonParameters) -> int:
+async def run_server(process_config: DaemonParameters, shared_socket: Any | None = None) -> int:
     """Run the sandbox server with the provided configuration.
 
     Args:
@@ -265,6 +265,7 @@ async def run_server(process_config: DaemonParameters) -> int:
     os_sandbox = all_rules.os_sandbox
     assert os_sandbox in (
         "subprocess",
+        "appcontainer",
         "firejail",
         "unshare",
         "landlock",
@@ -287,6 +288,7 @@ async def run_server(process_config: DaemonParameters) -> int:
                 process_config.token,
                 port=process_config.port,
                 bind_host=process_config.bind_host,
+                shared_socket=shared_socket,
             ),
         )
     assert isinstance(server_daemon, SSEServerDaemon)
@@ -370,6 +372,7 @@ def main() -> int:
     parser.add_argument("--_python-sb", action="store_true", default=False, help="_internal parameter")
 
     parser.add_argument("--_named-pipe", help="_internal parameter")
+    parser.add_argument("--_shared-socket", help="_internal parameter")
 
     # Parse the arguments provided by the user
     sandboxes_parsed, sandboxes_args = parser.parse_known_args()
@@ -384,6 +387,12 @@ def main() -> int:
     process_config: DaemonParameters = pickle.loads(memoryview(pickle_data))
     if not process_config:
         raise RuntimeError("Impossible to read the config body from stdin")
+    shared_socket = None
+    if sandboxes_parsed._shared_socket:
+        import socket
+
+        fromshare = socket.__dict__["fromshare"]
+        shared_socket = fromshare(Path(sandboxes_parsed._shared_socket).read_bytes())
 
     if _qemu_show_boot_console_guest_trace_enabled(process_config):
         import faulthandler
@@ -413,6 +422,8 @@ def main() -> int:
     logger.debug("config body and token successfully read from named pipe")
 
     all_rules = process_config.all_rules
+    if sys.platform == "win32" and all_rules.os_sandbox == "appcontainer" and "LOCALAPPDATA" not in all_rules.envs:
+        os.environ.pop("LOCALAPPDATA", None)
 
     # Initialize learn
     set_learning_path(all_rules.learning_path)
@@ -493,7 +504,9 @@ def main() -> int:
     activate_sandboxes(
         all_rules,
         os.environ,
-        rules_provider="none" if python_main_args else None,
+        rules_provider=(
+            "none" if python_main_args or (sys.platform == "win32" and all_rules.os_sandbox == "appcontainer") else None
+        ),
     )
     # From here on, this process *is* the sandbox, and the learning mode must be
     # armed at the same moment as the guards. Every deferred import the harness
@@ -527,7 +540,7 @@ def main() -> int:
         runner = asyncio.Runner()
         runner.get_loop()
     with runner:
-        return runner.run(run_server(process_config))
+        return runner.run(run_server(process_config, shared_socket))
 
 
 if __name__ == "__main__":

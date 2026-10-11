@@ -80,6 +80,17 @@ Here is a brief description of the implementation in **partial mode**. You will 
       `SandBoxProtocolError`; the host application is never terminated
     - The current requests are retry multiple times to be reconnected to the new child process.
 
+### Windows AppContainer provider
+
+The Windows provider keeps the existing subprocess watchdog and SSE client. Its command launches an
+unconfined trampoline, which configures per-run ACL grants, creates an AppContainer token, and starts
+`main_sandbox` suspended with that token. A Job Object kills the child if its trampoline exits. The SSE listener
+is created outside the AppContainer and handed to the child as a shared socket because AppContainer blocks
+loopback. File rules map to ACL grants and temporary masks; network rules select broad AppContainer capabilities,
+while host/port filtering remains with the Python guard. See [AppContainer](appcontainer.md) for the design and
+limits. The implementation is on the feature branch and passed the local Windows VM matrix as administrator
+and standard user; release support awaits the Windows CI run.
+
 ### Sensitive API calls
 The `python-api=` rules are enforced by `pysandboxes/guard_api.py`, on top of the same patching machinery as the other guards.
 

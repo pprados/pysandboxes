@@ -36,16 +36,18 @@ logger = logging.getLogger(__name__)
 
 _LINUX = frozenset({"linux"})
 _ANY_OS = frozenset({"linux", "darwin", "win32"})
+_WINDOWS = frozenset({"win32"})
 
 # (subpackage.module_name, class_name, platforms) relative to package ``pysandboxes``.
 # Loaded on first use so ``main_sandbox`` / QEMU guest do not import aiohttp, bwrap, etc. at startup.
 # ``platforms`` holds the ``sys.platform`` values a provider runs on. It is read without importing
 # the provider, whose module may not even import elsewhere (``fcntl`` does not exist on Windows).
-# A tag is a claim: the CI job of that OS must run the provider suites before a value is added.
+# A tag is an enablement claim: provider-specific CI must pass before release support is claimed.
 _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
     "_sse_server": ("remote.sse_server_daemon", "SSEServerDaemon", _ANY_OS),
     "none": ("remote.none_daemon", "NoneDaemon", _ANY_OS),
     "subprocess": ("remote.client_subprocess_sse_daemon", "SubProcessDaemon", _ANY_OS),
+    "appcontainer": ("remote.appcontainer_daemon", "AppContainerSSEDaemon", _WINDOWS),
     "bwrap": ("remote.bwrap_sse_daemon", "BWrapSSEDaemon", _LINUX),
     "firejail": ("remote.firejail_sse_daemon", "FireJailSSEDaemon", _LINUX),
     "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon", _LINUX),
@@ -384,6 +386,8 @@ def start_daemon(
             if all_rules.os_sandbox == "qemu"
             else float(TIMEOUT_FOR_START_DAEMON)
         )
+        if all_rules.os_sandbox == "appcontainer":
+            start_timeout = max(start_timeout, 120.0)
         logger.info(
             "Starting %s daemon (waiting up to %ss for ready)",
             all_rules.os_sandbox,

@@ -261,7 +261,12 @@ async def launch_sandbox(
 
         # Notify caller before blocking on FIFO write (e.g., to start slirp4netns)
         if on_launched and process.pid is not None:
-            on_launched(process.pid)
+            try:
+                on_launched(process.pid)
+            except BaseException:
+                process.kill()
+                await process.wait()
+                raise
 
         # It's a good time for that
         gc.collect()
@@ -318,11 +323,23 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         "_reset_delay",
         "_last_reset",
         "_python_args",
+        "_job_handle",
         "restart",
     )
+    _job_handle: int | None
 
     async def _on_process_started(self) -> None:
         """Hook called after the subprocess is started but before the ping loop."""
+
+    def _on_process_launched(self, pid: int) -> None:
+        """Allow providers that need process ownership to attach the child."""
+
+    def _close_job_handle(self) -> None:
+        if self._job_handle is not None:
+            from .win_job import close
+
+            handle, self._job_handle = self._job_handle, None
+            close(handle)
 
     def _ping_url(self, port: int) -> str:
         """HTTP URL used to wait until the sandbox daemon accepts connections."""
@@ -362,6 +379,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         """
         super().__init__(token, max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
+        self._job_handle = None
         self._process: Process | None = None
         self._watchdog: Task | None = None
         self._attempts = 0
@@ -463,6 +481,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             self._attempts = 0
             while True:
                 errorlevel = await self._process.wait()
+                self._close_job_handle()
                 # Process is dead
                 if not self._accept_incoming:
                     break  # Detect legitimate _shutdown
@@ -602,6 +621,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             pipe_path=pipe_path,
             envs=Envs(env),
             process_config=process_config,
+            on_launched=self._on_process_launched,
         )
         logger.info(
             "Subprocess launched (pid=%s), waiting for daemon (ping URL resolved each attempt)",
@@ -761,6 +781,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             logger.exception("Unknown error in _shutdown")
             assert e is None, f"Unknown error in _shutdown {e}"
         finally:
+            self._close_job_handle()
             self._process = None
             self._is_started = False
 

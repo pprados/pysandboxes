@@ -232,11 +232,12 @@ This is the core use case: a code interpreter tool, a data analysis agent, a cal
 ## Other untrusted Python
 
 The same pattern applies to a notebook downloaded from the web, or to the plugins that each customer of a SaaS
-uploads: one rule file per origin, and a kernel provider since the author is unknown.
+uploads: one rule file per origin, and an OS provider since the author is unknown. On Linux, use a kernel
+provider; a Windows AppContainer provider is being developed but is not yet supported pending its Windows gates.
 
 ## Limits
 
 Only Python is covered by the Python layer. Starting a process is denied by default, but a script granted
-`python-api=ALLOW:process-exec` to start `bash`, `curl` or a compiled binary escapes it, and only a kernel provider
-still holds. On macOS and Windows, no kernel provider exists: the Python layer runs
-alone, with `none` or `subprocess`.
+`python-api=ALLOW:process-exec` to start `bash`, `curl` or a compiled binary escapes it, and only an OS provider
+still holds. On macOS, no OS boundary provider exists. On Windows, the Python layer currently runs alone with
+`none` or `subprocess`; AppContainer is under development and cannot be relied on until its validation gates pass.

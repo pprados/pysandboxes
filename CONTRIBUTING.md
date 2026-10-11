@@ -15,8 +15,12 @@ does not count as a vulnerability, such as the known Python-layer weaknesses in
 
 ## Getting started
 
-The project runs on Linux or WSL (every OS provider is a Linux technology), with Python 3.11 to 3.14, and uses
+The project develops and validates the existing providers on Linux or WSL, with Python 3.11 to 3.14, and uses
 [uv](https://docs.astral.sh/uv/) exclusively.
+
+The AppContainer provider is implemented on its feature branch, and local VM suites pass as administrator and
+standard user. Release support remains pending until the Windows CI suites pass. The local workflow uses
+`make windows-vm`, `make windows-tests`, `make windows-vm-stop`, and `make windows-vm-clean`.
 
 ```bash
 git clone https://github.com/pprados/pysandboxes.git
@@ -48,7 +52,8 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
   and the attacks already studied;
-- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`), and
+- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`), plus the
+  in-development [`appcontainer.md`](wiki/appcontainer.md), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;
 - [`release.md`](wiki/release.md): how a pre-release is published, and the settings behind it;

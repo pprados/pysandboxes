@@ -5,7 +5,7 @@ SHELL=/bin/bash
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate _uv-init inspector github-push-test init \
-	clean-sandbox-temps quick-demo-gif
+	clean-sandbox-temps quick-demo-gif windows-vm windows-tests windows-vm-stop windows-vm-clean
 
 UV_GROUP?=--group dev --group test --group lint
 
@@ -75,6 +75,82 @@ container-tests: build-images
 INTEGRATION_TESTS ?= tests/integration_tests
 integration-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest $(INTEGRATION_TESTS)
+
+WINDOWS_VM_DIR ?= .claude/windows-vm
+WINDOWS_VM_CONTAINER ?= pysandboxes-windows-vm
+WINDOWS_VM_SSH_PORT ?= 2222
+WINDOWS_VM_HOST ?= 127.0.0.1
+WINDOWS_VM_ADMIN ?= Docker
+WINDOWS_VM_ENGINE ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (command -v docker >/dev/null 2>&1 && echo docker))
+WINDOWS_VM_SSH := ssh -i $(WINDOWS_VM_DIR)/admin -p $(WINDOWS_VM_SSH_PORT) -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5
+WINDOWS_VM_TESTS := tests/integration_tests/test_usage_with_providers.py tests/integration_tests/test_guards_with_providers.py tests/integration_tests/remote/test_appcontainer.py
+
+## Start the local Windows 11 AppContainer VM (requires Linux, Docker or Podman, and /dev/kvm)
+windows-vm:
+	@set -eu; \
+	if [ -z "$(WINDOWS_VM_ENGINE)" ]; then echo "Install Docker or Podman to run the Windows VM." >&2; exit 1; fi; \
+	if [ ! -e /dev/kvm ]; then echo "The Windows VM requires /dev/kvm; enable KVM on this Linux host." >&2; exit 1; fi; \
+	mkdir -p "$(WINDOWS_VM_DIR)/oem" "$(WINDOWS_VM_DIR)/storage"; \
+	if [ ! -f "$(WINDOWS_VM_DIR)/admin" ]; then ssh-keygen -q -t ed25519 -N '' -f "$(WINDOWS_VM_DIR)/admin"; fi; \
+	if [ ! -f "$(WINDOWS_VM_DIR)/sbuser" ]; then ssh-keygen -q -t ed25519 -N '' -f "$(WINDOWS_VM_DIR)/sbuser"; fi; \
+	cp scripts/windows-vm/install.bat "$(WINDOWS_VM_DIR)/oem/install.bat"; \
+	cp scripts/windows-vm/grant-runtime.ps1 "$(WINDOWS_VM_DIR)/oem/grant-runtime.ps1"; \
+	cp "$(WINDOWS_VM_DIR)/admin.pub" "$(WINDOWS_VM_DIR)/oem/admin_authorized_keys"; \
+	cp "$(WINDOWS_VM_DIR)/sbuser.pub" "$(WINDOWS_VM_DIR)/oem/sbuser_authorized_keys"; \
+	if $(WINDOWS_VM_ENGINE) container inspect "$(WINDOWS_VM_CONTAINER)" >/dev/null 2>&1; then \
+	  $(WINDOWS_VM_ENGINE) start "$(WINDOWS_VM_CONTAINER)" >/dev/null; \
+	else \
+	  $(WINDOWS_VM_ENGINE) run -d --name "$(WINDOWS_VM_CONTAINER)" --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN \
+	    --stop-timeout 120 -p 127.0.0.1:8006:8006 -p "127.0.0.1:$(WINDOWS_VM_SSH_PORT):22" \
+	    -e VERSION=11 -e DISK_SIZE=40G -e RAM_SIZE=4G -e CPU_CORES=4 \
+	    -v "$(abspath $(WINDOWS_VM_DIR))/storage:/storage" -v "$(abspath $(WINDOWS_VM_DIR))/oem:/oem" dockurr/windows; \
+	fi; \
+	echo "Waiting for Windows installation, SSH, and sshd provisioning (first boot can take about 30 minutes)..."; \
+	for attempt in $$(seq 1 180); do \
+	  if $(WINDOWS_VM_SSH) -o BatchMode=yes "$(WINDOWS_VM_ADMIN)@$(WINDOWS_VM_HOST)" exit >/dev/null 2>&1; then \
+	    echo "Windows VM is reachable at $(WINDOWS_VM_HOST):$(WINDOWS_VM_SSH_PORT)"; exit 0; \
+	  fi; \
+	  sleep 10; \
+	done; \
+	echo "Timed out waiting for SSH. Inspect the VM with: $(WINDOWS_VM_ENGINE) logs $(WINDOWS_VM_CONTAINER)" >&2; exit 1
+
+## Run the Windows AppContainer integration and shared provider suites as admin and sbuser
+windows-tests: windows-vm
+	@set -euo pipefail; \
+	$(WINDOWS_VM_SSH) "$(WINDOWS_VM_ADMIN)@$(WINDOWS_VM_HOST)" "if not exist C:\\pysandboxes mkdir C:\\pysandboxes"; \
+	git ls-files -co --exclude-standard | awk '/^(pysandboxes|tests)\// || /^(pyproject.toml|uv.lock|README.md|LICENSE.txt)$$/' \
+	  | tar -cf - -T - | $(WINDOWS_VM_SSH) "$(WINDOWS_VM_ADMIN)@$(WINDOWS_VM_HOST)" "tar -xf - -C C:/pysandboxes"; \
+	for account in "$(WINDOWS_VM_ADMIN)" sbuser; do \
+	  identity="$(WINDOWS_VM_DIR)/$$(test "$$account" = sbuser && echo sbuser || echo admin)"; \
+	  project_dir="C:\\pysandboxes"; \
+	  python_arg=""; \
+	  if test "$$account" = sbuser; then \
+	    project_dir="C:\\Users\\sbuser\\pysandboxes"; \
+	    python_arg="--python C:\\Users\\sbuser\\python-runtime\\python.exe"; \
+	    ssh -i "$$identity" -p "$(WINDOWS_VM_SSH_PORT)" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+	      "$$account@$(WINDOWS_VM_HOST)" "if not exist C:\\Users\\sbuser\\pysandboxes mkdir C:\\Users\\sbuser\\pysandboxes"; \
+	    git ls-files -co --exclude-standard | awk '/^(pysandboxes|tests)\// || /^(pyproject.toml|uv.lock|README.md|LICENSE.txt)$$/' \
+	      | tar -cf - -T - | ssh -i "$$identity" -p "$(WINDOWS_VM_SSH_PORT)" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+	        "$$account@$(WINDOWS_VM_HOST)" "tar -xf - -C C:/Users/sbuser/pysandboxes"; \
+	    ssh -i "$$identity" -p "$(WINDOWS_VM_SSH_PORT)" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+	      "$$account@$(WINDOWS_VM_HOST)" \
+	      "powershell.exe -NoProfile -Command \"\$$python = uv python find 3.14 --managed-python; robocopy (Split-Path \$$python) C:\\Users\\sbuser\\python-runtime /E /COPY:DAT /R:1 /W:1 | Out-Null; if (\$$LASTEXITCODE -ge 8) { exit \$$LASTEXITCODE }; exit 0\""; \
+	  fi; \
+	  echo "Installing test dependencies and running Windows suites as $$account..."; \
+	  ssh -i "$$identity" -p "$(WINDOWS_VM_SSH_PORT)" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+	    -o ConnectTimeout=5 "$$account@$(WINDOWS_VM_HOST)" \
+	    "cd /d $$project_dir && set \"UV_PROJECT_ENVIRONMENT=.venv-$$account\" && set \"PYSANDBOXES_FAIL_ON_SKIP=1\" && uv sync $$python_arg --group dev --group test --group lint && uv run pytest -q $(WINDOWS_VM_TESTS)"; \
+	done
+
+## Stop the local Windows AppContainer VM without removing its disk
+windows-vm-stop:
+	@if [ -z "$(WINDOWS_VM_ENGINE)" ]; then echo "Install Docker or Podman to manage the Windows VM." >&2; exit 1; fi
+	-@$(WINDOWS_VM_ENGINE) stop --time 120 "$(WINDOWS_VM_CONTAINER)" >/dev/null
+
+## Remove the Windows VM and its local keys and disk (destructive)
+windows-vm-clean: windows-vm-stop
+	@if [ -n "$(WINDOWS_VM_ENGINE)" ]; then $(WINDOWS_VM_ENGINE) rm -f "$(WINDOWS_VM_CONTAINER)" >/dev/null 2>&1 || true; fi
+	rm -rf "$(WINDOWS_VM_DIR)"
 
 # (integration first: the unit tests leave the socket guard
 # armed with a deny-all rule set, which breaks the in-process integration tests).
