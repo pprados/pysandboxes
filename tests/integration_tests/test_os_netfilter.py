@@ -148,14 +148,15 @@ def _run(
     provider: str,
     mode: str,
     port: int,
-    allow: str,
+    allow: str | None,
     *,
     target_host: str | None = None,
     firejail_bridge: str | None = None,
 ) -> str:
-    # /etc is exposed on purpose: mounted over the qemu guest's own, it once hid iptables-restore from the guest.
     profile = tmp_path / "netfilter.profile"
     firejail_net = f"firejail.net={firejail_bridge}\n" if firejail_bridge else ""
+    # /etc is exposed on purpose: mounted over the qemu guest's own, it once hid iptables-restore from the guest.
+    file_rules = f"expose-ro=.\nexpose-ro=/etc\nexpose-ro={sys.base_prefix}/lib\n"
     profile.write_text(
         "".join(
             [
@@ -163,10 +164,8 @@ def _run(
                 f"os-sandbox={provider}\n",
                 firejail_net,
                 "python-import=*\n",
-                "expose-ro=.\n",
-                "expose-ro=/etc\n",
-                f"expose-ro={sys.base_prefix}/lib\n",
-                f"net=ALLOW|TCP|{allow}|OUT\n",
+                file_rules,
+                f"net=ALLOW|TCP|{allow}|OUT\n" if allow is not None else "",
             ]
         )
     )

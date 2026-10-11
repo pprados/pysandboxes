@@ -11,7 +11,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] Management of *Denial of Service*
   - [ ] Management of regular expressions
 - [ ] OS Compatible
-  - [ ] Windows
+  - [x] Windows AppContainer provider implementation and local VM validation. Release support awaits Windows CI.
   - [ ] Mac OS (see https://cursor.com/fr/blog/agent-sandboxing)
 - [ ] OS-sandboxes
   - [ ] Basic
@@ -20,6 +20,8 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     other provider applies. Landlock cannot filter it, so a seccomp user-notification filter sends each Unix
     `connect()` to the parent, which checks the path, connects itself and hands the descriptor back
     (`SECCOMP_IOCTL_NOTIF_ADDFD`), leaving no window to change the path after the check.
+  - [ ] AppContainer network option B: firewall rules per package SID for host/port filtering, beyond the current
+    capability-based public/private network classes.
   - [ ] Sandbox utilities
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: filtering by domain, not only by IP)
   - [ ] Container

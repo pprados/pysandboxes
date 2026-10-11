@@ -1,6 +1,6 @@
 ## Project Overview
 
-PySandboxes = Python security framework. Sandbox envs → run untrusted Python safe. Defense-in-depth: Python API patching + OS isolation. Python guards + 1 OS provider of `none`, `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`. Docker/Podman ≠ own provider: container runs `unshare` provider, `--privileged` for Docker.
+PySandboxes = Python security framework. Sandbox envs → run untrusted Python safe. Defense-in-depth: Python API patching + OS isolation. Python guards + 1 OS provider of `none`, `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`. AppContainer is implemented for Windows on its feature branch; local VM suites pass, but release support awaits Windows CI. Docker/Podman ≠ own provider: container runs `unshare` provider, `--privileged` for Docker.
 
 All code English.
 
@@ -140,5 +140,5 @@ Rules in `.py-sandboxes` files, whitelist-based:
 - Target: AI/LLM-generated code security
 - Config files: whitelist-only model
 - 7 OS providers ship. `none` + `subprocess` = no OS boundary. Kernel-backed (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) = what holds vs compiled code
-- Kernel boundaries Linux + WSL only: all kernel-backed providers = Linux tech. macOS/Windows → Python layer w/ `subprocess`, proven by `.github/workflows/cross-os.yml`
+- Kernel boundaries Linux + WSL only: all kernel-backed providers = Linux tech. AppContainer is implemented for Windows; do not claim release support until `.github/workflows/cross-os.yml` passes. macOS uses the Python layer with `subprocess`, proven by that workflow
 - Known weaknesses documented, not hidden: `wiki/weaknesses.md`, `wiki/audit-eval-security.md`, `wiki/audit-python-security.md`. `SECURITY.md` says which = vulnerability

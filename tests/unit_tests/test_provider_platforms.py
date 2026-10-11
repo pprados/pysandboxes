@@ -52,7 +52,10 @@ def test_linux_runs_every_public_provider() -> None:
 
 @pytest.mark.parametrize(
     ("platform", "expected"),
-    [("darwin", ["none", "subprocess"]), ("win32", ["none", "subprocess"])],
+    [
+        ("darwin", ["none", "subprocess"]),
+        ("win32", ["none", "subprocess", "appcontainer"]),
+    ],
 )
 def test_other_platforms_only_list_their_providers(platform: str, expected: list[str]) -> None:
     with patch("sys.platform", platform):

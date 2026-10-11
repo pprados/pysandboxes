@@ -478,7 +478,7 @@ def _test_files() -> int:
                 # `none` is the no-op provider, and landlock denies paths without being
                 # able to hide them, so it has no OS-level equivalent of `ignore=` (see the
                 # guard table in README.md). Both leave .env readable with py-sandbox off.
-                # bwrap masks it instead: the read returns empty, so `if s:` is already false.
+                # AppContainer and bwrap mask it instead: the read returns empty, so `if s:` is already false.
                 if pysandboxes.os_sandbox in [
                     "none",
                     "landlock",

@@ -22,7 +22,12 @@ kernel boundary is a Linux technology.
 
 ## [0.0.0] - 202X-XX-XX
 
+### Added
+- Add the Windows AppContainer provider for OS isolation. Its local administrator and standard-user suites pass;
+  release support awaits the Windows CI run.
+
 ### Changed
+- Document the AppContainer provider's security limits and local Windows VM workflow
 - `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
   object the application passed in, as it already could not set its attributes
 - Clarify platform support, security limits, and provider test coverage in the README and wiki

@@ -363,6 +363,10 @@ the OS sandbox's role, stated plainly rather than papered over.
 
 ## Recommendations
 
+The AppContainer Windows provider described in [its design page](appcontainer.md) is under development. Its
+planned token and ACL boundary is not evidence that native-code attacks are contained in a released package;
+use only a provider whose OS-specific integration gates have passed.
+
 - Treat the Python layer as a guardrail for code that is wrong, not hostile. Against code written to break out, use a kernel provider.
 - Never use learning mode with untrusted code: it executes unguarded and writes its own permissions into the whitelist.
 - Review every generated profile before trusting it. That review is the only barrier.
@@ -373,4 +377,4 @@ the OS sandbox's role, stated plainly rather than papered over.
 
 - [Security assessment of the `eval-*` guard](audit-eval-security.md)
 - [Transport unpickle guard](transport-unpickle-guard.md), [weaknesses](weaknesses.md), [implementation](implementation.md)
-- Kernel providers: [landlock](landlock.md), [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [qemu](qemu.md)
+- Kernel providers: [landlock](landlock.md), [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [qemu](qemu.md). Windows AppContainer is described separately and remains pending validation.

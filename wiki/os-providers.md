@@ -16,47 +16,54 @@ We offer several implementations to encapsulate the Python sandbox:
 | Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
 |-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
 | subprocess                                                      |                                            | • no complementary security                                                  |                                                                                                                                          |
-| [bwrap](https://github.com/containers/bubblewrap)               | [here](bwrap.md)                      | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [firejail](https://github.com/netblue30/firejail)               | [here](firejail.md)                   | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
-| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
-| [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
-| [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
+| [AppContainer (Windows, unreleased)](appcontainer.md)            | [here](appcontainer.md)                    | • File ACLs<br/>• AppContainer network capabilities<br/>• Job Object         | Implemented on this branch; local admin and standard-user suites pass. Release support awaits Windows CI.                                 |
+| [bwrap](https://github.com/containers/bubblewrap)               | [here](bwrap.md)                           | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
+| [firejail](https://github.com/netblue30/firejail)               | [here](firejail.md)                        | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels.                                               |
+| [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                         | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
+| [landlock](https://landlock.io/)                                | [here](landlock.md)                        | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
+| [qemu](https://www.qemu.org/)                                   | [here](qemu.md)                            | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
 
 *Other implementations will be added soon*
 
-How to read the matrix below. The `none` column is the baseline: plain Python, no sandbox at all. The `py-sandbox` column is the Python layer on its own. Every other column lists what that OS technology enforces **on its own** too, whereas in practice you nest it *around* the py-sandbox instead of replacing it.
+How to read the matrix below. The `none` column is the baseline: plain Python, no sandbox at all. The `py-sandbox` column is the Python layer on its own. Every other column lists what that OS technology enforces **on its own** too, whereas in practice you nest it *around* the py-sandbox instead of replacing it. AppContainer values describe the current implementation; release support still awaits Windows CI.
 
 So a ❌ means "*this technology does not deal with that concern*", never "*that concern is left unprotected*". Choosing landlock, for instance, does not stop the Python guards from filtering `import` or sensitive API calls: landlock simply has no notion of Python, and in exchange it covers what the Python layer cannot reach, namely compiled code and direct syscalls. Read each OS column as what you *add* on top of the Python layer, and the union of the two as your actual protection.
 
-| Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       |
-|--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|
-| Isolation                |  ❌   |  Process   | Linux ABI | Namespace | Namespace | Namespace | VM+<br/>emulator |
-| Python code              |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
-| Compiled code            |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| env                      |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| import                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
-| expose-ro/rw=path        |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| ignore=*                 |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
-| python-api=*             |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| eval-*                   |  ❌   |     ✅      |     ❌     |     ❌     |     ❌     |     ❌  |        ❌         |
-| **Network**              |      |            |           |           |           |        |                  |
-| • TCP                    |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| • UDP                    |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
-| • host                   |  ❌   |     ✅      |     ❌     |     ✅     |     ✅     |     ✅  |        ✅         |
-| • port                   |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| OS-sandbox               |  ❌   |     ❌      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| Vm compatible            |  ❌   |     ✅      |     ✅     |     ✅     |     ✅     |     ✅  |        ✅         |
-| **Docker / Podman**      |      |            |           |           |           |        |                  |
-| • unprivileged           |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
-| • --privileged           |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ✅         |
-| **Kubernetes**           |      |            |           |           |           |        |                  |
-| • unprivileged pod       |  ✅   |     ✅      |     ✅     |     ❌     |     ❌     |     ❌  |        ✅         |
-| • SYS_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
-| • NET_ADMIN              |  ✅   |     ✅      |     ✅     |     ✅     |     ✅     |     ❌  |        ❌         |
-| **Extra**                |      |            |           |           |           |        |                  |
-| • Resource limits        |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |     ✅  |        ✅         |
-| • Seccomp                |  ❌   |     ❌      |     ❌     |     ❌     |     ❌     |   ✅    |        ✅         |
-| • Latency                | <1s  |    <1s     |    <1s    |    <1s    |    <1s    |    <1s |      >20s        |
+| Guard                    | none | py-sandbox | landlock  | unshare | bwrap | firejail | qemu | AppContainer¹ |
+|--------------------------|:----:|:----------:|:---------:|:-------:|:-----:|:--------:|:----:|:-------------:|
+| Isolation                | ❌ | Process | Linux ABI | Namespace | Namespace | Namespace | VM+emulator | AppContainer |
+| Python code              | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Compiled code            | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| env                      | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| import                   | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| expose-ro/rw=path        | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ignore=*                 | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Partial² |
+| python-api=*             | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| eval-*                   | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Network**              | | | | | | | | |
+| • TCP                    | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Partial³ |
+| • UDP                    | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Partial³ |
+| • host                   | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| • port                   | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| OS-sandbox               | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| VM compatible            | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Docker / Podman**      | | | | | | | | |
+| • unprivileged           | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A |
+| • --privileged           | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | N/A |
+| **Kubernetes**           | | | | | | | | |
+| • unprivileged pod       | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A |
+| • SYS_ADMIN              | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | N/A |
+| • NET_ADMIN              | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | N/A |
+| **Extra**                | | | | | | | | |
+| • Resource limits        | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ |
+| • Seccomp                | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | N/A |
+| • Latency                | <1s | <1s | <1s | <1s | <1s | <1s | >20s | Pending |
+
+¹ AppContainer is implemented on this branch but unavailable in released packages until Windows CI passes. Docker and
+Kubernetes deployment rows are N/A: this provider targets Windows hosts. ² `ignore=` covers only paths present
+at launch and their names may remain listable. ³ Capabilities select public Internet or private-network access;
+they do not enforce host, port, protocol, or loopback rules. The Python guard provides those finer checks when
+enabled.
 
 `ignore=` is enforced differently by each technology: **py-sandbox** and **firejail** make the path disappear (`FileNotFoundError`), **unshare** has the OS refuse it, and **bwrap** and **qemu** mask it, so a read succeeds and returns nothing. **landlock** denies access to a path but cannot hide one, so it has no equivalent: with `--py-sandbox=False` an ignored file stays readable there.
 
