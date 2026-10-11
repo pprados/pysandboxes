@@ -32,6 +32,10 @@ or merge a branch. The learning skill asks before each permissive learning run a
 profiles. Learning records accesses rather than refusing them, so run only trusted code; it does not provide an OS
 sandbox boundary.
 
+The Windows AppContainer provider is implemented on its feature branch, and its local VM suites pass as both
+administrator and standard user. Coding agents must not describe it as supported in a release until Windows CI
+passes; use the provider comparison for the current platform support status.
+
 ## Why keep test and application rules separate?
 
 Both modes use `.py-sandboxes` for application runtime permissions and `.py-sandboxes.learn` for temporary

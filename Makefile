@@ -144,8 +144,11 @@ windows-vm:
 	if [ ! -e /dev/kvm ]; then echo "The Windows VM requires /dev/kvm." >&2; exit 1; fi; \
 	mkdir -p -m 700 "$(WINDOWS_VM_DIR)/oem" "$(WINDOWS_VM_DIR)/storage"; \
 	if [ ! -f "$(WINDOWS_VM_DIR)/admin" ]; then ssh-keygen -q -t ed25519 -N '' -f "$(WINDOWS_VM_DIR)/admin"; fi; \
+	if [ ! -f "$(WINDOWS_VM_DIR)/sbuser" ]; then ssh-keygen -q -t ed25519 -N '' -f "$(WINDOWS_VM_DIR)/sbuser"; fi; \
 	cp scripts/windows-vm/install.bat "$(WINDOWS_VM_DIR)/oem/install.bat"; \
+	cp scripts/windows-vm/grant-runtime.ps1 "$(WINDOWS_VM_DIR)/oem/grant-runtime.ps1"; \
 	cp "$(WINDOWS_VM_DIR)/admin.pub" "$(WINDOWS_VM_DIR)/oem/admin_authorized_keys"; \
+	cp "$(WINDOWS_VM_DIR)/sbuser.pub" "$(WINDOWS_VM_DIR)/oem/sbuser_authorized_keys"; \
 	if $(WINDOWS_VM_ENGINE) container inspect "$(WINDOWS_VM_CONTAINER)" >/dev/null 2>&1; then \
 	  $(WINDOWS_VM_ENGINE) start "$(WINDOWS_VM_CONTAINER)" >/dev/null; \
 	else \
@@ -161,7 +164,9 @@ windows-vm:
 	done; \
 	echo "Timed out waiting for SSH: $(WINDOWS_VM_ENGINE) logs $(WINDOWS_VM_CONTAINER)" >&2; exit 1
 
-WINDOWS_VM_PYTEST ?= $(CROSS_OS_PYTEST)
+# Windows also runs the `appcontainer` provider: the "AppContainer integration" step of cross-os.yml.
+WINDOWS_VM_PYTEST ?= $(CROSS_OS_PYTEST) \
+	"uv run pytest -rs tests/integration_tests/remote/test_appcontainer.py"
 # As in cross-os.yml, a skipped integration test fails the run; the whole suite skips what Windows cannot run.
 WINDOWS_VM_FAIL_ON_SKIP ?= 1
 

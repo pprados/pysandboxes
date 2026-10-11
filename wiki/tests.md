@@ -153,7 +153,7 @@ that loads a profile exercises it implicitly.
 
 ## B. OS_SANDBOX backends
 
-Nine entries are registered in `pysandboxes/_os_sandbox.py`: eight providers, plus
+Ten entries are registered in `pysandboxes/_os_sandbox.py`: nine providers, plus
 `_sse_server`, which is internal and not user-selectable.
 
 | Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | OS-only files | Docker | Podman | Kubernetes |
@@ -166,9 +166,15 @@ Nine entries are registered in `pysandboxes/_os_sandbox.py`: eight providers, pl
 | `qemu` | yes | yes | yes (KVM) | yes (2 modes) | yes | yes | yes |
 | `qemu-tcg` | yes | yes | — | yes (2 modes) | — | — | — |
 | `sandbox-exec` | yes (macOS only) | yes (macOS only) | yes (2 modes, macOS only) | yes (2 modes, macOS only) | **excluded** | **excluded** | **excluded** |
+| `appcontainer` | yes (Windows only) | yes (Windows only) | — | — | **excluded** | **excluded** | **excluded** |
 
 "Host" means the suite runs on the machine itself, not in a container. A Linux provider runs on a Linux host
 (`integration.yml`); `sandbox-exec` runs only on a macOS host, in `cross-os.yml`, and has no row on Linux.
+
+`appcontainer` runs only on a Windows host, in `cross-os.yml` (step "AppContainer integration", with
+`PYSANDBOXES_FAIL_ON_SKIP=1`: a skipped Windows scenario is not a pass); `make windows-tests` runs the same steps in
+a local Windows VM. See [AppContainer](appcontainer.md) for the validation setup and security limits.
+
 "Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
 a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
 `tests/integration_tests/_env.py`). It carries the `slow` marker, which is how a

@@ -63,7 +63,7 @@ Planned work, in no committed order:
     - [x] sandbox-exec
     - [ ] Collima
   - [ ] Windows
-    - [ ] AppContainer
+    - [X] AppContainer
     - [ ] Windows Sandbox
   - [ ] Network strategies
     - [X] local netfilter and pin DNS
