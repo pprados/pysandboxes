@@ -161,7 +161,8 @@ A test for a guard must be able to fail. The rules below come from bugs that shi
 ## Review
 
 CI runs lint and unit tests on every pull request. A maintainer may also ask for an automated review by
-adding the `claude-review` label. That review:
+adding the `claude-review` label (currently inactive: it waits for its Amazon Bedrock access to be set up).
+That review:
 
 - applies the requirements above, read from a copy of `develop` taken before the review starts, so a pull
   request cannot change the criteria it is reviewed against;

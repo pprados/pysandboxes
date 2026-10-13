@@ -9,11 +9,20 @@ name: PR Review
 # if the action moves the working tree. A head pushed after the label is
 # refused: the maintainer relabels to review it.
 # Not listed in GH_PUSH_WORKFLOWS: `make gh-tests` never spends tokens on it.
+#
+# INACTIVE: no Anthropic key is stored on GitHub. Claude runs on Amazon Bedrock
+# through OIDC, which needs an AWS IAM role trusting this repository's OIDC
+# token (sub repo:<owner>/<repo>:pull_request) and allowed only to invoke the
+# model, plus the repository variables AWS_ROLE_ARN and AWS_REGION. Until that
+# exists the trigger stays commented out; workflow_dispatch only keeps the file
+# valid, the job is skipped without the label. To enable, uncomment
+# pull_request_target and delete workflow_dispatch.
 
 on:
-  pull_request_target:
-    types: [ labeled ]
-    branches: [ "develop" ]
+  workflow_dispatch:
+#  pull_request_target:
+#    types: [ labeled ]
+#    branches: [ "develop" ]
 
 concurrency:
   group: pr-review-${{ github.event.pull_request.number }}
@@ -27,6 +36,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
 
     steps:
     - uses: actions/checkout@v5
@@ -52,10 +62,16 @@ jobs:
         cp --parents CONTRIBUTING.md SECURITY.md wiki/weaknesses.md .github/prompts/review-pr.prompt.md \
           "$RUNNER_TEMP/review-rules/"
 
+    - name: Get short-lived AWS credentials
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+      with:
+        role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+        aws-region: ${{ vars.AWS_REGION }}
+
     - name: Review
       uses: anthropics/claude-code-action@8cf3482550831fb35a4fc3fbf7ca139cf8028b4c  # v1.0.233
       with:
-        anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+        use_bedrock: "true"
         github_token: ${{ secrets.GITHUB_TOKEN }}
         use_sticky_comment: true
         prompt: |
