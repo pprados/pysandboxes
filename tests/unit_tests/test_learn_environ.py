@@ -133,6 +133,87 @@ def test_first_scanned_key_read_after_a_scan_is_learned() -> None:
     assert first in envs._keys_used, "A read in scan order that no read-back follows is a use"
 
 
+def test_a_key_read_after_the_scan_moved_past_it_is_still_learned() -> None:
+    """A read must match the scan's last entry exactly: nothing merely ``>`` or ``<`` it, in
+    whatever lexical order, may be mistaken for that entry's own read-back."""
+    envs = LearnEnviron()  # Reset singleton
+    envs["ZZZ_TEST_KEY"] = "z"
+    envs._written.discard("ZZZ_TEST_KEY")
+    envs._keys_used.clear()
+    t = threading.current_thread()
+    envs._scanned[t] = ["AAA_TEST_KEY"]  # Lexically below the key we are about to read
+    envs._yielded[t] = "ZZZ_TEST_KEY"  # Matches the key, not the pending scan entry
+    try:
+        _ = envs["ZZZ_TEST_KEY"]
+        assert "ZZZ_TEST_KEY" in envs._keys_used, "An unrelated read must still be learned"
+    finally:
+        del envs["ZZZ_TEST_KEY"]
+        envs._scanned.pop(t, None)
+        envs._yielded.pop(t, None)
+
+
+def test_a_key_read_before_the_scan_entry_is_still_learned() -> None:
+    """Same as above, with the key sorting the other way: the comparison must not be ordering-based."""
+    envs = LearnEnviron()  # Reset singleton
+    envs["AAA_TEST_KEY"] = "a"
+    envs._written.discard("AAA_TEST_KEY")
+    envs._keys_used.clear()
+    t = threading.current_thread()
+    envs._scanned[t] = ["ZZZ_TEST_KEY"]  # Lexically above the key we are about to read
+    envs._yielded[t] = "AAA_TEST_KEY"
+    try:
+        _ = envs["AAA_TEST_KEY"]
+        assert "AAA_TEST_KEY" in envs._keys_used, "An unrelated read must still be learned"
+    finally:
+        del envs["AAA_TEST_KEY"]
+        envs._scanned.pop(t, None)
+        envs._yielded.pop(t, None)
+
+
+def test_a_reconstructed_equal_key_still_matches_the_scan_by_value() -> None:
+    """The scan-detection comparisons must use ``==``, not ``is``: a key rebuilt at runtime, equal
+    in content to the scanned and yielded keys but never interned to the same object, is still
+    recognised as their own read-back."""
+    envs = LearnEnviron()  # Reset singleton
+    envs["DEMO_API_KEY"] = "sk-demo"
+    envs._written.discard("DEMO_API_KEY")
+    envs._keys_used.clear()
+    t = threading.current_thread()
+    base = "DEMO_API_KEY"
+    scanned_key = (base + "_")[:-1]
+    yielded_key = (base + "_")[:-1]
+    assert scanned_key is not base and yielded_key is not base and scanned_key is not yielded_key
+    envs._scanned[t] = [scanned_key]
+    envs._yielded[t] = yielded_key
+    try:
+        _ = envs[base]
+        assert "DEMO_API_KEY" not in envs._keys_used, "A scan's own read-back must not be learned"
+        assert not envs._scanned[t], "The matched key must be popped from the pending scan"
+        assert "DEMO_API_KEY" not in envs._unsure.get(t, []), "A confirmed read-back is not merely 'unsure'"
+    finally:
+        del envs["DEMO_API_KEY"]
+        envs._scanned.pop(t, None)
+        envs._yielded.pop(t, None)
+        envs._unsure.pop(t, None)
+
+
+def test_a_key_before_the_remaining_scan_head_is_not_mistaken_for_it() -> None:
+    """A read sorting lexically before the scan's remaining head must not be mistaken for it."""
+    envs = LearnEnviron()  # Reset singleton
+    envs["AAA_TEST_KEY"] = "a"
+    envs._written.discard("AAA_TEST_KEY")
+    envs._keys_used.clear()
+    t = threading.current_thread()
+    envs._scanned[t] = ["ZZZ_TEST_KEY"]
+    envs._yielded.pop(t, None)
+    try:
+        _ = envs["AAA_TEST_KEY"]
+        assert "AAA_TEST_KEY" in envs._keys_used, "An unrelated read must still be learned"
+    finally:
+        del envs["AAA_TEST_KEY"]
+        envs._scanned.pop(t, None)
+
+
 def test_update_from_environ() -> None:
     d: dict[str, str] = {}
     envs = LearnEnviron()  # Reset singleton
