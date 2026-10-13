@@ -616,7 +616,6 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
         or a range(0, 65535) if '*' is specified. Returns an empty list for
         invalid syntax.
     """
-    use_range = False
     max_port = 65535  # Maximum valid port number
     if not syntax:
         return tuple()
@@ -657,9 +656,8 @@ def _convert_ports_range(syntax: str) -> tuple[int, ...] | range:
                 if start == end:
                     ports.add(start)
                 elif start <= end:
-                    if not use_range and not len(ports):
+                    if not len(ports):
                         ports.add(range(start, end + 1))
-                        use_range = True
                     else:
                         ports = cast(set[int | range], _flatten_ports(ports))
                         for p in range(start, end + 1):
