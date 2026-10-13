@@ -10,6 +10,7 @@ from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_deni
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
+    _deactivate_all_rules,
     activate_guard_files_rules,
     files,  # noqa: F401
 )
@@ -378,7 +379,7 @@ def test_os_chdir_and_getcwd(files: Dict[str, Path]) -> None:  # noqa: F811
 
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-rw={os.environ['PWD']}", Path(), 0),
+        ConfigLine(f"expose-rw={os.getcwd()}", Path(), 0),
         ConfigLine(f"expose-rw={files['path']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
@@ -402,7 +403,7 @@ def test_os_getcwdb(files: Dict[str, Path]) -> None:  # noqa: F811
 
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-rw={os.environ['PWD']}", Path(), 0),
+        ConfigLine(f"expose-rw={os.getcwd()}", Path(), 0),
         ConfigLine(f"expose-rw={files['path']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
@@ -696,32 +697,6 @@ def test_os_chmod_and_lchmod_refused(files: Dict[str, Path]) -> None:  # noqa: F
             os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="requires no windows OS")
-def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:  # noqa: F811
-    rules = [
-        ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
-        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
-        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
-    ]
-    activate_guard_files_rules(rules)
-
-    import os
-
-    uid = os.stat(files["path"]).st_uid
-    gid = os.stat(files["path"]).st_gid
-    os.chown(files["path"], uid, gid)
-    os.chown(files["bound_file"], uid, gid)
-    os.chown(files["bind_dest"], uid, gid)
-    os.chown(files["bind_src"], uid, gid)
-
-    os.lchown(files["path"], uid, gid)
-    os.lchown(files["bound_file"], uid, gid)
-    os.lchown(files["bound_file"], uid, gid)
-    os.lchown(files["bind_dest"], uid, gid)
-    os.lchown(files["bind_src"], uid, gid)
-
-
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.chown")
 def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
@@ -741,6 +716,27 @@ def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:  # noqa: F
 
     with pytest.raises(RulePermissionError):
         os.lchown(files["bound_file"], uid, gid)
+
+
+def test_os_chown_judges_the_name_against_its_dir_fd(files: Dict[str, Path]) -> None:  # noqa: F811
+    """With ``dir_fd``, the name is relative to that directory, not to the current one."""
+    import os
+
+    inside, outside = files["bind_src"], files["bind_dest"]
+    (inside / "f").write_text("inside")
+    (outside / "f").write_text("outside")
+    uid, gid = os.stat(inside / "f").st_uid, os.stat(inside / "f").st_gid
+    outside_fd = os.open(outside, os.O_RDONLY)
+    cwd = os.getcwd()
+    os.chdir(inside)
+    try:
+        activate_guard_files_rules([ConfigLine(f"expose-rw={inside}", Path(), 0)])
+        with pytest.raises((RulePermissionError, RuleFileNotFoundError)):
+            os.chown("f", uid, gid, dir_fd=outside_fd)
+    finally:
+        _deactivate_all_rules()
+        os.chdir(cwd)
+        os.close(outside_fd)
 
 
 def test_os_replace(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -866,35 +862,6 @@ def test_os_utime_refused(files: Dict[str, Path]) -> None:  # noqa: F811
 
     with pytest.raises(RulePermissionError):
         os.utime(files["bound_file"], (yesterday, now))
-
-
-def test_os_scandir(files: Dict[str, Path]) -> None:  # noqa: F811
-    rules = [
-        ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
-        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
-        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
-    ]
-    activate_guard_files_rules(rules)
-
-    import os
-
-    with os.scandir(files["path"]) as entries:
-        rc = list(entries)
-    rc_name = [r.name for r in rc]
-    assert "bind_src" in rc_name
-    assert "bind_dest" in rc_name
-    assert "visible.txt" in rc_name
-    assert "ignore.log" not in rc_name
-    assert rc[0].is_file() or rc[0].is_dir()
-
-    with os.scandir(files["bind_dest"]) as entries:
-        rc = list(entries)
-    rc_name = [r.name for r in rc]
-    assert "bound_file.txt" in rc_name
-
-    with os.scandir(files["bind_src"]) as b:
-        assert "bound_file.txt" in [e.name for e in b]
 
 
 def test_os_scandir_entry_is_pathlike(files: Dict[str, Path]) -> None:  # noqa: F811

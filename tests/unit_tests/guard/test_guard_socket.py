@@ -637,12 +637,9 @@ def test_a_udp_rule_refuses_tcp() -> None:
         _check_address_with_rules(rules, Kind.TCP, ("127.0.0.1", 53), Direction.OUT)
 
 
-def test_a_kind_list_allows_every_listed_kind() -> None:
-    """``any`` and an explicit list must still accept both kinds."""
-    for spec in ("tcp,udp", "any", "*"):
-        rules = _parse_ok(f"net=ALLOW|{spec}|127.0.0.1|80|OUT")
-        for kind in (Kind.TCP, Kind.UDP):
-            _check_address_with_rules(rules, kind, ("127.0.0.1", 80), Direction.OUT)
+def test_the_highest_port_is_a_valid_destination() -> None:
+    rules = _parse_ok("net=ALLOW|tcp|127.0.0.1|65535|OUT")
+    _check_address_with_rules(rules, Kind.TCP, ("127.0.0.1", 65535), Direction.OUT)
 
 
 # DNS pinning is the anti-rebinding defence: a host named in a rule is

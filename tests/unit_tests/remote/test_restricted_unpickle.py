@@ -773,8 +773,9 @@ class TestPayloadBudget:
         with pytest.raises(SandBoxProtocolError, match="limit of the transport"):
             check_sse_line("x" * (_SSE_LINE_LIMIT + 1))
 
-    def test_a_line_within_the_limit_passes(self) -> None:
-        check_sse_line("x" * _SSE_LINE_LIMIT)
+    @pytest.mark.parametrize("length", [1, _SSE_LINE_LIMIT // 2, _SSE_LINE_LIMIT])
+    def test_a_line_within_the_limit_passes(self, length: int) -> None:
+        check_sse_line("x" * length)
 
 
 class _Plain:

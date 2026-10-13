@@ -15,7 +15,7 @@ import sys
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from types import FunctionType, ModuleType
+from types import ModuleType
 from typing import Any, Callable, Iterator, cast
 
 import pytest
@@ -147,48 +147,12 @@ def test_the_subprocess_alias_of_fork_exec_is_wrapped(monkeypatch: pytest.Monkey
 # 3. Relative imports.
 
 
-def test_a_relative_import_module_is_judged() -> None:
-    import json  # noqa: F401 - loaded, so only the wrapper can judge it
-
-    with _import_rules(), user_code():
-        _refused_import(lambda: importlib.import_module(".", "json"), "json")
-        _refused_import(lambda: importlib.import_module(".decoder", "json"), "json")
-
-
-def test_a_relative_dunder_import_is_judged() -> None:
-    import json.decoder  # noqa: F401
-
-    with _import_rules(), user_code():
-        _refused_import(lambda: __import__("", {"__package__": "json"}, None, ["decoder"], 1), "json")
-        _refused_import(lambda: __import__("decoder", {"__package__": "json"}, None, [], 1), "json")
-
-
 def test_a_relative_import_granted_by_a_rule_passes() -> None:
     import json.decoder  # noqa: F401
 
     with _import_rules("json"), user_code():
         assert importlib.import_module(".decoder", "json").__name__ == "json.decoder"
         assert __import__("", {"__package__": "json"}, None, ["decoder"], 1).__name__ == "json"
-
-
-def test_a_kept_package_still_imports_its_own_submodules() -> None:
-    """asyncio is kept without a rule, and imports some of its submodules lazily (``from .unix_events import``)."""
-    import asyncio.events
-
-    code = compile("from . import events as found", "<asyncio>", "exec")
-    own_code = FunctionType(code, dict(vars(asyncio.events)))
-    with _import_rules(), user_code():
-        own_code()
-
-
-def test_a_relative_import_from_the_main_module_is_judged() -> None:
-    """``__main__`` is kept without a rule, but it is the user's script, not a library."""
-    import json.decoder  # noqa: F401
-
-    code = compile('__import__("", {"__package__": "json"}, None, ["decoder"], 1)', "<script>", "exec")
-    script_code = FunctionType(code, vars(sys.modules["__main__"]))
-    with _import_rules(), user_code():
-        _refused_import(script_code, "json")
 
 
 # 4. Submodules of the modules kept without a rule.

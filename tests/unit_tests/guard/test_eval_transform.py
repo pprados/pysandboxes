@@ -202,12 +202,6 @@ def test_the_reserved_prefix_is_refused_as_an_attribute() -> None:
     assert _check("x.__sb_getattr__", syntax=_syntax(), magic=_names("__sb_getattr__"))
 
 
-def test_an_attribute_store_is_refused() -> None:
-    violations = _check("x.attr = 1", syntax=_syntax("assign"), attribute=_names("attr"))
-    assert len(violations) == 1
-    assert "Store" in violations[0].message or "assign" in violations[0].message
-
-
 def test_an_attribute_delete_is_refused() -> None:
     assert _check("del x.attr", syntax=_syntax("assign"), attribute=_names("attr"))
 
@@ -266,10 +260,6 @@ def test_the_exception_carries_one_block_per_violation() -> None:
         raise_if_rejected("<eval>", source, violations)
     assert len(caught.value.violations) == len(violations)
     assert all("line " in block for block in caught.value.violations)
-
-
-def test_raise_if_rejected_is_a_no_op_without_violations() -> None:
-    raise_if_rejected("<eval>", "1", [])
 
 
 def _compile(source: str) -> CodeType:

@@ -94,6 +94,13 @@ def test_creating_a_symlink_inside_the_scope_is_allowed(
     assert wrapped("target.txt", str(exposed_dir / "link.txt")) == "created"
 
 
+def test_a_symlink_to_a_read_only_target_is_allowed(exposed_dir: Path) -> None:
+    """The link is written, its target is only read: a read-only target is enough."""
+    wrapped = _wrap_os_symlink(lambda src, dst, **kwargs: "created")
+
+    assert wrapped(str(Path.cwd() / "pyproject.toml"), str(exposed_dir / "link.txt")) == "created"
+
+
 def test_regular_file_in_scope_keeps_its_unresolved_path(
     exposed_dir: Path,
 ) -> None:

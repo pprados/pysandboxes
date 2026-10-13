@@ -111,6 +111,7 @@ dev = [
     "pyright>=1.1.407",
     "pip-audit",
     "pytest-cov>=7.1.0",
+    "cosmic-ray>=8.7.0",
 ]
 test = [
     "pytest>=7.3.0",

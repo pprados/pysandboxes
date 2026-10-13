@@ -692,7 +692,10 @@ def _apply_dest_to_src_rules(
                 # must never be matched, or it would hide every file of the exposure.
                 root = _matching_expose_root(canon_path)
                 if root is not None:
-                    spellings = tuple(s[len(root) :] if s.startswith(root) else s for s in spellings)
+                    spellings = tuple(
+                        s[len(root) :] if s.startswith(root) else os.path.basename(s) if s == root[:-1] else s
+                        for s in spellings
+                    )
                 spellings = tuple(part for spelling in spellings for part in Path(spelling).parts)
             if any(_ignore_matches(spelling, rule.source) for spelling in spellings):
                 return None, rule

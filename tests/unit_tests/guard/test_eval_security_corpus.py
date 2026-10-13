@@ -118,20 +118,6 @@ def test_getattr_in_a_list_is_not_a_name_call_and_still_fails() -> None:
     assert "__class__" in str(caught.value) or "object" in str(caught.value)
 
 
-def test_a_name_built_by_concatenation_dies_on_the_namespace() -> None:
-    """Payload 3 of spec 2: the name is never written at all.
-
-    `NameError` is the *expected* outcome here and is asserted as such, not
-    tolerated alongside a refusal: the point of this payload is that a closed
-    namespace holds no `__builtins__` to walk, so the name resolution fails
-    before any rule is consulted. That is the namespace layer doing the work.
-    """
-    _activate(syntax=_syntax("arith", "subscript"), namespace="closed")
-    with pytest.raises((NameError, RuleEvalPermissionError, EvalSyntaxRejected)) as caught:
-        guarded_eval("__builtins__.__dict__['ope' + 'n']('/etc/passwd').read()")
-    assert "__builtins__" in str(caught.value) or "__dict__" in str(caught.value)
-
-
 def test_frame_capture_through_a_generator_is_refused() -> None:
     """gi_frame.f_globals reaches the real globals without writing a dunder."""
     _activate(

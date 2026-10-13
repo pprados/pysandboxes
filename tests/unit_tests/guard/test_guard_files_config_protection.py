@@ -98,6 +98,29 @@ def test_unlink_and_rename_of_the_active_config_are_denied(tmp_path: Path) -> No
     assert config.exists()
 
 
+def test_unlink_and_rename_of_a_symlink_to_the_active_config_are_denied(tmp_path: Path) -> None:
+    """The link lives outside the config's directory, so no ancestor of the config shields it."""
+    import os
+
+    (tmp_path / "conf").mkdir()
+    (tmp_path / "links").mkdir()
+    config = tmp_path / "conf" / ".py-sandboxes"
+    config.write_text(f"py-sandbox=true\nexpose-rw={tmp_path}\nos-sandbox=none\nlearn=false\n")
+    link = tmp_path / "links" / "link"
+    link.symlink_to(config)
+
+    _activate(config)
+    try:
+        with pytest.raises(RulePermissionError):
+            os.unlink(link)
+        with pytest.raises(RulePermissionError):
+            os.rename(link, tmp_path / "links" / "renamed")
+    finally:
+        _disarm()
+
+    assert link.is_symlink()
+
+
 def test_self_widening_does_not_take_effect_on_the_next_activation(tmp_path: Path) -> None:
     """The exact NA1 repro: a profile exposes its own directory read-write, the
     sandboxed code tries to append a wider rule to the active config, and a

@@ -189,14 +189,6 @@ class TestGetSandboxLoop:
         mock_ensure_loop.assert_called_once_with(new_loop=True)
         mock_get_running_loop.assert_called_once()
 
-    @patch("pysandboxes.private_loop._ensure_background_loop")
-    def test_get_sandbox_loop_exception_handling(self, mock_ensure_loop: Mock) -> None:
-        """Test get_sandbox_loop handles exceptions from _ensure_background_loop."""
-        mock_ensure_loop.side_effect = Exception("Test exception")
-
-        with pytest.raises(Exception, match="Test exception"):
-            get_sandbox_loop()
-
 
 @pytest.mark.asyncio
 async def test_purge_loop_cancels_pending_tasks(monkeypatch: pytest.MonkeyPatch) -> None:

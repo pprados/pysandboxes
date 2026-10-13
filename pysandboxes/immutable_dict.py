@@ -74,12 +74,6 @@ class ImmutableDict(
             values = data._values
         else:
             if isinstance(data, Mapping):
-                from pysandboxes.guard_envs import LearnEnviron
-
-                # Hack to detect the learn phase.
-                # We don't want to learn all keys
-                if isinstance(data, LearnEnviron):
-                    data = dict(data)
                 keys = cast(tuple[KeyType, ...], tuple(data.keys()))
                 values = cast(tuple[ValueType, ...], tuple(data.values()))
             else:

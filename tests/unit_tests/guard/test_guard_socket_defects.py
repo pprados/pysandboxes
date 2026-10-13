@@ -153,6 +153,17 @@ def test_nat64_well_known_prefix_address_is_judged_by_the_ipv4_rules() -> None:
         _check_address_with_rules(rules, Kind.TCP, ("64:ff9b::127.0.0.1", 80), Direction.OUT)
 
 
+@pytest.mark.parametrize(
+    "address",
+    ["2001:db8::102:304", "2001:db8::ffff:102:304", "2001:db8::ffff:0:102:304", "::ffff:1:102:304", "fe80::102:304"],
+)
+def test_an_ipv6_address_ending_like_an_allowed_ipv4_is_not_that_ipv4(address: str) -> None:
+    """Only the four embedded forms carry an IPv4 address: any other IPv6 address is judged as itself."""
+    rules = _parse("net=ALLOW|*|1.2.3.4/32|*|OUT")
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, (address, 80), Direction.OUT)
+
+
 # %% 3. listen() without bind()
 
 

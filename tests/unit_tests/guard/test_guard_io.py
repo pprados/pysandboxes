@@ -255,6 +255,28 @@ def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
     assert not target_path.exists()
 
 
+def test_io_open_refuses_an_append_on_a_read_only_file(files: Dict[str, Path]) -> None:
+    activate_guard_files_rules([ConfigLine(f"expose-ro={files['path']}", Path(), 0)])
+    target_path = files["path"] / "visible.txt"
+
+    import io
+
+    with pytest.raises(RulePermissionError):
+        io.open(target_path, "a").close()
+    assert target_path.read_text() == "Visible"
+
+
+def test_io_open_refuses_an_exclusive_creation_in_a_read_only_directory(files: Dict[str, Path]) -> None:
+    activate_guard_files_rules([ConfigLine(f"expose-ro={files['path']}", Path(), 0)])
+    target_path = files["path"] / "created.txt"
+
+    import io
+
+    with pytest.raises(RulePermissionError):
+        io.open(target_path, "x").close()
+    assert not target_path.exists()
+
+
 def test_io_open_accepts_a_file_descriptor(files: Dict[str, Path]) -> None:
     """A descriptor is not a path, and the guard must not read it as one.
 
