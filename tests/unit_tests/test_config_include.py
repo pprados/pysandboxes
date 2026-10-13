@@ -61,6 +61,35 @@ class TestConfigInclude:
         assert rules.os_sandbox_params.get("memory") == "1G"
         assert "show_boot_console" not in rules.os_sandbox_params
 
+    @pytest.mark.parametrize("platform", ["linux", "win32"])
+    def test_platform_include_is_ignored_on_other_platforms(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str
+    ) -> None:
+        _write(tmp_path / "conf" / "macos.profile", "python-import=macos_dependency\n")
+        profile = _write(
+            tmp_path / "conf" / "test.profile",
+            'os-sandbox=subprocess\ninclude-platform=darwin "macos.profile"\n',
+        )
+        monkeypatch.setattr("pysandboxes.py_sandbox.sys.platform", platform)
+
+        rules = load_and_parse_config(profile)
+
+        assert not any(line.rule == "python-import=macos_dependency" for line in rules.config)
+
+    def test_platform_include_is_loaded_only_on_matching_platform(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _write(tmp_path / "conf" / "macos.profile", "python-import=macos_dependency\n")
+        profile = _write(
+            tmp_path / "conf" / "test.profile",
+            'os-sandbox=subprocess\ninclude-platform=darwin "macos.profile"\n',
+        )
+        monkeypatch.setattr("pysandboxes.py_sandbox.sys.platform", "darwin")
+
+        rules = load_and_parse_config(profile)
+
+        assert any(line.rule == "python-import=macos_dependency" for line in rules.config)
+
 
 def test_plain_module_caller_without_resources_falls_back_to_cwd(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

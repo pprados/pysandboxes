@@ -199,15 +199,18 @@ def _parse_include(
 ) -> ConfigLines:
     # includes parameter is to detect the recursive includes
     others: ConfigLines = []
-    pattern = re.compile(r'^include\s+"(.+)"\s*$')
+    pattern = re.compile(r'^(?:include(?:-platform=([\w.-]+))?)\s+"(.+)"\s*$')
     for rule in rules:
         match = pattern.match(rule.rule)
         if match:
+            platform = match[1]
+            if platform is not None and platform != sys.platform:
+                continue
             # Test the text, not the Path: pathlib normalises "./x" to "x", so an
             # include written relative to the current directory looked like a bare
             # name and was searched next to the including file instead -- where it
             # is not, so the include was dropped without a word.
-            raw_filename = match[1]
+            raw_filename = match[2]
             filename = Path(raw_filename)
             if "/" not in raw_filename:
                 filename = root_path / filename
