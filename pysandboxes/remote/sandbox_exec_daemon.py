@@ -195,6 +195,9 @@ def _build_profile(
 ) -> str:
     """Build an SBPL profile from file and socket rules plus Python runtime needs."""
     runtime_paths = {_path(p) for p in (*python_paths, os.path.dirname(python_executable), *_SYSTEM_READ_PATHS)}
+    python_framework = Path(_path(python_executable)).parent.parent / "Python"
+    if python_framework.is_file():
+        runtime_paths.add(_path(str(python_framework)))
     symlink_directories = _symlink_directories(python_executable)
     runtime_paths.update(symlink_directories)
     read_paths = set(runtime_paths)

@@ -66,6 +66,8 @@ def test_python_symlink_target_directories_are_available_to_seatbelt(tmp_path: P
     python_bin.mkdir(parents=True)
     python_executable = python_bin / "python3.13"
     python_executable.write_text("", encoding="utf-8")
+    python_framework = python_install / "Python"
+    python_framework.write_text("", encoding="utf-8")
     python_alias = tmp_path / "cpython-3.13-macos-x86_64-none"
     python_alias.symlink_to(python_install, target_is_directory=True)
     venv_bin = tmp_path / "venv" / "bin"
@@ -83,6 +85,8 @@ def test_python_symlink_target_directories_are_available_to_seatbelt(tmp_path: P
 
     assert f'(allow file-read* (subpath "{python_alias}")' in profile
     assert f'(allow file-map-executable (subpath "{python_alias}")' in profile
+    assert f'(allow file-read* (subpath "{python_framework}")' in profile
+    assert f'(allow file-map-executable (subpath "{python_framework}")' in profile
     assert f'(allow file-read-metadata (subpath "{venv_bin.parent}")' in profile
     assert f'(allow file-read* (subpath "{venv_bin.parent}")' not in profile
 
