@@ -83,6 +83,8 @@ def test_python_symlink_target_directories_are_available_to_seatbelt(tmp_path: P
 
     assert f'(allow file-read* (subpath "{python_alias}")' in profile
     assert f'(allow file-map-executable (subpath "{python_alias}")' in profile
+    assert f'(allow file-read-metadata (subpath "{venv_bin.parent}")' in profile
+    assert f'(allow file-read* (subpath "{venv_bin.parent}")' not in profile
 
 
 def test_ignore_rule_is_a_deny_after_exposed_ancestor(tmp_path: Path) -> None:

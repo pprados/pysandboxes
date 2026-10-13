@@ -95,6 +95,11 @@ def _symlink_directories(path: str) -> set[str]:
     return aliases
 
 
+def _parent_paths(path: str) -> set[str]:
+    """Return lexical parent directories needed to resolve a runtime path."""
+    return {str(parent) for parent in Path(os.path.abspath(path)).parents if parent != parent.parent}
+
+
 def _path_rule(action: str, path: str) -> str:
     return f"({action} (subpath {_sbpl_string(path)}))"
 
@@ -190,11 +195,16 @@ def _build_profile(
 ) -> str:
     """Build an SBPL profile from file and socket rules plus Python runtime needs."""
     runtime_paths = {_path(p) for p in (*python_paths, os.path.dirname(python_executable), *_SYSTEM_READ_PATHS)}
-    runtime_paths.update(_symlink_directories(python_executable))
+    symlink_directories = _symlink_directories(python_executable)
+    runtime_paths.update(symlink_directories)
     read_paths = set(runtime_paths)
     read_paths.add(_path(str(temp_dir)))
     write_paths = {_path(str(temp_dir))}
     executable_paths = runtime_paths | {_path(python_executable)}
+    metadata_paths = set(_parent_paths(python_executable)) | set(_parent_paths(_path(python_executable)))
+    for path in symlink_directories:
+        metadata_paths.update(_parent_paths(path))
+    metadata_paths.difference_update(read_paths)
     for rule in all_rules.file_rules:
         if isinstance(rule, FSExposeRule):
             path = _path(rule.path)
@@ -214,6 +224,13 @@ def _build_profile(
         lines.extend(
             [
                 _path_rule("allow file-read*", path),
+                _path_rule("allow file-read-metadata", path),
+                _path_rule("allow file-test-existence", path),
+            ]
+        )
+    for path in sorted(metadata_paths):
+        lines.extend(
+            [
                 _path_rule("allow file-read-metadata", path),
                 _path_rule("allow file-test-existence", path),
             ]
