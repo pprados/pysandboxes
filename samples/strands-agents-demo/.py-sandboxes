@@ -51,7 +51,7 @@ env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
 env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
 # ⚠ Dangerous!
-python-import=atexit, ctypes, importlib, inspect, mmap, subprocess
+python-import=atexit, importlib, inspect, mmap, subprocess
 
 # Standard Python
 python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
@@ -113,5 +113,5 @@ remote-result-mode=data-only
 
 # Add rules (2026/10/07 at 16:50)
 # Standard Python
-python-import=_ctypes, compression
+python-import=compression
 
