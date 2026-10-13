@@ -171,6 +171,24 @@ def test_included_file_is_protected_too(tmp_path: Path) -> None:
         _disarm()
 
 
+def test_an_ordinary_sibling_file_sorting_after_the_config_name_is_still_writable(tmp_path: Path) -> None:
+    """`.` sorts below every normal filename: an unrelated file in the same exposed directory
+    as the active config must never be mistaken for the protected path itself."""
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(f"py-sandbox=true\nexpose-rw={tmp_path}\nos-sandbox=none\nlearn=false\n")
+    sibling = tmp_path / "data.txt"
+    sibling.write_text("x")
+
+    _activate(config)
+    try:
+        with open(sibling, "a") as f:
+            f.write("more")
+    finally:
+        _disarm()
+
+    assert sibling.read_text() == "xmore"
+
+
 def test_read_only_access_to_the_active_config_still_works(tmp_path: Path) -> None:
     """The protection is write-only: the daemon (and the sandboxed code, since
     the directory is exposed) must still be able to read the file it runs

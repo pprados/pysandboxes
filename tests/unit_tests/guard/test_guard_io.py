@@ -353,3 +353,55 @@ def test_io_FileIO(files: Dict[str, Path]) -> None:
         with io.FileIO(files["bind_dest"] / "missing-bound.txt", "r"):
             pass
     assert sandbox_denials(missing.value) == []
+
+
+def test_io_open_decodes_a_bytes_path_for_an_exposed_file(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+
+    import io
+
+    with io.open(str(target).encode()) as f:
+        assert f.read() == "x"
+
+
+def test_io_fileio_decodes_a_bytes_path_for_an_exposed_file(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+
+    import io
+
+    with io.FileIO(str(target).encode()) as f:
+        assert f.read() == b"x"
+
+
+def test_io_fileio_keeps_an_explicit_mode(tmp_path: Path) -> None:
+    """`mode is None` must only default a missing mode: an explicit `"w"` must not be forced back
+    to `"r"`."""
+    target = tmp_path / "f.txt"
+    activate_guard_files_rules([ConfigLine(f"expose-rw={tmp_path}", Path(), 0)])
+
+    import io
+
+    with io.FileIO(str(target), "w") as f:
+        f.write(b"hello")
+
+    assert target.read_bytes() == b"hello"
+
+
+@pytest.mark.parametrize("mode", ["w", "a", "x"])
+def test_io_fileio_every_write_mode_letter_alone_is_denied_in_a_read_only_directory(tmp_path: Path, mode: str) -> None:
+    """Each of `w`/`a`/`x` alone (no `+`) must count as a write: the three-way `or` chain must not
+    be weakened to an `and` between any pair of them, and `mode is not None` must not be flipped
+    to `mode is None`."""
+    target = tmp_path / "f.txt"
+    if mode != "x":
+        target.write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+
+    import io
+
+    with pytest.raises(RulePermissionError):
+        io.FileIO(str(target), mode)
