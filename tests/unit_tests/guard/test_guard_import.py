@@ -276,9 +276,12 @@ def test_find_distributions_without_a_name_finds_nothing() -> None:
 
 
 def test_an_unsafe_name_does_not_stop_later_names_from_being_generated() -> None:
-    """The per-item ``continue`` must only skip the unsafe name, not abort the whole scan."""
+    """The per-item ``continue`` must only skip the unsafe name, not abort the whole scan
+    (``break``): a ``set`` would leave that to the (randomised) hash order, so the unsafe
+    name is placed first in an ordered list instead."""
     evil_name = "evil\nname"
-    lines = generate_rules({LearnImportRule(evil_name), LearnImportRule("json")})
+    learn = cast("set[Any]", [LearnImportRule(evil_name), LearnImportRule("json")])
+    lines = generate_rules(learn)
     assert any(line.startswith("python-import=json") for line in lines)
 
 

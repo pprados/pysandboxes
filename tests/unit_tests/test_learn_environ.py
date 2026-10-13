@@ -197,6 +197,32 @@ def test_a_reconstructed_equal_key_still_matches_the_scan_by_value() -> None:
         envs._unsure.pop(t, None)
 
 
+def test_a_reconstructed_equal_key_is_not_mistaken_when_another_entry_remains() -> None:
+    """With more than one pending scan entry, a non-identical-but-equal match on the scan's last
+    entry must still take the "read back the scan" branch, not the "unrelated read" one: a single
+    remaining entry masks this, because that branch also empties and discards ``_unsure``."""
+    envs = LearnEnviron()  # Reset singleton
+    envs["DEMO_API_KEY"] = "sk-demo"
+    envs._written.discard("DEMO_API_KEY")
+    envs._keys_used.clear()
+    t = threading.current_thread()
+    base = "DEMO_API_KEY"
+    scanned_key = (base + "_")[:-1]
+    yielded_key = (base + "_")[:-1]
+    assert scanned_key is not base and yielded_key is not base
+    envs._scanned[t] = ["AAA_OTHER_KEY", scanned_key]
+    envs._yielded[t] = yielded_key
+    try:
+        _ = envs[base]
+        assert "DEMO_API_KEY" not in envs._keys_used, "A scan's own read-back must not be learned"
+        assert envs._scanned[t] == ["AAA_OTHER_KEY"], "Only the matched, last entry is popped"
+    finally:
+        del envs["DEMO_API_KEY"]
+        envs._scanned.pop(t, None)
+        envs._yielded.pop(t, None)
+        envs._unsure.pop(t, None)
+
+
 def test_a_key_before_the_remaining_scan_head_is_not_mistaken_for_it() -> None:
     """A read sorting lexically before the scan's remaining head must not be mistaken for it."""
     envs = LearnEnviron()  # Reset singleton
