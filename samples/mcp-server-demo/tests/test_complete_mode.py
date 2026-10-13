@@ -30,8 +30,7 @@ CONFIG = "mcp_server/.py-sandboxes-complete"
 
 ALLOWED_URL = "https://www.google.com/"
 DENIED_URL = "https://example.com/"
-POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0]([{!r}, '-c', 'pass'])"
-POPEN_ESCAPE = POPEN_ESCAPE.format(sys.executable)
+POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
 
 
 @pytest.fixture
@@ -52,7 +51,7 @@ def sandboxed_server() -> Client:
             cwd=str(SAMPLE_ROOT),
             # The stdio client passes only a few variables down: without this the profile's
             # os-sandbox=${OS_SANDBOX:-subprocess} never sees the provider under test.
-            env={name: os.environ[name] for name in ("OS_SANDBOX",) if name in os.environ} | {"PYTHONUTF8": "1"},
+            env={name: os.environ[name] for name in ("OS_SANDBOX",) if name in os.environ},
         )
     )
 

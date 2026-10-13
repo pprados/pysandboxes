@@ -91,17 +91,6 @@ def _read_user_turn() -> str | None:
     return None if line in ("/quit", "/exit") else line
 
 
-def _ensure_runtime_directories() -> None:
-    """Create the CrewAI paths granted by this sample's sandbox profile."""
-    (Path(os.environ.get("LOCALAPPDATA", Path.cwd())) / "CrewAI").mkdir(parents=True, exist_ok=True)
-    for relative_path in (
-        ".config/crewai",
-        ".local/share/crewai-demo",
-        ".local/share/crewai/credentials",
-    ):
-        (Path.home() / relative_path).mkdir(parents=True, exist_ok=True)
-
-
 def chat(agent: Agent, *, verbose: bool) -> int:
     """Hold a conversation, carrying history through CrewAI's own chat inputs.
 
@@ -200,7 +189,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Partial mode: only the tool bodies run in the sandbox. The context
         # manager has to wrap the kickoff that *calls* them -- @sandbox needs a
         # running daemon at call time, and the crew is where the calls happen.
-        _ensure_runtime_directories()
         with sandboxes(sandboxes_config=CONFIG):
             result = crew.kickoff()
     except Exception as e:

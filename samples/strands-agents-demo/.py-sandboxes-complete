@@ -4,7 +4,6 @@
 # `learn.py`; see its docstring.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
-include "../windows-standard-imports.profile"
 include-platform=linux "../linux-standard-imports.profile"
 
 # A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the

@@ -65,7 +65,6 @@ py-sandbox=true
 # Note: Some providers may not work in containers without additional privileges.
 
 os-sandbox=${OS_SANDBOX:-subprocess}
-include "../windows-standard-imports.profile"
 
 # A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the
 # nearest .env above it and copies every name into os.environ, past the env= rules.
@@ -150,7 +149,7 @@ env=VIRTUAL_ENV=${VIRTUAL_ENV}
 expose-ro=../..
 
 # Add rules (2026/10/07 at 16:48)
-expose-ro=${SYSTEMROOT:-/etc}
+expose-ro=/etc
 
 # </learning_guard_files>
 

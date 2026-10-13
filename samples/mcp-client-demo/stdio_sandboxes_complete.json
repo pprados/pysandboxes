@@ -14,8 +14,7 @@
         "-t", "stdio"
       ],
       "env": {
-         "OS_SANDBOX": "subprocess",
-         "PYTHONUTF8": "1"
+         "OS_SANDBOX": "subprocess"
       }
     }
  }

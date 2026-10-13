@@ -231,7 +231,7 @@ def render_violation(source: str, violation: Violation) -> str:
         block.append(f"      {'^' * len(text)}")
     remedy = f"    add: {violation.remedy}"
     if violation.warning:
-        remedy += f"    WARNING: {violation.warning}"
+        remedy += f"    ⚠ {violation.warning}"
     block.append(remedy)
     return "\n".join(block)
 

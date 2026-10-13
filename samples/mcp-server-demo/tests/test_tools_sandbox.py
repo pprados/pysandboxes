@@ -53,8 +53,7 @@ def armed_kwargs() -> dict[str, object]:
 # Reaches Popen through the subclass tree, which an empty __builtins__ does not
 # hide. The expression tool is a plain eval() on purpose: what stops this is the
 # sandbox, not a parser.
-POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0]([{!r}, '-c', 'pass'])"
-POPEN_ESCAPE = POPEN_ESCAPE.format(sys.executable)
+POPEN_ESCAPE = "[c for c in ().__class__.__base__.__subclasses__() if c.__name__=='Popen'][0](['/bin/echo','pwned'])"
 
 
 def test_scenario_a_the_escape_succeeds_without_the_sandbox() -> None:
