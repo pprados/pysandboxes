@@ -1000,3 +1000,78 @@ def test_os_and_posix_chroot_refused(files: Dict[str, Path]) -> None:  # noqa: F
 
     with pytest.raises(RuleFileNotFoundError):
         posix.chroot(files["ignore"])
+
+
+def test_dir_entry_stat_and_is_file_delegate_correctly(tmp_path: Path) -> None:
+    """`__getattr__`'s `name == "path"` must not be loosened to an ordering comparison: for
+    `name="stat"`, `"stat" > "path"` is True, which would wrongly return `self._path` (a string)
+    instead of the real bound method."""
+    import os
+
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+
+    with os.scandir(tmp_path) as it:
+        entry = next(iter(it))
+
+    assert entry.is_file() is True
+    assert entry.stat().st_size == 1
+
+
+def test_os_scandir_via_fd_does_not_require_write_access(tmp_path: Path) -> None:
+    import os
+
+    if os.scandir not in os.supports_fd:
+        pytest.skip("no fd-based scandir on this platform")
+
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        with os.scandir(dir_fd) as it:
+            names = [e.name for e in it]
+    finally:
+        os.close(dir_fd)
+    assert "f.txt" in names
+
+
+def test_os_scandir_decodes_a_bytes_path(tmp_path: Path) -> None:
+    import os
+
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    with os.scandir(str(tmp_path).encode()) as it:
+        names = [e.name for e in it]
+    assert "f.txt" in names
+
+
+def test_scandir_context_manager_closes_the_underlying_scanner_on_exit(tmp_path: Path) -> None:
+    """`__exit__` must call the wrapped scanner's own `__exit__` and clear the reference, or the
+    OS-level directory handle is never released."""
+    from pysandboxes.guard_files import _ScanDirContextManager
+
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    mgr = _ScanDirContextManager(str(tmp_path))
+    with mgr:
+        pass
+
+    assert mgr.scanner is None
+
+
+def test_scandir_iter_does_not_use_the_optimize_fast_path_during_learning(tmp_path: Path) -> None:
+    """`OPTIMIZE` is a hard-coded `False`: learning mode alone must not switch `__iter__` onto the
+    raw-iterator fast path, which bypasses the per-entry rule filter."""
+    from pysandboxes.guard_files import _ScanDirContextManager
+    from pysandboxes.learning import set_learning_mode
+
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    mgr = _ScanDirContextManager(str(tmp_path))
+
+    set_learning_mode(True)
+    try:
+        result = iter(mgr)
+    finally:
+        set_learning_mode(False)
+        mgr.close()
+
+    assert result is mgr

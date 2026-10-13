@@ -18,6 +18,7 @@ guard the test just armed, and a hidden file reads as absent to `exists()`.
 
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Callable
 from unittest.mock import patch
@@ -35,6 +36,7 @@ from pysandboxes.guard_files import (
     _dir_fd_path,
     _DirEntry,
     _ignore_matches,
+    _is_unsafe_rule_path,
     _wrap_buitins_open,
     _wrap_filename,
     _wrap_os_access,
@@ -56,6 +58,7 @@ from pysandboxes.guard_files import (
 from pysandboxes.learning import set_learning_mode
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
+from pysandboxes.tools import follow_links_executable
 
 from .test_guard_io import _deactivate_all_rules, activate_guard_files_rules
 
@@ -251,13 +254,6 @@ def test_apply_dest_to_src_rules_rejects_an_unknown_rule_type(tmp_path: Path) ->
     with patch.object(guard_files, "_rules", (bogus,)):
         with pytest.raises(AssertionError):
             _apply_dest_to_src_rules(str(tmp_path / "f.txt"), write=False)
-
-
-def test_apply_dest_to_src_rules_skips_a_rule_without_a_path(tmp_path: Path) -> None:
-    bogus = FSExposeRule(path=None, write=True, config=ConfigLine("x", Path(), 0))  # type: ignore[arg-type]
-
-    with patch.object(guard_files, "_rules", (bogus,)):
-        assert _apply_dest_to_src_rules(str(tmp_path / "f.txt"), write=False) == (None, None)
 
 
 def test_apply_dest_to_src_rules_learns_a_write_upgrade_instead_of_denying(
@@ -703,19 +699,6 @@ def test_wrap_os_open_learns_the_actual_write_intent_of_an_unexposed_path(
 # %% _wrap_os_symlink
 
 
-def test_wrap_os_symlink_passes_through_file_descriptors() -> None:
-    calls: list[dict[str, object]] = []
-
-    def fake_symlink(**kw: object) -> str:
-        calls.append(kw)
-        return "ok"
-
-    wrapped = _wrap_os_symlink(fake_symlink)
-
-    assert wrapped(3, 4) == "ok"
-    assert calls == [{"src": 3, "dst": 4, "target_is_directory": False, "dir_fd": None}]
-
-
 def test_wrap_os_symlink_decodes_bytes_paths(tmp_path: Path) -> None:
     activate_guard_files_rules([ConfigLine(f"expose-rw={tmp_path}", Path(), 0)])
     target = tmp_path / "target.txt"
@@ -968,3 +951,517 @@ def test_every_tool_directory_variable_is_recognised(tmp_path: Path) -> None:
     )
 
     assert set(names) <= set(done.stdout.split())
+
+
+# %% parse_rules -- the conflicting-duplicate-rule and interpreter-exposure branches
+
+
+def test_parse_rules_flags_a_conflicting_duplicate_rule_regardless_of_order(tmp_path: Path) -> None:
+    """`write != is_write` must not be loosened to an ordering comparison: the existing test only
+    exercises the (ro, rw) order, which coincides with `<`/`<=` too."""
+    errors: list[ErrorMsg] = []
+    rules = [
+        ConfigLine(f"expose-rw={tmp_path}", Path(), 0),
+        ConfigLine(f"expose-ro={tmp_path}", Path(), 1),
+    ]
+
+    file_rules, _ = parse_rules(rules, errors)
+
+    assert len(errors) == 1
+    assert "invalidate another rule" in errors[0][0]
+
+
+def test_parse_rules_allows_two_identical_duplicate_rules(tmp_path: Path) -> None:
+    """Two identical `expose-ro=` lines for the same path (e.g. from an `include`) are a harmless
+    duplicate, not a conflict: `<=` would wrongly flag the (False, False) pair `!=` does not."""
+    errors: list[ErrorMsg] = []
+    rules = [
+        ConfigLine(f"expose-ro={tmp_path}", Path(), 0),
+        ConfigLine(f"expose-ro={tmp_path}", Path(), 1),
+    ]
+
+    file_rules, _ = parse_rules(rules, errors)
+
+    assert errors == []
+
+
+def test_parse_rules_always_exposes_the_python_interpreter() -> None:
+    """Without the `for p in list_bin` loop, no expose rule for the interpreter is ever emitted,
+    breaking the sandboxed Python's own ability to start."""
+    if not follow_links_executable(Path(sys.executable), set()):
+        pytest.skip("this interpreter's chain resolves straight into /usr/bin: nothing is recorded")
+    errors: list[ErrorMsg] = []
+
+    file_rules, _ = parse_rules([], errors)
+
+    assert any(isinstance(r, FSExposeRule) and r.config.rule == "<python>" for r in file_rules)
+
+
+def test_parse_rules_exposes_both_a_pythons_link_name_and_its_resolved_name() -> None:
+    """The interpreter chain may reach through a link whose resolved target differs (e.g. a uv
+    venv reaching `cpython-3.13-...` through a link to `cpython-3.13.7-...`); both names need
+    their own rule, or the sandboxed process -- which reports the link name -- is denied."""
+    list_bin = follow_links_executable(Path(sys.executable), set())
+    link_and_target = next(
+        ((p, p.resolve()) for p in list_bin if p != p.resolve()),
+        None,
+    )
+    if link_and_target is None:
+        pytest.skip("the interpreter here is not reached through a symlink with a different resolved name")
+    link, target = link_and_target
+
+    errors: list[ErrorMsg] = []
+    file_rules, _ = parse_rules([], errors)
+
+    python_paths = {
+        r.path.rstrip(os.sep) for r in file_rules if isinstance(r, FSExposeRule) and r.config.rule == "<python>"
+    }
+    assert str(link) in python_paths
+    assert str(target) in python_paths
+
+
+def test_parse_rules_marks_a_directory_interpreter_path_with_a_trailing_separator() -> None:
+    """A directory reached through the interpreter chain (e.g. a venv root) must store a rule
+    ending in the native separator, or a sibling directory sharing the same string prefix
+    (`.venv` vs `.venv-evil`) would also match it."""
+    errors: list[ErrorMsg] = []
+    file_rules, _ = parse_rules([], errors)
+
+    python_rules = [r for r in file_rules if isinstance(r, FSExposeRule) and r.config.rule == "<python>"]
+    directory_rules = [r for r in python_rules if Path(r.path.rstrip(os.sep)).is_dir()]
+    if not directory_rules:
+        pytest.skip("this interpreter's chain never adds a directory (e.g. no venv root in it)")
+    assert all(r.path.endswith(os.sep) for r in directory_rules)
+
+
+# %% _check_is_in_rules
+
+
+def test_check_is_in_rules_does_not_match_a_path_merely_sorting_before_a_rule(tmp_path: Path) -> None:
+    """`spath == rule.path` must not accept a path that only sorts earlier, such as the parent of
+    the exposed directory: that parent is not itself covered by the rule."""
+    rule = FSExposeRule(path=str(tmp_path) + os.sep, write=True, config=ConfigLine("x", Path(), 0))
+    activate_guard((rule,))
+
+    assert _check_is_in_rules(tmp_path.parent) is False
+
+
+# %% _is_unsafe_rule_path
+
+
+def test_is_unsafe_rule_path_flags_leading_and_trailing_whitespace(tmp_path: Path) -> None:
+    leading = tmp_path / " padded"
+    trailing = tmp_path / "padded "
+
+    assert _is_unsafe_rule_path(leading) is True
+    assert _is_unsafe_rule_path(trailing) is True
+
+
+# %% generate_rules -- /proc, interpreter exclusion, overflow de-duplication
+
+
+def test_generate_rules_skips_only_proc_paths_not_every_path_after_it(tmp_path: Path) -> None:
+    """`continue` must skip only the `/proc` entry; `break` would also discard every learned path
+    the input carries after it."""
+    work = tmp_path / "project"
+    work.mkdir()
+    ordered_learn = [LearnFileRule(Path("/proc/stat"), False), LearnFileRule(work, False)]
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules(ordered_learn)  # type: ignore[arg-type]
+
+    assert rules == [f"expose-ro={work}"]
+
+
+def test_generate_rules_skips_a_path_inside_the_interpreters_own_tree() -> None:
+    """A learned path inside the interpreter/venv tree is already covered by `parse_rules`'s own
+    python-bin rule: recording it again would be a redundant duplicate."""
+    if not follow_links_executable(Path(sys.executable), set()):
+        pytest.skip("this interpreter's chain resolves straight into /usr/bin: list_bin is empty")
+    candidate = Path(sys.executable).resolve().parent / "some_stdlib_file.py"
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(candidate, False)})
+
+    assert rules == []
+
+
+def test_generate_rules_skips_only_the_unsafe_path_not_every_path_after_it(tmp_path: Path) -> None:
+    """`continue` must skip only the unsafe path; `break` would also discard every safe path
+    sorted after it."""
+    bad = tmp_path / "bad#dir"
+    good = tmp_path / "zzz_good_dir"
+    bad.mkdir()
+    good.mkdir()
+    assert str(bad) < str(good)
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(bad, False), LearnFileRule(good, False)})
+
+    assert rules == [f"expose-ro={good}"]
+
+
+def test_generate_rules_skips_a_non_regular_file(tmp_path: Path) -> None:
+    """A learned path that exists but is neither a file nor a directory (e.g. a FIFO) must not
+    get a rule: `exists() and (is_file() or is_dir()) and access(R_OK)` guards that."""
+    if sys.platform == "win32":
+        pytest.skip("no FIFOs on Windows")
+    fifo = tmp_path / "pipe"
+    os.mkfifo(fifo)
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        # A path under the fifo does not exist either, so it collapses to the fifo itself --
+        # the same way a plain file's path collapses to its (directory) parent.
+        rules = generate_rules({LearnFileRule(fifo / "child", False)})
+
+    assert rules == []
+
+
+def test_generate_rules_deduplicates_a_path_sorting_before_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`allready_path == home` (and the symmetric `path != home`) are always False by
+    construction; an ordering comparison must not spuriously match an entry that merely sorts
+    before `home` and skip (or lose) its overflow de-duplication."""
+    fake_home = tmp_path / "zzz_home"
+    fake_home.mkdir()
+    parent = tmp_path / "aaa_parent"
+    child = parent / "sub"
+    child.mkdir(parents=True)
+    assert str(parent) < str(fake_home)
+
+    monkeypatch.setattr("pysandboxes.guard_files.Path.home", staticmethod(lambda: fake_home))
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(parent, False), LearnFileRule(child, False)})
+
+    assert rules == [f"expose-ro={parent}"]
+
+
+@pytest.mark.parametrize("allready_write, write", [(True, False), (False, True)])
+def test_generate_rules_keeps_a_nested_paths_own_rule_when_write_mode_differs(
+    tmp_path: Path, allready_write: bool, write: bool
+) -> None:
+    """A nested path whose write mode differs from its already-recorded ancestor is not an
+    overflow: `==` must not be replaced by an ordering comparison that only agrees for one of
+    the two (True, False) orderings."""
+    parent = tmp_path / "parent"
+    child = parent / "child"
+    child.mkdir(parents=True)
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(parent, allready_write), LearnFileRule(child, write)})
+
+    expected = sorted(
+        {
+            f'{"expose-rw" if allready_write else "expose-ro"}={parent}',
+            f'{"expose-rw" if write else "expose-ro"}={child}',
+        }
+    )
+    assert rules == expected
+
+
+def test_generate_rules_processes_paths_after_an_overflowing_one(tmp_path: Path) -> None:
+    """An overflowing (redundant) path must only skip itself: `break` instead of `continue` would
+    also discard every path sorted after it."""
+    parent = tmp_path / "aaa_parent"
+    child = parent / "sub"
+    other = tmp_path / "zzz_other"
+    child.mkdir(parents=True)
+    other.mkdir()
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(parent, False), LearnFileRule(child, False), LearnFileRule(other, False)})
+
+    assert rules == sorted([f"expose-ro={parent}", f"expose-ro={other}"])
+
+
+def test_generate_rules_does_not_blank_a_special_var_relative_path_starting_below_dot(tmp_path: Path) -> None:
+    """Only the exact match (`x == "/."`) collapses to the whole special directory: a child whose
+    name sorts below `.` (ASCII), such as one starting with `!`, must keep its narrow subpath."""
+    work = tmp_path / "work"
+    work.mkdir()
+    child = work / "!weird"
+    child.mkdir()
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {"PWD": str(work)}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(child, False)})
+
+    assert rules == ["expose-ro=./!weird"]
+
+
+def test_generate_rules_keeps_the_longest_special_home_match(tmp_path: Path) -> None:
+    """`_special_home` is sorted longest-value-first precisely so the first match wins: `break`
+    must stop there, not let a shorter, less specific entry overwrite it."""
+    venv = tmp_path / "venv"
+    nested = venv / "nested"
+    nested.mkdir(parents=True)
+
+    with (
+        patch.dict(
+            "pysandboxes.guard_files._special_home",
+            {"VIRTUAL_ENV": str(venv), "CONDA_HOME": str(tmp_path)},
+            clear=True,
+        ),
+        # Cleared so the `for-else` can never fall into the `_special_env` branch and mask a
+        # `continue` that lets the loop run to completion without ever reaching `break`.
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(nested, False)})
+
+    assert rules == ["expose-ro=${VIRTUAL_ENV}"]
+
+
+def test_generate_rules_keeps_the_longest_special_env_match(tmp_path: Path) -> None:
+    """`_special_env` is sorted longest-value-first precisely so the first match wins: `break`
+    must stop there, not let a shorter, less specific entry overwrite it."""
+    outer = tmp_path / "outer"
+    inner = outer / "inner"
+    inner.mkdir(parents=True)
+    target = inner / "work"
+    target.mkdir()
+
+    with (
+        patch.dict(
+            "pysandboxes.guard_files._special_env",
+            {"PWD": str(inner), "TMPDIR": str(outer)},
+            clear=True,
+        ),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(target, False)})
+
+    assert rules == ["expose-ro=./work"]
+
+
+# %% _wrap_os_open -- flags handling
+
+
+def test_wrap_os_open_decodes_a_bytes_path_for_an_exposed_file(tmp_path: Path) -> None:
+    """A real bytes path must be fsdecode'd before being matched against the (string) rules."""
+    target = tmp_path / "f.txt"
+    target.write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_open(os.open)
+
+    fd = wrapped(str(target).encode(), os.O_RDONLY)
+    os.close(fd)
+
+
+@pytest.mark.skipif(os.open not in os.supports_dir_fd, reason="no dir_fd on this platform")
+def test_wrap_os_open_allows_a_readonly_open_through_a_read_only_dir_fd(tmp_path: Path) -> None:
+    """`isinstance(flags, int)` must not be loosened: `os.open`'s real `flags` is always an int,
+    and treating it as if it were not would force every dir_fd open to need write access."""
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_open(os.open)
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        fd = wrapped("f.txt", os.O_RDONLY, dir_fd=dir_fd)
+        os.close(fd)
+    finally:
+        os.close(dir_fd)
+
+
+# %% _wrap_os_listdir / _wrap_os_readlink / _wrap_os_rmdir -- bytes decoding
+
+
+def test_wrap_os_listdir_decodes_a_bytes_path_for_an_exposed_directory(tmp_path: Path) -> None:
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_listdir(os.listdir)
+
+    assert wrapped(str(tmp_path).encode()) == os.listdir(tmp_path)
+
+
+def test_wrap_os_readlink_decodes_a_bytes_path_for_an_exposed_link(tmp_path: Path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("x")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_readlink(os.readlink)
+
+    assert wrapped(str(link).encode()) == str(target)
+
+
+def test_wrap_os_rmdir_decodes_a_bytes_path_for_an_exposed_directory(tmp_path: Path) -> None:
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    activate_guard_files_rules([ConfigLine(f"expose-rw={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_rmdir(os.rmdir)
+
+    wrapped(str(sub).encode())
+
+    assert not sub.exists()
+
+
+# %% _wrap_os_readlink -- learning records a read, not a write
+
+
+def test_wrap_os_readlink_learns_an_unexposed_link_as_read_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("x")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    wrapped = _wrap_os_readlink(os.readlink)
+    monkeypatch.setattr(learning_mod, "_learning", set())
+
+    with patch.object(guard_files, "_rules", ()):
+        set_learning_mode(True)
+        try:
+            wrapped(str(link))
+        finally:
+            set_learning_mode(False)
+
+    assert LearnFileRule(Path(str(link)), False) in learning_mod._learning
+
+
+def test_wrap_os_readlink_learns_an_unexposed_target_as_read_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = outside / "target.txt"
+    target.write_text("x")
+    inside = tmp_path / "inside"
+    inside.mkdir()
+    link = inside / "link"
+    link.symlink_to(target)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={inside}", Path(), 0)])
+    wrapped = _wrap_os_readlink(os.readlink)
+    monkeypatch.setattr(learning_mod, "_learning", set())
+
+    set_learning_mode(True)
+    try:
+        wrapped(str(link))
+    finally:
+        set_learning_mode(False)
+
+    assert LearnFileRule(target, False) in learning_mod._learning
+
+
+# %% _wrap_os_symlink -- plain-path write protection
+
+
+def test_wrap_os_symlink_denies_a_read_only_destination_without_dir_fd(tmp_path: Path) -> None:
+    """Creating a symlink in a read-only exposed directory must be denied on the main, non-dir_fd
+    code path too, not only through a dir_fd."""
+    target = tmp_path / "target.txt"
+    target.write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_symlink(os.symlink)
+
+    with pytest.raises(RulePermissionError):
+        wrapped(str(target), str(tmp_path / "link"))
+
+    assert not (tmp_path / "link").exists()
+
+
+# %% _body_two_filenames -- dst_dir_fd must be checked through _check_dir_fd
+
+
+@pytest.mark.skipif(os.rename not in os.supports_dir_fd, reason="no dir_fd on this platform")
+def test_body_two_filenames_checks_the_destination_dir_fd_even_with_a_plain_source(tmp_path: Path) -> None:
+    """`dst_dir_fd` must be resolved through `_check_dir_fd`, not treated as a plain CWD-relative
+    path once given -- escaping the directory the descriptor actually names."""
+    src_dir = tmp_path / "src"
+    dst_dir = tmp_path / "dst"
+    src_dir.mkdir()
+    dst_dir.mkdir()
+    (src_dir / "source.txt").write_text("hi")
+    activate_guard_files_rules(
+        [
+            ConfigLine(f"expose-rw={src_dir}", Path(), 0),
+            ConfigLine(f"expose-ro={dst_dir}", Path(), 1),
+        ]
+    )
+    wrapped = _wrap_two_filenames(os.rename, in_write=True, out_write=True)
+    dst_dir_fd = os.open(str(dst_dir), os.O_RDONLY)
+    try:
+        with pytest.raises(RulePermissionError):
+            wrapped(str(src_dir / "source.txt"), "target.txt", dst_dir_fd=dst_dir_fd)
+    finally:
+        os.close(dst_dir_fd)
+    assert not (dst_dir / "target.txt").exists()
+
+
+# %% _wrap_os_getcwd -- root edge case
+
+
+def test_wrap_os_getcwd_keeps_the_root_separator() -> None:
+    """At the filesystem root, the trailing separator must stay: stripping it would return ''
+    instead of '/'."""
+    wrapped = _wrap_os_getcwd(lambda: os.sep)
+
+    assert wrapped() == os.sep
+
+
+# %% _wrap_os_readlink -- dir_fd learning write flag
+
+
+@pytest.mark.skipif(os.readlink not in os.supports_dir_fd, reason="no dir_fd on this platform")
+def test_wrap_os_readlink_reads_a_link_through_dir_fd_in_a_read_only_directory(tmp_path: Path) -> None:
+    """The directory holding a link read through a `dir_fd` is only checked for read access, not
+    write."""
+    target = tmp_path / "target.txt"
+    target.write_text("x")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    wrapped = _wrap_os_readlink(os.readlink)
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        result = wrapped("link", dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+    assert Path(result) == target
+
+
+# %% _check_dir_fd_entry -- learning records the actual write intent
+
+
+@pytest.mark.skipif(os.unlink not in os.supports_dir_fd, reason="no dir_fd on this platform")
+def test_wrap_os_unlink_records_a_dir_fd_removal_as_a_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The permission check for a dir_fd unlink is hard-coded elsewhere; only the learning-mode
+    record depends on the `write` flag `_wrap_os_unlink` passes to `_check_dir_fd_entry`."""
+    (tmp_path / "f.txt").write_text("x")
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    wrapped = _wrap_os_unlink(os.unlink)
+    monkeypatch.setattr(learning_mod, "_learning", set())
+    try:
+        with patch.object(guard_files, "_rules", ()):
+            set_learning_mode(True)
+            try:
+                wrapped("f.txt", dir_fd=dir_fd)
+            finally:
+                set_learning_mode(False)
+    finally:
+        os.close(dir_fd)
+
+    assert LearnFileRule(Path(str(tmp_path / "f.txt")), True) in learning_mod._learning
