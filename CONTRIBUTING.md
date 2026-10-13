@@ -170,6 +170,10 @@ That review:
   set: relabel to review new commits;
 - only posts comments: it never runs the pull request's code, never pushes, never approves.
 
+CI on a pull request runs lint and unit tests only; the integration suite runs nightly on `develop`, after the
+merge. So before merging a pull request that touches a provider, the remote layer or a full workflow, a
+maintainer pushes its reviewed head to a branch of this repository and runs `full-gate.yml` on it.
+
 The decision to merge always stays with a maintainer.
 
 ## License
