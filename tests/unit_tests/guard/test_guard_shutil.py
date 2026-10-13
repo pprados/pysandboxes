@@ -372,3 +372,37 @@ def test_patching_os_functions_replaces_originals_in_supports_sets() -> None:
             supports_set = getattr(os, name)
             supports_set.clear()
             supports_set.update(members)
+
+
+def test_patching_os_functions_only_touches_supports_sets_that_held_the_original() -> None:
+    """A function absent from a given ``os.supports_*`` set must stay absent after patching it.
+
+    ``getattr(os, set_name, None)`` is never ``None`` in practice, so an ``or`` in place of the
+    ``and`` would unconditionally add ``patched`` to every set, not just the ones ``original``
+    actually belonged to.
+    """
+    import os
+
+    from pysandboxes.guard_import import _OS_SUPPORTS_SETS, _keep_os_supports_sets
+
+    def original() -> None:
+        pass
+
+    def patched() -> None:
+        pass
+
+    before = {name: set(getattr(os, name)) for name in _OS_SUPPORTS_SETS if hasattr(os, name)}
+    try:
+        for supports in before:
+            getattr(os, supports).discard(original)  # None of them hold it
+
+        _keep_os_supports_sets(original, patched)
+
+        for name in before:
+            supports_set = getattr(os, name)
+            assert patched not in supports_set
+    finally:
+        for name, members in before.items():
+            supports_set = getattr(os, name)
+            supports_set.clear()
+            supports_set.update(members)

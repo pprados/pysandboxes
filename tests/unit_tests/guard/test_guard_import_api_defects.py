@@ -8,6 +8,7 @@ real program, a refused call stops before the original function runs.
 
 import asyncio
 import importlib
+import importlib.machinery
 import logging
 import pickle
 import subprocess
@@ -261,6 +262,111 @@ def test_under_optimize_a_second_activation_does_not_wrap_twice() -> None:
     namespace["_apply_patch"](module, "fake")
 
     assert module.call() == "guarded(original)"  # type: ignore[attr-defined]
+
+
+def test_a_later_rule_is_still_applied_after_an_earlier_one_is_already_patched() -> None:
+    """The "already patched" guard must ``continue`` to the next rule, not stop the whole loop."""
+    module = ModuleType("fake_multi")
+    module.one = lambda: "one"  # type: ignore[attr-defined]
+    module.two = lambda: "two"  # type: ignore[attr-defined]
+
+    def wrap(original: Callable[[], str]) -> Callable[[], str]:
+        def wrapper() -> str:
+            return f"guarded({original()})"
+
+        return wrapper
+
+    saved_patch_rules = guard_import._patch_rules
+    guard_import._patch_rules = {  # type: ignore[assignment]
+        "fake_multi": (PatchRule("one", wrap), PatchRule("two", wrap))
+    }
+    try:
+        guard_import._apply_patch(module, "fake_multi")
+        # Undo the second patch only, as if an earlier activation had wrapped it differently.
+        module.two = lambda: "two"  # type: ignore[attr-defined]
+
+        guard_import._apply_patch(module, "fake_multi")
+
+        assert module.one() == "guarded(one)"  # type: ignore[attr-defined]
+        assert module.two() == "guarded(two)"  # type: ignore[attr-defined]
+    finally:
+        guard_import._patch_rules = saved_patch_rules
+
+
+# 7. GuardLoader/GuardFinder pieces that need no real sys.meta_path/sys.modules arming.
+
+
+def test_exec_module_drops_reinjected_submodules_from_pending() -> None:
+    """A submodule reinjected into ``sys.modules`` must also leave ``_pending_modules``.
+
+    Otherwise a later ``find_spec`` on it could still see the stale pending entry.
+    """
+    package = ModuleType("fakepkg")
+    submodule = ModuleType("fakepkg.sub")
+    guard_import._pending_modules["fakepkg"] = package
+    guard_import._pending_modules["fakepkg.sub"] = submodule
+    original_spec = importlib.machinery.ModuleSpec("fakepkg", loader=object())  # type: ignore[arg-type]
+    loader = guard_import.GuardLoader("fakepkg", original_spec, package)
+    try:
+        loader.exec_module(package)
+        assert sys.modules.get("fakepkg.sub") is submodule
+        assert "fakepkg.sub" not in guard_import._pending_modules
+    finally:
+        guard_import._pending_modules.pop("fakepkg", None)
+        guard_import._pending_modules.pop("fakepkg.sub", None)
+        sys.modules.pop("fakepkg.sub", None)
+
+
+def test_find_spec_reinjects_a_pending_module_under_its_own_spec_name() -> None:
+    """A pending module with a real ``__spec__`` must be reinjected under that spec's name."""
+    fake = ModuleType("alias")
+    fake.__spec__ = importlib.machinery.ModuleSpec("real.name", loader=None)
+    guard_import._pending_modules["alias"] = fake
+    try:
+        with _import_rules("*"):
+            spec = guard_import.GuardFinder().find_spec("alias", None, None)
+        assert spec is not None
+        assert spec.name == "real.name"
+    finally:
+        guard_import._pending_modules.pop("alias", None)
+
+
+def test_find_spec_reinjects_a_pending_module_with_no_spec_under_its_module_name() -> None:
+    """Without a usable ``__spec__``, the pending module's own ``__name__`` must be used instead."""
+    fake = ModuleType("fakename")
+    assert fake.__spec__ is None
+    guard_import._pending_modules["other_fullname"] = fake
+    try:
+        with _import_rules("*"):
+            spec = guard_import.GuardFinder().find_spec("other_fullname", None, None)
+        assert spec is not None
+        assert spec.name == "fakename"
+    finally:
+        guard_import._pending_modules.pop("other_fullname", None)
+
+
+def test_find_spec_does_not_list_a_pending_non_package_as_having_submodules() -> None:
+    """A non-package pending module's ``submodule_search_locations`` must stay unset, not ``list(None)``."""
+    fake = ModuleType("fakeleaf")
+    fake.__spec__ = importlib.machinery.ModuleSpec("fakeleaf", loader=None)
+    assert fake.__spec__.submodule_search_locations is None
+    guard_import._pending_modules["fakeleaf"] = fake
+    try:
+        with _import_rules("*"):
+            spec = guard_import.GuardFinder().find_spec("fakeleaf", None, None)
+        assert spec is not None
+        assert spec.submodule_search_locations is None
+    finally:
+        guard_import._pending_modules.pop("fakeleaf", None)
+
+
+def test_find_spec_denies_even_when_running_inside_the_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``is_learning_mode()`` and ``is_in_sandbox()`` must both hold before a denial is turned into a learned rule."""
+    monkeypatch.setattr(guard_import, "is_in_sandbox", lambda: True)
+    monkeypatch.setattr(guard_import, "is_learning_mode", lambda: False)
+    with _import_rules("os"):
+        with pytest.raises(RuleModuleNotFoundError):
+            guard_import.GuardFinder().find_spec("subprocess", None, None)
 
 
 # 8. Small defects.

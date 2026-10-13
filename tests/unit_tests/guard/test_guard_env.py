@@ -279,6 +279,21 @@ def test_bytes_names_are_passed_unchanged_by_putenv_and_unsetenv(learning_enviro
     ]
 
 
+def test_the_patched_wrappers_keep_the_original_functions_name() -> None:
+    """``guard_wraps`` must still decorate each wrapper: without it, ``__name__`` stays ``"wrapper"``."""
+    table = patch_rules(learn=True)
+    originals: List[Tuple[str, Callable[..., Any]]] = [
+        ("os.getenv", os.getenv),
+        ("os.putenv", os.putenv),
+        ("os.unsetenv", os.unsetenv),
+    ]
+    if "os.getenvb" in table:
+        originals.append(("os.getenvb", os.getenvb))
+    for key, original in originals:
+        wrapped = table[key](original)
+        assert wrapped.__name__ == original.__name__, key
+
+
 def test_reading_a_variable_records_it(learning_environ: Set[str]) -> None:
     os.environ["PATH"]
 
