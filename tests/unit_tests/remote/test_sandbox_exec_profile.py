@@ -60,6 +60,31 @@ def test_profile_denies_by_default_and_quotes_read_write_paths(tmp_path: Path) -
     assert f'(allow file-map-executable (subpath "{exposed}")' not in profile
 
 
+def test_python_symlink_target_directories_are_available_to_seatbelt(tmp_path: Path) -> None:
+    python_install = tmp_path / "python-install"
+    python_bin = python_install / "bin"
+    python_bin.mkdir(parents=True)
+    python_executable = python_bin / "python3.13"
+    python_executable.write_text("", encoding="utf-8")
+    python_alias = tmp_path / "cpython-3.13-macos-x86_64-none"
+    python_alias.symlink_to(python_install, target_is_directory=True)
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    venv_python = venv_bin / "python"
+    venv_python.symlink_to(python_alias / "bin" / "python3.13")
+
+    profile = _build_profile(
+        EmptyRules,
+        temp_dir=tmp_path / "runtime",
+        python_executable=str(venv_python),
+        python_paths=(),
+        sse_port=45678,
+    )
+
+    assert f'(allow file-read* (subpath "{python_alias}")' in profile
+    assert f'(allow file-map-executable (subpath "{python_alias}")' in profile
+
+
 def test_ignore_rule_is_a_deny_after_exposed_ancestor(tmp_path: Path) -> None:
     exposed = tmp_path / "project"
     ignored = exposed / "secret*.txt"

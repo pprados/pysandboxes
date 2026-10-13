@@ -72,6 +72,29 @@ def _path(path: str) -> str:
     return os.path.realpath(path.rstrip(os.sep) or os.sep)
 
 
+def _symlink_directories(path: str) -> set[str]:
+    """Return directory symlinks in an executable's path chain for Seatbelt grants."""
+    current = os.path.abspath(path)
+    aliases: set[str] = set()
+    for _ in range(40):
+        parts = Path(current).parts
+        prefix = parts[0]
+        for index, part in enumerate(parts[1:], start=1):
+            prefix = os.path.join(prefix, part)
+            if not os.path.islink(prefix):
+                continue
+            if os.path.isdir(prefix):
+                aliases.add(prefix)
+            target = os.readlink(prefix)
+            if not os.path.isabs(target):
+                target = os.path.join(os.path.dirname(prefix), target)
+            current = os.path.join(target, *parts[index + 1 :])
+            break
+        else:
+            return aliases
+    return aliases
+
+
 def _path_rule(action: str, path: str) -> str:
     return f"({action} (subpath {_sbpl_string(path)}))"
 
@@ -167,6 +190,7 @@ def _build_profile(
 ) -> str:
     """Build an SBPL profile from file and socket rules plus Python runtime needs."""
     runtime_paths = {_path(p) for p in (*python_paths, os.path.dirname(python_executable), *_SYSTEM_READ_PATHS)}
+    runtime_paths.update(_symlink_directories(python_executable))
     read_paths = set(runtime_paths)
     read_paths.add(_path(str(temp_dir)))
     write_paths = {_path(str(temp_dir))}
