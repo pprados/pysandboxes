@@ -20,7 +20,9 @@ from pysandboxes.eval_runtime import (
     __sb_iter__,
     __sb_leave__,
     __sb_tick__,
+    __sb_writable__,
     _reset_regex_warnings,
+    check_format_spec,
     pop_state,
     push_state,
 )
@@ -256,3 +258,133 @@ def test_helpers_exposes_exactly_the_nine_names() -> None:
         "__sb_writable__",
         "__sb_format__",
     }
+
+
+def test_an_exhausted_iteration_budget_stays_interrupted_across_helpers(state: EvalState) -> None:
+    """A bare `except:` around the raise must not let the next call through."""
+    for _ in range(5):
+        __sb_tick__()
+    try:
+        __sb_tick__()
+    except EvalInterrupted:
+        pass
+    with pytest.raises(EvalInterrupted):
+        __sb_enter__()
+
+
+def test_an_exhausted_call_depth_budget_stays_interrupted_across_helpers(state: EvalState) -> None:
+    for _ in range(3):
+        __sb_enter__()
+    try:
+        __sb_enter__()
+    except EvalInterrupted:
+        pass
+    with pytest.raises(EvalInterrupted):
+        __sb_tick__()
+
+
+def test_call_depth_budget_holds_past_the_small_int_cache() -> None:
+    """500 is outside CPython's small-int cache (-5..256): `is` would miss it."""
+    rules = DEFAULT_RULES._replace(max_call_depth=500)
+    push_state(EvalState(rules))
+    try:
+        for _ in range(500):
+            __sb_enter__()
+        with pytest.raises(EvalInterrupted, match="eval-max-call-depth=500"):
+            __sb_enter__()
+    finally:
+        pop_state()
+
+
+def test_a_name_must_satisfy_both_dunder_ends_to_route_as_magic() -> None:
+    """`__custom` starts with `__` but does not end with it: an ordinary attribute."""
+    rules = DEFAULT_RULES._replace(
+        attribute=NameSet(allow=frozenset(), allow_patterns=(), deny=frozenset({"__custom"}), deny_patterns=()),
+        magic=_names("__custom"),
+    )
+    push_state(EvalState(rules))
+    try:
+        with pytest.raises(RuleEvalPermissionError, match="eval-attribute=__custom"):
+            __sb_getattr__(object(), "__custom")
+    finally:
+        pop_state()
+
+
+def test_check_format_spec_allows_a_width_exactly_as_long_as_the_budgets_digit_count(state: EvalState) -> None:
+    """max_alloc=1000 is 4 digits; a 4-digit width under it must not be short-circuited."""
+    check_format_spec("0999d")
+
+
+def test_binop_percent_with_a_star_width_ignores_non_int_arguments(state: EvalState) -> None:
+    assert __sb_binop__("%", "%*d %s", (5, 1, "ab")) == "    1 ab"
+
+
+class _EqualToRe:
+    def match(self, *_args: Any) -> None:
+        return None
+
+    def __eq__(self, other: object) -> bool:
+        return True
+
+    def __hash__(self) -> int:
+        return 0
+
+
+def test_the_regex_warning_identity_check_rejects_an_equal_impostor(regex_state: EvalState, caplog: Any) -> None:
+    caplog.set_level(logging.WARNING, logger="pysandboxes.eval_runtime")
+    __sb_getattr__(_EqualToRe(), "match")
+    assert caplog.records == []
+
+
+def test_binop_power_guard_does_not_crash_on_non_int_operands(state: EvalState) -> None:
+    assert __sb_binop__("**", 5, 2j) == 5**2j
+
+
+def test_binop_allows_a_trivial_base_with_a_huge_exponent(state: EvalState) -> None:
+    assert __sb_binop__("**", 1, 10**9) == 1
+
+
+def test_binop_power_exactly_at_the_budget_boundary_is_allowed(state: EvalState) -> None:
+    """bit_length(200) * 1000 == max_alloc(1000) * 8 exactly."""
+    assert __sb_binop__("**", 200, 1000) == 200**1000
+
+
+def test_binop_left_shift_by_zero_is_always_allowed(state: EvalState) -> None:
+    huge = 2**100_000
+    assert __sb_binop__("<<", huge, 0) == huge
+
+
+def test_binop_left_shift_exactly_at_the_budget_boundary_is_allowed(state: EvalState) -> None:
+    """bit_length(2**7998) == 7999; 7999 + 1 == max_alloc(1000) * 8 exactly."""
+    left = 2**7998
+    assert __sb_binop__("<<", left, 1) == left << 1
+
+
+def test_binop_sequence_repetition_exactly_at_the_budget_is_allowed(state: EvalState) -> None:
+    result = __sb_binop__("*", [0] * 10, 100)
+    assert len(result) == 1000
+
+
+def test_binop_plus_with_a_non_sequence_operand_fails_natively(state: EvalState) -> None:
+    with pytest.raises(TypeError, match="unsupported operand"):
+        __sb_binop__("+", 5, "hi")
+
+
+def test_binop_sequence_concatenation_exactly_at_the_budget_is_allowed(state: EvalState) -> None:
+    result = __sb_binop__("+", "a" * 500, "b" * 500)
+    assert len(result) == 1000
+
+
+class _NeverEqual:
+    def __eq__(self, other: object) -> bool:
+        return False
+
+    def __hash__(self) -> int:
+        return 0
+
+
+def test_writable_identity_check_rejects_a_never_equal_container(state: EvalState) -> None:
+    obj = _NeverEqual()
+    state.supplied[id(obj)] = obj
+    with pytest.raises(RuleEvalPermissionError):
+        __sb_writable__(obj)

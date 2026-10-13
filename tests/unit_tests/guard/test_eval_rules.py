@@ -514,3 +514,93 @@ def test_learning_is_wired_into_the_replaces_table() -> None:
 
     source = inspect.getsource(learning.generate_config_from_learning)
     assert "learning_guard_eval" in source
+
+
+@pytest.mark.parametrize("pattern", ["get*", "abcd*"])
+def test_a_pattern_whose_fixed_part_is_at_least_three_chars_does_not_warn(
+    pattern: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    errors: list[ErrorMsg] = []
+    with caplog.at_level("WARNING"):
+        parse_rules(_lines(f"eval-attribute={pattern}"), errors)
+    assert not errors
+    assert not any("expands to" in record.getMessage() for record in caplog.records)
+
+
+def test_a_wide_pattern_warning_names_a_matched_attribute(caplog: pytest.LogCaptureFixture) -> None:
+    errors: list[ErrorMsg] = []
+    with caplog.at_level("WARNING"):
+        parse_rules(_lines("eval-attribute=ge*"), errors)
+    assert not errors
+    assert any("including" in record.getMessage() for record in caplog.records)
+
+
+def test_an_unknown_syntax_token_suggests_from_ast_nodes_not_just_groups() -> None:
+    errors: list[ErrorMsg] = []
+    parse_rules(_lines("eval-syntax=BinOpp"), errors)
+    assert len(errors) == 1
+    assert "'BinOp'" in errors[0][0]
+
+
+def test_the_blind_attribute_warning_is_scoped_to_eval_attribute_grants(caplog: pytest.LogCaptureFixture) -> None:
+    errors: list[ErrorMsg] = []
+    with caplog.at_level("WARNING"):
+        parse_rules(_lines("eval-call=format", "eval-attribute=upper"), errors)
+    assert not errors
+    assert not any("4bis.a" in record.getMessage() for record in caplog.records)
+
+
+def test_builtin_warnings_are_scoped_to_an_allowed_eval_call_grant(caplog: pytest.LogCaptureFixture) -> None:
+    errors: list[ErrorMsg] = []
+    with caplog.at_level("WARNING"):
+        parse_rules(_lines("eval-attribute=open", "eval-import=open", "eval-call=DENY:open"), errors)
+    assert not errors
+    assert not any(
+        "adds the builtin" in record.getMessage() or "grants a sensitive builtin" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_sensitive_and_ordinary_builtins_get_distinct_warnings(caplog: pytest.LogCaptureFixture) -> None:
+    errors: list[ErrorMsg] = []
+    with caplog.at_level("WARNING"):
+        parse_rules(_lines("eval-call=open", "eval-call=len"), errors)
+    assert not errors
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("grants a sensitive builtin" in m and "open" in m for m in messages)
+    assert any("adds the builtin" in m and "len" in m for m in messages)
+    assert not any("grants a sensitive builtin" in m and "len" in m for m in messages)
+    assert not any("adds the builtin" in m and "open" in m for m in messages)
+
+
+def test_a_duplicate_scalar_key_does_not_abort_parsing_the_rest() -> None:
+    errors: list[ErrorMsg] = []
+    profiles, others = parse_rules(_lines("eval-timeout=2s", "eval-timeout=5s", "eval-call=open"), errors)
+    assert not others
+    assert len(errors) == 1
+    assert _profile(profiles).call.allows("open")
+
+
+def test_learning_condenses_two_complete_groups_in_the_same_profile() -> None:
+    complete = {LearnEvalRule("eval-syntax", node) for group in ("loop", "arith") for node in SYNTAX_GROUPS[group]}
+    lines = generate_rules(complete)
+    syntax_line = next(line for line in lines if line.startswith("eval-syntax="))
+    tokens = syntax_line[len("eval-syntax=") :].split(", ")
+    assert "loop" in tokens
+    assert "arith" in tokens
+    assert not any(node in tokens for node in (*SYNTAX_GROUPS["loop"], *SYNTAX_GROUPS["arith"]))
+
+
+def test_a_caller_context_still_lets_later_keys_emit() -> None:
+    observed = {
+        LearnEvalContext("tools.py:66"),
+        LearnEvalRule("eval-attribute", "split"),
+    }
+    lines = generate_rules(observed)
+    assert any(line.startswith("eval-attribute=split") for line in lines)
+
+
+def test_the_fstring_comment_is_scoped_to_eval_attribute() -> None:
+    lines = generate_rules({LearnEvalRule("eval-call", "format")})
+    assert "eval-call=format" in lines
+    assert not any("f-string" in line for line in lines)
