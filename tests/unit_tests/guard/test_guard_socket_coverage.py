@@ -503,3 +503,160 @@ def test_generate_rules_skips_an_in_rule_already_present(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(gs, "_rules", existing)
     assert generate_rules(learned) == []
+
+
+# %% Mutation-testing gaps
+
+
+def test_set_pin_dns_logs_the_addresses_of_a_non_empty_pin(pin_dns_reset: None) -> None:
+    gs._pin_dns = cast(ImmutableDict[str, tuple[AddrInfoType, ...]], ImmutableDict({}))
+    entries = cast(
+        ImmutableDict[str, tuple[AddrInfoType, ...]],
+        ImmutableDict({"pinned.example": ((socket.AF_INET, SocketKind.SOCK_STREAM, 6, "", ("198.51.100.7", 0)),)}),
+    )
+
+    with patch.object(gs, "logger") as mock_logger:
+        gs.set_pin_dns(entries)
+
+    message = mock_logger.debug.call_args.args[0]
+    assert "198.51.100.7" in message
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        gs._wrap_socket_gethostbyname,
+        gs._wrap_socket_gethostbyname_ex,
+        gs._wrap_socket_socketpair,
+        gs._wrap_socket_getaddrinfo,
+        gs._wrap_socket_bind,
+        gs._wrap_socket_listen,
+        gs._wrap_socket_connect,
+        gs._wrap_socket_connect_ex,
+        gs._wrap_socket_sendto,
+        gs._wrap_socket_sendmsg,
+    ],
+)
+def test_wrap_socket_factories_preserve_the_original_name(factory: Callable[[Callable], Callable]) -> None:
+    """``guard_wraps`` copies ``__name__`` from the wrapped function onto the wrapper it builds."""
+
+    def original_target(*args: Any, **kwargs: Any) -> None:
+        """Original docstring."""
+
+    wrapped = factory(original_target)
+
+    assert wrapped.__name__ == "original_target"
+
+
+def test_gethostbyname_does_not_record_a_learning_rule_outside_learning_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[Any] = []
+    monkeypatch.setattr(gs, "is_learning_mode", lambda: False)
+    monkeypatch.setattr(gs, "add_learning_rule", recorded.append)
+    wrapped = patch_rules(learn=False)["socket.gethostbyname"](lambda *a, **k: "5.6.7.8")
+
+    assert wrapped("outside.example") == "5.6.7.8"
+    assert recorded == []
+
+
+def test_gethostbyname_ex_does_not_record_a_learning_rule_outside_learning_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: list[Any] = []
+    monkeypatch.setattr(gs, "is_learning_mode", lambda: False)
+    monkeypatch.setattr(gs, "add_learning_rule", recorded.append)
+    wrapped = patch_rules(learn=False)["socket.gethostbyname_ex"](lambda name, *a, **k: (name, [], ["5.6.7.8"]))
+
+    assert wrapped("outside.example") == ("outside.example", [], ["5.6.7.8"])
+    assert recorded == []
+
+
+def test_getaddrinfo_does_not_record_a_learning_rule_outside_learning_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[Any] = []
+    monkeypatch.setattr(gs, "is_learning_mode", lambda: False)
+    monkeypatch.setattr(gs, "add_learning_rule", recorded.append)
+    fake_result = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("5.6.7.8", 443))]
+    wrapped = patch_rules(learn=False)["socket.getaddrinfo"](lambda *a, **k: fake_result)
+
+    assert wrapped("outside.example", 443) == fake_result
+    assert recorded == []
+
+
+def test_read_host_file_skips_a_hosts_path_that_is_not_a_regular_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An existing-but-non-regular hosts path (here, a directory) must be skipped, not read."""
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    (tmp_path / "System32\\drivers\\etc\\hosts").mkdir()
+
+    dns, _inverse_dns = gs._read_host_file()
+
+    assert "localhost" in dns  # the loopback fallback still ran; nothing crashed reading the "file"
+
+
+def test_read_host_file_skips_a_comment_line_but_parses_the_rest(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A leading ``#`` comment line must be skipped, not stop parsing the rest of the file."""
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    hosts_file = tmp_path / "System32\\drivers\\etc\\hosts"
+    hosts_file.write_text("# comment\n198.51.100.44 after-comment.example\n")
+
+    dns, _inverse_dns = gs._read_host_file()
+
+    assert "after-comment.example" in dns
+
+
+def test_read_host_file_populates_inverse_dns_from_a_hosts_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Each hosts-file line must record its first hostname in ``inverse_dns``, for later IP-to-name aliasing."""
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    hosts_file = tmp_path / "System32\\drivers\\etc\\hosts"
+    hosts_file.write_text("198.51.100.45 reverse.example\n")
+
+    _dns, inverse_dns = gs._read_host_file()
+
+    assert inverse_dns[ip_address("198.51.100.45")] == {"reverse.example"}
+
+
+def test_read_host_file_detects_windows_on_a_non_interned_platform_string(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``sys.platform`` is the interpreter's own string, never identical to a literal: == must be used, not is."""
+    monkeypatch.setattr("sys.platform", "".join(["win", "32"]))
+    monkeypatch.setenv("SystemRoot", str(tmp_path))
+    (tmp_path / "System32\\drivers\\etc\\hosts").write_text("198.51.100.46 non-interned.example\n")
+
+    dns, _inverse_dns = gs._read_host_file()
+
+    assert "non-interned.example" in dns
+
+
+def test_generate_rules_aliases_a_destination_via_a_non_interned_env_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An env value equal to the destination must alias it even though it is never the same object."""
+    monkeypatch.setattr(gs, "_read_host_file", lambda: ({}, {}))
+    destination = "".join(["192.0.2", ".5/32"])
+    monkeypatch.setattr(gs.os, "environ", {"TARGET": destination})
+    learned = {LearnSocketRule("connect", Kind.TCP, "192.0.2.5", 443, Direction.OUT, ())}
+
+    assert generate_rules(learned) == ["net=ALLOW|TCP|${TARGET}|443|OUT"]
+
+
+def test_generate_rules_keeps_an_in_rule_whose_existing_match_sorts_earlier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The dedup must compare rule *text* equality, not lexicographic order."""
+    monkeypatch.setattr(gs, "_read_host_file", lambda: ({}, {}))
+    monkeypatch.setattr(gs.os, "environ", {})
+    errors: list[ErrorMsg] = []
+    # Sorts before the candidate IN rule below, but is not the same text.
+    earlier_rule = "net=ALLOW|TCP|100.64.0.1/32|1|IN"
+    existing, _, _ = parse_rules([ConfigLine(earlier_rule, Path(), 1)], errors)
+    assert not errors
+    monkeypatch.setattr(gs, "_rules", existing)
+    learned = {LearnSocketRule("bind", Kind.TCP, "203.0.113.5", 9999, Direction.IN, ())}
+
+    assert generate_rules(learned) == ["net=ALLOW|TCP|203.0.113.5/32|9999|IN"]
