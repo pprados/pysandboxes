@@ -5,12 +5,14 @@
 import os
 import subprocess
 import sys
+import types
 from pathlib import Path
 from typing import Any, Callable
 
 import pytest
 
 import pysandboxes
+from pysandboxes import guard_api
 from pysandboxes.e import RuleApiPermissionError, SandBoxError
 from pysandboxes.guard_api import (
     _CATEGORY_HELP,
@@ -18,6 +20,7 @@ from pysandboxes.guard_api import (
     SENSITIVE_API,
     ApiRule,
     LearnApiRule,
+    _not_applicable,
     activate_guard,
     all_qualnames,
     generate_rules,
@@ -25,6 +28,7 @@ from pysandboxes.guard_api import (
     parse_rules,
     patch_rules,
 )
+from pysandboxes.guard_eval import classify_context_value
 from pysandboxes.lifecycle import arm, is_armed
 from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.sb_types import ConfigLine
@@ -123,6 +127,7 @@ def test_other_directives_are_returned_untouched() -> None:
         "python-api=ALLOW:",
         "python-api=ALLOW:threads,",
         "python-api=",
+        "python-api=ALLOW:!",
     ],
 )
 def test_rejected_syntax(rule: str) -> None:
@@ -832,3 +837,149 @@ def test_subinterpreter_creation_is_refused_end_to_end(tmp_path: Path) -> None:
         expected += ["concurrent.interpreters.create", "InterpreterPoolExecutor"]
     for tag in expected:
         assert f"{tag} GUARD" in result.stdout, result.stdout + result.stderr
+
+
+def _fake_sys(version: tuple[Any, ...], platform: str) -> types.SimpleNamespace:
+    return types.SimpleNamespace(version_info=version, platform=platform)
+
+
+_V311 = (3, 11, 0, "final", 0)
+_V313 = (3, 13, 0, "final", 0)
+_V314 = (3, 14, 0, "final", 0)
+
+
+def test_not_applicable_gates_the_version_dependent_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`sys.version_info` is a 5-tuple: it can never be `==`/`is` a 2-tuple literal, only ordered
+    against one. Faking `guard_api.sys` lets every version boundary be exercised on one interpreter."""
+    monkeypatch.setattr(guard_api, "sys", _fake_sys(_V311, "linux"))
+    skip = _not_applicable()
+    assert "threading._start_joinable_thread" in skip
+    assert "threading._start_new_thread" not in skip
+    assert "os.unshare" in skip
+    assert "sys.monitoring.use_tool_id" in skip
+    assert "sys.remote_exec" in skip
+
+    monkeypatch.setattr(guard_api, "sys", _fake_sys(_V313, "linux"))
+    skip = _not_applicable()
+    assert "threading._start_new_thread" in skip
+    assert "threading._start_joinable_thread" not in skip
+    assert "os.unshare" not in skip
+    assert "sys.monitoring.use_tool_id" not in skip
+    assert "sys.remote_exec" in skip
+
+    monkeypatch.setattr(guard_api, "sys", _fake_sys(_V314, "linux"))
+    skip = _not_applicable()
+    assert "sys.remote_exec" not in skip
+
+
+def test_not_applicable_gates_the_platform_dependent_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`sys.platform` is a runtime C string, never the same object as a literal in this module, though
+    always `==`-equal to it: the gate must compare by value, not by identity, on every platform."""
+    linux = "".join(("lin", "ux"))
+    win32 = "".join(("win", "32"))
+    darwin = "".join(("dar", "win"))
+
+    monkeypatch.setattr(guard_api, "sys", _fake_sys(_V313, linux))
+    skip = _not_applicable()
+    assert "nt.system" in skip
+    assert "posix.system" not in skip
+    assert "os.setresuid" not in skip
+
+    monkeypatch.setattr(guard_api, "sys", _fake_sys(_V313, win32))
+    skip = _not_applicable()
+    assert "nt.system" not in skip
+    assert "posix.system" in skip
+    assert "os.setresuid" in skip
+
+    monkeypatch.setattr(guard_api, "sys", _fake_sys(_V313, darwin))
+    skip = _not_applicable()
+    assert "nt.system" in skip
+    assert "posix.system" not in skip
+    assert "os.setresuid" in skip
+
+
+def test_parse_rules_continues_after_a_malformed_directive_line() -> None:
+    """A `continue` at the config-line level, not only inside one line's comma-separated targets."""
+    errors: list[ErrorMsg] = []
+    lines = [
+        ConfigLine("python-api=threads", Path("p"), 1),  # missing the ACTION:target colon
+        ConfigLine("python-api=ALLOW:os.system", Path("p"), 2),
+        ConfigLine("expose-ro=.", Path("p"), 3),
+    ]
+    parsed, others = parse_rules(lines, errors)
+    assert len(errors) == 1
+    assert [r.target for r in parsed] == ["os.system"]
+    assert others == [lines[2]]
+
+
+def test_parse_rules_continues_after_an_unknown_action_line() -> None:
+    errors: list[ErrorMsg] = []
+    lines = [
+        ConfigLine("python-api=PERMIT:threads", Path("p"), 1),
+        ConfigLine("python-api=ALLOW:os.system", Path("p"), 2),
+        ConfigLine("expose-ro=.", Path("p"), 3),
+    ]
+    parsed, others = parse_rules(lines, errors)
+    assert len(errors) == 1
+    assert [r.target for r in parsed] == ["os.system"]
+    assert others == [lines[2]]
+
+
+def test_an_empty_target_does_not_also_report_the_next_one() -> None:
+    _, errors = _parse("python-api=ALLOW:,threadz")
+    assert len(errors) == 1
+
+
+def test_the_mixed_action_message_names_the_real_problem() -> None:
+    _, errors = _parse("python-api=ALLOW:DENY")
+    assert errors
+    assert "one action per line" in errors[0][0]
+
+
+def test_a_mixed_action_target_does_not_also_report_the_next_one() -> None:
+    _, errors = _parse("python-api=ALLOW:DENY,threadz")
+    assert len(errors) == 1
+
+
+def test_an_invalid_category_in_a_multi_target_line_discards_the_whole_line() -> None:
+    parsed, errors = _parse("python-api=ALLOW:os.system,threadz")
+    assert errors
+    assert parsed == ()
+
+
+def test_an_unknown_category_does_not_also_report_the_next_target() -> None:
+    _, errors = _parse("python-api=ALLOW:threadz,bogus")
+    assert len(errors) == 1
+
+
+def test_an_invalid_function_in_a_multi_target_line_discards_the_whole_line() -> None:
+    parsed, errors = _parse("python-api=ALLOW:os.system,bogus.func")
+    assert errors
+    assert parsed == ()
+
+
+def test_an_unregistered_function_does_not_also_report_the_next_target() -> None:
+    _, errors = _parse("python-api=ALLOW:bogus.func,another.bogus")
+    assert len(errors) == 1
+
+
+def test_generate_rules_marks_a_dangerous_category_with_a_warning() -> None:
+    activate_guard(())
+    lines = generate_rules({LearnApiRule("os.system")})
+    header = next(line for line in lines if line.startswith("#"))
+    assert header.startswith("# ⚠ ")
+
+
+def test_generate_rules_does_not_warn_on_a_safe_category() -> None:
+    activate_guard(())
+    lines = generate_rules({LearnApiRule("threading.settrace")})
+    header = next(line for line in lines if line.startswith("#"))
+    assert header == f"# threads: {_CATEGORY_HELP['threads']}"
+
+
+def test_a_patched_sensitive_function_keeps_its_identity_for_classification() -> None:
+    """Without `@guard_wraps`, a patched sensitive function would be graded "weak" by
+    `guard_eval.classify_context_value` once exposed as a name inside an armed eval context."""
+    table = patch_rules(learn=False)
+    wrapped = table["os.system"](os.getpid)
+    assert classify_context_value(wrapped) == "strong"
