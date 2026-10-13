@@ -25,10 +25,6 @@ expose-ro=../..
 net=ALLOW|TCP|ip6-localhost|0|IN
 net=ALLOW|TCP|ip6-loopback|0|IN
 
-# ⚠ native: native code and arbitrary memory access
-python-api=ALLOW:ctypes.CDLL
-python-api=ALLOW:_ctypes.dlopen
-
 # The calculator tool evaluates a string the model produced. `closed` rather
 # than the adaptive default: the caller already passes {"__builtins__": {}},
 # so the resulting namespace is identical, and a profile handling model output
