@@ -52,7 +52,7 @@ def test_linux_runs_every_public_provider() -> None:
 
 @pytest.mark.parametrize(
     ("platform", "expected"),
-    [("darwin", ["none", "subprocess"]), ("win32", ["none", "subprocess"])],
+    [("darwin", ["none", "subprocess", "sandbox-exec"]), ("win32", ["none", "subprocess"])],
 )
 def test_other_platforms_only_list_their_providers(platform: str, expected: list[str]) -> None:
     with patch("sys.platform", platform):
@@ -90,7 +90,7 @@ def test_parse_rules_rejects_a_provider_of_another_platform(tmp_path: Path) -> N
     with patch("sys.platform", "darwin"):
         parse_rules(tmp_path / "p.conf", [ConfigLine("os-sandbox=landlock", tmp_path, 1)], errors)
     assert len(errors) == 1
-    assert "os-sandbox 'landlock' does not run on darwin. Use one of: subprocess." in errors[0][0]
+    assert "os-sandbox 'landlock' does not run on darwin. Use one of: subprocess, sandbox-exec." in errors[0][0]
 
 
 def test_start_refuses_a_provider_of_another_platform(landlock_rules: AllRules) -> None:

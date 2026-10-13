@@ -11,6 +11,8 @@
 # Name without '/' may be in the same directory.
 # Missing files are silently ignored.
 # Platform-specific profiles use the exact value of sys.platform:
+# include-platform=darwin "macos.profile"
+# include-platform=win32 "windows.profile"
 # include-platform=linux "linux.profile"
 
 # Uncomment to accept local rules. The path is resolved from the current directory, so

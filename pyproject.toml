@@ -48,11 +48,12 @@ bwrap = []
 firejail = []
 landlock = []
 subprocess = []
+sandbox-exec = []
 unshare = []
 # Install all provider extras: pip install pysandboxes[all]
 # Self-referential: no duplication; pip resolves all provider extras.
 all = [
-    "pysandboxes[bwrap,firejail,landlock,subprocess,unshare]",
+    "pysandboxes[bwrap,firejail,landlock,sandbox-exec,subprocess,unshare]",
 ]
 
 [project.urls]

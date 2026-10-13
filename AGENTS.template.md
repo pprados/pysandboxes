@@ -164,9 +164,10 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 
 - The project targets AI/LLM-generated code security use cases
 - Configuration files use whitelist-only security model
-- Seven OS providers ship today; `none` and `subprocess` give no OS boundary at all, and the kernel-backed
+- Eight OS providers ship today; `none` and `subprocess` give no OS boundary at all, and the kernel-backed
   ones (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) are what holds against compiled code
-- Kernel boundaries are Linux and WSL only: every kernel-backed provider is a Linux technology. On macOS and
-  Windows, the Python layer runs with `subprocess`, as `.github/workflows/cross-os.yml` proves
+- Kernel boundaries are Linux and WSL only. macOS also has the deprecated `sandbox-exec` Seatbelt provider,
+  which filters paths and network ports but cannot filter remote hosts. Its default remains `subprocess`;
+  Windows uses `subprocess`, as `.github/workflows/cross-os.yml` proves
 - Known weaknesses are documented, not hidden: see `wiki/weaknesses.md`, `wiki/audit-eval-security.md` and
   `wiki/audit-python-security.md`. `SECURITY.md` says which of them count as a vulnerability

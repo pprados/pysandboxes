@@ -21,8 +21,11 @@ We offer several implementations to encapsulate the Python sandbox:
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 | [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
 | [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
+| sandbox-exec | [here](sandbox-exec.md) | • Seatbelt path and port filtering<br/>• Deprecated by Apple<br/>• No remote host/IP filtering | Legacy macOS-only profile launcher. |
 
 *Other implementations will be added soon*
+
+`sandbox-exec` is macOS-only and deprecated. It is listed here for compatibility, but it is not a kernel-backed provider. Its network rules constrain protocol and port, while remote host/IP constraints are unavailable. When DNS is allowed, Seatbelt also needs an unscoped local UDP inbound permission for replies. See [the provider page](sandbox-exec.md) before selecting it.
 
 How to read the matrix below. The `none` column is the baseline: plain Python, no sandbox at all. The `py-sandbox` column is the Python layer on its own. Every other column lists what that OS technology enforces **on its own** too, whereas in practice you nest it *around* the py-sandbox instead of replacing it.
 

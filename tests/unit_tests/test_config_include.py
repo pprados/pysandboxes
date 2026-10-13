@@ -1,4 +1,4 @@
-"""Unit tests for `include "..."` path resolution in a configuration file."""
+"""Unit tests for configuration include path and platform selection."""
 
 from pathlib import Path
 

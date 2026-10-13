@@ -31,6 +31,7 @@ and verify the scenarios your application needs.
 - [Firejail](firejail.md)
 - [Unshare](unshare.md)
 - [QEMU](qemu.md)
+- [macOS `sandbox-exec` (deprecated Seatbelt)](sandbox-exec.md)
 - [DNS and network filtering](dns.md) — DNS resolution and `iptables` behavior.
 - [Docker Hub images](docker-hub.md) — pull and run published provider images.
 

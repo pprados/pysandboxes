@@ -34,7 +34,10 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/remote/test_qemu_*.py",
     "unit_tests/remote/test_unshare_*.py",
 ]
-collect_ignore_glob = [] if sys.platform == "linux" else _LINUX_ONLY_TESTS
+_MACOS_ONLY_TESTS = ["integration_tests/remote/test_sandbox_exec.py"]
+collect_ignore_glob = ([] if sys.platform == "linux" else _LINUX_ONLY_TESTS) + (
+    [] if sys.platform == "darwin" else _MACOS_ONLY_TESTS
+)
 
 # A script that calls an LLM (scripts/changelog-draft.sh) gets a command that fails, so no test spends tokens by
 # omission. Only the tests marked `llm` call the model, and only with RUN_LLM_TESTS=1.

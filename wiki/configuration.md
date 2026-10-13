@@ -20,7 +20,7 @@ Parameters for all of the user's projects can be present in `~/.config/py-sandbo
 
 By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is ignored, as the template's user and node profiles usually are; if it exists but cannot be read, the configuration is refused. A bare name (`include "common"`) is resolved next to the including file. A relative path holding a `/` (`include "shared/strict.profile"`, `include "./.py-sandboxes"`) is resolved against the current working directory, not the including file: the same profile then includes a different file depending on where the program starts, or none. Write an absolute path, or one starting with `~/`, for a file that must not depend on it.
 
-Use `include-platform=<sys.platform> "profile"` to include rules only on one Python platform, for example `include-platform=linux "linux.profile"`. The platform name must match `sys.platform`; a profile for another platform is not read or applied. This syntax is suitable for OS-specific imports and API permissions.
+Use `include-platform=<sys.platform> "profile"` to include rules only on one Python platform, for example `include-platform=darwin "macos.profile"`, `include-platform=win32 "windows.profile"`, or `include-platform=linux "linux.profile"`. The platform name must match `sys.platform`; a profile for another platform is not read or applied. This keeps imports and API permissions specific to the OS where they are needed. Configuration files use this rule syntax and environment-variable substitution; they are not Jinja templates.
 
 With **python-sb**, a special parameter can be used to select the configuration.
 Without it, `python-sb` reads the `.py-sandboxes` next to the script or in the directory of the `-m` module, and
@@ -50,7 +50,7 @@ the entire project tree, including files the program never touched. This is not 
 file (the rule syntax accepts a file path as well as a directory): the harness itself has to read the script
 file to run it, so the script's own directory is already learned even when the application opens nothing
 else there, and narrowing other reads in that same directory would not shrink the profile. A kernel-backed
-OS provider (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) also needs every `sys.path` entry, which
+OS provider (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, or macOS `sandbox-exec`) also needs every `sys.path` entry, which
 includes that directory, mounted for `os.listdir`/`os.scandir` to work at replay; this part is reasoned from
 the provider code, not separately verified by replaying under one of them. When the working directory
 differs from the script's own directory, there is no such floor: a relative-path read against an unrelated

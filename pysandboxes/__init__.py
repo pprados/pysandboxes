@@ -4,8 +4,8 @@
 
 This package provides sandbox environments for executing untrusted Python code safely.
 It uses a multi-layered defense-in-depth security architecture combining Python API
-patching with an OS boundary enforced by the kernel: one provider among `none`,
-`subprocess`, `landlock`, `bwrap`, `firejail`, `unshare` and `qemu`, selected by the
+patching with an OS boundary: one provider among `none`, `subprocess`, `landlock`,
+`bwrap`, `firejail`, `unshare`, `qemu` and the deprecated macOS `sandbox-exec`, selected by the
 `os-sandbox` directive. Docker and Podman are not providers of their own: a container
 runs the `unshare` provider.
 

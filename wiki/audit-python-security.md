@@ -364,6 +364,7 @@ the OS sandbox's role, stated plainly rather than papered over.
 ## Recommendations
 
 - Treat the Python layer as a guardrail for code that is wrong, not hostile. Against code written to break out, use a kernel provider.
+- On macOS, `sandbox-exec` is deprecated and cannot enforce remote host/IP filtering; its Seatbelt profile is a legacy option, not a replacement for a maintained kernel boundary.
 - Never use learning mode with untrusted code: it executes unguarded and writes its own permissions into the whitelist.
 - Review every generated profile before trusting it. That review is the only barrier.
 - Grant `python-api=ALLOW:deserialization` only when a trusted payload requires it.
@@ -374,3 +375,4 @@ the OS sandbox's role, stated plainly rather than papered over.
 - [Security assessment of the `eval-*` guard](audit-eval-security.md)
 - [Transport unpickle guard](transport-unpickle-guard.md), [weaknesses](weaknesses.md), [implementation](implementation.md)
 - Kernel providers: [landlock](landlock.md), [bwrap](bwrap.md), [firejail](firejail.md), [unshare](unshare.md), [qemu](qemu.md)
+- macOS legacy provider: [`sandbox-exec`](sandbox-exec.md)

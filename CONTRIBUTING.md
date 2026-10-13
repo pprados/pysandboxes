@@ -15,8 +15,8 @@ does not count as a vulnerability, such as the known Python-layer weaknesses in
 
 ## Getting started
 
-The project runs on Linux or WSL (every OS provider is a Linux technology), with Python 3.11 to 3.14, and uses
-[uv](https://docs.astral.sh/uv/) exclusively.
+The project runs Linux providers on Linux or WSL and the legacy Seatbelt provider on macOS. It supports Python 3.11
+to 3.14 and uses [uv](https://docs.astral.sh/uv/) exclusively.
 
 ```bash
 git clone https://github.com/pprados/pysandboxes.git
@@ -33,7 +33,7 @@ A plain `uv sync` installs the `dev` group only and removes the linters. `make h
 |---|---|
 | `pysandboxes/sandboxes_api.py` | the public API: `@sandbox` and the `sandboxes()` context manager |
 | `pysandboxes/py_sandbox.py` | the Python layer, which patches the standard library at run time |
-| `pysandboxes/_os_sandbox.py` | the registry of OS providers, from `none` to `qemu` |
+| `pysandboxes/_os_sandbox.py` | the registry of OS providers, from `none` to `sandbox-exec` |
 | `pysandboxes/guard_*.py` | one guard per resource: files, network, imports, env, sensitive calls, eval |
 | `pysandboxes/eval_*.py` | the `eval-*` sub-language: rules, AST rewriting, runtime checks |
 | `pysandboxes/remote/` | the SSE channel between the host and the sandboxed child |
@@ -48,7 +48,7 @@ The [`wiki/`](wiki/Home.md) directory holds the documentation a contributor need
 - [`implementation.md`](wiki/implementation.md): how the framework is put together;
 - [`weaknesses.md`](wiki/weaknesses.md) and the two security assessments: what the Python layer does not stop,
   and the attacks already studied;
-- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`), and
+- one page per OS provider (`bwrap.md`, `firejail.md`, `unshare.md`, `qemu.md`, `landlock.md`, `sandbox-exec.md`), and
   [`eval.md`](wiki/eval.md) for the `eval-*` rules;
 - [`tests.md`](wiki/tests.md): which suite covers what, and the gaps;
 - [`release.md`](wiki/release.md): how a pre-release is published, and the settings behind it;

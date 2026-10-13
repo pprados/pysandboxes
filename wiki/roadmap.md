@@ -12,7 +12,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
   - [ ] Management of regular expressions
 - [ ] OS Compatible
   - [ ] Windows
-  - [ ] Mac OS (see https://cursor.com/fr/blog/agent-sandboxing)
+  - [x] macOS Seatbelt provider (`sandbox-exec`, deprecated; see [provider limits](sandbox-exec.md))
 - [ ] OS-sandboxes
   - [ ] Basic
     - [ ] sub interpreter
@@ -45,7 +45,7 @@ We have a planned roadmap. Developments will arrive gradually, with no specific 
     - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
   - [ ] Apple
     - [ ] App Sandbox
-    - [ ] sandbox-exec
+    - [x] sandbox-exec (deprecated)
 - [ ] Features
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id

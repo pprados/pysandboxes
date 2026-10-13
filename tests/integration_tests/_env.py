@@ -33,6 +33,7 @@ ALL_OS_SANDBOX: tuple[str, ...] = (
     "firejail",
     "landlock",
     "bwrap",
+    "sandbox-exec",
 )
 
 # Row name -> the value `os-sandbox=` accepts.

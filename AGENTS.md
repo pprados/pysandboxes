@@ -1,6 +1,6 @@
 ## Project Overview
 
-PySandboxes = Python security framework. Sandbox envs → run untrusted Python safe. Defense-in-depth: Python API patching + OS isolation. Python guards + 1 OS provider of `none`, `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`. Docker/Podman ≠ own provider: container runs `unshare` provider, `--privileged` for Docker.
+PySandboxes = Python security framework. Sandbox envs → run untrusted Python safe. Defense-in-depth: Python API patching + OS isolation. Python guards + 1 OS provider of `none`, `subprocess`, `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`, `sandbox-exec`. Docker/Podman ≠ own provider: container runs `unshare` provider, `--privileged` for Docker.
 
 All code English.
 
@@ -140,6 +140,6 @@ Rules in `.py-sandboxes` files, whitelist-based:
 
 - Target: AI/LLM-generated code security
 - Config files: whitelist-only model
-- 7 OS providers ship. `none` + `subprocess` = no OS boundary. Kernel-backed (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) = what holds vs compiled code
-- Kernel boundaries Linux + WSL only: all kernel-backed providers = Linux tech. macOS/Windows → Python layer w/ `subprocess`, proven by `.github/workflows/cross-os.yml`
+- 8 OS providers ship. `none` + `subprocess` = no OS boundary. Kernel-backed (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) = what holds vs compiled code. macOS `sandbox-exec` applies Seatbelt policy but is deprecated and cannot filter remote host/IP.
+- Kernel-backed boundaries are Linux + WSL only. macOS can opt into legacy `sandbox-exec`; its default remains `subprocess`. Windows uses `subprocess`. Cross-platform provider claims are tested by `.github/workflows/cross-os.yml`.
 - Known weaknesses documented, not hidden: `wiki/weaknesses.md`, `wiki/audit-eval-security.md`, `wiki/audit-python-security.md`. `SECURITY.md` says which = vulnerability

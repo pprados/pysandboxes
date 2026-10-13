@@ -8,6 +8,8 @@ it does not mean the row ran successfully on every host.
 
 - The host integration suite exercises six runtime guard families over six
   distinct OS providers. QEMU has two rows: KVM and forced TCG emulation.
+- macOS adds a separate `sandbox-exec` row with direct Seatbelt, network-only,
+  provider usage, and guard coverage. It does not change the Linux container counts.
 - Container scenarios exercise file, socket, and environment behavior. They do
   not exercise `guard_eval`, `guard_api`, or `guard_import`.
 - Twelve unprivileged `unshare`/`bwrap` container cases are declared
@@ -152,8 +154,8 @@ that loads a profile exercises it implicitly.
 
 ## B. OS_SANDBOX backends
 
-Nine entries are registered in `pysandboxes/_os_sandbox.py`: seven providers, plus
-`_task` and `_sse_server`, which are internal and not user-selectable.
+Nine entries are registered in `pysandboxes/_os_sandbox.py`: eight providers, plus
+`_sse_server`, which is internal and not user-selectable.
 
 | Backend | Host: `tst_usage` | Host: guards | OS-only netfilter | Docker | Podman | Kubernetes |
 |---|---|---|---|---|---|---|
@@ -164,6 +166,7 @@ Nine entries are registered in `pysandboxes/_os_sandbox.py`: seven providers, pl
 | `landlock` | yes | yes | yes (ABI v4) | yes | yes | yes |
 | `qemu` | yes | yes | yes (KVM) | yes | yes | yes |
 | `qemu-tcg` | yes | yes | — | — | — | — |
+| `sandbox-exec` (macOS) | yes | yes | yes (2 modes) | **excluded** | **excluded** | **excluded** |
 
 "Host: guards" is `test_guards_with_providers`. `qemu-tcg` is not a backend but
 a second host row for `qemu` with `qemu.use_kvm=false` (`ALL_OS_SANDBOX` in
