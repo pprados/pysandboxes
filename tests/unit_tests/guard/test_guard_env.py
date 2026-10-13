@@ -177,11 +177,10 @@ def test_rules_flag_env_and_unenv() -> None:
     )
 
     assert not errors
-    by_ignore = {rule.ignore: rule for rule in rules}
-    assert by_ignore[False].pattern.match("FOO")
-    assert by_ignore[True].pattern.match("BAZ")
-    assert not by_ignore[False].pattern.match("FOOBAR")
-    assert not by_ignore[True].pattern.match("BAZOOKA")
+    env_rule = next(rule for rule in rules if rule.pattern.match("FOO"))
+    unenv_rule = next(rule for rule in rules if rule.pattern.match("BAZ"))
+    assert not env_rule.pattern.match("FOOBAR")
+    assert not unenv_rule.pattern.match("BAZOOKA")
 
 
 def test_wildcard_rule_keeps_a_matching_pattern() -> None:

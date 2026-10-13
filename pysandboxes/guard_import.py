@@ -66,7 +66,8 @@ class PatchRule(NamedTuple):
     """Rule for applying patches to imported modules.
 
     Attributes:
-        code_path: Name of the module or attribute to patch.
+        code_path: Dotted attribute path within the module to patch. No producer emits an empty
+            path: ``_apply_patch`` silently skips it rather than patching the module itself.
         patch_factory: Factory function that creates the patch.
     """
 
@@ -359,31 +360,26 @@ def _apply_patch(module: ModuleType, name: str) -> None:
     all_patch = cast(tuple[PatchRule, ...], _patch_rules[name])
     for patch in all_patch:
         cur_object = module
-        if patch.code_path != "":
-            paths = patch.code_path.split(".")
-            for node in paths[:-1]:
-                cur_object = cur_object.__dict__[node]
-            if not hasattr(cur_object, paths[-1]):
-                continue  # Not on this platform (`os.listxattr` off Linux): nothing to guard
-            original_value = getattr(cur_object, paths[-1])
-            if vars(original_value).get("__pysandbox__") if hasattr(original_value, "__dict__") else False:
-                continue  # Patched by an earlier activation: wrapping it again would check every call twice
-            new_value = patch.patch_factory(original_value)
-            # Explicit checks, not asserts: ``python -O`` removes asserts, and losing the marker there
-            # wrapped every function again on each activation.
-            if hasattr(new_value, "__pysandbox__"):
-                raise RuntimeError(f"Double injection on {name}.{patch.code_path}")
-            # A class wrapper (io.FileIO) is marked too, in its own __dict__: a subclass must not read as patched.
-            if isinstance(new_value, (type(_apply_patch), type)):  # Fake kinds.FunctionType
-                new_value.__pysandbox__ = True  # type: ignore[attr-defined,union-attr]
-            if cur_object is os:
-                _keep_os_supports_sets(original_value, new_value)
-            setattr(cur_object, paths[-1], new_value)
-            # logger.debug("Patch %s.%s",name, patch.code_path)
-        else:
-            # Patch the entire module
-            sys.modules[name] = patch.patch_factory(cur_object)
-            # logger.debug("Patch the module %s",name)
+        paths = patch.code_path.split(".")
+        for node in paths[:-1]:
+            cur_object = cur_object.__dict__[node]
+        if not hasattr(cur_object, paths[-1]):
+            continue  # Not on this platform (`os.listxattr` off Linux): nothing to guard
+        original_value = getattr(cur_object, paths[-1])
+        if vars(original_value).get("__pysandbox__") if hasattr(original_value, "__dict__") else False:
+            continue  # Patched by an earlier activation: wrapping it again would check every call twice
+        new_value = patch.patch_factory(original_value)
+        # Explicit checks, not asserts: ``python -O`` removes asserts, and losing the marker there
+        # wrapped every function again on each activation.
+        if hasattr(new_value, "__pysandbox__"):
+            raise RuntimeError(f"Double injection on {name}.{patch.code_path}")
+        # A class wrapper (io.FileIO) is marked too, in its own __dict__: a subclass must not read as patched.
+        if isinstance(new_value, (type(_apply_patch), type)):  # Fake kinds.FunctionType
+            new_value.__pysandbox__ = True  # type: ignore[attr-defined,union-attr]
+        if cur_object is os:
+            _keep_os_supports_sets(original_value, new_value)
+        setattr(cur_object, paths[-1], new_value)
+        # logger.debug("Patch %s.%s",name, patch.code_path)
 
 
 class GuardLoader(Loader):
@@ -948,20 +944,13 @@ if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
         if _guard_finder in sys.meta_path:
             sys.meta_path.remove(_guard_finder)
 
-        # Restore pending modules back to sys.modules, except those that were kept
-        keep = [
-            "warnings",
-            "tokenize",
-            "asyncio",
-            "sys",
-            "builtins",
-            "__main__",
-        ]
-
+        # Restore pending modules back to sys.modules, except those that were kept: a kept module
+        # (_KEPT_MODULES or a framework import) is never removed from sys.modules on activation, so
+        # it is always still present here and the membership check alone tells them apart.
         if _pending_modules:
             for module_name, module in _pending_modules.items():
                 # Only restore modules that were removed from sys.modules
-                if module_name not in keep and module_name not in sys.modules:
+                if module_name not in sys.modules:
                     sys.modules[module_name] = module
             _pending_modules = {}
 

@@ -31,12 +31,10 @@ class EnvRule(NamedTuple):
 
     Attributes:
         pattern: Compiled glob matching variable names.
-        ignore: Whether this is an ignore rule (blocks access).
         config: Configuration line where this rule was defined.
     """
 
     pattern: GlobPattern
-    ignore: bool
     config: ConfigLine
 
 
@@ -105,7 +103,7 @@ def parse_rules(
             # Case: Wildcard rule like *_API_KEY=${*_API_KEY} or *_API_KEY=fixed
             if "*" in key_pattern:
                 regex_key = _compile_key_pattern(key_pattern)
-                envs_rules.add(EnvRule(regex_key, False, orule))
+                envs_rules.add(EnvRule(regex_key, orule))
                 specificity = len(key_pattern.replace("*", ""))
                 for source_key in source_vars:
                     if regex_key.match(source_key):
@@ -128,11 +126,11 @@ def parse_rules(
                 # written, so "key in os.environ" is True (e.g. My_ENV for tests).
                 if v or "${" not in value_pattern:
                     new_vars[key_pattern] = v
-                envs_rules.add(EnvRule(_compile_key_pattern(key_pattern), False, orule))
+                envs_rules.add(EnvRule(_compile_key_pattern(key_pattern), orule))
         elif orule.rule.startswith("unenv="):
             remove_pattern = _compile_key_pattern(orule.rule[len("unenv=") :])
             unenv_patterns.append(remove_pattern)
-            envs_rules.add(EnvRule(remove_pattern, True, orule))
+            envs_rules.add(EnvRule(remove_pattern, orule))
         else:
             ignore_rules.append(orule)
 

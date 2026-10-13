@@ -66,6 +66,18 @@ def test_py_sandbox_accepted_falsy_values(value: str, existing_config: Path) -> 
     assert result[PY_SANDBOX] is False
 
 
+def test_an_invalid_first_py_sandbox_value_still_locks_out_learning(tmp_path: Path) -> None:
+    """An invalid ``py-sandbox=`` value leaves ``use_py_sandbox`` at its default (enabled): were
+    it to default to disabled instead, ``learn`` would be forced ``False`` too, and a file-sourced
+    ``learn=false`` lock that should still fire (py-sandbox is only nominally invalid, not
+    disabled) would silently not be reported."""
+    missing_config = tmp_path / CONFIG_NAME
+    _, errors = _parse("py-sandbox=bogus", "learn=false", config_path=missing_config, rule_path=missing_config)
+    assert len(errors) == 2
+    assert any("Invalid value 'bogus' for py-sandbox" in e[0] for e in errors)
+    assert any("learning mode is forbidden" in e[0] for e in errors)
+
+
 def test_an_empty_port_is_rejected(existing_config: Path) -> None:
     result, errors = _parse("port=", config_path=existing_config)
     assert len(errors) == 1
