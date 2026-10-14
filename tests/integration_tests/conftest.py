@@ -38,14 +38,3 @@ def pytest_terminal_summary(terminalreporter: Any) -> None:
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     if _skipped and exitstatus == pytest.ExitCode.OK:
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
-    from pysandboxes.private_loop import get_sandbox_loop
-
-    loop = get_sandbox_loop()
-    loop.stop()
-    # Fix a problem with pycharm. It's call close() on a running loop
-    if hasattr(loop, "_thread_id"):
-        loop._thread_id = None  # type: ignore[attr-defined]

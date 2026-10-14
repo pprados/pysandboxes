@@ -114,10 +114,8 @@ SAMPLES = \
 # $(MAKE) shares the jobserver, so -jN stays a global budget.
 # The per-sample targets must not be declared .PHONY: make skips the implicit
 # rule search for phony targets, which would leave this pattern rule unused.
-# `init` first: pytest lives in the sample's `test` dependency group, which
-# `uv run pytest` does not install -- uv syncs `dev` only. A developer whose
-# sample venv was hydrated by an earlier `make init` never notices; a clean
-# container fails with `Failed to spawn: pytest`. Two recipe lines rather than
+# `init` first, then include the `test` group in `uv run`: without it uv syncs
+# `dev` only and removes pytest from the environment. Two recipe lines rather than
 # two goals on one $(MAKE): goals given on a command line run concurrently
 # under -jN, which would race `tests` against the sync it depends on.
 # UV_GROUP is deliberately not overridden here: the sample Makefile declares it
@@ -143,7 +141,7 @@ sample-tests-%:
 		echo "skip $*-demo: requires-python >= $$req, running $(UV_PYTHON)"; \
 	else \
 		$(MAKE) -C samples/$*-demo init && \
-		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run pytest -p no:dotenv -v tests; \
+		cd samples/$*-demo && env $(addprefix -u ,$(LIVE_TEST_GATES)) uv run --group test pytest -p no:dotenv -v tests; \
 	fi
 
 # mcp-client spawns the neighbouring server sample as a subprocess, through that

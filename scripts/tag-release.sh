@@ -117,7 +117,11 @@ trap on_error ERR
 
 if [[ $mode != pre ]]; then
     step=changelog
-    sed -i "s/^## \[0\.0\.0\] - 202X-XX-XX\$/## [$version] - $(date +%Y-%m-%d)/" CHANGELOG.md
+    if sed --version >/dev/null 2>&1; then
+        sed -i "s/^## \[0\.0\.0\] - 202X-XX-XX\$/## [$version] - $(date +%Y-%m-%d)/" CHANGELOG.md
+    else
+        sed -i '' "s/^## \[0\.0\.0\] - 202X-XX-XX\$/## [$version] - $(date +%Y-%m-%d)/" CHANGELOG.md
+    fi
     git commit -q -S -m "chore(release): $tag" CHANGELOG.md
 fi
 step=tag

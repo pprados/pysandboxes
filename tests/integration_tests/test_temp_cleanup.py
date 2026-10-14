@@ -42,7 +42,7 @@ def test_a_sandbox_leaves_no_temporary_file_behind(os_sandbox: str) -> None:
     reason = provider_skip_reason(os_sandbox)
     if reason:
         pytest.skip(reason)
-    if not default_route_available():
+    if os_sandbox != "subprocess" and not default_route_available():
         pytest.skip(NO_DEFAULT_ROUTE_REASON)
     if not profile_hosts_resolvable():
         pytest.skip(NO_PROFILE_DNS_REASON)
