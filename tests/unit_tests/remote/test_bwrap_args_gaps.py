@@ -286,6 +286,11 @@ class TestNetworkFiltering:
     def test_a_started_network_forwards_the_incoming_ports_quietly(self, tmp_path: Path) -> None:
         on_launched, (_, write_end) = self._on_launched(tmp_path, port=9100)
         threads: list[dict[str, Any]] = []
+
+        def make_thread(**kw: Any) -> Mock:
+            threads.append(kw)
+            return Mock()
+
         extracted: list[dict[str, Any]] = []
 
         def extract(rules: Any, port: int, **kwargs: Any) -> str:
@@ -296,9 +301,7 @@ class TestNetworkFiltering:
             with (
                 patch.object(bwrap_sse_daemon, "_sandbox_pid", return_value=4242),
                 patch.object(bwrap_sse_daemon, "_apply_netfilter_from_host"),
-                patch.object(
-                    bwrap_sse_daemon.threading, "Thread", side_effect=lambda **kw: threads.append(kw) or Mock()
-                ),
+                patch.object(bwrap_sse_daemon.threading, "Thread", side_effect=make_thread),
                 patch.object(bwrap_sse_daemon, "_slirp_ready", return_value=True),
                 patch.object(bwrap_sse_daemon, "slirp_extract_port_forwards", side_effect=extract),
             ):

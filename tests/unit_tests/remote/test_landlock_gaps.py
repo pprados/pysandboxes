@@ -131,7 +131,12 @@ class _Recorder:
             return 0
 
         libc = MagicMock()
-        libc.open.side_effect = lambda path, flags: self.opened.append(path) or 9
+
+        def open_path(path: bytes, flags: int) -> int:
+            self.opened.append(path)
+            return 9
+
+        libc.open.side_effect = open_path
         monkeypatch.setattr(ll, "syscall", syscall, raising=False)
         monkeypatch.setattr(ll, "libc", libc, raising=False)
         monkeypatch.setattr(ll, "_get_landlock_abi_version", lambda: abi)

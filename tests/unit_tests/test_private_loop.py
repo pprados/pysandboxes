@@ -278,8 +278,12 @@ async def test_purge_reports_only_the_tasks_that_fail_while_being_cancelled(
             return "finished anyway"
         return "unreachable"
 
-    tasks = [asyncio.create_task(fails_on_cancel()), asyncio.create_task(swallows_cancel())]
-    tasks.append(asyncio.create_task(asyncio.Event().wait()))
+    tasks: list[asyncio.Task[object]] = [
+        asyncio.create_task(fails_on_cancel()),
+        asyncio.create_task(swallows_cancel()),
+        asyncio.create_task(asyncio.Event().wait()),
+    ]
+    assert len(tasks) == 3
     await asyncio.sleep(0)
 
     with caplog.at_level("DEBUG", logger="pysandboxes.private_loop"):
