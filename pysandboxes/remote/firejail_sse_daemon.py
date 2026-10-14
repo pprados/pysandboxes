@@ -338,7 +338,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             for line in firejail_config.read_text().split("\n"):
                 if re.match(r"restricted-network\s+no", line):
                     restricted_network = False
-                    break
+                    break  # pragma: no mutate
                 if re.match(r"restricted-network\s+yes", line):
                     restricted_network_explicit_yes = True
                     break

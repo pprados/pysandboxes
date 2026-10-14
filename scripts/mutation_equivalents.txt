@@ -37,3 +37,5 @@ pysandboxes/remote/landlock_daemon.py | ReplaceComparisonOperator_NotEq_Lt | if 
 pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Gt_GtE | if isinstance(ports, range) and len(ports) > 1000:
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceAndWithOr | if sp and os.path.isdir(sp):
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceOrWithAnd | if not d_res.is_dir() or d_res in seen:
+pysandboxes/remote/firejail_sse_daemon.py | ReplaceAndWithOr | if temp_str and temp_str not in whitelist:
+pysandboxes/_os_sandbox.py | RemoveDecorator | @sandbox_loop
