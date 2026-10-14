@@ -33,5 +33,8 @@ jobs:
     - name: Install CrewAI sample dependencies
       run: make -C samples/crewai-demo init
 
+    - name: Prepare sample data directories
+      run: mkdir -p "$HOME/.local/share/crewai-demo" "$HOME/.local/share/crewai/credentials"
+
     - name: Test CrewAI sample
       run: make -C samples/crewai-demo tests
