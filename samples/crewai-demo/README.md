@@ -32,8 +32,14 @@ for nothing, which is the opposite of what the partial mode is for.
 cd samples/crewai-demo
 cp env.example .env
 # Edit .env: set CHAT_MODEL and the API key(s) for your provider.
-uv sync --group dev --group test
+make init
 ```
+
+On Intel macOS, use Python 3.13: the current ONNX Runtime release has no Intel
+macOS wheel for Python 3.14. LanceDB 0.30.0 also has no published Intel wheel,
+so uv builds it from the pinned upstream tag and caches the resulting wheel.
+The first Intel build requires `protoc` on `PATH`; later installs reuse uv's
+cached wheel. Apple Silicon continues to install the published wheel from PyPI.
 
 ## Model and providers
 

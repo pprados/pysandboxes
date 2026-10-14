@@ -93,7 +93,11 @@ lock:
 validate: lint tests
 
 _uv-init:
-	@uv sync $(UV_GROUP)
+	@if [ "$$(uname -s)" = Darwin ] && [ "$$(uname -m)" = x86_64 ]; then \
+		CARGO_PROFILE_RELEASE_LTO=thin CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 uv sync --python 3.13 $(UV_GROUP); \
+	else \
+		uv sync $(UV_GROUP); \
+	fi
 
 ## Install deps with uv
 init: _uv-init
