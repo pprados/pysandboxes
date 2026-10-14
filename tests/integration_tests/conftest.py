@@ -42,8 +42,12 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
+    from pysandboxes import _os_sandbox
     from pysandboxes.private_loop import get_sandbox_loop
 
+    if _os_sandbox._current_daemon is not None:
+        # A started daemon lives on this loop, and its shutdown needs it running.
+        return
     loop = get_sandbox_loop()
     loop.stop()
     # Fix a problem with pycharm. It's call close() on a running loop
