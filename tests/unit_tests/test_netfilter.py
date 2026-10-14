@@ -3,6 +3,8 @@
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
 
+import pytest
+
 from pysandboxes.guard_socket import (
     Action,
     Direction,
@@ -333,3 +335,59 @@ class TestRuleToNetfilter:
 
         # Should only have one rule even though we added the same rule twice
         assert len(tcp_rules) == 1
+
+
+def _rule(network: IPv4Network | IPv6Network, direction: Direction, kind: Kind = Kind.TCP) -> SocketRules:
+    return (
+        SocketRule(
+            Action.ALLOW,
+            SocketMask((kind,), network, (80,)),
+            (direction,),
+            ConfigLine("<arg>", Path(), 0),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("network", "ipv6", "local_wildcards"),
+    [
+        (IPv4Network("0.0.0.0/32"), False, "0.0.0.0/32"),
+        (IPv6Network("::/128"), True, "::/128"),
+    ],
+)
+class TestBindWildcard:
+    """The wildcard bind address stands for every local address of an IN rule, and for one host of an OUT rule."""
+
+    def test_in_rule_matches_every_local_address(
+        self, network: IPv4Network | IPv6Network, ipv6: bool, local_wildcards: str
+    ) -> None:
+        result = rule_to_netfilter(_rule(network, Direction.IN), [], is_ipv6=ipv6)
+
+        assert "-A INPUT -p tcp -m conntrack --ctstate NEW,ESTABLISHED -m multiport --dports 80 -j ACCEPT" in result
+
+    def test_out_rule_keeps_the_wildcard_as_a_destination(
+        self, network: IPv4Network | IPv6Network, ipv6: bool, local_wildcards: str
+    ) -> None:
+        result = rule_to_netfilter(_rule(network, Direction.OUT), [], is_ipv6=ipv6)
+
+        assert (
+            f"-A OUTPUT -p tcp -m conntrack --ctstate NEW -d {local_wildcards} -m multiport --dports 80 -j ACCEPT"
+            in result
+        )
+
+
+@pytest.mark.parametrize(
+    ("network", "ipv6", "any_address"),
+    [(IPv4Network("0.0.0.0/0"), False, "0.0.0.0/0"), (IPv6Network("::/0"), True, "::/0")],
+)
+def test_the_any_address_is_never_written_as_a_destination(
+    network: IPv4Network | IPv6Network, ipv6: bool, any_address: str
+) -> None:
+    for direction in (Direction.IN, Direction.OUT):
+        assert not any(any_address in line for line in rule_to_netfilter(_rule(network, direction), [], is_ipv6=ipv6))
+
+
+def test_a_network_of_the_other_family_writes_no_rule() -> None:
+    result = rule_to_netfilter(_rule(IPv6Network("2001:db8::/32"), Direction.OUT), [], is_ipv6=False)
+
+    assert not any(line.startswith("-A OUTPUT -p") for line in result)
