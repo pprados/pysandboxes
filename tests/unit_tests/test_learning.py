@@ -417,3 +417,93 @@ def test_a_run_without_a_rule_file_learns_under_subprocess(tmp_path: Path) -> No
 
     assert all_rules.learn
     assert all_rules.os_sandbox == "subprocess"
+
+
+def _generate(cfg: Path, envs: list[str] | None = None, api: list[str] | None = None) -> None:
+    patches = list(_patched_rule_generators(envs))
+    patches[4] = patch("pysandboxes.guard_api.generate_rules", return_value=api or [])
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patch("pysandboxes.learning._learning_path", cfg),
+        patch("pysandboxes.learning._save_learning_done", False),
+        patch("pysandboxes.learning.is_learning_mode", return_value=True),
+        patch("pysandboxes.learning._learning", set()),
+    ):
+        generate_config_from_learning()
+
+
+def test_learned_rules_are_inserted_before_their_section_marker(tmp_path: Path) -> None:
+    cfg = tmp_path / ".py-sandboxes"
+
+    _generate(cfg, envs=["env=FOO=${FOO}"], api=["python-api=ALLOW:threads"])
+
+    lines = cfg.read_text().split("\n")
+    assert lines.index("env=FOO=${FOO}") < lines.index("# </learning_guard_envs>")
+    assert lines.index("python-api=ALLOW:threads") < lines.index("# </learning_guard_api>")
+    assert lines.index("# </learning_guard_envs>") < lines.index("python-api=ALLOW:threads")
+
+
+def test_rules_without_a_marker_in_the_existing_file_are_appended(tmp_path: Path) -> None:
+    cfg = tmp_path / ".py-sandboxes"
+    cfg.write_text("py-sandbox=true\n")
+
+    _generate(cfg, envs=["env=FOO=${FOO}"])
+
+    assert cfg.read_text().split("\n").count("env=FOO=${FOO}") == 1
+    assert cfg.read_text().startswith("py-sandbox=true\n")
+
+
+@pytest.mark.parametrize(("existing", "mentioned"), [("learn=.py-sandboxes\n", True), ("py-sandbox=true\n", False)])
+def test_the_report_tells_to_remove_the_learn_parameter_only_when_the_file_has_one(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, existing: str, mentioned: bool
+) -> None:
+    cfg = tmp_path / ".py-sandboxes"
+    cfg.write_text(existing)
+
+    with caplog.at_level("INFO", logger="pysandboxes"):
+        _generate(cfg, envs=["env=FOO=${FOO}"])
+
+    assert ("Remove the 'learn' parameter" in caplog.text) is mentioned
+
+
+def test_the_rules_are_written_once_per_process(tmp_path: Path) -> None:
+    cfg = tmp_path / ".py-sandboxes"
+    patches = _patched_rule_generators(["env=FOO=${FOO}"])
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patch("pysandboxes.learning._learning_path", cfg),
+        patch("pysandboxes.learning._save_learning_done", False),
+        patch("pysandboxes.learning.is_learning_mode", return_value=True),
+        patch("pysandboxes.learning._learning", set()),
+    ):
+        generate_config_from_learning()
+        cfg.unlink()
+        generate_config_from_learning()
+
+    assert not cfg.exists()
+
+
+def test_a_failed_write_reports_its_own_error_not_a_missing_temporary_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    from pysandboxes import learning
+
+    def refuse(*_args: object, **_kwargs: object) -> int:
+        raise PermissionError("no write access")
+
+    monkeypatch.setattr(os, "open", refuse)
+
+    with pytest.raises(PermissionError, match="no write access"):
+        learning._write_atomic(tmp_path / ".py-sandboxes", "x")
