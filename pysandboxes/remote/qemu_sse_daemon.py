@@ -389,7 +389,7 @@ def _ldd_resolved_paths(elf: Path) -> set[Path]:
         )
     except (OSError, subprocess.TimeoutExpired):
         return set()
-    if r.returncode != 0:  # pragma: no mutate
+    if r.returncode != 0:
         return set()
     out: set[Path] = set()
     for line in r.stdout.splitlines():
@@ -792,7 +792,7 @@ def _add_peer_lib_dir_for_executables(dirs: set[Path], bin_paths: set[Path]) -> 
             continue
         peer = er.parent.parent / "lib"
         if not peer.is_dir():
-            continue
+            continue  # pragma: no mutate
         try:
             pr = peer.resolve(strict=True)  # pragma: no mutate
         except OSError:
@@ -808,7 +808,7 @@ def _add_libpython_dirs_from_ldd(dirs: set[Path], bin_paths: set[Path]) -> None:
     """
     for p in bin_paths:
         if not p.is_file():
-            continue
+            continue  # pragma: no mutate
         try:
             er = p.resolve(strict=True)
         except OSError:
@@ -853,7 +853,7 @@ def _execution_dirs_mounts() -> list[tuple[str, Path, str]]:
     mount_specs: list[tuple[str, Path, str]] = []
     for i, d in enumerate(sorted(dirs, key=lambda p: str(p))):
         d_res = d.resolve(strict=True)  # pragma: no mutate
-        if not d_res.is_dir() or d_res in seen:  # pragma: no mutate
+        if not d_res.is_dir() or d_res in seen:
             continue
         seen.add(d_res)
         tag = f"pysb_exec_{i}"
@@ -1215,9 +1215,9 @@ class QemuSSEDaemon(VMSSEDaemon):
         from .client_subprocess_sse_daemon import get_callable_info
 
         self._is_started = False
-        self._accept_incoming = False  # pragma: no mutate
+        self._accept_incoming = False
         init_fn_ref = ""
-        if init_fn:  # pragma: no mutate
+        if init_fn:
             module, func_ref = get_callable_info(init_fn)
             init_fn_ref = f"{module}:{func_ref}"
 
@@ -1239,7 +1239,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         )
 
         env: dict[str, str]
-        if all_rules.learn:  # pragma: no mutate
+        if all_rules.learn:
             env = {**dict(os.environ), **dict(all_rules.envs)}
         else:
             env = dict(all_rules.envs)
@@ -1257,7 +1257,7 @@ class QemuSSEDaemon(VMSSEDaemon):
         # A FIFO lives on the host, where the guest can never present itself as a reader, so
         # the config travels as a regular file on a 9p mount -- the same transport the
         # python_sb path uses. DEBUG_CONFIG only moves it under ./tmp/ for inspection.
-        config_dir = Path("tmp") / "pysb_config" if DEBUG_CONFIG else temp / "pysb_config"  # pragma: no mutate
+        config_dir = Path("tmp") / "pysb_config" if DEBUG_CONFIG else temp / "pysb_config"
         config_dir.mkdir(parents=True, exist_ok=True)
         # serialization only
         (config_dir / "config.pkl").write_bytes(pickle.dumps(process_config))

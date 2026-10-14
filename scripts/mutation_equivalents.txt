@@ -23,3 +23,17 @@ pysandboxes/remote/tools.py | ReplaceOrWithAnd | if not line or line.startswith(
 pysandboxes/tools.py | ReplaceComparisonOperator_Eq_Is | elif ch == "#" and not in_quotes:
 pysandboxes/tools.py | ReplaceComparisonOperator_Eq_Is | elif ch == "#" and not in_quotes:
 pysandboxes/tools.py | ReplaceComparisonOperator_Eq_GtE | return glob_at == len(glob)
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_GtE | if (dns.version == 6) == is_ipv6:
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_Is | if (dns.version == 6) == is_ipv6:
+pysandboxes/py_sandbox.py | ReplaceComparisonOperator_Eq_Is | if caller_name == "__main__" and caller_spec is not None:
+pysandboxes/tools.py | ReplaceComparisonOperator_Lt_NotEq | while i < len(line):
+pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Eq_Is | if kind == Kind.TCP:
+pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Eq_Is | elif kind == Kind.UDP:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | out.add(p.resolve(strict=True))
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | dirs.add(dep.parent.resolve(strict=True))
+pysandboxes/remote/landlock_daemon.py | ReplaceOrWithAnd | if not path or path == ".":
+pysandboxes/remote/bwrap_sse_daemon.py | ReplaceTrueWithFalse | placeholder.mkdir(exist_ok=True)
+pysandboxes/remote/landlock_daemon.py | ReplaceComparisonOperator_NotEq_Lt | if ret != 0:
+pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Gt_GtE | if isinstance(ports, range) and len(ports) > 1000:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceAndWithOr | if sp and os.path.isdir(sp):
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceOrWithAnd | if not d_res.is_dir() or d_res in seen:

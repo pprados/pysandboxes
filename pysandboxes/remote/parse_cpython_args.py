@@ -112,7 +112,7 @@ def parse_python_cmd_line(
     pysandboxes_config: Path = Path(CONFIG_NAME)
     named_config: Path | None = None
     module_mode = False
-    if len(python_run_args) >= 2 and python_run_args[0] == "-m":  # pragma: no mutate
+    if len(python_run_args) >= 2 and python_run_args[0] == "-m":
         module_mode = True
 
     remove_index = []

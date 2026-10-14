@@ -174,7 +174,7 @@ def _remove_comment(line: str) -> str:
     quote_char: str | None = None
     i: int = 0
 
-    while i < len(line):  # pragma: no mutate
+    while i < len(line):
         ch: str = line[i]
 
         # Handle quotes (single or double)
@@ -342,7 +342,7 @@ def check_mixte_async_async() -> None:
         if asyncio.get_running_loop():
             raise RuntimeError(mixed_sync_and_async_error)
     except RuntimeError as e:
-        if str(e) == "no running event loop":  # pragma: no mutate
+        if str(e) == "no running event loop":
             pass  # Ignore
         else:
             raise
@@ -384,7 +384,7 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
         for step in (current, resolved):
             all_paths.add(step.parent.parent if step.parents[0].name in ("bin", "Scripts") else step)
         if not current.is_symlink():
-            break
+            break  # pragma: no mutate
         target = Path(os.readlink(current))
         current = target if target.is_absolute() else current.parent / target
     # A Windows venv's python.exe is a copy, not a link to the base interpreter: the

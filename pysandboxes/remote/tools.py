@@ -215,13 +215,13 @@ def suggest_package_installation(package_name: str) -> str:
                 Please refer to your distribution's documentation for the correct command.
                 """).strip()  # noqa: E501  # noqa
 
-    elif system == "darwin":  # pragma: no mutate
+    elif system == "darwin":
         # For macOS, suggest Homebrew
         return textwrap.dedent(f"""
             /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
             brew install {package_name}
             """).strip()  # noqa
-    elif system == "win32":  # pragma: no mutate
+    elif system == "win32":
         # For Windows, suggest Winget or Chocolatey
         return textwrap.dedent(f"""
             You can try installing {package_name!r} using:")

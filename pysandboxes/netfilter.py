@@ -60,7 +60,7 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
         "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
     ]
     for dns in dns_server:
-        if (dns.version == 6) == is_ipv6:  # pragma: no mutate
+        if (dns.version == 6) == is_ipv6:
             prefix = 128 if is_ipv6 else 32
             netfilter.append(f"-A OUTPUT -p udp -d {dns}/{prefix} --dport 53 -m conntrack --ctstate NEW -j ACCEPT")
     _map_direction = {Direction.IN: "INPUT", Direction.OUT: "OUTPUT"}

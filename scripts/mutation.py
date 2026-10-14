@@ -204,7 +204,7 @@ def main() -> int:
     known = known_equivalents()
     for result in results:
         source = source_lines[result["line"] - 1].strip()
-        if result["outcome"] == "survived" and (args.module, result["operator"], source) in known:
+        if result["outcome"] == "survived" and (args.module, result["operator"].removeprefix("core/"), source) in known:
             result["outcome"] = "equivalent"
     counts: dict[str, int] = {}
     for result in results:

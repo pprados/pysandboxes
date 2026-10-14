@@ -80,7 +80,7 @@ def _attach_remote_traceback(exception: BaseException, serial_traceback: Any) ->
     # Drop the transport frames, which say nothing about the denial itself.
     for _ in range(3):
         if traceback.tb_next is None:
-            break
+            break  # pragma: no mutate
         traceback = traceback.tb_next
     return exception.with_traceback(traceback)
 

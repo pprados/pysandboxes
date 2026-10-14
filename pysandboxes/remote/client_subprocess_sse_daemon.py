@@ -84,7 +84,7 @@ def get_log_formatter() -> str:
 
 def use_rich_handler() -> bool:
     root_handlers = logging.getLogger().handlers
-    return any(h.__class__.__name__ == "RichHandler" for h in root_handlers)  # pragma: no mutate
+    return any(h.__class__.__name__ == "RichHandler" for h in root_handlers)
 
 
 async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:

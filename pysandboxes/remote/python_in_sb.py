@@ -161,7 +161,7 @@ def _python_interactive(
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
         sb_mode = f"{BOLD}APIs are LIMITED according to the rules in " f"{str(conf_path)!r} "
-        if all_rules.os_sandbox != "subprocess":  # pragma: no mutate
+        if all_rules.os_sandbox != "subprocess":
             sb_mode += f"and by the os-sandbox={all_rules.os_sandbox!r}"
         sb_mode += f"{RESET}\n"
     else:

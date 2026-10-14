@@ -61,7 +61,7 @@ def _search_module_config(config_path: Path | None) -> Path:
 
     caller_name = frame.f_globals.get("__name__", "__main__")
     caller_spec = frame.f_globals.get("__spec__")
-    if caller_name == "__main__" and caller_spec is not None:  # pragma: no mutate
+    if caller_name == "__main__" and caller_spec is not None:
         # `python -m pkg.mod` names the module __main__; its spec keeps the real name.
         caller_name = caller_spec.name
     caller_modules = caller_name.split(".")
