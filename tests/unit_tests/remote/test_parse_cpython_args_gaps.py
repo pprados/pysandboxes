@@ -18,6 +18,8 @@ from pysandboxes.remote.parse_cpython_args import parse_python_cmd_line
         (["-Wignore", "script.py"], ["-Wignore"], ["script.py"]),
         (["-Wcm", "x.py"], ["-Wcm"], ["x.py"]),
         (["-W", "ignore", "s.py"], ["-W", "ignore"], ["s.py"]),
+        (["-", "a"], [], ["-", "a"]),
+        (["-I", "-", "a", "--b"], ["-I"], ["-", "a", "--b"]),
     ],
 )
 def test_the_split_between_cpython_options_and_the_program(

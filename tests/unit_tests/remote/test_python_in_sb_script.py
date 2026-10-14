@@ -102,3 +102,27 @@ def test_a_traceback_names_the_script_not_string(tmp_path: Path) -> None:
 
     assert "boom" in result.stderr
     assert "<string>" not in result.stderr
+
+
+def test_a_dash_runs_the_program_read_from_stdin(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """``python -`` reads the program from stdin, and the arguments after the dash are its ``sys.argv[1:]``."""
+    import io
+    from unittest.mock import MagicMock
+
+    from pysandboxes.remote import python_in_sb as module
+
+    monkeypatch.setattr(module, "set_learning_path", lambda path: None)
+    monkeypatch.setattr(module, "set_learning_mode", lambda learn: None)
+    monkeypatch.setattr(module, "is_learning_mode", lambda: False)
+    monkeypatch.setattr(module, "_before_user_code", lambda: None)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("import sys\nprint('argv:', sys.argv)\n"))
+    saved_argv = sys.argv
+
+    try:
+        assert module.python_in_sb(MagicMock(), ["-", "a", "b"]) == 0
+    finally:
+        sys.argv = saved_argv
+
+    assert "argv: ['-', 'a', 'b']" in capsys.readouterr().out

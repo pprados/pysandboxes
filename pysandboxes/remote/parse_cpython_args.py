@@ -79,13 +79,14 @@ def parse_python_cmd_line(
         "--check-hash-based-pycs",
     ]
 
-    # Split where CPython stops reading its options: '--', the first argument that is not an option (the script),
+    # Split where CPython stops reading its options: '--', '-' (the program comes from stdin), the first argument
+    # that is not an option (the script),
     # or a -c/-m switch, possibly glued to its value (-mjson.tool) or grouped after flags (-Im json.tool).
     split_pos = -1
     i = 0
     while i < len(args) and split_pos == -1:
         arg = args[i]
-        if arg == "--" or not arg.startswith("-"):
+        if arg in ("--", "-") or not arg.startswith("-"):
             split_pos = i
         elif arg.startswith("--"):
             i += 2 if arg == "--pysandboxes-config" else 1
