@@ -79,6 +79,7 @@ def test_rpc_refuses_a_wrong_token_then_a_stopping_daemon(
         ("<stderr>", "ext://sys.stderr"),
         ("<stdout>", "ext://sys.stdout"),
         ("/var/log/app.log", "ext:/var/log/app.log"),
+        ("app.log", "ext:app.log"),
     ],
 )
 def test_the_uvicorn_log_stream_follows_the_stream_of_the_existing_handler(

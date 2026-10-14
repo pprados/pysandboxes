@@ -6,6 +6,7 @@ import asyncio
 import ipaddress
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -81,6 +82,23 @@ class TestNetfilterFiles:
             reader.join(10)
         assert contents == {"--netfilter": "ipv6=False", "--netfilter6": "ipv6=True"}
 
+    def test_a_published_file_is_removed_once_read(
+        self, tmp_path: Path, recorded: list[tuple[list[Any], bool]]
+    ) -> None:
+        args = _args(tmp_path, ["br0"], pipe=True, dns=[ipaddress.IPv4Address("192.0.2.53")])
+        files = [Path(a.split("=", 1)[1]) for a in args if a.startswith("--netfilter")]
+
+        readers = [threading.Thread(target=file.read_text, daemon=True) for file in files]
+        for reader in readers:
+            reader.start()
+        for reader in readers:
+            reader.join(10)
+        deadline = time.monotonic() + 10
+        while any(file.exists() for file in files) and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+        assert [file.exists() for file in files] == [False, False]
+
     def test_the_publishing_threads_never_keep_the_process_alive(self, tmp_path: Path) -> None:
         created: list[dict[str, Any]] = []
 
@@ -92,6 +110,15 @@ class TestNetfilterFiles:
             _args(tmp_path, ["br0"], pipe=True)
 
         assert [kw["daemon"] for kw in created] == [True, True]
+
+
+class TestUpstreamDns:
+    def test_every_routable_resolver_is_passed_once(self, tmp_path: Path) -> None:
+        dns = [ipaddress.IPv4Address("192.0.2.53"), ipaddress.IPv4Address("192.0.2.54")]
+
+        args = _args(tmp_path, ["br0"], dns=dns)
+
+        assert [a for a in args if a.startswith("--dns=")] == ["--dns=192.0.2.53", "--dns=192.0.2.54"]
 
 
 class TestCallGuard:

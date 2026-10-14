@@ -39,3 +39,7 @@ pysandboxes/remote/qemu_sse_daemon.py | ReplaceAndWithOr | if sp and os.path.isd
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceOrWithAnd | if not d_res.is_dir() or d_res in seen:
 pysandboxes/remote/firejail_sse_daemon.py | ReplaceAndWithOr | if temp_str and temp_str not in whitelist:
 pysandboxes/_os_sandbox.py | RemoveDecorator | @sandbox_loop
+pysandboxes/remote/firejail_sse_daemon.py | ReplaceTrueWithFalse | netfilter_file.unlink(missing_ok=True)
+pysandboxes/remote/firejail_sse_daemon.py | ReplaceTrueWithFalse | netfilter6_file.unlink(missing_ok=True)
+pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Gt_NotEq | if len(python_cmd) > 1:
+pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Eq_Is | elif python_cmd[0] == "-":

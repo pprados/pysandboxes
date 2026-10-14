@@ -169,6 +169,7 @@ class TestPythonInSbDispatch:
     def test_no_argument_opens_the_repl(self, calls: list[tuple[str, tuple[Any, ...]]]) -> None:
         assert self._run() == 0
         assert [name for name, _ in calls] == ["_python_interactive"]
+        assert calls[0][1][1] is True
 
     def test_dash_m_runs_the_module_with_the_rest_as_argv(
         self, calls: list[tuple[str, tuple[Any, ...]]], monkeypatch: pytest.MonkeyPatch
@@ -191,6 +192,22 @@ class TestPythonInSbDispatch:
         self._run("-m", "pytest", "-q")
 
         assert ("color", ()) in calls
+
+    @pytest.mark.parametrize("module", ["unittest", "zlib"])
+    def test_only_pytest_asks_for_colours(self, calls: list[tuple[str, tuple[Any, ...]]], module: str) -> None:
+        self._run("-m", module)
+
+        assert ("color", ()) not in calls
+
+    def test_dash_m_of_an_unknown_module_runs_with_an_empty_program_name(
+        self, calls: list[tuple[str, tuple[Any, ...]]], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sys, "argv", ["keep"])
+
+        self._run("-m", "no_such_module_for_python_sb", "a")
+
+        assert sys.argv == ["", "a"]
+        assert [(name, args[1:]) for name, args in calls] == [("_python_module", ("no_such_module_for_python_sb",))]
 
     def test_dash_c_runs_the_command_and_keeps_the_other_arguments(
         self, calls: list[tuple[str, tuple[Any, ...]]]
