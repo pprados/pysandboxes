@@ -627,7 +627,7 @@ def test_os_access_read_only(files: Dict[str, Path]) -> None:  # noqa: F811
 
 @pytest.mark.skipif(
     not (sys.platform != "win32" and sys.platform != "linux"),
-    reason="requires special os",
+    reason="os.chflags and os.lchflags exist on macOS and the BSDs only",
 )
 def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [

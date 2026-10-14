@@ -9,18 +9,27 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes.eval_rules import EvalRules, parse_rules
 from pysandboxes.sb_types import ConfigLine
 
-_SAMPLES = (
+_STANDARD_SAMPLES = (
     "agno-demo",
     "autogen-demo",
     "crewai-demo",
     "google-adk-demo",
     "langchain-demo",
     "langgraph-demo",
-    "mcp-server-demo",
     "openai-agents-sdk-demo",
     "pydantic-ai-demo",
     "smolagents-demo",
     "strands-agents-demo",
+)
+
+_SAMPLES = (*_STANDARD_SAMPLES, "mcp-server-demo")
+
+# The MCP server sample keeps one profile per mode next to its server, besides the one at its root.
+_PROFILES = (
+    *((sample, name) for sample in _STANDARD_SAMPLES for name in (".py-sandboxes", ".py-sandboxes-complete")),
+    ("mcp-server-demo", ".py-sandboxes"),
+    ("mcp-server-demo", "mcp_server/.py-sandboxes"),
+    ("mcp-server-demo", "mcp_server/.py-sandboxes-complete"),
 )
 
 _ROOT = Path(__file__).resolve().parents[2] / "samples"
@@ -33,19 +42,16 @@ _REQUIRED = (
 )
 
 
-@pytest.mark.parametrize("sample", _SAMPLES)
-@pytest.mark.parametrize("profile", (".py-sandboxes", ".py-sandboxes-complete"))
+@pytest.mark.parametrize(("sample", "profile"), _PROFILES)
 def test_the_sample_declares_its_sub_language(sample: str, profile: str) -> None:
     path = _ROOT / sample / profile
-    if not path.exists():
-        pytest.skip(f"{sample} has no {profile}")
+    assert path.exists(), f"{sample} has no {profile}"
     text = path.read_text()
     for line in _REQUIRED:
         assert line in text, f"{path} is missing {line!r}"
 
 
-@pytest.mark.parametrize("sample", _SAMPLES)
-@pytest.mark.parametrize("profile", (".py-sandboxes", ".py-sandboxes-complete"))
+@pytest.mark.parametrize(("sample", "profile"), _PROFILES)
 def test_the_declared_lines_parse_into_the_intended_rules(sample: str, profile: str) -> None:
     """Presence of the text is weak; what matters is what it parses into.
 
@@ -53,8 +59,7 @@ def test_the_declared_lines_parse_into_the_intended_rules(sample: str, profile: 
     resolve the `net=` rules, whose hostnames make this depend on DNS.
     """
     path = _ROOT / sample / profile
-    if not path.exists():
-        pytest.skip(f"{sample} has no {profile}")
+    assert path.exists(), f"{sample} has no {profile}"
     lines = [
         ConfigLine(text, path, number)
         for number, text in enumerate(path.read_text().splitlines(), start=1)
