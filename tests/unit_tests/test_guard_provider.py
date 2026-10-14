@@ -107,6 +107,7 @@ def test_os_sandbox_valid(mocker: MagicMock) -> None:
 
 
 def test_os_sandbox_bwrap_valid(mocker: MagicMock) -> None:
+    mocker.patch("sys.platform", "linux")
     mock_path_class = mocker.patch("pysandboxes.guard_provider.Path", autospec=True)
 
     config_path_mock = create_mock_path("/fake/pysandbox.conf", exists_val=True)

@@ -29,6 +29,7 @@ class TestConfigInclude:
             'os-sandbox=qemu\ninclude "./local.conf"  # a comment must not hide it\n',
         )
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("sys.platform", "linux")
 
         rules = load_and_parse_config(profile)
 
@@ -43,6 +44,7 @@ class TestConfigInclude:
             'os-sandbox=qemu\ninclude "local.conf"\n',
         )
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("sys.platform", "linux")
 
         rules = load_and_parse_config(profile)
 
@@ -55,6 +57,7 @@ class TestConfigInclude:
             'os-sandbox=qemu\ninclude "./absent.conf"\nqemu.memory=1G\n',
         )
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("sys.platform", "linux")
 
         rules = load_and_parse_config(profile)
 

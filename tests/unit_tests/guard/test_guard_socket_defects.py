@@ -7,6 +7,7 @@ Only local addresses are reached: the loopback and sockets the test opens itself
 
 import socket
 import sys
+import tempfile
 from collections.abc import Iterator
 from ipaddress import IPv4Address, IPv6Address, ip_address, ip_network
 from pathlib import Path
@@ -44,6 +45,12 @@ class _FakeSocket:
     def __init__(self, kind: SocketKind, family: AddressFamily = AddressFamily.AF_INET) -> None:
         self.type = kind
         self.family = family
+
+
+@pytest.fixture
+def short_socket_dir() -> Iterator[Path]:
+    with tempfile.TemporaryDirectory(prefix="psb-", dir="/tmp") as directory:
+        yield Path(directory)
 
 
 def _parse(*rules: str) -> SocketRules:
@@ -192,13 +199,13 @@ def test_listen_without_bind_passes_with_a_wildcard_rule() -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
-def test_unix_connect_needs_write_access_to_the_socket(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    path = str(tmp_path / "s")
+def test_unix_connect_needs_write_access_to_the_socket(short_socket_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = str(short_socket_dir / "s")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(path)
         server.listen()
         errors: list[ErrorMsg] = []
-        file_rules, _ = gf.parse_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 1)], errors)
+        file_rules, _ = gf.parse_rules([ConfigLine(f"expose-ro={short_socket_dir}", Path(), 1)], errors)
         assert not errors
         monkeypatch.setattr(gf, "_rules", file_rules)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
@@ -209,13 +216,13 @@ def test_unix_connect_needs_write_access_to_the_socket(monkeypatch: pytest.Monke
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
-def test_unix_connect_passes_with_write_access(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    path = str(tmp_path / "s")
+def test_unix_connect_passes_with_write_access(short_socket_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = str(short_socket_dir / "s")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(path)
         server.listen()
         errors: list[ErrorMsg] = []
-        file_rules, _ = gf.parse_rules([ConfigLine(f"expose-rw={tmp_path}", Path(), 1)], errors)
+        file_rules, _ = gf.parse_rules([ConfigLine(f"expose-rw={short_socket_dir}", Path(), 1)], errors)
         assert not errors
         monkeypatch.setattr(gf, "_rules", file_rules)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:

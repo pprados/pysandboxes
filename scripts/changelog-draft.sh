@@ -31,11 +31,11 @@ else
     llm=(claude -p --tools "" --no-session-persistence --strict-mcp-config --setting-sources "")
 fi
 
-shape='^(### (Added|Changed|Deprecated|Removed|Fixed|Security)|- .+|  .+|)$'
+shape='^(### (Added|Changed|Deprecated|Removed|Fixed|Security)|- .+|  .+)$'
 errors=$(mktemp)
 trap 'rm -f "$errors"' EXIT
 if draft=$("${llm[@]}" "$prompt" <<<"$input" 2>"$errors") &&
-    grep -q '^- ' <<<"$draft" && ! grep -qvE "$shape" <<<"$draft"; then
+    grep -q '^- ' <<<"$draft" && ! grep -vE "$shape" <<<"$draft" | grep -qv '^$'; then
     printf '%s\n' "$draft"
     exit 0
 fi

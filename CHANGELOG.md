@@ -28,6 +28,7 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 - Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
 
 ### Changed
+- The CrewAI sample grants access to its macOS application-support directories for local data and credentials
 - `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
   object the application passed in, as it already could not set its attributes
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
