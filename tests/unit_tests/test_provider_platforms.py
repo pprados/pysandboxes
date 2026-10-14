@@ -103,3 +103,13 @@ async def test_async_start_refuses_a_provider_of_another_platform(landlock_rules
     with patch("sys.platform", "win32"), pytest.raises(ValueError, match="does not run on win32"):
         await _os_sandbox.async_start_daemon(landlock_rules, envs={}, log_level=0, init_fn=None)
     assert _os_sandbox._current_daemon is None
+
+
+def test_suggested_providers_are_all_but_none_whatever_they_sort_like() -> None:
+    with (
+        patch("sys.platform", "darwin"),
+        patch.object(_os_sandbox, "platform_providers", return_value=["bwrap", "none", "subprocess"]),
+    ):
+        reason = _os_sandbox.unsupported_platform_reason("landlock")
+
+    assert reason == "os-sandbox 'landlock' does not run on darwin. Use one of: bwrap, subprocess"
