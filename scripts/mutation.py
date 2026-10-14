@@ -5,6 +5,13 @@
 cosmic-ray rewrites the module on disk, so every run works on copies of the tracked files, never on
 the checkout. Only the function-body lines the tests execute are mutated, split across parallel copies.
 A mutant survives when the tests still pass: either a test is missing, or the mutant is equivalent.
+
+Three things keep the equivalent mutants out of the report:
+- logging calls (`logger.info(...)`) are never mutated, as no test pins a log message;
+- a line carrying `# pragma: no mutate` is skipped; on a compound statement (`if`, `for`, ...) that means its
+  header only, not the body;
+- `scripts/mutation_equivalents.txt` lists the survivors already judged equivalent, one per line as
+  `module | operator | source line`. They are counted apart and not printed.
 """
 
 import argparse
@@ -20,6 +27,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+EQUIVALENTS = Path(__file__).with_name("mutation_equivalents.txt")
+PRAGMA = re.compile(r"#\s*pragma:\s*no mutate\b")
+LOGGERS = {"logger", "logging", "log"}
 # Operators that mostly produce noise here: arithmetic, unary and constant rewrites.
 EXCLUDED_OPERATORS = [
     "core/ReplaceBinaryOperator_.*",
@@ -37,15 +47,58 @@ def tooling_tests(tests: list[str]) -> list[str]:
     return sorted(str(f.relative_to(ROOT)) for f in files if not imports.search(f.read_text()))
 
 
+def is_log_call(statement: ast.stmt) -> bool:
+    call = statement.value if isinstance(statement, ast.Expr) else None
+    return (
+        isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and isinstance(call.func.value, ast.Name)
+        and call.func.value.id in LOGGERS
+    )
+
+
+def header_end(statement: ast.stmt) -> int:
+    """Last line of the statement itself: for a compound statement, the line before its body."""
+    body = getattr(statement, "body", None)
+    return body[0].lineno - 1 if body else statement.end_lineno or statement.lineno
+
+
+def skipped_lines(source: str) -> set[int]:
+    """Lines never mutated: logging calls, and statements marked `# pragma: no mutate`."""
+    statements = [node for node in ast.walk(ast.parse(source)) if isinstance(node, ast.stmt)]
+    skipped: set[int] = set()
+    for statement in statements:
+        if is_log_call(statement):
+            skipped.update(range(statement.lineno, (statement.end_lineno or statement.lineno) + 1))
+    for number, text in enumerate(source.splitlines(), start=1):
+        if PRAGMA.search(text):
+            marked = [s for s in statements if s.lineno <= number <= header_end(s)]
+            if marked:
+                innermost = max(marked, key=lambda s: s.lineno)
+                skipped.update(range(innermost.lineno, header_end(innermost) + 1))
+    return skipped
+
+
 def body_lines(source: Path) -> set[int]:
+    text = source.read_text()
     lines: set[int] = set()
-    for node in ast.walk(ast.parse(source.read_text())):
+    for node in ast.walk(ast.parse(text)):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for statement in node.body:
                 if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant):
                     continue
                 lines.update(range(statement.lineno, (statement.end_lineno or statement.lineno) + 1))
-    return lines
+    return lines - skipped_lines(text)
+
+
+def known_equivalents() -> set[tuple[str, str, str]]:
+    known = set()
+    if EQUIVALENTS.exists():
+        for line in EQUIVALENTS.read_text().splitlines():
+            if line.strip() and not line.lstrip().startswith("#"):
+                module, operator, source = (part.strip() for part in line.split("|", 2))
+                known.add((module, operator, source))
+    return known
 
 
 def copy_tree(destination: Path) -> None:
@@ -129,6 +182,7 @@ def main() -> int:
             return 2
         timeout = max(60.0, 5 * (time.monotonic() - start))
         executed = json.loads((base / "cov.json").read_text())["files"].get(args.module, {}).get("executed_lines", [])
+        source_lines = (base / args.module).read_text().splitlines()
         lines = sorted(set(executed) & body_lines(base / args.module))
         if not lines:
             print(f"The tests execute no function body of {args.module}.", file=sys.stderr)
@@ -147,16 +201,23 @@ def main() -> int:
             ]
             results = [result for job in jobs for result in job.result()]
     results.sort(key=lambda r: (r["line"], r["operator"]))
+    known = known_equivalents()
+    for result in results:
+        source = source_lines[result["line"] - 1].strip()
+        if result["outcome"] == "survived" and (args.module, result["operator"], source) in known:
+            result["outcome"] = "equivalent"
     counts: dict[str, int] = {}
     for result in results:
         counts[result["outcome"]] = counts.get(result["outcome"], 0) + 1
-    for result in results:
-        if result["outcome"] == "survived":
+    survivors = [result for result in results if result["outcome"] == "survived"]
+    for line in sorted({result["line"] for result in survivors}):
+        print(f"{args.module}:{line}  {source_lines[line - 1].strip()}")
+        for result in (r for r in survivors if r["line"] == line):
             changed = [
-                line for line in result["diff"].splitlines() if line[:1] in "+-" and not line.startswith(("+++", "---"))
+                text for text in result["diff"].splitlines() if text[:1] in "+-" and not text.startswith(("+++", "---"))
             ]
-            print(f"{args.module}:{result['line']} {result['operator']}")
-            print("\n".join(f"    {line}" for line in changed))
+            print(f"  {result['operator']}")
+            print("\n".join(f"    {text}" for text in changed))
     print(json.dumps(counts))
     if args.report:
         args.report.write_text(json.dumps(results, indent=1))

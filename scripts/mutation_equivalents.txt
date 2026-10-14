@@ -1,0 +1,3 @@
+# Survivors of scripts/mutation.py judged equivalent: module | operator | source line (stripped).
+# An entry matches by source text, so it survives line shifts. Prefer `# pragma: no mutate` on the
+# line itself when the reason fits in a comment; use this file for lines that cannot carry one.
