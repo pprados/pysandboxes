@@ -772,3 +772,118 @@ def test_python_sb_wrapper_propagates_the_exit_code(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(python_sb, "main", lambda: 3)
 
     assert module.main() == 3
+
+
+class _Stop(Exception):
+    pass
+
+
+@pytest.mark.parametrize("debug", [True, False])
+def test_the_debug_log_is_set_up_only_under_debug(monkeypatch: pytest.MonkeyPatch, debug: bool) -> None:
+    debug_log = MagicMock()
+
+    def stop(argv: Any) -> Any:
+        raise _Stop
+
+    monkeypatch.setattr(python_sb, "DEBUG", debug)
+    monkeypatch.setattr(python_sb, "_debug_log", debug_log)
+    monkeypatch.setattr(python_sb, "parse_python_cmd_line", stop)
+
+    with pytest.raises(_Stop):
+        python_sb.main()
+
+    assert debug_log.called is debug
+
+
+class TestMainPortChoice:
+    """A configured port is kept, and port -1 asks for a free one, for both provider families."""
+
+    @pytest.mark.parametrize(("configured", "expected"), [(-1, 6100), (4321, 4321)])
+    def test_subprocess_provider_port(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured: int, expected: int
+    ) -> None:
+        monkeypatch.setattr(python_sb, "find_free_port", lambda: 6100)
+        daemon = _FakeSubprocessDaemon()
+        all_rules = EmptyRules._replace(os_sandbox="fake-sub", port=configured, envs=Envs({}), learn=False)
+
+        TestMainSubprocessBranch()._run(tmp_path, monkeypatch, daemon=daemon, all_rules=all_rules, rc=0, python_cmd=[])
+
+        assert daemon.port == expected
+
+    @pytest.mark.parametrize(("configured", "expected"), [(-1, 6100), (4321, 4321)])
+    def test_vm_provider_port(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured: int, expected: int
+    ) -> None:
+        monkeypatch.setattr(python_sb, "find_free_port", lambda: 6100)
+        branch = TestMainVMBranch()
+        vm = branch._make_vm(
+            subprocess_cmd_return=(["qemu-fake"], {}), show_boot=False, guest_rc=0, stdout=None, stderr=None
+        )
+        all_rules = EmptyRules._replace(os_sandbox="fake-vm", port=configured, envs=Envs({}), learn=False)
+
+        branch._run_main(tmp_path, monkeypatch, vm=vm, all_rules=all_rules)
+
+        assert vm.port == expected
+
+
+class TestMainVMConsoleAndStatus:
+    def _rules(self) -> AllRules:
+        return EmptyRules._replace(os_sandbox="fake-vm", port=5700, envs=Envs({}), learn=False)
+
+    @pytest.mark.parametrize("console_path", [None, Path("console.log")])
+    def test_the_console_log_location_is_reported_only_when_there_is_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        console_path: Path | None,
+    ) -> None:
+        branch = TestMainVMBranch()
+        vm = branch._make_vm(
+            subprocess_cmd_return=(["qemu-fake"], {}),
+            show_boot=True,
+            guest_rc=0,
+            stdout=MagicMock(),
+            stderr=MagicMock(),
+        )
+        monkeypatch.setattr(python_sb, "_open_qemu_console_log", lambda: (None, console_path))
+
+        with caplog.at_level(logging.INFO, logger="pysandboxes.python_sb"):
+            branch._run_main(tmp_path, monkeypatch, vm=vm, all_rules=self._rules())
+
+        assert ("QEMU guest console" in caplog.text) is (console_path is not None)
+
+    def test_one_missing_pipe_is_enough_to_skip_the_console_filter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        branch = TestMainVMBranch()
+        vm = branch._make_vm(
+            subprocess_cmd_return=(["qemu-fake"], {}),
+            show_boot=False,
+            guest_rc=None,
+            stdout=None,
+            stderr=MagicMock(),
+            process_wait_rc=3,
+        )
+
+        result, _ = branch._run_main(tmp_path, monkeypatch, vm=vm, all_rules=self._rules())
+
+        vm.wait_process_and_filter_console.assert_not_awaited()
+        assert result == 3
+
+    def test_a_negative_wait_status_without_guest_exitcode_is_kept(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        branch = TestMainVMBranch()
+        vm = branch._make_vm(
+            subprocess_cmd_return=(["qemu-fake"], {}),
+            show_boot=False,
+            guest_rc=None,
+            stdout=MagicMock(),
+            stderr=MagicMock(),
+            wait_process_and_filter_console_rc=-9,
+        )
+
+        result, _ = branch._run_main(tmp_path, monkeypatch, vm=vm, all_rules=self._rules())
+
+        assert result == -9
