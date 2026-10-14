@@ -432,7 +432,7 @@ def test_except_sandbox_error_does_not_catch_a_timeout() -> None:
 
 def test_an_exception_from_inside_reaches_the_caller() -> None:
     _activate(syntax=_syntax("arith"), namespace="closed", call=_names("int"))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="invalid literal for int"):
         guarded_eval("int('zz')")
 
 
@@ -451,7 +451,7 @@ def test_the_worker_frame_is_absent_from_the_traceback() -> None:
     import traceback as traceback_module
 
     _activate(syntax=_syntax("arith"), namespace="closed", call=_names("int"))
-    with pytest.raises(ValueError) as caught:
+    with pytest.raises(ValueError, match="invalid literal for int") as caught:
         guarded_eval("int('zz')")
     rendered = "".join(traceback_module.format_tb(caught.value.__traceback__))
     assert ", in _worker\n" not in rendered

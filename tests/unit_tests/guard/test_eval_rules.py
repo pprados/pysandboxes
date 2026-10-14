@@ -144,7 +144,7 @@ def test_parse_scalar_rejects_an_unknown_namespace_mode() -> None:
 
 
 def test_parse_scalar_rejects_a_size_suffix_on_a_duration() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="could not convert string to float"):
         parse_scalar("eval-timeout", "10MB")
 
 
