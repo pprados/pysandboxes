@@ -30,7 +30,10 @@ def tracked_files(root: Path) -> list[str]:
         text=True,
         check=True,
     ).stdout.splitlines()
-    return [n for n in names if not n.startswith("samples/") and (root / n).is_file()]
+    # The samples are left out, bar their profiles, which the sample-profile tests read.
+    return [
+        n for n in names if (not n.startswith("samples/") or ".py-sandboxes" in Path(n).name) and (root / n).is_file()
+    ]
 
 
 def build_base(root: Path, base: Path) -> None:

@@ -54,7 +54,8 @@ def copy_tree(destination: Path) -> None:
     ).stdout.splitlines()
     for name in tracked:
         source = ROOT / name
-        if name.startswith("samples/") or not source.is_file():
+        # The samples are left out, bar their profiles, which the sample-profile tests read.
+        if (name.startswith("samples/") and ".py-sandboxes" not in Path(name).name) or not source.is_file():
             continue
         target = destination / name
         target.parent.mkdir(parents=True, exist_ok=True)
