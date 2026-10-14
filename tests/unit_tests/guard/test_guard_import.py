@@ -69,6 +69,8 @@ def test_other_directives_are_returned_untouched() -> None:
 
 def _activate(monkeypatch: pytest.MonkeyPatch, rules: tuple[str, ...]) -> None:
     monkeypatch.setattr(guard_import, "_rules", rules)
+    # The set is process-wide: an earlier test's imports must not leak into the verdict.
+    monkeypatch.setattr(guard_import, "_framework_names", set())
 
 
 def test_no_rule_denies_everything(monkeypatch: pytest.MonkeyPatch) -> None:

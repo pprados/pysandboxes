@@ -113,8 +113,9 @@ def test_regular_file_in_scope_keeps_its_unresolved_path(
     assert remapped == str(target)
 
 
-def test_no_import_rule_denies_every_module(import_rules: None) -> None:
+def test_no_import_rule_denies_every_module(import_rules: None, monkeypatch: pytest.MonkeyPatch) -> None:
     """An empty rule set is a deny-all, not a missing filter."""
+    monkeypatch.setattr(guard_import, "_framework_names", set())
     guard_import._rules = ()
 
     assert not guard_import._is_import_allowed("os")
