@@ -110,4 +110,4 @@ def config_log(log_level: int, format: str | None = None, use_rich: bool = False
     if not handlers:
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
-    # It's not possible to use basicConfig here, else the next basicConfig() in init is not apply.
+    logging.basicConfig(level=log_level, format=format, handlers=handlers, force=True)
