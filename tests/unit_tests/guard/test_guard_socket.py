@@ -1,5 +1,6 @@
 import logging
 import re
+import socket
 import sys
 from ipaddress import ip_address
 from pathlib import Path
@@ -960,20 +961,29 @@ def _windows_socketpair(monkeypatch: pytest.MonkeyPatch, func: Callable[..., Any
     return patch_rules(learn=False)["socket.socketpair"](func)
 
 
+def _windows_socketpair_fallback() -> tuple[socket.socket, socket.socket]:
+    """Emulate the stdlib's Windows socketpair using loopback TCP."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        first = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        first.connect(listener.getsockname())
+        second, _ = listener.accept()
+    return first, second
+
+
 def test_the_windows_socketpair_emulation_passes_the_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     """Windows has no native socketpair: the stdlib emulates it over a loopback listener.
 
     The guard refused that listener, so asyncio could not even build its event loop
     in a sandbox, whatever the rules said.
     """
-    import socket
-
     _arm()
     table = patch_rules(learn=False)
     monkeypatch.setattr(socket.socket, "bind", table["socket.socket.bind"](socket.socket.bind))
     monkeypatch.setattr(socket.socket, "connect", table["socket.socket.connect"](socket.socket.connect))
 
-    first, second = _windows_socketpair(monkeypatch, socket._fallback_socketpair)()  # type: ignore[attr-defined]
+    first, second = _windows_socketpair(monkeypatch, _windows_socketpair_fallback)()
     with first, second:
         first.sendall(b"x")
         assert second.recv(1) == b"x"
