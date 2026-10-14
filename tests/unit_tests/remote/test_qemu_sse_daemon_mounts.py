@@ -54,3 +54,23 @@ def test_virtfs_stage_copytree_ignore_skips_venv_and_samples() -> None:
     assert skipped == {".venv", ".ai", ".claude", "samples", "foo.egg-info"}
     assert "pysandboxes" not in skipped
     assert "README.md" not in skipped
+
+
+def test_virtfs_staging_skips_what_cannot_be_staged_without_stopping(tmp_path: Path) -> None:
+    from pysandboxes.remote.qemu_sse_daemon import _stage_exec_virtfs_mounts
+
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "f.txt").write_text("x")
+    guest = tmp_path / "guest" / "tree"
+    specs = [
+        ("other_tag", source, str(guest)),
+        ("pysb_exec_1", source, "relative/guest"),
+        ("pysb_exec_2", tmp_path / "missing", str(tmp_path / "guest" / "gone")),
+        ("pysb_exec_3", source, str(guest)),
+    ]
+
+    _stage_exec_virtfs_mounts(tmp_path / "temp", specs)
+
+    staged = (tmp_path / "temp" / "virtfs_stage_exec" / guest.relative_to("/")).resolve()
+    assert (staged / "f.txt").read_text() == "x"

@@ -116,11 +116,22 @@ class TestNetPorts:
 class _Recorder:
     """Stands for the syscall and libc functions `_apply_landlock` drives."""
 
-    def __init__(self, monkeypatch: pytest.MonkeyPatch, *, abi: int, create_result: int = 7, restrict_result: int = 0):
+    def __init__(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        abi: int,
+        create_result: int = 7,
+        restrict_result: int = 0,
+        add_result: int = 0,
+        open_result: int = 9,
+    ):
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
         self.opened: list[bytes] = []
         self.create_result = create_result
         self.restrict_result = restrict_result
+        self.add_result = add_result
+        self.open_result = open_result
 
         def syscall(number: int, *args: Any) -> int:
             self.calls.append((self._name(number), args))
@@ -128,13 +139,13 @@ class _Recorder:
                 return self.create_result
             if number == ll._LANDLOCK_RESTRICT_SELF:
                 return self.restrict_result
-            return 0
+            return self.add_result
 
         libc = MagicMock()
 
         def open_path(path: bytes, flags: int) -> int:
             self.opened.append(path)
-            return 9
+            return self.open_result
 
         libc.open.side_effect = open_path
         monkeypatch.setattr(ll, "syscall", syscall, raising=False)
@@ -251,6 +262,88 @@ class TestApplyLandlock:
             (81, ll.LANDLOCK_ACCESS_NET_CONNECT_TCP),
             (82, ll.LANDLOCK_ACCESS_NET_BIND_TCP | ll.LANDLOCK_ACCESS_NET_CONNECT_TCP),
         ]
+
+    def test_a_port_without_rights_does_not_hide_the_following_ones(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        recorder = _Recorder(monkeypatch, abi=4)
+
+        ll._apply_landlock([], [(83, False, False), (84, True, False)])
+
+        ports = [c[2]._obj.port for c in recorder.adds() if c[2]._obj.__class__.__name__.endswith("PortAttr")]
+        assert ports == [84]
+
+    def test_no_port_rule_is_added_when_the_kernel_does_not_handle_the_network(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        recorder = _Recorder(monkeypatch, abi=3)
+
+        ll._apply_landlock([], [(80, True, True)])
+
+        assert not [c for c in recorder.adds() if c[2]._obj.__class__.__name__.endswith("PortAttr")]
+
+    def test_the_resolver_directories_are_read_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        recorder = _Recorder(monkeypatch, abi=4)
+
+        ll._apply_landlock([])
+
+        resolv_dirs = {str(Path("/etc/resolv.conf").resolve().parent), str(Path("/etc/resolv.conf").parent)}
+        opened = [path.decode() for path in recorder.opened]
+        for directory in resolv_dirs:
+            grant = recorder.adds()[opened.index(directory)][2]._obj.allowed_access
+            assert grant == ll.ACCESS_RO & recorder.attr("create").handled_access_fs
+
+    def test_a_relative_path_is_anchored_at_the_current_directory_whatever_its_first_character(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        recorder = _Recorder(monkeypatch, abi=4)
+
+        ll._apply_landlock([("-dash", False)])
+
+        assert str(tmp_path / "-dash") in [path.decode() for path in recorder.opened]
+
+    def test_descriptor_zero_is_a_valid_parent_and_a_negative_one_is_skipped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        zero = _Recorder(monkeypatch, abi=4, open_result=0)
+        ll._apply_landlock([("/abs/zero", False)])
+        granted_zero = [c[2]._obj.parent_fd for c in zero.adds() if hasattr(c[2]._obj, "parent_fd")]
+        failed = _Recorder(monkeypatch, abi=4, open_result=-1)
+        ll._apply_landlock([("/abs/failed", False)])
+
+        assert 0 in granted_zero
+        assert not [c for c in failed.adds() if hasattr(c[2]._obj, "parent_fd")]
+
+    def test_a_path_that_cannot_be_opened_does_not_hide_the_following_ones(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        recorder = _Recorder(monkeypatch, abi=4)
+        recorder.libc.open.side_effect = lambda path, flags: -1 if path == b"/abs/failed" else 9
+
+        ll._apply_landlock([("/abs/failed", False), ("/abs/ok", False)])
+
+        granted = [c[2]._obj.parent_fd for c in recorder.adds() if hasattr(c[2]._obj, "parent_fd")]
+        assert granted.count(9) >= 1 and -1 not in granted
+
+    def test_a_rule_the_kernel_refuses_is_reported_and_an_accepted_one_is_not(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level("WARNING", logger=ll.logger.name):
+            _Recorder(monkeypatch, abi=4, add_result=0)
+            ll._apply_landlock([("/abs/ok", False)], [(80, True, True)])
+            assert not [r for r in caplog.records if "landlock_add_rule" in r.getMessage()]
+
+            _Recorder(monkeypatch, abi=4, add_result=-1)
+            ll._apply_landlock([("/abs/refused", False)], [(81, True, True)])
+
+        messages = [r.getMessage() for r in caplog.records if "landlock_add_rule" in r.getMessage()]
+        assert any("/abs/refused" in m for m in messages)
+        assert any("port 81" in m for m in messages)
+
+    def test_any_nonzero_answer_of_restrict_self_is_an_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _Recorder(monkeypatch, abi=4, restrict_result=1)
+
+        with pytest.raises(OSError, match="landlock_restrict_self"):
+            ll._apply_landlock([])
 
 
 class TestCollectPaths:

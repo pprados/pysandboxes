@@ -114,3 +114,15 @@ def test_a_rich_handler_replaces_the_plain_one_when_asked(_isolated_root_logger:
     config_log(logging.INFO, use_rich=True)
 
     assert [type(handler) for handler in _isolated_root_logger.handlers] == [RichHandler]
+
+
+def test_an_explicit_format_is_kept_with_the_rich_handler() -> None:
+    root = logging.getLogger()
+    saved = root.handlers[:], root.level
+    try:
+        config_log(20, format="%(levelname)s!%(message)s", use_rich=True)
+        formats = [h.formatter._fmt for h in root.handlers if h.formatter is not None]
+    finally:
+        root.handlers[:], root.level = saved
+
+    assert "%(levelname)s!%(message)s" in formats

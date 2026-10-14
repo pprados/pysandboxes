@@ -91,3 +91,20 @@ class TestRemoveSlirpTempFiles:
 
     def test_missing_or_unset_paths_are_ignored(self, tmp_path: Path) -> None:
         remove_slirp_temp_files(str(tmp_path / "absent"), None)
+
+
+class TestWideRanges:
+    def test_a_small_range_is_forwarded_and_a_wide_one_is_not(self) -> None:
+        spec = _spec(
+            _rule(Action.ALLOW, (Direction.IN,), range(8000, 8003)),
+            _rule(Action.ALLOW, (Direction.IN,), range(1, 5000)),
+        )
+
+        assert spec == "tcp:8000 tcp:8001 tcp:8002 tcp:9000"
+
+    def test_a_long_explicit_list_is_forwarded_whole(self) -> None:
+        ports = tuple(range(2000, 3500))
+
+        spec = _spec(_rule(Action.ALLOW, (Direction.IN,), ports))
+
+        assert spec.split() == [f"tcp:{p}" for p in sorted((*ports, 9000))]
