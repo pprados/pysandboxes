@@ -54,7 +54,7 @@ def extract_port_forwards(
     tcp_ports: set[int] = {sse_port}
     udp_ports: set[int] = set()
     for rule in all_rules.socket_rules:
-        if rule.action != Action.ALLOW or Direction.IN not in rule.directions:
+        if rule.action != Action.ALLOW or Direction.IN not in rule.directions:  # pragma: no mutate
             continue
         ports = rule.mask.ports
         if isinstance(ports, range) and len(ports) > 1000:

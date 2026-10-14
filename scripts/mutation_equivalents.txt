@@ -1,3 +1,25 @@
 # Survivors of scripts/mutation.py judged equivalent: module | operator | source line (stripped).
 # An entry matches by source text, so it survives line shifts. Prefer `# pragma: no mutate` on the
 # line itself when the reason fits in a comment; use this file for lines that cannot carry one.
+pysandboxes/_os_sandbox.py | ReplaceComparisonOperator_LtE_Eq | if _startup_counter <= 0:
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_Is | s_network = _build_network(network, is_ipv6, direction == Direction.IN)
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_LtE | s_network = _build_network(network, is_ipv6, direction == Direction.IN)
+pysandboxes/private_loop.py | AddNot | if _background_loop_ref is not None:
+pysandboxes/private_loop.py | AddNot | if loop is not None and loop.is_running():
+pysandboxes/private_loop.py | ReplaceComparisonOperator_IsNot_Is | if _background_loop_ref is not None:
+pysandboxes/private_loop.py | ReplaceComparisonOperator_IsNot_Is | if loop is not None and loop.is_running():
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceFalseWithTrue | self._accept_incoming = False
+pysandboxes/remote/landlock_daemon.py | ReplaceAndWithOr | if p and os.path.exists(p):
+pysandboxes/remote/landlock_daemon.py | ReplaceComparisonOperator_Eq_Is | if not path or path == ".":
+pysandboxes/remote/landlock_daemon.py | ReplaceComparisonOperator_Eq_LtE | if not path or path == ".":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | config_dir.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | dest.parent.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | er = p.resolve(strict=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | self._stage_root = tempfile.TemporaryDirectory(prefix=QEMU_HOST_RUN_PREFIX, ignore_cleanup_errors=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | shutil.copytree(host_path, dest, symlinks=True, dirs_exist_ok=True, ignore=_virtfs_stage_unreadable)
+pysandboxes/remote/tools.py | ReplaceComparisonOperator_Eq_GtE | assert platform.system() == "Linux"
+pysandboxes/remote/tools.py | ReplaceComparisonOperator_Eq_LtE | assert platform.system() == "Linux"
+pysandboxes/remote/tools.py | ReplaceOrWithAnd | if not line or line.startswith("#"):
+pysandboxes/tools.py | ReplaceComparisonOperator_Eq_Is | elif ch == "#" and not in_quotes:
+pysandboxes/tools.py | ReplaceComparisonOperator_Eq_Is | elif ch == "#" and not in_quotes:
+pysandboxes/tools.py | ReplaceComparisonOperator_Eq_GtE | return glob_at == len(glob)

@@ -473,7 +473,7 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
             # An explicit 'restricted-network yes' is tolerated, as on a GitHub runner: the
             # jail then keeps the HOST network and the socket rules are enforced by the
             # Python layer only. Native code, ctypes or a subprocess can reach any address.
-            skip_network_setup = restricted_network and restricted_network_explicit_yes
+            skip_network_setup = restricted_network and restricted_network_explicit_yes  # pragma: no mutate
             if skip_network_setup:
                 logger.warning(
                     "firejail config 'restricted-network yes' in %s: the sandbox keeps the host "

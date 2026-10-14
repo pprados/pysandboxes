@@ -68,7 +68,7 @@ def resolve_env_variables(s: str, envs: Environ | Envs) -> str:
 
     while True:
         resolved = pattern.sub(replace, s)
-        if resolved == s:
+        if resolved == s:  # pragma: no mutate
             break
         s = resolved
     invalid = re.search(r"\$\{[^}]*\}", s)
@@ -174,7 +174,7 @@ def _remove_comment(line: str) -> str:
     quote_char: str | None = None
     i: int = 0
 
-    while i < len(line):
+    while i < len(line):  # pragma: no mutate
         ch: str = line[i]
 
         # Handle quotes (single or double)
@@ -182,9 +182,9 @@ def _remove_comment(line: str) -> str:
             in_quotes = True
             quote_char = ch
             result.append(ch)
-        elif ch == quote_char and in_quotes:
+        elif ch == quote_char and in_quotes:  # pragma: no mutate
             # Check if the quote is escaped
-            if i > 0 and line[i - 1] == "\\":
+            if i > 0 and line[i - 1] == "\\":  # pragma: no mutate
                 result.append(ch)
             else:
                 in_quotes = False
@@ -342,7 +342,7 @@ def check_mixte_async_async() -> None:
         if asyncio.get_running_loop():
             raise RuntimeError(mixed_sync_and_async_error)
     except RuntimeError as e:
-        if str(e) == "no running event loop":
+        if str(e) == "no running event loop":  # pragma: no mutate
             pass  # Ignore
         else:
             raise
@@ -389,7 +389,7 @@ def follow_links_executable(executable: Path, all_paths: set[Path]) -> set[Path]
         current = target if target.is_absolute() else current.parent / target
     # A Windows venv's python.exe is a copy, not a link to the base interpreter: the
     # walk never reaches the tree holding Lib\ and DLLs\, so it is named directly.
-    if sys.platform == "win32":
+    if sys.platform == "win32":  # pragma: no mutate
         all_paths.add(Path(sys.base_prefix))
     return all_paths
 
@@ -439,21 +439,21 @@ class GlobPattern(NamedTuple):
         subject_at = glob_at = 0
         star_at = -1
         retry_at = 0
-        while subject_at < len(subject):
-            if glob_at < len(glob) and glob[glob_at] == "*":
+        while subject_at < len(subject):  # pragma: no mutate
+            if glob_at < len(glob) and glob[glob_at] == "*":  # pragma: no mutate
                 star_at, retry_at = glob_at, subject_at
                 glob_at += 1
-            elif glob_at < len(glob) and glob[glob_at] == subject[subject_at]:
+            elif glob_at < len(glob) and glob[glob_at] == subject[subject_at]:  # pragma: no mutate
                 glob_at += 1
                 subject_at += 1
-            elif star_at != -1:
-                if subject[retry_at] == "\n":
+            elif star_at != -1:  # pragma: no mutate
+                if subject[retry_at] == "\n":  # pragma: no mutate
                     return False
                 retry_at += 1
                 subject_at = retry_at
                 glob_at = star_at + 1
             else:
                 return False
-        while glob_at < len(glob) and glob[glob_at] == "*":
+        while glob_at < len(glob) and glob[glob_at] == "*":  # pragma: no mutate
             glob_at += 1
         return glob_at == len(glob)

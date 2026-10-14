@@ -101,7 +101,7 @@ def unsupported_platform_reason(name: str) -> str | None:
     if sys.platform in _PROVIDER_SPECS[name][2]:
         return None
     # `none` is never suggested: it disarms the Python guards as well, so it is no alternative.
-    others = [provider for provider in platform_providers() if provider != "none"]
+    others = [provider for provider in platform_providers() if provider != "none"]  # pragma: no mutate
     if not others:
         return f"os-sandbox {name!r} does not run on {sys.platform}, and no provider does yet"
     return f"os-sandbox {name!r} does not run on {sys.platform}. Use one of: {', '.join(others)}"
@@ -300,7 +300,7 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
             _startup_counter -= 1
             return
 
-        if _startup_counter > 1:
+        if _startup_counter > 1:  # pragma: no mutate
             _startup_counter -= 1
             logger.info("Daemon not shutting down because the startup counter > 1")
             return

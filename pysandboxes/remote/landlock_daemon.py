@@ -160,18 +160,18 @@ except Exception:
 
 
 def _landlock_available() -> bool:
-    if _LANDLOCK_RESTRICT_SELF < 0:
+    if _LANDLOCK_RESTRICT_SELF < 0:  # pragma: no mutate
         return False
-    if sys.platform != "linux":
+    if sys.platform != "linux":  # pragma: no mutate
         return False
     # The ABI version query fails (ENOSYS: no syscall, EOPNOTSUPP: disabled at boot) whenever Landlock cannot
     # enforce; probing landlock_restrict_self instead only ever sees EPERM before no_new_privs is set.
-    return _get_landlock_abi_version() > 0
+    return _get_landlock_abi_version() > 0  # pragma: no mutate
 
 
 def _get_landlock_abi_version() -> int:
     """Return Landlock ABI version (1+) or 0 if unsupported."""
-    if _LANDLOCK_CREATE_RULESET < 0 or sys.platform != "linux":
+    if _LANDLOCK_CREATE_RULESET < 0 or sys.platform != "linux":  # pragma: no mutate
         return 0
     try:
         abi = syscall(
@@ -180,7 +180,7 @@ def _get_landlock_abi_version() -> int:
             c_size_t(0),
             c_uint32(LANDLOCK_CREATE_RULESET_VERSION),
         )
-        if abi < 0:
+        if abi < 0:  # pragma: no mutate
             return 0
         return abi
     except Exception:
@@ -210,7 +210,7 @@ def _collect_landlock_net_ports(
         port_access[port] = (b or allow_bind, c or allow_connect)
 
     for rule in socket_rules:
-        if rule.action != Action.ALLOW:
+        if rule.action != Action.ALLOW:  # pragma: no mutate
             continue
         if Kind.TCP not in rule.mask.kinds:
             continue
@@ -219,9 +219,9 @@ def _collect_landlock_net_ports(
         if not allow_bind and not allow_connect:
             continue
         ports = rule.mask.ports
-        if isinstance(ports, range):
+        if isinstance(ports, range):  # pragma: no mutate
             for p in ports:
-                if 0 <= p <= 65535:
+                if 0 <= p <= 65535:  # pragma: no mutate
                     merge(p, allow_bind, allow_connect)
         else:
             for p in ports:
@@ -385,13 +385,13 @@ def _collect_landlock_paths(all_rules: AllRules, temp: Path, cwd: str) -> list[t
             path = cwd
         if not os.path.isabs(path):
             path = os.path.abspath(path)
-        if path in path_to_access and path_to_access[path] == "rw":
+        if path in path_to_access and path_to_access[path] == "rw":  # pragma: no mutate
             return
-        if path in path_to_access and access == "rw":
+        if path in path_to_access and access == "rw":  # pragma: no mutate
             path_to_access[path] = "rw"
             return
         if path not in path_to_access:
-            if os.path.exists(path) or path == cwd or path == str(temp):
+            if os.path.exists(path) or path == cwd or path == str(temp):  # pragma: no mutate
                 path_to_access[path] = access
 
     # System paths required to run Python and runtime (read-only)

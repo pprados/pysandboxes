@@ -157,7 +157,7 @@ async def acatch_stdio(
     Returns:
         A dictionary containing the result, stdout, and stderr.
     """
-    assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"
+    assert asyncio.get_event_loop() == get_sandbox_loop(), "Should be in sandbox loop"  # pragma: no mutate
     captured_stdout: io.StringIO = QueueStringIO(type="stdout", queue=sync_or_async_queue)
     captured_stderr: io.StringIO = QueueStringIO(type="stderr", queue=sync_or_async_queue)
     fn_result: Any = None

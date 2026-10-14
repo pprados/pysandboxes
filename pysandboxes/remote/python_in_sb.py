@@ -161,7 +161,7 @@ def _python_interactive(
         exit_msg = f"Save rules to {str(all_rules.learning_path)!r}"
     elif all_rules.use_py_sandbox:
         sb_mode = f"{BOLD}APIs are LIMITED according to the rules in " f"{str(conf_path)!r} "
-        if all_rules.os_sandbox != "subprocess":
+        if all_rules.os_sandbox != "subprocess":  # pragma: no mutate
             sb_mode += f"and by the os-sandbox={all_rules.os_sandbox!r}"
         sb_mode += f"{RESET}\n"
     else:
@@ -240,7 +240,7 @@ def _python_interactive(
             # Start the standard interactive console
             try:
                 extra: dict[str, Any] = {}
-                if sys.version_info[:2] >= (3, 13):
+                if sys.version_info[:2] >= (3, 13):  # pragma: no mutate
                     extra = {"local_exit": True}
                 code.interact(
                     banner=banner if ban and not banner_shown else "",

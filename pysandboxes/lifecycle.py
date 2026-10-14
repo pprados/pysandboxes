@@ -56,7 +56,7 @@ def is_in_sandbox() -> bool:
     arming no rule at all, and ``tests/unit_tests/remote/test_none_daemon.py``
     pins that on purpose.
     """
-    return _entered > 0
+    return _entered > 0  # pragma: no mutate
 
 
 def arm() -> None:

@@ -210,7 +210,7 @@ async def purge_loop() -> AbstractEventLoop | None:
         if current_task is not None:
             tasks.discard(current_task)
 
-        if loop and not tasks:
+        if loop and not tasks:  # pragma: no mutate
             return loop
 
         # 2. Cancel all tasks

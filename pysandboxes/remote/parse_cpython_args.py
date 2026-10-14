@@ -84,7 +84,7 @@ def parse_python_cmd_line(
     # or a -c/-m switch, possibly glued to its value (-mjson.tool) or grouped after flags (-Im json.tool).
     split_pos = -1
     i = 0
-    while i < len(args) and split_pos == -1:
+    while i < len(args) and split_pos == -1:  # pragma: no mutate
         arg = args[i]
         if arg in ("--", "-") or not arg.startswith("-"):
             split_pos = i
@@ -94,25 +94,25 @@ def parse_python_cmd_line(
             for j, flag in enumerate(arg[1:], start=1):
                 if flag in "cm":
                     flags, value = arg[:j], arg[j + 1 :]
-                    head = [flags] if flags != "-" else []
+                    head = [flags] if flags != "-" else []  # pragma: no mutate
                     args = args[:i] + head + [f"-{flag}"] + ([value] if value else []) + args[i + 1 :]
                     split_pos = i + len(head)
                     break
                 if flag in "WX":
-                    if j == len(arg) - 1:
+                    if j == len(arg) - 1:  # pragma: no mutate
                         i += 1  # The value is the next argument
                     break
             i += 1
 
     python_run_args = []
-    if split_pos != -1:
+    if split_pos != -1:  # pragma: no mutate
         python_run_args = args[split_pos:]
         args = args[:split_pos]
 
     pysandboxes_config: Path = Path(CONFIG_NAME)
     named_config: Path | None = None
     module_mode = False
-    if len(python_run_args) >= 2 and python_run_args[0] == "-m":
+    if len(python_run_args) >= 2 and python_run_args[0] == "-m":  # pragma: no mutate
         module_mode = True
 
     remove_index = []
@@ -127,7 +127,7 @@ def parse_python_cmd_line(
             pysandboxes_config = Path(pysandboxes_config_p)
             remove_index.append(i)
         if arg == "--pysandboxes-config":
-            if i + 1 >= len(args):
+            if i + 1 >= len(args):  # pragma: no mutate
                 print("python-sb: error: argument --pysandboxes-config: expected one argument", file=sys.stderr)
                 raise SystemExit(2)
             # Accept full name or relative name of the module

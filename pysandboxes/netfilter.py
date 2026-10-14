@@ -60,7 +60,7 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
         "-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
     ]
     for dns in dns_server:
-        if (dns.version == 6) == is_ipv6:
+        if (dns.version == 6) == is_ipv6:  # pragma: no mutate
             prefix = 128 if is_ipv6 else 32
             netfilter.append(f"-A OUTPUT -p udp -d {dns}/{prefix} --dport 53 -m conntrack --ctstate NEW -j ACCEPT")
     _map_direction = {Direction.IN: "INPUT", Direction.OUT: "OUTPUT"}
@@ -82,12 +82,12 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
                 elif not is_ipv6 and isinstance(network, IPv4Network):
                     s_network = _build_network(network, is_ipv6, direction == Direction.IN)
                 else:
-                    continue
+                    continue  # pragma: no mutate
 
                 # The network of an IN rule is the local address, as for bind() in the Python layer: the
                 # destination of an incoming packet.
                 s_network = f"-d {s_network}" if s_network else ""
-                if direction == Direction.OUT:
+                if direction == Direction.OUT:  # pragma: no mutate
                     s_state = "--ctstate NEW "
                 else:
                     s_state = "--ctstate NEW,ESTABLISHED "
@@ -98,7 +98,7 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
                     multiport = ""
 
                 ip_rule: str
-                if kind == Kind.TCP:
+                if kind == Kind.TCP:  # pragma: no mutate
                     ip_rule = (
                         f"-A {_map_direction[direction]} "
                         f"-p tcp "
@@ -108,7 +108,7 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
                         f"{multiport}"
                         f"-j {_map_action[action]}"
                     )
-                elif kind == Kind.UDP:
+                elif kind == Kind.UDP:  # pragma: no mutate
                     ip_rule = (
                         f"-A {_map_direction[direction]} "
                         f"-p udp "

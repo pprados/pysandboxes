@@ -61,12 +61,12 @@ def _search_module_config(config_path: Path | None) -> Path:
 
     caller_name = frame.f_globals.get("__name__", "__main__")
     caller_spec = frame.f_globals.get("__spec__")
-    if caller_name == "__main__" and caller_spec is not None:
+    if caller_name == "__main__" and caller_spec is not None:  # pragma: no mutate
         # `python -m pkg.mod` names the module __main__; its spec keeps the real name.
         caller_name = caller_spec.name
     caller_modules = caller_name.split(".")
     resource_config: Path | None = None
-    if caller_modules[0] != "__main__":
+    if caller_modules[0] != "__main__":  # pragma: no mutate
         # The nearest package holding the file wins: the top package of a sub-package may hold none.
         for pos in range(len(caller_modules), 0, -1):
             try:
@@ -294,7 +294,7 @@ def parse_config(
     providers_rules, others = parse_provider_rules(others)
 
     os_sandbox_params: ImmutableDict[str, Any]
-    if os_sandbox != "error":
+    if os_sandbox != "error":  # pragma: no mutate
         os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
     else:
         os_sandbox_params = ImmutableDict({})

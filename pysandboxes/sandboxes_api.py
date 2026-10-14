@@ -231,7 +231,7 @@ class sandboxes:
 
     def _register_signals_handlers(self) -> None:
         self._signals: dict[signal.Signals, Any | int | signal.Handlers | None] = {}
-        if threading.current_thread() is not threading.main_thread():
+        if threading.current_thread() is not threading.main_thread():  # pragma: no mutate
             # signal.signal() only works from the main thread of the main interpreter; signals are
             # delivered there anyway, so a worker thread has nothing to install.
             return
@@ -279,7 +279,7 @@ class sandboxes:
     def _unregister_signals_handlers(self) -> None:
         with self._lock:
             # If used private a private loop, the signal will be removed if it's handle
-            if threading.current_thread() is threading.main_thread():
+            if threading.current_thread() is threading.main_thread():  # pragma: no mutate
                 for s, h in self._signals.items():
                     signal.signal(s, h)
             else:

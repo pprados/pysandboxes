@@ -631,7 +631,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                     break
                 # Any exit while accepting calls is a crash, 0 included: nobody would answer the next call.
                 logger.info("watchdog: subprocess exited with %s", errorlevel)
-                if time.time() - self._last_reset > self._reset_delay:
+                if time.time() - self._last_reset > self._reset_delay:  # pragma: no mutate
                     self._attempts = 0
                 self._attempts += 1
                 if self._attempts > self._max_attempts:

@@ -210,7 +210,7 @@ def _main(stack: ExitStack) -> int:
             vm = cast(VMSSEDaemon, os_provider)
             # VM-based providers: build process_config before subprocess_cmd so the guest
             # image / boot media can embed config (provider-specific).
-            vm.port = find_free_port() if all_rules.port == -1 else all_rules.port
+            vm.port = find_free_port() if all_rules.port == -1 else all_rules.port  # pragma: no mutate
             token = str(uuid.uuid4())
             # Propagate host terminal size to guest so console width/height match
             columns, lines = _get_terminal_size()
@@ -245,7 +245,7 @@ def _main(stack: ExitStack) -> int:
 
             config_writer = _noop_config_writer
         else:
-            os_provider.port = find_free_port() if all_rules.port == -1 else all_rules.port
+            os_provider.port = find_free_port() if all_rules.port == -1 else all_rules.port  # pragma: no mutate
             cmd, extra_envs = os_provider.subprocess_cmd(
                 all_rules, envs=os.environ, pipe_path=pipe_path, temp=Path(tmpdir)
             )

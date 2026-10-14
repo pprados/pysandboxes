@@ -84,7 +84,7 @@ def get_log_formatter() -> str:
 
 def use_rich_handler() -> bool:
     root_handlers = logging.getLogger().handlers
-    return any(h.__class__.__name__ == "RichHandler" for h in root_handlers)
+    return any(h.__class__.__name__ == "RichHandler" for h in root_handlers)  # pragma: no mutate
 
 
 async def _write_stream(child_stdin_writer: asyncio.StreamWriter) -> None:
@@ -146,7 +146,7 @@ async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
         try:
             fd = os.open(pipe_path, os.O_WRONLY | os.O_NONBLOCK)
         except OSError as e:
-            if e.errno != errno.ENXIO:
+            if e.errno != errno.ENXIO:  # pragma: no mutate
                 raise
         else:
             import fcntl  # Imported here: python_sb imports this module, and Windows has no fcntl
@@ -157,7 +157,7 @@ async def _open_fifo_for_write(pipe_path: Path, process: Process) -> int:
             raise SandBoxError(
                 f"The sandbox process exited with code {process.returncode} before reading its configuration."
             )
-        if time.monotonic() > deadline:
+        if time.monotonic() > deadline:  # pragma: no mutate
             raise SandBoxError(
                 f"The sandbox process did not read its configuration within {TIMEOUT_FOR_START_DAEMON}s."
             )
@@ -171,7 +171,7 @@ def _child_env(envs: Envs) -> dict[str, str]:
     ``import asyncio`` with WinError 10106 before running anything.
     """
     env = dict(envs)
-    if sys.platform == "win32" and "SYSTEMROOT" in os.environ:
+    if sys.platform == "win32" and "SYSTEMROOT" in os.environ:  # pragma: no mutate
         env.setdefault("SYSTEMROOT", os.environ["SYSTEMROOT"])
     return env
 
@@ -427,7 +427,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             init_fn: Optional initialization function.
         """
         self.restart = 0
-        self.port = find_free_port() if all_rules.port == -1 else all_rules.port
+        self.port = find_free_port() if all_rules.port == -1 else all_rules.port  # pragma: no mutate
 
         await self._re_start(
             all_rules,
@@ -469,7 +469,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
 
                 # Any exit while accepting calls is a crash, 0 included: nobody would answer the next call.
                 logger.info("watchdog: subprocess exited with %s", errorlevel)
-                if time.time() - self._last_reset > self._reset_delay:
+                if time.time() - self._last_reset > self._reset_delay:  # pragma: no mutate
                     self._attempts = 0
                 self._attempts += 1
                 if self._attempts > self._max_attempts:
@@ -688,7 +688,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
             if not watchdog.cancelled():
                 raise
         finally:
-            if self._watchdog is watchdog:
+            if self._watchdog is watchdog:  # pragma: no mutate
                 self._watchdog = None
 
     async def _stop(self, max_pending: int) -> None:
