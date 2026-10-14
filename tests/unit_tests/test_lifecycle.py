@@ -46,3 +46,17 @@ def test_arming_does_not_imply_sandbox_membership(monkeypatch: pytest.MonkeyPatc
 
     assert lifecycle.is_armed()
     assert not lifecycle.is_in_sandbox()
+
+
+def test_arming_is_logged_once_however_many_entry_points_call_it(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(lifecycle, "_armed", False)
+
+    with caplog.at_level("DEBUG", logger="pysandboxes.lifecycle"):
+        lifecycle.arm()
+        first_call = caplog.text.count("lifecycle: armed")
+        lifecycle.arm()
+
+    assert first_call == 1
+    assert caplog.text.count("lifecycle: armed") == 1
