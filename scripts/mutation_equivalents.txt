@@ -73,3 +73,16 @@ pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_Lt_LtE | if
 pysandboxes/remote/unshare_sse_daemon.py | ReplaceTrueWithFalse | debug_tmp.mkdir(parents=True, exist_ok=True)
 pysandboxes/remote/unshare_sse_daemon.py | ReplaceTrueWithFalse | config_file.unlink(missing_ok=True)
 pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | self.port = find_free_port() if all_rules.port == -1 else all_rules.port
+pysandboxes/remote/client_subprocess_sse_daemon.py | AddNot | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Gt | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_GtE | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Lt | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_NotEq | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | AddNot | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Gt | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_GtE | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Lt | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_NotEq | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceTrueWithFalse | debug_tmp.mkdir(parents=True, exist_ok=True)

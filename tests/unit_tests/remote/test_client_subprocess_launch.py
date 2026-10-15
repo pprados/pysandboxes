@@ -178,12 +178,22 @@ class TestLaunchWithoutFifo:
     def test_windows_gets_a_plain_file_and_no_preexec(self, tmp_path: Path) -> None:
         launch = _Launch(tmp_path)
 
-        with patch.object(csd, "sys", SimpleNamespace(platform="win32")):
+        with patch.object(csd, "sys", SimpleNamespace(platform="".join(["win", "32"]))):
             launch.run(config={"w": 1})
 
         assert pickle.loads((tmp_path / "pipe").read_bytes()) == {"w": 1}
         assert "preexec_fn" not in launch.calls[0][1]
         assert launch.events == ["exec"]
+
+    @pytest.mark.parametrize("platform", ["linux", "darwin", "freebsd", "zzz-os"])
+    def test_every_other_platform_uses_the_fifo_and_the_preexec(self, tmp_path: Path, platform: str) -> None:
+        launch = _Launch(tmp_path)
+
+        with patch.object(csd, "sys", SimpleNamespace(platform="".join(list(platform)))):
+            launch.run()
+
+        assert launch.events == ["exec", "fifo"]
+        assert "preexec_fn" in launch.calls[0][1]
 
 
 class TestDebugLaunch:
@@ -196,6 +206,17 @@ class TestDebugLaunch:
 
         script = (tmp_path / "tmp" / "run.sh").read_text()
         assert script == "#!/bin/bash\nprog 'a b' \\\n  c\n"
+
+    def test_the_script_is_written_when_the_debug_directory_already_exists(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "tmp").mkdir()
+
+        with patch.object(csd, "DEBUG_LAUNCH", True):
+            _Launch(tmp_path).run(cmd=["prog"])
+
+        assert (tmp_path / "tmp" / "run.sh").read_text() == "#!/bin/bash\nprog \n"
 
     def test_an_unwritable_script_does_not_stop_the_launch(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -254,9 +275,11 @@ class _Writer:
         self.data: list[bytes] = []
         self.drained = 0
         self.fail_on = fail_on
+        self.failed = False
 
     def write(self, data: bytes) -> None:
-        if self.fail_on is not None and len(self.data) == self.fail_on:
+        if self.fail_on is not None and len(self.data) == self.fail_on and not self.failed:
+            self.failed = True
             raise BrokenPipeError()
         self.data.append(data)
 
