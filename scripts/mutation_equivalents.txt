@@ -44,3 +44,4 @@ pysandboxes/remote/firejail_sse_daemon.py | ReplaceTrueWithFalse | netfilter6_fi
 pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Gt_NotEq | if len(python_cmd) > 1:
 pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Eq_Is | elif python_cmd[0] == "-":
 pysandboxes/remote/sse_server_daemon.py | ReplaceTrueWithFalse | async_fut.add_done_callback(lambda _: stdio_queue.put_nowait({"done": True}))
+pysandboxes/remote/unshare_setup.py | ReplaceComparisonOperator_Gt_NotEq | if attempt > 0:
