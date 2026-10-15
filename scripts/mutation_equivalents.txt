@@ -45,3 +45,9 @@ pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Gt_NotEq | if len
 pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Eq_Is | elif python_cmd[0] == "-":
 pysandboxes/remote/sse_server_daemon.py | ReplaceTrueWithFalse | async_fut.add_done_callback(lambda _: stdio_queue.put_nowait({"done": True}))
 pysandboxes/remote/unshare_setup.py | ReplaceComparisonOperator_Gt_NotEq | if attempt > 0:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_Is | if s == _FORWARD_STATE_WAITING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_LtE | if s == _FORWARD_STATE_WAITING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_Is | if s == _FORWARD_STATE_FORWARDING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_LtE | if s == _FORWARD_STATE_FORWARDING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if end_exclusive < 0:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if nl >= 0 and (cr < 0 or nl < cr):
