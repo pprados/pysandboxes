@@ -154,13 +154,15 @@ class TestClosure:
 
         assert {libs["libm.so"], libs["libc.so"]} <= q._dynamic_linker_closure_paths()
 
-    def test_a_dependency_that_is_not_a_file_is_left_out(
+    def test_a_dependency_that_is_not_a_file_is_left_out_without_hiding_the_others(
         self, libs: dict[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         missing = tmp_path / "libgone.so"
         directory = tmp_path / "libdir.so"
         directory.mkdir()
-        self._ldd(monkeypatch, {libs["python"].resolve(): [missing, directory, libs["libm.so"]]})
+        graph = {libs["python"].resolve(): [libs["libm.so"], directory, missing]}
+        # A list, so the stack pops the missing path first, then the directory, then the library.
+        monkeypatch.setattr(q, "_ldd_resolved_paths", lambda path: graph.get(path, []))  # type: ignore[arg-type,return-value]
 
         closure = q._dynamic_linker_closure_paths()
 
