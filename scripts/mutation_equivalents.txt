@@ -51,3 +51,4 @@ pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_Is | 
 pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_LtE | if s == _FORWARD_STATE_FORWARDING:
 pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if end_exclusive < 0:
 pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if nl >= 0 and (cr < 0 or nl < cr):
+pysandboxes/remote/qemu_sse_daemon.py | AddNot | if tag.startswith("pysb_exec_") and tag[9:].isdigit():

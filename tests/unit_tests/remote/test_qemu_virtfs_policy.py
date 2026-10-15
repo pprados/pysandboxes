@@ -128,11 +128,19 @@ class TestQemuBinary:
         assert asked == ["qemu-system-aarch64", "qemu-system-x86_64"]
 
     def test_x86_does_not_ask_twice(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(q.platform, "machine", lambda: "x86_64")
+        arch = "".join(list("x86_64"))  # equal to the literal, but not the same object
+        monkeypatch.setattr(q.platform, "machine", lambda: arch)
         asked = self._which(monkeypatch, {})
 
         assert q._qemu_binary() == "qemu-system-x86_64"
         assert asked == ["qemu-system-x86_64"]
+
+    @pytest.mark.parametrize("arch", ["xtensa", "zarch", "s390x", "aarch64", "mips"])
+    def test_any_other_architecture_falls_back_to_x86(self, monkeypatch: pytest.MonkeyPatch, arch: str) -> None:
+        monkeypatch.setattr(q.platform, "machine", lambda: arch)
+        self._which(monkeypatch, {"qemu-system-x86_64": "/opt/qemu-x86"})
+
+        assert q._qemu_binary() == "/opt/qemu-x86"
 
     def test_without_any_binary_the_expected_name_is_returned(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(q.platform, "machine", lambda: "riscv64")
@@ -198,6 +206,13 @@ class TestFileRulesMounts:
 
         assert [t for t, _, _ in specs] == ["pysb_run"]
 
+    def test_a_missing_path_does_not_hide_the_rules_after_it(self, tmp_path: Path) -> None:
+        (tmp_path / "a").mkdir()
+
+        specs, _ = self._mounts(tmp_path, [_expose(tmp_path / "absent"), _expose(tmp_path / "a")])
+
+        assert "pysb_1" in [t for t, _, _ in specs]
+
     def test_the_run_directory_is_always_shared_at_its_guest_mount(self, tmp_path: Path) -> None:
         specs, mounts = self._mounts(tmp_path, [])
 
@@ -232,11 +247,15 @@ class TestFileRulesMounts:
         shallow.mkdir()
         config = tmp_path / "config"
         config.mkdir()
-        monkeypatch.setattr(q, "_execution_dirs_mounts", lambda: [("other", tmp_path, "/o")])
+        monkeypatch.setattr(
+            q,
+            "_execution_dirs_mounts",
+            lambda: [("pysb_exec_0", tmp_path, "/zz/exec"), ("other", tmp_path, "/a/other")],
+        )
 
         specs, mounts = self._mounts(tmp_path, [_expose(deep), _expose(shallow)], config_dir=config)
 
-        assert [t for t, _ in mounts] == ["pysb_1", "pysb_0", "pysb_config", "pysb_run", "other"]
+        assert [t for t, _ in mounts] == ["pysb_1", "pysb_0", "pysb_config", "pysb_run", "other", "pysb_exec_0"]
         assert [t for t, _, _ in specs] == [t for t, _ in mounts]
 
     @pytest.mark.xfail(
@@ -266,6 +285,21 @@ class TestFileRulesMounts:
         specs, _ = self._mounts(tmp_path, [_expose(shared)])
 
         assert "pysb_exec_0" not in [t for t, _, _ in specs]
+
+    def test_an_already_exposed_exec_dir_does_not_hide_the_next_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        monkeypatch.setattr(
+            q,
+            "_execution_dirs_mounts",
+            lambda: [("pysb_exec_0", shared, str(shared.resolve())), ("pysb_exec_1", tmp_path, "/exec/other")],
+        )
+
+        specs, _ = self._mounts(tmp_path, [_expose(shared)])
+
+        assert [t for t, _, _ in specs if t.startswith("pysb_exec")] == ["pysb_exec_1"]
 
     def test_an_exec_dir_listed_twice_is_mounted_once(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
