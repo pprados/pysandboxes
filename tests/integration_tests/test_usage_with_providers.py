@@ -131,6 +131,8 @@ def _partial_mode_params() -> list:
     for os_sandbox in all_os_sandbox:
         if unsupported_platform_reason(backend_of(os_sandbox)):
             continue  # No row for a backend of another platform, as in os_sandbox_params
+        if os_sandbox == "subinterpreter" and sys.version_info < (3, 13):
+            continue  # Nor for a backend this Python lacks
         marks = []
         if os_sandbox in _PARTIAL_MODE_XFAIL:
             reason, run = _PARTIAL_MODE_XFAIL[os_sandbox]

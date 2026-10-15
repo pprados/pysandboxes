@@ -27,6 +27,7 @@ from ..e import RuleApiPermissionError, SandBoxError
 from ..guard_api import is_allowed
 from ..lifecycle import arm
 from ..main_logger import config_log
+from ..tools import in_subinterpreter
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,10 @@ def _register_signals_handlers() -> None:
             return handler(signum, frame)
         return None
 
+    if in_subinterpreter():
+        # os-sandbox=subinterpreter: only the main interpreter takes signal handlers.
+        # A signal then ends the host without saving the learned rules.
+        return
     for s in signals.keys():
         signal.signal(signal.Signals(s), signal_handler)
 

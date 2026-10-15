@@ -51,6 +51,7 @@ _PROVIDER_SPECS: dict[str, tuple[str, str, frozenset[str]]] = {
     "unshare": ("remote.unshare_sse_daemon", "UnshareSSEDaemon", _LINUX),
     "landlock": ("remote.landlock_daemon", "LandlockSSEDaemon", _LINUX),
     "qemu": ("remote.qemu_sse_daemon", "QemuSSEDaemon", _LINUX),
+    "subinterpreter": ("remote.subinterpreter_daemon", "SubInterpreterDaemon", _LINUX),
 }
 
 _provider_class_cache: dict[str, type[BaseDaemon]] = {}

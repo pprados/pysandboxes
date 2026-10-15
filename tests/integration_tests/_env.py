@@ -4,6 +4,7 @@
 
 import socket
 import subprocess
+import sys
 from functools import cache
 from pathlib import Path
 
@@ -33,6 +34,7 @@ ALL_OS_SANDBOX: tuple[str, ...] = (
     "firejail",
     "landlock",
     "bwrap",
+    "subinterpreter",
 )
 
 # Row name -> the value `os-sandbox=` accepts.
@@ -60,12 +62,13 @@ def os_sandbox_params() -> list:
 
     A backend not meant for this platform gets no row at all, rather than a skip: with
     PYSANDBOXES_FAIL_ON_SKIP a skip fails the run, and a Linux backend on macOS is not a
-    gap in the environment but a structural absence.
+    gap in the environment but a structural absence. So is ``subinterpreter`` before Python 3.13.
     """
     return [
         pytest.param(row, marks=[pytest.mark.slow] if row == "qemu-tcg" else [])
         for row in ALL_OS_SANDBOX
         if not unsupported_platform_reason(backend_of(row))
+        and not (row == "subinterpreter" and sys.version_info < (3, 13))
     ]
 
 

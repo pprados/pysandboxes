@@ -21,6 +21,7 @@ We offer several implementations to encapsulate the Python sandbox:
 | [unshare](https://man7.org/linux/man-pages/man2/unshare.2.html) | [here](unshare.md)                    | • Disk mapping (without rename)<br/>• File filtering<br/>• Network filtering | This is a technology that allows isolating a Linux process at the disk and network levels using `unshare`, `slirp4netns` and `iptables`. |
 | [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
 | [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
+| subinterpreter (experimental, Python 3.13+)                     | [here](subinterpreter.md)             | • no complementary security                                                  | The Python guards armed in a subinterpreter of the host process: no process, but no OS boundary either, and less than `subprocess`.     |
 
 *Other implementations will be added soon*
 

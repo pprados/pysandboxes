@@ -47,6 +47,7 @@ def test_linux_runs_every_public_provider() -> None:
             "unshare",
             "landlock",
             "qemu",
+            "subinterpreter",
         ]
 
 

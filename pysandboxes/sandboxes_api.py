@@ -37,6 +37,7 @@ from .tools import (
     Environ,
     SyncOrAsyncFunc,
     check_mixte_async_async,
+    in_subinterpreter,
     is_in_sandbox,
 )
 
@@ -254,6 +255,11 @@ class sandboxes:
                         return handler(signum, frame)
                 return None
 
+            if in_subinterpreter():
+                # os-sandbox=subinterpreter runs python-sb there: only the main interpreter
+                # takes signal handlers, so none is installed, and none is to be restored.
+                self._signals.clear()
+                return
             for s in self._signals.keys():
                 signal.signal(signal.Signals(s), signal_handler)
 

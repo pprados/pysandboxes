@@ -164,6 +164,13 @@ def main() -> int:
         # sandboxed one", which stays true even though no guard is patched in.
         enter()
         return python_in_sb(all_rules, python_cmd)
+    if all_rules.os_sandbox == "subinterpreter":
+        from .remote.subinterpreter_daemon import SubInterpreterDaemon
+
+        if reason := SubInterpreterDaemon.unavailable_reason():
+            print(reason, file=sys.stderr)
+            return -1
+        return cast(SubInterpreterDaemon, _daemon).run_python_sb(all_rules, python_cmd, log_level)
     os_provider = cast(BaseSubProcessDaemon, _daemon)
     _run_prefix = (
         cast(VMSSEDaemon, os_provider).host_run_temp_prefix

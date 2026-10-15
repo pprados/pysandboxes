@@ -34,6 +34,8 @@ kernel boundary is a Linux technology.
   (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
 
 ### Fixed
+- Creating a subinterpreter (`concurrent.interpreters`, `InterpreterPoolExecutor`, `_interpreters`) is a sensitive
+  call of the `process-exec` category: code run in a new interpreter escaped every Python guard
 - Learning mode no longer writes a rule under `/proc`: a library reading `/proc/stat` at import produced
   `expose-ro=/proc`, which exposed every process's environment and command line
 - Under `bwrap`, a project reached through a symbolic link runs in its own directory, not silently in `$HOME`
@@ -58,6 +60,8 @@ kernel boundary is a Linux technology.
   the profile invalid on the next run
 
 ### Added
+- Experimental `os-sandbox=subinterpreter` (Python 3.13+): the Python guards armed in a subinterpreter of the host
+  process, without starting a process. No OS boundary, see `wiki/subinterpreter.md`
 - A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
   more than 300 MB at import
 - Two coding-agent skills: one learns the rules a new feature needs from its tests and asks before granting them,

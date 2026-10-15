@@ -33,8 +33,13 @@ _LINUX_ONLY_TESTS = [
     "unit_tests/remote/test_landlock_*.py",
     "unit_tests/remote/test_qemu_*.py",
     "unit_tests/remote/test_unshare_*.py",
+    "integration_tests/remote/test_subinterpreter.py",
 ]
-collect_ignore_glob = [] if sys.platform == "linux" else _LINUX_ONLY_TESTS
+# The subinterpreter provider needs Python 3.13: a structural absence before, like another platform's.
+_SUBINTERPRETER_TESTS = ["integration_tests/remote/test_subinterpreter.py"]
+collect_ignore_glob = ([] if sys.platform == "linux" else _LINUX_ONLY_TESTS) + (
+    _SUBINTERPRETER_TESTS if sys.version_info < (3, 13) else []
+)
 
 # A script that calls an LLM (scripts/changelog-draft.sh) gets a command that fails, so no test spends tokens by
 # omission. Only the tests marked `llm` call the model, and only with RUN_LLM_TESTS=1.

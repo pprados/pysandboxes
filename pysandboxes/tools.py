@@ -219,6 +219,23 @@ def _walk_to_base(path: str, base: str) -> Iterator[str]:
 # %% -----------------------
 
 
+def _detect_subinterpreter() -> bool:
+    try:
+        import _interpreters  # type: ignore[import-not-found]
+    except ImportError:
+        return False  # before 3.13: never run by os-sandbox=subinterpreter
+    return bool(_interpreters.get_current()[0] != _interpreters.get_main()[0])
+
+
+# Read at import, before the guards are armed: importing `_interpreters` later is a user import.
+_IN_SUBINTERPRETER = _detect_subinterpreter()
+
+
+def in_subinterpreter() -> bool:
+    """Return whether this code runs in a subinterpreter, where no signal handler can be installed."""
+    return _IN_SUBINTERPRETER
+
+
 def is_in_sandbox() -> bool:
     """Check if currently executing inside a sandbox.
 
