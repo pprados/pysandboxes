@@ -12,6 +12,7 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
     """Check all possible syntax errors."""
     config_path = Path(__file__).parent / "syntax-error.profile"
 
+    cwd = str(Path.cwd())
     try:
         with caplog.at_level(logging.WARNING):  # type: ignore[attr-defined]
             extra: Mapping[str, Any] = {
@@ -21,11 +22,11 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
             }
             load_and_parse_config(
                 config_path,
+                envs={"PWD": cwd},
                 **extra,
             )
             assert 0, "Must raise an exception"
     except ConfigSyntaxError as e:
-        cwd = str(Path.cwd())
         without_filename = [
             error.replace(cwd, ".").replace("tests/unit_tests/syntax-error.profile", "syntax-error")
             for error in e.errors

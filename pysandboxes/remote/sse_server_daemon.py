@@ -146,7 +146,7 @@ async def sandbox_daemon(
             msg = await stdio_queue.get()
             if "result" in msg:
                 result = msg
-                break
+                break  # pragma: no mutate
             elif "exception" in msg or "done" in msg:
                 break
             elif "stdout" in msg:

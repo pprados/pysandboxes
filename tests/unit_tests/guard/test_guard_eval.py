@@ -7,15 +7,23 @@ import logging
 import os
 import pathlib
 import sysconfig
+import threading
 import time
 import types
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, cast
 
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import guard_eval
-from pysandboxes.e import EvalInterrupted, EvalSyntaxRejected, RuleEvalPermissionError, SandBoxError
-from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, LearnEvalRule, NameSet
+from pysandboxes.e import (
+    EvalInterrupted,
+    EvalSyntaxRejected,
+    RuleApiPermissionError,
+    RuleEvalPermissionError,
+    SandBoxError,
+)
+from pysandboxes.eval_rules import CORE_NODES, DEFAULT_RULES, SYNTAX_GROUPS, EvalRules, LearnEvalRule, NameSet
+from pysandboxes.eval_rules import parse_rules as parse_eval_rules
 from pysandboxes.guard_api import SENSITIVE_API, LearnApiRule, _deactivate_guard_api
 from pysandboxes.guard_api import activate_guard as activate_api
 from pysandboxes.guard_api import parse_rules as parse_api_rules
@@ -27,6 +35,7 @@ from pysandboxes.guard_eval import (
     _reset_context_warnings,
     _wrap_compile,
     _wrap_eval_like,
+    _wrap_formatter_get_field,
     activate_guard,
     build_namespace,
     classify_context_value,
@@ -423,7 +432,7 @@ def test_except_sandbox_error_does_not_catch_a_timeout() -> None:
 
 def test_an_exception_from_inside_reaches_the_caller() -> None:
     _activate(syntax=_syntax("arith"), namespace="closed", call=_names("int"))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="invalid literal for int"):
         guarded_eval("int('zz')")
 
 
@@ -442,7 +451,7 @@ def test_the_worker_frame_is_absent_from_the_traceback() -> None:
     import traceback as traceback_module
 
     _activate(syntax=_syntax("arith"), namespace="closed", call=_names("int"))
-    with pytest.raises(ValueError) as caught:
+    with pytest.raises(ValueError, match="invalid literal for int") as caught:
         guarded_eval("int('zz')")
     rendered = "".join(traceback_module.format_tb(caught.value.__traceback__))
     assert ", in _worker\n" not in rendered
@@ -783,3 +792,335 @@ def test_loading_a_profile_with_a_bypassed_eval_rule_fails(tmp_path: pathlib.Pat
     with pytest.raises(ConfigSyntaxError) as caught:
         load_and_parse_config(profile)
     assert any("'eval-call=len' is never applied" in error for error in caught.value.errors)
+
+
+def test_a_dunder_name_sorting_before_builtins_is_still_reported(caplog: pytest.LogCaptureFixture) -> None:
+    """`__builtins__` is skipped by exact name, not by everything lexicographically before it."""
+    with caplog.at_level("WARNING", logger="pysandboxes.guard_eval"):
+        warn_about_context({"OS": os}, "tools.py:66")
+    assert caplog.records
+
+
+def test_skipping_builtins_does_not_stop_later_findings(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="pysandboxes.guard_eval"):
+        warn_about_context({"__builtins__": {}, "mod": os}, "tools.py:66")
+    assert any("mod" in record.getMessage() for record in caplog.records)
+
+
+def test_a_scalar_entry_does_not_stop_later_findings(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="pysandboxes.guard_eval"):
+        warn_about_context({"x": 1, "mod": os}, "tools.py:66")
+    assert any("mod" in record.getMessage() for record in caplog.records)
+
+
+def test_a_deduplicated_entry_does_not_stop_later_findings(caplog: pytest.LogCaptureFixture) -> None:
+    warn_about_context({"mod": os}, "tools.py:66")  # pre-warm the dedup set, outside the capture
+    with caplog.at_level("WARNING", logger="pysandboxes.guard_eval"):
+        warn_about_context({"mod": os, "other": os}, "tools.py:66")
+    assert any("other" in record.getMessage() for record in caplog.records)
+
+
+def test_adaptive_namespace_from_real_config_honours_the_caller_context() -> None:
+    """A namespace value parsed from a real `.py-sandboxes` line is a fresh `str`, not the interned
+    literal a test fixture would pass: the adaptive branch must still recognise it."""
+    errors: list[Any] = []
+    profiles, _ = parse_eval_rules([ConfigLine("eval-namespace=adaptive", pathlib.Path("p"), 1)], errors)
+    assert not errors
+    rules = cast(EvalRules, profiles[""])._replace(declared=True)
+    caller: dict[str, Any] = {"helper": len}
+    namespace = build_namespace(rules, caller_globals=caller, names=None, from_wrapper=False)
+    assert namespace is caller
+
+
+def test_caller_namespace_from_real_config_bypasses_eval_guarding() -> None:
+    errors: list[Any] = []
+    profiles, _ = parse_eval_rules([ConfigLine("eval-namespace=caller", pathlib.Path("p"), 1)], errors)
+    assert not errors
+    rules = cast(EvalRules, profiles[""])._replace(declared=True)
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    activate_guard(ImmutableDict({"": rules}))
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        assert patched_eval("[x for x in (1, 2)]") == [1, 2]
+    finally:
+        _deactivate_guard_api()
+
+
+def test_caller_namespace_from_real_config_bypasses_compile_guarding() -> None:
+    errors: list[Any] = []
+    profiles, _ = parse_eval_rules([ConfigLine("eval-namespace=caller", pathlib.Path("p"), 1)], errors)
+    assert not errors
+    rules = cast(EvalRules, profiles[""])._replace(declared=True)
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    activate_guard(ImmutableDict({"": rules}))
+    patched_compile = _patched()["builtins.compile"]
+    try:
+        code = patched_compile("[x for x in (1, 2)]", "<s>", "eval")
+        assert eval(code) == [1, 2]  # noqa: S307
+    finally:
+        _deactivate_guard_api()
+
+
+def test_default_namespace_does_not_bypass_eval_syntax_checking() -> None:
+    """The default profile namespace is "adaptive", which must stay on the guarded path: only an
+    explicit `eval-namespace=caller` may take the raw-builtin passthrough."""
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax())
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        with pytest.raises(EvalSyntaxRejected):
+            patched_eval("[x for x in ()]", {"__builtins__": {}})
+    finally:
+        _deactivate_guard_api()
+
+
+def test_default_namespace_does_not_bypass_compile_syntax_checking() -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax())
+    patched_compile = _patched()["builtins.compile"]
+    try:
+        with pytest.raises(EvalSyntaxRejected):
+            patched_compile("[x for x in ()]", "<s>", "eval")
+    finally:
+        _deactivate_guard_api()
+
+
+def test_a_bare_eval_under_adaptive_does_not_crash_warning_about_a_missing_context() -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="adaptive")
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        assert patched_eval("40 + 2") == 42
+    finally:
+        _deactivate_guard_api()
+
+
+def test_adaptive_warns_when_an_explicit_context_is_passed(monkeypatch: pytest.MonkeyPatch) -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="adaptive")
+    patched_eval = _patched()["builtins.eval"]
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_eval, "add_learning_rule", recorded.append)
+    try:
+        assert patched_eval("40 + 2", {"mod": os, "__builtins__": {}}) == 42
+    finally:
+        _deactivate_guard_api()
+    assert recorded
+
+
+def test_adaptive_warning_recognises_a_namespace_value_from_real_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`eval-namespace=adaptive` parsed from a real `.py-sandboxes` line is a fresh `str`, not the
+    interned literal a test fixture would pass: the exposure-warning gate must recognise it too."""
+    errors: list[Any] = []
+    lines = [
+        ConfigLine("eval-syntax=arith", pathlib.Path("p"), 1),
+        ConfigLine("eval-namespace=adaptive", pathlib.Path("p"), 2),
+    ]
+    profiles, _ = parse_eval_rules(lines, errors)
+    assert not errors
+    rules = cast(EvalRules, profiles[""])._replace(declared=True)
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    activate_guard(ImmutableDict({"": rules}))
+    patched_eval = _patched()["builtins.eval"]
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_eval, "add_learning_rule", recorded.append)
+    try:
+        assert patched_eval("40 + 2", {"mod": os, "__builtins__": {}}) == 42
+    finally:
+        _deactivate_guard_api()
+    assert recorded
+
+
+def test_closed_namespace_does_not_warn_about_an_explicit_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    patched_eval = _patched()["builtins.eval"]
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_eval, "add_learning_rule", recorded.append)
+    try:
+        assert patched_eval("40 + 2", {"mod": os, "__builtins__": {}}) == 42
+    finally:
+        _deactivate_guard_api()
+    assert not recorded
+
+
+def test_the_patched_eval_honours_the_callers_globals_under_adaptive() -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="adaptive", call=_names("len"))
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        assert patched_eval("x + 1", {"x": 41}) == 42
+    finally:
+        _deactivate_guard_api()
+
+
+def test_exec_on_a_produced_eval_code_object_still_returns_none() -> None:
+    """`exec()` must return None, even when the compiled code was produced for `eval` mode."""
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    patched_compile = _patched()["builtins.compile"]
+    patched_exec = _patched()["builtins.exec"]
+    try:
+        code = patched_compile("40 + 2", "<s>", "eval")
+        assert patched_exec(code, {"__builtins__": {}}, {}) is None
+    finally:
+        _deactivate_guard_api()
+
+
+def test_the_eval_wrapper_still_classifies_as_a_strong_capability() -> None:
+    wrapper = _wrap_eval_like(guard_eval._RAW_EVAL, qualname="builtins.eval", mode="eval")
+    assert classify_context_value(wrapper) == "strong"
+
+
+def test_the_compile_wrapper_still_classifies_as_a_strong_capability() -> None:
+    wrapper = _wrap_compile(guard_eval._RAW_COMPILE)
+    assert classify_context_value(wrapper) == "strong"
+
+
+def test_the_formatter_get_field_wrapper_keeps_the_original_name_and_module() -> None:
+    import string
+
+    wrapper = _wrap_formatter_get_field(string.Formatter.get_field)
+    assert wrapper.__name__ == "get_field"
+    assert wrapper.__module__ == "string"
+
+
+def test_wrap_compile_is_idempotent_on_its_own_output() -> None:
+    once = _wrap_compile(guard_eval._RAW_COMPILE)
+    assert _wrap_compile(once) is once
+
+
+def test_compile_without_any_eval_key_is_refused() -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    activate_guard(ImmutableDict({}))
+    patched_compile = _patched()["builtins.compile"]
+    try:
+        with pytest.raises(RuleApiPermissionError, match="dynamic-code"):
+            patched_compile("1 + 1", "<s>", "eval")
+    finally:
+        _deactivate_guard_api()
+
+
+def test_compile_exempts_ambient_dataclasses_generation_even_when_undeclared() -> None:
+    """Mirrors `test_dataclasses_still_works_under_an_armed_declared_profile`, for `compile`, with no
+    declared profile and no python-api grant: the ambient exemption alone must let it through."""
+    stdlib_path = str(pathlib.Path(sysconfig.get_paths()["stdlib"]) / "dataclasses.py")
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    activate_guard(ImmutableDict({}))
+    patched_compile = _patched()["builtins.compile"]
+    namespace: dict[str, object] = {"patched_compile": patched_compile}
+    probe = guard_eval._RAW_COMPILE(
+        "def probe():\n    return patched_compile('1 + 1', '<string>', 'eval')\n",
+        stdlib_path,
+        "exec",
+    )
+    guard_eval._RAW_EXEC(probe, namespace)
+    try:
+        code = namespace["probe"]()  # type: ignore[operator]
+        assert eval(code) == 2  # noqa: S307
+    finally:
+        _deactivate_guard_api()
+
+
+def test_the_unknown_profile_message_lists_configured_profiles() -> None:
+    activate_guard(
+        ImmutableDict(
+            {
+                "": DEFAULT_RULES._replace(declared=True),
+                "llm": DEFAULT_RULES._replace(declared=True),
+            }
+        )
+    )
+    with pytest.raises(ValueError) as caught:
+        resolve_profile("other")
+    assert "llm" in str(caught.value)
+    assert "(none)" not in str(caught.value)
+
+
+def test_the_patched_eval_tag_names_the_default_profile() -> None:
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax())
+    patched_eval = _patched()["builtins.eval"]
+    try:
+        with pytest.raises(EvalSyntaxRejected, match=r"<eval:default>"):
+            patched_eval("1 + 1", {"__builtins__": {}})
+    finally:
+        _deactivate_guard_api()
+
+
+def test_the_leak_threshold_is_a_durable_refusal_not_an_exact_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A one-shot `==`/`is` match would stop refusing the instant the leak count passed the cap by any margin."""
+    _activate(syntax=_syntax("arith"), namespace="closed", max_leaked_threads=4)
+    for count in (4, 5):
+        monkeypatch.setattr(guard_eval, "leaked_threads", lambda count=count: count)
+        with pytest.raises(EvalInterrupted, match="eval-max-leaked-threads"):
+            guarded_eval("40 + 2")
+
+
+def test_learning_from_eval_mode_parses_the_source_as_an_expression(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An assignment is not valid in eval mode: learning from an `eval()` call must parse the source
+    the same way the enforced path does, or it proposes rules the enforced path never needs."""
+    assert _learned_from(monkeypatch, "x = 1", None) == []
+
+
+def test_learning_mode_records_a_format_field_attribute_observed_only_at_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`'{0.real}'.format(x)` resolves `real` in C, invisible to the static AST pass: only the post-run
+    recording of `state.attributes` can propose `eval-attribute=real`."""
+    _activate(syntax=_syntax(), namespace="closed", attribute=_names("format"))
+    recorded: list[Any] = []
+    monkeypatch.setattr(guard_eval, "add_learning_rule", recorded.append)
+    set_learning_mode(True)
+    try:
+        assert guarded_eval("'{0.real}'.format(x)", names={"x": 1}) == "1"
+    finally:
+        set_learning_mode(False)
+    assert LearnEvalRule("eval-attribute", "real") in recorded
+
+
+def test_threads_started_by_the_guard_use_the_raw_primitives_even_when_patched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_start_unguarded` must swap the raw thread primitives back in, even when guard_api's own armed
+    patches are installed on `threading` -- otherwise the guard's own watchdog/worker threads are
+    refused by the very guard they implement."""
+    _deactivate_guard_api()
+    activate_api(())
+    arm_api()
+    _activate(syntax=_syntax("arith"), namespace="closed")
+    table = guard_eval.guard_api.patch_rules(False)
+    for name, raw in guard_eval._RAW_THREAD_PRIMITIVES.items():
+        qualname = f"threading.{name}"
+        if qualname in table:
+            monkeypatch.setattr(threading, name, table[qualname](raw))
+    try:
+        assert guarded_eval("40 + 2") == 42
+    finally:
+        _deactivate_guard_api()

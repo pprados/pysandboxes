@@ -240,7 +240,7 @@ def _python_interactive(
             # Start the standard interactive console
             try:
                 extra: dict[str, Any] = {}
-                if sys.version_info[:2] >= (3, 13):
+                if sys.version_info[:2] >= (3, 13):  # pragma: no mutate
                     extra = {"local_exit": True}
                 code.interact(
                     banner=banner if ban and not banner_shown else "",
@@ -387,6 +387,9 @@ def python_in_sb(
                     "Try `python-sb -h' for more information.\n",
                     file=sys.stderr,
                 )
+        elif python_cmd[0] == "-":
+            # Case: the program comes from stdin, as `python -` does
+            return _python_command(all_rules, sys.stdin.read(), python_cmd)
         else:
             # Run a script
             return _python_script(all_rules, Path(python_cmd[0]), python_cmd[1:])

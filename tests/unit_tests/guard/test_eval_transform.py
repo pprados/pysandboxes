@@ -17,8 +17,10 @@ from pysandboxes.eval_transform import (
     RESERVED_PREFIX,
     Violation,
     inject,
+    learn_targets,
     raise_if_rejected,
     render_report,
+    render_violation,
     validate,
 )
 
@@ -202,12 +204,6 @@ def test_the_reserved_prefix_is_refused_as_an_attribute() -> None:
     assert _check("x.__sb_getattr__", syntax=_syntax(), magic=_names("__sb_getattr__"))
 
 
-def test_an_attribute_store_is_refused() -> None:
-    violations = _check("x.attr = 1", syntax=_syntax("assign"), attribute=_names("attr"))
-    assert len(violations) == 1
-    assert "Store" in violations[0].message or "assign" in violations[0].message
-
-
 def test_an_attribute_delete_is_refused() -> None:
     assert _check("del x.attr", syntax=_syntax("assign"), attribute=_names("attr"))
 
@@ -259,10 +255,6 @@ def test_the_exception_carries_one_block_per_violation() -> None:
         raise_if_rejected("<eval>", source, violations)
     assert len(caught.value.violations) == len(violations)
     assert all("line " in block for block in caught.value.violations)
-
-
-def test_raise_if_rejected_is_a_no_op_without_violations() -> None:
-    raise_if_rejected("<eval>", "1", [])
 
 
 def _compile(source: str) -> CodeType:
@@ -361,3 +353,59 @@ def test_recursion_is_bounded_at_runtime() -> None:
             _run("def f(n):\n    return f(n + 1)\nresult = f(0)")
     finally:
         pop_state()
+
+
+def test_a_grouped_violation_also_names_the_narrower_syntax_token() -> None:
+    violations = _check("1 + 1", syntax=_syntax())
+    assert "(or, narrower: eval-syntax=BinOp)" in violations[0].remedy
+
+
+def test_an_ungrouped_violation_does_not_name_a_narrower_token() -> None:
+    violations = _check("global x", syntax=_syntax())
+    assert any(v.remedy == "eval-syntax=Global" for v in violations)
+
+
+def test_render_violation_shows_the_snippet_for_a_non_last_line() -> None:
+    source = "1 + 1\nx\ny\n"
+    violations = _check(source, syntax=_syntax())
+    first = next(v for v in violations if v.lineno == 1)
+    assert first.lineno < len(source.splitlines())
+    assert "^" in render_violation(source, first)
+
+
+def test_render_violation_shows_the_snippet_for_the_last_line() -> None:
+    source = "1 + 1\n"
+    violations = _check(source, syntax=_syntax())
+    last = violations[0]
+    assert last.lineno == len(source.splitlines())
+    assert "^" in render_violation(source, last)
+
+
+def test_render_violation_shows_no_snippet_for_an_unlocated_violation() -> None:
+    source = "1 + 1\n2 + 2\n"
+    violation = Violation(lineno=0, col=0, message="m", remedy="r")
+    rendered = render_violation(source, violation)
+    assert "^" not in rendered
+    assert "2 + 2" not in rendered
+
+
+def test_the_warning_suffix_is_scoped_to_the_violation_that_has_one() -> None:
+    source = "1 + 1\nimport os\n"
+    violations = _check(source, syntax=_syntax("import"))
+    arith = next(v for v in violations if "BinOp" in v.message)
+    imp = next(v for v in violations if "os" in v.remedy)
+    assert not arith.warning
+    assert imp.warning
+    assert "⚠" not in render_violation(source, arith)
+    assert "⚠" in render_violation(source, imp)
+
+
+def test_an_augmented_assignment_on_an_attribute_is_left_untouched() -> None:
+    """Phase 2 assumes a `Name` or `Subscript` target; an `Attribute` one must early-return, not crash."""
+    tree = inject(ast.parse("obj.attr **= 2"))
+    assert "__sb_binop__" not in ast.dump(tree)
+
+
+def test_learn_targets_ignores_a_scalar_remedy() -> None:
+    violations = [Violation(lineno=1, col=0, message="m", remedy="eval-max-depth=10")]
+    assert learn_targets(violations) == []

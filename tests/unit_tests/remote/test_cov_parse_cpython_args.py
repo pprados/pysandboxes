@@ -7,6 +7,7 @@ Each test states what CPython does with the command line.
 
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
@@ -76,3 +77,26 @@ def test_a_module_command_parses_in_a_fresh_interpreter() -> None:
 
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.strip() == "['-m', 'json.tool']"
+
+
+def test_a_module_command_looks_up_the_config_of_its_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    looked_up: list[str] = []
+
+    def find(module: str, config: str) -> Path:
+        looked_up.append(module)
+        return Path("/configs/pkg/.py-sandboxes")
+
+    monkeypatch.setattr("pysandboxes.remote.parse_cpython_args.find_config_for_module", find)
+
+    assert parse_python_cmd_line(["-m", "pkg.mod"])[3] == Path("/configs/pkg/.py-sandboxes")
+    assert parse_python_cmd_line(["-m", "pkg.mod", "arg"])[3] == Path("/configs/pkg/.py-sandboxes")
+    assert looked_up == ["pkg.mod", "pkg.mod"]
+
+
+def test_a_script_command_does_not_look_up_a_module_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    def find(module: str, config: str) -> Path:
+        raise AssertionError(f"looked up {module}")
+
+    monkeypatch.setattr("pysandboxes.remote.parse_cpython_args.find_config_for_module", find)
+
+    parse_python_cmd_line(["script.py", "pkg.mod"])

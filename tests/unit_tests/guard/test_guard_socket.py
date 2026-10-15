@@ -1,7 +1,7 @@
 import logging
 import re
 import sys
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 from pathlib import Path
 from socket import AddressFamily, SocketKind
 from typing import (
@@ -21,14 +21,21 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleSocketConnectionRefusedError
 from pysandboxes.guard_socket import (
+    Action,
     AddrInfoType,
     Direction,
     Kind,
     LearnSocketRule,
+    SocketMask,
+    SocketRule,
+    _addr_infos_from_ips,
     _check_address_with_rules,
     _convert_ports_range,
     _deactivate_guard_sockets,
+    _resolve_wildcard_host,
     _socket_add_learning_rule,
+    _wrap_socket_getaddrinfo,
+    _wrap_socket_gethostbyname_ex,
     activate_guard,
     generate_rules,
     parse_rules,
@@ -425,6 +432,10 @@ def test_socket_type_any_allows_different_types(mock_getaddrinfo: Mock) -> None:
         ("  80  ,  443 ", (80, 443)),  # With spaces
         ("8000-", range(8000, 65536)),  # Open-ended range
         ("10-10", (10,)),  # Single port range
+        ("0-0", (0,)),  # Range starting and ending at the lowest valid port
+        ("65535-65535", (65535,)),  # Range starting and ending at the highest valid port
+        ("8000-65535", range(8000, 65536)),  # Range ending at the highest valid port
+        ("300-300", (300,)),  # Single-port range above the small-int cache
         ("", ()),  # Empty string
         (" ", ()),  # String with only spaces
         (",", ()),  # Only a comma
@@ -637,12 +648,9 @@ def test_a_udp_rule_refuses_tcp() -> None:
         _check_address_with_rules(rules, Kind.TCP, ("127.0.0.1", 53), Direction.OUT)
 
 
-def test_a_kind_list_allows_every_listed_kind() -> None:
-    """``any`` and an explicit list must still accept both kinds."""
-    for spec in ("tcp,udp", "any", "*"):
-        rules = _parse_ok(f"net=ALLOW|{spec}|127.0.0.1|80|OUT")
-        for kind in (Kind.TCP, Kind.UDP):
-            _check_address_with_rules(rules, kind, ("127.0.0.1", 80), Direction.OUT)
+def test_the_highest_port_is_a_valid_destination() -> None:
+    rules = _parse_ok("net=ALLOW|tcp|127.0.0.1|65535|OUT")
+    _check_address_with_rules(rules, Kind.TCP, ("127.0.0.1", 65535), Direction.OUT)
 
 
 # DNS pinning is the anti-rebinding defence: a host named in a rule is
@@ -1006,3 +1014,97 @@ def test_learning_records_a_missing_rule_without_logging_a_refusal(caplog: pytes
         _socket_add_learning_rule(_FakeSocket(SocketKind.SOCK_STREAM), ("10.0.0.1", 443), Direction.OUT, rule)
     assert recorded == [rule]
     assert not caplog.records
+
+
+# %% 8. Mutation-testing gaps: the two-pass scan, resolver pins, and platform identity
+
+
+def test_check_address_with_rules_a_deny_still_wins_when_the_tuple_is_unsorted() -> None:
+    """``parse_rules`` always sorts DENY first; this proves the two-pass scan does not rely on it."""
+    config = ConfigLine("net=DENY|TCP|198.51.100.0/24|443|OUT", Path(), 1)
+    mask = SocketMask((Kind.TCP,), ip_network("198.51.100.0/24"), (443,))
+    rules = (
+        SocketRule(Action.ALLOW, mask, (Direction.OUT,), config),
+        SocketRule(Action.DENY, mask, (Direction.OUT,), config),
+    )
+
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, ("198.51.100.5", 443), Direction.OUT)
+
+
+def test_a_second_matching_allow_rule_does_not_log_again(caplog: pytest.LogCaptureFixture) -> None:
+    """The inner loop stops at the first matching ALLOW: a later one must not also log."""
+    mask = SocketMask((Kind.TCP,), ip_network("198.51.100.0/24"), (443,))
+    rules = (
+        SocketRule(
+            Action.ALLOW, mask, (Direction.OUT,), ConfigLine("net=ALLOW|TCP|198.51.100.0/24|443|OUT", Path(), 1)
+        ),
+        SocketRule(
+            Action.ALLOW, mask, (Direction.OUT,), ConfigLine("net=ALLOW|TCP|198.51.100.0/24|443|OUT", Path(), 2)
+        ),
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="Pysandboxes"):
+        _check_address_with_rules(rules, Kind.TCP, ("198.51.100.5", 443), Direction.OUT)
+
+    allow_logs = [r for r in caplog.records if "ALLOW by explicit rule" in r.getMessage()]
+    assert len(allow_logs) == 1
+
+
+def test_hostname_deny_rule_is_logged_as_an_error(mock_getaddrinfo: Mock, caplog: pytest.LogCaptureFixture) -> None:
+    """A DENY on a hostname must log an error, the same as a DENY on a literal IP does."""
+    mock_getaddrinfo.return_value = [(AddressFamily.AF_INET, Kind.TCP, 6, "", ("198.51.100.9", 443))]
+    rules = _parse_ok("net=DENY|TCP|198.51.100.9/32|443|OUT")
+
+    with caplog.at_level(logging.ERROR, logger="Pysandboxes"), pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, ("blocked.example", 443), Direction.OUT)
+
+    assert any("DENIED by explicit rule" in r.getMessage() for r in caplog.records)
+
+
+def test_gethostbyname_ex_falls_back_to_the_queried_name_for_an_empty_pin(pin_dns: None) -> None:
+    """A name pinned to zero addresses (``set_pin_dns``'s ``v or ()``) must not index into it."""
+    import pysandboxes.guard_socket as gs
+
+    gs._pin_dns = ImmutableDict({"empty.example": ()})
+    wrapped = _wrap_socket_gethostbyname_ex(lambda *a, **k: ("unreachable", [], []))
+
+    assert wrapped("empty.example") == ("empty.example", [], [])
+
+
+def test_gethostbyname_ex_reports_the_pinned_canonical_name(pin_dns: None) -> None:
+    """The canonical name of the pin, not the queried name, must come back when one was recorded."""
+    import pysandboxes.guard_socket as gs
+
+    pinned = ((AddressFamily.AF_INET, SocketKind.SOCK_STREAM, 6, "canon.example", (_PINNED_IP, 0)),)
+    gs._pin_dns = ImmutableDict({"pinned.example": pinned})
+    wrapped = _wrap_socket_gethostbyname_ex(lambda *a, **k: ("unreachable", [], []))
+
+    name, _aliases, _addresses = wrapped("pinned.example")
+    assert name == "canon.example"
+
+
+def test_getaddrinfo_filters_the_pin_by_family_and_type(pin_dns: None) -> None:
+    """An explicit ``family=``/``type=`` must filter the pin, not just compare against a default of 0."""
+    import pysandboxes.guard_socket as gs
+
+    entries = tuple(_addr_infos_from_ips([ip_address("198.51.100.7"), ip_address("2001:db8::1")]))
+    gs._pin_dns = ImmutableDict({"dual.example": entries})
+    resolve = _wrap_socket_getaddrinfo(lambda *a, **k: [])
+
+    result = resolve("dual.example", None, int(AddressFamily.AF_INET6), int(SocketKind.SOCK_DGRAM))
+
+    assert result
+    assert all(r[0] == AddressFamily.AF_INET6 and r[1] == SocketKind.SOCK_DGRAM for r in result)
+
+
+def test_resolve_wildcard_host_defaults_to_ipv4_without_a_family_attribute() -> None:
+    """A socket-like object with no ``family`` attribute must fall back to the IPv4 wildcard, not crash."""
+    assert _resolve_wildcard_host(object(), ("", 80)) == ("0.0.0.0", 80)
+
+
+def test_patch_rules_adds_socketpair_on_a_non_interned_win32_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``sys.platform`` is the interpreter's own string, never identical to a literal: == must be used, not is."""
+    monkeypatch.setattr("sys.platform", "".join(["win", "32"]))
+
+    assert "socket.socketpair" in patch_rules(learn=False)

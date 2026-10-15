@@ -8,6 +8,7 @@
 # author's decision, not an observation: review each one.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
+include-platform=linux "../linux-standard-imports.profile"
 
 # A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the
 # nearest .env above it and copies every name into os.environ, past the env= rules.
@@ -27,10 +28,6 @@ expose-ro=../..
 net=ALLOW|TCP|ip6-localhost|0|IN
 net=ALLOW|TCP|ip6-loopback|0|IN
 
-# ⚠ native: native code and arbitrary memory access
-python-api=ALLOW:ctypes.CDLL
-python-api=ALLOW:_ctypes.dlopen
-
 # The calculator tool evaluates a string the model produced. `closed` rather
 # than the adaptive default: the caller already passes {"__builtins__": {}},
 # so the resulting namespace is identical, and a profile handling model output
@@ -49,7 +46,7 @@ env=PYDANTIC_DISABLE_PLUGINS=${PYDANTIC_DISABLE_PLUGINS}
 env=VIRTUAL_ENV=${VIRTUAL_ENV}
 
 # ⚠ Dangerous!
-python-import=atexit, ctypes, importlib, inspect, mmap, subprocess
+python-import=atexit, importlib, inspect, mmap, subprocess
 
 # Standard Python
 python-import=__future__, _codecs_cn, _codecs_hk, _codecs_iso2022, _codecs_jp
@@ -111,5 +108,5 @@ remote-result-mode=data-only
 
 # Add rules (2026/10/07 at 16:50)
 # Standard Python
-python-import=_ctypes, compression
+python-import=compression
 

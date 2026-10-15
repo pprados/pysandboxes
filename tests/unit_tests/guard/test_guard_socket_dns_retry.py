@@ -15,6 +15,7 @@ mistake in the profile.
 """
 
 import socket
+from ipaddress import ip_network
 from pathlib import Path
 from unittest.mock import patch
 
@@ -119,3 +120,17 @@ def test_tolerated_allow_is_claimed_not_left_unknown() -> None:
     assert not errors
     assert tuple(socket_rules) == ()
     assert list(unclaimed) == []
+
+
+def test_a_resolved_hostname_is_recorded_as_its_own_network() -> None:
+    """A real hostname (not in ``/etc/hosts``) that resolves must yield its own network.
+
+    ``_yield_networks_from_string`` builds its result from the resolver's answer, not
+    the hosts-file path: an empty loop here would make the whole rule vanish silently.
+    """
+    errors: list[ErrorMsg] = []
+    lines = [ConfigLine(_DENY_RULE, Path(), 1)]
+    with patch("pysandboxes.guard_socket.socket.getaddrinfo", side_effect=[_RESOLVED]):
+        socket_rules, _, _ = parse_rules(lines, errors)
+    assert not errors
+    assert [rule.mask.network for rule in socket_rules] == [ip_network("93.184.216.34/32")]

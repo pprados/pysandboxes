@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes.guard_files import _apply_dest_to_src_rules, _without_ntfs_streams
+from pysandboxes.guard_files import _apply_dest_to_src_rules, _dir_fd_path, _without_ntfs_streams, patch_rules
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import activate_guard_files_rules
@@ -67,6 +67,15 @@ def test_macos_matches_an_ignored_name_whatever_its_case(env_file: Path, monkeyp
     _arm(env_file.parent, ".env")
 
     assert _is_ignored(str(env_file.with_name(".ENV")))
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="asserts the default Linux case-sensitive behavior")
+def test_linux_ignore_matching_stays_case_sensitive(env_file: Path) -> None:
+    """`sys.platform == "darwin"` must not be loosened to an ordering comparison: `"linux" >=
+    "darwin"` is true, which would wrongly fold case on Linux too."""
+    _arm(env_file.parent, ".env")
+
+    assert not _is_ignored(str(env_file.with_name(".ENV")))
 
 
 def test_a_link_to_an_ignored_file_is_ignored(env_file: Path) -> None:
@@ -222,3 +231,36 @@ def test_an_exposed_directory_is_writable_by_its_short_and_long_names(tmp_path: 
     activate_guard_files_rules([ConfigLine(f"expose-rw={rule}", Path(), 0)])
 
     assert _is_writable(f"{access}\\file")
+
+
+def test_dir_fd_path_uses_fcntl_on_macos(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`sys.platform == "darwin"` must not be loosened to `<`: `"darwin" < "darwin"` is False,
+    which would wrongly take the Linux `/proc/self/fd` branch on macOS."""
+    monkeypatch.setattr("pysandboxes.guard_files.sys.platform", "darwin")
+    calls = []
+
+    class _FakeFcntl:
+        F_GETPATH = 50
+
+        @staticmethod
+        def fcntl(fd: int, cmd: int, arg: bytes) -> bytes:
+            calls.append((fd, cmd))
+            return str(tmp_path).encode() + b"\0" * 10
+
+    monkeypatch.setattr("pysandboxes.guard_files.fcntl", _FakeFcntl, raising=False)
+
+    result = _dir_fd_path("file.txt", 3)
+
+    assert result == str(tmp_path / "file.txt")
+    assert calls == [(3, _FakeFcntl.F_GETPATH)]
+
+
+def test_patch_rules_excludes_chown_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`sys.platform != "win32"` must not be loosened to `<=`: `"win32" <= "win32"` is True, which
+    would wrongly add `os.chown`/`os.lchown` on Windows, which has no such calls."""
+    monkeypatch.setattr("pysandboxes.guard_files.sys.platform", "win32")
+
+    rules = patch_rules(learn=False)
+
+    assert "os.chown" not in rules
+    assert "os.lchown" not in rules

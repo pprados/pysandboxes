@@ -127,3 +127,19 @@ def test_generate_rules_leaves_a_home_relative_path_alone(tmp_path: Path) -> Non
         rules = generate_rules({LearnFileRule(work, False)})
 
     assert "expose-ro=~/project" in rules
+
+
+def test_generate_rules_records_a_first_write_observation_as_readwrite(tmp_path: Path) -> None:
+    """A brand-new parent's very first learned access, if it is a write, must promote that
+    parent to read-write: every other `generate_rules` call in this suite learns a read-only
+    access, so a rule swallowing the write flag on the first observation would go unnoticed."""
+    work = tmp_path / "project"
+    work.mkdir()
+
+    with (
+        patch.dict("pysandboxes.guard_files._special_env", {}, clear=True),
+        patch.dict("pysandboxes.guard_files._special_home", {}, clear=True),
+    ):
+        rules = generate_rules({LearnFileRule(work, True)})
+
+    assert rules == [f"expose-rw={work}"]

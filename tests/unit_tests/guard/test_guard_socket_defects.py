@@ -5,6 +5,8 @@
 Only local addresses are reached: the loopback and sockets the test opens itself.
 """
 
+import logging
+import re
 import socket
 import sys
 from collections.abc import Iterator
@@ -151,6 +153,17 @@ def test_nat64_well_known_prefix_address_is_judged_by_the_ipv4_rules() -> None:
     rules = _parse("net=ALLOW|*|*|*|OUT", "net=DENY|*|127.0.0.1/32|*|OUT")
     with pytest.raises(RuleSocketConnectionRefusedError):
         _check_address_with_rules(rules, Kind.TCP, ("64:ff9b::127.0.0.1", 80), Direction.OUT)
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["2001:db8::102:304", "2001:db8::ffff:102:304", "2001:db8::ffff:0:102:304", "::ffff:1:102:304", "fe80::102:304"],
+)
+def test_an_ipv6_address_ending_like_an_allowed_ipv4_is_not_that_ipv4(address: str) -> None:
+    """Only the four embedded forms carry an IPv4 address: any other IPv6 address is judged as itself."""
+    rules = _parse("net=ALLOW|*|1.2.3.4/32|*|OUT")
+    with pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, (address, 80), Direction.OUT)
 
 
 # %% 3. listen() without bind()
@@ -380,3 +393,123 @@ def test_a_pinned_name_without_ipv4_reports_eai_again(pin_dns_reset: None) -> No
     with pytest.raises(socket.gaierror) as raised:
         resolve("v6.test")
     assert raised.value.errno == socket.EAI_AGAIN
+
+
+# %% 8. Mutation-testing gaps
+
+
+def test_addr_infos_from_ips_builds_ipv4_entries_for_an_ipv4_address() -> None:
+    infos = _addr_infos_from_ips([ip_address("192.0.2.1")])
+    assert infos
+    assert all(family == socket.AF_INET and len(sockaddr) == 2 for family, _, _, _, sockaddr in infos)
+
+
+def test_ip_literal_deny_rule_uses_the_bracket_address_message() -> None:
+    """A DENY on a literal IP must not be reported in the hostname-form message."""
+    rules = _parse("net=DENY|TCP|192.0.2.1/32|443|OUT")
+    with pytest.raises(RuleSocketConnectionRefusedError, match=re.escape("[192.0.2.1]:443")):
+        _check_address_with_rules(rules, Kind.TCP, ("192.0.2.1", 443), Direction.OUT)
+
+
+def test_ip_literal_deny_rule_is_logged_as_an_error(caplog: pytest.LogCaptureFixture) -> None:
+    rules = _parse("net=DENY|TCP|192.0.2.1/32|443|OUT")
+    with caplog.at_level(logging.ERROR, logger="Pysandboxes"), pytest.raises(RuleSocketConnectionRefusedError):
+        _check_address_with_rules(rules, Kind.TCP, ("192.0.2.1", 443), Direction.OUT)
+    assert any("DENIED by explicit rule" in r.getMessage() for r in caplog.records)
+
+
+def test_port_number_looks_up_the_udp_service_for_a_datagram_socket(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A UDP caller asking for a service name by port must not get the TCP service database."""
+    calls: list[tuple[str, str]] = []
+
+    def fake_getservbyname(name: str, proto: str) -> int:
+        calls.append((name, proto))
+        return 123
+
+    monkeypatch.setattr(gs.socket, "getservbyname", fake_getservbyname)
+
+    assert gs._port_number("domain", socktype=int(socket.SOCK_DGRAM)) == 123
+    assert calls == [("domain", "udp")]
+
+
+def test_bind_to_af_unix_needs_write_access_not_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Binding creates a filesystem entry: an ``expose-ro=`` rule must not be enough."""
+    errors: list[ErrorMsg] = []
+    file_rules, _ = gf.parse_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 1)], errors)
+    assert not errors
+    monkeypatch.setattr(gf, "_rules", file_rules)
+    wrapped = patch_rules(learn=False)["socket.socket.bind"](lambda *a, **k: None)
+
+    with pytest.raises(SandBoxError) as refused:
+        wrapped(_FakeSocket(SocketKind.SOCK_STREAM), str(tmp_path / "s"))
+    assert sandbox_denials(refused.value)
+
+
+def test_connect_ex_to_af_unix_needs_write_access_not_read_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``connect_ex`` to a unix socket needs write permission at the OS level too."""
+    errors: list[ErrorMsg] = []
+    file_rules, _ = gf.parse_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 1)], errors)
+    assert not errors
+    monkeypatch.setattr(gf, "_rules", file_rules)
+    wrapped = patch_rules(learn=False)["socket.socket.connect_ex"](lambda *a, **k: 0)
+
+    with pytest.raises(SandBoxError) as refused:
+        wrapped(_FakeSocket(SocketKind.SOCK_STREAM), str(tmp_path / "s"))
+    assert sandbox_denials(refused.value)
+
+
+def test_sendto_to_af_unix_needs_write_access_not_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    errors: list[ErrorMsg] = []
+    file_rules, _ = gf.parse_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 1)], errors)
+    assert not errors
+    monkeypatch.setattr(gf, "_rules", file_rules)
+    wrapped = patch_rules(learn=False)["socket.socket.sendto"](lambda *a, **k: None)
+
+    with pytest.raises(SandBoxError) as refused:
+        wrapped(_FakeSocket(SocketKind.SOCK_DGRAM), b"x", str(tmp_path / "s"))
+    assert sandbox_denials(refused.value)
+
+
+def test_sendto_accepts_an_ipv6_four_tuple_destination() -> None:
+    """An IPv6 destination carries flowinfo/scopeid as a 4-tuple, not the IPv4 2-tuple shape."""
+    calls: list[tuple[Any, ...]] = []
+    wrapped = patch_rules(learn=False)["socket.socket.sendto"](lambda *a, **k: calls.append(a))
+    sock = _FakeSocket(SocketKind.SOCK_DGRAM)
+
+    wrapped(sock, b"x", ("::1", 53, 0, 0))
+
+    assert calls == [(sock, b"x", ("::1", 53, 0, 0))]
+
+
+def test_sendto_refuses_a_list_destination_as_an_unsupported_shape() -> None:
+    """A list is not the tuple shape a net= rule can judge, even though it looks like one."""
+    wrapped = patch_rules(learn=False)["socket.socket.sendto"](lambda *a, **k: None)
+
+    with pytest.raises(RuleSocketConnectionRefusedError, match="unsupported address"):
+        wrapped(_FakeSocket(SocketKind.SOCK_DGRAM), b"x", ["127.0.0.1", 9999])
+
+
+def test_sendmsg_with_fewer_than_three_trailing_args_defers_to_the_builtin() -> None:
+    """``sendmsg(buffers, ancdata)`` -- the documented minimal form -- carries no address to judge."""
+    calls: list[tuple[Any, ...]] = []
+
+    def _record(*args: Any, **_kwargs: Any) -> int:
+        calls.append(args)
+        return 1
+
+    wrapped = gs._wrap_socket_sendmsg(_record)
+    sock = _FakeSocket(SocketKind.SOCK_DGRAM)
+
+    assert wrapped(sock, [b"x"], []) == 1
+    assert calls == [(sock, [b"x"], [])]
+
+
+def test_sendmsg_still_judges_the_address_behind_extra_trailing_args() -> None:
+    """A 4th positional after (ancdata, flags, address) must not let the address through unjudged."""
+    wrapped = gs._wrap_socket_sendmsg(lambda *a, **k: 1)
+    sock = _FakeSocket(SocketKind.SOCK_DGRAM)
+
+    with pytest.raises(RuleSocketConnectionRefusedError, match="unsupported address"):
+        wrapped(sock, [b"x"], [], 0, 12345, "extra")

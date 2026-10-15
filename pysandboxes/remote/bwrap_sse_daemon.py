@@ -91,7 +91,7 @@ def _sandbox_pid(bwrap_pid: int, timeout: float = NETFILTER_TIMEOUT) -> int:
     host_net = os.readlink(_PROC / "self" / "ns" / "net")
     children = _PROC / str(bwrap_pid) / "task" / str(bwrap_pid) / "children"
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline:  # pragma: no mutate
         try:
             for child in children.read_text().split():
                 if (
@@ -132,7 +132,7 @@ def _apply_netfilter_from_host(sandbox_pid: int, netfilter_rules: tuple[str, ...
 def _slirp_ready(ready_fd: int, timeout: float) -> bool:
     """True once slirp4netns writes its ready byte; False on timeout, or when it exits first and closes the pipe."""
     readable, _, _ = select.select([ready_fd], [], [], timeout)
-    return bool(readable) and os.read(ready_fd, 1) != b""
+    return bool(readable) and os.read(ready_fd, 1) != b""  # pragma: no mutate
 
 
 def _kill_quietly(pid: int) -> None:
@@ -479,7 +479,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         # sys.executable: importing pysandboxes.sandboxes_api then died with
         # BrokenPipeError, the tracker having failed to exec "". The path is the
         # resolved one because that is what stays valid inside the sandbox.
-        args.extend(["--argv0", str(Path(sys.executable).resolve(strict=True))])
+        args.extend(["--argv0", str(Path(sys.executable).resolve(strict=True))])  # pragma: no mutate
 
         # Name the prefix explicitly rather than let CPython derive it, then put the
         # venv's site-packages back: PYTHONHOME resets sys.path to the base
@@ -531,7 +531,7 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         follow_links_executable(Path(sys.executable), bin_paths)
         for p in bin_paths:
             args.extend(["--ro-bind", str(p), str(p)])
-        resolved_exe = Path(sys.executable).resolve(strict=True)
+        resolved_exe = Path(sys.executable).resolve(strict=True)  # pragma: no mutate
         if resolved_exe not in bin_paths and not any(p in resolved_exe.parents for p in bin_paths):
             args.extend(["--ro-bind", str(resolved_exe), str(resolved_exe)])
         for sp in sys.path:

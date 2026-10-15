@@ -142,7 +142,7 @@ class TestSandboxesContextManager:
         mock_daemon = Mock()
         mock_start.return_value = mock_daemon
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="test error"):
             with sandboxes():
                 raise ValueError("test error")
 
@@ -159,7 +159,7 @@ class TestSandboxesContextManager:
         mock_daemon = Mock()
         mock_async_start.return_value = mock_daemon
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="test error"):
             async with sandboxes():
                 raise ValueError("test error")
 

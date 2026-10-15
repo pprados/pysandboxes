@@ -162,6 +162,24 @@ def test_relative_ignore_pattern_does_not_match_a_dot_named_ancestor(tmp_path: P
     assert open(root / "rw" / "file.txt").read() == "rw"
 
 
+def test_relative_ignore_pattern_is_judged_below_the_root_that_holds_the_path(tmp_path: Path) -> None:
+    # Another exposed root, listed first and sorting after the path, must not be taken for the root of the path.
+    root = Path(os.path.realpath(tmp_path)) / "x" / ".p" / "proj"
+    for name in ("ro", "rw", "zz"):
+        (root / name).mkdir(parents=True)
+    (root / "rw" / "file.txt").write_text("rw")
+    activate_guard_files_rules(
+        [
+            ConfigLine(f"expose-ro={root / 'zz'}", NonePath, 0),
+            ConfigLine(f"expose-ro={root / 'ro'}", NonePath, 0),
+            ConfigLine(f"expose-rw={root / 'rw'}", NonePath, 0),
+            ConfigLine("ignore=.*", NonePath, 0),
+        ]
+    )
+    assert open(root / "rw" / "file.txt").read() == "rw"
+    assert os.listdir(root / "rw") == ["file.txt"]
+
+
 def test_relative_ignore_pattern_still_hides_matching_names_below_the_root(tree: Path) -> None:
     # Keep the intended behaviour of a relative ignore= pattern.
     (tree / "rw" / ".secrets").mkdir()

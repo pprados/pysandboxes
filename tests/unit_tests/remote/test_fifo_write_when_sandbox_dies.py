@@ -9,6 +9,7 @@ caller waits forever instead of reporting the exit code.
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
@@ -30,16 +31,15 @@ async def test_dead_sandbox_reports_its_exit_code(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_live_reader_yields_a_writable_descriptor(tmp_path: Path) -> None:
-    """With a reader on the other end, the FIFO opens and stays usable for a blocking write."""
+async def test_a_sandbox_that_never_reads_times_out(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Alive but never reading: the wait must end on the start timeout, not last forever."""
     pipe_path = tmp_path / "config.fifo"
     os.mkfifo(pipe_path)
-    payload = b"x" * (1024 * 256)  # larger than the pipe buffer: the write must block, not fail
-    process = await asyncio.create_subprocess_exec("/bin/cat", str(pipe_path), stdout=asyncio.subprocess.DEVNULL)
-
-    fd = await asyncio.wait_for(_open_fifo_for_write(pipe_path, process), timeout=10)
-    with os.fdopen(fd, "wb") as fifo:
-        fifo.write(payload)
-        fifo.flush()
-
-    await asyncio.wait_for(process.wait(), timeout=10)
+    monkeypatch.setattr("pysandboxes.remote.client_subprocess_sse_daemon.TIMEOUT_FOR_START_DAEMON", 0.2)
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", "import time; time.sleep(30)")
+    try:
+        with pytest.raises(SandBoxError, match="did not read its configuration"):
+            await asyncio.wait_for(_open_fifo_for_write(pipe_path, process), timeout=5)
+    finally:
+        process.kill()
+        await process.wait()

@@ -177,11 +177,10 @@ def test_rules_flag_env_and_unenv() -> None:
     )
 
     assert not errors
-    by_ignore = {rule.ignore: rule for rule in rules}
-    assert by_ignore[False].pattern.match("FOO")
-    assert by_ignore[True].pattern.match("BAZ")
-    assert not by_ignore[False].pattern.match("FOOBAR")
-    assert not by_ignore[True].pattern.match("BAZOOKA")
+    env_rule = next(rule for rule in rules if rule.pattern.match("FOO"))
+    unenv_rule = next(rule for rule in rules if rule.pattern.match("BAZ"))
+    assert not env_rule.pattern.match("FOOBAR")
+    assert not unenv_rule.pattern.match("BAZOOKA")
 
 
 def test_wildcard_rule_keeps_a_matching_pattern() -> None:
@@ -277,6 +276,21 @@ def test_bytes_names_are_passed_unchanged_by_putenv_and_unsetenv(learning_enviro
         ("putenv", (b"BYTES_SET", b"value")),
         ("unsetenv", b"BYTES_REMOVED"),
     ]
+
+
+def test_the_patched_wrappers_keep_the_original_functions_name() -> None:
+    """``guard_wraps`` must still decorate each wrapper: without it, ``__name__`` stays ``"wrapper"``."""
+    table = patch_rules(learn=True)
+    originals: List[Tuple[str, Callable[..., Any]]] = [
+        ("os.getenv", os.getenv),
+        ("os.putenv", os.putenv),
+        ("os.unsetenv", os.unsetenv),
+    ]
+    if "os.getenvb" in table:
+        originals.append(("os.getenvb", os.getenvb))
+    for key, original in originals:
+        wrapped = table[key](original)
+        assert wrapped.__name__ == original.__name__, key
 
 
 def test_reading_a_variable_records_it(learning_environ: Set[str]) -> None:

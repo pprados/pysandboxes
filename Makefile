@@ -82,7 +82,15 @@ integration-tests:
 # own environment variables never reach the sandboxed child.
 ## Report test coverage
 coverage:
-	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-report=term --cov-report=html
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-branch --cov-report=term --cov-report=html
+
+# Each mutant runs the whole TESTS list: point TESTS at the module's own tests to go faster.
+MUTATION_TESTS ?= tests/unit_tests
+MUTATION_JOBS ?= 4
+## Mutation testing of one module (cosmic-ray): make mutation MODULE=pysandboxes/guard_socket.py [MUTATION_TESTS=...] [MUTATION_JOBS=4]
+mutation:
+	@test -n "$(MODULE)" || { echo "Usage: make mutation MODULE=pysandboxes/<module>.py"; exit 1; }
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run python scripts/mutation.py $(MODULE) --tests $(MUTATION_TESTS) --jobs $(MUTATION_JOBS)
 
 # Uncomment a sample only once it satisfies the acceptance criteria of its
 # design spec.

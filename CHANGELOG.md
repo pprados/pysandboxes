@@ -22,6 +22,10 @@ kernel boundary is a Linux technology.
 
 ## [0.0.0] - 202X-XX-XX
 
+### Added
+- Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
+  in separate files
+
 ### Changed
 - `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
   object the application passed in, as it already could not set its attributes

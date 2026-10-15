@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Iterator
 
 import pytest  # type: ignore[import-untyped]
 
@@ -12,11 +12,6 @@ from pysandboxes.py_sandbox import load_and_parse_config
 from .._env import NO_PROFILE_DNS_REASON, profile_hosts_resolvable
 
 pytestmark = pytest.mark.skipif(not profile_hosts_resolvable(), reason=NO_PROFILE_DNS_REASON)
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
-    pass
 
 
 @pytest.fixture(scope="module", autouse=True)

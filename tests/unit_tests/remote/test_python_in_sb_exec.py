@@ -58,7 +58,7 @@ def test_raw_builtins_restores_the_trio_for_the_repl() -> None:
 
 
 def test_raw_builtins_restores_the_patch_even_on_an_exception() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="boom"):
         with python_in_sb.raw_builtins():
             raise ValueError("boom")
     assert getattr(builtins.exec, "__pysandbox_eval__", False)

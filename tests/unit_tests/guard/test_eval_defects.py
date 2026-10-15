@@ -305,3 +305,32 @@ def test_a_format_spec_is_evaluated_once() -> None:
     _activate(call=_names("width"))
     assert guarded_eval("f'{1:{width()}}'", names={"width": width}) == "  1"
     assert calls == [1]
+
+
+def test_an_overlong_width_digit_string_is_refused_without_parsing_it() -> None:
+    """A 5000-digit width must be short-circuited, never handed to `int()`."""
+    _activate(max_alloc=1000, call=_names("format"))
+    with pytest.raises(RuleEvalPermissionError, match="eval-max-alloc"):
+        guarded_eval(f"format(1, '0{'9' * 5000}d')")
+
+
+def test_a_format_width_exactly_at_the_budget_is_allowed() -> None:
+    _activate(max_alloc=1000, call=_names("format"))
+    assert len(guarded_eval("format(1, '1000d')")) == 1000
+
+
+def test_a_percent_template_without_a_star_does_not_check_argument_values() -> None:
+    """No `*` width at all: the argument's numeric value must not be mistaken for a width."""
+    _activate(max_alloc=1000)
+    assert guarded_eval("'%d' % 99999999999") == "99999999999"
+
+
+def test_a_nested_format_field_ignores_non_int_extra_arguments() -> None:
+    _activate(max_alloc=1000, attribute=_names("format"))
+    assert guarded_eval("'{0:{1}}'.format(1, 3, 'extra')") == "  1"
+
+
+def test_a_plain_format_field_does_not_check_other_arguments() -> None:
+    """`{0}` takes no nested spec field, so the argument's value must pass untouched."""
+    _activate(max_alloc=1000, attribute=_names("format"))
+    assert guarded_eval("'{0}'.format(99999999999)") == "99999999999"

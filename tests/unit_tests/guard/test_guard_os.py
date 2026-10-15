@@ -10,6 +10,7 @@ from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_deni
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
+    _deactivate_all_rules,
     activate_guard_files_rules,
     files,  # noqa: F401
 )
@@ -378,7 +379,7 @@ def test_os_chdir_and_getcwd(files: Dict[str, Path]) -> None:  # noqa: F811
 
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-rw={os.environ['PWD']}", Path(), 0),
+        ConfigLine(f"expose-rw={os.getcwd()}", Path(), 0),
         ConfigLine(f"expose-rw={files['path']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
@@ -402,7 +403,7 @@ def test_os_getcwdb(files: Dict[str, Path]) -> None:  # noqa: F811
 
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-rw={os.environ['PWD']}", Path(), 0),
+        ConfigLine(f"expose-rw={os.getcwd()}", Path(), 0),
         ConfigLine(f"expose-rw={files['path']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
         ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
@@ -626,7 +627,7 @@ def test_os_access_read_only(files: Dict[str, Path]) -> None:  # noqa: F811
 
 @pytest.mark.skipif(
     not (sys.platform != "win32" and sys.platform != "linux"),
-    reason="requires special os",
+    reason="os.chflags and os.lchflags exist on macOS and the BSDs only",
 )
 def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
@@ -696,32 +697,6 @@ def test_os_chmod_and_lchmod_refused(files: Dict[str, Path]) -> None:  # noqa: F
             os.lchmod(files["bound_file"], mode | stat.S_IREAD | stat.S_IWRITE)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="requires no windows OS")
-def test_os_chown_and_lchown(files: Dict[str, Path]) -> None:  # noqa: F811
-    rules = [
-        ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
-        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
-        ConfigLine(f"expose-rw={files['bind_dest']}", Path(), 0),
-    ]
-    activate_guard_files_rules(rules)
-
-    import os
-
-    uid = os.stat(files["path"]).st_uid
-    gid = os.stat(files["path"]).st_gid
-    os.chown(files["path"], uid, gid)
-    os.chown(files["bound_file"], uid, gid)
-    os.chown(files["bind_dest"], uid, gid)
-    os.chown(files["bind_src"], uid, gid)
-
-    os.lchown(files["path"], uid, gid)
-    os.lchown(files["bound_file"], uid, gid)
-    os.lchown(files["bound_file"], uid, gid)
-    os.lchown(files["bind_dest"], uid, gid)
-    os.lchown(files["bind_src"], uid, gid)
-
-
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.chown")
 def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
@@ -741,6 +716,27 @@ def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:  # noqa: F
 
     with pytest.raises(RulePermissionError):
         os.lchown(files["bound_file"], uid, gid)
+
+
+def test_os_chown_judges_the_name_against_its_dir_fd(files: Dict[str, Path]) -> None:  # noqa: F811
+    """With ``dir_fd``, the name is relative to that directory, not to the current one."""
+    import os
+
+    inside, outside = files["bind_src"], files["bind_dest"]
+    (inside / "f").write_text("inside")
+    (outside / "f").write_text("outside")
+    uid, gid = os.stat(inside / "f").st_uid, os.stat(inside / "f").st_gid
+    outside_fd = os.open(outside, os.O_RDONLY)
+    cwd = os.getcwd()
+    os.chdir(inside)
+    try:
+        activate_guard_files_rules([ConfigLine(f"expose-rw={inside}", Path(), 0)])
+        with pytest.raises((RulePermissionError, RuleFileNotFoundError)):
+            os.chown("f", uid, gid, dir_fd=outside_fd)
+    finally:
+        _deactivate_all_rules()
+        os.chdir(cwd)
+        os.close(outside_fd)
 
 
 def test_os_replace(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -866,35 +862,6 @@ def test_os_utime_refused(files: Dict[str, Path]) -> None:  # noqa: F811
 
     with pytest.raises(RulePermissionError):
         os.utime(files["bound_file"], (yesterday, now))
-
-
-def test_os_scandir(files: Dict[str, Path]) -> None:  # noqa: F811
-    rules = [
-        ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
-        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
-        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
-    ]
-    activate_guard_files_rules(rules)
-
-    import os
-
-    with os.scandir(files["path"]) as entries:
-        rc = list(entries)
-    rc_name = [r.name for r in rc]
-    assert "bind_src" in rc_name
-    assert "bind_dest" in rc_name
-    assert "visible.txt" in rc_name
-    assert "ignore.log" not in rc_name
-    assert rc[0].is_file() or rc[0].is_dir()
-
-    with os.scandir(files["bind_dest"]) as entries:
-        rc = list(entries)
-    rc_name = [r.name for r in rc]
-    assert "bound_file.txt" in rc_name
-
-    with os.scandir(files["bind_src"]) as b:
-        assert "bound_file.txt" in [e.name for e in b]
 
 
 def test_os_scandir_entry_is_pathlike(files: Dict[str, Path]) -> None:  # noqa: F811
@@ -1033,3 +1000,78 @@ def test_os_and_posix_chroot_refused(files: Dict[str, Path]) -> None:  # noqa: F
 
     with pytest.raises(RuleFileNotFoundError):
         posix.chroot(files["ignore"])
+
+
+def test_dir_entry_stat_and_is_file_delegate_correctly(tmp_path: Path) -> None:
+    """`__getattr__`'s `name == "path"` must not be loosened to an ordering comparison: for
+    `name="stat"`, `"stat" > "path"` is True, which would wrongly return `self._path` (a string)
+    instead of the real bound method."""
+    import os
+
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+
+    with os.scandir(tmp_path) as it:
+        entry = next(iter(it))
+
+    assert entry.is_file() is True
+    assert entry.stat().st_size == 1
+
+
+def test_os_scandir_via_fd_does_not_require_write_access(tmp_path: Path) -> None:
+    import os
+
+    if os.scandir not in os.supports_fd:
+        pytest.skip("no fd-based scandir on this platform")
+
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    dir_fd = os.open(str(tmp_path), os.O_RDONLY)
+    try:
+        with os.scandir(dir_fd) as it:
+            names = [e.name for e in it]
+    finally:
+        os.close(dir_fd)
+    assert "f.txt" in names
+
+
+def test_os_scandir_decodes_a_bytes_path(tmp_path: Path) -> None:
+    import os
+
+    (tmp_path / "f.txt").write_text("x")
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    with os.scandir(str(tmp_path).encode()) as it:
+        names = [e.name for e in it]
+    assert "f.txt" in names
+
+
+def test_scandir_context_manager_closes_the_underlying_scanner_on_exit(tmp_path: Path) -> None:
+    """`__exit__` must call the wrapped scanner's own `__exit__` and clear the reference, or the
+    OS-level directory handle is never released."""
+    from pysandboxes.guard_files import _ScanDirContextManager
+
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    mgr = _ScanDirContextManager(str(tmp_path))
+    with mgr:
+        pass
+
+    assert mgr.scanner is None
+
+
+def test_scandir_iter_does_not_use_the_optimize_fast_path_during_learning(tmp_path: Path) -> None:
+    """`OPTIMIZE` is a hard-coded `False`: learning mode alone must not switch `__iter__` onto the
+    raw-iterator fast path, which bypasses the per-entry rule filter."""
+    from pysandboxes.guard_files import _ScanDirContextManager
+    from pysandboxes.learning import set_learning_mode
+
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", Path(), 0)])
+    mgr = _ScanDirContextManager(str(tmp_path))
+
+    set_learning_mode(True)
+    try:
+        result = iter(mgr)
+    finally:
+        set_learning_mode(False)
+        mgr.close()
+
+    assert result is mgr

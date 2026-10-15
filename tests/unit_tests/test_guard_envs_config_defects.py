@@ -174,7 +174,7 @@ def test_immutable_dict_has_no_instance_dict() -> None:
 
 
 def test_immutable_dict_from_pairs_keeps_keys_and_values_aligned() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="has length 0; 2 is required"):
         ImmutableDict([(), ("DUMMY_KEY", "abc")])  # type: ignore[arg-type]
     d = ImmutableDict([("DUMMY_KEY", "abc"), ("DUMMY_KEY", "def")])
     assert len(d) == 1

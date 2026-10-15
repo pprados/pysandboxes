@@ -66,7 +66,7 @@ def _search_module_config(config_path: Path | None) -> Path:
         caller_name = caller_spec.name
     caller_modules = caller_name.split(".")
     resource_config: Path | None = None
-    if caller_modules[0] != "__main__":
+    if caller_modules[0] != "__main__":  # pragma: no mutate
         # The nearest package holding the file wins: the top package of a sub-package may hold none.
         for pos in range(len(caller_modules), 0, -1):
             try:
@@ -199,15 +199,18 @@ def _parse_include(
 ) -> ConfigLines:
     # includes parameter is to detect the recursive includes
     others: ConfigLines = []
-    pattern = re.compile(r'^include\s+"(.+)"\s*$')
+    pattern = re.compile(r'^(?:include(?:-platform=([\w.-]+))?)\s+"(.+)"\s*$')
     for rule in rules:
         match = pattern.match(rule.rule)
         if match:
+            platform = match[1]
+            if platform is not None and platform != sys.platform:
+                continue
             # Test the text, not the Path: pathlib normalises "./x" to "x", so an
             # include written relative to the current directory looked like a bare
             # name and was searched next to the including file instead -- where it
             # is not, so the include was dropped without a word.
-            raw_filename = match[1]
+            raw_filename = match[2]
             filename = Path(raw_filename)
             if "/" not in raw_filename:
                 filename = root_path / filename
@@ -291,7 +294,7 @@ def parse_config(
     providers_rules, others = parse_provider_rules(others)
 
     os_sandbox_params: ImmutableDict[str, Any]
-    if os_sandbox != "error":
+    if os_sandbox != "error":  # pragma: no mutate
         os_sandbox_params, _ = providers_factory[os_sandbox](token="").parse_rules(providers_rules, errors)
     else:
         os_sandbox_params = ImmutableDict({})

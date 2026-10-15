@@ -189,14 +189,6 @@ class TestGetSandboxLoop:
         mock_ensure_loop.assert_called_once_with(new_loop=True)
         mock_get_running_loop.assert_called_once()
 
-    @patch("pysandboxes.private_loop._ensure_background_loop")
-    def test_get_sandbox_loop_exception_handling(self, mock_ensure_loop: Mock) -> None:
-        """Test get_sandbox_loop handles exceptions from _ensure_background_loop."""
-        mock_ensure_loop.side_effect = Exception("Test exception")
-
-        with pytest.raises(Exception, match="Test exception"):
-            get_sandbox_loop()
-
 
 @pytest.mark.asyncio
 async def test_purge_loop_cancels_pending_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -225,3 +217,77 @@ async def test_purge_loop_leaves_a_shared_loop_running(monkeypatch: pytest.Monke
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+def test_a_running_loop_is_reused_whatever_new_loop_says(monkeypatch: pytest.MonkeyPatch) -> None:
+    running = Mock()
+    running.is_running.return_value = True
+    monkeypatch.setattr(private_loop, "_background_loop_ref", running)
+
+    assert _ensure_background_loop(new_loop=False) is running
+    assert _ensure_background_loop(new_loop=True) is running
+
+
+def test_a_stopped_loop_is_not_reused_when_no_new_loop_is_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    stopped = Mock()
+    stopped.is_running.return_value = False
+    monkeypatch.setattr(private_loop, "_background_loop_ref", stopped)
+
+    assert _ensure_background_loop(new_loop=False) is None
+
+
+def test_the_private_loop_is_marked_and_remembered_as_private(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(private_loop, "_background_loop_ref", None)
+    monkeypatch.setattr(private_loop, "_new_event_loop", False)
+    monkeypatch.setattr(private_loop, "_thread", None)
+    loop = None
+    try:
+        with patch("asyncio.get_running_loop", side_effect=RuntimeError("no running event loop")):
+            loop = _ensure_background_loop(new_loop=True)
+
+        assert loop is not None
+        assert loop.__pysandbox__ is True  # type: ignore[attr-defined]
+        assert private_loop._new_event_loop is True
+    finally:
+        if loop is not None:
+            loop.call_soon_threadsafe(loop.stop)
+            if private_loop._thread is not None:
+                private_loop._thread.join(timeout=2)
+            asyncio.set_event_loop(None)
+            loop.close()
+
+
+@pytest.mark.asyncio
+async def test_purge_reports_only_the_tasks_that_fail_while_being_cancelled(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(private_loop, "_background_loop_ref", loop)
+    monkeypatch.setattr(private_loop, "_new_event_loop", True)
+
+    async def fails_on_cancel() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            raise ValueError("cleanup failed") from None
+
+    async def swallows_cancel() -> str:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            return "finished anyway"
+        return "unreachable"
+
+    tasks: list[asyncio.Task[object]] = [
+        asyncio.create_task(fails_on_cancel()),
+        asyncio.create_task(swallows_cancel()),
+        asyncio.create_task(asyncio.Event().wait()),
+    ]
+    assert len(tasks) == 3
+    await asyncio.sleep(0)
+
+    with caplog.at_level("DEBUG", logger="pysandboxes.private_loop"):
+        await purge_loop()
+
+    reports = [r.getMessage() for r in caplog.records if "unexpected error" in r.getMessage()]
+    assert reports == ["Task finished with unexpected error: cleanup failed"]

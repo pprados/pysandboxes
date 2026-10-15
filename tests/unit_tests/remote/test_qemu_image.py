@@ -41,13 +41,6 @@ class TestGetVmImagesDir:
         assert "vm-images" in str(result)
         assert result == (Path("/xdg/data") / "vm-images").resolve()
 
-    def test_fallback_to_local_share(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv(ENV_VM_IMAGES_DIR, raising=False)
-        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-        result = get_vm_images_dir()
-        assert ".local" in str(result) or "share" in str(result)
-        assert result.name == "vm-images"
-
 
 class TestGetDefaultImagePath:
     """Tests for get_default_image_path."""

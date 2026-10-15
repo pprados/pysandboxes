@@ -20,6 +20,8 @@ Parameters for all of the user's projects can be present in `~/.config/py-sandbo
 
 By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is ignored, as the template's user and node profiles usually are; if it exists but cannot be read, the configuration is refused. A bare name (`include "common"`) is resolved next to the including file. A relative path holding a `/` (`include "shared/strict.profile"`, `include "./.py-sandboxes"`) is resolved against the current working directory, not the including file: the same profile then includes a different file depending on where the program starts, or none. Write an absolute path, or one starting with `~/`, for a file that must not depend on it.
 
+Use `include-platform=<sys.platform> "profile"` to include rules only on one Python platform, for example `include-platform=linux "linux.profile"`. The platform name must match `sys.platform`; a profile for another platform is not read or applied. This syntax is suitable for OS-specific imports and API permissions.
+
 With **python-sb**, a special parameter can be used to select the configuration.
 Without it, `python-sb` reads the `.py-sandboxes` next to the script or in the directory of the `-m` module, and
 `./.py-sandboxes` when there is none. Both `--pysandboxes-config=FILE` and `--pysandboxes-config FILE`

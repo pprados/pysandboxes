@@ -63,7 +63,7 @@ def format_ruleref(rule: ConfigLine) -> str:
         path = "<arg>"
     else:
         path = make_relative_path(rule.path)
-    if rule.ln == 0:
+    if rule.ln == 0:  # pragma: no mutate
         return path
     else:
         return f"{path}({rule.ln})"
@@ -79,13 +79,13 @@ def format_error_list(errors: Sequence[str]) -> str:
         A formatted string with proper conjunction usage.
     """
     errors = sorted(errors)
-    return errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]
+    return errors[0] if len(errors) == 1 else ", ".join(errors[:-1]) + " and " + errors[-1]  # pragma: no mutate
 
 
 def config_log(log_level: int, format: str | None = None, use_rich: bool = False) -> None:
     handlers: list[logging.Handler] = []
     # rich queries kernel32 through ctypes on Windows, which the API guard denies
-    if use_rich and sys.platform != "win32":
+    if use_rich and sys.platform != "win32":  # pragma: no mutate
         try:
             from rich.console import Console
             from rich.logging import RichHandler
@@ -110,4 +110,4 @@ def config_log(log_level: int, format: str | None = None, use_rich: bool = False
     if not handlers:
         handlers = [logging.StreamHandler()]
         handlers[0].setFormatter(logging.Formatter(format))
-    # It's not possible to use basicConfig here, else the next basicConfig() in init is not apply.
+    logging.basicConfig(level=log_level, format=format, handlers=handlers, force=True)

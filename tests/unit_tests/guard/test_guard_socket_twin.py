@@ -111,6 +111,18 @@ def test_connect_through_the_c_class_is_refused(tmp_path: Path) -> None:
     assert "GUARD" in result.stdout, result.stdout + result.stderr
 
 
+def test_the_guarded_subclass_installs_sendmsg_when_the_original_has_it() -> None:
+    """``hasattr(original, "sendmsg")`` gates the guard: it must not skip it when sendmsg exists."""
+    import _socket
+
+    if not hasattr(_socket.socket, "sendmsg"):
+        pytest.skip("no sendmsg on this platform")
+
+    guarded = patch_rules(learn=False)["_socket.socket"](_socket.socket)
+
+    assert "sendmsg" in vars(guarded)
+
+
 def test_every_guarded_resolution_call_has_its_c_twin() -> None:
     """socket.py does `from _socket import *`; the socket name is an alias.
 

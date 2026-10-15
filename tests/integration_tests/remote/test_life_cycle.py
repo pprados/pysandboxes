@@ -71,13 +71,21 @@ def test_multi_thread() -> None:
     """
     Check if the multiple call at the same time are not shuffled
     """
+    errors: list[BaseException] = []
+
+    def _collect_errors(thread_id: int) -> None:
+        try:
+            _worker(thread_id)
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
     with sandboxes(sandboxes_config=config_path):
         r = range(5)
         threads: List[threading.Thread] = []
 
         for i in r:
             # Create a new thread with the worker function and a unique ID
-            thread: threading.Thread = threading.Thread(target=_worker, args=(i,), name=f"Thread-{i}")
+            thread: threading.Thread = threading.Thread(target=_collect_errors, args=(i,), name=f"Thread-{i}")
             threads.append(thread)
 
             # Start the thread
@@ -86,3 +94,6 @@ def test_multi_thread() -> None:
         # Wait for all threads to complete their execution
         for thread in threads:
             thread.join()
+
+    # An assertion failing inside a thread would otherwise only print a warning
+    assert errors == []

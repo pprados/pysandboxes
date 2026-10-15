@@ -7,6 +7,7 @@ Only the pure parts are covered here. ``GuardFinder`` and ``GuardLoader`` mutate
 """
 
 import logging
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, cast
@@ -68,6 +69,8 @@ def test_other_directives_are_returned_untouched() -> None:
 
 def _activate(monkeypatch: pytest.MonkeyPatch, rules: tuple[str, ...]) -> None:
     monkeypatch.setattr(guard_import, "_rules", rules)
+    # The set is process-wide: an earlier test's imports must not leak into the verdict.
+    monkeypatch.setattr(guard_import, "_framework_names", set())
 
 
 def test_no_rule_denies_everything(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,6 +98,12 @@ def test_a_listed_module_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_a_wildcard_allows_everything(monkeypatch: pytest.MonkeyPatch) -> None:
     _activate(monkeypatch, _parse("python-import=*")[0])
     assert _is_import_allowed("anything")
+
+
+def test_an_empty_first_rule_does_not_open_everything(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``python-import=`` (an empty value) must not act as a wildcard: only ``"*"`` does."""
+    _activate(monkeypatch, _parse("python-import=")[0])
+    assert not _is_import_allowed("os")
 
 
 def test_a_bare_key_patches_the_whole_module() -> None:
@@ -211,6 +220,40 @@ def test_in_the_user_code_a_missing_module_is_not_learned(monkeypatch: pytest.Mo
     assert recorded == []
 
 
+def test_direct_call_with_exactly_three_extra_positional_args(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``__import__(name, globals, locals, fromlist)``, with no ``level``, must default it to 0."""
+    _activate(monkeypatch, ())
+    import_, _ = _guarded_imports()
+    assert import_("json", {}, {}, ()) == "json"
+
+
+def test_a_forged_copy_of_a_kept_librarys_globals_is_not_exempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_caller_module`` must compare the caller's globals by identity, not equality.
+
+    A relative import made by the real ``asyncio`` package's own code is exempt from the user's
+    rules; a merely ``==``-equal copy of its ``__dict__`` (e.g. ``exec(code, dict(asyncio.__dict__))``)
+    must not inherit that exemption.
+    """
+    _activate(monkeypatch, ())
+    wrapped = guard_import._wrap_import(_imported)
+    real_dict = sys.modules["asyncio"].__dict__
+    code = compile("def call(fn, *a, **k):\n    return fn(*a, **k)\n", "<forged>", "exec")
+    import_args = ({"__name__": "asyncio", "__path__": ["<asyncio>"]}, None, (), 1)
+
+    exec(code, real_dict)
+    call_from_real = real_dict.pop("call")
+    copy_dict = dict(real_dict)  # == real_dict in content, but a different object
+    exec(code, copy_dict)
+    call_from_copy = copy_dict.pop("call")
+
+    with user_code():
+        # The real asyncio module's own relative import is exempt: no rule is asked for it.
+        assert call_from_real(wrapped, "subprocess", *import_args) == "subprocess"
+        # A forged, equal-but-not-identical copy of the same dict must be judged like anyone else.
+        with pytest.raises(RuleModuleNotFoundError, match="asyncio"):
+            call_from_copy(wrapped, "subprocess", *import_args)
+
+
 def test_in_the_user_code_a_module_never_evicted_is_not_judged(monkeypatch: pytest.MonkeyPatch) -> None:
     """The finder never sees sys, builtins or warnings: the complete mode asks no rule for them either."""
     _activate(monkeypatch, ())
@@ -218,6 +261,38 @@ def test_in_the_user_code_a_module_never_evicted_is_not_judged(monkeypatch: pyte
     with user_code():
         assert import_("sys") == "sys"
         assert import_module("warnings") == "warnings"
+
+
+def test_find_distributions_with_no_context_returns_nothing() -> None:
+    """``context=None`` must build a fresh ``Context()``, not stay ``None``."""
+    assert list(guard_import.GuardFinder.find_distributions()) == []
+
+
+def test_find_distributions_without_a_name_finds_nothing() -> None:
+    """Both ``name`` and ``path`` must be set: a path alone must not list every distribution."""
+    import importlib.metadata
+
+    context = importlib.metadata.DistributionFinder.Context(path=sys.path)
+    assert context.name is None
+    assert list(guard_import.GuardFinder.find_distributions(context)) == []
+
+
+def test_an_unsafe_name_does_not_stop_later_names_from_being_generated() -> None:
+    """The per-item ``continue`` must only skip the unsafe name, not abort the whole scan
+    (``break``): a ``set`` would leave that to the (randomised) hash order, so the unsafe
+    name is placed first in an ordered list instead."""
+    evil_name = "evil\nname"
+    learn = cast("set[Any]", [LearnImportRule(evil_name), LearnImportRule("json")])
+    lines = generate_rules(learn)
+    assert any(line.startswith("python-import=json") for line in lines)
+
+
+def test_an_uppercase_module_name_is_not_miscategorized_as_standard() -> None:
+    """``name[0] == "_"`` must not become a lexicographic comparison: ``"PIL"`` sorts before ``"_"``."""
+    lines = generate_rules({LearnImportRule("PIL")})
+    text = "\n".join(lines)
+    assert "External modules" in text
+    assert "Standard Python" not in text
 
 
 def test_learned_modules_are_sorted_by_danger() -> None:

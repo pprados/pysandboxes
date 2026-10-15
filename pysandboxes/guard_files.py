@@ -546,7 +546,7 @@ def generate_rules(
                         break
             if not value:
                 value = str(path)
-            if value and value != "${HOME}":
+            if value:
                 result.add(f'{"expose-rw" if write else "expose-ro"}={value}')
             if path != home:
                 allready_added.append(LearnFileRule(path, write))
@@ -668,8 +668,6 @@ def _apply_dest_to_src_rules(
 
     for rule in _rules:
         if isinstance(rule, FSExposeRule):
-            if rule.path is None:
-                continue
             rp = rule.path
             if canon_path.startswith(rp) or canon_path == rp[:-1]:
                 if not rule.write and write:
@@ -692,7 +690,10 @@ def _apply_dest_to_src_rules(
                 # must never be matched, or it would hide every file of the exposure.
                 root = _matching_expose_root(canon_path)
                 if root is not None:
-                    spellings = tuple(s[len(root) :] if s.startswith(root) else s for s in spellings)
+                    spellings = tuple(
+                        s[len(root) :] if s.startswith(root) else os.path.basename(s) if s == root[:-1] else s
+                        for s in spellings
+                    )
                 spellings = tuple(part for spelling in spellings for part in Path(spelling).parts)
             if any(_ignore_matches(spelling, rule.source) for spelling in spellings):
                 return None, rule
@@ -1205,13 +1206,10 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
                 need_to_write = True
             _check_dir_fd(path, dir_fd, write=need_to_write)
             return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
-        if isinstance(flags, int):
-            # O_TRUNC empties a file even opened O_RDONLY, and O_CREAT creates one.
-            write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
-            write_flags |= getattr(os, "O_TMPFILE", 0)
-            need_to_write = bool(flags & write_flags)
-        else:
-            need_to_write = True
+        # O_TRUNC empties a file even opened O_RDONLY, and O_CREAT creates one.
+        write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
+        write_flags |= getattr(os, "O_TMPFILE", 0)
+        need_to_write = bool(flags & write_flags)
         remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
         if rule:
             _raise_ignore(path, rule)
@@ -1447,13 +1445,6 @@ def _wrap_os_symlink(func: Callable[..., Any]) -> Callable[..., Any]:
         dir_fd: int | None = None,
     ) -> Any:
 
-        if isinstance(src, int) or isinstance(dst, int):
-            return func(
-                src=src,
-                dst=dst,
-                target_is_directory=target_is_directory,
-                dir_fd=dir_fd,
-            )
         if isinstance(src, bytes):
             src = os.fsdecode(src)
         if isinstance(dst, bytes):

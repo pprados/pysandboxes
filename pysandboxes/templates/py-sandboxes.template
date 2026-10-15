@@ -10,6 +10,8 @@
 # You can include additional configuration files for better organization.
 # Name without '/' may be in the same directory.
 # Missing files are silently ignored.
+# Platform-specific profiles use the exact value of sys.platform:
+# include-platform=linux "linux.profile"
 
 # Uncomment to accept local rules. The path is resolved from the current directory, so
 # whatever directory the program is launched from can then add rules of its own.

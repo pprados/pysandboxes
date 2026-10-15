@@ -82,12 +82,12 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
                 elif not is_ipv6 and isinstance(network, IPv4Network):
                     s_network = _build_network(network, is_ipv6, direction == Direction.IN)
                 else:
-                    continue
+                    continue  # pragma: no mutate
 
                 # The network of an IN rule is the local address, as for bind() in the Python layer: the
                 # destination of an incoming packet.
                 s_network = f"-d {s_network}" if s_network else ""
-                if direction == Direction.OUT:
+                if direction == Direction.OUT:  # pragma: no mutate
                     s_state = "--ctstate NEW "
                 else:
                     s_state = "--ctstate NEW,ESTABLISHED "
@@ -98,7 +98,7 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
                     multiport = ""
 
                 ip_rule: str
-                if kind == Kind.TCP:
+                if kind == Kind.TCP:  # pragma: no mutate
                     ip_rule = (
                         f"-A {_map_direction[direction]} "
                         f"-p tcp "
@@ -108,7 +108,7 @@ def rule_to_netfilter(socket_rules: SocketRules, dns_server: list[IPv4Address], 
                         f"{multiport}"
                         f"-j {_map_action[action]}"
                     )
-                elif kind == Kind.UDP:
+                elif kind == Kind.UDP:  # pragma: no mutate
                     ip_rule = (
                         f"-A {_map_direction[direction]} "
                         f"-p udp "

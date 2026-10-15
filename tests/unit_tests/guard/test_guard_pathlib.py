@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 import pytest  # type: ignore[import-untyped]
 
-from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_denials
+from pysandboxes import RuleFileNotFoundError, RulePermissionError, guard_files, sandbox_denials
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -178,6 +178,131 @@ def test_pathlib_rglob(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     assert pathlib.Path(files["path"] / "ignore.log") not in result
     assert pathlib.Path(files["path"] / "visible.txt") in result
     assert pathlib.Path(files["bind_dest"] / "bound_file.txt") in result
+
+
+def test_pathlib_glob_disables_alias_checks_only_around_advancing_the_raw_iterator(
+    tmp_path: opl.Path,
+) -> None:
+    """Each step of the per-entry filter must disable `_check_alias` only while advancing the raw
+    iterator, not leave (or force) it enabled for the rest of the walk."""
+    recorded: List[bool] = []
+
+    class _RecordingIterator:
+        def __init__(self, items: List[Any]) -> None:
+            self._items = iter(items)
+
+        def __iter__(self) -> "_RecordingIterator":
+            return self
+
+        def __next__(self) -> Any:
+            recorded.append(guard_files._check_alias.get())
+            return next(self._items)
+
+    def spy(self: Any, pattern: str, **kwargs: Any) -> Any:
+        return _RecordingIterator([tmp_path / "a", tmp_path / "b"])
+
+    wrapped = guard_files._wrap_pathlib_Path_glob(spy)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", NonePath, 0)])
+
+    list(wrapped(opl.Path(tmp_path), "*"))
+
+    # One record per `next(it)` call, including the final one that raises `StopIteration`.
+    assert recorded == [False, False, False]
+
+
+def test_pathlib_glob_disables_alias_checks_while_iterating_the_remapped_path(
+    tmp_path: opl.Path,
+) -> None:
+    """The optimized branch must disable `_check_alias` around the raw underlying `glob()` call,
+    not leave (or force) it enabled. Calls `_wrap_pathlib_Path_glob` directly with a fake
+    underlying function -- monkeypatching the global, already-patched `pathlib.Path.glob` would
+    not reach a wrapper built earlier, around a different closure, by `activate_guard_import`."""
+    recorded: List[bool] = []
+
+    def spy(self: Any, pattern: str, **kwargs: Any) -> Any:
+        recorded.append(guard_files._check_alias.get())
+        return iter(())
+
+    wrapped = guard_files._wrap_pathlib_Path_glob(spy)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", NonePath, 0)])
+
+    list(wrapped(opl.Path(tmp_path), "*"))
+
+    assert recorded == [False]
+
+
+def test_pathlib_glob_skips_the_remapped_fast_path_when_alias_checks_are_already_off(
+    tmp_path: opl.Path,
+) -> None:
+    """`remapped and _check_alias.get()` must not be loosened to `or`: since `remapped` is always
+    truthy here, that would always take the optimized (`Path(remapped)`) branch even when a
+    caller higher up (e.g. `copytree`) already disabled alias checks and expects `self` itself to
+    be used."""
+    recorded: List[Any] = []
+
+    def spy(self: Any, pattern: str, **kwargs: Any) -> Any:
+        recorded.append(self)
+        return iter(())
+
+    wrapped = guard_files._wrap_pathlib_Path_glob(spy)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", NonePath, 0)])
+
+    p = opl.Path(tmp_path)
+    token = guard_files._check_alias.set(False)
+    try:
+        list(wrapped(p, "*"))
+    finally:
+        guard_files._check_alias.reset(token)
+
+    assert recorded[0] is p
+
+
+@pytest.mark.parametrize(
+    ("version", "expect_case_sensitive"),
+    [((3, 11, 0, "final", 0), False), ((3, 12, 0, "final", 0), True)],
+)
+def test_pathlib_glob_forwards_case_sensitive_from_the_right_python_version(
+    tmp_path: opl.Path, monkeypatch: pytest.MonkeyPatch, version: Any, expect_case_sensitive: bool
+) -> None:
+    """`sys.version_info[:2] >= (3, 12)` gates `case_sensitive`: faking an older `version_info`
+    here (the kwarg stays valid on the real 3.12+ interpreter underneath) must still omit it."""
+    recorded: Dict[str, Any] = {}
+
+    def spy(self: Any, pattern: str, **kwargs: Any) -> Any:
+        recorded.update(kwargs)
+        return iter(())
+
+    wrapped = guard_files._wrap_pathlib_Path_glob(spy)
+    monkeypatch.setattr(guard_files.sys, "version_info", version)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", NonePath, 0)])
+
+    list(wrapped(opl.Path(tmp_path), "*"))
+
+    assert ("case_sensitive" in recorded) is expect_case_sensitive
+
+
+@pytest.mark.parametrize(
+    ("version", "expect_recurse_symlinks"),
+    [((3, 12, 0, "final", 0), False), ((3, 14, 0, "final", 0), True)],
+)
+def test_pathlib_glob_forwards_recurse_symlinks_from_the_right_python_version(
+    tmp_path: opl.Path, monkeypatch: pytest.MonkeyPatch, version: Any, expect_recurse_symlinks: bool
+) -> None:
+    """`sys.version_info[:2] >= (3, 13)` gates `recurse_symlinks`: faking the `version_info` here
+    (the kwarg stays valid on the real 3.13+ interpreter underneath) must still match."""
+    recorded: Dict[str, Any] = {}
+
+    def spy(self: Any, pattern: str, **kwargs: Any) -> Any:
+        recorded.update(kwargs)
+        return iter(())
+
+    wrapped = guard_files._wrap_pathlib_Path_glob(spy)
+    monkeypatch.setattr(guard_files.sys, "version_info", version)
+    activate_guard_files_rules([ConfigLine(f"expose-ro={tmp_path}", NonePath, 0)])
+
+    list(wrapped(opl.Path(tmp_path), "*"))
+
+    assert ("recurse_symlinks" in recorded) is expect_recurse_symlinks
 
 
 def test_pathlib_iterdir(files: Dict[str, opl.Path]) -> None:  # noqa: F811

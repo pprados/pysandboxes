@@ -7,6 +7,7 @@ from typing import Any, Dict
 import pytest  # type: ignore[import-untyped]
 
 from pysandboxes import RuleFileNotFoundError, RulePermissionError, sandbox_denials
+from pysandboxes.guard_files import _check_alias, _wrap_shutil_copytree
 from pysandboxes.sb_types import ConfigLine
 
 from .test_guard_io import (
@@ -177,6 +178,29 @@ def test_shutil_copytree_outside_the_rules_is_denied(
         shutil.copytree(files["bind_src"], files["bind_dest"] / "copied")
 
 
+@pytest.mark.parametrize("dirs_exist_ok", [False, True])
+def test_shutil_copytree_into_a_read_only_destination_is_denied(tmp_path: Path, dirs_exist_ok: bool) -> None:
+    """The destination of a copy is written: a readable source must not make it writable.
+
+    The walk runs with the alias checks off, so the check made before it is the only guard.
+    """
+    root = Path(os.path.realpath(tmp_path))
+    source, destination = root / "rw", root / "ro"
+    source.mkdir()
+    destination.mkdir()
+    (source / "f.txt").write_text("x")
+    activate_guard_files_rules(
+        [ConfigLine(f"expose-ro={destination}", Path(), 0), ConfigLine(f"expose-rw={source}", Path(), 0)]
+    )
+
+    import shutil
+
+    target = destination if dirs_exist_ok else destination / "new"
+    with pytest.raises(RulePermissionError):
+        shutil.copytree(source, target, dirs_exist_ok=dirs_exist_ok)
+    assert list(destination.iterdir()) == []
+
+
 def test_shutil_disk_usage(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -292,6 +316,88 @@ def test_shutil_move(files: Dict[str, Path]) -> None:  # noqa: F811
     assert (d / "inner").is_dir()
 
 
+def test_shutil_copytree_wraps_the_copy_function_restoring_alias_checks(files: Dict[str, Path]) -> None:  # noqa: F811
+    """`copy_function` must be wrapped like `ignore`: the walk disables `_check_alias`, and the
+    user callback needs it restored to stat paths safely."""
+    rules = [
+        ConfigLine("ignore=*.log", Path(), 0),
+        ConfigLine(f"expose-rw={files['path']}", Path(), 0),
+        ConfigLine(f"expose-rw={files['bind_src']}", Path(), 0),
+    ]
+    activate_guard_files_rules(rules)
+
+    import shutil
+
+    seen_alias_states = []
+
+    def spy_copy(src: str, dst: str, **kwargs: Any) -> Any:
+        seen_alias_states.append(_check_alias.get())
+        return shutil.copy2(src, dst, **kwargs)
+
+    dest = files["path"] / "copied_with_spy"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(files["bind_src"], dest, copy_function=spy_copy)
+
+    assert seen_alias_states and all(seen_alias_states)
+
+
+def test_shutil_copytree_disables_alias_checks_for_its_own_duration(tmp_path: Path) -> None:
+    """The walk itself must run with `_check_alias` off; only a user callback gets it restored."""
+    recorded: list[bool] = []
+
+    def fake_copytree(src: str, dst: str) -> str:
+        recorded.append(_check_alias.get())
+        return dst
+
+    activate_guard_files_rules([ConfigLine(f"expose-rw={tmp_path}", Path(), 0)])
+    wrapped = _wrap_shutil_copytree(fake_copytree)
+
+    wrapped(str(tmp_path / "a"), str(tmp_path / "b"))
+
+    assert recorded == [False]
+
+
+def test_shutil_copytree_reads_the_source_without_requiring_write_access(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f.txt").write_text("x")
+    dest_parent = tmp_path / "dest_parent"
+    dest_parent.mkdir()
+    activate_guard_files_rules(
+        [ConfigLine(f"expose-ro={src}", Path(), 0), ConfigLine(f"expose-rw={dest_parent}", Path(), 0)]
+    )
+
+    import shutil
+
+    shutil.copytree(src, dest_parent / "copied")
+
+    assert (dest_parent / "copied" / "f.txt").read_text() == "x"
+
+
+def test_shutil_copytree_of_a_top_level_symlink_copies_by_its_target_not_its_holder(tmp_path: Path) -> None:
+    """The top-level `src` must be judged on its resolved target (`_apply_dest_to_src_rules`),
+    not on the directory holding the link (`_apply_rules_to_entry`'s move semantics)."""
+    real_dir = tmp_path / "real_dir"
+    real_dir.mkdir()
+    (real_dir / "f.txt").write_text("x")
+    unexposed_holder = tmp_path / "unexposed_holder"
+    unexposed_holder.mkdir()
+    link = unexposed_holder / "link_to_real"
+    link.symlink_to(real_dir, target_is_directory=True)
+    dest_parent = tmp_path / "dest_parent"
+    dest_parent.mkdir()
+    activate_guard_files_rules(
+        [ConfigLine(f"expose-ro={real_dir}", Path(), 0), ConfigLine(f"expose-rw={dest_parent}", Path(), 0)]
+    )
+
+    import shutil
+
+    shutil.copytree(link, dest_parent / "copied")
+
+    assert (dest_parent / "copied" / "f.txt").read_text() == "x"
+
+
 def test_the_guarded_os_functions_keep_their_supports_sets(files: Dict[str, Path]) -> None:  # noqa: F811
     """A patched os function must stay in the os.supports_* sets its original was in.
 
@@ -367,6 +473,40 @@ def test_patching_os_functions_replaces_originals_in_supports_sets() -> None:
             supports_set = getattr(os, name)
             assert original not in supports_set
             assert patched in supports_set
+    finally:
+        for name, members in before.items():
+            supports_set = getattr(os, name)
+            supports_set.clear()
+            supports_set.update(members)
+
+
+def test_patching_os_functions_only_touches_supports_sets_that_held_the_original() -> None:
+    """A function absent from a given ``os.supports_*`` set must stay absent after patching it.
+
+    ``getattr(os, set_name, None)`` is never ``None`` in practice, so an ``or`` in place of the
+    ``and`` would unconditionally add ``patched`` to every set, not just the ones ``original``
+    actually belonged to.
+    """
+    import os
+
+    from pysandboxes.guard_import import _OS_SUPPORTS_SETS, _keep_os_supports_sets
+
+    def original() -> None:
+        pass
+
+    def patched() -> None:
+        pass
+
+    before = {name: set(getattr(os, name)) for name in _OS_SUPPORTS_SETS if hasattr(os, name)}
+    try:
+        for supports in before:
+            getattr(os, supports).discard(original)  # None of them hold it
+
+        _keep_os_supports_sets(original, patched)
+
+        for name in before:
+            supports_set = getattr(os, name)
+            assert patched not in supports_set
     finally:
         for name, members in before.items():
             supports_set = getattr(os, name)

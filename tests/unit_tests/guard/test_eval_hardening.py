@@ -235,3 +235,28 @@ def test_eval_call_on_a_capability_builtin_warns_stronger(caplog: pytest.LogCapt
     with caplog.at_level(logging.WARNING):
         parse_rules(_lines("eval-call=getattr"), [])
     assert any("getattr" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------- sentinel identity
+class _AlwaysEqual:
+    def __eq__(self, other: object) -> bool:
+        return True
+
+    def __hash__(self) -> int:
+        return 0
+
+
+def test_vars_sentinel_check_uses_identity_not_equality() -> None:
+    _activate(call=_names("vars"), magic=_names("__dict__"))
+    assert guarded_eval("vars(o)", names={"o": _AlwaysEqual()}) == {}
+
+
+def test_dir_sentinel_check_uses_identity_not_equality() -> None:
+    _activate(call=_names("dir"))
+    assert guarded_eval("dir(o)", names={"o": _AlwaysEqual()}) == []
+
+
+def test_type_with_no_arguments_is_refused_cleanly() -> None:
+    _activate(call=_names("type"))
+    with pytest.raises(RuleEvalPermissionError):
+        guarded_eval("type()")

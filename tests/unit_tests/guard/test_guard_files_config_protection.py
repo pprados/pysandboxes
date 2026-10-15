@@ -98,6 +98,29 @@ def test_unlink_and_rename_of_the_active_config_are_denied(tmp_path: Path) -> No
     assert config.exists()
 
 
+def test_unlink_and_rename_of_a_symlink_to_the_active_config_are_denied(tmp_path: Path) -> None:
+    """The link lives outside the config's directory, so no ancestor of the config shields it."""
+    import os
+
+    (tmp_path / "conf").mkdir()
+    (tmp_path / "links").mkdir()
+    config = tmp_path / "conf" / ".py-sandboxes"
+    config.write_text(f"py-sandbox=true\nexpose-rw={tmp_path}\nos-sandbox=none\nlearn=false\n")
+    link = tmp_path / "links" / "link"
+    link.symlink_to(config)
+
+    _activate(config)
+    try:
+        with pytest.raises(RulePermissionError):
+            os.unlink(link)
+        with pytest.raises(RulePermissionError):
+            os.rename(link, tmp_path / "links" / "renamed")
+    finally:
+        _disarm()
+
+    assert link.is_symlink()
+
+
 def test_self_widening_does_not_take_effect_on_the_next_activation(tmp_path: Path) -> None:
     """The exact NA1 repro: a profile exposes its own directory read-write, the
     sandboxed code tries to append a wider rule to the active config, and a
@@ -146,6 +169,24 @@ def test_included_file_is_protected_too(tmp_path: Path) -> None:
             open(included, "a").close()
     finally:
         _disarm()
+
+
+def test_an_ordinary_sibling_file_sorting_after_the_config_name_is_still_writable(tmp_path: Path) -> None:
+    """`.` sorts below every normal filename: an unrelated file in the same exposed directory
+    as the active config must never be mistaken for the protected path itself."""
+    config = tmp_path / ".py-sandboxes"
+    config.write_text(f"py-sandbox=true\nexpose-rw={tmp_path}\nos-sandbox=none\nlearn=false\n")
+    sibling = tmp_path / "data.txt"
+    sibling.write_text("x")
+
+    _activate(config)
+    try:
+        with open(sibling, "a") as f:
+            f.write("more")
+    finally:
+        _disarm()
+
+    assert sibling.read_text() == "xmore"
 
 
 def test_read_only_access_to_the_active_config_still_works(tmp_path: Path) -> None:

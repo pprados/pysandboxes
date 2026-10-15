@@ -1,0 +1,63 @@
+# Survivors of scripts/mutation.py judged equivalent: module | operator | source line (stripped).
+# An entry matches by source text, so it survives line shifts. Prefer `# pragma: no mutate` on the
+# line itself when the reason fits in a comment; use this file for lines that cannot carry one.
+pysandboxes/_os_sandbox.py | ReplaceComparisonOperator_LtE_Eq | if _startup_counter <= 0:
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_Is | s_network = _build_network(network, is_ipv6, direction == Direction.IN)
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_LtE | s_network = _build_network(network, is_ipv6, direction == Direction.IN)
+pysandboxes/private_loop.py | AddNot | if _background_loop_ref is not None:
+pysandboxes/private_loop.py | AddNot | if loop is not None and loop.is_running():
+pysandboxes/private_loop.py | ReplaceComparisonOperator_IsNot_Is | if _background_loop_ref is not None:
+pysandboxes/private_loop.py | ReplaceComparisonOperator_IsNot_Is | if loop is not None and loop.is_running():
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceFalseWithTrue | self._accept_incoming = False
+pysandboxes/remote/landlock_daemon.py | ReplaceAndWithOr | if p and os.path.exists(p):
+pysandboxes/remote/landlock_daemon.py | ReplaceComparisonOperator_Eq_Is | if not path or path == ".":
+pysandboxes/remote/landlock_daemon.py | ReplaceComparisonOperator_Eq_LtE | if not path or path == ".":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | config_dir.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | dest.parent.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | er = p.resolve(strict=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | self._stage_root = tempfile.TemporaryDirectory(prefix=QEMU_HOST_RUN_PREFIX, ignore_cleanup_errors=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | shutil.copytree(host_path, dest, symlinks=True, dirs_exist_ok=True, ignore=_virtfs_stage_unreadable)
+pysandboxes/remote/tools.py | ReplaceComparisonOperator_Eq_GtE | assert platform.system() == "Linux"
+pysandboxes/remote/tools.py | ReplaceComparisonOperator_Eq_LtE | assert platform.system() == "Linux"
+pysandboxes/remote/tools.py | ReplaceOrWithAnd | if not line or line.startswith("#"):
+pysandboxes/tools.py | ReplaceComparisonOperator_Eq_Is | elif ch == "#" and not in_quotes:
+pysandboxes/tools.py | ReplaceComparisonOperator_Eq_Is | elif ch == "#" and not in_quotes:
+pysandboxes/tools.py | ReplaceComparisonOperator_Eq_GtE | return glob_at == len(glob)
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_GtE | if (dns.version == 6) == is_ipv6:
+pysandboxes/netfilter.py | ReplaceComparisonOperator_Eq_Is | if (dns.version == 6) == is_ipv6:
+pysandboxes/py_sandbox.py | ReplaceComparisonOperator_Eq_Is | if caller_name == "__main__" and caller_spec is not None:
+pysandboxes/tools.py | ReplaceComparisonOperator_Lt_NotEq | while i < len(line):
+pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Eq_Is | if kind == Kind.TCP:
+pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Eq_Is | elif kind == Kind.UDP:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | out.add(p.resolve(strict=True))
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | dirs.add(dep.parent.resolve(strict=True))
+pysandboxes/remote/landlock_daemon.py | ReplaceOrWithAnd | if not path or path == ".":
+pysandboxes/remote/bwrap_sse_daemon.py | ReplaceTrueWithFalse | placeholder.mkdir(exist_ok=True)
+pysandboxes/remote/landlock_daemon.py | ReplaceComparisonOperator_NotEq_Lt | if ret != 0:
+pysandboxes/remote/slirp4netns_common.py | ReplaceComparisonOperator_Gt_GtE | if isinstance(ports, range) and len(ports) > 1000:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceAndWithOr | if sp and os.path.isdir(sp):
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceOrWithAnd | if not d_res.is_dir() or d_res in seen:
+pysandboxes/remote/firejail_sse_daemon.py | ReplaceAndWithOr | if temp_str and temp_str not in whitelist:
+pysandboxes/_os_sandbox.py | RemoveDecorator | @sandbox_loop
+pysandboxes/remote/firejail_sse_daemon.py | ReplaceTrueWithFalse | netfilter_file.unlink(missing_ok=True)
+pysandboxes/remote/firejail_sse_daemon.py | ReplaceTrueWithFalse | netfilter6_file.unlink(missing_ok=True)
+pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Gt_NotEq | if len(python_cmd) > 1:
+pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Eq_Is | elif python_cmd[0] == "-":
+pysandboxes/remote/sse_server_daemon.py | ReplaceTrueWithFalse | async_fut.add_done_callback(lambda _: stdio_queue.put_nowait({"done": True}))
+pysandboxes/remote/unshare_setup.py | ReplaceComparisonOperator_Gt_NotEq | if attempt > 0:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_Is | if s == _FORWARD_STATE_WAITING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_LtE | if s == _FORWARD_STATE_WAITING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_Is | if s == _FORWARD_STATE_FORWARDING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_LtE | if s == _FORWARD_STATE_FORWARDING:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if end_exclusive < 0:
+pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if nl >= 0 and (cr < 0 or nl < cr):
+pysandboxes/remote/qemu_sse_daemon.py | AddNot | if tag.startswith("pysb_exec_") and tag[9:].isdigit():
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Gt | if soname == name:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_GtE | if soname == name:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if soname == name:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if ld_closure_libs == "full":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if ld_closure_libs == "full" and _path_under_host_multiarch_lib(p, triplet):
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | ld64.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_config":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_run":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | mode = "full multiarch merge + ldd seeds" if ld_closure_libs == "full" else "sparse ldd + compat seeds"
