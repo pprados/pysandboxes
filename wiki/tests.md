@@ -189,8 +189,7 @@ Every host row skips itself when its binary or kernel feature is missing
 suite stays portable; a skip is not a pass.
 
 Each backend is also covered by a small liveness test under
-`tests/integration_tests/remote/` (`test_bwrap.py`, `test_firejail.py`,
-`test_landlock.py`, `test_unshare.py`) that only checks a sync and an async
+`tests/integration_tests/remote/test_providers.py`, one case per backend, that only checks a sync and an async
 `@sandbox` call round-trip — not the guards.
 
 The grid profile sets `bwrap.share-net=yes`, so its bwrap rows run on the host
