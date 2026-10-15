@@ -161,13 +161,18 @@ A test for a guard must be able to fail. The rules below come from bugs that shi
 ## Review
 
 CI runs lint and unit tests on every pull request. A maintainer may also ask for an automated review by
-adding the `claude-review` label. That review:
+adding the `claude-review` label (currently inactive: it waits for its Amazon Bedrock access to be set up).
+That review:
 
 - applies the requirements above, read from a copy of `develop` taken before the review starts, so a pull
   request cannot change the criteria it is reviewed against;
 - reads the pull request only through its diff, and refuses to review a head that moved after the label was
   set: relabel to review new commits;
 - only posts comments: it never runs the pull request's code, never pushes, never approves.
+
+CI on a pull request runs lint and unit tests only; the integration suite runs nightly on `develop`, after the
+merge. So before merging a pull request that touches a provider, the remote layer or a full workflow, a
+maintainer pushes its reviewed head to a branch of this repository and runs `full-gate.yml` on it.
 
 The decision to merge always stays with a maintainer.
 
