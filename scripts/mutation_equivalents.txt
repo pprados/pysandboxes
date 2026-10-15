@@ -61,3 +61,30 @@ pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | ld64.mkdir(parent
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_config":
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_run":
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | mode = "full multiarch merge + ldd seeds" if ld_closure_libs == "full" else "sparse ldd + compat seeds"
+pysandboxes/remote/qemu_image.py | ReplaceTrueWithFalse | partial.unlink(missing_ok=True)
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_NotEq_IsNot | if f.read().strip() != "1":
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_NotEq_Gt | if socket_rule.action != Action.ALLOW or Direction.OUT not in socket_rule.directions:
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_NotEq_IsNot | if socket_rule.action != Action.ALLOW or Direction.OUT not in socket_rule.directions:
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_NotEq_Gt | if not isinstance(net, IPv4Network) or net.prefixlen != 32:
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_NotEq_Lt | if not isinstance(net, IPv4Network) or net.prefixlen != 32:
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceOrWithAnd | if not isinstance(net, IPv4Network) or net.prefixlen != 32:
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_Lt_Eq | if len(parts) < 3:
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_Lt_LtE | if len(parts) < 3:
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceTrueWithFalse | debug_tmp.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceTrueWithFalse | config_file.unlink(missing_ok=True)
+pysandboxes/remote/unshare_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | self.port = find_free_port() if all_rules.port == -1 else all_rules.port
+pysandboxes/remote/client_subprocess_sse_daemon.py | AddNot | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Gt | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_GtE | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Lt | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_NotEq | if count_loop == 1:
+pysandboxes/remote/client_subprocess_sse_daemon.py | AddNot | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Gt | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_GtE | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_Lt | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceComparisonOperator_Eq_NotEq | if count_loop % 15 == 0:
+pysandboxes/remote/client_subprocess_sse_daemon.py | ReplaceTrueWithFalse | debug_tmp.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Gt_NotEq | if len(python_cmd) > 1:
+pysandboxes/remote/python_in_sb.py | ReplaceComparisonOperator_Eq_Is | elif python_cmd[0] == "-":

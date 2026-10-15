@@ -91,6 +91,9 @@ MUTATION_JOBS ?= 4
 mutation:
 	@test -n "$(MODULE)" || { echo "Usage: make mutation MODULE=pysandboxes/<module>.py"; exit 1; }
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run python scripts/mutation.py $(MODULE) --tests $(MUTATION_TESTS) --jobs $(MUTATION_JOBS)
+## Last recorded mutation run of every module, and whether its code changed since: make mutation-status
+mutation-status:
+	uv run python scripts/mutation.py --status
 
 # Uncomment a sample only once it satisfies the acceptance criteria of its
 # design spec.

@@ -24,6 +24,7 @@ make lint                    # Run all linters (mypy, pyright, black, ruff)
 make spell_check             # Check spell
 make coverage                # Unit and integration tests with a coverage report
 make mutation MODULE=pysandboxes/<module>.py  # Mutation testing of one module (cosmic-ray): a survivor is a missing test or an equivalent mutant
+make mutation-status         # Last recorded mutation run of every module (scripts/mutation_status.json), flagged when its code changed since
 make pip-audit               # Audit the runtime dependencies for known CVEs
 make validate                # All validation (before commit)
 ```
@@ -59,6 +60,7 @@ make tests
 - **pysandboxes/guard_*.py**: guards: files (`guard_files`), network (`guard_socket`), imports (`guard_import`), env (`guard_envs`), sensitive calls (`guard_api`), dyn-eval code (`guard_eval`)
 - **pysandboxes/eval_rules.py, eval_transform.py, eval_runtime.py**: `eval-*` sub-language. Parse, AST rewrite, runtime helpers enforce what static check can't
 - **pysandboxes/remote/**: SSE IPC for remote exec, 1 daemon/provider
+- **Import layering**: `tests/unit_tests/test_architecture.py` (pytestarch, runs in `make unit-tests`). Guards never import `remote`/entry points, guards build only on lower guards, providers never import each other or entry points, only `_os_sandbox` + `python_sb` import `remote`. New module breaks a rule → fix the import, not the rule
 
 ### Security Model
 - **Default deny-all**, explicit whitelist via `.py-sandboxes` config files

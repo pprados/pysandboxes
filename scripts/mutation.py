@@ -12,10 +12,16 @@ Three things keep the equivalent mutants out of the report:
   header only, not the body;
 - `scripts/mutation_equivalents.txt` lists the survivors already judged equivalent, one per line as
   `module | operator | source line`. They are counted apart and not printed.
+
+Each run records its counts in `scripts/mutation_status.json`, with the commit and a digest of the module.
+`--status` prints that file and flags the modules whose code changed since their last run. `noexec` counts the
+mutants on lines the tests never execute: they are not judged, so a high number is a coverage gap.
 """
 
 import argparse
 import ast
+import datetime
+import hashlib
 import json
 import re
 import shutil
@@ -28,6 +34,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EQUIVALENTS = Path(__file__).with_name("mutation_equivalents.txt")
+STATUS = Path(__file__).with_name("mutation_status.json")
 PRAGMA = re.compile(r"#\s*pragma:\s*no mutate\b")
 LOGGERS = {"logger", "logging", "log"}
 # Operators that mostly produce noise here: arithmetic, unary and constant rewrites.
@@ -101,6 +108,45 @@ def known_equivalents() -> set[tuple[str, str, str]]:
     return known
 
 
+def source_digest(module: str) -> str:
+    """Short digest of a module, to tell whether its code changed since a run."""
+    return hashlib.sha256((ROOT / module).read_bytes()).hexdigest()[:12]
+
+
+def record_status(module: str, counts: dict[str, int]) -> None:
+    """Keep the counts of this run, with the commit and the digest of the module, in the versioned status file."""
+    status = json.loads(STATUS.read_text()) if STATUS.exists() else {}
+    commit = subprocess.run(
+        ["git", "describe", "--always", "--dirty", "--abbrev=7"], cwd=ROOT, capture_output=True, text=True
+    ).stdout.strip()
+    status[module] = {
+        "date": datetime.date.today().isoformat(),
+        "commit": commit,
+        "source": source_digest(module),
+        **counts,
+    }
+    STATUS.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n")
+
+
+def status_report() -> list[str]:
+    """One line per recorded module: the last counts, and whether the code changed since."""
+    status = json.loads(STATUS.read_text()) if STATUS.exists() else {}
+    lines = [f"{'module':52} {'date':10} {'commit':9} {'killed':>6} {'surv.':>5} {'equiv.':>6} {'noexec':>6}  state"]
+    for module, entry in sorted(status.items()):
+        if not (ROOT / module).is_file():
+            state = "module gone"
+        elif source_digest(module) != entry["source"]:
+            state = "code changed since"
+        else:
+            state = "code unchanged"
+        note = f" ({entry['note']})" if "note" in entry else ""
+        lines.append(
+            f"{module:52} {entry['date']:10} {entry['commit']:9} {entry.get('killed', 0):>6} "
+            f"{entry.get('survived', 0):>5} {entry.get('equivalent', 0):>6} {entry.get('skipped', 0):>6}  {state}{note}"
+        )
+    return lines
+
+
 def copy_tree(destination: Path) -> None:
     tracked = subprocess.run(
         ["git", "ls-files", "-co", "--exclude-standard"], cwd=ROOT, capture_output=True, text=True, check=True
@@ -161,11 +207,18 @@ def run_chunk(work: Path, module: str, lines: list[int], command: list[str], tim
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("module", help="module to mutate, e.g. pysandboxes/guard_socket.py")
+    parser.add_argument("module", nargs="?", help="module to mutate, e.g. pysandboxes/guard_socket.py")
     parser.add_argument("--tests", nargs="+", default=["tests/unit_tests"], help="tests run against each mutant")
     parser.add_argument("--jobs", type=int, default=4, help="parallel copies")
     parser.add_argument("--report", type=Path, help="write every result to this JSON file")
+    parser.add_argument("--status", action="store_true", help="print the recorded runs and exit")
+    parser.add_argument("--no-status", action="store_true", help="do not record this run in the status file")
     args = parser.parse_args()
+    if args.status:
+        print("\n".join(status_report()))
+        return 0
+    if not args.module:
+        parser.error("a module is required, unless --status is given")
 
     ignored = tooling_tests(args.tests)
     command = pytest_command(args.tests, ignored)
@@ -219,6 +272,8 @@ def main() -> int:
             print(f"  {result['operator']}")
             print("\n".join(f"    {text}" for text in changed))
     print(json.dumps(counts))
+    if not args.no_status:
+        record_status(args.module, counts)
     if args.report:
         args.report.write_text(json.dumps(results, indent=1))
     return 0
