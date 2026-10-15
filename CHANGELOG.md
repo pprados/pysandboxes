@@ -47,6 +47,8 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- `eval-call=__lazy_import__`, the hook behind Python 3.15's `lazy import`, is reported as a capability, like
+  `__import__`
 - Under `landlock`, the current working directory no longer receives implicit write access; writes require
   an explicit file rule
 - An `os-sandbox` the host cannot run (a missing `bwrap`, `firejail` or QEMU, a kernel without Landlock or user

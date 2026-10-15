@@ -245,6 +245,7 @@ CAPABILITY_BUILTINS = frozenset(
     {
         "getattr", "setattr", "delattr", "vars", "hasattr", "dir", "globals",
         "type", "breakpoint", "open", "eval", "exec", "compile", "__import__",
+        "__lazy_import__",
     }
 )  # fmt: skip
 

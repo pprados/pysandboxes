@@ -6,6 +6,7 @@ import builtins
 import logging
 import os
 import pathlib
+import sys
 import sysconfig
 import threading
 import time
@@ -164,6 +165,21 @@ def test_every_capability_builtin_is_graded_strong() -> None:
     for name in CAPABILITY_BUILTINS:
         if hasattr(builtins, name):
             assert classify_context_value(getattr(builtins, name)) == "strong", name
+
+
+def test_the_lazy_import_hook_is_a_capability_builtin() -> None:
+    """3.15 adds `__lazy_import__`, the hook `lazy import` calls as `import` calls `__import__`.
+
+    Listed whatever the interpreter: on an older one the name is simply absent from `builtins`."""
+    assert "__lazy_import__" in CAPABILITY_BUILTINS
+
+
+@pytest.mark.skipif(sys.version_info < (3, 15), reason="`lazy import` is a 3.15 syntax")
+def test_a_lazy_import_is_refused_like_an_import_outside_eval_import() -> None:
+    rules = DEFAULT_RULES._replace(declared=True, syntax=_names(*CORE_NODES, "Import", "alias"))
+    activate_guard(ImmutableDict({"": rules}))
+    with pytest.raises(EvalSyntaxRejected, match="import 'json' is not allowed"):
+        guarded_eval("lazy import json", mode="exec")
 
 
 def test_a_patched_capability_builtin_is_still_strong() -> None:
