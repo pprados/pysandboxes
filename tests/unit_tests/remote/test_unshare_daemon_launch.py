@@ -139,6 +139,16 @@ class TestSubprocessCmd:
         finally:
             self._clean(daemon)
 
+    def test_the_debug_directory_may_already_exist(self, tmp_path: Path, threads: Any, monkeypatch: Any) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "tmp").mkdir()
+        daemon = UnshareSSEDaemon("tok")
+        try:
+            with patch.object(usd, "DEBUG_LAUNCH", True):
+                self._cmd(daemon, tmp_path / "other")
+        finally:
+            self._clean(daemon)
+
     def test_the_environment_carries_the_slirp_pipe_and_the_python_path(
         self, tmp_path: Path, threads: Any, monkeypatch: Any
     ) -> None:
@@ -407,9 +417,10 @@ class TestStart:
         watchdog.assert_called_once_with(EmptyRules._replace(port=-1), envs={"A": "b"}, log_level=7, init_fn=None)
         assert task.get_name() == "ControlDaemon"
 
-    def test_a_port_fixed_by_the_rules_is_kept(self) -> None:
+    @pytest.mark.parametrize("port", [5555, 0, -2])
+    def test_a_port_fixed_by_the_rules_is_kept(self, port: int) -> None:
         daemon = UnshareSSEDaemon("tok")
 
-        self._start(daemon, EmptyRules._replace(port=5555))
+        self._start(daemon, EmptyRules._replace(port=port))
 
-        assert daemon.port == 5555
+        assert daemon.port == port

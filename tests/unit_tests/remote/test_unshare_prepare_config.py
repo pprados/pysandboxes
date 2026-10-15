@@ -120,6 +120,11 @@ class TestDns:
 
         assert config.dns_servers == [SLIRP_DNS, "9.9.9.9"]
 
+    def test_an_upstream_server_above_the_slirp_resolver_is_kept(self, tmp_path: Path) -> None:
+        config, _ = _prepare(_rules(), tmp_path, dns=[IPv4Address(SLIRP_DNS), IPv4Address("10.9.9.9")])
+
+        assert config.dns_servers == [SLIRP_DNS, "10.9.9.9"]
+
     def test_only_ipv4_upstream_servers_count(self, tmp_path: Path) -> None:
         from ipaddress import IPv6Address
 
@@ -150,6 +155,20 @@ class TestHosts:
         net = ("net=ALLOW|TCP|localhost|443|OUT", "net=ALLOW|TCP|localhost|80|OUT")
 
         config, _ = _prepare(_rules(net=net), tmp_path)
+
+        assert config.hosts == ["127.0.0.1 localhost"]
+
+    @pytest.mark.parametrize(
+        "skipped",
+        [
+            "net=DENY|TCP|1.1.1.1|443|OUT",
+            "net=ALLOW|TCP|1.1.1.1|443|IN",
+            "net=ALLOW|TCP|10.0.0.0/8|443|OUT",
+            "net=ALLOW|TCP|1.2.3.4|443|OUT",
+        ],
+    )
+    def test_a_skipped_rule_does_not_hide_the_host_that_follows(self, tmp_path: Path, skipped: str) -> None:
+        config, _ = _prepare(_rules(net=(skipped, "net=ALLOW|TCP|localhost|443|OUT")), tmp_path)
 
         assert config.hosts == ["127.0.0.1 localhost"]
 
@@ -193,6 +212,20 @@ class TestMounts:
             config, _ = _prepare(_rules(), tmp_path)
 
         assert (ghost, ghost) not in config.mounts_ro
+
+    def test_the_site_packages_are_mounted(self, tmp_path: Path) -> None:
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+        with patch.object(usd.site, "getsitepackages", return_value=[str(site_dir)]), patch.object(sys, "path", []):
+            config, _ = _prepare(_rules(), tmp_path)
+
+        assert (str(site_dir), str(site_dir)) in config.mounts_ro
+
+    def test_a_python_without_site_packages_support_is_tolerated(self, tmp_path: Path) -> None:
+        with patch.object(usd, "site", object()), patch.object(sys, "path", []):
+            config, _ = _prepare(_rules(), tmp_path)
+
+        assert (sys.executable, sys.executable) in config.mounts_ro
 
     def test_every_directory_of_the_interpreter_chain_is_mounted(self, tmp_path: Path) -> None:
         link = tmp_path / "chain"
