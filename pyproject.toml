@@ -125,6 +125,7 @@ test = [
     "toml>=0.10.2",
     "pyyaml>=6.0",
     "speckit>=1.0.1",
+    "pytestarch>=4.0.1",
 ]
 lint = [
     "mypy>=1.8",
