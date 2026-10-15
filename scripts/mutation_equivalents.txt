@@ -60,3 +60,4 @@ pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if ld
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | ld64.mkdir(parents=True, exist_ok=True)
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_config":
 pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_run":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | mode = "full multiarch merge + ldd seeds" if ld_closure_libs == "full" else "sparse ldd + compat seeds"

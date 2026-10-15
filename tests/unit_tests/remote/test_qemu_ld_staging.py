@@ -159,7 +159,7 @@ class TestStageClosure:
             lib.write_text("elf")
         monkeypatch.setattr(q, "_path_under_host_multiarch_lib", lambda path, triplet: path == first)
 
-        stage({first, second}, ld_closure_libs="full")
+        stage({first, second}, ld_closure_libs="".join(list("full")))
 
         assert not (stage.root / first.relative_to("/")).exists()
         assert (stage.root / second.relative_to("/")).exists()
@@ -212,7 +212,7 @@ class TestStageClosure:
         (stage.root / "lib" / "tri-linux-gnu").mkdir(parents=True)
 
         with caplog.at_level(logging.DEBUG, logger=q.logger.name):
-            stage({Path("/nonexistent/lib.so")}, ld_closure_libs=mode)
+            stage({Path("/nonexistent/lib.so")}, ld_closure_libs="".join(list(mode)))
 
         assert f"(1 ldd objects, {text})" in caplog.text
 
