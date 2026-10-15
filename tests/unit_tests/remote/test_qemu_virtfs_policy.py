@@ -165,6 +165,19 @@ class TestFileRulesMounts:
         monkeypatch.setattr(q, "_execution_dirs_mounts", lambda: [])
         monkeypatch.setattr(q, "_virtfs_stage_exec_needed", lambda params: False)
 
+        def forbidden(*args: Any, **kwargs: Any) -> Any:
+            # A real staging copies tens of gigabytes of host libraries; no test here may reach it.
+            raise AssertionError("staging must not run")
+
+        for name in (
+            "_stage_exec_virtfs_mounts",
+            "_merge_staged_virtfs_into_expose_mounts",
+            "_rebase_file_expose_hosts_under_staged_app",
+            "_stage_overlay_etc_expose_mount",
+            "_stage_dynamic_linker_closure",
+        ):
+            monkeypatch.setattr(q, name, forbidden)
+
     def _mounts(self, tmp_path: Path, rules: list[Any], **kwargs: Any) -> tuple[list[Any], list[Any]]:
         temp = kwargs.pop("temp", tmp_path / "run")
         temp.mkdir(exist_ok=True)
