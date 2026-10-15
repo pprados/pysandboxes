@@ -8,10 +8,10 @@
   "source": "c11a137a4031"
  },
  "pysandboxes/base_daemon.py": {
-  "commit": "166b245",
-  "date": "2026-10-14",
-  "killed": 3,
-  "skipped": 567,
+  "commit": "v0.5.0b1-217-g2d82079",
+  "date": "2026-10-15",
+  "killed": 6,
+  "skipped": 374,
   "source": "b176d53f1b72"
  },
  "pysandboxes/e.py": {
