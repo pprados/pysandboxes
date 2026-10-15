@@ -161,10 +161,11 @@ class TestHosts:
     @pytest.mark.parametrize(
         "skipped",
         [
-            "net=DENY|TCP|1.1.1.1|443|OUT",
-            "net=ALLOW|TCP|1.1.1.1|443|IN",
-            "net=ALLOW|TCP|10.0.0.0/8|443|OUT",
-            "net=ALLOW|TCP|1.2.3.4|443|OUT",
+            "net=DENY|TCP|1.1.1.1|80,443,8080|OUT",
+            "net=ALLOW|TCP|1.1.1.1|80,443,8080|IN",
+            "net=ALLOW|TCP|10.0.0.0/8|80,443,8080|OUT",
+            "net=ALLOW|TCP|1.2.3.4|80,443,8080|OUT",
+            "net=ALLOW|TCP|1.2.3.4/32|80,443,8080|OUT",
         ],
     )
     def test_a_skipped_rule_does_not_hide_the_host_that_follows(self, tmp_path: Path, skipped: str) -> None:

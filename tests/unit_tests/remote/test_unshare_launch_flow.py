@@ -419,6 +419,25 @@ class TestPing:
         with pytest.raises(RuntimeError, match=r"Unexpected status 503 from http://127.0.0.1:7001/ping"):
             flow.launch(_daemon())
 
+    @pytest.mark.parametrize("status", [100, 199, 201, 204, 404])
+    def test_only_the_status_200_means_ready(self, flow: _Fixture, status: int) -> None:
+        flow.ping = _Ping(status)
+
+        with pytest.raises(RuntimeError, match=f"Unexpected status {status} "):
+            flow.launch(_daemon())
+
+    def test_the_process_is_started_through_the_sandbox_loop(self, flow: _Fixture) -> None:
+        decorated: list[str] = []
+
+        def sandbox_loop(func: Any) -> Any:
+            decorated.append(func.__name__)
+            return func
+
+        with patch.object(usd, "sandbox_loop", sandbox_loop):
+            flow.launch(_daemon())
+
+        assert decorated == ["_do_launch"]
+
     def test_a_daemon_that_never_answers_ends_in_a_sandbox_error(self, flow: _Fixture) -> None:
         flow.ping = _Ping(*([TimeoutError()] * 3))
         daemon = _daemon()
