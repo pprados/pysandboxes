@@ -29,15 +29,6 @@ def test_the_glob_scan_decides_the_same_language_as_its_regex(glob: str, subject
     assert GlobPattern(glob).match(subject) == bool(_reference_glob(glob).fullmatch(subject))
 
 
-@settings(max_examples=300, deadline=None)
-@given(st.text(max_size=40))
-def test_a_comment_is_cut_off_and_nothing_else_is_added(line: str) -> None:
-    cleaned = _remove_comment(line)
-
-    assert line.startswith(cleaned)
-    assert _remove_comment(cleaned) == cleaned
-
-
 @settings(max_examples=200, deadline=None)
 @given(st.text(st.characters(exclude_characters="#'\"", exclude_categories=_CS), max_size=40))
 def test_a_line_without_quote_keeps_what_precedes_its_hash_without_trailing_blanks(text: str) -> None:

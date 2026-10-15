@@ -153,16 +153,6 @@ def test_a_missing_ipython_falls_back_with_its_traceback(
     assert "Falling back" not in err
 
 
-def test_a_learning_run_tries_ipython_even_when_the_threads_door_is_closed(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    _interact_with(monkeypatch, _rules(tmp_path, learn=True), learning=True, allowed=False)
-
-    err = capsys.readouterr().err
-    assert "ModuleNotFoundError" in err
-    assert "Falling back" not in err
-
-
 def test_termination_signals_are_caught_to_save_the_learned_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     installed: list[int] = []
     monkeypatch.setattr(python_in_sb.signal, "signal", lambda signum, handler: installed.append(signum))

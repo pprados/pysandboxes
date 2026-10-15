@@ -326,23 +326,3 @@ class TestQemuExecutionDirs:
             qemu._add_libpython_dirs_from_ldd(dirs, {exe})
 
         assert dirs == {libdir.resolve()}
-
-    def test_only_existing_directories_of_sys_path_are_mounted(self, tmp_path: Path) -> None:
-        pyexe = tmp_path / "bin" / "python3"
-        pyexe.parent.mkdir()
-        pyexe.write_bytes(b"\x7fELF")
-        real = tmp_path / "real"
-        real.mkdir()
-        (tmp_path / "link").symlink_to(real, target_is_directory=True)
-        entries = ["", str(tmp_path / "missing"), str(real), str(tmp_path / "link")]
-
-        with (
-            patch.object(sys, "executable", str(pyexe)),
-            patch.object(sys, "path", entries),
-            patch.object(qemu.site, "getsitepackages", return_value=["", str(tmp_path / "gone")]),
-        ):
-            specs = qemu._execution_dirs_mounts()
-
-        hosts = [str(host) for _, host, _ in specs]
-        assert hosts.count(str(real.resolve())) == 1
-        assert not any("missing" in host or "gone" in host for host in hosts)

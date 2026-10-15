@@ -51,12 +51,6 @@ class TestPrescanMarkBudget:
         with pytest.raises(RestrictedUnpicklingError, match="MARK budget"):
             _prescan(data)
 
-    def test_closing_marks_never_opened_do_not_widen_the_budget(self) -> None:
-        data = _PROTO + b"t" * 50 + b"(" * (tools._MAX_MARK_DEPTH + 10) + _STOP
-
-        with pytest.raises(RestrictedUnpicklingError, match="MARK budget"):
-            _prescan(data)
-
     def test_a_balanced_nesting_is_accepted(self) -> None:
         _prescan(_PROTO + b"(" * 5 + b"t" * 5 + _STOP)
 

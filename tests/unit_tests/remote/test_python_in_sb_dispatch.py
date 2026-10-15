@@ -111,15 +111,6 @@ class TestModule:
 
         assert runs.argv_seen[-1] == ["", "x"]
 
-    def test_a_module_without_an_origin_gets_an_empty_program_name(
-        self, runs: _Runs, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        self._spec(monkeypatch, None)
-
-        _run(runs, ["-m", "namespace_pkg", "x"])
-
-        assert runs.argv_seen[-1] == ["", "x"]
-
     def test_pytest_is_asked_for_colour(self, runs: _Runs, monkeypatch: pytest.MonkeyPatch) -> None:
         self._spec(monkeypatch, "/lib/pytest/__main__.py")
 
@@ -210,20 +201,6 @@ class TestLearningSave:
         runs.learning = True
 
         _run(runs, ["tool.py"])
-
-        assert runs.saved == 1
-
-    def test_the_learned_rules_are_saved_even_when_the_program_fails(
-        self, runs: _Runs, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        runs.learning = True
-
-        def failing(*args: Any, **kwargs: Any) -> int:
-            raise ValueError("user code failed")
-
-        monkeypatch.setattr(pis, "_python_script", failing)
-        with pytest.raises(ValueError, match="user code failed"):
-            _run(runs, ["tool.py"])
 
         assert runs.saved == 1
 

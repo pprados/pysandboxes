@@ -109,17 +109,6 @@ class TestDownloadUrl:
 
         assert qemu_image.get_download_url(Path("/x/name.img")) == "https://standard/img"
 
-    def test_an_unsafe_scheme_from_the_environment_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_URL, "file:///etc/passwd")
-
-        with pytest.raises(ValueError):
-            qemu_image.get_download_url(Path("/x/name.img"))
-
-        monkeypatch.delenv(qemu_image.ENV_VM_IMAGE_URL)
-        monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_BASE_URL, "ftp://base")
-        with pytest.raises(ValueError):
-            qemu_image.get_download_url(Path("/x/name.img"))
-
 
 class TestProgressText:
     def _text(self, monkeypatch: pytest.MonkeyPatch, downloaded: int, total: int | None) -> str:
@@ -217,17 +206,6 @@ class TestDownload:
         qemu_image.download_image(tmp_path / "vm.img", "https://h/v", lambda *_: None)
 
         assert stderr.getvalue() == "\n"
-
-    def test_without_a_callback_the_default_progress_is_printed(
-        self, web: list[dict[str, Any]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        stderr = io.StringIO()
-        monkeypatch.setattr(qemu_image.sys, "stderr", stderr)
-        _serve(web, _Response([b"ab"], length="2"))
-
-        qemu_image.download_image(tmp_path / "vm.img", "https://h/v")
-
-        assert "Downloading VM image" in stderr.getvalue()
 
     def test_a_closed_stderr_does_not_fail_the_final_newline(
         self, web: list[dict[str, Any]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch

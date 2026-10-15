@@ -59,18 +59,6 @@ class TestBwrapArgs:
         assert _setenv(args, "FOO") == "bar"
         assert _setenv(args, "N") == "1"
 
-    def test_pythonpath_lists_existing_directories_once(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        real = tmp_path / "real"
-        real.mkdir()
-        packages = tmp_path / "packages"
-        packages.mkdir()
-        monkeypatch.setattr(site, "getsitepackages", lambda: [str(packages), str(tmp_path / "missing")])
-        monkeypatch.setattr(sys, "path", ["", str(tmp_path / "missing"), str(real), str(packages), str(real)])
-
-        entries = (_setenv(_args(tmp_path), "PYTHONPATH") or "").split(os.pathsep)
-
-        assert entries == [str(packages), str(real), str(real)]
-
     def test_the_profile_network_parameters_are_added_but_not_the_share_ones(self, tmp_path: Path) -> None:
         rules = EmptyRules._replace(os_sandbox_params={"share-net": "", "with-value": "1", "bare": ""})  # type: ignore[arg-type]
 

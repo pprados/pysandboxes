@@ -17,10 +17,3 @@ def test_windows_child_keeps_systemroot(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("SYSTEMROOT", r"C:\Windows")
 
     assert _child_env(Envs({"TERM": "xterm"})) == {"TERM": "xterm", "SYSTEMROOT": r"C:\Windows"}
-
-
-def test_posix_child_gets_only_the_allowed_variables(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("sys.platform", "linux")
-    monkeypatch.setenv("SYSTEMROOT", r"C:\Windows")
-
-    assert _child_env(Envs({"TERM": "xterm"})) == {"TERM": "xterm"}

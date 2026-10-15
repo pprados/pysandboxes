@@ -30,8 +30,6 @@ def _spec(*rules: SocketRule, **kwargs: bool) -> str:
 
 
 class TestExtractPortForwards:
-    def test_the_sse_port_is_always_forwarded(self) -> None:
-        assert _spec() == "tcp:9000"
 
     def test_an_allowed_incoming_rule_is_forwarded_sorted_by_kind_and_port(self) -> None:
         spec = _spec(

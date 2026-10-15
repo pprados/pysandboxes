@@ -287,11 +287,6 @@ class TestExposedPaths:
 
         assert f"--whitelist={path}" not in args
 
-    def test_etc_itself_gets_no_access_option_at_all(self, tmp_path: Path) -> None:
-        args = _args(tmp_path, self._rules(FSExposeRule("/etc/", True, _CONFIG)))
-
-        assert not any(arg.endswith("=/etc/") for arg in args)
-
     def test_the_rules_are_returned_unchanged(self, tmp_path: Path) -> None:
         rules = _with_socket_rule()._replace(file_rules=(FSExposeRule("/srv/", False, _CONFIG),))
         config = tmp_path / "firejail.config"

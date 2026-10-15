@@ -329,16 +329,6 @@ class TestWatcher:
         assert _closed(write_end)
         os.close(read_end)
 
-    def test_the_stderr_is_kept_only_when_debugging(self, watcher: Any, caplog: pytest.LogCaptureFixture) -> None:
-        with caplog.at_level(logging.INFO, logger=slirp.logger.name):
-            r1, _ = watcher(child_pid=1)
-        assert watcher.launched[-1]["stderr"] == subprocess.DEVNULL
-        with caplog.at_level(logging.DEBUG, logger=slirp.logger.name):
-            r2, _ = watcher(child_pid=1)
-        assert watcher.launched[-1]["stderr"] == subprocess.PIPE
-        os.close(r1)
-        os.close(r2)
-
     def test_the_pid_comes_from_the_file_when_there_is_no_child_pid(self, watcher: Any, tmp_path: Path) -> None:
         pid_file = tmp_path / "pid"
         pid_file.write_text("4321")

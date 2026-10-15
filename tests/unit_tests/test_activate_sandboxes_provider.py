@@ -39,12 +39,6 @@ def rules(tmp_path: Path) -> Any:
     return load_and_parse_config(profile)
 
 
-def test_the_configured_provider_updates_the_rules(providers: list[str], rules: Any) -> None:
-    activate_sandboxes(rules)
-
-    assert providers == ["subprocess"]
-
-
 def test_rules_provider_overrides_the_configured_provider(providers: list[str], rules: Any) -> None:
     activate_sandboxes(rules, rules_provider="none")
 

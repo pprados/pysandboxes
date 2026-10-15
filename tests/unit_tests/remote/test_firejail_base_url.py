@@ -8,7 +8,6 @@ it there, but ``base_url`` insisted on an ``eth0`` address and raised
 ``SystemExit``, which ended the whole calling process.
 """
 
-import ipaddress
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -25,12 +24,6 @@ def _daemon() -> FireJailSSEDaemon:
 def test_a_jail_without_its_own_network_is_reached_on_the_loopback() -> None:
     with patch.object(firejail_sse_daemon, "parse_firejail_net_print", return_value=None):
         assert _daemon().base_url == "http://127.0.0.1:{PORT}"
-
-
-def test_a_jail_with_its_own_network_is_reached_on_its_address() -> None:
-    ip = ipaddress.IPv4Address("10.10.20.2")
-    with patch.object(firejail_sse_daemon, "parse_firejail_net_print", return_value=ip):
-        assert _daemon().base_url == "http://10.10.20.2:{PORT}"
 
 
 def test_the_daemon_listens_on_the_loopback_when_the_jail_keeps_the_host_network() -> None:

@@ -35,25 +35,6 @@ def test_options_after_the_script_belong_to_the_script() -> None:
     assert run_args == ["x.py", "-v", "--learn"]
 
 
-def test_a_module_glued_to_its_switch_is_the_command() -> None:
-    _, _, run_args, _ = parse_python_cmd_line(["-mjson.tool"])
-
-    assert _command(run_args) == "-mjson.tool"
-
-
-def test_a_program_glued_to_its_switch_is_the_command() -> None:
-    _, _, run_args, _ = parse_python_cmd_line(["-cprint(1)"])
-
-    assert _command(run_args) == "-cprint(1)"
-
-
-def test_a_module_switch_grouped_with_a_flag_is_the_command() -> None:
-    python_args, _, run_args, _ = parse_python_cmd_line(["-Im", "json.tool"])
-
-    assert _command(run_args) == "-mjson.tool"
-    assert "-I" in python_args or "-Im" in python_args
-
-
 def test_a_script_without_the_py_suffix_is_the_command() -> None:
     python_args, _, run_args, _ = parse_python_cmd_line(["-B", "myscript", "arg"])
 

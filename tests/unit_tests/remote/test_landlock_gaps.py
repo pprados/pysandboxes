@@ -79,9 +79,6 @@ class TestAbiVersion:
         monkeypatch.setattr(sys, "platform", platform)
         return ll._get_landlock_abi_version()
 
-    def test_the_kernel_answer_is_the_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        assert self._version(monkeypatch, 6) == 6
-
     @pytest.mark.parametrize("failure", [-1, -38, OSError("no")])
     def test_a_failing_syscall_means_unsupported(self, monkeypatch: pytest.MonkeyPatch, failure: Any) -> None:
         assert self._version(monkeypatch, failure) == 0

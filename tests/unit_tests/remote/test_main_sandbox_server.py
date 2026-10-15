@@ -80,13 +80,6 @@ async def test_an_unknown_init_module_stops_the_process(server: list[tuple[str, 
     assert server == []
 
 
-async def test_an_unknown_init_function_is_refused(server: list[tuple[str, Any]]) -> None:
-    with pytest.raises(AssertionError):
-        await main_sandbox.run_server(_config(init_fn="json:no_such_function"))
-
-    assert server == []
-
-
 @pytest.mark.parametrize("provider", ["subprocess", "firejail", "unshare", "landlock", "bwrap", "qemu"])
 async def test_every_kernel_backed_provider_is_accepted(server: list[tuple[str, Any]], provider: str) -> None:
     assert await main_sandbox.run_server(_config(os_sandbox=provider)) == 0

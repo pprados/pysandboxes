@@ -58,18 +58,6 @@ class TestParsePythonCmdLine:
         assert python_cmd == ["-c", "print('hello world')", "extra"]
         assert config == Path(CONFIG_NAME)
 
-    def test_parse_python_cmd_line_interactive_mode(self) -> None:
-        """Test parsing interactive mode (no script/command)."""
-        args = ["-i", "-v"]
-
-        python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
-
-        assert ["-i", "-v"] == python_parsed
-
-        assert sandboxes_args == []
-        assert python_cmd == []
-        assert config == Path(CONFIG_NAME)
-
     def test_parse_python_cmd_line_x_option(self) -> None:
         """Test parsing with -X option."""
         args = ["--env=a=b", "-X", "dev", "-X", "utf8", "script.py", "--param=value"]

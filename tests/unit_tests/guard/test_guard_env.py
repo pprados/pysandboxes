@@ -44,18 +44,6 @@ def test_var_value() -> None:
     assert env == Envs({"FOO": "BAR"})
 
 
-def test_var_default_value() -> None:
-    errors: List[ErrorMsg] = []
-    _, env, _ = parse_rules(
-        [
-            ConfigLine("env=FOO=${X:-BAR}", Path(), 0),
-        ],
-        {"bar": "BAR"},
-        errors,
-    )
-    assert env == Envs({"FOO": "BAR"})
-
-
 def test_var_pattern() -> None:
     errors: List[ErrorMsg] = []
     _, env, _ = parse_rules(

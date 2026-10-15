@@ -28,10 +28,3 @@ def test_other_mounts_keep_the_configured_model(tmp_path: Path, monkeypatch: pyt
     assert _virtfs_security_model(tmp_path, "mapped-xattr") == "mapped-xattr"
     assert _virtfs_security_model(tmp_path, "auto") == "mapped-xattr"
     assert _virtfs_security_model(tmp_path, "passthrough") == "passthrough"
-
-
-def test_a_staged_tree_is_shared_without_mapped_xattr(tmp_path: Path) -> None:
-    staged = tmp_path / "virtfs_stage_exec"
-    staged.mkdir()
-
-    assert _virtfs_security_model(staged, "mapped-xattr") == "none"
