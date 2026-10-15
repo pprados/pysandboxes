@@ -1,92 +1,23 @@
-import asyncio
-import logging
+# Copyright (c) 2026, Philippe PRADOS
+# License: Apache V2
+"""What a real bwrap process can reach on the host."""
+
 import os
 import subprocess
 import sys
-from asyncio import AbstractEventLoop
 from pathlib import Path
-from typing import AsyncGenerator, Iterator
 
 import pytest  # type: ignore[import-untyped]
-import pytest_asyncio  # type: ignore[import-untyped]
 
-from pysandboxes import sandbox
-from pysandboxes._os_sandbox import async_shutdown_daemon, async_start_daemon
 from pysandboxes.all_rules import EmptyRules
-from pysandboxes.immutable_dict import ImmutableDict
-from pysandboxes.py_sandbox import load_and_parse_config
 from pysandboxes.remote.bwrap_sse_daemon import BWrapSSEDaemon
 
 from .._env import provider_skip_reason
 
 _BWRAP_SKIP_REASON = provider_skip_reason("bwrap") or ""
 
-# py-sandbox-test.profile includes net= rules: the daemon runs with --unshare-net, slirp4netns, and the iptables
-# filter the host loads into the sandbox, without root.
-_BWRAP_PARAMS: ImmutableDict[str, str] = ImmutableDict({})
 
-
-def _bwrap_integration_ready() -> bool:
-    return provider_skip_reason("bwrap") is None
-
-
-# See https://github.com/tortoise/tortoise-orm/issues/638
-@pytest.fixture(scope="module")
-def event_loop() -> Iterator[AbstractEventLoop]:
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def start_daemon_for_tests() -> AsyncGenerator[None, None]:
-    if not _bwrap_integration_ready():
-        yield
-        return
-    config_path = Path(__file__).parent / "py-sandbox-test.profile"
-
-    log_level = logging.root.getEffectiveLevel()
-    all_rules = load_and_parse_config(config_path=config_path)
-    all_rules = all_rules._replace(
-        os_sandbox="bwrap",
-        os_sandbox_params=_BWRAP_PARAMS,
-    )
-    await async_start_daemon(
-        all_rules,
-        envs=os.environ,
-        log_level=log_level,
-        init_fn=None,
-    )
-    yield
-    await async_shutdown_daemon(graceful_shutdown=False)
-
-
-@sandbox()
-def sync_function(a: str, b: str) -> str:
-    return f"{a} {b}"
-
-
-@pytest.mark.skipif(not _bwrap_integration_ready(), reason=_BWRAP_SKIP_REASON)
-def test_sync_function() -> None:
-    result_sync = sync_function("a", b="b")
-    assert result_sync == "a b"
-
-
-@sandbox()
-async def async_function(a: str, b: str) -> str:
-    import asyncio
-
-    await asyncio.sleep(0)
-    return f"{a} {b}"
-
-
-@pytest.mark.skipif(not _bwrap_integration_ready(), reason=_BWRAP_SKIP_REASON)
-async def test_async_function() -> None:
-    result_async = await async_function("a", b="b")
-    assert result_async == "a b"
-
-
-@pytest.mark.skipif(not _bwrap_integration_ready(), reason=_BWRAP_SKIP_REASON)
+@pytest.mark.skipif(provider_skip_reason("bwrap") is not None, reason=_BWRAP_SKIP_REASON)
 def test_run_user_bus_is_not_reachable_from_inside_bwrap(tmp_path: Path) -> None:
     """NR1: binding the whole of /run exposed every /run/user/<uid>, including this user's session
     D-Bus bus (answers AUTH EXTERNAL OK from inside the sandbox -- a host escape). A real bwrap

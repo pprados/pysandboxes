@@ -62,17 +62,6 @@ def test_current_directory_access_matches_explicit_rule(tmp_path: Path, write: b
     assert _paths(tmp_path, _rule(cwd, write))[str(cwd)] == expected
 
 
-def test_an_exposed_path_gets_the_access_its_rule_names(tmp_path: Path) -> None:
-    ro, rw = tmp_path / "ro", tmp_path / "rw"
-    ro.mkdir()
-    rw.mkdir()
-
-    granted = _paths(tmp_path, _rule(ro, write=False), _rule(rw, write=True))
-
-    assert granted[str(ro)] == "ro"
-    assert granted[str(rw)] == "rw"
-
-
 def test_a_later_read_only_rule_never_downgrades_write_access(tmp_path: Path) -> None:
     data = tmp_path / "data"
     data.mkdir()

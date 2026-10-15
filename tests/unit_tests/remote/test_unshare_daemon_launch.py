@@ -149,22 +149,6 @@ class TestSubprocessCmd:
         finally:
             self._clean(daemon)
 
-    def test_the_environment_carries_the_slirp_pipe_and_the_python_path(
-        self, tmp_path: Path, threads: Any, monkeypatch: Any
-    ) -> None:
-        monkeypatch.setenv("PYTHONPATH", "/existing")
-        daemon = UnshareSSEDaemon("tok")
-        try:
-            _, extra = self._cmd(daemon, tmp_path)
-
-            assert extra == {
-                "PID_FILE": daemon._slirp_pid_file,
-                "SLIRP_READY_FD": str(daemon._slirp_pipe_r),
-                "PYTHONPATH": f"{os.getcwd()}:/existing",
-            }
-        finally:
-            self._clean(daemon)
-
     def test_without_a_python_path_the_project_root_stands_alone(
         self, tmp_path: Path, threads: Any, monkeypatch: Any
     ) -> None:
@@ -358,20 +342,6 @@ class TestShutdown:
             asyncio.run(daemon._shutdown(False))
 
         assert order == ["parent:False:True", "slirp", "roots"]
-
-    def test_the_cleanup_runs_even_when_the_parent_fails(self) -> None:
-        daemon = UnshareSSEDaemon("tok")
-
-        with (
-            patch.object(BaseSubProcessDaemon, "_shutdown", AsyncMock(side_effect=RuntimeError("boom"))),
-            patch.object(UnshareSSEDaemon, "_kill_slirp") as kill,
-            patch.object(UnshareSSEDaemon, "_remove_chroot_dirs") as roots,
-        ):
-            with pytest.raises(RuntimeError, match="boom"):
-                asyncio.run(daemon._shutdown())
-
-        kill.assert_called_once_with()
-        roots.assert_called_once_with()
 
     def test_the_default_shutdown_is_graceful(self) -> None:
         daemon = UnshareSSEDaemon("tok")

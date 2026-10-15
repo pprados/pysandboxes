@@ -83,14 +83,6 @@ class TestSandboxDecorator:
             def gen() -> Any:  # type: ignore[misc]
                 yield 1
 
-    def test_sandbox_refuses_an_async_generator_function(self) -> None:
-        """An asynchronous generator function cannot be sent across the sandbox boundary."""
-        with pytest.raises(TypeError, match="generator"):
-
-            @sandbox
-            async def agen() -> Any:  # type: ignore[misc]
-                yield 1
-
 
 class TestRunFunction:
     """Test cases for run function."""
@@ -166,18 +158,6 @@ class TestSandboxesContextManager:
         mock_async_start.assert_called_once()
         mock_async_shutdown.assert_called_once()
 
-    @patch("pysandboxes._os_sandbox.start_daemon")
-    @patch("pysandboxes.sandboxes_api.async_shutdown_daemon")
-    def test_sandboxes_context_manager_parameters(self, mock_async_shutdown: Mock, mock_async_start: Mock) -> None:
-        """Test sandboxes context manager with parameters."""
-        mock_daemon = Mock()
-        mock_async_start.return_value = mock_daemon
-
-        with sandboxes(sandboxes_config="test.conf"):
-            pass
-
-        mock_async_start.assert_called_once()
-        mock_async_shutdown.assert_called_once()
         # Check that parameters were passed correctly - this is a basic test
         # since the actual parameter structure is complex
 

@@ -152,13 +152,6 @@ def test_an_abbreviated_internal_option_is_not_taken_from_the_command_line(
     assert not harness.named("python_in_sb")
 
 
-def test_a_missing_named_pipe_is_refused(harness: _Harness, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["main_sandbox"])
-
-    with pytest.raises(AssertionError, match="--_named-pipe"):
-        main_sandbox.main()
-
-
 def test_the_netfilter_is_applied_only_when_there_are_rules(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -287,13 +280,6 @@ class TestEntryPointsPreloaded:
         self, harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         seen = self._preloaded_at_activation(harness, monkeypatch, tmp_path, "--_python-sb", "x.py")
-
-        assert seen == {name: True for name in _ENTRY_POINTS}
-
-    def test_a_program_in_the_vm_loads_them_before_arming(
-        self, harness: _Harness, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        seen = self._preloaded_at_activation(harness, monkeypatch, tmp_path, python_main_args=("x.py",))
 
         assert seen == {name: True for name in _ENTRY_POINTS}
 

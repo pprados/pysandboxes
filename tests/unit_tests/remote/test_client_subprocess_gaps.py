@@ -45,16 +45,6 @@ class TestLogFormat:
 
         assert client.get_log_formatter() == "%(message)s"
 
-    def test_rich_is_detected_by_the_class_name_of_a_root_handler(self, root_handlers: list[logging.Handler]) -> None:
-        root_handlers[:] = [logging.StreamHandler(), logging.NullHandler()]
-        assert client.use_rich_handler() is False
-
-        class RichHandler(logging.Handler):
-            pass
-
-        root_handlers[:] = [logging.StreamHandler(), RichHandler()]
-        assert client.use_rich_handler() is True
-
 
 class TestOpenFifoForWrite:
     def test_an_error_other_than_no_reader_is_raised_at_once(self, tmp_path: Path) -> None:

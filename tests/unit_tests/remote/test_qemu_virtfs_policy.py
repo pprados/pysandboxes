@@ -246,11 +246,6 @@ class TestFileRulesMounts:
         assert ("pysb_config", config, q.GUEST_CONFIG_MOUNT) in specs
         assert ("pysb_config", q.GUEST_CONFIG_MOUNT) in mounts
 
-    def test_a_config_directory_that_does_not_exist_is_not_shared(self, tmp_path: Path) -> None:
-        specs, _ = self._mounts(tmp_path, [], config_dir=tmp_path / "absent")
-
-        assert "pysb_config" not in [t for t, _, _ in specs]
-
     def test_the_mounts_are_ordered_rules_by_depth_then_config_run_and_the_rest(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

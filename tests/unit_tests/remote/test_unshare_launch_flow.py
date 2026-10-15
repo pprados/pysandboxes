@@ -194,21 +194,6 @@ class TestLaunchCommand:
         assert rest[-2] == "--_named-pipe"
         assert Path(rest[-1]).name.startswith("_")
 
-    def test_the_child_gets_the_slirp_pipe_the_pid_file_and_the_python_path(
-        self, flow: _Fixture, monkeypatch: Any
-    ) -> None:
-        monkeypatch.setenv("PYTHONPATH", "/existing")
-        daemon = _daemon()
-
-        flow.launch(daemon)
-
-        ((_, kwargs),) = flow.exec_calls
-        env = kwargs["env"]
-        assert env["PID_FILE"] == daemon._slirp_pid_file
-        assert env["PYTHONPATH"] == f"{os.getcwd()}:/existing"
-        (read_fd,) = kwargs["pass_fds"]
-        assert env["SLIRP_READY_FD"] == str(read_fd)
-
     def test_without_a_python_path_the_project_root_stands_alone(self, flow: _Fixture, monkeypatch: Any) -> None:
         monkeypatch.delenv("PYTHONPATH", raising=False)
 

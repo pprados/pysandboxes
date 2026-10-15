@@ -493,7 +493,8 @@ def test_os_open_writeonly(files: Dict[str, Path]) -> None:  # noqa: F811
         os.open(files["ignore"], os.O_RDONLY)
 
 
-def test_os_open_writeonly_refused(files: Dict[str, Path]) -> None:  # noqa: F811
+@pytest.mark.parametrize("flag", ["O_WRONLY", "O_RDWR"])
+def test_os_open_for_writing_refused(files: Dict[str, Path], flag: str) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
         ConfigLine(f"expose-ro={files['path']}", Path(), 0),
@@ -507,7 +508,7 @@ def test_os_open_writeonly_refused(files: Dict[str, Path]) -> None:  # noqa: F81
     with pytest.raises(RulePermissionError):
         fd = -1
         try:
-            fd = os.open(files["bind_dest"], os.O_WRONLY)
+            fd = os.open(files["bind_dest"], getattr(os, flag))
         finally:
             if fd != -1:
                 os.close(fd)
@@ -538,26 +539,6 @@ def test_os_open_readwrite(files: Dict[str, Path]) -> None:  # noqa: F811
     finally:
         if fd != -1:
             os.close(fd)
-
-
-def test_os_open_readwrite_refused(files: Dict[str, Path]) -> None:  # noqa: F811
-    rules = [
-        ConfigLine("ignore=*.log", Path(), 0),
-        ConfigLine(f"expose-ro={files['path']}", Path(), 0),
-        ConfigLine(f"expose-ro={files['bind_src']}", Path(), 0),
-        ConfigLine(f"expose-ro={files['bind_dest']}", Path(), 0),
-    ]
-    activate_guard_files_rules(rules)
-
-    import os
-
-    with pytest.raises(RulePermissionError):
-        fd = -1
-        try:
-            fd = os.open(files["bind_dest"], os.O_WRONLY)
-        finally:
-            if fd != -1:
-                os.close(fd)
 
 
 def test_os_access_read_write(files: Dict[str, Path]) -> None:  # noqa: F811

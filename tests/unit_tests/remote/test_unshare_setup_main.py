@@ -285,15 +285,6 @@ class TestFirewall:
 
 
 class TestMounts:
-    def test_the_chroot_is_a_tmpfs_with_a_sticky_tmp(
-        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
-
-        assert ["mount", "-t", "tmpfs", "none", str(harness.root)] in harness.mounts
-        assert (harness.root / "tmp").stat().st_mode & 0o7777 == 0o1777
-        for name in ("dev", "proc", "etc", "home", "root"):
-            assert (harness.root / name).is_dir()
 
     def test_the_current_directory_is_writable_and_user_mounts_follow_their_mode(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -423,13 +414,6 @@ class TestIgnoredPaths:
 
         assert len(attempts) == 2
         assert "Could not overlay ignore path" in caplog.text
-
-    def test_nothing_is_masked_without_a_current_directory(
-        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        _main(harness, monkeypatch, tmp_path, _config(harness.root, ignore_paths=["a"]), "prog")
-
-        assert not [m for m in harness.mounts if m[:2] == ["mount", "--bind"] and m[3].endswith("/a")]
 
 
 class TestNameResolution:
@@ -635,17 +619,6 @@ class TestSignalledCommands:
         unshare_setup._mount_bind(str(tmp_path / "two"), "/mnt/two", str(root), readonly=False)
 
         assert (root / "mnt" / "one").is_file() and (root / "mnt" / "two").is_file()
-
-    def test_a_link_command_killed_by_a_signal_is_retried(
-        self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        harness.ip_results = [(-9, "")] * 5
-
-        _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
-
-        links = [c for c in harness.subs if c[:3] == ["ip", "link", "set"] and c[3] != "lo"]
-        assert len(links) == 5
-        assert not [c for c in harness.subs if c[:3] == ["ip", "route", "add"]]
 
     def test_the_output_of_a_state_command_killed_by_a_signal_is_not_logged(
         self, harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture

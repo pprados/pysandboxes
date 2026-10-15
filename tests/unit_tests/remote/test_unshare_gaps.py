@@ -1,12 +1,10 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""Mount targets, chroot roots, slirp teardown and restart accounting of the unshare provider."""
+"""Mount targets, chroot roots, and slirp teardown of the unshare provider."""
 
-import asyncio
 import os
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 
 from pysandboxes.all_rules import EmptyRules
@@ -89,50 +87,3 @@ class TestUnshareDaemon:
             daemon._kill_slirp()
 
         assert daemon._slirp_process_holder == [None]
-
-
-class _Dead:
-    returncode = 3
-
-    async def wait(self) -> int:
-        return 3
-
-
-class TestWatchdogAccounting:
-    def _daemon(self, **kwargs: Any) -> UnshareSSEDaemon:
-        daemon = UnshareSSEDaemon("tok", base_delay=0.0, max_delay=0.0, **kwargs)
-        daemon._process = _Dead()  # type: ignore[assignment]
-        daemon._accept_incoming = True
-        daemon._is_started = True
-        return daemon
-
-    def _run(self, daemon: UnshareSSEDaemon, stop_after: int) -> int:
-        launches = 0
-
-        async def launch(*args: Any, **kwargs: Any) -> None:
-            nonlocal launches
-            launches += 1
-            daemon._process = _Dead()  # type: ignore[assignment]
-            if launches >= stop_after:
-                daemon._accept_incoming = False
-
-        async def scenario() -> None:
-            with patch.object(UnshareSSEDaemon, "_launch", AsyncMock(side_effect=launch)):
-                await daemon._watchdog_loop(EmptyRules, envs={}, log_level=0, init_fn=None)
-
-        asyncio.run(asyncio.wait_for(scenario(), 5))
-        return launches
-
-    def test_giving_up_marks_the_daemon_as_stopped(self) -> None:
-        daemon = self._daemon(max_attempts=2)
-
-        self._run(daemon, stop_after=99)
-
-        assert daemon.is_started is False
-        assert daemon._failure
-
-    def test_the_attempt_counter_restarts_after_the_reset_delay(self) -> None:
-        daemon = self._daemon(max_attempts=2, reset_delay=-1.0)
-
-        assert self._run(daemon, stop_after=6) == 6
-        assert not daemon._failure

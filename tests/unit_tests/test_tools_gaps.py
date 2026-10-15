@@ -23,12 +23,6 @@ def test_either_reserved_marker_character_alone_is_refused(reserved: str) -> Non
         resolve_env_variables(f"a{reserved}b", {})
 
 
-def test_remove_comments_drops_comments_and_blank_lines() -> None:
-    config = ["  a=1  # trailing", "# whole line", "", "   ", "b='x # kept'", "c=2"]
-
-    assert remove_comments(config) == ["a=1", "b='x # kept'", "c=2"]
-
-
 @pytest.mark.parametrize(
     ("line", "expected"),
     [

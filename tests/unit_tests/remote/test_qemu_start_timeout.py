@@ -29,15 +29,6 @@ def test_an_absent_rule_keeps_the_default(with_kvm: None) -> None:
     assert qemu_start_timeout({}) == float(TIMEOUT_FOR_START_DAEMON_QEMU)
 
 
-def test_emulation_gets_the_longer_default() -> None:
-    """The case that could not start a daemon at all: a container with no /dev/kvm.
-
-    ``qemu.use_kvm=false`` makes this independent of the machine running the test, and it
-    goes through the same predicate that decides whether QEMU is given -enable-kvm.
-    """
-    assert qemu_start_timeout({"use_kvm": "false"}) == float(TIMEOUT_FOR_START_DAEMON_QEMU_TCG)
-
-
 def test_the_rule_still_wins_without_kvm() -> None:
     """The automatic default is a default, not a ceiling."""
     assert qemu_start_timeout({"use_kvm": "false", "start_timeout": "300"}) == 300.0

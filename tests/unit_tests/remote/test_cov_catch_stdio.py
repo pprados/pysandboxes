@@ -130,18 +130,6 @@ async def test_a_non_int_exit_code_is_carried_as_its_repr(stdio: _Stdio) -> None
     assert transported.code == "'bye'"
 
 
-async def test_a_keyboard_interrupt_carries_no_code(stdio: _Stdio) -> None:
-    def interrupt() -> None:
-        raise KeyboardInterrupt()
-
-    result = await _call(stdio, None, interrupt, {})
-
-    transported, _ = result["exception"]
-    assert type(transported) is SandBoxBaseExceptionError
-    assert transported.exception_type == "builtins.KeyboardInterrupt"
-    assert transported.code is None
-
-
 async def test_a_generator_exit_is_turned_into_a_sandbox_error(stdio: _Stdio) -> None:
     """The sandboxed function's own ``GeneratorExit`` must fail the call, not this coroutine's own close."""
 

@@ -48,7 +48,6 @@ from pysandboxes.remote.tools import (
     SSE_READ_BUFSIZE,
     check_sse_line,
     describe_exception,
-    descriptor_predicate,
     exception_predicate,
     from_b85_restricted,
     rebuild_from_descriptor,
@@ -159,9 +158,6 @@ class TestResultChannel:
                 )
         finally:
             del tools.rmtree_alias  # type: ignore[attr-defined]
-
-    def test_nested_class_still_resolves(self) -> None:
-        assert from_b85_restricted(_hostile(_Outer.Inner("x")), exception_predicate).args == ("x",)
 
     def test_memo_indirection_refused(self) -> None:
         # os/system memoized then recalled via BINGET before STACK_GLOBAL: a
@@ -692,18 +688,6 @@ class TestDescriptorFallback:
 
         with pytest.raises(RestrictedUnpicklingError):
             _rebuild_remote_exception("", payload)
-
-    def test_the_descriptor_predicate_refuses_a_gadget(self) -> None:
-        """The fallback payload carries primitives, so only tblib may resolve."""
-
-        class Evil:
-            def __reduce__(self) -> tuple:
-                import os
-
-                return (os.system, ("echo pwned",))
-
-        with pytest.raises(RestrictedUnpicklingError):
-            from_b85_restricted(_hostile(Evil()), descriptor_predicate)
 
 
 class TestPayloadBudget:

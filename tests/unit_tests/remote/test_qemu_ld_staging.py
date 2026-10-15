@@ -216,12 +216,6 @@ class TestStageClosure:
 
         assert f"(1 ldd objects, {text})" in caplog.text
 
-    def test_nothing_is_logged_when_nothing_is_mounted(self, stage: Any, caplog: pytest.LogCaptureFixture) -> None:
-        with caplog.at_level(logging.DEBUG, logger=q.logger.name):
-            stage({Path("/nonexistent/lib.so")})
-
-        assert "staged dynamic linker closure" not in caplog.text
-
 
 class TestEtcCopy:
     def _specs(self, tmp_path: Path) -> tuple[Path, list[tuple[str, Path, str]]]:

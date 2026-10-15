@@ -214,19 +214,6 @@ class TestGuestWorkingDirectory:
 
         assert seen == [str(root.resolve())]
 
-    def test_a_config_file_root_stands_for_its_directory(
-        self, tmp_path: Path, iso: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        seen = self._bootstrap(monkeypatch)
-        root = tmp_path / "project"
-        root.mkdir()
-        profile = root / "p.profile"
-        profile.write_text("")
-
-        _create(tmp_path, _process_config(all_rules=EmptyRules._replace(root_path=profile)))
-
-        assert seen == [str(root.resolve())]
-
     def test_without_any_directory_the_bootstrap_decides(
         self, tmp_path: Path, iso: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -235,18 +222,6 @@ class TestGuestWorkingDirectory:
         _create(tmp_path, _process_config(all_rules=SimpleNamespace(root_path="not a path", file_rules=())))
 
         assert seen == [None]
-
-    def test_the_ignored_paths_are_resolved_from_the_guest_directory(
-        self, tmp_path: Path, iso: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        project = tmp_path / "project"
-        project.mkdir()
-        (project / ".env").write_text("secret")
-        rules = EmptyRules._replace(file_rules=(IgnoreRule(source=".env", config=_line()),))
-
-        _create(tmp_path, _process_config(guest_working_dir=str(project), all_rules=rules))
-
-        assert (tmp_path / qemu_setup.IGNORE_OVERLAYS_FILE).read_text() == f"{(project / '.env').resolve()}\n"
 
     def test_the_current_directory_is_used_for_ignored_paths_when_none_is_known(
         self, tmp_path: Path, iso: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch

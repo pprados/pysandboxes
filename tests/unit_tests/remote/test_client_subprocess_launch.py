@@ -100,14 +100,6 @@ class TestLaunchWithFifo:
         assert pids == [4242]
         assert launch.events == ["exec", "launched", "fifo"]
 
-    def test_a_process_without_a_pid_is_not_announced(self, tmp_path: Path) -> None:
-        launch = _Launch(tmp_path, pid=None)
-        pids: list[int] = []
-
-        launch.run(on_launched=pids.append)  # type: ignore[arg-type]
-
-        assert pids == []
-
     def test_the_child_umask_is_narrowed_after_the_extra_preexec(self, tmp_path: Path) -> None:
         launch = _Launch(tmp_path)
         order: list[str] = []

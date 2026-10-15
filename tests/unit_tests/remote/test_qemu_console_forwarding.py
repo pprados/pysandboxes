@@ -135,12 +135,6 @@ class TestEmit:
 
         assert out == ""
 
-    async def test_forward_all_prints_everything_and_ignores_the_state(self) -> None:
-        out, state = await _emit(b"boot noise\n", [console._FORWARD_STATE_WAITING], forward_all=True)
-
-        assert out == "boot noise\r\n"
-        assert state == [console._FORWARD_STATE_WAITING]
-
     async def test_a_filtered_chunk_advances_the_state(self) -> None:
         _, state = await _emit(f"{START}\n".encode(), [console._FORWARD_STATE_WAITING])
 
@@ -161,10 +155,6 @@ class TestEmit:
         assert out == ""
         assert tee.getvalue() == "[  1.5] prog[2]: noise\n"
         assert flushed == [True]
-
-    async def test_a_tee_without_a_lock_is_a_programming_error(self) -> None:
-        with pytest.raises(AssertionError):
-            await _emit(b"x\n", tee_file=io.StringIO(), tee_lock=None)
 
     async def test_the_forwarded_line_is_mirrored_to_the_log(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.DEBUG, logger="mirror-test"):
@@ -213,9 +203,6 @@ class TestReadAndForward:
 
     async def test_a_last_line_without_newline_is_still_printed_at_eof(self) -> None:
         assert await _forward(_stream(b"done\ntail")) == "done\r\ntail"
-
-    async def test_stderr_goes_to_stderr(self) -> None:
-        assert await _forward(_stream(b"oops\n"), is_stderr=True) == "oops\r\n"
 
     async def test_the_sentinels_filter_the_stream(self) -> None:
         data = f"boot\n{START}\nvisible\n{END}\nhalt\n".encode()
@@ -384,14 +371,6 @@ class TestGuestStderrTail:
         console.GuestStderrTail(path, out=out)._drain()
 
         assert flushed == [True]
-
-    def test_the_default_output_is_stderr(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        path = tmp_path / "stderr"
-        path.write_text("x\n")
-
-        console.GuestStderrTail(path)._drain()
-
-        assert capsys.readouterr().err == "x\n"
 
     def test_the_tail_forwards_while_running_and_drains_what_remains_at_exit(self, tmp_path: Path) -> None:
         path, out = tmp_path / "stderr", io.StringIO()

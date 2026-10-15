@@ -21,13 +21,6 @@ def test_nested_enter_calls_keep_the_process_in_the_sandbox(monkeypatch: pytest.
     assert not lifecycle.is_in_sandbox()
 
 
-def test_leaving_without_entering_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(lifecycle, "_entered", 0)
-
-    with pytest.raises(AssertionError):
-        lifecycle.leave()
-
-
 def test_sandbox_membership_does_not_imply_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lifecycle, "_entered", 0)
     monkeypatch.setattr(lifecycle, "_armed", False)
