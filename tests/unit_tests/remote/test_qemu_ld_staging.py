@@ -143,6 +143,85 @@ class TestStageClosure:
     def test_with_no_staged_tree_nothing_is_mounted(self, stage: Any) -> None:
         assert stage({Path("/nonexistent/lib.so")}) == []
 
+    def test_the_mode_is_compared_by_value_not_identity(self, stage: Any) -> None:
+        full = "".join(list("full"))  # equal to the literal, but not the same object
+
+        stage({Path("/nonexistent/lib.so")}, ld_closure_libs=full)
+
+        assert stage.merges == [(stage.root, "tri-linux-gnu")]
+
+    def test_a_skipped_multiarch_file_does_not_stop_the_copy_of_the_others(
+        self, stage: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        first = tmp_path / "a_libc.so.6"
+        second = tmp_path / "b_libz.so.1"
+        for lib in (first, second):
+            lib.write_text("elf")
+        monkeypatch.setattr(q, "_path_under_host_multiarch_lib", lambda path, triplet: path == first)
+
+        stage({first, second}, ld_closure_libs="full")
+
+        assert not (stage.root / first.relative_to("/")).exists()
+        assert (stage.root / second.relative_to("/")).exists()
+
+    def test_a_symlink_of_the_closure_is_copied_as_the_file_it_points_to(self, stage: Any, tmp_path: Path) -> None:
+        target = tmp_path / "libreal.so.1.0"
+        target.write_text("elf")
+        link = tmp_path / "libalias.so"
+        link.symlink_to(target)
+
+        stage({link})
+
+        staged = stage.root / link.relative_to("/")
+        assert not staged.is_symlink() and staged.read_text() == "elf"
+
+    def test_an_existing_lib64_directory_is_reused(
+        self, stage: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (stage.root / "lib64").mkdir(parents=True)
+        monkeypatch.setattr(Path, "is_file", lambda self: self == _INTERP or os.path.isfile(self))
+        monkeypatch.setattr(q.shutil, "copy2", lambda src, dst, **kw: Path(dst).write_text("loader") or str(dst))
+
+        out = stage({tmp_path / "x"})
+
+        assert out == [("pysb_lib64", stage.root / "lib64", "/lib64")]
+
+    def test_the_loader_is_copied_through_its_links(
+        self, stage: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(Path, "is_file", lambda self: self == _INTERP or os.path.isfile(self))
+        seen: list[tuple[Any, bool]] = []
+
+        def copy(src: Any, dst: Any, follow_symlinks: bool = True) -> str:
+            seen.append((Path(src), follow_symlinks))
+            Path(dst).write_text("loader")
+            return str(dst)
+
+        monkeypatch.setattr(q.shutil, "copy2", copy)
+
+        stage({tmp_path / "x"})
+
+        assert (_INTERP, True) in seen and all(follow for _, follow in seen)
+
+    @pytest.mark.parametrize(
+        ("mode", "text"), [("full", "full multiarch merge + ldd seeds"), ("sparse", "sparse ldd + compat seeds")]
+    )
+    def test_the_staging_is_summarised_in_the_log(
+        self, stage: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, mode: str, text: str
+    ) -> None:
+        (stage.root / "lib" / "tri-linux-gnu").mkdir(parents=True)
+
+        with caplog.at_level(logging.DEBUG, logger=q.logger.name):
+            stage({Path("/nonexistent/lib.so")}, ld_closure_libs=mode)
+
+        assert f"(1 ldd objects, {text})" in caplog.text
+
+    def test_nothing_is_logged_when_nothing_is_mounted(self, stage: Any, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.DEBUG, logger=q.logger.name):
+            stage({Path("/nonexistent/lib.so")})
+
+        assert "staged dynamic linker closure" not in caplog.text
+
 
 class TestEtcCopy:
     def _specs(self, tmp_path: Path) -> tuple[Path, list[tuple[str, Path, str]]]:
@@ -187,6 +266,22 @@ class TestEtcCopy:
         q._stage_overlay_etc_expose_mount(tmp_path / "stage", specs)
 
         assert specs == [("pysb_0", tmp_path / "absent", "/etc")]
+
+    def test_a_missing_host_directory_does_not_hide_the_next_etc_mount(self, tmp_path: Path) -> None:
+        etc, _ = self._specs(tmp_path)
+        specs = [("pysb_0", tmp_path / "absent", "/etc"), ("pysb_1", etc, "/etc")]
+
+        q._stage_overlay_etc_expose_mount(tmp_path / "stage", specs)
+
+        assert specs[0][1] == tmp_path / "absent" and specs[1][1] != etc
+
+    def test_an_unrelated_mount_does_not_hide_the_etc_one(self, tmp_path: Path) -> None:
+        etc, _ = self._specs(tmp_path)
+        specs = [("pysb_run", tmp_path, "/mnt/run"), ("pysb_exec_0", tmp_path, "/etc"), ("pysb_2", etc, "/etc")]
+
+        q._stage_overlay_etc_expose_mount(tmp_path / "stage", specs)
+
+        assert specs[2][1] != etc
 
     def test_only_the_first_etc_mount_is_copied(self, tmp_path: Path) -> None:
         etc, _ = self._specs(tmp_path)

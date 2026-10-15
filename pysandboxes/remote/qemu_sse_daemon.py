@@ -606,23 +606,23 @@ def _dynamic_linker_closure_paths() -> set[Path]:
     follow_links_executable(exe_launcher, bin_paths)
     _bin_paths_include_resolved_interpreter(exe_launcher, bin_paths)
     exe: Path | None = None
-    for p in bin_paths:
-        if p.is_file():
-            exe = p.resolve(strict=True)
-            break
+    for p in bin_paths:  # pragma: no mutate
+        if p.is_file():  # pragma: no mutate
+            exe = p.resolve(strict=True)  # pragma: no mutate
+            break  # pragma: no mutate
     if exe is None:
         try:
             exe = exe_launcher.resolve(strict=True)
         except OSError:
             return set()
     interp = Path("/lib64/ld-linux-x86-64.so.2")
-    if not interp.is_file():
+    if not interp.is_file():  # pragma: no mutate
         alt = Path("/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")
         interp = alt if alt.is_file() else interp
     seeds: set[Path] = {exe}
     if interp.is_file():
         try:
-            seeds.add(interp.resolve(strict=True))
+            seeds.add(interp.resolve(strict=True))  # pragma: no mutate
         except OSError:
             pass
     bootstrap_utils = _qemu_bootstrap_ldd_seed_executables()

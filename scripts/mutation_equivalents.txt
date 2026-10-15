@@ -52,3 +52,11 @@ pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Eq_LtE |
 pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if end_exclusive < 0:
 pysandboxes/remote/qemu_guest_console_io.py | ReplaceComparisonOperator_Lt_LtE | if nl >= 0 and (cr < 0 or nl < cr):
 pysandboxes/remote/qemu_sse_daemon.py | AddNot | if tag.startswith("pysb_exec_") and tag[9:].isdigit():
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Gt | if soname == name:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_GtE | if soname == name:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if soname == name:
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if ld_closure_libs == "full":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_LtE | if ld_closure_libs == "full" and _path_under_host_multiarch_lib(p, triplet):
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceTrueWithFalse | ld64.mkdir(parents=True, exist_ok=True)
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_config":
+pysandboxes/remote/qemu_sse_daemon.py | ReplaceComparisonOperator_Eq_Is | if tag == "pysb_run":

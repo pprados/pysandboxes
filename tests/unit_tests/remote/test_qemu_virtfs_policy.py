@@ -250,12 +250,24 @@ class TestFileRulesMounts:
         monkeypatch.setattr(
             q,
             "_execution_dirs_mounts",
-            lambda: [("pysb_exec_0", tmp_path, "/zz/exec"), ("other", tmp_path, "/a/other")],
+            lambda: [
+                ("pysb_exec_0", tmp_path, "/zz/exec"),
+                ("other", tmp_path, "/a/other"),
+                ("pysb_zzz", tmp_path, "/b/z"),
+            ],
         )
 
         specs, mounts = self._mounts(tmp_path, [_expose(deep), _expose(shallow)], config_dir=config)
 
-        assert [t for t, _ in mounts] == ["pysb_1", "pysb_0", "pysb_config", "pysb_run", "other", "pysb_exec_0"]
+        assert [t for t, _ in mounts] == [
+            "pysb_1",
+            "pysb_0",
+            "pysb_config",
+            "pysb_run",
+            "other",
+            "pysb_zzz",
+            "pysb_exec_0",
+        ]
         assert [t for t, _, _ in specs] == [t for t, _ in mounts]
 
     @pytest.mark.xfail(

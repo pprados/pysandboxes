@@ -73,10 +73,15 @@ class TestSonameLink:
         assert not (tmp_path / "libfoo.so.1").is_symlink()
         assert (tmp_path / "libfoo.so.1").read_text() == "real"
 
-    def test_an_existing_symlink_is_kept_even_when_dangling(self, tmp_path: Path) -> None:
+    def test_an_existing_symlink_is_kept_even_when_dangling(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         (tmp_path / "libfoo.so.1").symlink_to("gone")
 
-        self._link(tmp_path, "libfoo.so.1.2.3")
+        with caplog.at_level(logging.DEBUG, logger=q.logger.name):
+            self._link(tmp_path, "libfoo.so.1.2.3")
+
+        assert "could not soname-symlink" not in caplog.text
 
         assert (tmp_path / "libfoo.so.1").resolve() == (tmp_path / "gone").resolve()
 
@@ -172,6 +177,27 @@ class TestClosure:
         closure = q._dynamic_linker_closure_paths()
 
         assert {libs["util"], libs["libutil.so"], libs["compat.so"]} <= closure
+
+    def test_the_seeds_added_for_the_nested_overlay_are_logged_only_when_there_are_some(
+        self, libs: dict[str, Path], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        self._ldd(monkeypatch, {})
+        with caplog.at_level(logging.DEBUG, logger=q.logger.name):
+            q._dynamic_linker_closure_paths()
+        assert "bootstrap utility seeds" not in caplog.text and "guest-compat .so seeds" not in caplog.text
+
+        monkeypatch.setattr(q, "_qemu_bootstrap_ldd_seed_executables", lambda: [libs["util"]])
+        monkeypatch.setattr(q, "_qemu_guest_overlay_compat_so_seeds", lambda: [libs["compat.so"]])
+        with caplog.at_level(logging.DEBUG, logger=q.logger.name):
+            q._dynamic_linker_closure_paths()
+        assert f"bootstrap utility seeds for nested /lib overlay: ['{libs['util']}']" in caplog.text
+        assert "guest-compat .so seeds for nested /lib overlay: ['compat.so']" in caplog.text
+
+    @pytest.mark.skipif(not Path("/lib64/ld-linux-x86-64.so.2").is_file(), reason="no x86-64 loader on this host")
+    def test_the_host_loader_is_a_seed(self, libs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+        self._ldd(monkeypatch, {})
+
+        assert Path("/lib64/ld-linux-x86-64.so.2").resolve() in q._dynamic_linker_closure_paths()
 
     def test_an_interpreter_that_cannot_be_resolved_gives_an_empty_closure(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
