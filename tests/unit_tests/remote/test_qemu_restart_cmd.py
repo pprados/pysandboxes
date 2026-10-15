@@ -5,6 +5,7 @@
 import asyncio
 import os
 import pickle
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -103,3 +104,13 @@ def test_the_config_is_staged_in_the_run_dir_unless_debugging(
     config_dir = run(EmptyRules).build["config_dir"]
 
     assert config_dir == (Path("tmp") if debug else tmp_path / "run") / "pysb_config"
+
+
+@pytest.mark.parametrize(("show", "stream"), [(False, subprocess.DEVNULL), (True, subprocess.PIPE)])
+def test_the_console_streams_follow_the_boot_console_knob(run: Any, show: bool, stream: int) -> None:
+    rules = EmptyRules._replace(os_sandbox_params={"show_boot_console": "true"} if show else {})  # type: ignore[arg-type]
+
+    launch = run(rules).launch
+
+    assert (launch["stdout"], launch["stderr"]) == (stream, stream)
+    assert launch["stdin"] == subprocess.DEVNULL
