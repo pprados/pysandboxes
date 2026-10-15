@@ -127,6 +127,16 @@ class TestModule:
 
         assert runs.argv_seen[-1] == ["/lib/pytest/__main__.py", "--color=yes", "-q"]
 
+    @pytest.mark.parametrize("option", ["--color=no", "--color=auto"])
+    def test_a_colour_choice_of_the_caller_is_kept(
+        self, runs: _Runs, monkeypatch: pytest.MonkeyPatch, option: str
+    ) -> None:
+        self._spec(monkeypatch, "/lib/pytest/__main__.py")
+
+        _run(runs, ["-m", "pytest", "-q", option])
+
+        assert runs.argv_seen[-1] == ["/lib/pytest/__main__.py", "-q", option]
+
     @pytest.mark.parametrize("name", ["zzmod", "pytest_plugin", "pytests"])
     def test_a_module_that_only_sorts_after_pytest_gets_no_colour_option(
         self, runs: _Runs, monkeypatch: pytest.MonkeyPatch, name: str
