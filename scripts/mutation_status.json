@@ -1,0 +1,286 @@
+{
+ "pysandboxes/_os_sandbox.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "equivalent": 4,
+  "killed": 66,
+  "skipped": 1322,
+  "source": "c11a137a4031"
+ },
+ "pysandboxes/base_daemon.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 3,
+  "skipped": 567,
+  "source": "b176d53f1b72"
+ },
+ "pysandboxes/e.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 14,
+  "skipped": 940,
+  "source": "756ccc02f44c"
+ },
+ "pysandboxes/guard_wraps.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 2,
+  "skipped": 10,
+  "source": "3fe458b93246"
+ },
+ "pysandboxes/immutable_dict.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 15,
+  "skipped": 189,
+  "source": "47fb8876f7f3"
+ },
+ "pysandboxes/learning.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 53,
+  "skipped": 1747,
+  "source": "e477932a8104"
+ },
+ "pysandboxes/lifecycle.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "killed": 9,
+  "skipped": 171,
+  "source": "b70a9a314e8d"
+ },
+ "pysandboxes/main_logger.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "killed": 20,
+  "skipped": 790,
+  "source": "02025b1fd4df"
+ },
+ "pysandboxes/netfilter.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "equivalent": 6,
+  "killed": 48,
+  "skipped": 672,
+  "source": "8aada05a271c"
+ },
+ "pysandboxes/private_loop.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "equivalent": 4,
+  "killed": 28,
+  "skipped": 400,
+  "source": "b4177f70a0fe"
+ },
+ "pysandboxes/py_sandbox.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "equivalent": 1,
+  "killed": 63,
+  "skipped": 2504,
+  "source": "17fcceb7f02a"
+ },
+ "pysandboxes/python_sb.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "killed": 41,
+  "skipped": 1645,
+  "source": "f4b2a3e5698d"
+ },
+ "pysandboxes/remote/base_sse_daemon.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 29,
+  "skipped": 719,
+  "source": "a8089b2d4375",
+  "survived": 2
+ },
+ "pysandboxes/remote/bwrap_sse_daemon.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "equivalent": 1,
+  "killed": 89,
+  "skipped": 3552,
+  "source": "0d6291049abe"
+ },
+ "pysandboxes/remote/catch_stdio.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 18,
+  "skipped": 372,
+  "source": "f969d36961c4"
+ },
+ "pysandboxes/remote/client_subprocess_sse_daemon.py": {
+  "commit": "b0ad0c1",
+  "date": "2026-10-15",
+  "killed": 129,
+  "note": "24 survivors equivalent, 7 fixed, checked by replay, mutation not re-run",
+  "skipped": 2880,
+  "source": "41e9ea2f348d",
+  "survived": 31
+ },
+ "pysandboxes/remote/firejail_sse_daemon.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "equivalent": 1,
+  "killed": 106,
+  "skipped": 2024,
+  "source": "81633cb91d3a",
+  "survived": 5
+ },
+ "pysandboxes/remote/landlock_daemon.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "equivalent": 8,
+  "killed": 119,
+  "skipped": 6257,
+  "source": "6b67718553bf"
+ },
+ "pysandboxes/remote/main_sandbox.py": {
+  "commit": "ad07254",
+  "date": "2026-10-15",
+  "killed": 62,
+  "skipped": 1132,
+  "source": "c3e42f791b94"
+ },
+ "pysandboxes/remote/none_daemon.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 4,
+  "skipped": 224,
+  "source": "cd824d787ca6"
+ },
+ "pysandboxes/remote/parameters.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 9,
+  "skipped": 489,
+  "source": "42f24a97118e"
+ },
+ "pysandboxes/remote/parse_cpython_args.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 69,
+  "skipped": 1929,
+  "source": "2b08d99a2a8e"
+ },
+ "pysandboxes/remote/python_in_sb.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 72,
+  "skipped": 1644,
+  "source": "e6d7f2d2ba95",
+  "survived": 6
+ },
+ "pysandboxes/remote/qemu_fetch_image.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 3,
+  "skipped": 111,
+  "source": "7484d498fc57"
+ },
+ "pysandboxes/remote/qemu_guest_console_io.py": {
+  "commit": "b9bfa5a",
+  "date": "2026-10-15",
+  "equivalent": 6,
+  "killed": 114,
+  "note": "survivor fixed afterwards, mutation not re-run",
+  "skipped": 2867,
+  "source": "8739f055764b",
+  "survived": 1
+ },
+ "pysandboxes/remote/qemu_image.py": {
+  "commit": "ea29c4f",
+  "date": "2026-10-15",
+  "killed": 65,
+  "note": "survivors fixed afterwards, mutation not re-run",
+  "skipped": 1732,
+  "source": "592733a9b78e",
+  "survived": 3
+ },
+ "pysandboxes/remote/qemu_setup.py": {
+  "commit": "ba80fa6",
+  "date": "2026-10-15",
+  "killed": 26,
+  "skipped": 2770,
+  "source": "b306c0717770"
+ },
+ "pysandboxes/remote/qemu_sse_daemon.py": {
+  "commit": "4d24659",
+  "date": "2026-10-15",
+  "equivalent": 21,
+  "exception": 1,
+  "killed": 255,
+  "note": "last survivor killed afterwards, checked by hand, mutation not re-run",
+  "skipped": 4798,
+  "source": "16a57dd798ad",
+  "survived": 1
+ },
+ "pysandboxes/remote/slirp4netns_common.py": {
+  "commit": "9d55dfa",
+  "date": "2026-10-15",
+  "equivalent": 3,
+  "killed": 72,
+  "skipped": 1137,
+  "source": "e4ff531c992f"
+ },
+ "pysandboxes/remote/sse_server_daemon.py": {
+  "commit": "d512d94",
+  "date": "2026-10-15",
+  "killed": 37,
+  "note": "survivors fixed afterwards, mutation not re-run",
+  "skipped": 1275,
+  "source": "b63f2b416ae6",
+  "survived": 2
+ },
+ "pysandboxes/remote/tools.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "equivalent": 3,
+  "exception": 1,
+  "killed": 257,
+  "skipped": 4455,
+  "source": "4f8e7e9f2a6e"
+ },
+ "pysandboxes/remote/unshare_setup.py": {
+  "commit": "b66d915",
+  "date": "2026-10-15",
+  "killed": 96,
+  "note": "survivor fixed afterwards, mutation not re-run",
+  "skipped": 1793,
+  "source": "d1341ba4d33c",
+  "survived": 1
+ },
+ "pysandboxes/remote/unshare_sse_daemon.py": {
+  "commit": "7261c15",
+  "date": "2026-10-15",
+  "equivalent": 13,
+  "killed": 144,
+  "note": "survivors fixed afterwards, mutation not re-run",
+  "skipped": 2590,
+  "source": "dcdd6f687e51",
+  "survived": 5
+ },
+ "pysandboxes/remote/vm_sse_daemon.py": {
+  "commit": "166b245",
+  "date": "2026-10-14",
+  "killed": 4,
+  "skipped": 326,
+  "source": "f026e98cc01c"
+ },
+ "pysandboxes/sandboxes_api.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "killed": 31,
+  "skipped": 2063,
+  "source": "52dcd93168f1"
+ },
+ "pysandboxes/tools.py": {
+  "commit": "a2a01a3",
+  "date": "2026-10-14",
+  "equivalent": 3,
+  "killed": 79,
+  "skipped": 2408,
+  "source": "2235aa4c0f97"
+ }
+}

@@ -24,6 +24,7 @@ make lint                    # Run all linters (mypy, pyright, black, ruff)
 make spell_check             # Check spell
 make coverage                # Unit and integration tests with a coverage report
 make mutation MODULE=pysandboxes/<module>.py  # Mutation testing of one module (cosmic-ray): a survivor is a missing test or an equivalent mutant
+make mutation-status         # Last recorded mutation run of every module (scripts/mutation_status.json), flagged when its code changed since
 make pip-audit               # Audit the runtime dependencies for known CVEs
 make validate                # All validation (before commit)
 ```
