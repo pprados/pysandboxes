@@ -32,7 +32,7 @@ def test_known_failure():
 def _run(tmp_path: Path, suite: str, fail_on_skip: bool) -> subprocess.CompletedProcess[str]:
     (tmp_path / "conftest.py").write_text(_CONFTEST.read_text())
     (tmp_path / "test_suite.py").write_text(suite)
-    env = {k: v for k, v in os.environ.items() if k != "PYSANDBOXES_FAIL_ON_SKIP"}
+    env = {k: v for k, v in os.environ.items() if k not in ("PYSANDBOXES_FAIL_ON_SKIP", "COVERAGE_PROCESS_CONFIG")}
     if fail_on_skip:
         env["PYSANDBOXES_FAIL_ON_SKIP"] = "1"
     return subprocess.run(

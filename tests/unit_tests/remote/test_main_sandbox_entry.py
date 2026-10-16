@@ -312,3 +312,18 @@ class TestGuestDiagnostics:
         _run(monkeypatch, tmp_path, EmptyRules, guest_run_dir=str(tmp_path))
 
         assert enabled == []
+
+
+class TestStartCoverage:
+    def test_nothing_starts_without_the_settings_in_the_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("COVERAGE_PROCESS_CONFIG", raising=False)
+
+        assert main_sandbox._start_coverage() is None
+
+    def test_a_missing_coverage_module_is_ignored_instead_of_crashing_the_sandbox(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("COVERAGE_PROCESS_CONFIG", "e30=")
+        monkeypatch.setitem(sys.modules, "coverage", None)
+
+        assert main_sandbox._start_coverage() is None

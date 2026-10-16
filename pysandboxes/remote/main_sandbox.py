@@ -21,6 +21,7 @@ import os
 import pickle
 import subprocess
 import sys
+import threading
 import traceback
 from logging import StreamHandler
 from pathlib import Path
@@ -530,23 +531,36 @@ def main() -> int:
         return runner.run(run_server(process_config))
 
 
+def _start_coverage() -> Any:
+    """Start the coverage named in the environment, or return None when none is asked for or installed.
+
+    A measured run (make coverage) names the coverage settings in the environment. It starts before the guards:
+    some backends do not read the .pth file that would. os._exit skips the atexit where it saves.
+    """
+    if "COVERAGE_PROCESS_CONFIG" not in os.environ:
+        return None
+    try:
+        import coverage
+    except ImportError:
+        return None
+    if coverage.Coverage.current() is None:
+        coverage.process_startup()
+    measured = coverage.Coverage.current()
+    if measured is not None:
+        # Branch measurement on a tracer core installs a trace hook that every new thread runs through
+        # sys.settrace, which the guards deny: the threads of the program would die at birth.
+        threading.settrace(None)
+        measured.get_data()  # opens the data file now: it imports modules a restricted profile refuses once armed
+    return measured
+
+
 if __name__ == "__main__":
     # Kill this process when the parent is killed
     from ..tools import exit_status
     from .tools import set_pdeathsig
 
     set_pdeathsig()
-    # A measured run (make coverage) names the coverage settings in the environment. Start it here, before the
-    # guards: some backends do not read the .pth file that would. os._exit skips the atexit where it saves.
-    measured = None
-    if "COVERAGE_PROCESS_CONFIG" in os.environ:
-        import coverage
-
-        if coverage.Coverage.current() is None:
-            coverage.process_startup()
-        measured = coverage.Coverage.current()
-        if measured is not None:
-            measured.get_data()  # opens the data file now: it imports modules a restricted profile refuses once armed
+    measured = _start_coverage()
     rc = 0
     try:
         rc = main()

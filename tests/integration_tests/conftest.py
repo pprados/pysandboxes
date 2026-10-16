@@ -64,7 +64,7 @@ def _always_graceful(shutdown: Any) -> Any:
     return stop
 
 
-@pytest.fixture(autouse=True, scope="session")
+@pytest.fixture(autouse=True, scope="module")
 def measure_sandboxed_children() -> Iterator[None]:
     """Under `make coverage`, let the sandboxed child process write its coverage data.
 

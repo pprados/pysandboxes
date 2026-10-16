@@ -80,10 +80,11 @@ integration-tests:
 # armed with a deny-all rule set, which breaks the in-process integration tests).
 # The `python-sb` processes the tests start are measured too (`patch = subprocess`, pyproject.toml), and so are
 # the sandboxed children of the integration tests: tests/integration_tests/conftest.py gives their profiles the
-# coverage settings and a data directory, since the sandbox is whitelist-only.
+# coverage settings and a data directory, since the sandbox is whitelist-only. The data lives outside the
+# checkout: the profiles expose the checkout read-only, which a writable data directory inside it would contradict.
 ## Report test coverage
 coverage:
-	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-branch --cov-report=term --cov-report=html
+	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && export COVERAGE_FILE=$${TMPDIR:-/tmp}/pysandboxes-coverage/.coverage && rm -rf $$(dirname $$COVERAGE_FILE) && mkdir -p $$(dirname $$COVERAGE_FILE) && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-branch --cov-report=term --cov-report=html
 
 # Each mutant runs the whole TESTS list: point TESTS at the module's own tests to go faster.
 MUTATION_TESTS ?= tests/unit_tests
