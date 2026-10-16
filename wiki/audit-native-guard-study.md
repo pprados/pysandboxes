@@ -43,7 +43,7 @@ Under the tested Landlock profile, native code successfully opened `/dev/full` f
 
 **QEMU: code-established.** The guest bootstrap runs each configured 9p mount and ignore overlay with `|| true`, then continues. A failed share can consequently leave a requested path unmounted without failing bootstrap. This was not separately induced in a guest fault-injection probe. See [`qemu_setup.py`](../pysandboxes/remote/qemu_setup.py).
 
-**Unshare: reproduced for a failed mount setup path.** The setup code handles mount errors as warnings and continues in the tested fault-injection path. A warning is not proof that the requested namespace mount took effect. Review the resulting namespace and effective mounts when relying on a specific mount rule. See [`unshare_sse_daemon.py`](../pysandboxes/remote/unshare_sse_daemon.py) and [`unshare_setup.py`](../pysandboxes/remote/unshare_setup.py).
+**Unshare ignore overlays: reproduced for a failed overlay mount.** The ignore-overlay loop catches a mount error, logs a warning, and continues. This finding is limited to that path: user-defined bind mounts use a separate setup path whose failures are propagated. A failed ignore overlay can leave the ignored path visible; verify effective mounts when relying on an ignore rule. See [`unshare_sse_daemon.py`](../pysandboxes/remote/unshare_sse_daemon.py) and [`unshare_setup.py`](../pysandboxes/remote/unshare_setup.py).
 
 These findings do not mean every mount fails. They mean startup success alone does not prove that every requested mount policy was applied.
 
