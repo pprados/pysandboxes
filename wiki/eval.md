@@ -350,8 +350,9 @@ A closed set of frame-capture attributes is refused **even when
 `gi_yieldfrom`, `cr_frame`, `cr_code`, `cr_await`, `ag_frame`, `ag_code`,
 `f_globals`, `f_locals`, `f_builtins`, `f_back`, `f_trace`, `tb_frame`,
 `tb_next`. A generator reaches the real globals through `gi_frame.f_globals`
-without writing a single dunder, and no configuration should be able to open
-that by accident. This is the one implicit, non-overridable `DENY`.
+without writing a single dunder. This deny applies while the configured helper
+is in place; it is not a boundary against a trusted caller that supplies
+replacement helpers through the `guarded_eval(names=...)` API.
 
 ```ini
 # Valid
@@ -660,7 +661,11 @@ call time, never a silent fallback to the default.
 `guarded_eval` is a different entry point from the patched builtin:
 `eval-namespace` does not apply to it, because choosing it is itself the
 statement of intent. Its `names` argument is data merged into a namespace
-built from `eval-call`, never used in place of one.
+built from `eval-call`, never used in place of one. Names are merged after the
+internal helpers, however, so a caller can replace a helper such as
+`__sb_getattr__`. Only pass trusted callables in `names`; a caller-supplied
+replacement can bypass the evaluator's attribute checks. See
+[`audit-eval-security.md`](audit-eval-security.md#findings).
 
 ---
 

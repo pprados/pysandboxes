@@ -3,7 +3,7 @@ This version is a first implementation offered to the community. It allows for t
 
 It ensures that the patches for Python functions are correct and do not cause bugs in applications. If you find a case that presents a problem, open a ticket with a scenario to reproduce it. We will provide a fix as soon as possible.
 
-It also verifies the relevance of the multiple sandbox encapsulation strategy. The latter was selected because it allows for network-level filtering, prohibits access to files matching patterns, etc. Since it does not allow renaming directories during an expose mapping, the **py-sandbox** layer handles this.
+It also verifies the relevance of the multiple sandbox encapsulation strategy. Depending on the configured rules and selected provider, the layers can filter network access and deny access to files matching patterns. Provider limits apply: for example, Landlock leaves networking unrestricted without `net=` rules, and the current QEMU 9p path does not enforce `expose-ro` against native guest writes. Since OS providers do not rename directories during an expose mapping, the **py-sandbox** layer handles this.
 
 We have a planned roadmap. Developments will arrive gradually, with no specific order:
 
@@ -64,6 +64,8 @@ If your application itself runs in a container, it may not be able to launch ano
 | Podman            |           No            |         No          |   High   |    High     |
 | Kubernetes (DinD) |    Yes (privileged)     |      Optional       |   Low    |   Medium    |
 | qemu              |           No            |         No          |   High   |    High     |
+
+The QEMU rating above does not account for the current 9p `expose-ro` limitation: native guest writes can modify host files exposed that way. See [QEMU limitations](qemu.md#security-limitations).
 
 Different solutions will be proposed (pre-launch of the sandbox in another container, in parallel; use of emulation solutions, like *qemu*, that do not require privileges, etc.).
 

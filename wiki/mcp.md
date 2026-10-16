@@ -78,4 +78,4 @@ To add the *Demo MCP Server* in Claude, use something like this:
 ```bash
 claude mcp add --scope project demo -- python-sb -m demo_mcp.calc
 ```
-and use it. It's secure.
+and use it. The sandbox constrains supported operations according to its profile and selected OS provider; it is not a blanket guarantee for every tool or provider. Review the [security model](security-model.md), [known weaknesses](weaknesses.md), and [provider limits](os-providers.md) for the configuration you deploy.

@@ -28,6 +28,12 @@ The host starts a QEMU virtual machine with a cloud image (Debian/Ubuntu) and a 
 | **Dependencies**    | Cloud image to download (Debian/Ubuntu), `genisoimage` or `mkisofs` for the NoCloud ISO, QEMU binary.                         |
 | **Debug**           | Kernel/cloud-init output is hidden by default; set `qemu.show_boot_console=true` and inspect the console log to troubleshoot. |
 
+## Security limitations
+
+The current virtio-9p mount path does not enforce `expose-ro` as read-only against native guest code. A native guest write to a host directory configured with `expose-ro` changed a host file in an isolated probe. Do not rely on QEMU `expose-ro` to prevent native guest writes until the mount is made read-only and verified. This finding concerns filesystem shares; it does not establish a guest escape. See [the native provider audit](audit-native-guard-study.md#qemu-expose-ro-shares-are-writable-by-guest-code).
+
+QEMU mount setup also contains paths that ignore mount-command failures. Those paths were confirmed in source but have not been reproduced with guest fault injection; do not assume a failed optional mount always stops the guest.
+
 
 ## How it works
 

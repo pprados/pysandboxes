@@ -111,7 +111,7 @@ layer 7, and it grants privileges on more than the network destination alone.
 
 | Solution | Default egress | UDP | ICMP | DNS | Domain rules | Layer 7 | Credentials |
 |---|---|---|---|---|---|---|---|
-| **PySandboxes** | Deny at the Python layer. At the OS layer: `unshare` and `qemu` set `iptables` to `DROP`; `bwrap` and `firejail` leave only loopback when the profile has no `net=` rule; with `net=` rules under an explicit `restricted-network yes`, `firejail` keeps the host network and warns | `net=` rules, enforced by Python and `iptables`. `landlock` cannot filter UDP | No rule can name it; blocked as a side effect | Names resolved once and pinned into `getaddrinfo` | Name resolved to IPs when the profile is parsed | None | `env=` whitelist; a granted secret enters the sandbox in clear |
+| **PySandboxes** | Deny at the Python layer. At the OS layer: `unshare` and `qemu` set `iptables` to `DROP`; `bwrap` and `firejail` leave only loopback when the profile has no `net=` rule; with `net=` rules under an explicit `restricted-network yes`, `firejail` keeps the host network and warns. `landlock` leaves native networking unrestricted unless `net=` rules are configured and supported by the kernel ABI | `net=` rules, enforced by Python and `iptables`. `landlock` cannot filter UDP | No rule can name it; blocked as a side effect | Names resolved once and pinned into `getaddrinfo` | Name resolved to IPs when the profile is parsed | None | `env=` whitelist; a granted secret enters the sandbox in clear |
 | OpenShell | Deny | Only to the DNS relay | Socket never created | Own relay, policy per name | Proxy `CONNECT` + OPA | REST, GraphQL, JSON-RPC, MCP, WebSocket, TLS interception | Placeholders, SigV4, SPIFFE to OAuth2 |
 | sandbox-runtime | Open if `allowedDomains` is undefined; the CLI closes it | Impossible: the netns has only loopback | Impossible | Resolved by the proxy after the allow decision | HTTP and SOCKS proxy | Optional TLS interception; domain fronting acknowledged | Masked credentials, SigV4 re-signed |
 | Codex | Deny on Linux and macOS; on Windows (restricted token), allow with a WFP deny-list | Blocked by seccomp (Linux Restricted mode) | Blocked on Windows by WFP | Resolved by the proxy, rebinding checked | Optional proxy | Method, path, headers (optional proxy) | Credential broker scoped per host |
@@ -472,6 +472,7 @@ full QEMU VM.
 - No rule can name ICMP. ICMP is only blocked as a side effect, and the `IPPROTO_ICMP` entry of the
   `iptables` generator ([`netfilter.py`](../pysandboxes/netfilter.py)) is never used.
 - `landlock` cannot filter UDP, which the [Landlock page](landlock.md) already says.
+- QEMU's current 9p mount path does not enforce `expose-ro` against native guest writes; see the [provider audit](audit-native-guard-study.md#qemu-expose-ro-shares-are-writable-by-guest-code).
 
 **Ideas worth borrowing, in decreasing order of value for the effort.**
 

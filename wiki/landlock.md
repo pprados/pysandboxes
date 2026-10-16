@@ -34,6 +34,8 @@ The provider reads the kernel ABI at startup and masks the rights the running ke
 | `TRUNCATE` | v3 | 6.2+ | Right is masked: `open(O_TRUNC)` or `creat` may fail on an existing file. |
 | Network rules (TCP bind/connect by port) | v4 | 6.7+ | **Socket rules are not enforced at OS level.** The py-sandbox layer still applies them. |
 
+When no `net=` allow rule is configured, Landlock adds no network restriction: native code can open TCP and UDP connections. With ABI v4 or later, configured `net=` rules restrict TCP bind/connect by port; they do not filter UDP, destination IPs, or hostnames. The Python guard's default-deny policy does not constrain native calls. This was confirmed on ABI 8 by a native loopback connection with no socket rules.
+
 If the ruleset cannot be applied at all (for example `ENOSYS` on a kernel without Landlock), the sandbox process **logs the error and exits**. It never runs unprotected in silence.
 
 ## Limits
@@ -90,6 +92,7 @@ This tells you whether the LSM is active, not which ABI it exposes. The provider
 
 - Choose LandLock when no privilege can be granted, on the host or in a container: it needs neither a package nor a privilege, only a recent kernel.
 - Make sure the host kernel is **6.7+** before relying on the `net=` rules at OS level. Below that version, only the py-sandbox layer enforces them.
+- Configure at least one `net=` allow rule when native code must not have unrestricted network access. With no rules, Landlock itself leaves networking open.
 - Do not count on LandLock to filter by host, by IP address, or over UDP. When you need IP-level filtering at OS level, use [unshare](unshare.md), [bwrap](bwrap.md) or [firejail](firejail.md).
 - Keep the `DENY` exceptions to a minimum: LandLock does not see them.
 - For code that may run native code you do not trust, prefer [bwrap](bwrap.md) or [unshare](unshare.md): their
