@@ -393,6 +393,18 @@ def _main(stack: ExitStack) -> int:
         return return_code
 
 
+def _save_coverage() -> None:
+    """Save the coverage data of a measured run: ``os._exit`` skips the ``atexit`` where coverage does it.
+
+    Nothing to do unless coverage already runs in this process, so it is looked up, never imported.
+    """
+    coverage = sys.modules.get("coverage")
+    measured = coverage.Coverage.current() if coverage else None
+    if measured is not None:
+        measured.stop()
+        measured.save()
+
+
 if __name__ == "__main__":
     rc = 0
     try:
@@ -408,4 +420,5 @@ if __name__ == "__main__":
         sys.stdout.flush()
     if not sys.stderr.closed:
         sys.stderr.flush()
+    _save_coverage()
     os._exit(rc)

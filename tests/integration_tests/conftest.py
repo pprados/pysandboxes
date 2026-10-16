@@ -1,8 +1,15 @@
+import base64
+import json
 import os
 import sys
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest  # type: ignore[import-untyped]
+
+from pysandboxes import _os_sandbox, py_sandbox
+from pysandboxes.sb_types import ConfigLine, ConfigLines
 
 # Read by py-sandbox-test.profile to expose the interpreter's library tree, which is
 # not /usr/local/lib everywhere (a macOS runner has none).
@@ -53,3 +60,44 @@ def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
     # Fix a problem with pycharm. It's call close() on a running loop
     if hasattr(loop, "_thread_id"):
         loop._thread_id = None  # type: ignore[attr-defined]
+
+
+def _always_graceful(shutdown: Any) -> Any:
+    async def stop(self: Any, graceful_shutdown: bool = True) -> Any:
+        return await shutdown(self, True)
+
+    return stop
+
+
+@pytest.fixture(autouse=True, scope="session")
+def measure_sandboxed_children() -> Iterator[None]:
+    """Under `make coverage`, let the sandboxed child process write its coverage data.
+
+    coverage starts in every child that holds its configuration variable, but the sandbox is whitelist-only: the
+    profile must pass that variable and open the data directory for writing. A child saves its data when it exits
+    by itself, so the daemons are shut down gracefully. Outside a coverage run the profiles are left as they are.
+    """
+    config = os.environ.get("COVERAGE_PROCESS_CONFIG")
+    if not config:
+        yield
+        return
+    settings = json.loads(base64.b64decode(config))
+    # The backends bind the resolved path: the child must name the data file the same way.
+    data_file = Path(settings["data_file"]).resolve()
+    child_config = base64.b64encode(json.dumps({**settings, "data_file": str(data_file)}).encode()).decode()
+    extra = [
+        ConfigLine(f"env=COVERAGE_PROCESS_CONFIG={child_config}", Path(), 0),
+        ConfigLine(f"expose-rw={data_file.parent}", Path(), 0),
+    ]
+    parse_config = py_sandbox.parse_config
+
+    def parse_config_with_coverage(config_lines: ConfigLines, *args: Any, **kwargs: Any) -> Any:
+        return parse_config([*config_lines, *extra], *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(py_sandbox, "parse_config", parse_config_with_coverage)
+        daemon_classes = {base for cls in _os_sandbox.providers_factory.values() for base in cls.__mro__}
+        for daemon_class in daemon_classes:
+            if "_shutdown" in vars(daemon_class):
+                patch.setattr(daemon_class, "_shutdown", _always_graceful(vars(daemon_class)["_shutdown"]))
+        yield

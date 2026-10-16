@@ -183,6 +183,12 @@ reportPossiblyUnboundVariable = "warning"
 reportRedeclaration = "warning"
 reportInvalidTypeForm = "warning"
 
+[tool.coverage.run]
+# A test that runs `python-sb` as a command is measured in that process: each process writes its own data file,
+# which pytest-cov combines. The sandboxed children of those processes are not measured.
+parallel = true
+patch = ["subprocess"]
+
 [tool.pytest.ini_options]
 # --strict-markers will raise errors on unknown marks.
 # https://docs.pytest.org/en/7.1.x/how-to/mark.html#raising-errors-on-unknown-marks

@@ -536,6 +536,15 @@ if __name__ == "__main__":
     from .tools import set_pdeathsig
 
     set_pdeathsig()
+    # A measured run (make coverage) names the coverage settings in the environment. Start it here, before the
+    # guards: some backends do not read the .pth file that would. os._exit skips the atexit where it saves.
+    measured = None
+    if "COVERAGE_PROCESS_CONFIG" in os.environ:
+        import coverage
+
+        if coverage.Coverage.current() is None:
+            coverage.process_startup()
+        measured = coverage.Coverage.current()
     rc = 0
     try:
         rc = main()
@@ -555,4 +564,6 @@ if __name__ == "__main__":
         logger.exception(f"Unknown exception: {e}")
         rc = 1
     logger.debug("main_sandbox exit with errorlevel=%s", rc)
+    if measured is not None:
+        measured.save()  # no stop(): the thread guard denies threading.settrace
     os._exit(rc)

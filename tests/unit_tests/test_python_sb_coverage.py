@@ -887,3 +887,27 @@ class TestMainVMConsoleAndStatus:
         result, _ = branch._run_main(tmp_path, monkeypatch, vm=vm, all_rules=self._rules())
 
         assert result == -9
+
+
+class TestSaveCoverage:
+    def test_a_run_that_measures_coverage_saves_it_before_the_hard_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        measured = MagicMock()
+        fake = types.SimpleNamespace(Coverage=types.SimpleNamespace(current=lambda: measured))
+        monkeypatch.setitem(sys.modules, "coverage", fake)
+
+        python_sb._save_coverage()
+
+        assert [call[0] for call in measured.method_calls] == ["stop", "save"]
+
+    def test_coverage_that_is_not_started_saves_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = types.SimpleNamespace(Coverage=types.SimpleNamespace(current=lambda: None))
+        monkeypatch.setitem(sys.modules, "coverage", fake)
+
+        python_sb._save_coverage()
+
+    def test_a_process_without_coverage_does_not_import_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delitem(sys.modules, "coverage", raising=False)
+
+        python_sb._save_coverage()
+
+        assert "coverage" not in sys.modules

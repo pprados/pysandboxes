@@ -78,8 +78,9 @@ integration-tests:
 
 # (integration first: the unit tests leave the socket guard
 # armed with a deny-all rule set, which breaks the in-process integration tests).
-# Only the parent process is measured: the sandbox is whitelist-only, so coverage's
-# own environment variables never reach the sandboxed child.
+# The `python-sb` processes the tests start are measured too (`patch = subprocess`, pyproject.toml), and so are
+# the sandboxed children of the integration tests: tests/integration_tests/conftest.py gives their profiles the
+# coverage settings and a data directory, since the sandbox is whitelist-only.
 ## Report test coverage
 coverage:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest tests/integration_tests tests/unit_tests --cov=pysandboxes --cov-branch --cov-report=term --cov-report=html
