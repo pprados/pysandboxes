@@ -1,348 +1,74 @@
-# The transport unpickle guard
-
-PySandboxes runs untrusted code in a child process and talks to it from the
-trusted parent over a local Server-Sent-Events transport. Objects cross that
-transport as pickle, base85-encoded (`to_b85` / `from_b85` in
-`pysandboxes/remote/tools.py`). This page describes the guard that protects the
-**parent** when it deserializes what the **child** sent back.
-
-## Summary
-
-The child controls its serialized return payload, so the parent checks it
-before reconstructing objects. By default (`remote-result-mode=data-only`) the
-result channel accepts values only, from a closed list of types; the exception
-channel rejects unsupported objects and can fall back to an exception
-descriptor. `remote-result-mode=objects` supports custom returned objects behind
-a fail-open denylist. These checks protect the parent-side
-deserialization path; they do not make the Python layer a boundary against
-native code in the child.
-
-## Contents
-
-- [Why the return channel is dangerous](#why-the-return-channel-is-dangerous)
-- [The two channels](#the-two-channels)
-- [The layers](#the-layers)
-- [`remote-result-guard`](#the-remote-result-guard-profile-key)
-- [Portability](#portability)
-- [Limits](#limits)
-- [Recommendations](#recommendations)
-- [References](#references)
-
-## Why the return channel is dangerous
-
-The whole point of the sandbox is that the code running in the child is not
-trusted. Every guard (`guard_api`, `guard_import`, `guard_socket`, ...) runs
-**inside the child** to contain it. The return channel does the opposite: it
-takes bytes the child produced and reconstructs them **in the parent**, where no
-guard runs.
-
-`pickle.loads` is not a data decoder. A pickle stream is a small program, and
-deserializing it can call arbitrary callables. So a child that cannot call
-`os.system` inside the sandbox (the API guard denies it there) can still return
-an object whose reconstruction calls `os.system` **in the parent**:
-
-```python
-class Evil:
-    def __reduce__(self):
-        import os
-        return (os.system, ("...",))
-```
-
-`to_b85` runs in the child, so the child chooses what `__reduce__` emits. The
-parent's `from_b85` would then execute it. This is a sandbox escape through the
-one channel that legitimately crosses the boundary.
-
-It does not even need a hand-written hostile module. Benign child code that runs
-`eval` (or any deserializer) on untrusted input is enough: the untrusted input
-forges the object, the benign code returns it, and the parent executes it.
-
-This guard therefore assumes nothing about the *shape* of what the child sends.
-The only reliable defense is what the parent accepts **when it reads** — the
-round-trip check in `to_b85` is not a defense, because it runs on the child's
-side where the attacker already controls both ends.
-
-## The two channels
-
-Two sites read child-produced payloads, both in `base_sse_daemon.py`:
-
-- the **result channel** — the return value of the sandboxed function;
-- the **exception channel** — the `(exception, traceback)` pair raised inside
-  the child.
-
-Both go through `from_b85_restricted`. The reverse direction (the parent sending
-arguments and keyword arguments to the child) stays on the raw `from_b85`: there
-the trust runs the other way and it is out of scope.
-
-## The layers
-
-`from_b85_restricted` applies several independent checks. They do disjoint work;
-none is sufficient on its own.
-
-### 1. Opcode prescan
-
-Before anything executes, the stream is walked with `pickletools.genops`, which
-parses without running it (no `__reduce__` is called). Two checks:
-
-- an **allowlist of opcodes**, enumerated by family (all integer variants, all
-  string variants, and so on) rather than by observation. Anything outside it is
-  refused. This removes the opcodes that bypass the class check below: the
-  extension opcodes (`EXT1`/`EXT2`/`EXT4`, which resolve through the `copyreg`
-  extension cache and can skip `find_class` when that cache is warm), the
-  protocol-0 `GLOBAL`/`INST`/`OBJ` forms, and persistent-id opcodes;
-- **anti-DoS budgets**: a cap on the number of opcodes, the number of memo
-  entries, the byte size, and the `MARK` nesting depth. A memo bomb passes the
-  class check but is caught here.
-
-#### The byte budget, and the ceiling that really applies
-
-The byte budget is not a free choice. The payload travels as a single SSE line,
-and aiohttp refuses a line longer than the high water mark of its
-`StreamReader`, `2 * ClientSession(read_bufsize=...)`: `readline()` passes no
-`max_line_length`, so `readuntil` falls back to `_high_water = 2 * limit`. With
-the transport's 262144-byte buffer that is 512 KiB; a longer line raises
-`aiohttp.http_exceptions.LineTooLong`.
-
-That reader is the ceiling, and it applies **before** this prescan: the refusal
-happens while the response is being read, so an oversized result never reaches
-the guard at all. The child therefore checks the assembled line itself, before
-sending it (`check_sse_line`), and the caller gets a refusal naming the size and
-the limit instead of a `LineTooLong` naming nothing. The whole line is measured,
-since the reply also carries the exception forms and whatever the sandboxed
-function printed, all sharing one budget.
-
-The budget is derived from that ceiling rather than chosen:
-
-```
-line    <= 2 * read_bufsize                = 524288
-line     = b85(pickle) + envelope + stdout/stderr
-b85(n)   = ceil(n / 4) * 5                 = 1.25 * n
-n       <= (524288 - envelope) / 1.25      = 419392 with no captured output
-```
-
-`_MAX_BYTES` is 384 KiB, which encodes to 491520 bytes and leaves 32 KiB of the
-line for the JSON envelope and for whatever the sandboxed function printed.
-
-Every `ClientSession` of the transport passes `SSE_READ_BUFSIZE` (262144)
-explicitly, so aiohttp's own default does not move the ceiling. A unit test
-measures that relation on a real aiohttp `StreamReader` built with the same
-buffer: the largest reply `check_sse_line` accepts must be read, and the first
-one aiohttp refuses must already be refused by the child. Changing the buffer,
-or an aiohttp release deriving the line limit differently, reddens CI instead
-of leaving the two sides silently inconsistent.
-
-The prescan deliberately does **not** try to inventory the `(module, name)`
-pairs the stream references. Under memo/`BINGET` indirection a stack-simulating
-scan diverges from what the C unpickler actually resolves (it would see a memo
-reference where the unpickler resolves `os.system`). Reproducing the match would
-mean reimplementing the pickle stack — a second interpreter, whose divergence is
-itself a bypass class. Names are left to `find_class`, during the load.
-
-### 2. `find_class`, common rules
-
-- **No import is triggered by the stream.** A module that is not already loaded
-  in the parent is refused rather than imported, so the stream cannot run a
-  module's import-time code. Note this does not, by itself, block `os`/`posix`:
-  they are almost always already loaded. What blocks them is the per-channel
-  predicate.
-- The dotted qualified name (protocol 4+ carries `Outer.Inner`) is resolved
-  in-house by successive `getattr`, not through `pickle._getattribute`, which is
-  private and whose signature and return value have changed across CPython
-  versions. A dotted name must end on a class: a walk that reaches anything else
-  is refused, on every channel. Otherwise a module re-exported by an allowed one
-  (`pysandboxes.remote.tools` + `os.system`) would carry `os.system` under an
-  allowed module name, and a method of an allowed class (`pathlib.Path.unlink`)
-  would run through `REDUCE` on an instance of the stream's choosing.
-
-### 3. The result channel: a fail-open denylist
-
-The result is the return value of the sandboxed function, so it can legitimately
-be almost anything: base types, application classes, third-party library types
-(`numpy`, `pandas`), common standard-library types (`pathlib.Path`, `uuid.UUID`,
-`collections.OrderedDict`). Requiring an allowlist here would break real return
-values, so the result channel refuses only a **denylist of dangerous gadgets**
-and lets everything else through.
-
-The denylist is keyed by capability and, critically, by every alias and C-twin
-that can appear as `__module__` in a stream. `os.system` does not arrive as
-`os.system` — it arrives as `posix.system` on Linux, `nt.system` on Windows;
-`socket.socket` can arrive as `_socket.socket`. A denylist written against
-import names would miss the very gadget it is meant to stop. It covers OS
-execution (`posix`/`nt`/`os`, `subprocess`, `_posixsubprocess`, `pty`,
-`multiprocessing`, `concurrent`, `asyncio`), imports (`sys`, `importlib`,
-`runpy`), networking (`socket`/`_socket`), low-level access (`ctypes`,
-`_thread`, `mmap`), files (`shutil`, `io`/`_io`, `codecs`, `tempfile`,
-`logging`), signals (`signal`/`_signal`), nested streams and code objects
-(`pickle`/`_pickle`, `marshal`, `types`), callback gadgets (`operator`,
-`functools`), and the dangerous builtins (`eval`, `exec`, `compile`,
-`__import__`, `__build_class__`, `getattr`, `type`, `open`, `exit`, `quit`, ...).
-A callable is judged twice: by the module the stream names, and by its own
-`__module__`, so `from shutil import rmtree` in an allowed module does not carry
-`shutil.rmtree` past the list. A module object itself is refused.
-
-Values of these modules are refused too, so a function that returns an
-`io.BytesIO` or a `logging.LogRecord` must return its content instead.
-
-This layer is **fail-open by nature**: a module not on the list passes. That is
-a deliberate trade-off. Making it fail-closed would break legitimate results, so
-the design accepts that a determined attacker reaching for an unlisted gadget can
-get through, in exchange for never rejecting an honest return value. The threat
-it actually stops is the common one: `eval`/deserialization producing an obvious
-gadget. It is defense in depth, not a closure.
-
-### 4. The exception channel: fail-closed
-
-The exception payload is always an `Exception` instance plus a `tblib.Traceback`.
-The predicate accepts an `Exception` subclass (keying on `Exception`, not
-`BaseException`, which keeps `SystemExit`/`KeyboardInterrupt` out of the gadget
-set), `tblib`'s own types, or a base data class. Everything else is refused.
-
-`tblib.Traceback` is admitted by class, so `find_class` alone does not vet its
-contents. Its `as_traceback()` rebuilds frame objects from child-controlled
-attributes, so the object's shape is checked before that call.
-
-### 5. The descriptor fallback: keeping the refusal
-
-Unpickling an exception drags its whole state along, and an exception's state
-routinely holds objects this predicate cannot admit. `httpx.ConnectError` carries
-the `httpx.Request` it failed on; a `FileNotFoundError` raised by application
-code may carry a `pathlib.Path`; an application exception may carry an
-application object. Admitting those would mean admitting essentially any type,
-which is the fail-open posture this channel exists to avoid.
-
-Refusing them outright is worse, though: the caller then sees
-`RestrictedUnpicklingError` where it should see *which rule refused the call*,
-and a sandbox that cannot report its own refusal has lost its point.
-
-So the child sends the exception **twice**:
-
-- the **rich form**, the pickled `(exception, traceback)` pair;
-- the **descriptor form**, `(module, qualname, message, denials)` — strings and
-  a list of strings — plus the same traceback.
-
-The parent tries the rich form under the predicate above. If the guard refuses
-it, the parent falls back to the descriptor. It resolves the class from
-`sys.modules` exactly as `find_class` does (never importing), and instantiates it
-through `__new__`. In effect, an exception's `__init__` signature is its own
-business, and replaying it with a single argument fails on any class taking more.
-
-The descriptor payload carries primitives only, so its predicate admits `tblib`
-and nothing else.
-
-**What a caller keeps and loses on the fallback path:**
-
-```python
-try:
-    fetch_webpage(url)
-except httpx.ConnectError as e:  # the class is preserved
-    str(e)                       # the message is preserved
-    sandbox_denials(e)           # the denials are preserved
-    e.__traceback__              # the sandbox frames are preserved
-    e.request.url                # AttributeError: the state is NOT preserved
-```
-
-The attributes survive whenever the rich form is admissible, which covers an
-exception carrying no state, or state made only of the base data classes. They
-are lost exactly when the guard would otherwise have refused the exception
-entirely.
-
-Two failures are not fatal. An exception the child cannot pickle at all does
-not sink the reply. A class the parent never imported does not raise: the
-refusal is reported through `SandBoxProtocolError`, prefixed with the original
-`module.qualname`, rather than being lost.
-
-## The `remote-result-guard` profile key
-
-The result-channel denylist is the one **risky** layer (fail-open, and it can in
-principle reject an exotic legitimate return). It is controlled by a profile
-key:
-
-```
-remote-result-guard=true    # default: the result denylist is active
-remote-result-guard=false   # disable the result denylist only
-```
-
-Turning it off disables **only** that denylist. The opcode prescan, the DoS
-budgets, the exception-channel guard, and the `tblib` shape check stay active.
-With it off, the result channel has no protection against the `__reduce__`
-vector (the opcode allowlist does not see it), so leave it on unless a real
-regression forces otherwise.
-
-The result channel has two structural profiles:
-
-```
-remote-result-mode=data-only   # default; values only, a closed list of types
-remote-result-mode=objects     # supports application-defined classes
-```
-
-`data-only` resolves every global against a closed list of value classes
-(`pathlib` paths, `datetime` dates, times, durations and `timezone`,
-`zoneinfo.ZoneInfo`, `time.struct_time`, `decimal.Decimal`,
-`fractions.Fraction`, `complex`, `uuid.UUID` and its `SafeUUID` state,
-`ipaddress` addresses, networks and interfaces, `range`), then checks the
-resulting graph contains only `None`, booleans, numbers, strings, bytes,
-bytearrays, list, tuple, dict, set, frozenset, `OrderedDict`, `Counter` or
-`deque` containers, and those value classes. `ZoneInfo` pickles as
-`getattr(ZoneInfo, "_unpickle")`: in this mode `getattr` resolves to a stand-in
-that answers that single pair, so it cannot hand out a method such as
-`Path.unlink`. Cycles and subclasses are refused. The constructors and
-`__setstate__` of these classes only store what they receive, so the stream can
-build a wrong value but cannot act in the parent: the mode is fail-closed. A
-refusal names `remote-result-mode=objects`. The mode remains in force even if
-`remote-result-guard=false`; that switch controls only the denylist in
-`objects` mode.
-
-Learning mode decodes each emitted result as `data-only` would, in the child. It
-writes `remote-result-mode=data-only` when every observed result passes. If
-any observed result needs class reconstruction, it writes `objects` with a
-warning in the generated profile because class-defined reconstruction methods
-can execute in the parent process. Repeated observations collapse to one rule.
-If a later learning run observes objects while the active mode is `data-only`,
-it comments the previous rule with the enrichment date and adds the new mode in
-the dated learning block. An active `objects` mode is not tightened based only
-on one run that happened to return primitives. Review the generated profile;
-learning only describes the results exercised by that run.
-
-## Portability
-
-Sites that depend on CPython internals carry a `# CPYTHON-COMPAT:` marker
-(`rg CPYTHON-COMPAT` to find them). They are:
-
-- the opcode alphabet, which can grow between versions. A corpus test reasserts
-  that a representative sample stays within the allowlist, so a version bump
-  reddens CI instead of breaking production;
-- the in-house qualified-name resolution, replacing the private
-  `pickle._getattribute`;
-- the refusal to import a module from the stream;
-- the result denylist, keyed by every alias and C-twin of a module;
-- the pinned wire protocol constant, used on both ends instead of
-  `HIGHEST_PROTOCOL`. The alphabet therefore does not drift with the
-  interpreter, and the two ends stay compatible across container backends.
-
-Supported range: CPython 3.11 to 3.14.
-
-## Limits
-
-- The result denylist is fail-open and not exhaustive; an unlisted dangerous
-  module passes. See layer 3.
-- An exception whose `__reduce__` rebuilds through a *function* (rather than a
-  class) is refused on the exception channel; the descriptor fallback still
-  delivers its class, message and denials, without its state.
-- An exception that crosses on the fallback path arrives without its attributes.
-  See layer 5.
-- `__cause__` and `__context__` do not survive the transport, on either path.
-  That is plain pickle behaviour; `sandbox_denials` exists because of it.
-- This guard protects the parent's deserialization only. Arbitrary Python in the
-  child can still reach native code by other routes; the OS-level sandbox remains
-  the real barrier. See [weaknesses](weaknesses.md).
-
-## Recommendations
-
-- Leave `remote-result-guard` at its default. Turn it off only when a real regression forces it: the result channel then has no protection against the `__reduce__` vector.
-- Read the refusals of a crossed exception with `sandbox_denials`, not with its attributes: on the fallback path, the state is lost.
-- Do not rely on `__cause__` or `__context__` after the transport.
-- Review the `# CPYTHON-COMPAT:` sites before supporting a new CPython version.
-- Keep an OS-level sandbox around the child: this guard protects the parent's deserialization only.
-
-## References
-
-- [Weaknesses](weaknesses.md)
+# Parent-side pickle handling on the remote transport
+
+This page describes the current child-to-parent result and exception deserialization paths. It is based on the implementation and tests linked below. It does not treat earlier audit prose as evidence.
+
+## Scope and trust direction
+
+PySandboxes executes a sandboxed call in a child process and returns results over the local SSE transport. The child controls the bytes it sends. A pickle stream can invoke reconstruction callables, so deserializing a child payload in the trusted parent is security-sensitive.
+
+There are two directions in the transport:
+
+- Parent-to-child call arguments use raw `from_b85` in [`sse_server_daemon.py`](../pysandboxes/remote/sse_server_daemon.py). That payload is produced by the trusted parent.
+- Child-to-parent results and exceptions use `from_b85_restricted` in [`base_sse_daemon.py`](../pysandboxes/remote/base_sse_daemon.py). The raw [`from_b85`](../pysandboxes/remote/tools.py) function is not the effective decoder for those response values.
+
+The child serializes values with `to_b85`. It no longer reloads and compares the value before sending: that would not establish that the parent can safely reconstruct attacker-controlled bytes. The parent-side checks are applied when it receives the response.
+
+The exception sender emits both a rich pickle of `(exception, traceback)` and a primitive descriptor plus traceback. The parent tries the rich form first and uses the descriptor when restricted loading refuses it. See [`sse_server_daemon.py`](../pysandboxes/remote/sse_server_daemon.py) and [`base_sse_daemon.py`](../pysandboxes/remote/base_sse_daemon.py).
+
+## What the restricted loader checks
+
+[`from_b85_restricted`](../pysandboxes/remote/tools.py) base85-decodes the payload, prescans the pickle stream, then loads it with a restricted unpickler and a channel-specific predicate.
+
+### Opcode and size prescan
+
+The prescan uses `pickletools.genops` to reject opcodes outside the protocol-5 allowlist and enforce byte, opcode-count, memo-entry, and MARK-depth budgets. In particular, the allowlist excludes extension opcodes and protocol-0 global forms that could avoid the `find_class` check. The prescan does not execute pickle reconstruction code.
+
+The scanner deliberately does not emulate the pickle stack to predict every `(module, name)` pair. Memo indirection makes a partial stack interpreter a second implementation that could disagree with the actual unpickler. Instead, allowed `STACK_GLOBAL` references are checked by `find_class` during loading. The test `test_memo_indirection_refused` exercises a memoized `os.system` reference and confirms that the result predicate refuses it: [`test_restricted_unpickle.py`](../tests/unit_tests/remote/test_restricted_unpickle.py).
+
+The HTTP reader also limits an SSE line. `check_sse_line` checks the assembled line on the child before it is sent, while `_MAX_BYTES` bounds the encoded pickle portion on the parent-side loader. The constants and rationale are in [`tools.py`](../pysandboxes/remote/tools.py); the unit tests cover their relationship to the aiohttp reader. These limits reduce oversized-payload and parser exhaustion risks; they do not make an accepted pickle inert.
+
+### Global resolution
+
+The restricted unpickler only resolves a module already present in the parent's `sys.modules`; it does not import a module named by the stream. It resolves dotted names by attribute lookup, then applies the channel predicate. For dotted names it requires the resolved target to be a class, preventing a dotted path from selecting a callable such as a method.
+
+This is a restriction on global lookup, not a guarantee that every admitted class is safe to reconstruct. Pickle reconstruction may invoke methods on an admitted class, which is particularly important for the exception channel below.
+
+## Result channel
+
+Two result modes are implemented:
+
+- `remote-result-mode=data-only` uses a closed set of supported value classes and validates that the reconstructed graph contains only supported exact container/value types. This is the narrower result profile. It is separate from exception handling.
+- `remote-result-mode=objects` allows application and library classes, subject to a denylist of known dangerous module roots and builtins. The denylist is intentionally fail-open: a dangerous gadget from an unlisted module may pass. The code lists the roots it currently covers in [`tools.py`](../pysandboxes/remote/tools.py); it does not establish coverage of every alias, C twin, or future gadget.
+
+`remote-result-guard=false` disables the result denylist in objects mode. The opcode prescan and its budgets still run, but globals then load through the standard pickle loader. This setting therefore removes the name-level gadget check; it must not be described as retaining equivalent protection against reconstruction gadgets.
+
+Tests for value mode, object mode, memo handling, and the switch are in [`test_restricted_unpickle.py`](../tests/unit_tests/remote/test_restricted_unpickle.py). They exercise selected cases; they are not a proof that the fail-open denylist is exhaustive.
+
+## Exception channel: residual parent-code-execution risk
+
+The exception predicate accepts any class that is a subclass of `Exception`, along with `tblib` types and a small set of base data classes. It excludes `BaseException`-only classes such as `SystemExit` and `KeyboardInterrupt`, but it does not distinguish trusted exception classes from arbitrary application-defined exception classes. See `exception_predicate` in [`tools.py`](../pysandboxes/remote/tools.py).
+
+This means the rich form can execute reconstruction hooks in the parent. If a matching custom exception class is already imported in the parent, a hostile child payload can select that class and trigger its pickle reconstruction behavior, including a custom `__setstate__`. This was reproduced at the restricted-loader level with a preloaded custom exception class. The probe demonstrates the hook execution, not a complete remote exploit over the SSE socket; the prerequisite remains that the relevant class is present in the trusted parent's process.
+
+The descriptor fallback has a related, independently source-established risk. After resolving the descriptor's module and qualified name from `sys.modules`, `rebuild_from_descriptor` calls `cls.__new__(cls)` for any resolved `Exception` subclass. A custom `__new__` therefore runs in the parent. This was reproduced directly at the descriptor rebuild helper with a preloaded custom exception class. The descriptor's primitive shape check prevents arbitrary pickle globals in that fallback payload, but it does not make the subsequent class constructor inert.
+
+Accordingly, the exception path is **not fail-closed against code execution by reconstruction hooks on preloaded exception classes**. The descriptor fallback preserves the class/message/denials in ordinary cases but is not a safe boundary against a hostile child when such a class is available. The source and direct probes establish the behavior; they do not establish that every application has a reachable malicious exception class.
+
+When the class cannot be resolved, or is not an `Exception` subclass, the code falls back to `SandBoxProtocolError`. A fallback descriptor carries the exception module, qualified name, string message and denial strings; it does not preserve arbitrary exception attributes. `__cause__` and `__context__` are not transported as part of this descriptor. Existing tests cover shape validation and ordinary fallback behavior, but do not assert that hostile `__new__` or `__setstate__` hooks are prevented: see [`test_restricted_unpickle.py`](../tests/unit_tests/remote/test_restricted_unpickle.py).
+
+## Protocol and compatibility details
+
+The regular `to_b85` path pins `_PICKLE_PROTOCOL` to 5. The exception serialization code currently uses `pickle.HIGHEST_PROTOCOL` in [`sse_server_daemon.py`](../pysandboxes/remote/sse_server_daemon.py), rather than that constant. CPython 3.11 through 3.14 currently use protocol 5, but “the fixed protocol constant is used at both ends” is not an implementation invariant. Revisit this if the supported interpreter range or pickle protocol changes.
+
+The opcode allowlist and name resolution depend on CPython behavior. The repository marks compatibility-sensitive sites with `CPYTHON-COMPAT`; review them when adding a Python version. The supported Python range is recorded in project metadata and CI configuration.
+
+## Related API-guard limitation
+
+The xfail for `pickle.Unpickler(...).load()` is in [`test_guard_api.py`](../tests/unit_tests/guard/test_guard_api.py), not in the transport restricted-unpickler tests. It documents a separate Python API guard limitation: the immutable C `pickle.Unpickler` type cannot be patched in the same manner as `pickle.loads`. It should not be read as evidence that the parent-side restricted transport loader is unguarded; nor does it resolve the exception-hook issue described above.
+
+## Security interpretation
+
+- The parent-side result loader has meaningful opcode, size, global-resolution, and channel-predicate checks. `data-only` is narrower than `objects`; the objects-mode denylist is fail-open and not exhaustive.
+- The child-to-parent exception loader admits arbitrary preloaded `Exception` subclasses, whose pickle hooks can execute in the parent. The descriptor fallback also invokes a resolved exception class's `__new__`.
+- The parent-to-child raw `from_b85` path has the opposite trust direction and should not be confused with child response handling.
+- These checks do not replace process isolation. For the broader current threat model and other residual weaknesses, see [`weaknesses.md`](weaknesses.md).
