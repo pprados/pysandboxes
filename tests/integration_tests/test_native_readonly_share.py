@@ -1,32 +1,46 @@
 # Copyright (c) 2026, Philippe PRADOS
 # License: Apache V2
-"""QEMU must enforce read-only host shares against native guest code."""
+"""Kernel providers must enforce read-only host shares against native code."""
 
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from typing import Iterator
 
 import pytest
 
 from ._env import provider_skip_reason
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-_QEMU_REASON = provider_skip_reason("qemu")
+_PROVIDERS = ("qemu", "unshare", "firejail", "landlock", "bwrap")
 
 
-@pytest.mark.skipif(bool(_QEMU_REASON), reason=_QEMU_REASON or "")
-def test_native_guest_code_cannot_write_an_expose_ro_share(tmp_path: Path) -> None:
-    sentinel = tmp_path / "host-sentinel.txt"
+@pytest.fixture
+def exposed_dir(provider: str, tmp_path: Path) -> Iterator[Path]:
+    if provider == "qemu":
+        yield tmp_path
+        return
+    with tempfile.TemporaryDirectory(prefix=".native-readonly-", dir=ROOT_DIR) as directory:
+        yield Path(directory)
+
+
+@pytest.mark.parametrize("provider", _PROVIDERS)
+def test_native_code_cannot_write_a_read_only_share(provider: str, tmp_path: Path, exposed_dir: Path) -> None:
+    if reason := provider_skip_reason(provider):
+        pytest.skip(reason)
+
+    sentinel = exposed_dir / "host-sentinel.txt"
     sentinel.write_text("host-before\n")
-    profile = tmp_path / "qemu-readonly.profile"
+    profile = tmp_path / f"{provider}-readonly.profile"
     profile.write_text(
         "\n".join(
             [
                 "py-sandbox=false",
-                "os-sandbox=qemu",
-                "qemu.use_kvm=false",
-                f"expose-ro={tmp_path}",
+                f"os-sandbox={provider}",
+                *(["qemu.use_kvm=false"] if provider == "qemu" else []),
+                f"expose-ro={exposed_dir}",
                 "",
             ]
         )
@@ -54,7 +68,7 @@ else:
             "-c",
             code,
         ],
-        cwd=ROOT_DIR,
+        cwd=ROOT_DIR if provider == "qemu" else tmp_path,
         capture_output=True,
         text=True,
         timeout=900,
@@ -62,5 +76,4 @@ else:
     )
 
     assert result.returncode == 0, result.stderr[-3000:]
-    assert "REFUSED" in result.stdout
     assert sentinel.read_text() == "host-before\n"

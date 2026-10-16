@@ -45,6 +45,21 @@ def test_a_single_module() -> None:
     assert remaining == []
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="cached sys.modules entries bypass import mediation; documented in wiki/audit-python-security.md",
+)
+def test_cached_module_is_not_available_through_sys_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the known import-policy bypass without treating it as an OS-boundary escape."""
+    import json
+
+    _activate(monkeypatch, ())
+    assert sys.modules["json"] is json
+    with user_code():
+        with pytest.raises(RuleModuleNotFoundError):
+            _ = sys.modules["json"]
+
+
 def test_several_modules_on_one_line_are_split_and_stripped() -> None:
     parsed, _ = _parse("python-import=os, sys ,json")
     assert parsed == ("os", "sys", "json")

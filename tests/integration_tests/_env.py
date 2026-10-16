@@ -147,8 +147,17 @@ def provider_skip_reason(os_sandbox: str) -> str | None:
     # GitHub runner is a VM, with neither marker file.
     if os_sandbox == "firejail" and (Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()):
         return "firejail does not run inside a container"
-    if os_sandbox == "firejail" and not _runs("firejail", "--quiet", "--noprofile", "true"):
-        return "firejail cannot create its sandbox here"
+    if os_sandbox == "firejail":
+        try:
+            probe = subprocess.run(
+                ["firejail", "--noprofile", "true"], capture_output=True, text=True, timeout=10, check=False
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return "firejail cannot create its sandbox here"
+        if "existing sandbox was detected" in probe.stderr:
+            return "firejail cannot add a nested sandbox here"
+        if probe.returncode != 0:
+            return "firejail cannot create its sandbox here"
     if os_sandbox == "bwrap" and not _runs("bwrap", "--ro-bind", "/", "/", "--unshare-net", "true"):
         return "bwrap cannot create its namespaces here (inside a container, or user namespaces restricted)"
     return None

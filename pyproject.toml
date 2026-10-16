@@ -133,6 +133,9 @@ lint = [
     "ruff>=0.14.8",
     "types-requests>=2.28.11.5",
 ]
+fuzz = [
+    "atheris>=3.1.0; python_version >= '3.12' and implementation_name == 'cpython' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
 
 [tool.codespell]
 # Generated trees, caches and virtualenvs: scanning .venv alone took minutes.

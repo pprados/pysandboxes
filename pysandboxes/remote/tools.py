@@ -398,9 +398,10 @@ _ALLOWED_OPCODES = frozenset(
 # Anti-DoS budgets: generous guard-rails, not tight limits. A legitimate result
 # may be large; these only bound the pathological shapes the predicate cannot
 # see (memo bombs, opcode floods) that would expand in the parent's RAM.
-_MAX_OPCODES = 5_000_000
+_MAX_OPCODES = 100_000
 _MAX_MEMO = 2_000_000
 _MAX_MARK_DEPTH = 256
+_MAX_INTEGER_BYTES = 16 * 1024
 
 # The payload travels as one SSE line, and aiohttp caps a line at the high
 # water mark of its StreamReader, 2 * ClientSession(read_bufsize=...)
@@ -613,13 +614,25 @@ def _prescan(data: bytes) -> None:
             name = opcode.name
             if name not in _ALLOWED_OPCODES:
                 raise RestrictedUnpicklingError(f"opcode {name!r} is not allowed on the sandbox transport.")
+            if name in ("LONG1", "LONG4") and _arg.bit_length() > _MAX_INTEGER_BYTES * 8:
+                raise RestrictedUnpicklingError(
+                    f"integer exceeds the {_MAX_INTEGER_BYTES}-byte transport budget."
+                )
             if name == "MARK":  # pragma: no mutate
                 mark_depth += 1
                 if mark_depth > _MAX_MARK_DEPTH:  # pragma: no mutate
                     raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_MARK_DEPTH}-deep MARK budget.")
             elif name in _MARK_CONSUMERS and mark_depth > 0:  # pragma: no mutate
                 mark_depth -= 1
-            elif name in ("MEMOIZE", "BINPUT", "LONG_BINPUT"):
+            elif name in ("BINPUT", "LONG_BINPUT"):
+                if _arg >= _MAX_MEMO:
+                    raise RestrictedUnpicklingError(
+                        f"memo index {_arg} exceeds the {_MAX_MEMO}-entry transport budget."
+                    )
+                n_memo += 1
+                if n_memo > _MAX_MEMO:  # pragma: no mutate
+                    raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_MEMO}-entry memo budget.")
+            elif name == "MEMOIZE":
                 n_memo += 1
                 if n_memo > _MAX_MEMO:  # pragma: no mutate
                     raise RestrictedUnpicklingError(f"stream exceeds the {_MAX_MEMO}-entry memo budget.")

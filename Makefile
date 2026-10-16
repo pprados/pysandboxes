@@ -1,5 +1,5 @@
 SHELL=/bin/bash
-.PHONY: all format format_diff lint lint_diff claude-lint coverage \
+.PHONY: all format format_diff lint lint_diff claude-lint coverage security-corpus fuzz \
 	unit-tests integration-tests container-tests sample-tests sample-tests-matrix all-tests gh-tests gh-all-tests \
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
@@ -8,6 +8,9 @@ SHELL=/bin/bash
 	clean-sandbox-temps quick-demo-gif
 
 UV_GROUP?=--group dev --group test --group lint
+FUZZ_SECONDS?=20
+FUZZ_RSS_LIMIT_MB?=1024
+FUZZ_TIMEOUT_SECONDS?=5
 
 # Use cursor-agent, claude, etc.
 LLM_CLI?=cursor-agent
@@ -46,6 +49,36 @@ compress-templates:
 ## Make unit test
 unit-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest -v tests/unit_tests/
+
+## Run the known Python and transport attack regression corpus
+security-corpus:
+	uv run pytest -q \
+		tests/unit_tests/guard/test_eval_attack_matrix.py \
+		tests/unit_tests/guard/test_eval_security_corpus.py \
+		tests/unit_tests/guard/test_guard_api.py \
+		tests/unit_tests/guard/test_guard_import.py \
+		tests/unit_tests/guard/test_guard_escape_fixes.py \
+		tests/unit_tests/test_escape_pysandbox.py \
+		tests/unit_tests/test_provider_skip_reason.py \
+		tests/unit_tests/remote/test_restricted_unpickle.py \
+		tests/unit_tests/remote/test_base_sse_daemon_gaps.py \
+		tests/integration_tests/test_native_readonly_share.py
+
+## Run a bounded Atheris campaign (Linux x86_64, Python 3.12-3.14; 20s per target)
+fuzz:
+	@uv run python -c 'import platform, sys; assert sys.implementation.name == "cpython" and (3, 12) <= sys.version_info[:2] < (3, 15) and platform.system() == "Linux" and platform.machine() == "x86_64", "Atheris fuzzing requires CPython 3.12-3.14 on Linux x86_64"'
+	@for target in eval_rules eval_transform restricted_pickle sse; do \
+		echo "Fuzzing $$target for $(FUZZ_SECONDS)s"; \
+		corpus=$$(mktemp -d); \
+		cp -R tests/fuzzing/corpus/$$target/. "$$corpus"/; \
+		artifact="$${TMPDIR:-/tmp}/pysandboxes-fuzz-artifacts/$$target/"; \
+		mkdir -p "$$artifact"; \
+		FUZZ_TARGET=$$target uv run --group fuzz python scripts/fuzzing/fuzz_targets.py \
+			"$$corpus" -max_total_time=$(FUZZ_SECONDS) -rss_limit_mb=$(FUZZ_RSS_LIMIT_MB) \
+			-max_len=4096 -timeout=$(FUZZ_TIMEOUT_SECONDS) -verbosity=0 \
+			-artifact_prefix="$$artifact" || { fuzz_exit=$$?; rm -rf "$$corpus"; exit $$fuzz_exit; }; \
+		rm -rf "$$corpus"; \
+	done
 
 # Ensure minikube is running (start if installed but not running).
 # When we start minikube, wait for node and CoreDNS so pods get DNS (avoids "name resolution" failures).

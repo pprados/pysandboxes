@@ -815,3 +815,40 @@ class TestSwitch:
                 from_b85_restricted(base64.b85encode(stream).decode(), None)
         finally:
             copyreg.remove_extension("os", "system", 241)
+
+
+def test_non_ascii_base85_is_a_typed_transport_refusal() -> None:
+    with pytest.raises(RestrictedUnpicklingError):
+        from_b85_restricted("é", result_predicate)
+
+
+def test_sparse_memo_index_is_refused_before_unpickling() -> None:
+    payload = b"\x80\x05Nr\xff\xff\xff\x7f."
+    with pytest.raises(RestrictedUnpicklingError, match="memo index"):
+        tools._prescan(payload)
+    encoded = base64.b85encode(payload).decode("ascii")
+    with pytest.raises(RestrictedUnpicklingError, match="memo index"):
+        from_b85_restricted(encoded, result_predicate)
+
+
+def test_opcode_flood_is_refused_before_unpickling() -> None:
+    payload = pickle.dumps([[] for _ in range(50_000)], protocol=5)
+    encoded = base64.b85encode(payload).decode("ascii")
+    with pytest.raises(RestrictedUnpicklingError, match="opcode transport budget"):
+        from_b85_restricted(encoded, None, data_only=True)
+
+
+def test_large_pickle_integer_respects_transport_budget() -> None:
+    def long_integer_payload(size: int) -> bytes:
+        return b"\x80\x05\x8b" + size.to_bytes(4, "little") + b"\x01" * size + b"."
+
+    at_limit = long_integer_payload(16 * 1024)
+    encoded = base64.b85encode(at_limit).decode("ascii")
+    assert from_b85_restricted(encoded, None, data_only=True) == int.from_bytes(
+        b"\x01" * (16 * 1024), "little", signed=True
+    )
+
+    over_limit = long_integer_payload(16 * 1024 + 1)
+    encoded = base64.b85encode(over_limit).decode("ascii")
+    with pytest.raises(RestrictedUnpicklingError, match="integer exceeds"):
+        from_b85_restricted(encoded, None, data_only=True)
