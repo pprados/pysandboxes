@@ -61,7 +61,10 @@ async def provider(request: pytest.FixtureRequest) -> AsyncGenerator[_Provider, 
     if reason := chosen.skip_reason():
         pytest.skip(reason)
     config_path = Path(__file__).parent / "py-sandbox-test.profile"
-    all_rules = load_and_parse_config(config_path=config_path)
+    # The profile reads OS_SANDBOX: parsed under another provider, the `firejail.*` lines are dropped.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("OS_SANDBOX", chosen.name)
+        all_rules = load_and_parse_config(config_path=config_path)
     all_rules = all_rules._replace(os_sandbox=chosen.name)
     if chosen.name == "bwrap":
         all_rules = all_rules._replace(os_sandbox_params=ImmutableDict({}))

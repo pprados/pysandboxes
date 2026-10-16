@@ -45,12 +45,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 @pytest.hookimpl(tryfirst=True)
 def pytest_fixture_post_finalizer(fixturedef: Any, request: Any) -> None:
     from pysandboxes import _os_sandbox
-    from pysandboxes.private_loop import get_sandbox_loop
+    from pysandboxes.private_loop import _ensure_background_loop
 
     if _os_sandbox._current_daemon is not None:
         # A started daemon lives on this loop, and its shutdown needs it running.
         return
-    loop = get_sandbox_loop()
+    # Never create one here: this hook runs after every fixture, and each loop it made and stopped kept its
+    # epoll and socketpair descriptors open until the process exited.
+    loop = _ensure_background_loop()
+    if loop is None:
+        return
     loop.stop()
     # Fix a problem with pycharm. It's call close() on a running loop
     if hasattr(loop, "_thread_id"):
