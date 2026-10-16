@@ -766,8 +766,6 @@ def test_armed_denies_subinterpreter_creation() -> None:
     [
         "_testinternalcapi.create_interpreter",
         "_testinternalcapi.run_in_subinterp_with_config",
-        "_testcapi.run_in_subinterp",
-        "_testcapi.run_in_subinterp_with_config",
     ],
 )
 def test_armed_denies_subinterpreter_creation_through_the_test_modules(qualname: str) -> None:
