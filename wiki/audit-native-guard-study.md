@@ -1,56 +1,70 @@
 <!-- Copyright (c) 2026, Carbon-It, Philippe Prados (pprados) -->
 <!-- License: Apache V2 -->
 
-# Native guard study and decision
+# Native code and OS-boundary assessment
 
-This page records the design study of a C extension intended to make the original functions behind PySandboxes' Python guards harder to recover or call through ordinary Python introspection. The study concluded that the technique works for a narrow set of CPython C functions, but does not provide enough coverage to justify a general native guard layer. **The general implementation is abandoned.** The Python guards and `OS_SANDBOX` are the protection in place.
+## Scope and method
 
-For the threat model and current limitations, see [Weaknesses](weaknesses.md) and the [security assessment of the Python layer](audit-python-security.md). The `eval-*` sub-language has a different threat model; see its [security assessment](audit-eval-security.md). The OS boundary and provider differences are described in [Choosing a provider](os-providers.md).
+This assessment covers the boundary that remains relevant when sandboxed work can use native code: the Linux OS providers, QEMU's host shares, and the feasibility of a native replacement for Python API guards. It was checked against the current provider implementation and isolated probes. It does not treat earlier descriptions of a prototype as evidence for current enforcement.
 
-## What the prototype established
+Evidence labels used below:
 
-A disposable C extension extracted a CPython builtin's function pointer, retained it in C storage, and invoked it through a native wrapper. The tested `math.sqrt` original was not found by the tested Python heap/profile introspection routes. A single `abi3` binary compiled against Python 3.11 headers also dispatched representative C functions using six call conventions on CPython 3.11, 3.12, 3.13, and 3.14. On 3.12–3.14, `sys.monitoring` observed the public wrapper call but not the direct C-pointer call to `math.sqrt`.
+- **Reproduced**: exercised against the current implementation in an isolated probe.
+- **Code-established**: the current implementation directly exhibits the behavior; no end-to-end guest or kernel probe was run.
+- **Conditional**: the behavior depends on a stated configuration, platform, or capability.
 
-These are positive but narrow results. They establish that a C wrapper can hide a selected C function object from the tested Python routes while preserving its call result. They do not establish equivalent behavior for every function in the registry, every compiler or platform, or every callable kind. The prototype was not a production guard and did not prove thread, reload, subinterpreter, or free-threaded safety.
+The Python patching and `eval-*` layers have separate assessments: [Python layer](audit-python-security.md) and [`eval-*`](audit-eval-security.md). Provider setup and prerequisites are described in [OS providers](os-providers.md).
 
-The study also tested native audit hooks and GC wrappers on Python 3.11 through 3.14. A native hook ran before later Python hooks, and native GC wrappers could deny direct and re-entrant access through saved aliases. However, an existing Python audit hook could silently veto `PySys_AddAuditHook()` even when it reported success. The prototype detected this only by emitting a unique verification event and checking that the native callback observed it. Any production use would have to fail closed when that self-test failed.
+## Findings
 
-## Why the general approach was abandoned
+### QEMU `expose-ro` shares are writable by guest code
 
-`SENSITIVE_API` holds 121 names. On a Linux host running CPython 3.14, 107 resolve: 77 to built-in/C callables, 28 to Python functions, and two to classes. The other 14 are platform- or version-specific and do not resolve there. Across the other patch tables there are 114 API entries, 63 filesystem entries, 11 socket entries, four eval entries, and four learning-mode environment entries. These are patch entries rather than unique implementations, and aliases overlap.
+**Severity: high when the profile relies on `expose-ro` to protect host files. Evidence: reproduced.**
 
-The pointer technique applies to selected C callables. It does not make Python functions secret: retaining a Python function in C still leaves it visible through Python references, and an exception traceback exposes its frame, code, and globals. Reconstructing a function from that code and globals reproduces the callable. Compiling Python code or shipping bytecode does not remove these objects or provide a secrecy boundary.
+With `py-sandbox=false`, `os-sandbox=qemu`, and a host directory exposed using `expose-ro`, native guest code opened a host sentinel through the 9p share with `libc.open(..., O_WRONLY | O_TRUNC)`, wrote new contents, and exited successfully. The host file changed. The probe ran against the local Ubuntu cloud image under QEMU TCG; it did not depend on KVM.
 
-Other limits lie outside the technique:
+The code path explains the result: [`_file_rules_mounts`](../pysandboxes/remote/qemu_sse_daemon.py) keeps the host path and mount tag but does not carry `FSExposeRule.write` into the QEMU share options. The guest bootstrap mounts each 9p tag without a read-only option ([`qemu_setup.py`](../pysandboxes/remote/qemu_setup.py)). QEMU documents that a 9p export is read-write by default unless `readonly=on` is set ([QEMU manual](https://www.qemu.org/docs/master/system/qemu-manpage.html)). Therefore the Python file guard cannot make this share read-only when it is disabled or bypassed by native guest code.
 
-- `object.__subclasses__()` is an operation on immutable built-in types. It cannot be replaced by assigning a Python wrapper and emits no audit event. Native code cannot disable it without changing CPython itself.
-- A native audit hook only sees the event CPython emits. It cannot reliably infer which public API caused a shared event: `os.popen()` and `subprocess.run()` can both emit `subprocess.Popen`. Such a hook cannot preserve distinct per-function rules for old aliases in that case.
-- Audit events do not carry all arguments needed to reproduce every guard decision. For example, the tested `os.open(..., dir_fd=...)` call emitted `open(path, mode, flags)` without the directory descriptor. Filesystem rules also need canonicalization, symlink handling, and learning behavior.
-- Immutable classes can still be found through the type graph. An audit hook can guard selected operations that emit complete pre-effect events, but it cannot guarantee coverage of every method or every path that uses an already-held descriptor or object.
-- The `PySys_AddAuditHook()` declaration is unavailable through the Limited API headers used for `abi3`. Requiring it means building a CPython-minor-specific wheel for each supported Python minor and each OS/architecture target. It also adds permanent process-wide state, installation checks, worker lifecycle requirements, and compatibility work for debugging, profiling, learning, and reload.
-- Porting all current behavior to C would be a broad rewrite. It would need to preserve filesystem path semantics, `dir_fd`, sockets, platform-specific calls, return values, learning rules, and public Python behavior. That cost is disproportionate to the protection gained while Python functions and interpreter-level introspection remain outside the native pointer technique.
+Treat QEMU `expose-ro` as writable until the provider passes an end-to-end regression probe that writes through a guest native syscall and confirms the host file remains unchanged. This finding concerns that QEMU mount mode; it is not evidence that every provider's read-only rules fail.
 
-The official [CPython audit-event table](https://docs.python.org/3/library/audit_events.html) is useful for building an event inventory, but its events do not provide complete, one-to-one mediation for these guards. CPython's [audit-hook guidance](https://docs.python.org/3/library/sys.html#sys.addaudithook) explicitly says audit hooks are not a sandbox. These facts rule out treating the hook as a replacement for either the existing guard behavior or the OS boundary.
+### Landlock does not restrict networking without socket rules
+
+**Evidence: reproduced; conditional on omitting `net=` rules or lacking Landlock network ABI support.**
+
+On the tested Linux kernel (Landlock ABI 8), a native loopback `connect()` succeeded under Landlock when no socket rules were configured. The current activation code passes `net_ports=None` when `all_rules.socket_rules` is empty. Network restriction is therefore not implicit merely because filesystem Landlock is active. On kernels below ABI 4, Landlock cannot apply its TCP bind/connect restrictions at all; check provider availability and kernel support before relying on `net=` enforcement. See [`landlock_daemon.py`](../pysandboxes/remote/landlock_daemon.py) and [Landlock limits](landlock.md#limits).
+
+### Landlock's `/dev` access is broader than regular-file rules
+
+**Evidence: reproduced with a limited operation.**
+
+Under the tested Landlock profile, native code successfully opened `/dev/full` for writing. The probe did not write to it and did not establish access to a high-impact device: `/dev/kvm`, `/dev/dri`, and `/dev/fuse` were unavailable in the test environment. This establishes that an allowed device-node open can remain possible; it does not establish a privilege escalation or arbitrary device access. Device availability and host permissions determine practical impact.
+
+### Some mount failures are logged but do not abort startup
+
+**QEMU: code-established.** The guest bootstrap runs each configured 9p mount and ignore overlay with `|| true`, then continues. A failed share can consequently leave a requested path unmounted without failing bootstrap. This was not separately induced in a guest fault-injection probe. See [`qemu_setup.py`](../pysandboxes/remote/qemu_setup.py).
+
+**Unshare: reproduced for a failed mount setup path.** The setup code handles mount errors as warnings and continues in the tested fault-injection path. A warning is not proof that the requested namespace mount took effect. Review the resulting namespace and effective mounts when relying on a specific mount rule. See [`unshare_sse_daemon.py`](../pysandboxes/remote/unshare_sse_daemon.py) and [`unshare_setup.py`](../pysandboxes/remote/unshare_setup.py).
+
+These findings do not mean every mount fails. They mean startup success alone does not prove that every requested mount policy was applied.
+
+## Native guard feasibility
+
+The current production boundary is implemented by Python guards plus OS-provider mechanisms; this assessment found no production native extension that replaces the Python guard tables. A native wrapper around selected Python callables would not enforce filesystem, network, process, or device policy. It also would not remove the Python object-model limitations documented in the refreshed [Python-layer assessment](audit-python-security.md), including immutable `object.__subclasses__`, an already-loaded pickle implementation, frame/global introspection, and immutable `pickle.Unpickler.load`.
+
+Those are limitations of same-process Python mediation. They are not evidence that a kernel-backed provider is bypassed. Native code and direct system calls must be constrained by a correctly configured OS boundary.
 
 ## Decision
 
-Do not implement a general native guard layer. The prototype has a real, measurable effect for selected C callables, but the full layer would be complicated to build and maintain across Python versions and platforms while leaving important introspection paths open. For the current goal, that is not a sufficient return on the cost.
+Do not treat a native wrapper around selected Python callables as the security boundary. Keep Python guards as policy enforcement for supported APIs, and select an OS provider according to the attacker capabilities and resources in scope. Current QEMU read-only shares need correction and end-to-end coverage before they can be relied upon. Landlock requires explicit, supported network rules for TCP filtering, and device-node exposure should be considered in the deployment threat model.
 
-The study does **not** recommend removing `OS_SANDBOX`. The kernel-backed providers remain the boundary for hostile code. The `none` and `subprocess` providers do not supply that OS boundary and must not be described as equivalent containment. Native wrappers would not change that fact.
-
-The following smaller measures are worthwhile independently of the abandoned native guard:
-
-- Remove generic FFI use from worker startup where practical, including the `ctypes` path used for parent-death signaling and Landlock operations. Verify reachability in a fresh worker; removing `ctypes` from `sys.modules` alone is insufficient.
-- Release bootstrap module snapshots and other references that keep pre-activation modules or loaders reachable from user code.
-- Keep the direct GC, frame, reload, and import guards documented as reductions of ordinary access paths, not complete prevention of Python introspection.
-- Use `OS_SANDBOX` and its provider-specific tests for confinement.
-
-These actions reduce reachable capabilities or make existing guard limitations clearer. They do not turn same-process Python patching into a security boundary.
+`none` and `subprocess` do not supply a kernel-enforced OS boundary. For the limitations of same-process guards and remote result handling, see [Weaknesses](weaknesses.md), [Python layer](audit-python-security.md), and [`eval-*`](audit-eval-security.md).
 
 ## References
 
-- [Weaknesses](weaknesses.md) — known limits of Python patching, `ctypes`, and OS providers.
-- [Security assessment of the Python layer](audit-python-security.md) — attack paths and their current controls.
-- [Security assessment of the eval-* guard](audit-eval-security.md) — bounded source-string execution and its separate threat model.
-- [Choosing a provider](os-providers.md) — which providers supply an OS-level boundary.
-- [CPython audit events](https://docs.python.org/3/library/audit_events.html) and [audit-hook guidance](https://docs.python.org/3/library/sys.html#sys.addaudithook).
+- [Python-layer assessment](audit-python-security.md)
+- [`eval-*` assessment](audit-eval-security.md)
+- [Weaknesses](weaknesses.md)
+- [OS providers](os-providers.md)
+- [QEMU 9p mount construction](../pysandboxes/remote/qemu_sse_daemon.py)
+- [QEMU guest setup](../pysandboxes/remote/qemu_setup.py)
+- [Landlock provider](../pysandboxes/remote/landlock_daemon.py)

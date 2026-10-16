@@ -1,108 +1,45 @@
-# Security limits and residual risks
+# Security limits and verified residual risks
 
-## Scope
+## How to read this page
 
-The Python layer (`py-sandbox`) intercepts supported Python APIs. It is a policy
-and visibility layer, not an isolation boundary against a determined attacker.
-Use an OS provider when the threat model includes hostile code that can use
-native extensions or direct system calls. The provider comparison describes
-what each OS mechanism can enforce and its prerequisites.
+This page summarizes limitations found in the current code and focused probes. Each item names whether the behavior was reproduced or established from code. A reproduced result applies to the tested configuration and environment; it does not prove that all providers or deployments behave identically.
 
-## Python-layer limits
+PySandboxes combines Python API guards with an optional OS provider. Python guards mediate supported Python calls; they are not a boundary against hostile native code in the same process. `none` and `subprocess` do not add a kernel boundary. Kernel-backed providers must be evaluated separately for their platform, kernel, configuration, and exposed host resources.
 
-- **Introspection can reach guard internals.** Python code can inspect wrappers,
-  original callables, rules, or the armed state. The
-  [Python-layer assessment](audit-python-security.md) separates demonstrated
-  paths from source-based reasoning and links each finding to regression tests.
-- **Native code can bypass Python wrappers.** `ctypes`, compiled extensions,
-  and direct system calls can access capabilities the Python layer does not
-  mediate. Secrets already present in the process memory are not protected from
-  such code.
-- **Some API edge cases remain.** For example, `dir_fd` checks resolve a path
-  before the kernel operation; a concurrent rename can create a
-  time-of-check/time-of-use race. A file descriptor already held by the code is
-  itself a capability.
-- **Windows: the Proactor event loop bypasses the socket methods.** asyncio's default loop on Windows calls
-  `_overlapped.ConnectEx`, `WSASendTo` and `AcceptEx` on the socket handle, which the socket guard does not
-  wrap: the destination of an asyncio connection or datagram is not judged by the `net=` rules there.
-- **The daemon's own modules escape the import rules outside a call.** In partial mode, the sandbox process runs
-  an HTTP server (uvicorn, fastapi) after the guards are active, and the modules it imports for itself stay
-  loaded. While the user's code runs (the import of its module, `init_fn`, each call of a `@sandbox` function and
-  the tasks it awaits), every import is judged on `python-import=` alone, loaded or not: `__import__`,
-  `importlib.import_module` and `importlib.__import__` are wrapped for that. Code that runs outside such a call is
-  not judged that way: a thread the user's code starts (it does not inherit the call's context), a finalizer, an
-  `atexit` function, or the `__reduce__` of a returned object, run while the daemon serializes the result. There,
-  the modules the daemon loaded for itself are importable without a rule (the
-  [list is in the annex](#annex-modules-the-daemon-loads-for-itself)). The imports that
-  importlib's bootstrap makes for itself are not judged either, nor the relative imports a kept package such as
-  `asyncio` makes of its own submodules. Code that runs with the globals of one of those modules passes for it, and
-  that takes no grant: `type(lambda: 0)(code, module.__dict__)()` builds such a function without `exec` or
-  `compile`, so this route is open to any user code, for the modules already loaded. Importing a module is not calling
-  it: the sensitive functions they hold stay behind `python-api`, and files and sockets behind their own guards.
-  `tests/integration_tests/test_framework_imports.py` fails if this list grows.
-- **The local transport is not an OS boundary.** A co-resident process that
-  learns the daemon's local port and token may reach it. The token and random
-  port raise the cost; they do not protect against an attacker who can read
-  them.
+Detailed evidence and attack paths are in the [Python-layer assessment](audit-python-security.md), the [`eval-*` assessment](audit-eval-security.md), and the [native and OS-boundary assessment](audit-native-guard-study.md).
 
-## Return-value deserialization
+## OS-provider limitations
 
-The trusted parent must deserialize values returned by the sandbox child. The
-default `remote-result-mode=data-only` accepts values only: primitive values,
-built-in containers, paths, dates and time zones, decimals, fractions, UUIDs
-and IP addresses, from a closed list. It
-rejects applications that return custom objects. `remote-result-mode=objects`
-rebuilds them behind a guard that filters known dangerous pickle gadgets, but it
-is a fail-open denylist and does not prove that every gadget is blocked. See the [transport guard assessment](transport-unpickle-guard.md)
-for the result and exception channel behavior.
+- **QEMU `expose-ro` is writable by native guest code — reproduced.** In a QEMU guest with `py-sandbox=false`, a native write through an `expose-ro` 9p share changed a host sentinel. The QEMU mount construction does not carry the rule's write bit into a read-only export option, and the guest mount has no `ro` option. Do not rely on QEMU `expose-ro` for host-file integrity until this is fixed and retested end to end. This result is specific to the current QEMU provider path.
+- **Landlock has no implicit network deny — reproduced on ABI 8.** A native loopback connection succeeded when no socket rules were configured. TCP bind/connect filtering requires explicit socket rules and a kernel with Landlock ABI 4 or later. Without that support, do not claim Landlock network confinement.
+- **Landlock allowed opening `/dev/full` for writing — reproduced, impact limited.** The probe only opened the node; it did not write, and the environment lacked `/dev/kvm`, `/dev/dri`, and `/dev/fuse`. This does not establish access to those devices or a privilege escalation. Device nodes present on a deployment and their DAC permissions affect the impact.
+- **Mount errors can be non-fatal — QEMU code-established; unshare reproduced for a setup failure.** QEMU's generated guest script tolerates 9p and ignore-overlay mount failures and continues. In the tested unshare failure path, setup also continued after reporting a mount error. Startup success by itself is not evidence that every requested mount policy took effect.
+- **Landlock cannot enforce `ignore=` rules — code-established.** Its allow-rule model does not hide an otherwise reachable path. The provider warns about ignored paths; when Python guards are disabled, an `ignore=` rule is not an OS-level denial.
 
-The exception channel is wider than the result channel. When sandboxed code raises, the parent rebuilds the
-exception: its class must already be loaded in the parent and derive from `Exception`, but no denylist applies,
-and its arguments and attributes are chosen by the sandboxed code. An exception class whose constructor or
-`__setstate__` has a side effect (writes a file, starts something) would run that effect in the trusted parent with
-values the sandbox picked. No such class was found in the current dependency tree; this is a residual risk that
-grows with the classes an application loads.
+See [native and OS-boundary assessment](audit-native-guard-study.md) and [Landlock limits](landlock.md#limits) for details and provider-specific qualifications.
 
-Under `landlock`, the host's named Unix sockets remain reachable from native code: the kernel filters file
-access, not `connect()` on a socket. The session D-Bus bus, which can start commands through `systemd --user`,
-is among them, so `landlock` is no boundary against native code that wants to leave. See
-[landlock](landlock.md#limits).
+## Python API guards
 
-## Additional measured findings
+Python API patching is useful for policy checks and reporting, but code in the same interpreter can reach Python objects that implement or configure those checks. The refreshed [Python-layer assessment](audit-python-security.md) separates demonstrated bypasses from source-based or conditional findings. Among the directly demonstrated cases are mutable file-guard rules and access to already-loaded modules through `sys.modules`; neither result by itself proves a kernel boundary is bypassed.
 
-The development assessment also records narrower cases: `ctypes.pythonapi` is
-created before the constructor patch can intercept it; a private event-loop
-`KeyboardInterrupt` path can call `_thread.interrupt_main`; and enforcement can
-be disarmed through the same introspection weakness. These are detailed in the
-[Python-layer assessment](audit-python-security.md) and are not claims that an
-OS provider is bypassed.
+Known CPython limitations include immutable `object.__subclasses__`, an already-loaded pickle implementation, frame/global introspection, and the immutable C implementation of `pickle.Unpickler.load`. Their exact consequences depend on the guard configuration and execution path. They are documented as limitations of Python-level mediation, not as unexpected failures of the pytest suite: tests marked `xfail` are expected-failure records.
 
-## Recommendations
+Native extensions, `ctypes`, and direct system calls are outside Python wrapper mediation. If such code is within the threat model, use an OS boundary appropriate to the deployment and account for its provider-specific residuals above.
 
-- Keep the Python layer enabled for policy feedback and supported-API checks.
-- Add an OS provider appropriate to the deployment when native or compiled code
-  is within the threat model. Review its host, kernel, network, and container
-  prerequisites before relying on it.
-- Treat learned rules as a starting policy. Exercise representative paths and
-  review the result before enforcing it.
-- Keep the default `remote-result-mode=data-only` when the application can
-  return values; set `remote-result-mode=objects` only for the objects it must
-  return, and keep `remote-result-guard` on.
+## `eval-*` source execution
 
-## Annex: modules the daemon loads for itself
+The `eval-*` feature parses and checks source strings, rewrites operations, and applies runtime restrictions. Its guarantees and remaining cases are independent of the ordinary Python import/API guards. Consult the current [`eval-*` assessment](audit-eval-security.md) for the parser and runtime boundary, including the scope and prerequisites of any demonstrated issue. Do not infer that an expression is safe solely because `__builtins__` is empty.
 
-In partial mode, code that runs outside a call of the user's code (a thread it starts, a finalizer, an `atexit`
-function, the `__reduce__` of a returned object) can import these modules without a `python-import=` rule, because
-the daemon loaded them for itself. See [Python-layer limits](#python-layer-limits). The list is checked by
-`tests/integration_tests/test_framework_imports.py`, which fails if it grows.
+## Remote result and exception handling
 
-`__future__`, `_hashlib`, `_hmac`, `_multiprocessing`, `_queue`, `_socket`, `_thread`, `abc`, `annotated_doc`,
-`annotated_types`, `annotationlib`, `anyio`, `array`, `ast`, `asyncio`, `base64`, `binascii`, `click`, `codecs`,
-`collections`, `colorsys`, `concurrent`, `configparser`, `contextlib`, `contextvars`, `copy`, `copyreg`,
-`dataclasses`, `datetime`, `decimal`, `email`, `enum`, `errno`, `fastapi`, `fractions`, `functools`, `gettext`,
-`h11`, `hashlib`, `heapq`, `hmac`, `html`, `http`, `importlib`, `inspect`, `io`, `ipaddress`, `itertools`, `json`,
-`keyword`, `locale`, `logging`, `math`, `mimetypes`, `multiprocessing`, `operator`, `os`, `pathlib`, `pickle`,
-`platform`, `pydantic`, `pydantic_core`, `queue`, `random`, `re`, `reprlib`, `secrets`, `selectors`, `shlex`,
-`signal`, `socket`, `socketserver`, `ssl`, `starlette`, `stat`, `struct`, `tempfile`, `textwrap`, `threading`,
-`time`, `traceback`, `types`, `typing`, `typing_extensions`, `typing_inspection`, `urllib`, `uuid`, `uvicorn`,
-`weakref`, `zoneinfo`.
+Remote execution returns serialized results to the trusted parent. Keep `remote-result-mode=data-only` when the application can use the closed supported value set. The optional objects mode uses a restricted reconstruction path, but custom-object support expands the parent-side deserialization surface; see the current transport findings in the [Python-layer assessment](audit-python-security.md) and [`eval-*` assessment](audit-eval-security.md) where relevant.
+
+The exception channel also deserves a separate trust decision: the parent reconstructs exception types that are available in the parent process. The audit documents the conditional side-effect risk for a matching preloaded exception class. This is not evidence that an arbitrary child can import an arbitrary class into the parent.
+
+## Operational guidance
+
+- Use `none` or `subprocess` only when the absence of a kernel boundary is acceptable.
+- For native-code threats, select and test a kernel-backed provider on the target host. Confirm effective mounts, network policy, and device exposure rather than relying only on successful startup.
+- Keep Python API guards enabled for policy enforcement and useful denials, while treating them as one layer of defense.
+- Prefer `remote-result-mode=data-only`; enable object reconstruction only when required by the application.
+- Treat any claim as configuration-specific. Re-run probes when changing providers, kernel, guest image, or exposed paths.
