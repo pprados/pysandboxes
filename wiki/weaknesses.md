@@ -32,16 +32,8 @@ what each OS mechanism can enforce and its prerequisites.
   `importlib.import_module` and `importlib.__import__` are wrapped for that. Code that runs outside such a call is
   not judged that way: a thread the user's code starts (it does not inherit the call's context), a finalizer, an
   `atexit` function, or the `__reduce__` of a returned object, run while the daemon serializes the result. There,
-  the modules the daemon loaded for itself are importable without a rule: `__future__`, `_hashlib`, `_hmac`,
-  `_multiprocessing`, `_queue`, `_socket`, `_thread`, `abc`, `annotated_doc`, `annotated_types`, `annotationlib`, `anyio`, `array`,
-  `ast`, `asyncio`, `base64`, `binascii`, `click`, `codecs`, `collections`, `colorsys`, `concurrent`,
-  `configparser`, `contextlib`, `contextvars`, `copy`, `copyreg`, `dataclasses`, `datetime`, `decimal`, `email`,
-  `enum`, `errno`, `fastapi`, `fractions`, `functools`, `gettext`, `h11`, `hashlib`, `heapq`, `hmac`, `html`,
-  `http`, `importlib`, `inspect`, `io`, `ipaddress`, `itertools`, `json`, `keyword`, `locale`, `logging`, `math`,
-  `mimetypes`, `multiprocessing`, `operator`, `os`, `pathlib`, `pickle`, `platform`, `pydantic`, `pydantic_core`,
-  `queue`, `random`, `re`, `reprlib`, `secrets`, `selectors`, `shlex`, `signal`, `socket`, `socketserver`, `ssl`,
-  `starlette`, `stat`, `struct`, `tempfile`, `textwrap`, `threading`, `time`, `traceback`, `types`, `typing`,
-  `typing_extensions`, `typing_inspection`, `urllib`, `uuid`, `uvicorn`, `weakref`, `zoneinfo`. The imports that
+  the modules the daemon loaded for itself are importable without a rule (the
+  [list is in the annex](#annex-modules-the-daemon-loads-for-itself)). The imports that
   importlib's bootstrap makes for itself are not judged either, nor the relative imports a kept package such as
   `asyncio` makes of its own submodules. Code that runs with the globals of one of those modules passes for it, and
   that takes no grant: `type(lambda: 0)(code, module.__dict__)()` builds such a function without `exec` or
@@ -96,3 +88,21 @@ OS provider is bypassed.
 - Keep the default `remote-result-mode=data-only` when the application can
   return values; set `remote-result-mode=objects` only for the objects it must
   return, and keep `remote-result-guard` on.
+
+## Annex: modules the daemon loads for itself
+
+In partial mode, code that runs outside a call of the user's code (a thread it starts, a finalizer, an `atexit`
+function, the `__reduce__` of a returned object) can import these modules without a `python-import=` rule, because
+the daemon loaded them for itself. See [Python-layer limits](#python-layer-limits). The list is checked by
+`tests/integration_tests/test_framework_imports.py`, which fails if it grows.
+
+`__future__`, `_hashlib`, `_hmac`, `_multiprocessing`, `_queue`, `_socket`, `_thread`, `abc`, `annotated_doc`,
+`annotated_types`, `annotationlib`, `anyio`, `array`, `ast`, `asyncio`, `base64`, `binascii`, `click`, `codecs`,
+`collections`, `colorsys`, `concurrent`, `configparser`, `contextlib`, `contextvars`, `copy`, `copyreg`,
+`dataclasses`, `datetime`, `decimal`, `email`, `enum`, `errno`, `fastapi`, `fractions`, `functools`, `gettext`,
+`h11`, `hashlib`, `heapq`, `hmac`, `html`, `http`, `importlib`, `inspect`, `io`, `ipaddress`, `itertools`, `json`,
+`keyword`, `locale`, `logging`, `math`, `mimetypes`, `multiprocessing`, `operator`, `os`, `pathlib`, `pickle`,
+`platform`, `pydantic`, `pydantic_core`, `queue`, `random`, `re`, `reprlib`, `secrets`, `selectors`, `shlex`,
+`signal`, `socket`, `socketserver`, `ssl`, `starlette`, `stat`, `struct`, `tempfile`, `textwrap`, `threading`,
+`time`, `traceback`, `types`, `typing`, `typing_extensions`, `typing_inspection`, `urllib`, `uuid`, `uvicorn`,
+`weakref`, `zoneinfo`.

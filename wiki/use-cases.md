@@ -74,7 +74,7 @@ from tabulate import tabulate
   before running it, rather than meeting a `ModuleNotFoundError` in the sandbox.
 - `env -S` splits the line into arguments. The script needs its execute bit, and the whole first line must fit in
   the 255 bytes Linux reads.
-- Until the final release reaches PyPI, put the TestPyPI options of the README's Quick start
+- Until the final release reaches PyPI, put the TestPyPI options of the alias in [Releasing](release.md#publishing-a-pre-release)
   (`--prerelease allow --find-links ...`) in the shebang, before `python-sb`: 175 bytes for this example.
 
 Launched through this shebang from another directory, with `os-sandbox=bwrap`, the script prints its report; a
