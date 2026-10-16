@@ -67,6 +67,11 @@ anything. Once a rule file is reviewed, write in it, or in a file it includes:
 ```ini
 learn=false
 ```
+or in command line:
+```bash
+python-sb --learn=false ...
+```
+
 
 From then on, the configuration is refused at startup when:
 
