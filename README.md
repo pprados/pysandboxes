@@ -76,7 +76,7 @@ This is *complete mode*: the whole application runs under the sandbox. To isolat
 |---|---|---|
 | **Python layer** (`py-sandbox`) | Intercepts file, network, environment, import and sensitive-call APIs and applies the policy. Gives visible, explicit refusals. | Is not a boundary against hostile code: `ctypes`, native extensions and direct system calls bypass it. |
 | **Dynamic-code layer** (`eval-*`) | Parses, checks, rewrites and runs strings given to `eval()`, `exec()` and `compile()` under a budget and a timeout. | Applies only to those three entry points, and is not a process boundary. |
-| **OS layer** (a *provider*: `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) | Applies OS-level restrictions that can constrain compiled code, subject to the selected provider and profile. | Cannot express Python notions (import whitelist, `eval-*`), and each provider has its own limits. For example, Landlock leaves networking unrestricted unless `net=` rules are configured and supported by the kernel's Landlock ABI; QEMU's current 9p path does not enforce `expose-ro` against native guest writes. |
+| **OS layer** (a *provider*: `landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) | Applies OS-level restrictions that can constrain compiled code, subject to the selected provider and profile. | Cannot express Python notions (import whitelist, `eval-*`), and each provider has its own limits. Landlock denies native TCP bind/connect by default and requires ABI v4 (Linux 6.7+); it cannot filter UDP. QEMU enforces `expose-ro` with a read-only 9p export. |
 
 Defense in depth: use the Python layer to *see and refuse* misuse of legitimate code, add an OS provider when the code itself may be hostile. [Details of the model](https://github.com/pprados/pysandboxes/wiki/security-model).
 
@@ -150,7 +150,7 @@ The OS layer is selected with `os-sandbox=<provider>` in `.py-sandboxes`, or for
 | Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare` or `bwrap` with `--privileged` |
 | Only process separation, no OS boundary (also macOS, Windows) | `subprocess` |
 
-`landlock` denies a path but cannot hide it, does not protect the host's named Unix sockets, and applies no network restriction unless `net=` rules are configured and supported by the kernel's Landlock ABI. Against untrusted native code, write `os-sandbox=bwrap` or `unshare`. QEMU's current 9p path also does not enforce `expose-ro` against native guest writes. A named provider is never silently downgraded: if it is unavailable, the sandboxed process fails closed. The [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers) gives the full matrix and limits.
+`landlock` denies TCP bind/connect by default when Landlock ABI v4 is available (Linux 6.7+); it cannot filter UDP, hide denied paths, or protect the host's named Unix sockets. Below ABI v4, Landlock is unavailable rather than silently running without its default TCP boundary. Against native code that needs UDP or Unix-socket isolation, use `os-sandbox=bwrap` or `unshare`. QEMU applies `expose-ro` through a read-only 9p export. A named provider is never silently downgraded: if it is unavailable, the sandboxed process fails closed. The [provider comparison](https://github.com/pprados/pysandboxes/wiki/os-providers) gives the full matrix and limits.
 
 # Platform support
 

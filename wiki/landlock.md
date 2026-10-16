@@ -25,16 +25,16 @@ There is no useful **write-only** mode. In effect, a directory needs `READ_DIR` 
 
 ## Kernel ABI and degraded modes
 
-The provider reads the kernel ABI at startup and masks the rights the running kernel does not know. An older kernel therefore still works, with reduced semantics, rather than failing.
+The provider reads the kernel ABI at startup and masks filesystem rights the running kernel does not know. It requires ABI v4 for its default TCP deny policy; on older kernels, it reports unavailable and does not start.
 
 | Feature | Required ABI | Kernel | Behaviour below that version |
 | ------- | ------------ | ------ | ---------------------------- |
 | Filesystem rules | v1 | 5.13+ | Landlock unavailable, see below. |
 | `REFER` (rename/link across directories) | v2 | — | Right is masked: rename and link only within the same directory. |
 | `TRUNCATE` | v3 | 6.2+ | Right is masked: `open(O_TRUNC)` or `creat` may fail on an existing file. |
-| Network rules (TCP bind/connect by port) | v4 | 6.7+ | **Socket rules are not enforced at OS level.** The py-sandbox layer still applies them. |
+| Default TCP deny and network rules (bind/connect by port) | v4 | 6.7+ | The provider is unavailable below ABI v4 so it never runs without the TCP boundary. UDP is not covered by Landlock. |
 
-When no `net=` allow rule is configured, Landlock adds no network restriction: native code can open TCP and UDP connections. With ABI v4 or later, configured `net=` rules restrict TCP bind/connect by port; they do not filter UDP, destination IPs, or hostnames. The Python guard's default-deny policy does not constrain native calls. This was confirmed on ABI 8 by a native loopback connection with no socket rules.
+With ABI v4 or later, Landlock handles TCP bind/connect even when the profile contains no socket rules; an empty allowlist denies all native TCP bind/connect operations. Configured `net=` allow rules open only listed TCP ports. Landlock cannot filter UDP, destination IPs, or hostnames. Below ABI v4, the provider reports unavailable and refuses to run.
 
 If the ruleset cannot be applied at all (for example `ENOSYS` on a kernel without Landlock), the sandbox process **logs the error and exits**. It never runs unprotected in silence.
 
@@ -91,8 +91,8 @@ This tells you whether the LSM is active, not which ABI it exposes. The provider
 ## Recommendations
 
 - Choose LandLock when no privilege can be granted, on the host or in a container: it needs neither a package nor a privilege, only a recent kernel.
-- Make sure the host kernel is **6.7+** before relying on the `net=` rules at OS level. Below that version, only the py-sandbox layer enforces them.
-- Configure at least one `net=` allow rule when native code must not have unrestricted network access. With no rules, Landlock itself leaves networking open.
+- Make sure the host kernel is **6.7+** to use Landlock; the provider requires ABI v4 for its default TCP deny and configured `net=` rules.
+- Landlock does not filter UDP. Use `bwrap`, `unshare`, or `firejail` when native UDP traffic must also be blocked.
 - Do not count on LandLock to filter by host, by IP address, or over UDP. When you need IP-level filtering at OS level, use [unshare](unshare.md), [bwrap](bwrap.md) or [firejail](firejail.md).
 - Keep the `DENY` exceptions to a minimum: LandLock does not see them.
 - For code that may run native code you do not trust, prefer [bwrap](bwrap.md) or [unshare](unshare.md): their

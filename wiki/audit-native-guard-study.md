@@ -17,21 +17,21 @@ The Python patching and `eval-*` layers have separate assessments: [Python layer
 
 ## Findings
 
-### QEMU `expose-ro` shares are writable by guest code
+### QEMU `expose-ro` is enforced by a read-only 9p export
 
-**Severity: high when the profile relies on `expose-ro` to protect host files. Evidence: reproduced.**
+**Previous behavior: host-file write reproduced. Current status: fixed and verified in this worktree.**
 
-With `py-sandbox=false`, `os-sandbox=qemu`, and a host directory exposed using `expose-ro`, native guest code opened a host sentinel through the 9p share with `libc.open(..., O_WRONLY | O_TRUNC)`, wrote new contents, and exited successfully. The host file changed. The probe ran against the local Ubuntu cloud image under QEMU TCG; it did not depend on KVM.
+The audit first reproduced a native guest write to a host sentinel through an `expose-ro` share with `py-sandbox=false`. The QEMU command omitted the export's `readonly=on` option, and the guest mount had no `ro` option. This is fixed by passing `readonly=on` to each 9p export created for an `FSExposeRule(write=False)`. The regression test boots a local Ubuntu cloud image under QEMU TCG and confirms native `libc.open(..., O_WRONLY | O_TRUNC)` is refused and the host sentinel is unchanged: [`test_qemu_readonly_share.py`](../tests/integration_tests/test_qemu_readonly_share.py).
 
-The code path explains the result: [`_file_rules_mounts`](../pysandboxes/remote/qemu_sse_daemon.py) keeps the host path and mount tag but does not carry `FSExposeRule.write` into the QEMU share options. The guest bootstrap mounts each 9p tag without a read-only option ([`qemu_setup.py`](../pysandboxes/remote/qemu_setup.py)). QEMU documents that a 9p export is read-write by default unless `readonly=on` is set ([QEMU manual](https://www.qemu.org/docs/master/system/qemu-manpage.html)). Therefore the Python file guard cannot make this share read-only when it is disabled or bypassed by native guest code.
+The enforcing control is QEMU's host-side export option, so a guest cannot restore write access by remounting its view. QEMU documents 9p exports as read-write by default unless `readonly=on` is set ([QEMU manual](https://www.qemu.org/docs/master/system/qemu-manpage.html)). The integration test is the current evidence for this exact filesystem-share behavior; it does not establish protection against a QEMU hypervisor escape.
 
-Treat QEMU `expose-ro` as writable until the provider passes an end-to-end regression probe that writes through a guest native syscall and confirms the host file remains unchanged. This finding concerns that QEMU mount mode; it is not evidence that every provider's read-only rules fail.
+This result is specific to QEMU 9p shares. It does not establish that every provider's read-only rules behave identically.
 
-### Landlock does not restrict networking without socket rules
+### Landlock denies native TCP by default; UDP remains outside its controls
 
-**Evidence: reproduced; conditional on omitting `net=` rules or lacking Landlock network ABI support.**
+**Previous behavior: native TCP connection reproduced. Current status: default TCP denial fixed for ABI v4 and later.**
 
-On the tested Linux kernel (Landlock ABI 8), a native loopback `connect()` succeeded under Landlock when no socket rules were configured. The current activation code passes `net_ports=None` when `all_rules.socket_rules` is empty. Network restriction is therefore not implicit merely because filesystem Landlock is active. On kernels below ABI 4, Landlock cannot apply its TCP bind/connect restrictions at all; check provider availability and kernel support before relying on `net=` enforcement. See [`landlock_daemon.py`](../pysandboxes/remote/landlock_daemon.py) and [Landlock limits](landlock.md#limits).
+The audit reproduced a native loopback TCP `connect()` on ABI 8 when no socket rules were configured. The provider now always marks Landlock TCP bind/connect rights as handled and passes an empty allowlist when no `net=` rules exist. A focused integration test confirms a native connection to a reachable host listener is refused in both `python-sb` and daemon modes. On kernels below ABI 4, the provider reports unavailable and refuses to start rather than running without this boundary. Landlock cannot filter UDP at any supported ABI. See [`landlock_daemon.py`](../pysandboxes/remote/landlock_daemon.py) and [Landlock limits](landlock.md#limits).
 
 ### Landlock's `/dev` access is broader than regular-file rules
 
@@ -55,7 +55,7 @@ Those are limitations of same-process Python mediation. They are not evidence th
 
 ## Decision
 
-Do not treat a native wrapper around selected Python callables as the security boundary. Keep Python guards as policy enforcement for supported APIs, and select an OS provider according to the attacker capabilities and resources in scope. Current QEMU read-only shares need correction and end-to-end coverage before they can be relied upon. Landlock requires explicit, supported network rules for TCP filtering, and device-node exposure should be considered in the deployment threat model.
+Do not treat a native wrapper around selected Python callables as the security boundary. Keep Python guards as policy enforcement for supported APIs, and select an OS provider according to the attacker capabilities and resources in scope. QEMU `expose-ro` and Landlock's default TCP denial now have regression coverage; Landlock UDP and device-node exposure remain outside its network/filesystem allowlist controls.
 
 `none` and `subprocess` do not supply a kernel-enforced OS boundary. For the limitations of same-process guards and remote result handling, see [Weaknesses](weaknesses.md), [Python layer](audit-python-security.md), and [`eval-*`](audit-eval-security.md).
 

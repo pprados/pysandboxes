@@ -30,9 +30,9 @@ The host starts a QEMU virtual machine with a cloud image (Debian/Ubuntu) and a 
 
 ## Security limitations
 
-The current virtio-9p mount path does not enforce `expose-ro` as read-only against native guest code. A native guest write to a host directory configured with `expose-ro` changed a host file in an isolated probe. Do not rely on QEMU `expose-ro` to prevent native guest writes until the mount is made read-only and verified. This finding concerns filesystem shares; it does not establish a guest escape. See [the native provider audit](audit-native-guard-study.md#qemu-expose-ro-shares-are-writable-by-guest-code).
+The provider now passes QEMU's `readonly=on` option for every host share corresponding to an `expose-ro` rule. A regression test boots the guest and verifies native `libc.open(O_WRONLY | O_TRUNC)` is refused and the host sentinel remains unchanged: [QEMU read-only share test](../tests/integration_tests/test_qemu_readonly_share.py). This fixes the previously reproduced host-file write through an `expose-ro` share; it does not establish protection against a QEMU hypervisor escape.
 
-QEMU mount setup also contains paths that ignore mount-command failures. Those paths were confirmed in source but have not been reproduced with guest fault injection; do not assume a failed optional mount always stops the guest.
+QEMU mount setup still contains paths that ignore mount-command failures. Those paths were confirmed in source but have not been reproduced with guest fault injection; a failed optional mount may leave the requested path unmounted while startup continues.
 
 
 ## How it works

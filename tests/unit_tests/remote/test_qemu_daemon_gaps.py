@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pysandboxes.all_rules import EmptyRules
+from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.guard_socket import parse_rules
 from pysandboxes.remote import qemu_sse_daemon as q
 from pysandboxes.remote.qemu_sse_daemon import QemuSSEDaemon
@@ -310,7 +311,7 @@ class TestStaging:
 
 class TestQemuCommand:
     def _cmd(
-        self, tmp_path: Path, image: Path, *, mounts: Any = (), config_dir: Path | None = None
+        self, tmp_path: Path, image: Path, *, mounts: Any = (), config_dir: Path | None = None, rules: Any = EmptyRules
     ) -> tuple[list[str], Any]:
         prepared = MagicMock(return_value=tmp_path / "nocloud.iso")
         with (
@@ -322,7 +323,7 @@ class TestQemuCommand:
             patch.object(q, "_qemu_binary", return_value="qemu-system-x86_64"),
         ):
             cmd, _ = QemuSSEDaemon("token")._build_qemu_cmd(
-                EmptyRules, tmp_path, MagicMock(), 4242, tmp_path / "pipe", config_dir=config_dir
+                rules, tmp_path, MagicMock(), 4242, tmp_path / "pipe", config_dir=config_dir
             )
         return list(cmd), prepared
 
@@ -351,6 +352,30 @@ class TestQemuCommand:
 
         shares = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-virtfs"]
         assert shares == [f"local,path={host},id=pysb_0,security_model=mapped-xattr,mount_tag=pysb_0"]
+
+    def test_read_only_file_rules_make_the_qemu_export_read_only(self, tmp_path: Path) -> None:
+        read_only = tmp_path / "read-only"
+        writable = tmp_path / "writable"
+        read_only.mkdir()
+        writable.mkdir()
+        config = ConfigLine("expose", Path("profile"), 1)
+        rules = EmptyRules._replace(
+            file_rules=(
+                FSExposeRule(str(read_only), False, config),
+                FSExposeRule(str(writable), True, config),
+            )
+        )
+
+        cmd, _ = self._cmd(
+            tmp_path,
+            tmp_path / "i.qcow2",
+            mounts=[("pysb_0", read_only, "/read-only"), ("pysb_1", writable, "/writable")],
+            rules=rules,
+        )
+
+        shares = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-virtfs"]
+        assert "readonly=on" in shares[0]
+        assert "readonly=on" not in shares[1]
 
     @pytest.mark.parametrize("with_dir", [True, False])
     def test_the_config_is_read_from_the_shared_directory_only_when_there_is_one(

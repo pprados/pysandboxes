@@ -1119,12 +1119,18 @@ class QemuSSEDaemon(VMSSEDaemon):
 
         virtfs_args: Args = []
         configured = str(all_rules.os_sandbox_params.get("virtfs_security_model", "mapped-xattr"))
+        readonly_tags = {
+            f"pysb_{i}"
+            for i, rule in enumerate(all_rules.file_rules)
+            if isinstance(rule, FSExposeRule) and not rule.write
+        }
         for tag, host_path, guest_path in mount_specs:
             security = _virtfs_security_model(host_path, configured)
+            readonly = ",readonly=on" if tag in readonly_tags else ""
             virtfs_args.extend(
                 [
                     "-virtfs",
-                    f"local,path={host_path!s},id={tag},security_model={security},mount_tag={tag}",
+                    f"local,path={host_path!s},id={tag},security_model={security},mount_tag={tag}{readonly}",
                 ]
             )
             logger.debug("qemu 9p: %s -> %s", tag, guest_path)

@@ -30,6 +30,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 _GATEWAY = "10.0.2.2"
 _PROVIDERS = ("bwrap", "unshare", "qemu", "landlock")
 _FIREJAIL_BRIDGE = os.environ.get("PYSANDBOXES_FIREJAIL_TEST_BRIDGE", "docker0")
+_LANDLOCK_DEFAULT_DENY_REASON = provider_skip_reason("landlock") or (
+    "Landlock default TCP deny requires ABI v4 (Linux 6.7+)" if _get_landlock_abi_version() < 4 else None
+)
 _PAYLOAD = """
 import socket
 try:
@@ -47,7 +50,7 @@ def _params() -> list:
         for reason in (
             provider_skip_reason(provider)
             or (
-                "Landlock network rules require ABI v4 (Linux 6.7+)"
+                "Landlock default TCP deny and network rules require ABI v4 (Linux 6.7+)"
                 if provider == "landlock" and _get_landlock_abi_version() < 4
                 else None
             ),
@@ -148,7 +151,7 @@ def _run(
     provider: str,
     mode: str,
     port: int,
-    allow: str,
+    allow: str | None,
     *,
     target_host: str | None = None,
     firejail_bridge: str | None = None,
@@ -166,7 +169,7 @@ def _run(
                 "expose-ro=.\n",
                 "expose-ro=/etc\n",
                 f"expose-ro={sys.base_prefix}/lib\n",
-                f"net=ALLOW|TCP|{allow}|OUT\n",
+                f"net=ALLOW|TCP|{allow}|OUT\n" if allow is not None else "",
             ]
         )
     )
@@ -208,6 +211,18 @@ def test_the_same_destination_allowed_by_a_rule_connects(
     """Negative control: the refusal above comes from the filter, not from an unreachable listener."""
     allow_host = "*" if provider == "landlock" else _GATEWAY
     assert "CONNECTED" in _run(tmp_path, provider, mode, host_listener, f"{allow_host}|{host_listener}")
+
+
+@pytest.mark.parametrize("mode", ("python-sb", "daemon"))
+@pytest.mark.skipif(bool(_LANDLOCK_DEFAULT_DENY_REASON), reason=_LANDLOCK_DEFAULT_DENY_REASON or "")
+def test_landlock_denies_native_tcp_connections_by_default(
+    tmp_path: Path, host_listener: int, mode: str
+) -> None:
+    # Prove the listener is reachable outside the sandbox before checking the OS restriction.
+    with socket.create_connection(("127.0.0.1", host_listener), timeout=5):
+        pass
+
+    assert "REFUSED" in _run(tmp_path, "landlock", mode, host_listener, allow=None)
 
 
 @pytest.mark.parametrize("mode", ("python-sb", "daemon"))

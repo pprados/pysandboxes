@@ -16,7 +16,7 @@ from pysandboxes.all_rules import EmptyRules
 from pysandboxes.guard_files import FSExposeRule
 from pysandboxes.guard_socket import Action, Direction, Kind, SocketMask, SocketRule
 from pysandboxes.remote import landlock_daemon as ll
-from pysandboxes.sb_types import ConfigLine
+from pysandboxes.sb_types import ConfigLine, Envs
 
 _CONFIG = ConfigLine("x", Path(), 1)
 
@@ -45,16 +45,28 @@ class TestAvailability:
 
         assert ll._landlock_available() is False
 
-    @pytest.mark.parametrize(("abi", "available"), [(4, True), (1, True), (0, False)])
+    @pytest.mark.parametrize(("abi", "available"), [(4, True), (1, False), (0, False)])
     def test_the_abi_version_decides_on_linux(self, monkeypatch: pytest.MonkeyPatch, abi: int, available: bool) -> None:
         monkeypatch.setattr(ll, "_LANDLOCK_RESTRICT_SELF", 446)
         monkeypatch.setattr(ll, "_get_landlock_abi_version", lambda: abi)
         monkeypatch.setattr(sys, "platform", "linux")
 
-        assert ll._landlock_available() is available
+        assert ll._landlock_available() is (abi > 0)
         assert ll.landlock_user_available() is available
 
-    @pytest.mark.parametrize(("available", "reason"), [(True, None), (False, "Landlock not available")])
+    @pytest.mark.parametrize(("abi", "available"), [(4, True), (3, False), (0, False)])
+    def test_network_confinement_requires_landlock_abi_four(
+        self, monkeypatch: pytest.MonkeyPatch, abi: int, available: bool
+    ) -> None:
+        monkeypatch.setattr(ll, "_LANDLOCK_RESTRICT_SELF", 446)
+        monkeypatch.setattr(ll, "_get_landlock_abi_version", lambda: abi)
+        monkeypatch.setattr(sys, "platform", "linux")
+
+        assert ll.landlock_user_available() is available
+
+    @pytest.mark.parametrize(
+        ("available", "reason"), [(True, None), (False, "Landlock requires Linux with filesystem support")]
+    )
     def test_the_provider_reports_why_it_is_unavailable(
         self, monkeypatch: pytest.MonkeyPatch, available: bool, reason: str | None
     ) -> None:
@@ -188,7 +200,6 @@ class TestApplyLandlock:
             (5, [(80, False, True)], ll.HANDLED_ACCESS_NET),
             (6, [(80, False, True)], ll.HANDLED_ACCESS_NET),
             (4, None, 0),
-            (3, [(80, False, True)], 0),
         ],
     )
     def test_the_network_is_handled_from_abi_4_when_ports_are_given(
@@ -199,6 +210,24 @@ class TestApplyLandlock:
         ll._apply_landlock([], ports)
 
         assert recorder.attr("create").handled_access_net == handled_net
+
+    def test_an_empty_port_list_handles_network_access_but_adds_no_allow_rules(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        recorder = _Recorder(monkeypatch, abi=4)
+
+        ll._apply_landlock([], [])
+
+        assert recorder.attr("create").handled_access_net == ll.HANDLED_ACCESS_NET
+        assert not [c for c in recorder.adds() if c[2]._obj.__class__.__name__.endswith("PortAttr")]
+
+    def test_network_restriction_fails_closed_when_abi_four_is_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _Recorder(monkeypatch, abi=3)
+
+        with pytest.raises(OSError, match="network restriction requires Landlock ABI v4"):
+            ll._apply_landlock([], [])
 
     @pytest.mark.parametrize(("abi", "scoped"), [(5, 0), (6, ll.LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET)])
     def test_abstract_unix_sockets_are_scoped_from_abi_6(
@@ -268,14 +297,32 @@ class TestApplyLandlock:
         ports = [c[2]._obj.port for c in recorder.adds() if c[2]._obj.__class__.__name__.endswith("PortAttr")]
         assert ports == [84]
 
-    def test_no_port_rule_is_added_when_the_kernel_does_not_handle_the_network(
+    def test_network_rules_fail_closed_when_the_kernel_does_not_handle_them(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        recorder = _Recorder(monkeypatch, abi=3)
+        _Recorder(monkeypatch, abi=3)
 
-        ll._apply_landlock([], [(80, True, True)])
+        with pytest.raises(OSError, match="network restriction requires Landlock ABI v4"):
+            ll._apply_landlock([], [(80, True, True)])
 
-        assert not [c for c in recorder.adds() if c[2]._obj.__class__.__name__.endswith("PortAttr")]
+
+class TestProviderActivation:
+    def test_no_socket_rules_still_activate_an_empty_default_deny_network_policy(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        captured: dict[str, Any] = {}
+        monkeypatch.setattr(ll, "_landlock_available", lambda: True)
+        monkeypatch.setattr(ll, "_set_no_new_privs", lambda: None)
+        monkeypatch.setattr(ll, "_collect_landlock_paths", lambda *args: [])
+
+        def apply(paths: list[tuple[str, bool]], net_ports: list[tuple[int, bool, bool]] | None = None) -> None:
+            captured["net_ports"] = net_ports
+
+        monkeypatch.setattr(ll, "_apply_landlock", apply)
+
+        ll.LandlockSSEDaemon("token").update_rules_and_activate(envs=Envs({}), all_rules=EmptyRules, temp=tmp_path)
+
+        assert captured["net_ports"] == []
 
     def test_the_resolver_directories_are_read_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         recorder = _Recorder(monkeypatch, abi=4)

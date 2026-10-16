@@ -583,7 +583,7 @@ def test_container_runtime(runtime: str, os_sandbox: str, py_sandbox: bool, priv
         pytest.skip(f"{runtime} not available")
 
     if os_sandbox == "landlock" and not landlock_user_available():
-        pytest.skip("Landlock not available (kernel < 5.13 or not Linux)")
+        pytest.skip("Landlock requires filesystem support and network ABI v4 (Linux 6.7+) for default TCP deny")
 
     result = _run_container_runtime(runtime, os_sandbox, py_sandbox, privileged)
     assert result.returncode == 0, (

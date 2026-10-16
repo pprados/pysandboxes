@@ -43,7 +43,11 @@ def _unshare_skip_reason() -> str | None:
 
 
 def _landlock_skip_reason() -> str | None:
-    return None if landlock_user_available() else "Landlock not available (kernel < 5.13 or not Linux)"
+    return (
+        None
+        if landlock_user_available()
+        else "Landlock requires filesystem support and network ABI v4 (Linux 6.7+) for default TCP deny"
+    )
 
 
 # bwrap and firejail start through the async API, unshare and landlock through the sync one.

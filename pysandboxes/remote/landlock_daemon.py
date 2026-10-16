@@ -267,7 +267,9 @@ def _apply_landlock(
     """
     abi = _get_landlock_abi_version()
     handled_net = 0
-    if net_ports is not None and abi >= 4:
+    if net_ports is not None:
+        if abi < 4:
+            raise OSError("Landlock network restriction requires Landlock ABI v4 (Linux 6.7+)")
         handled_net = HANDLED_ACCESS_NET
 
     # Restrict handled FS rights to what the kernel ABI supports (forward compat).
@@ -371,8 +373,8 @@ def _apply_landlock(
 
 
 def landlock_user_available() -> bool:
-    """Return True if Landlock is available on this system (Linux 5.13+)."""
-    return _landlock_available()
+    """Return True if the Landlock provider can enforce its default TCP deny policy."""
+    return _landlock_available() and _get_landlock_abi_version() >= 4
 
 
 def _collect_landlock_paths(all_rules: AllRules, temp: Path, cwd: str) -> list[tuple[str, str]]:
@@ -457,7 +459,11 @@ class LandlockSSEDaemon(SubProcessDaemon):
     @classmethod
     @override
     def unavailable_reason(cls) -> str | None:
-        return None if landlock_user_available() else "Landlock not available (kernel < 5.13 or not Linux)"
+        return (
+            None
+            if landlock_user_available()
+            else "Landlock requires Linux with filesystem support and network ABI v4 (kernel 6.7+) for default TCP deny"
+        )
 
     @override
     def update_rules_and_activate(
@@ -474,9 +480,7 @@ class LandlockSSEDaemon(SubProcessDaemon):
             sys.exit(-1)
         try:
             _set_no_new_privs()
-            net_ports: list[tuple[int, bool, bool]] | None = (
-                _collect_landlock_net_ports(all_rules.socket_rules) if all_rules.socket_rules else None
-            )
+            net_ports = _collect_landlock_net_ports(all_rules.socket_rules)
             cwd = os.getcwd()
             temp_dir = Path(tempfile.gettempdir())
             path_tuples = _collect_landlock_paths(all_rules, temp_dir, cwd)
