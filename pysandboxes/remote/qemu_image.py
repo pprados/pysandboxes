@@ -229,7 +229,7 @@ def get_download_url(path: Path) -> str | None:
         return _validate_download_url(full.strip())
     base = os.environ.get(ENV_VM_IMAGE_BASE_URL)
     if base and base.strip():
-        url = f"{base.rstrip('/')}/{path.name}"
+        url = f"{base.strip().rstrip('/')}/{path.name}"
         return _validate_download_url(url)
     return get_standard_download_url()
 

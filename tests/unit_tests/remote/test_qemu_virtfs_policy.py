@@ -278,10 +278,6 @@ class TestFileRulesMounts:
         ]
         assert [t for t, _, _ in specs] == [t for t, _ in mounts]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="`tag[9:]` of 'pysb_exec_1' is '_1', never a digit: the (2, index) order of the exec dirs is dead code",
-    )
     def test_the_exec_dirs_follow_their_own_index_whatever_their_path(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

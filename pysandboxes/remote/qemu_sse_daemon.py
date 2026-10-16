@@ -941,8 +941,8 @@ def _file_rules_mounts(
             return (1, 0, 0, guest_path)
         if tag == "pysb_run":
             return (1, 1, 0, guest_path)
-        if tag.startswith("pysb_exec_") and tag[9:].isdigit():
-            return (2, 0, int(tag[9:]), guest_path)
+        if tag.startswith("pysb_exec_") and tag[len("pysb_exec_") :].isdigit():
+            return (3, 1, int(tag[len("pysb_exec_") :]), guest_path)
         return (3, 0, 0, guest_path)
 
     mount_list.sort(key=lambda m: _mount_order(m[0], m[1]))

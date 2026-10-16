@@ -91,10 +91,6 @@ class TestDownloadUrl:
 
         assert qemu_image.get_download_url(Path("/x/name.img")) == "https://base/dir/name.img"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="the base URL is tested for blankness but not stripped, unlike the full URL",
-    )
     def test_a_padded_base_url_is_stripped_like_the_full_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(qemu_image.ENV_VM_IMAGE_BASE_URL, " https://base/dir/ ")
 
