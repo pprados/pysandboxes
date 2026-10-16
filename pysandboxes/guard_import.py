@@ -382,6 +382,10 @@ def _apply_patch(module: ModuleType, name: str) -> None:
         # logger.debug("Patch %s.%s",name, patch.code_path)
 
 
+# What a loader is asked about the source of a module it did not just load.
+_SOURCE_QUERIES = frozenset({"get_code", "get_source", "get_filename", "is_package", "get_data"})
+
+
 class GuardLoader(Loader):
     """Custom loader that wraps original loader to modify modules after loading.
 
@@ -434,6 +438,17 @@ class GuardLoader(Loader):
         assert self.original_spec, f"No original spec for {self.fullname=}"
         module = self.original_loader.create_module(self.original_spec)
         return module  # Not initialized
+
+    def __getattr__(self, name: str) -> Any:
+        """Answer the questions ``runpy`` and ``pkgutil`` ask a loader, as the wrapped loader would.
+
+        ``python -m <module>`` asks the loader of a module already imported through the guard for its code. A
+        loader without ``get_code`` made ``runpy`` fail with an AttributeError. The attribute is looked up only
+        when asked, so ``hasattr`` still tells the truth about a wrapped loader that lacks it.
+        """
+        if name in _SOURCE_QUERIES:
+            return getattr(self.original_loader, name)
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
     def get_resource_reader(self, fullname: str) -> Any:
         """Delegate packaged-resource access to the original loader.

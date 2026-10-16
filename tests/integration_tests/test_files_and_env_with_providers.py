@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
-from ._env import backend_of, os_sandbox_params, row_profile_lines
+from ._env import backend_of, coverage_profile_lines, os_sandbox_params, row_profile_lines
 from .test_guards_with_providers import _INTERPRETER_PATHS, _TIMEOUT_SECONDS, ROOT_DIR, _skip_unavailable
 
 _ROWS = [row for row in os_sandbox_params() if not str(row.values[0]).startswith("qemu")]
@@ -32,7 +32,7 @@ def _run(
     exposed = "".join(f"expose-ro={path}\n" for path in (str(app), *_INTERPRETER_PATHS))
     profile.write_text(
         f"py-sandbox=true\nos-sandbox={backend_of(os_sandbox)}\n{row_profile_lines(os_sandbox)}"
-        f"python-import=*\n{exposed}{profile_lines}"
+        f"python-import=*\n{exposed}{coverage_profile_lines()}{profile_lines}"
     )
     return subprocess.run(
         [sys.executable, "-m", "pysandboxes.python_sb", f"--pysandboxes-config={profile}", str(target)],

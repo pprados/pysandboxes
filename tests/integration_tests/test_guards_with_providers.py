@@ -40,7 +40,7 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
-from ._env import backend_of, os_sandbox_params, provider_skip_reason, row_profile_lines
+from ._env import backend_of, coverage_profile_lines, os_sandbox_params, provider_skip_reason, row_profile_lines
 
 # Project root (parent of tests/), where the package and its venv live.
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -94,7 +94,7 @@ def _run(
     exposed = "".join(f"expose-ro={path}\n" for path in (str(tmp_path), *_INTERPRETER_PATHS))
     backend = backend_of(os_sandbox)
     profile.write_text(
-        f"py-sandbox=true\nos-sandbox={backend}\n{row_profile_lines(os_sandbox)}{exposed}{profile_lines}"
+        f"py-sandbox=true\nos-sandbox={backend}\n{row_profile_lines(os_sandbox)}{exposed}{coverage_profile_lines()}{profile_lines}"
     )
     return subprocess.run(
         [

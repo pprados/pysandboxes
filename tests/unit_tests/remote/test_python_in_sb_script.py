@@ -26,6 +26,14 @@ from pysandboxes.remote.python_in_sb import _python_command, _python_script
 # mean building one to have it ignored.
 _UNUSED_RULES = cast(AllRules, ())
 
+
+@pytest.fixture(autouse=True)
+def _keep_the_interpreter_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Running a program replaces ``sys.modules["__main__"]`` and ``sys.path[0]``: give the test run its own back."""
+    monkeypatch.setitem(sys.modules, "__main__", sys.modules["__main__"])
+    monkeypatch.setattr(sys, "path", list(sys.path))
+
+
 _SCRIPT = """\
 CONST = 42
 
@@ -126,3 +134,37 @@ def test_a_dash_runs_the_program_read_from_stdin(
         sys.argv = saved_argv
 
     assert "argv: ['-', 'a', 'b']" in capsys.readouterr().out
+
+
+_PROBE = """\
+import sys
+print(sys.modules["__main__"].__file__ == __file__, sys.modules["__main__"] is sys.modules[__name__])
+print(sys.path[0])
+print(__cached__, __loader__.name)
+"""
+
+
+def test_a_script_is_the_main_module_with_an_absolute_file_and_its_directory_first_in_the_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Like ``python script.py``: pickle and dataclasses find the program's classes in ``__main__``."""
+    script = tmp_path / "probe.py"
+    script.write_text(_PROBE)
+    monkeypatch.chdir(tmp_path)
+
+    assert _python_script(_UNUSED_RULES, Path("probe.py"), []) == 0
+
+    assert capsys.readouterr().out.splitlines() == [
+        "True True",
+        str(tmp_path.resolve()),
+        "None __main__",
+    ]
+
+
+def test_a_command_is_the_main_module_with_an_empty_first_path_entry(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """Like ``python -c``: ``sys.path[0]`` is ``''``, not the working directory of the framework."""
+    assert _python_command(_UNUSED_RULES, "import sys; print(repr(sys.path[0]), __name__)", ["-c"]) == 0
+
+    assert capsys.readouterr().out == "'' __main__\n"

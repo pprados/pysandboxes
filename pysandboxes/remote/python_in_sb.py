@@ -4,6 +4,7 @@ import builtins
 import code
 import contextlib
 import importlib
+import importlib.machinery
 import importlib.util
 import logging
 import os
@@ -257,7 +258,9 @@ def _python_interactive(
 
 def _python_module(all_rules: AllRules, mod_name: str) -> int:
     _before_user_code()
-    runpy.run_module(mod_name, run_name="__main__")
+    # alter_sys, as ``python -m`` does: the module runs as sys.modules["__main__"], which calendar and others
+    # rely on (their enum members are published into that module).
+    runpy.run_module(mod_name, run_name="__main__", alter_sys=True)
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)
     return 0
@@ -280,8 +283,27 @@ def _main_globals(file: str | None) -> dict:
         "__spec__": None,
     }
     if file is not None:
-        namespace["__file__"] = file
+        # CPython 3.9+: an absolute __file__, a SourceFileLoader, and a __cached__ that is None.
+        absolute = os.path.abspath(file)
+        namespace["__file__"] = absolute
+        namespace["__cached__"] = None
+        namespace["__loader__"] = importlib.machinery.SourceFileLoader("__main__", absolute)
+    else:
+        namespace["__loader__"] = importlib.machinery.BuiltinImporter
     return namespace
+
+
+def _enter_main(file: str | None, path0: str) -> dict:
+    """Make the program the real ``__main__`` module, with the ``sys.path[0]`` CPython gives it.
+
+    ``pickle``, ``dataclasses`` and ``multiprocessing`` look the classes of the program up in
+    ``sys.modules["__main__"]``: left as ``main_sandbox``, a class defined by the script could not be pickled.
+    """
+    main = ModuleType("__main__")
+    main.__dict__.update(_main_globals(file))
+    sys.modules["__main__"] = main
+    sys.path[0] = path0
+    return main.__dict__
 
 
 def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
@@ -299,18 +321,19 @@ def _python_script(all_rules: AllRules, script: Path, args: List[str]) -> int:
     sys.argv = [str(script)] + args
     # Runs the user script by design; the OS sandbox isolates it.
     # Compiled against the real path so a traceback names the user's file.
-    _RAW_EXEC(_RAW_COMPILE(script_body, str(script), "exec"), _main_globals(str(script)))
+    namespace = _enter_main(str(script), os.path.dirname(os.path.realpath(script)))
+    _RAW_EXEC(_RAW_COMPILE(script_body, namespace["__file__"], "exec"), namespace)
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)
     return 0
 
 
-def _python_command(all_rules: AllRules, script_body: str, args: List[str]) -> int:
+def _python_command(all_rules: AllRules, script_body: str, args: List[str], filename: str = "<string>") -> int:
     _before_user_code()
     sys.argv = args
     # Runs the user script by design; the OS sandbox isolates it.
     # No __file__: CPython does not set one for ``python -c`` either.
-    _RAW_EXEC(_RAW_COMPILE(script_body, "<string>", "exec"), _main_globals(None))
+    _RAW_EXEC(_RAW_COMPILE(script_body, filename, "exec"), _enter_main(None, ""))
     if sys.flags.inspect:
         return _python_interactive(all_rules=all_rules, ban=False)
     return 0
@@ -358,7 +381,20 @@ def python_in_sb(
                 if mod_name == "pytest":
                     _inject_pytest_color_yes(python_cmd)
                 spec = importlib.util.find_spec(mod_name)
-                if spec and spec.origin is not None:
+                if spec is None:
+                    print(f"{sys.executable}: No module named {mod_name}", file=sys.stderr)
+                    return 1
+                if (
+                    spec.submodule_search_locations is not None
+                    and importlib.util.find_spec(f"{mod_name}.__main__") is None
+                ):
+                    print(
+                        f"{sys.executable}: No module named {mod_name}.__main__; "
+                        f"{mod_name!r} is a package and cannot be directly executed",
+                        file=sys.stderr,
+                    )
+                    return 1
+                if spec.origin is not None:
                     sys.argv = [spec.origin] + python_cmd
                 else:
                     sys.argv = [""] + python_cmd
@@ -389,7 +425,7 @@ def python_in_sb(
                 )
         elif python_cmd[0] == "-":
             # Case: the program comes from stdin, as `python -` does
-            return _python_command(all_rules, sys.stdin.read(), python_cmd)
+            return _python_command(all_rules, sys.stdin.read(), python_cmd, "<stdin>")
         else:
             # Run a script
             return _python_script(all_rules, Path(python_cmd[0]), python_cmd[1:])

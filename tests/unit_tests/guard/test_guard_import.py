@@ -412,3 +412,38 @@ def test_a_guard_loader_never_wraps_another_guard_loader() -> None:
     loader = cast(guard_import.GuardLoader, spec.loader)
     assert loader.original_loader is real_loader
     assert loader.get_resource_reader("fake") is not None  # Delegates in one step, no RecursionError
+
+
+def test_a_guard_loader_answers_the_source_questions_of_the_loader_it_wraps(tmp_path: Path) -> None:
+    """``runpy`` asks for the code of a module already imported through the guard: ``python -m <module>``."""
+    import importlib.machinery
+
+    source = tmp_path / "wrapped.py"
+    source.write_text("VALUE = 1\n")
+    real_loader = importlib.machinery.SourceFileLoader("wrapped", str(source))
+    loader = guard_import.GuardLoader("wrapped", importlib.machinery.ModuleSpec("wrapped", real_loader))
+
+    assert loader.get_filename("wrapped") == str(source)  # type: ignore[attr-defined]
+    assert loader.get_source("wrapped") == "VALUE = 1\n"  # type: ignore[attr-defined]
+    assert loader.is_package("wrapped") is False  # type: ignore[attr-defined]
+    assert loader.get_data(str(source)) == b"VALUE = 1\n"  # type: ignore[attr-defined]
+    namespace: dict[str, Any] = {}
+    exec(loader.get_code("wrapped"), namespace)  # type: ignore[attr-defined]
+    assert namespace["VALUE"] == 1
+
+
+@pytest.mark.parametrize("original", [None, object()], ids=["no loader", "a loader without the methods"])
+def test_a_guard_loader_does_not_pretend_the_wrapped_loader_answers(original: Any) -> None:
+    import importlib.machinery
+
+    spec = importlib.machinery.ModuleSpec("wrapped", original)
+    loader = guard_import.GuardLoader("wrapped", spec)
+
+    assert not hasattr(loader, "get_code")
+
+
+def test_a_guard_loader_has_no_other_made_up_attribute() -> None:
+    loader = guard_import.GuardLoader("wrapped", None)
+
+    with pytest.raises(AttributeError, match="no_such_thing"):
+        loader.no_such_thing  # type: ignore[attr-defined]  # noqa: B018

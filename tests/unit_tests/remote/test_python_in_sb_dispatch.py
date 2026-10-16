@@ -90,7 +90,11 @@ class TestInteractive:
 
 class TestModule:
     def _spec(self, monkeypatch: pytest.MonkeyPatch, origin: Any, found: bool = True) -> None:
-        monkeypatch.setattr(importlib.util, "find_spec", lambda name: SimpleNamespace(origin=origin) if found else None)
+        monkeypatch.setattr(
+            importlib.util,
+            "find_spec",
+            lambda name: SimpleNamespace(origin=origin, submodule_search_locations=None) if found else None,
+        )
 
     def test_the_module_runs_with_its_origin_and_the_remaining_arguments_as_argv(
         self, runs: _Runs, monkeypatch: pytest.MonkeyPatch
@@ -104,12 +108,34 @@ class TestModule:
         assert args == (EmptyRules, "mod")
         assert runs.argv_seen[-1] == ["/lib/mod.py", "a", "b"]
 
-    def test_an_unknown_module_gets_an_empty_program_name(self, runs: _Runs, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_an_unknown_module_is_refused_like_python_dash_m(
+        self, runs: _Runs, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         self._spec(monkeypatch, None, found=False)
 
-        _run(runs, ["-m", "nowhere", "x"])
+        assert _run(runs, ["-m", "nowhere", "x"]) == 1
 
-        assert runs.argv_seen[-1] == ["", "x"]
+        assert f"{sys.executable}: No module named nowhere\n" == capsys.readouterr().err
+        assert [c for c in runs.calls if c[0] == "module"] == []
+
+    def test_a_package_without_main_is_refused_like_python_dash_m(
+        self, runs: _Runs, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr(
+            importlib.util,
+            "find_spec",
+            lambda name: (
+                SimpleNamespace(origin="/lib/pkg/__init__.py", submodule_search_locations=["/lib/pkg"])
+                if name == "pkg"
+                else None
+            ),
+        )
+
+        assert _run(runs, ["-m", "pkg"]) == 1
+
+        assert capsys.readouterr().err == (
+            f"{sys.executable}: No module named pkg.__main__; 'pkg' is a package and cannot be directly executed\n"
+        )
 
     def test_pytest_is_asked_for_colour(self, runs: _Runs, monkeypatch: pytest.MonkeyPatch) -> None:
         self._spec(monkeypatch, "/lib/pytest/__main__.py")
@@ -178,7 +204,7 @@ class TestCommand:
         assert _run(runs, ["-", "arg"]) == 5
 
         ((_, args, _),) = [c for c in runs.calls if c[0] == "command"]
-        assert args == (EmptyRules, "print('from stdin')", ["-", "arg"])
+        assert args == (EmptyRules, "print('from stdin')", ["-", "arg"], "<stdin>")
 
 
 class TestScript:
@@ -208,3 +234,15 @@ class TestLearningSave:
         _run(runs, ["tool.py"])
 
         assert runs.saved == 0
+
+
+def test_a_module_runs_as_the_main_module_like_python_dash_m(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``alter_sys`` makes the module ``sys.modules["__main__"]``: calendar publishes its enum members there."""
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(pis, "_before_user_code", lambda: None)
+    monkeypatch.setattr(pis.runpy, "run_module", lambda name, **kwargs: seen.update(name=name, **kwargs))
+    monkeypatch.setattr(pis.sys, "flags", SimpleNamespace(inspect=0))
+
+    assert pis._python_module(EmptyRules, "calendar") == 0
+
+    assert seen == {"name": "calendar", "run_name": "__main__", "alter_sys": True}

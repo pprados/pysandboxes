@@ -25,11 +25,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ._env import coverage_profile_lines
+
 
 def _write_profile(tmp_path: Path, *extra_lines: str) -> Path:
     profile = tmp_path / "arming.profile"
     profile.write_text(
-        "py-sandbox=true\n" "os-sandbox=subprocess\n" "python-import=*\n" + "".join(f"{line}\n" for line in extra_lines)
+        "py-sandbox=true\n"
+        "os-sandbox=subprocess\n"
+        "python-import=*\n" + coverage_profile_lines() + "".join(f"{line}\n" for line in extra_lines)
     )
     return profile
 

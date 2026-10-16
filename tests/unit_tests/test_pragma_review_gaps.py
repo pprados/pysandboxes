@@ -199,15 +199,13 @@ class TestPythonInSbDispatch:
 
         assert ("color", ()) not in calls
 
-    def test_dash_m_of_an_unknown_module_runs_with_an_empty_program_name(
-        self, calls: list[tuple[str, tuple[Any, ...]]], monkeypatch: pytest.MonkeyPatch
+    def test_dash_m_of_an_unknown_module_is_refused_without_running_anything(
+        self, calls: list[tuple[str, tuple[Any, ...]]], capsys: pytest.CaptureFixture[str]
     ) -> None:
-        monkeypatch.setattr(sys, "argv", ["keep"])
+        assert self._run("-m", "no_such_module_for_python_sb", "a") == 1
 
-        self._run("-m", "no_such_module_for_python_sb", "a")
-
-        assert sys.argv == ["", "a"]
-        assert [(name, args[1:]) for name, args in calls] == [("_python_module", ("no_such_module_for_python_sb",))]
+        assert calls == []
+        assert "No module named no_such_module_for_python_sb" in capsys.readouterr().err
 
     def test_dash_c_runs_the_command_and_keeps_the_other_arguments(
         self, calls: list[tuple[str, tuple[Any, ...]]]
@@ -230,7 +228,7 @@ class TestPythonInSbDispatch:
 
         self._run("-", "a")
 
-        assert [(name, args[1:]) for name, args in calls] == [("_python_command", ("print(2)", ["-", "a"]))]
+        assert [(name, args[1:]) for name, args in calls] == [("_python_command", ("print(2)", ["-", "a"], "<stdin>"))]
 
     @pytest.mark.parametrize("script", ["x.py", "+x.py", "-x.py", "!x.py", "~x.py"])
     def test_anything_else_is_a_script(self, calls: list[tuple[str, tuple[Any, ...]]], script: str) -> None:

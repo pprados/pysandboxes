@@ -1,5 +1,3 @@
-import base64
-import json
 import os
 import sys
 from collections.abc import Iterator
@@ -7,9 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest  # type: ignore[import-untyped]
-
-from pysandboxes import _os_sandbox, py_sandbox
-from pysandboxes.sb_types import ConfigLine, ConfigLines
 
 # Read by py-sandbox-test.profile to expose the interpreter's library tree, which is
 # not /usr/local/lib everywhere (a macOS runner has none).
@@ -77,18 +72,16 @@ def measure_sandboxed_children() -> Iterator[None]:
     profile must pass that variable and open the data directory for writing. A child saves its data when it exits
     by itself, so the daemons are shut down gracefully. Outside a coverage run the profiles are left as they are.
     """
-    config = os.environ.get("COVERAGE_PROCESS_CONFIG")
-    if not config:
+    if "COVERAGE_PROCESS_CONFIG" not in os.environ:
         yield
         return
-    settings = json.loads(base64.b64decode(config))
-    # The backends bind the resolved path: the child must name the data file the same way.
-    data_file = Path(settings["data_file"]).resolve()
-    child_config = base64.b64encode(json.dumps({**settings, "data_file": str(data_file)}).encode()).decode()
-    extra = [
-        ConfigLine(f"env=COVERAGE_PROCESS_CONFIG={child_config}", Path(), 0),
-        ConfigLine(f"expose-rw={data_file.parent}", Path(), 0),
-    ]
+    from pysandboxes import _os_sandbox, py_sandbox
+    from pysandboxes.sb_types import ConfigLine, ConfigLines
+
+    from ._env import coverage_profile_lines
+
+    lines = coverage_profile_lines()
+    extra = [ConfigLine(line, Path(), 0) for line in lines.splitlines()]
     parse_config = py_sandbox.parse_config
 
     def parse_config_with_coverage(config_lines: ConfigLines, *args: Any, **kwargs: Any) -> Any:

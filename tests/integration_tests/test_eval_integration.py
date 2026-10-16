@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
+from ._env import coverage_profile_lines
+
 
 def _run(profile: str, script: str, tmp_path: Path) -> "subprocess.CompletedProcess[str]":
     """Run `script` under python-sb with `profile`.
@@ -35,7 +37,7 @@ def _run(profile: str, script: str, tmp_path: Path) -> "subprocess.CompletedProc
     # os-sandbox=subprocess confines the filesystem, so the script pytest just
     # wrote under /tmp is invisible to the child unless its directory is
     # exposed. Writable, because the learning round trip saves its profile back.
-    config.write_text(textwrap.dedent(profile) + f"expose-rw={tmp_path}\n")
+    config.write_text(textwrap.dedent(profile) + f"expose-rw={tmp_path}\n" + coverage_profile_lines())
     return subprocess.run(
         [sys.executable, "-m", "pysandboxes.python_sb", f"--pysandboxes-config={config}", str(target)],
         cwd=tmp_path,

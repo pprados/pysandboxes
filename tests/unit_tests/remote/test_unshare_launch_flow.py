@@ -5,6 +5,7 @@
 import asyncio
 import errno
 import os
+import subprocess
 import pickle
 import sys
 from pathlib import Path
@@ -111,6 +112,9 @@ class _Fixture:
     async def sleep(self, delay: float) -> None:
         self.sleeps.append(delay)
 
+    async def to_thread(self, function: Any, *args: Any, **kwargs: Any) -> Any:
+        return function(*args, **kwargs)
+
     async def create_exec(self, *cmd: Any, **kwargs: Any) -> Any:
         self.exec_calls.append((cmd, kwargs))
         return _Process()
@@ -139,6 +143,7 @@ class _Fixture:
                 patch.object(UnshareSSEDaemon, "_prepare_unshare_config", lambda *_: (_Config(), [])),
                 patch.object(usd.threading, "Thread", self.thread),
                 patch.object(usd.asyncio, "sleep", self.sleep),
+                patch.object(usd.asyncio, "to_thread", self.to_thread),
                 patch.object(usd.asyncio, "create_subprocess_exec", self.create_exec),
                 patch.object(usd.os, "mkfifo", self.mkfifo),
                 patch.object(usd.aiohttp, "ClientSession", ping),
@@ -264,6 +269,58 @@ class TestLaunchState:
         flow.launch(_daemon(), first=False)
         flow.logger.warning.assert_called_once_with("Unshare Daemon Sandbox re-started")
         flow.logger.info.assert_not_called()
+
+
+class TestRestartFreesTheForwardedPorts:
+    """The slirp4netns of a sandbox that died does not notice: it keeps the host ports the new one forwards."""
+
+    def test_the_slirp_of_the_dead_sandbox_is_killed_before_the_new_one_starts(self, flow: _Fixture) -> None:
+        daemon = _daemon()
+        previous = Mock()
+        daemon._slirp_process_holder[0] = previous
+        order: list[str] = []
+        previous.kill.side_effect = lambda: order.append("killed")
+        previous.wait.side_effect = lambda timeout=None: order.append(f"waited {timeout}")
+        original = flow.create_exec
+
+        async def create_exec(*cmd: Any, **kwargs: Any) -> Any:
+            order.append("launched")
+            return await original(*cmd, **kwargs)
+
+        flow.create_exec = create_exec  # type: ignore[method-assign]
+
+        flow.launch(daemon)
+
+        assert order == ["killed", "waited 5", "launched"]
+        assert daemon._slirp_process_holder[0] is None
+
+    def test_a_first_start_has_nothing_to_kill(self) -> None:
+        daemon = _daemon()
+
+        daemon._stop_previous_slirp()
+
+        assert daemon._slirp_process_holder == [None]
+
+    def test_a_slirp_already_gone_does_not_stop_the_restart(self) -> None:
+        daemon = _daemon()
+        previous = Mock()
+        previous.kill.side_effect = ProcessLookupError
+        daemon._slirp_process_holder[0] = previous
+
+        daemon._stop_previous_slirp()
+
+        assert daemon._slirp_process_holder[0] is None
+
+    def test_a_slirp_that_does_not_die_in_time_is_dropped_all_the_same(self) -> None:
+        daemon = _daemon()
+        previous = Mock()
+        previous.wait.side_effect = subprocess.TimeoutExpired("slirp4netns", 5)
+        daemon._slirp_process_holder[0] = previous
+
+        daemon._stop_previous_slirp()
+
+        previous.kill.assert_called_once_with()
+        assert daemon._slirp_process_holder[0] is None
 
 
 class TestLaunchThreads:

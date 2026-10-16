@@ -2,6 +2,9 @@
 # License: Apache V2
 """Host capability probes, to skip the integration tests the environment cannot run."""
 
+import base64
+import json
+import os
 import socket
 import subprocess
 from functools import cache
@@ -14,6 +17,23 @@ from pysandboxes.remote.tools import get_default_interface
 
 # Hostnames from py-sandbox-test.profile that require resolution at config load time
 PROFILE_RESOLVE_HOSTS = ("github.com",)
+
+
+def coverage_profile_lines() -> str:
+    """The profile lines that let a sandboxed child write its coverage data, or nothing outside `make coverage`.
+
+    coverage starts in a child that holds its configuration variable, but the sandbox is whitelist-only: the
+    profile must pass that variable and open the data directory for writing. The backends bind the resolved
+    path, so the child must name the data file the same way.
+    """
+    config = os.environ.get("COVERAGE_PROCESS_CONFIG")
+    if not config:
+        return ""
+    settings = json.loads(base64.b64decode(config))
+    data_file = Path(settings["data_file"]).resolve()
+    child_config = base64.b64encode(json.dumps({**settings, "data_file": str(data_file)}).encode()).decode()
+    return f"env=COVERAGE_PROCESS_CONFIG={child_config}\nexpose-rw={data_file.parent}\n"
+
 
 # Every OS sandbox backend a test can be parametrized over. `none` is excluded: it is the
 # no-op provider, so a guard test would assert nothing there.

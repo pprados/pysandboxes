@@ -572,6 +572,19 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         self._slirp_pid_file = None
         self._slirp_api_socket = None
 
+    def _stop_previous_slirp(self) -> None:
+        """Stop the slirp4netns of a sandbox that died: it does not notice, and keeps the forwarded host ports."""
+        previous = self._slirp_process_holder[0]
+        if previous is None:
+            return
+        try:
+            previous.kill()
+            previous.wait(timeout=5)
+        except Exception:
+            # Already gone, or refusing to die: the new one reports it if a port stays taken.
+            pass
+        self._slirp_process_holder[0] = None
+
     @override
     async def _shutdown(self, graceful_shutdown: bool = True) -> None:
         """Shutdown the sandbox and kill slirp4netns."""
@@ -732,6 +745,9 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
                 "--_named-pipe",
                 str(pipe_path),
             ]
+
+            # A restart: the sandbox that died left its slirp4netns running, holding the ports the new one forwards.
+            await asyncio.to_thread(self._stop_previous_slirp)
 
             # Create slirp4netns temp files (shared helper)
             pid_file, api_socket = slirp_make_temp_files()

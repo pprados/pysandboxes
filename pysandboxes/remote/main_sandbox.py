@@ -545,6 +545,8 @@ if __name__ == "__main__":
         if coverage.Coverage.current() is None:
             coverage.process_startup()
         measured = coverage.Coverage.current()
+        if measured is not None:
+            measured.get_data()  # opens the data file now: it imports modules a restricted profile refuses once armed
     rc = 0
     try:
         rc = main()
@@ -565,5 +567,8 @@ if __name__ == "__main__":
         rc = 1
     logger.debug("main_sandbox exit with errorlevel=%s", rc)
     if measured is not None:
-        measured.save()  # no stop(): the thread guard denies threading.settrace
+        try:
+            measured.save()  # no stop(): the thread guard denies threading.settrace
+        except Exception:  # noqa: BLE001 - a measurement must never change the exit status
+            logger.debug("coverage data not saved", exc_info=True)
     os._exit(rc)

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-untyped]
 
-from ._env import backend_of, os_sandbox_params, row_profile_lines
+from ._env import backend_of, coverage_profile_lines, os_sandbox_params, row_profile_lines
 from .test_guards_with_providers import _INTERPRETER_PATHS, _TIMEOUT_SECONDS, ROOT_DIR, _skip_unavailable
 
 _ROWS = [row for row in os_sandbox_params() if not str(row.values[0]).startswith("qemu")]
@@ -24,7 +24,7 @@ def _python_sb(
     profile = tmp_path / "cli.profile"
     exposed = "".join(f"expose-ro={path}\n" for path in (str(tmp_path), *_INTERPRETER_PATHS))
     profile.write_text(
-        f"py-sandbox=true\nos-sandbox={backend_of(os_sandbox)}\n{row_profile_lines(os_sandbox)}{exposed}{profile_lines}"
+        f"py-sandbox=true\nos-sandbox={backend_of(os_sandbox)}\n{row_profile_lines(os_sandbox)}{exposed}{coverage_profile_lines()}{profile_lines}"
     )
     return subprocess.run(
         [sys.executable, "-m", "pysandboxes.python_sb", f"--pysandboxes-config={profile}", *args],
@@ -56,10 +56,6 @@ def test_a_module_runs_with_its_arguments_under_every_backend(os_sandbox: str, t
     assert "1 loop, best of 1" in done.stdout
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="runpy asks the import guard's loader for get_code, which a module imported before -m lacks",
-)
 def test_a_module_already_imported_by_the_framework_runs_with_m(tmp_path: Path) -> None:
     done = _python_sb("subprocess", "python-import=*\n", ["-m", "calendar", "2026", "10"], tmp_path)
 
