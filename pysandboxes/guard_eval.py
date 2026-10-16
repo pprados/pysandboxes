@@ -327,6 +327,7 @@ _JOIN_GRACE = 0.5
 _profiles: EvalProfiles = ImmutableDict({})
 _leaked: list[threading.Thread] = []
 _leak_lock = threading.Lock()
+_inline = False
 
 
 def activate_guard(profiles: EvalProfiles, *, learn: bool = False) -> None:
@@ -457,6 +458,46 @@ def _raise_parse_overflow(source_ref: str, source: str) -> NoReturn:
     raise AssertionError("unreachable: raise_if_rejected always raises for a non-empty violation list")
 
 
+def run_workers_inline() -> None:
+    """Run every evaluation on the calling thread, from now on.
+
+    The worker thread only isolates a blocking C call from the caller's timeout. A measured run (coverage) has
+    no use for that, and a trace hook cannot follow a thread the guards forbid it to hook.
+    """
+    global _inline
+    _inline = True
+
+
+def _run_in_worker_thread(
+    code: Any,
+    mode: str,
+    namespace: dict[str, Any],
+    state: EvalState,
+    box: dict[str, Any],
+    rules: EvalRules,
+    source_ref: str,
+    watchdog: threading.Timer,
+) -> None:
+    worker = threading.Thread(
+        target=_worker,
+        args=(code, mode, namespace, state, box),
+        name=f"guard_eval{source_ref}",
+        daemon=True,
+    )
+    _start_unguarded(worker)
+    worker.join(rules.timeout + _JOIN_GRACE)
+    watchdog.cancel()
+    if worker.is_alive():
+        # A blocking C call never returns to a tick. The caller gets its
+        # exception; the thread keeps burning CPU, cumulatively across calls.
+        # The real guarantee is the OS layer, where a timeout is a process
+        # kill. Documented as a limit, not presented as covered.
+        with _leak_lock:
+            _leaked.append(worker)
+        logger.warning("guard_eval: %s did not stop; %d leaked thread(s)", source_ref, leaked_threads())
+        raise EvalInterrupted(f"eval-timeout={rules.timeout}s exhausted, and the worker did not stop")
+
+
 def run_guarded(
     source: str,
     rules: EvalRules,
@@ -510,26 +551,13 @@ def run_guarded(
     # "exec", an `Expression` for "eval" -- and `compile` accepts either.
     code = _RAW_COMPILE(cast("ast.Module | ast.Expression", inject(tree)), source_ref, mode)
     box: dict[str, Any] = {}
-    worker = threading.Thread(
-        target=_worker,
-        args=(code, mode, namespace, state, box),
-        name=f"guard_eval{source_ref}",
-        daemon=True,
-    )
     watchdog = threading.Timer(rules.timeout, _interrupt, args=(state, rules.timeout))
     _start_unguarded(watchdog)
-    _start_unguarded(worker)
-    worker.join(rules.timeout + _JOIN_GRACE)
-    watchdog.cancel()
-    if worker.is_alive():
-        # A blocking C call never returns to a tick. The caller gets its
-        # exception; the thread keeps burning CPU, cumulatively across calls.
-        # The real guarantee is the OS layer, where a timeout is a process
-        # kill. Documented as a limit, not presented as covered.
-        with _leak_lock:
-            _leaked.append(worker)
-        logger.warning("guard_eval: %s did not stop; %d leaked thread(s)", source_ref, leaked_threads())
-        raise EvalInterrupted(f"eval-timeout={rules.timeout}s exhausted, and the worker did not stop")
+    if _inline:
+        _worker(code, mode, namespace, state, box)
+        watchdog.cancel()
+    else:
+        _run_in_worker_thread(code, mode, namespace, state, box, rules, source_ref, watchdog)
     if "error" in box:
         _reraise_from_worker(box["error"])
     if learn:

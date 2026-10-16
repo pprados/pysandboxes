@@ -543,6 +543,8 @@ def _start_coverage() -> Any:
         import coverage
     except ImportError:
         return None
+    from ..guard_eval import run_workers_inline
+
     if coverage.Coverage.current() is None:
         coverage.process_startup()
     measured = coverage.Coverage.current()
@@ -550,6 +552,7 @@ def _start_coverage() -> Any:
         # Branch measurement on a tracer core installs a trace hook that every new thread runs through
         # sys.settrace, which the guards deny: the threads of the program would die at birth.
         threading.settrace(None)
+        run_workers_inline()
         measured.get_data()  # opens the data file now: it imports modules a restricted profile refuses once armed
     return measured
 

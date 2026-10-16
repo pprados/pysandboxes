@@ -32,7 +32,10 @@ def coverage_profile_lines() -> str:
     settings = json.loads(base64.b64decode(config))
     data_file = Path(settings["data_file"]).resolve()
     child_config = base64.b64encode(json.dumps({**settings, "data_file": str(data_file)}).encode()).decode()
-    return f"env=COVERAGE_PROCESS_CONFIG={child_config}\nexpose-rw={data_file.parent}\n"
+    # firejail caps a file at 100 KB by default, below the size of a data file with branches.
+    return (
+        f"env=COVERAGE_PROCESS_CONFIG={child_config}\nexpose-rw={data_file.parent}\nfirejail.rlimit-fsize=1000000000\n"
+    )
 
 
 # Every OS sandbox backend a test can be parametrized over. `none` is excluded: it is the

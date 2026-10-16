@@ -402,6 +402,34 @@ def test_a_timeout_actually_kills_the_worker_thread() -> None:
     assert leaked_threads() == before
 
 
+class TestInline:
+    """Under coverage the evaluation runs on the calling thread: no worker thread to hook."""
+
+    @pytest.fixture(autouse=True)
+    def _inline(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(guard_eval, "_inline", False)
+
+        def no_thread(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("a worker thread was started")
+
+        monkeypatch.setattr(guard_eval, "_run_in_worker_thread", no_thread)
+        guard_eval.run_workers_inline()
+
+    def test_the_value_comes_back_without_a_worker_thread(self) -> None:
+        _activate(syntax=_syntax("arith"), namespace="closed")
+        assert guarded_eval("6 * 7") == 42
+
+    def test_the_iteration_budget_still_interrupts_a_loop(self) -> None:
+        _activate(syntax=_syntax("loop"), namespace="closed", max_iterations=100, timeout=30.0)
+        with pytest.raises(EvalInterrupted, match="eval-max-iterations=100"):
+            guarded_eval("while True:\n    pass", mode="exec")
+
+    def test_the_timeout_still_interrupts_a_loop(self) -> None:
+        _activate(syntax=_syntax("loop"), namespace="closed", timeout=0.3, max_iterations=10**9)
+        with pytest.raises(EvalInterrupted, match="eval-timeout"):
+            guarded_eval("while True:\n    pass", mode="exec")
+
+
 def test_the_iteration_budget_interrupts_a_loop() -> None:
     _activate(syntax=_syntax("loop"), namespace="closed", max_iterations=100, timeout=30.0)
     with pytest.raises(EvalInterrupted, match="eval-max-iterations=100"):
