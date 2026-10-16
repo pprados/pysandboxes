@@ -1,6 +1,6 @@
 <!--
 GitHub workflow or CI script. Target `develop`, never `master`.
-The requirements are in CONTRIBUTING.md, which the automated review applies.
+The requirements are in CONTRIBUTING.md, which the maintainer's review applies.
 -->
 
 ## Purpose

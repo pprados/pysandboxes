@@ -127,7 +127,7 @@ Security rules are defined in `.py-sandboxes` files using a whitelist-based syst
 - **`master`** is for releases only. It receives a merge at publication time, never as
   part of ordinary work. Do not propose a pull request or a merge towards `master`
   outside a release, and compare a branch against `develop`, not `master`.
-- **`CONTRIBUTING.md`** lists what a pull request must carry, and is the checklist the automated review
+- **`CONTRIBUTING.md`** lists what a pull request must carry, and is the checklist the maintainer's review
   applies. A change to those rules goes there, not only here.
 - **`CHANGELOG.md`**: a merge into `develop` that brings a new feature or a user-visible fix adds one line for it to
   the open `## [0.0.0] - 202X-XX-XX` entry, under `### Added`, `### Changed` or `### Fixed`, written for users,

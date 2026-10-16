@@ -7,8 +7,7 @@ description: Use when a maintainer asks to review or validate a pull request of 
 
 ## Overview
 
-The local counterpart of `.github/workflows/pr-review.yml`, which stays inactive while no model access is set up
-on GitHub. Two stages:
+The review of a pull request runs on the maintainer's machine: no model is called from CI. Two stages:
 
 1. **Review**, read-only: the diff against the rules of `develop`, posted as comments on the pull request.
 2. **Validation**, only on the maintainer's explicit approval: the reviewed head is pushed to `pr/<number>` and

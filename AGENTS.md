@@ -111,7 +111,7 @@ Rules in `.py-sandboxes` files, whitelist-based:
 ### Branches
 - **`develop`** = integration branch. Daily work there; feature branches from it, back to it.
 - **`master`** = releases only. Merge at publication only, never ordinary work. No PR/merge → `master` outside release. Compare branch vs `develop`, not `master`.
-- **`CONTRIBUTING.md`**: what PR must carry = checklist for automated review. Rule change → goes there, not only here.
+- **`CONTRIBUTING.md`**: what PR must carry = checklist for the maintainer review. Rule change → goes there, not only here.
 - **`CHANGELOG.md`**: merge → `develop` w/ new feature or user-visible fix → add 1 line to open `## [0.0.0] - 202X-XX-XX` entry, under `### Added` / `### Changed` / `### Fixed`. User-facing, no impl detail. Post-release: no open entry; first merge after adds `## [0.0.0] - 202X-XX-XX` line + empty line, above first `## [` line. Never date entry nor add version: `make publish-patch` / `publish-minor` / `publish-final` do.
 
 ### Design and Planning Documents

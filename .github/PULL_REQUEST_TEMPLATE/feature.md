@@ -1,7 +1,7 @@
 <!--
 New option, API or behaviour outside the security model. Target `develop`, never `master`.
 A change to a guard, `eval_*`, a provider or rule parsing uses security-model.md instead.
-The requirements are in CONTRIBUTING.md, which the automated review applies.
+The requirements are in CONTRIBUTING.md, which the maintainer's review applies.
 -->
 
 ## Purpose

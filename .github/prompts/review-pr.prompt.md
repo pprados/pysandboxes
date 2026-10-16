@@ -9,8 +9,8 @@ Review one pull request of PySandboxes against the requirements of `CONTRIBUTING
 
 - `PR NUMBER`: the pull request.
 - `HEAD SHA`: the commit the maintainer asked to review.
-- `RULES`: a directory holding `develop`'s copy of the rule files. The automated workflow always gives one.
-  Locally, without it, read the rule files from a checkout of `develop`.
+- `RULES`: a directory holding `develop`'s copy of the rule files. Without it, read the rule files from a
+  checkout of `develop`.
 
 ## Sources
 
@@ -38,7 +38,7 @@ The pull request is read only through `gh pr view <number>` and `gh pr diff <num
 ## Steps
 
 1. Check that `gh pr view <number> --json headRefOid` still returns `HEAD SHA`. If not, post the summary
-   comment "Head moved since the review was requested; relabel to review the new commits." and stop.
+   comment "Head moved since the review was requested; ask for a new review of the new commits." and stop.
 2. Check that the base branch is `develop`. If not, the summary says so as a blocking finding and the review
    stops there.
 3. Go through every section of the "Pull request requirements" of `RULES/CONTRIBUTING.md` against the diff.

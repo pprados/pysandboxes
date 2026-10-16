@@ -1,7 +1,7 @@
 <!--
 Bug fix outside the security model. Target `develop`, never `master`.
 A vulnerability is never fixed in a public pull request: follow SECURITY.md.
-The requirements are in CONTRIBUTING.md, which the automated review applies.
+The requirements are in CONTRIBUTING.md, which the maintainer's review applies.
 -->
 
 ## Bug

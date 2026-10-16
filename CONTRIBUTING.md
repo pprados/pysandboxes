@@ -2,7 +2,7 @@
 
 PySandboxes runs code its caller does not trust, so a contribution is judged first on whether the sandbox
 still holds after it. This page says how to get started, how to propose a change, and what a pull request
-must carry. It is also the checklist the automated review applies.
+must carry. It is also the checklist the maintainer's review applies.
 
 Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -160,14 +160,13 @@ A test for a guard must be able to fail. The rules below come from bugs that shi
 
 ## Review
 
-CI runs lint and unit tests on every pull request. A maintainer may also ask for an automated review by
-adding the `claude-review` label (currently inactive: it waits for its Amazon Bedrock access to be set up).
-That review:
+CI runs lint and unit tests on every pull request. The maintainer reviews the diff from their own machine,
+with the `pysandboxes-pr-review` skill (`.agents/skills/`). That review:
 
-- applies the requirements above, read from a copy of `develop` taken before the review starts, so a pull
-  request cannot change the criteria it is reviewed against;
-- reads the pull request only through its diff, and refuses to review a head that moved after the label was
-  set: relabel to review new commits;
+- applies the requirements above, read from `develop`, so a pull request cannot change the criteria it is
+  reviewed against;
+- reads the pull request only through its diff, and refuses to review a head that moved since it was
+  requested: ask again to review new commits;
 - only posts comments: it never runs the pull request's code, never pushes, never approves.
 
 CI on a pull request runs lint and unit tests only; the integration suite runs nightly on `develop`, after the
