@@ -867,6 +867,25 @@ def from_b85_restricted(
     Raises:
         RestrictedUnpicklingError: On a refused opcode, budget, or global.
     """
+    try:
+        return _load_b85_restricted(b85, predicate, data_only)
+    except RestrictedUnpicklingError:
+        raise
+    except (
+        ValueError,
+        OverflowError,
+        AttributeError,
+        TypeError,
+        EOFError,
+        IndexError,
+        KeyError,
+        pickle.UnpicklingError,
+    ) as exc:
+        raise RestrictedUnpicklingError(f"the payload is damaged ({type(exc).__name__}: {exc}).") from exc
+
+
+def _load_b85_restricted(b85: str, predicate: Callable[[str, str, Any], bool] | None, data_only: bool) -> Any:
+    """Decode, prescan and load a payload; a damaged one may raise any of the stdlib's errors."""
     data = base64.b85decode(b85.encode("ascii"))
     _prescan(data)
     if data_only:
