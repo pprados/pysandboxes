@@ -266,7 +266,7 @@ def parse_rules(
             s_path = value
             try:
                 resolved = Path(Path(s_path).expanduser()).resolve().absolute()
-            except (OSError, ValueError):
+            except (OSError, ValueError, RuntimeError):
                 errors.append(
                     (
                         f"{format_ruleref(rule)}: " f"In {rule.rule!r}, path is invalid.",

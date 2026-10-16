@@ -47,16 +47,11 @@ def test_a_payload_that_is_not_base85_is_refused_with_the_transport_error(garbag
         from_b85_restricted(garbage, _deny_all)
 
 
-@pytest.mark.xfail(strict=True, reason="a non-ASCII payload surfaces a bare UnicodeEncodeError from `str.encode`")
 def test_a_payload_with_a_non_ascii_character_is_refused_with_the_transport_error() -> None:
     with pytest.raises(RestrictedUnpicklingError):
         from_b85_restricted("\u00e9", _deny_all)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a flipped bit can surface a bare ValueError, OverflowError, AttributeError or TypeError from the unpickler",
-)
 @pytest.mark.parametrize("data_only", [False, True])
 def test_a_payload_with_a_flipped_bit_is_refused_or_loaded_but_never_leaks_a_bare_error(data_only: bool) -> None:
     for index in range(len(_DATA)):
@@ -65,5 +60,5 @@ def test_a_payload_with_a_flipped_bit_is_refused_or_loaded_but_never_leaks_a_bar
             damaged[index] ^= bit
             try:
                 from_b85_restricted(_encode(bytes(damaged)), _deny_all, data_only=data_only)
-            except (RestrictedUnpicklingError, pickle.UnpicklingError):
+            except RestrictedUnpicklingError:
                 pass

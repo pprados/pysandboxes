@@ -214,7 +214,13 @@ def _parse_include(
             filename = Path(raw_filename)
             if "/" not in raw_filename:
                 filename = root_path / filename
-            filename = filename.expanduser().absolute()
+            try:
+                filename = filename.expanduser().absolute()
+            except RuntimeError as e:
+                raise ConfigSyntaxError(
+                    "Syntax error in config files.",
+                    [f"{format_ruleref(rule)}: Unknown home directory in {raw_filename}: {e}"],
+                ) from e
             if filename not in includes:  # No loop of include
                 try:
                     if filename.exists():

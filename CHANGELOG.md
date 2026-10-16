@@ -47,6 +47,10 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- A damaged or non-ASCII payload from the sandbox now always ends in `RestrictedUnpicklingError`, never in a bare
+  `ValueError`, `TypeError` or `UnicodeEncodeError`
+- A profile path naming an unknown user (`~nosuchuser/x`) in `expose-*` or `include` is now a `ConfigSyntaxError`
+  pointing at the line, not a bare `RuntimeError`
 - Under `landlock`, the current working directory no longer receives implicit write access; writes require
   an explicit file rule
 - An `os-sandbox` the host cannot run (a missing `bwrap`, `firejail` or QEMU, a kernel without Landlock or user
