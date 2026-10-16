@@ -11,6 +11,23 @@ The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but
 
 Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.
 
+## Which provider?
+
+Start here; the matrix below gives the detail behind each line.
+
+| Situation | Provider |
+|---|---|
+| Default on Linux: nothing to install, no privilege, files and TCP ports | `landlock` |
+| Untrusted native code, or host and UDP filtering | `bwrap` or `unshare` |
+| Strongest separation, in a VM (more than 20 s to start) | `qemu` |
+| Resource limits and seccomp | `firejail` |
+| Inside Docker or Podman | `landlock` or `qemu` unprivileged; `unshare` or `bwrap` with `--privileged` |
+| Process separation only, no OS boundary (also the only choice on macOS and Windows) | `subprocess` |
+
+Two limits to know before choosing `landlock`: it denies a path but cannot hide it, and it does not protect the host's named Unix sockets (see [Host sockets under `/run`](#host-sockets-under-run)). Against untrusted native code, prefer `bwrap` or `unshare`.
+
+## All providers
+
 We offer several implementations to encapsulate the Python sandbox:
 
 | Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
