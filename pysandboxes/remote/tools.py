@@ -614,10 +614,11 @@ def _prescan(data: bytes) -> None:
             name = opcode.name
             if name not in _ALLOWED_OPCODES:
                 raise RestrictedUnpicklingError(f"opcode {name!r} is not allowed on the sandbox transport.")
-            if name in ("LONG1", "LONG4") and _arg.bit_length() > _MAX_INTEGER_BYTES * 8:
-                raise RestrictedUnpicklingError(
-                    f"integer exceeds the {_MAX_INTEGER_BYTES}-byte transport budget."
-                )
+            if name in ("LONG1", "LONG4"):
+                if not isinstance(_arg, int):
+                    raise RestrictedUnpicklingError(f"opcode {name!r} has an invalid integer operand.")
+                if _arg.bit_length() > _MAX_INTEGER_BYTES * 8:
+                    raise RestrictedUnpicklingError(f"integer exceeds the {_MAX_INTEGER_BYTES}-byte transport budget.")
             if name == "MARK":  # pragma: no mutate
                 mark_depth += 1
                 if mark_depth > _MAX_MARK_DEPTH:  # pragma: no mutate
@@ -625,6 +626,8 @@ def _prescan(data: bytes) -> None:
             elif name in _MARK_CONSUMERS and mark_depth > 0:  # pragma: no mutate
                 mark_depth -= 1
             elif name in ("BINPUT", "LONG_BINPUT"):
+                if not isinstance(_arg, int):
+                    raise RestrictedUnpicklingError(f"opcode {name!r} has an invalid memo index.")
                 if _arg >= _MAX_MEMO:
                     raise RestrictedUnpicklingError(
                         f"memo index {_arg} exceeds the {_MAX_MEMO}-entry transport budget."

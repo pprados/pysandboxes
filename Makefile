@@ -307,6 +307,8 @@ EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annota
 # with no fixed release yet. The sample uses neither RAG, memory nor knowledge, so
 # they are ignored there only, for now. The matching Dependabot alerts on
 # samples/crewai-demo/uv.lock are dismissed as "tolerable risk" for the same reason.
+# CrewAI pins mcp~=1.28.1, before the CVE-2026-59951 fix. The sample does not run
+# a stateful Streamable HTTP MCP server, which is the affected configuration.
 #
 # To reactivate, once chromadb publishes a fix:
 #   1. drop PIP_AUDIT_IGNORE_crewai below, then relock the sample:
@@ -318,7 +320,8 @@ EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annota
 #        gh api -X PATCH repos/pprados/pysandboxes/dependabot/alerts/N -f state=open
 #   3. run `make pip-audit`: it must pass without the ignore.
 PIP_AUDIT_IGNORE_crewai = --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
-	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
+	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815 \
+	--ignore-vuln CVE-2026-59951
 ## Report the runtime dependencies with a known security vulnerability, samples included
 pip-audit:
 	@unset VIRTUAL_ENV; status=0; \

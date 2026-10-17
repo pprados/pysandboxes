@@ -215,9 +215,7 @@ def test_the_same_destination_allowed_by_a_rule_connects(
 
 @pytest.mark.parametrize("mode", ("python-sb", "daemon"))
 @pytest.mark.skipif(bool(_LANDLOCK_DEFAULT_DENY_REASON), reason=_LANDLOCK_DEFAULT_DENY_REASON or "")
-def test_landlock_denies_native_tcp_connections_by_default(
-    tmp_path: Path, host_listener: int, mode: str
-) -> None:
+def test_landlock_denies_native_tcp_connections_by_default(tmp_path: Path, host_listener: int, mode: str) -> None:
     # Prove the listener is reachable outside the sandbox before checking the OS restriction.
     with socket.create_connection(("127.0.0.1", host_listener), timeout=5):
         pass

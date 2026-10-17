@@ -144,10 +144,11 @@ fuzz = [
 # document with the _fr suffix and it is skipped without a new entry here.
 # The LaTeX artefacts under research/ are generated from confining-python-by-observation.md, which is
 # checked: re-checking the derived files only reports biblatex's own macro names.
-skip = '*/.git,*/.venv,*/node_modules,*/.mypy_cache,*/.pytest_cache,*/.ruff_cache,*/dist,*/.ia_backup,*/graphify-out,*/htmlcov,*/docs/api,*/.agents,*/_bmad,*/wiki/bmad,*/PPR,*/audits,*/TODO.md,*_fr.md,*/research/build,*.tex,*.bib,*.bbl,*.mmd,*.pdf,*.svg,*.yaml,*.ipynb,*.lock,*.min.js,*.css,package-lock.json'
+skip = '*/.git,*/.venv,*/node_modules,*/.mypy_cache,*/.pytest_cache,*/.ruff_cache,*/dist,*/.ia_backup,*/graphify-out,*/htmlcov,*/docs/api,*/.agents,*/_bmad,*/wiki/bmad,*/PPR,*/audits,*/TODO.md,point_etape.md,*_fr.md,*/research/build,*.tex,*.bib,*.bbl,*.mmd,*.pdf,*.svg,*.yaml,*.ipynb,*.lock,*.min.js,*.css,package-lock.json'
 # Ignore latin etc
 ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
-#ignore-words-list = ''
+# Short byte fragments used in transport tests.
+ignore-words-list = 'caf,hel'
 
 [tool.black]
 line-length = 120

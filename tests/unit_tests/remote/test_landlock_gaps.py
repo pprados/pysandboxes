@@ -221,9 +221,7 @@ class TestApplyLandlock:
         assert recorder.attr("create").handled_access_net == ll.HANDLED_ACCESS_NET
         assert not [c for c in recorder.adds() if c[2]._obj.__class__.__name__.endswith("PortAttr")]
 
-    def test_network_restriction_fails_closed_when_abi_four_is_missing(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_network_restriction_fails_closed_when_abi_four_is_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _Recorder(monkeypatch, abi=3)
 
         with pytest.raises(OSError, match="network restriction requires Landlock ABI v4"):
