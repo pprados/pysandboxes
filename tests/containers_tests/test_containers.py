@@ -802,11 +802,15 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
             manifest_path = f.name
         try:
             logger.info(f"Applying Kubernetes manifest (image={image_name})...")
-            subprocess.run(
+            apply_result = subprocess.run(
                 ["kubectl", "apply", "-f", manifest_path],
                 cwd=ROOT_DIR,
-                check=True,
                 capture_output=True,
+                text=True,
+            )
+            assert apply_result.returncode == 0, (
+                f"kubectl apply failed with exit code {apply_result.returncode}:\n"
+                f"stdout: {apply_result.stdout}\nstderr: {apply_result.stderr}"
             )
         finally:
             Path(manifest_path).unlink(missing_ok=True)
