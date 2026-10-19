@@ -221,9 +221,14 @@ def _write_atomic(path: Path, content: str) -> None:
     # a file or link another user planted in a shared directory.
     tmp_path = path.with_name(f"{path.name}.{secrets.token_hex(8)}.tmp")
     try:
-        with os.fdopen(
-            os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666), "w", encoding="utf-8"
-        ) as tmp_file:
+        tmp_fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        try:
+            tmp_file = os.fdopen(tmp_fd, "w", encoding="utf-8")
+        except BaseException:
+            # A descriptor still open keeps Windows from removing the file below.
+            os.close(tmp_fd)
+            raise
+        with tmp_file:
             tmp_file.write(content)
         if path.exists():
             shutil.copymode(path, tmp_path)
