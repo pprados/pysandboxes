@@ -93,8 +93,9 @@ def test_pathlib_is(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     assert pathlib.Path(files["bind_dest"]).is_dir()
     assert pathlib.Path(files["path"] / "visible.txt").is_file()
     assert pathlib.Path(files["bind_dest"] / "bound_file.txt").is_file()
-    assert not pathlib.Path(files["path"]).is_mount()
-    assert not pathlib.Path(files["bind_dest"]).is_mount()
+    if sys.platform != "win32" or sys.version_info >= (3, 12):  # Path.is_mount() is unsupported on Windows before 3.12
+        assert not pathlib.Path(files["path"]).is_mount()
+        assert not pathlib.Path(files["bind_dest"]).is_mount()
     if hasattr(pathlib.Path, "is_junction"):
         assert not pathlib.Path(files["path"]).is_junction()  # type: ignore[attr-defined]
         assert not pathlib.Path(files["bind_dest"]).is_junction()  # type: ignore[attr-defined]
