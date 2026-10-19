@@ -9,6 +9,7 @@ import logging
 import re
 import socket
 import sys
+import tempfile
 from collections.abc import Iterator
 from ipaddress import IPv4Address, IPv6Address, ip_address, ip_network
 from pathlib import Path
@@ -195,9 +196,17 @@ def test_listen_without_bind_passes_with_a_wildcard_rule() -> None:
 # %% 4. AF_UNIX connect needs write access
 
 
+@pytest.fixture
+def short_tmp_path() -> Iterator[Path]:
+    # An AF_UNIX path is capped at 104 bytes on macOS, which pytest's tmp_path exceeds there.
+    with tempfile.TemporaryDirectory(dir="/tmp") as directory:
+        yield Path(directory).resolve()
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
 @requires_unix_sockets
-def test_unix_connect_needs_write_access_to_the_socket(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_unix_connect_needs_write_access_to_the_socket(short_tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tmp_path = short_tmp_path
     path = str(tmp_path / "s")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(path)
@@ -215,7 +224,8 @@ def test_unix_connect_needs_write_access_to_the_socket(monkeypatch: pytest.Monke
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
 @requires_unix_sockets
-def test_unix_connect_passes_with_write_access(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_unix_connect_passes_with_write_access(short_tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tmp_path = short_tmp_path
     path = str(tmp_path / "s")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(path)

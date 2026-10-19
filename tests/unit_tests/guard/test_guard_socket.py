@@ -984,7 +984,11 @@ def test_the_windows_socketpair_emulation_passes_the_guard(monkeypatch: pytest.M
     monkeypatch.setattr(socket.socket, "bind", table["socket.socket.bind"](socket.socket.bind))
     monkeypatch.setattr(socket.socket, "connect", table["socket.socket.connect"](socket.socket.connect))
 
-    first, second = _windows_socketpair(monkeypatch, socket._fallback_socketpair)()  # type: ignore[attr-defined]
+    # Some 3.11 builds (3.11.9) have no `_fallback_socketpair`: on Windows `socketpair` is the emulation itself.
+    emulation = getattr(socket, "_fallback_socketpair", socket.socketpair if sys.platform == "win32" else None)
+    if emulation is None:
+        pytest.skip("this Python has no socketpair emulation outside Windows")
+    first, second = _windows_socketpair(monkeypatch, emulation)()
     with first, second:
         first.sendall(b"x")
         assert second.recv(1) == b"x"
