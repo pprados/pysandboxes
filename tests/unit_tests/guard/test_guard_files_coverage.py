@@ -37,6 +37,7 @@ from pysandboxes.guard_files import (
     _DirEntry,
     _ignore_matches,
     _is_unsafe_rule_path,
+    _link_target,
     _wrap_buitins_open,
     _wrap_filename,
     _wrap_os_access,
@@ -1424,6 +1425,22 @@ def test_wrap_os_getcwd_keeps_the_root_separator() -> None:
     wrapped = _wrap_os_getcwd(lambda: root)
 
     assert wrapped() == root
+
+
+# %% _link_target -- Windows extended-length prefix
+
+
+def test_link_target_drops_the_extended_length_prefix_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.platform", "win32")
+
+    assert _link_target("\\\\?\\C:\\data\\file") == "C:\\data\\file"
+    assert _link_target("C:\\data\\file") == "C:\\data\\file"
+
+
+def test_link_target_keeps_a_name_starting_like_the_prefix_elsewhere(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.platform", "linux")
+
+    assert _link_target("\\\\?\\name") == "\\\\?\\name"
 
 
 # %% _wrap_os_readlink -- dir_fd learning write flag

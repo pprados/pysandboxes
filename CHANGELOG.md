@@ -47,6 +47,8 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- On Windows, `os.readlink` on an exposed link no longer refuses its target (the `\\?\` prefix Windows adds is
+  dropped before the rules are applied), and `os.getcwd` keeps the drive root `C:\`
 - In the sandbox, `sys.stdout` and `sys.stderr` now answer `writable()`, `encoding` and `errors` like the stream they
   replaced, and a missing attribute names itself instead of failing on `NoneType`
 - In the QEMU guest, the network filter is loaded with the first executable `iptables-restore` that accepts it

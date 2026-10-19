@@ -163,6 +163,13 @@ def _dir_path(path: str) -> str:
     return path if path.endswith(("/", os.sep)) else path + os.sep
 
 
+def _link_target(target: str) -> str:
+    """Return a ``readlink`` answer without the ``\\\\?\\`` prefix Windows adds, which no rule spells."""
+    if sys.platform == "win32" and target.startswith("\\\\?\\"):
+        return target[4:]
+    return target
+
+
 def _safe_realpath(path: str) -> str:
     """Resolve symlinks in ``path`` without re-entering the file guard."""
     token = _canonicalizing.set(True)
@@ -856,8 +863,6 @@ def _wrap_buitins_open(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-
-
 def _wrap_filename(func: Callable[..., Any], *, write: bool, learn: bool = True) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper(
@@ -1284,7 +1289,7 @@ def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
 
         if remapped.endswith(os.path.sep + "."):
             remapped = remapped[:-2]
-        if remapped != os.path.sep and remapped.endswith(os.path.sep):
+        if remapped != os.path.dirname(remapped) and remapped.endswith(os.path.sep):
             remapped = remapped[:-1]
         return str(remapped)
 
@@ -1376,8 +1381,8 @@ def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
                 if not is_learning_mode():
                     _raise_access(path)
                 add_learning_rule(LearnFileRule(Path(full_path).parent, False))
-            target = func(path=path, dir_fd=dir_fd)
-            if not target.startswith(os.path.sep):
+            target = _link_target(func(path=path, dir_fd=dir_fd))
+            if not os.path.isabs(target):
                 target = os.path.join(os.path.dirname(full_path), target)
             remapped, rule = _apply_src_to_dest_rules(target)
             if rule:
@@ -1395,8 +1400,8 @@ def _wrap_os_readlink(func: Callable[..., Any]) -> Callable[..., Any]:
                 _raise_access(path)
             add_learning_rule(LearnFileRule(Path(path), False))
             remapped_first = path
-        target = func(path=remapped_first, dir_fd=dir_fd)
-        if not target.startswith(os.path.sep):
+        target = _link_target(func(path=remapped_first, dir_fd=dir_fd))
+        if not os.path.isabs(target):
             target = os.path.dirname(remapped_first) + os.path.sep + target
         remapped, rule = _apply_src_to_dest_rules(target)
         if rule:
