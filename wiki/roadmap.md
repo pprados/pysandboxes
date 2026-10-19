@@ -8,27 +8,45 @@ renaming because OS providers do not rename directories.
 Planned work, in no committed order:
 
 - [ ] Guards
+  - [X] Control environment variables
+  - [X] Control import list
+  - [X] Control file and network access
+  - [X] Control life cycle of the daemon (restart if necessary)
+  - [X] Guard some critical methods in Python (spawn, shell, etc.)
   - [ ] Management of *Denial of Service*
   - [ ] Management of regular expressions
+  - [X] Control of `exec()`, `eval()` and `compile()` (the [`eval-*` rules](eval.md))
+    - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
 - [ ] OS Compatible
+  - [X] Linux
   - [ ] Windows
   - [ ] Mac OS (see https://cursor.com/fr/blog/agent-sandboxing)
 - [ ] OS-sandboxes
   - [ ] Basic
+    - [X] None
+    - [X] sub process
     - [ ] sub interpreter
+    - [X] Landlock
   - [ ] Landlock: refuse `connect()` to a named Unix socket not covered by an `expose-rw` rule, the rule every
     other provider applies. Landlock cannot filter it, so a seccomp user-notification filter sends each Unix
     `connect()` to the parent, which checks the path, connects itself and hands the descriptor back
     (`SECCOMP_IOCTL_NOTIF_ADDFD`), leaving no window to change the path after the check.
   - [ ] Sandbox utilities
+    - [X] firejail
+    - [X] unshare
+    - [X] bwrap
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: filtering by domain, not only by IP)
   - [ ] Container
+    - [X] Docker (--privileged with unshare)
+    - [X] podman (--privileged with unshare)
+    - [X] kubernetes
     - [ ] Flatpak
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
     - [ ] gVisor (user space kernel simulation, without docker)
     - [ ] Firecracker
   - [ ] VM
+    - [X] Qemu
     - [ ] multipass
     - [ ] lxc
     - [ ] vagrant
@@ -46,6 +64,19 @@ Planned work, in no committed order:
   - [ ] Apple
     - [ ] App Sandbox
     - [ ] sandbox-exec
+- [X] New samples
+  - [X] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
+  - [X] [Crewai](https://www.crewai.com/)
+  - [X] [Google ADK](https://google.github.io/adk-docs/)
+  - [X] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
+  - [X] MCP client
+  - [X] MCP server
+  - [X] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
+  - [X] [Pydantic.ai](https://ai.pydantic.dev/)
+  - [X] [Smolagent](https://huggingface.co/docs/smolagents/index)
+  - [X] [Strandsagents](https://strandsagents.com)
+  - [X] [langchain](https://www.langchain.com/)
+  - [X] [langgraph](https://langchain-ai.github.io/langgraph/)
 - [ ] Features
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id
@@ -80,56 +111,3 @@ To strengthen security, we are considering compiling a part of the project to ma
 
 ## Propagate the tracability id
 The protocol break prevents tracking with OpenTelemetry. We want to propagate the necessary information to get a complete trace.
-
-
-## Dangerous patterns
-```
-DANGEROUS_PATTERNS = [
-
-    # Dynamic code execution
-    r"\b__import__\b",
-    r"\bimportlib\b",
-    r"\beval\s*\(",
-    r"\bexec\s*\(",
-    r"\bcompile\s*\(",
-    r"\btype\s*\(",
-    r"\bcallable\s*\(",
-
-    # Builtins/attribute access
-    r"\b__builtins__\b",
-    r"\b__dict__\b",
-    r"\b__class__\b",
-    r"\b__globals__\b",
-    r"\b__setattr__\b",
-    r"\b__getattribute__\b",
-
-    # Introspection
-    r"\bglobals\s*\(",
-    r"\blocals\s*\(",
-    r"\bvars\s*\(",
-    r"\bdir\s*\(",
-    r"\bgetattr\s*\(",
-    r"\bsetattr\s*\(",
-    r"\bdelattr\s*\(",
-    r"\bhasattr\s*\(",
-
-    # Deserialization
-    r"\bpickle\b",
-    r"\bmarshal\b",
-    r"\bloads\s*\(",
-
-    # File access
-    r"\bopen\s*\(",
-    r"\binput\s*\(",
-    r"\braw_input\s*\(",
-
-    # Shell patterns
-    r"\bbash\b",
-    r"\bsh\b",
-    r"\bcmd\b",
-    r"/bin/",
-    r"\bsubprocess\b",
-    r"\bos\.system\b",
-    r"\bpopen\s*\(",
-]
-```

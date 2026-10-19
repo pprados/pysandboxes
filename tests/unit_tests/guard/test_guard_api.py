@@ -436,16 +436,18 @@ def test_ctypes_new_bypass_of_cdll_init_is_blocked(
     monkeypatch.setattr(_ctypes, "dlopen", wrapped_dlopen)
     monkeypatch.setattr(ctypes, "_dlopen", wrapped_dlopen)
 
+    libc = "libc.dylib" if sys.platform == "darwin" else "libc.so.6"
+
     def bypass_cdll_init() -> int:
         obj = ctypes.CDLL.__new__(ctypes.CDLL)
-        obj._name = "libc.so.6"
+        obj._name = libc
 
         class _FuncPtr(ctypes._CFuncPtr):  # type: ignore[name-defined]
             _flags_ = obj._func_flags_
             _restype_ = obj._func_restype_
 
         obj._FuncPtr = _FuncPtr
-        obj._handle = _ctypes.dlopen("libc.so.6", 2)  # RTLD_NOW
+        obj._handle = _ctypes.dlopen(libc, 2)  # RTLD_NOW
         return obj.system(b"true")
 
     activate_guard(())
