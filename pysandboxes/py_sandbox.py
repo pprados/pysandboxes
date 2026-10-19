@@ -109,7 +109,10 @@ def _get_caller_module(skip: int) -> types.ModuleType | None:
 
 def _read_config_and_remove_comments(config_path: Path) -> ConfigLines:
     return remove_config_comments(
-        [ConfigLine(line, config_path, ln + 1) for ln, line in enumerate(config_path.read_text().splitlines())]
+        [
+            ConfigLine(line, config_path, ln + 1)
+            for ln, line in enumerate(config_path.read_text(encoding="utf-8").splitlines())
+        ]
     )
 
 
@@ -228,7 +231,7 @@ def _parse_include(
                         include_config = remove_config_comments(
                             [
                                 ConfigLine(line, filename, ln + 1)
-                                for ln, line in enumerate(filename.read_text().split("\n"))
+                                for ln, line in enumerate(filename.read_text(encoding="utf-8").split("\n"))
                             ]
                         )
                         # Recursive include

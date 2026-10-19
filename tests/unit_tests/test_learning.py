@@ -386,6 +386,20 @@ def test_atomic_write_never_follows_a_planted_temporary_link(tmp_path: Path, mon
     assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp") and not p.is_symlink()] == []
 
 
+def test_a_profile_is_written_and_read_in_utf8(tmp_path: Path) -> None:
+    """Generated profiles carry ``⚠`` in their comments: the platform's own encoding, cp1252 on Windows, cannot
+    write it, and would read a path with an accent back as another one."""
+    from pysandboxes import learning
+    from pysandboxes.py_sandbox import _read_config_and_remove_comments
+
+    target = tmp_path / ".py-sandboxes"
+    learning._write_atomic(target, "# ⚠ Dangerous!\nexpose-ro=/data/café\n")
+
+    written = target.read_bytes().replace(b"\r\n", b"\n")
+    assert written == "# ⚠ Dangerous!\nexpose-ro=/data/café\n".encode("utf-8")
+    assert [line.rule for line in _read_config_and_remove_comments(target)] == ["expose-ro=/data/café"]
+
+
 @pytest.mark.parametrize("provider", ["landlock", "subprocess"])
 def test_a_generated_profile_names_the_default_provider_in_clear(tmp_path: Path, provider: str) -> None:
     cfg = tmp_path / ".py-sandboxes"

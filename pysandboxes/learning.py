@@ -131,7 +131,7 @@ def generate_config_from_learning() -> None:
         update_file = False
         if old_learning_path:
             # Current lines
-            all_lines = learning_path.read_text().split("\n")
+            all_lines = learning_path.read_text(encoding="utf-8").split("\n")
             # A rerun on a file already written by a previous run must not insert the
             # same rules again: drop any generated line already present in the file.
             existing_lines = {ln.strip() for ln in all_lines if ln.strip()}
@@ -153,7 +153,11 @@ def generate_config_from_learning() -> None:
             with resources.as_file(
                 resources.files(__name__.rsplit(".", maxsplit=1)[:-1][0] + ".templates") / "py-sandboxes.template"
             ) as resource_path:
-                all_lines = resource_path.read_text().replace(DEFAULT_OS_SANDBOX_MARK, default_os_sandbox()).split("\n")
+                all_lines = (
+                    resource_path.read_text(encoding="utf-8")
+                    .replace(DEFAULT_OS_SANDBOX_MARK, default_os_sandbox())
+                    .split("\n")
+                )
 
         replaces["learning_remote_result"] = _update_remote_result_mode(all_lines, learning, header, learning_path)
 
@@ -217,7 +221,9 @@ def _write_atomic(path: Path, content: str) -> None:
     # a file or link another user planted in a shared directory.
     tmp_path = path.with_name(f"{path.name}.{secrets.token_hex(8)}.tmp")
     try:
-        with os.fdopen(os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666), "w") as tmp_file:
+        with os.fdopen(
+            os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666), "w", encoding="utf-8"
+        ) as tmp_file:
             tmp_file.write(content)
         if path.exists():
             shutil.copymode(path, tmp_path)

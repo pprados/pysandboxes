@@ -47,6 +47,8 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- Profiles are read and written as UTF-8: on Windows, a learning run no longer fails writing the `⚠` of its
+  comments, and a path with an accent is read back as written
 - On Windows, `os.readlink` on an exposed link no longer refuses its target (the `\\?\` prefix Windows adds is
   dropped before the rules are applied), and `os.getcwd` keeps the drive root `C:\`
 - On Windows with Python 3.11 and 3.12, `os.path.realpath`, `Path.resolve()` and `Path.glob()` no longer refuse an
