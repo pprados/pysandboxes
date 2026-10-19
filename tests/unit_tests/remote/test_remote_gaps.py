@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+import sys
 from types import SimpleNamespace
 from typing import Any
 
@@ -96,6 +97,7 @@ def test_a_new_server_daemon_is_stopped() -> None:
     assert SSEServerDaemon("tok", port=1234).stopped is True
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the network filter is applied with iptables, on Linux")
 class TestApplyNetfilterCommands:
     @pytest.fixture
     def calls(self, monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:

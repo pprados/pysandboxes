@@ -7,6 +7,7 @@ import os
 import pickle
 import socket
 import stat
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -62,6 +63,7 @@ class _Launch:
         return asyncio.run(asyncio.wait_for(scenario(), 10))
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the FIFO launch path and the pty forwarding are POSIX")
 class TestLaunchWithFifo:
     def test_the_process_is_returned(self, tmp_path: Path) -> None:
         launch = _Launch(tmp_path)
@@ -152,6 +154,7 @@ class TestLaunchWithFifo:
         assert launch.calls[0][1][name] == 0
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the FIFO launch path and the pty forwarding are POSIX")
 class TestLaunchWithoutFifo:
     def test_a_config_writer_replaces_the_fifo(self, tmp_path: Path) -> None:
         launch = _Launch(tmp_path)
@@ -290,6 +293,7 @@ class _Stdin:
         return self.lines.pop(0) if self.lines else ""
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the FIFO launch path and the pty forwarding are POSIX")
 class TestWriteStream:
     def _run(self, writer: _Writer, stdin: _Stdin) -> dict[str, Any]:
         record: dict[str, Any] = {"restored": []}

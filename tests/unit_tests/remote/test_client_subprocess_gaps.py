@@ -6,6 +6,7 @@ import asyncio
 import errno
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -46,6 +47,7 @@ class TestLogFormat:
         assert client.get_log_formatter() == "%(message)s"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.mkfifo")
 class TestOpenFifoForWrite:
     def test_an_error_other_than_no_reader_is_raised_at_once(self, tmp_path: Path) -> None:
         process = Mock(returncode=None)

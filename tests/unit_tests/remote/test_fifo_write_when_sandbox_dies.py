@@ -17,6 +17,8 @@ import pytest  # type: ignore[import-untyped]
 from pysandboxes.e import SandBoxError
 from pysandboxes.remote.client_subprocess_sse_daemon import _open_fifo_for_write
 
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.mkfifo")
+
 
 @pytest.mark.asyncio
 async def test_dead_sandbox_reports_its_exit_code(tmp_path: Path) -> None:

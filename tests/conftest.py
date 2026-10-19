@@ -28,11 +28,33 @@ _LINUX_ONLY_TESTS = [
     "integration_tests/remote/test_providers.py",
     "unit_tests/test_qemu_*.py",
     "unit_tests/remote/test_bwrap_*.py",
-    "unit_tests/remote/test_landlock_*.py",
+    "unit_tests/remote/test_*landlock*.py",
     "unit_tests/remote/test_qemu_*.py",
-    "unit_tests/remote/test_unshare_*.py",
+    "unit_tests/remote/test_*unshare*.py",
+    "unit_tests/remote/test_*firejail*.py",
+    "unit_tests/remote/test_apply_netfilter.py",
+    "unit_tests/fault_injection/test_landlock_*.py",
+]
+
+# Modules that run the release scripts (bash, git) the maintainer and the CI use, and the import layering check,
+# whose parser reads the sources with the platform encoding. None of them depends on what Windows runs.
+_NOT_ON_WINDOWS_TESTS = [
+    "unit_tests/test_architecture.py",
+    "unit_tests/test_changelog_draft.py",
+    "unit_tests/test_checked_commits.py",
+    "unit_tests/test_image_tags.py",
+    "unit_tests/test_nightly_gate_reuse.py",
+    "unit_tests/test_python_patch.py",
+    "unit_tests/test_python_sb_release.py",
+    "unit_tests/test_refresh_images.py",
+    "unit_tests/test_release_tag.py",
+    "unit_tests/test_smoke_test_images.py",
+    "unit_tests/test_tag_release.py",
+    "unit_tests/test_verify_published.py",
 ]
 collect_ignore_glob = [] if sys.platform == "linux" else _LINUX_ONLY_TESTS
+if sys.platform == "win32":
+    collect_ignore_glob = [*collect_ignore_glob, *_NOT_ON_WINDOWS_TESTS]
 
 # A script that calls an LLM (scripts/changelog-draft.sh) gets a command that fails, so no test spends tokens by
 # omission. Only the tests marked `llm` call the model, and only with RUN_LLM_TESTS=1.

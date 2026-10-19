@@ -117,7 +117,7 @@ CROSS_OS_PYTEST = \
 	"uv run pytest tests/unit_tests/guard" \
 	"uv run pytest -rs -m \"not slow\" tests/integration_tests/test_guards_with_providers.py tests/integration_tests/test_usage_with_providers.py"
 # What a VM needs of the checkout: it has no git, so the tracked and new files are streamed as a tar.
-VM_SOURCES = git ls-files -co --exclude-standard | grep -v -E '^(samples|wiki|docs)/' | tar -cf - -T -
+VM_SOURCES = git ls-files -co --exclude-standard | tar -cf - -T -
 # hatch-vcs reads the version from git, which a VM does not have.
 VM_ENV = PYSANDBOXES_FAIL_ON_SKIP=1 SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 
