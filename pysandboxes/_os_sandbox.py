@@ -309,6 +309,7 @@ async def async_shutdown_daemon(graceful_shutdown: bool = True) -> None:
         assert not _current_daemon.is_started
         _current_daemon = None
         _startup_counter -= 1
+        assert not _startup_counter
 
 
 def start_daemon(

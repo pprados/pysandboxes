@@ -856,15 +856,6 @@ def _wrap_buitins_open(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-# def _wrap_test(func: Callable[...,Any]) -> Callable[...,Any]:
-#     @functools.wraps(func)
-#     def wrapper(
-#             *args,**kwargs
-#     ) -> Any:
-#         return func(*args, **kwargs)
-#
-#     return wrapper
-#
 
 
 def _wrap_filename(func: Callable[..., Any], *, write: bool, learn: bool = True) -> Callable[..., Any]:
@@ -1017,26 +1008,6 @@ def _wrap_shutil_copytree(
             _check_alias.reset(token)
 
     return wrapper
-
-
-# def _wrap_os_path_realpath(func: Callable[...,Any]) -> Callable[...,Any]:
-#     @functools.wraps(func)
-#     def wrapper(file: str | bytes | os.PathLike) -> Any:
-#         # Detect call from posixpath
-#         file = cast(str, file)
-#         remapped, rule = _apply_dest_to_src_rules(cast(str, file), write=False)
-#         if rule:
-#             _raise_ignore(file, rule)
-#         if not remapped:
-#             if is_learning_mode():
-#                 add_learning_rule(LearnFileRule(Path(file), False))
-#                 remapped = file
-#                 pass
-#             else:
-#                 _raise_access(file)
-#         return func(remapped)
-#
-#     return wrapper
 
 
 def _wrap_os_stat(func: Callable[..., Any], *, write: bool) -> Callable[..., Any]:

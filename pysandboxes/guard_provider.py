@@ -28,13 +28,11 @@ def parse_rules(
 ) -> Tuple[int, str, bool, Path, bool, bool, bool, ConfigLines]:
     from ._os_sandbox import providers_factory, unsupported_platform_reason
 
-    port = -1
     other_rules: ConfigLines = []
     parameters_multi_values: dict[str, set[Tuple[Any, ConfigLine]]] = defaultdict(set)
     use_py_sandbox = True
     remote_result_guard = True
     remote_result_data_only = True
-    learning_path = None
 
     for rule in rules:
         if rule.rule.startswith("os-sandbox="):
@@ -233,5 +231,3 @@ def parse_rules(
         other_rules,
     )
 
-
-# Tuple[int, str, bool, Path, bool, bool, bool, ConfigLines]:

@@ -2,7 +2,7 @@
 # License: Apache V2
 """Namespace setup module — runs inside the unshared namespace.
 
-Replaces unshare_setup.sh. This script is executed by the unshare command
+This script is executed by the unshare command
 inside user/network/mount namespaces. It:
 1. Signals readiness to the launcher (writes PID to PID_FILE)
 2. Waits for network (reads from fd 3, provided by slirp4netns)

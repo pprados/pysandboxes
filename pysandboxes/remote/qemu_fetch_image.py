@@ -19,7 +19,7 @@ from .qemu_image import (
 )
 
 
-def main() -> int:  # FIXME documenter
+def main() -> int:
     """Print the standard image path; download the image if missing and URL is configured."""
     dir_path = get_vm_images_dir()
     default_path = get_default_image_path()
