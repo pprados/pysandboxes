@@ -1,16 +1,15 @@
 # Python-layer security assessment
 
-This assessment covers runtime Python guards (`guard_files`, `guard_socket`,
-`guard_import`, `guard_envs`, `guard_api`) and their lifecycle. Python patching
-is not containment for hostile bytecode: code in the same interpreter can
-inspect and reassign module globals, retain references, call native extensions,
-and use interfaces the guards do not patch.
+This assessment covers the runtime guards (`guard_files`, `guard_socket`,
+`guard_import`, `guard_envs`, `guard_api`) and their lifecycle. Hostile code in
+the same interpreter can inspect or reassign guard state, retain references,
+and call native or unpatched interfaces. Python patching is not containment for
+hostile bytecode.
 
-The boundary depends on configuration. `os-sandbox=none` and
-`os-sandbox=subprocess` provide no kernel security boundary. Kernel-backed
-providers (`landlock`, `bwrap`, `firejail`, `unshare`, `qemu`) add provider-
-specific OS controls; see [OS providers](os-providers.md). A Python-policy
-bypass does not by itself prove escape from a correctly configured OS boundary.
+OS protection depends on the provider. `none` and `subprocess` add no kernel
+boundary. Kernel-backed providers add provider-specific controls; see
+[OS providers](os-providers.md). A Python-policy bypass does not prove an OS
+boundary escape.
 
 ## Evidence and scope
 

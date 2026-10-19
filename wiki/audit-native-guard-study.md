@@ -5,7 +5,7 @@
 
 ## Scope and method
 
-This assessment covers the boundary that remains relevant when sandboxed work can use native code: the Linux OS providers, QEMU's host shares, and the feasibility of a native replacement for Python API guards. It was checked against the current provider implementation and isolated probes. It does not treat earlier descriptions of a prototype as evidence for current enforcement.
+This assessment covers Linux OS-provider boundaries, QEMU host shares, and the feasibility of native replacements for Python API guards. It uses current provider code and isolated probes; prototype descriptions are not evidence of current enforcement.
 
 Evidence labels used below:
 
@@ -19,8 +19,6 @@ The Python patching and `eval-*` layers have separate assessments: [Python layer
 
 ### QEMU `expose-ro` is enforced by a read-only 9p export
 
-**Previous behavior: host-file write reproduced. Current status: fixed and verified in this worktree.**
-
 The audit first reproduced a native guest write to a host sentinel through an `expose-ro` share with `py-sandbox=false`. The QEMU command omitted the export's `readonly=on` option, and the guest mount had no `ro` option. This is fixed by passing `readonly=on` to each 9p export created for an `FSExposeRule(write=False)`. The regression test boots a local Ubuntu cloud image under QEMU TCG and confirms native `libc.open(..., O_WRONLY | O_TRUNC)` is refused and the host sentinel is unchanged: [`test_qemu_readonly_share.py`](../tests/integration_tests/test_qemu_readonly_share.py).
 
 The enforcing control is QEMU's host-side export option, so a guest cannot restore write access by remounting its view. QEMU documents 9p exports as read-write by default unless `readonly=on` is set ([QEMU manual](https://www.qemu.org/docs/master/system/qemu-manpage.html)). The integration test is the current evidence for this exact filesystem-share behavior; it does not establish protection against a QEMU hypervisor escape.
@@ -28,8 +26,6 @@ The enforcing control is QEMU's host-side export option, so a guest cannot resto
 This result is specific to QEMU 9p shares. It does not establish that every provider's read-only rules behave identically.
 
 ### Landlock denies native TCP by default; UDP remains outside its controls
-
-**Previous behavior: native TCP connection reproduced. Current status: default TCP denial fixed for ABI v4 and later.**
 
 The audit reproduced a native loopback TCP `connect()` on ABI 8 when no socket rules were configured. The provider now always marks Landlock TCP bind/connect rights as handled and passes an empty allowlist when no `net=` rules exist. A focused integration test confirms a native connection to a reachable host listener is refused in both `python-sb` and daemon modes. On kernels below ABI 4, the provider reports unavailable and refuses to start rather than running without this boundary. Landlock cannot filter UDP at any supported ABI. See [`landlock_daemon.py`](../pysandboxes/remote/landlock_daemon.py) and [Landlock limits](landlock.md#limits).
 

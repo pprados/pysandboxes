@@ -1,20 +1,20 @@
 # FAQ
 
 ## How to display **py-sandbox** logs?
-Set the level like this:
+Set the logger level:
 ```python
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 ```
-This specific logger carries the main information of the component.
+`Pysandboxes` logs the main runtime events.
 
-If you want more intimate details, use:
+For debug details, enable:
 ```python
 logging.getLogger("pysandboxes").setLevel(logging.DEBUG)
 logging.getLogger("Pysandboxes").setLevel(logging.INFO)
 ```
 
 ## How to catch rule violation exceptions?
-All rule violation exceptions are subclasses of the classic exceptions. They use multiple inheritance to be able to catch them all, regardless of their nature.
+Rule violations inherit from standard exceptions and `SandBoxError`. Catch `SandBoxError` to handle all violations:
 
 ```python
 from pysandboxes import SandBoxError
@@ -25,10 +25,10 @@ except SandBoxError:
   ...  # Rule violated
 ```
 
-> Exceptions are thrown if violations are detected by *py-sandbox* and not by *os-sandbox*.
+> Python guards raise these exceptions. OS providers report their own denials.
 
 ## How to activate the sandbox in a notebook?
-In on cell, you can use `with sandboxes()` or `run()`.
+Use `with sandboxes()` or `run()` in a notebook cell:
 ```python
 # single cell
 with sandboxes():
@@ -41,7 +41,7 @@ sb = sandboxes().__enter__()
 ```
 
 ## Why the current directory is used?
-Sometime, with the learn process, the rule `expose-ro=.` is added. This is usually due to the presence of an `.env` file that is found by a library. This causes this directory to be added to the rules. You can set the variables manually and temporarily rename this file while the learning process is underway.
+Learning may add `expose-ro=.` when a library reads a project `.env` file. Export its variables, then hide the file during learning:
 
 ```bash
 set -o allexport
@@ -120,13 +120,12 @@ def call_llm() -> None:
 ```
 
 ## How to ensure a new version of a module doesn't hide new network accesses?
-Using **Py-sandboxes** also makes you aware that a module update can also call the security rules into question.
-We invite you, after each update, to test your application without learning. This way, if a rule is violated, you will know its origin.
-See [use cases](use-cases.md) for this scenario and the others.
+After a dependency update, run the application without learning. New violations reveal changed access. See
+[use cases](use-cases.md).
 
 ##  Do I have any new rule violations since the update?
-Indeed, new ones can be proposed. As the approach is based on *denial by default*, these rules are rejected. Restart a learning session to add what is necessary.
-Use the minor version to fix the version to used (`n.m.*`). The minor version is incremented for each new rules.
+New accesses are denied by default. Review them, then relearn if the application needs additional rights. Pin the
+dependency's minor version (`n.m.*`) to control when new rules appear.
 
 ## Can the test suite feed the learning mode?
 
@@ -138,13 +137,13 @@ trusted code and run the suite strictly after promotion.
 See [Learning from tests](learning-from-tests.md) for full and partial workflows, fixture setup and rule review.
 
 ## Debugging
-When using an external sandbox, two processes are launched. Your development environment is normally capable of handling this, if you use `os-sandbox=subprocess`. A breakpoint in a `@sandbox` function will interrupt the program in the sandbox process. Stack trace analysis will not be easy, as there is no complete trace of the call.
+Partial mode runs sandboxed functions in a child process. Set `os-sandbox=subprocess` to debug without an OS
+boundary. A breakpoint pauses the child; its stack trace omits parts of the cross-process call.
 
-If an exception is generated at this level, the stack trace will be adjusted to show the direct path, abstracting the communication layer.
+PySandboxes adjusts propagated exceptions to hide the transport frames.
 
 ### OS-sandbox debugging
-To know precisely the parameters used to launch an **OS-sandbox**, and to test the behavior,
-use `python-sb`.
+Use `python-sb` to inspect the OS provider's launch parameters and test its behavior.
 
 Depending on the technologies, it may be possible to connect directly to the **os-sandbox**. For example, for firejail, use `firejail --join=firejail-sandbox`.
 

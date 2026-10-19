@@ -1,11 +1,11 @@
 # Roadmap
-This version is a first implementation offered to the community. It allows for testing and demonstrating the validity of the approach.
+The project tests Python API patches and the layered sandbox design. Report reproducible issues with a scenario.
 
-It ensures that the patches for Python functions are correct and do not cause bugs in applications. If you find a case that presents a problem, open a ticket with a scenario to reproduce it. We will provide a fix as soon as possible.
+Rules and providers filter network and file access. Their limits differ: Landlock blocks native TCP by default on
+ABI v4+, but cannot filter UDP. QEMU enforces `expose-ro` with a read-only 9p export. Python guards handle expose
+renaming because OS providers do not rename directories.
 
-It also verifies the relevance of the multiple sandbox encapsulation strategy. Depending on the configured rules and selected provider, the layers can filter network access and deny access to files matching patterns. Provider limits apply: Landlock denies native TCP bind/connect by default on ABI v4+ but cannot filter UDP; QEMU applies `expose-ro` with a read-only 9p export. Since OS providers do not rename directories during an expose mapping, the **py-sandbox** layer handles this.
-
-We have a planned roadmap. Developments will arrive gradually, with no specific order:
+Planned work, in no committed order:
 
 - [ ] Guards
   - [ ] Management of *Denial of Service*

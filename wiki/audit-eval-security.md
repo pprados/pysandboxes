@@ -8,11 +8,11 @@ boundaries; see [Python-layer assessment](audit-python-security.md) and
 
 ## Controls and evidence
 
-`pysandboxes/eval_transform.py` validates and rewrites permitted syntax.
-`pysandboxes/guard_eval.py::build_namespace` creates the evaluation namespace
-and merges caller-provided `names`. `pysandboxes/eval_runtime.py` implements
-attribute checks, selected operator checks, budgets, and guarded stores. The
-code executes in the host process; no `eval-*` rule is an OS boundary.
+`pysandboxes/eval_transform.py` validates and rewrites syntax.
+`pysandboxes/guard_eval.py::build_namespace` creates the namespace and merges
+caller-provided `names`. `pysandboxes/eval_runtime.py` checks attributes and
+selected operators, enforces budgets, and guards stores. Evaluation runs in
+the host process; `eval-*` is not an OS boundary.
 
 The findings marked reproduced below come from in-memory probes run during the
 2026-10-16 audit; there is no committed probe file. The task ledger records a
