@@ -1,32 +1,25 @@
 # Integrating with the MCP SDK
 
-Anthropic offers a standard [MCP SDK](https://github.com/modelcontextprotocol/python-sdk).
-
-This presents a valuable opportunity to use **Py-sandboxes**. The tools and APIs exposed by an MCP server can be abused by manipulating the LLM's responses.
-
-For example:
-- A tool for fetching a web page could be manipulated to access internal intranet pages or `localhost` (To access API details, or to enter a recursive loop of page requests).
-- An LLM that generates Python code and then invokes a tool to execute it could go beyond the developer's intended scope.
-
-In these scenarios, **Pysandboxes** provides a solution.
+The [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) exposes tools to an LLM. Prompt injection can
+steer a web fetcher to internal hosts or make a code execution tool exceed its intended scope. PySandboxes limits
+the server or selected tools.
 
 ## Usage with `python-sb` (complete mode)
 
-In this scenario, the entire MCP server is encapsulated within the sandbox. Simply launch it using `python-sb` instead of `python`.
+Complete mode confines the whole server. Launch it with `python-sb` instead of `python`.
 
-On the first run, if you want to associate a specific configuration file, use the `--learn` parameter as follows:
+On the first run, generate rules in a chosen file with `--learn`:
 
 ```
 python-sb --learn=demo_mcp/.py-sandboxes -m demo_mcp.calc sse
 ```
 
-After using the server to exercise all its *normal* functionalities, interrupt the process (*Ctrl-C* or `kill -2 <pid>`) to generate the rules learned during its operation.
-
-From then on, you can launch the MCP server without the `--learn` parameter to enforce the generated security profile.
+Exercise the server's normal functions, then stop it with Ctrl-C. Review the generated rules. Start it without
+`--learn` to enforce them.
 
 ## Usage by Selecting Functions to Protect (partial mode)
 
-To isolate a tool in the sandbox, start to launch the sandbox
+Use partial mode to isolate selected tools. Start the sandbox:
 
 ```python
 with sandboxes(
@@ -34,7 +27,7 @@ with sandboxes(
 ):
     mcp.run(transport=transport)
 ```
-and simply add the `@sandbox` decorator.
+Add `@sandbox` to each tool implementation:
 ```python
 @sandbox
 @mcp.tool(name="evaluate_expression",
@@ -50,21 +43,22 @@ async def evaluate_expression(expression: str) -> float:
         raise ValueError(f"Invalid expression: {e}")
 ```
 
-The MCP SDK framework allows a tool to access the MCP server itself by adding a `ctx: Context` parameter. Since the context object exists outside the sandbox, it cannot be serialized and sent to the protected version of the code.
+An MCP tool can receive `ctx: Context`. The context belongs to the main process and cannot be serialized into the
+sandbox.
 
-To solve this, split the function in two: one part that handles the context in the main process and another, sandboxed part that performs the evaluation.
+Split the tool into a main-process wrapper and a sandboxed helper. The wrapper uses the context; the helper does
+the protected work.
 
 ```python
 @mcp.tool(name="evaluate_expression",
           description="Evaluates a mathematical expression and returns the result")
 async def evaluate_expression(expression: str, ctx: Context) -> float:
-    # This function runs in the main process and has access to the context.
-    # It calls the sandboxed helper function to perform the actual work.
+    # Runs in the main process and can use the context.
     return await _evaluate_expression(expression)
 
 @sandbox
 async def _evaluate_expression(expression: str) -> float:
-    # This function is sandboxed and does not have access to the context.
+    # Runs in the sandbox without the context.
     try:
         result = eval(expression, {"__builtins__": {}},
                       {"add": add, "sub": sub, "mul": mul, "truediv": truediv})

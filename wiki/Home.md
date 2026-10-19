@@ -1,15 +1,15 @@
 # PySandboxes documentation
 
-PySandboxes runs a Python program under a deny-by-default policy kept in a readable `.py-sandboxes` file, with an optional Linux kernel boundary around it. This index is organized around reader tasks. Pick a reading path first.
+PySandboxes runs Python under a deny-by-default policy stored in `.py-sandboxes`. On Linux, an OS provider can add a kernel boundary. Choose a reading path below.
 
 ## Reading paths
 
-**5 minutes: what is it, does it fit?**
+**Overview (5 minutes)**
 
 1. [README](../README.md): the demo, the quick start, the limits at a glance.
 2. [Use cases](use-cases.md): which scenario, which protection level.
 
-**30 minutes: try it and decide**
+**Try it (30 minutes)**
 
 1. Run the [quick demo](../samples/quick-demo/README.md): learn a policy, then see it refuse an attack.
 2. [Usage](usage.md): complete mode or partial mode.
@@ -17,7 +17,7 @@ PySandboxes runs a Python program under a deny-by-default policy kept in a reada
 4. [Provider comparison](os-providers.md): choose the OS layer.
 5. [Alternatives](alternatives.md): how it compares with containers, microVMs and hosted services.
 
-**Security review: what exactly does it hold?**
+**Security review**
 
 1. [Security model](security-model.md): the layers and the filters.
 2. [Weaknesses](weaknesses.md): known limits and residual risks.

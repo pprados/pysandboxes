@@ -1,20 +1,19 @@
 # Implementation
 
 ## Strategy
-- All the py-sandbox are a dynamic patch of python API
-- To avoid having to load all modules in order to patch them before launching the program, we use a clever strategy. A specific import implementation is added. It imports the modules in the usual way and, if necessary, adds the changes required to protect the code.
-- This mechanism also allows authorized modules to be filtered.
-- Standard functions are replaced by versions that will check the parameters and possibly transform them.
-For file management, names will be checked against exclusion rules and modified if there is an expose parameter indicating a new name for the directories. If a file is not found in the expose rules, an exception is raised.
-- For network connection processing, the procedure is similar. Connection settings are validated against various rules. DENY rules take priority so that a wide range of IP addresses can be ALLOWED, with certain addresses excluded. For example, accept all connections except localhost or intranet addresses.
+- Python guards patch the Python API at runtime.
+- A custom import finder applies patches when modules load and enforces import rules.
+- Wrapped functions validate arguments and apply configured transformations.
+- File wrappers check paths against access and expose rules. Denied paths raise an exception.
+- Socket wrappers check connection settings. `DENY` rules override `ALLOW`, so a broad network range can exclude selected hosts.
 - Import rights and call rights are two distinct notions. A module may legitimately be importable while some of its functions must stay out of reach. A registry of 149 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, `ctypes.CDLL`, ...) is therefore denied by default, whatever `python-import=` allows, and a call right is never derived from a module being present in `python-import=`.
-- For filtering environment variables, processing is performed before the sandbox is launched. This process is launched with only the variables that it has visibility of.
+- Environment variables are filtered before launch. The sandbox receives only allowed variables.
 
 
 ## Current implementation
 
 ### Complete mode
-Here is a brief description of the implementation in **complete mode**. You will find more details by consulting the code.
+Complete mode follows this sequence:
 
 - Command-line parameters are parsed and classified into two groups: python program parameters and py-sandboxes parameters.
 - This process continues until the presence of the  `-c`, `-m`, or `<script.py>` parameters.
@@ -32,7 +31,7 @@ Here is a brief description of the implementation in **complete mode**. You will
 - If interactive mode is used, the code detects whether it's a standard interface or the IPython CLI. The code then adjusts its headers and parameters to indicate the presence of the sandbox.
 
 ### Selected mode
-Here is a brief description of the implementation in **partial mode**. You will find more details by consulting the code.
+Partial mode follows this sequence:
 
 - The parameter files are consulted.
 - The `os-sandbox` parameter is extracted.

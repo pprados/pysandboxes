@@ -2,14 +2,14 @@
 
 ## OS-sandbox vs Py-sandbox
 
-Our solution offers multiple layers of security:
+PySandboxes combines two isolation layers:
 
 - a sandbox at the Python API level (**py-sandbox**)
 - another sandbox at the OS level (**os-sandbox**)
 
-The Python sandbox (*py-sandbox*) can limit malicious usage via Python code, but it cannot prevent access via compiled C/C++/Rust code, or via direct calls to the kernel. For example, database access is often done via compiled C drivers (See [here](database.md) for more details). Similarly, a malicious code, with a little persistence, can manage to escape the Python sandbox. The goal is not to protect against a dependency imported into your project without ensuring it is safe. **We want to prevent abusive use of our code.**
+The Python layer blocks restricted Python operations. It cannot block native extensions or direct kernel calls. Database drivers, for example, often use compiled code ([details](database.md)). The Python layer also does not make an untrusted dependency safe.
 
-Therefore, to protect against a scenario that escapes **Py-Sandboxes**, it is possible to select a complementary technology that provides protection at the OS level. Depending on the available and selected technologies, the limitations will be more or less the same as with **py-sandbox**. You will not find specific Python limitations, such as the module whitelist.
+Add an OS provider to contain native code and direct system calls. OS providers enforce operating-system rules; they do not implement Python-specific controls such as the import whitelist.
 
 ## Which provider?
 
@@ -28,7 +28,7 @@ Two limits to know before choosing `landlock`: it denies a path but cannot hide 
 
 ## All providers
 
-We offer several implementations to encapsulate the Python sandbox:
+The providers that can wrap the Python sandbox are:
 
 | Technology                                                      | Implementation<br/>&amp;<br/>Configuration | Specifics                                                                    | Description                                                                                                                              |
 |-----------------------------------------------------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
@@ -39,11 +39,9 @@ We offer several implementations to encapsulate the Python sandbox:
 | [landlock](https://landlock.io/)                                | [here](landlock.md)                   | • Directory access<br/>• Network TCP port filtering                          | This is a technology that allows an auto isolation inside a Linux process.                                                               |
 | [qemu](https://www.qemu.org/)                            | [here](qemu.md)                       | • Total emulation of OS and CPU                                              | No need of privilege. Use KVM if it's possible, else use the emulation.                                                                  |
 
-*Other implementations will be added soon*
+The `none` column means plain Python with no sandbox. `py-sandbox` shows the Python layer. Each OS column shows that provider's controls; it does not include Python controls. In practice, OS providers wrap the Python layer.
 
-How to read the matrix below. The `none` column is the baseline: plain Python, no sandbox at all. The `py-sandbox` column is the Python layer on its own. Every other column lists what that OS technology enforces **on its own** too, whereas in practice you nest it *around* the py-sandbox instead of replacing it.
-
-So a ❌ means "*this technology does not deal with that concern*", never "*that concern is left unprotected*". Choosing landlock, for instance, does not stop the Python guards from filtering `import` or sensitive API calls: landlock simply has no notion of Python, and in exchange it covers what the Python layer cannot reach, namely compiled code and direct syscalls. Read each OS column as what you *add* on top of the Python layer, and the union of the two as your actual protection.
+A ❌ means the provider does not enforce that control. The Python layer may still enforce it. For example, Landlock cannot filter imports, but blocks compiled code and direct syscalls. Combined controls provide the effective protection.
 
 | Guard                    | none | py-sandbox | landlock  |  unshare  |   bwrap   | firejail |       qemu       |
 |--------------------------|:----:|:----------:|:---------:|:---------:|:---------:|:------:|:----------------:|

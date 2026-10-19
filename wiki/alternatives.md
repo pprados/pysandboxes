@@ -1,13 +1,11 @@
-# Alternatives to PySandboxes: a comparative analysis
+# Alternatives to PySandboxes
 
-*Snapshot of 2026-10-01. Every open-source project was cloned and read at the commit given in
-[Sources](#sources-and-commits-analysed); closed services were assessed from their technical documentation,
-security pages and independent reviews. Projects move fast: re-check a claim before relying on it.*
+*Snapshot: 2026-10-01. Open-source projects were checked at the commits listed in
+[Sources](#sources-and-commits-analysed). Closed services were assessed from vendor documentation, security
+pages, and independent reviews. Verify claims before relying on them; projects change.*
 
-PySandboxes is not alone in trying to run code written by a model without handing it the machine. This page
-compares it with eighteen other solutions. Some are open-source frameworks you embed, some are open-source
-platforms you operate, and some are cloud services you rent. The comparison concentrates on what each
-solution actually enforces, how it enforces it, and where its approach differs from ours.
+This page compares PySandboxes with eighteen solutions: embeddable frameworks, self-hosted platforms, and cloud
+services. It focuses on enforced controls, implementation, and security boundaries.
 
 - [Method](#method)
 - [The landscape](#the-landscape)

@@ -1,44 +1,31 @@
 # Samples
 
-We offer several scenarios for using **Py-Sandboxes**, combined with different frameworks.
-
-Every sample under [`samples/`](../samples/) demonstrates the same scenario, so that what
-changes from one to the next is only the framework's own way of declaring and dispatching a
-tool. A chat agent is given exactly two tools:
+Samples in [`samples/`](../samples/) implement the same chat agent in different frameworks. The agent has two tools:
 
 - **`fetch_webpage`** fetches a URL and returns it as markdown — it shows that pysandboxes
   controls which hosts a tool may reach;
 - **`evaluate_expression`** receives a "python like" expression and computes it — it shows
   that pysandboxes confines malicious code arriving through a tool's argument.
 
-Neither tool is written defensively. `fetch_webpage` calls httpx with whatever URL it is
-given, and `evaluate_expression` is a plain `eval()` with an emptied `__builtins__` — which is
-known not to hold, since `().__class__.__base__.__subclasses__()` still reaches `Popen`. That
-is deliberate: whatever refuses a host or an escape is **pysandboxes**, and no applicative
-filter can take the credit. There is deliberately **no expression filter**, not even an
-optional one: as soon as one exists, the reader can no longer tell who blocked what.
+The tools have no input filters: `fetch_webpage` uses the supplied URL, and `evaluate_expression` calls `eval()`
+with empty `__builtins__`. This keeps the test focused on PySandboxes. Any blocked host or code escape comes from
+the sandbox.
 
 ## The two modes, and the two profiles
 
-Each sample can be run two ways, and carries **one profile per mode**:
+Each sample has a profile for each mode:
 
 | Profile | Mode | What is confined | How it is launched                                                           |
 |---------|------|------------------|------------------------------------------------------------------------------|
 | `.py-sandboxes` | partial | the tool bodies only | the application opens `with sandboxes(...)` or `pysandboxes.run(...)` itself |
 | `.py-sandboxes-complete` | complete | the whole process | `python-sb` in front of the application             |
 
-The two files are deliberately separate. Sharing one would grant each mode the other's
-privileges for nothing, which is the opposite of what the partial mode is for. Each is learned
-in its own mode, by the sample's own `learn.py` — see `make learn`.
+Keep the profiles separate to avoid granting one mode the other's permissions. The sample's `learn.py` generates
+each profile in its matching mode. Run `make learn`.
 
-Counter-intuitively the **partial** profile is usually the larger one: in partial mode the SSE
-bridge that carries the calls into the sandboxed child (fastapi, uvicorn, starlette,
-websockets…) runs inside that child, next to the tool, and is therefore charged to the
-profile. The complete mode takes another path and never starts that server. So the privilege
-reduction of the partial mode does not show up in the number of rules but in the **perimeter
-of confined code**. It also gives a free measuring instrument: rules present in the complete
-profile come from the application, rules present only in the partial one come from the
-transport.
+The partial profile may contain more rules because its sandboxed process also runs the SSE transport (FastAPI,
+Uvicorn, Starlette, and WebSockets). Complete mode does not start that server. Compare the profiles to identify
+application rules and transport rules; the number of rules does not measure the confined code.
 
 ## Why every sample splits its tools in two
 

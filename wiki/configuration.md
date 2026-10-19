@@ -2,9 +2,9 @@
 
 ## Manage config file locations
 
-By default, the program looks for the file in the root directory of the **module** that launches the sandbox, or, for `python-sb script.py`, in the directory of the script. Otherwise, the `./.py-sandboxes` file is used. This can be modified before the program is launched. If you package your application in a Wheel, place your parameters within your module.
+The program first checks the directory of the module that launches the sandbox. For `python-sb script.py`, it checks the script's directory. Otherwise, it uses `./.py-sandboxes`. Set another path before launch. For a packaged application, include the rules in the module.
 
-To address different scenarios, parameter files can have `include` instructions. This allows you to distribute parameters across different files and locations.
+Use `include` to split rules across files and locations.
 
 By default, you'll find this:
 
@@ -14,13 +14,13 @@ include "~/.config/py-sandboxes/user-py-sandboxes.profile"  # For user
 include "/etc/py-sandboxes/global-py-sandboxes.profile"  # For node
 ```
 
-Uncomment the first line to save the `./.py-sandboxes` file in the Git repository while allowing the developer to make local modifications in the `./.local.py-sandboxes` file (which should be added to `.gitignore`). It is not active by default: its path is resolved from the current directory, so whatever directory the program is launched from could add rules of its own. Accepting it is the user's decision.
+Uncomment the first line to keep `.py-sandboxes` in Git and allow local overrides in `.local.py-sandboxes`. Add the local file to `.gitignore`. The include is disabled by default because its path resolves from the current directory. Enabling it lets the launch directory add rules.
 
 Parameters for all of the user's projects can be present in `~/.config/py-sandboxes/user-py-sandboxes.profile`, and for the entire machine in `/etc/py-sandboxes/global-py-sandboxes.profile`.
 
-By adding or removing `include` statements, you can select the different personalization scenarios you want. Note: if it does not exist, it is ignored, as the template's user and node profiles usually are; if it exists but cannot be read, the configuration is refused. A bare name (`include "common"`) is resolved next to the including file. A relative path holding a `/` (`include "shared/strict.profile"`, `include "./.py-sandboxes"`) is resolved against the current working directory, not the including file: the same profile then includes a different file depending on where the program starts, or none. Write an absolute path, or one starting with `~/`, for a file that must not depend on it.
+Add or remove `include` lines to select profiles. A missing included file is ignored; an unreadable file rejects the configuration. Bare names such as `include "common"` resolve beside the including file. Relative paths containing `/` resolve from the current working directory. Use an absolute path or `~/` path when the location must not depend on the launch directory.
 
-Use `include-platform=<sys.platform> "profile"` to include rules only on one Python platform, for example `include-platform=linux "linux.profile"`. The platform name must match `sys.platform`; a profile for another platform is not read or applied. This syntax is suitable for OS-specific imports and API permissions.
+Use `include-platform=<sys.platform> "profile"` to load platform-specific rules, for example `include-platform=linux "linux.profile"`. The value must match `sys.platform`. Other platform profiles are ignored. Use this for OS-specific imports and API permissions.
 
 With **python-sb**, a special parameter can be used to select the configuration.
 Without it, `python-sb` reads the `.py-sandboxes` next to the script or in the directory of the `-m` module, and

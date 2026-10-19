@@ -1,6 +1,6 @@
 # Usage: complete mode and partial mode
 
-The [README](../README.md) shows the shortest path. This page holds the detail of the two ways to use Py-Sandboxes.
+See the [README](../README.md) for a quick start. This page documents the two usage modes.
 
 The public API is four things:
 
@@ -38,13 +38,13 @@ style OSSandbox fill:#ebe0d0,stroke:#2f2617,stroke-width:4px,color:#000000
 style PythonSandbox fill:#aa7c52,stroke:#2f2617,stroke-width:4px
 ```
 
-This scenario is the simplest. Replace the launch of your application (`python -m my_module`) with a launch through `python-sb`. The `@sandbox` annotation is ignored in complete mode. You can add sandbox parameters before the module name:
+Complete mode needs no code changes. Replace `python` with `python-sb`. The `@sandbox` decorator has no effect in this mode. Pass rules before the module name:
 
 ```shell
 python-sb --learn -m my_module
 ```
 
-You can use it in interactive mode and continue to use the help shortcut.
+Start an interactive session with `python-sb`. Python's standard options remain available. If IPython is installed, it is used:
 
 ```shell
 > python-sb
@@ -59,28 +59,26 @@ Signature: os.open(path, flags, mode=511, *, dir_fd=None)
 ...
 ```
 
-If *IPython* is installed, it's used. All the standard python parameters are available.
-
-Complete mode is recommended for launching an [MCP](https://modelcontextprotocol.io/specification/2025-06-18) server, for example. It is easy to offer a precise or symbolic mathematical calculation tool by generating code and executing it in an environment limited to [numpy](https://numpy.org/), [scipy](https://scipy.org/), and [sympy](https://www.sympy.org/). See [the MCP integration guide](mcp.md).
+Complete mode suits standalone scripts, CLIs, and [MCP](https://modelcontextprotocol.io/specification/2025-06-18) servers. It can also run generated code with access limited to libraries such as [NumPy](https://numpy.org/), [SciPy](https://scipy.org/), and [SymPy](https://www.sympy.org/). See the [MCP guide](mcp.md).
 
 ### Learning
 
-The first launch can run in learning mode, as described in the README's Quick start. Exercise representative application paths, then review the resulting policy; an unobserved path or access outside supported APIs may not appear in the generated rules.
+Run the first launch in learning mode. Exercise representative paths, then review the generated policy. Unobserved paths and unsupported APIs may not appear in the rules.
 
 To restart a learning session and add missing rules:
 
 - activate the `learn` parameter in the configuration file
 - or add `--learn=.py-sandboxes` (or just `--learn`) when you start `python-sb`
 
-Learning adds rules for supported accesses it observes during that run. Review each addition before relying on it.
+Learning records supported accesses observed during that run. Review every generated rule before using the profile.
 
 ### Limit
 
-Complete mode grants the same privileges to the entire application, such as access to API tokens. It is likely that only a small part of the application needs them. Partial mode addresses that.
+Complete mode grants one policy to the whole application, including code that can access API tokens. Use partial mode when only selected functions need isolation.
 
 ### Use with uvx
 
-[uvx](https://docs.astral.sh/uv/guides/tools/) runs a Python tool without installing it in the project. A temporary environment is created for the duration of the tool's execution. The `python-sb` wrapper is a separate package that depends on `pysandboxes`:
+[uvx](https://docs.astral.sh/uv/guides/tools/) runs a Python tool in a temporary environment. The `python-sb` package provides the CLI and depends on `pysandboxes`:
 
 ```bash
 uvx python-sb --help
@@ -88,7 +86,7 @@ uvx python-sb --help
 
 ## Partial mode
 
-Often, the application needs all privileges and has access to all API tokens. Only a part of it should be executed in a sandbox. For example, tools invoked by an LLM should not have access to all files or all environment variables. The granularity is finer.
+Use partial mode when the application needs full privileges but selected functions need fewer. For example, limit the files and environment variables available to tools invoked by an LLM.
 
 The application is split in two parts:
 
@@ -143,11 +141,11 @@ async with sandboxes(init_fn=init_sandbox):
     ...
 ```
 
-The `init_fn` parameter is optional. It can contain a function invoked during the initialization of the sandbox. This is the place for:
+`init_fn` is optional. It runs during sandbox initialization. Use it to:
 
 - log level initialization
 - opening database connection pools
-- all important initializations that need to be done on the sandbox side.
+- initialize other resources required inside the sandbox.
 
 ```python
 def init_log_level():
