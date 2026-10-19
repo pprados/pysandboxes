@@ -27,7 +27,7 @@ if not exist "%UV_PYTHON_INSTALL_DIR%" mkdir "%UV_PYTHON_INSTALL_DIR%"
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $env:UV_INSTALL_DIR='C:\uv'; irm https://astral.sh/uv/install.ps1 | iex"
 if errorlevel 1 exit /b 1
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Environment]::SetEnvironmentVariable('UV_PYTHON_INSTALL_DIR','C:\uv-python','Machine'); $p=[Environment]::GetEnvironmentVariable('Path','Machine'); if (($p -split ';') -notcontains 'C:\uv') { [Environment]::SetEnvironmentVariable('Path',($p.TrimEnd(';')+';C:\uv'),'Machine') }"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Environment]::SetEnvironmentVariable('UV_PYTHON_INSTALL_DIR','C:\uv-python','Machine'); $p=[Environment]::GetEnvironmentVariable('Path','Machine'); if (($p -split ';') -notcontains 'C:\uv') { [Environment]::SetEnvironmentVariable('Path',($p.TrimEnd(';')+';C:\uv'),'Machine') }; $env:UV_PYTHON_INSTALL_DIR='C:\uv-python'; & 'C:\uv\uv.exe' python install 3.11 3.12 3.13 3.14; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
 if errorlevel 1 exit /b 1
 
 rem Windows loads its root certificates on demand, when a Schannel client first validates a chain; Python reads the
