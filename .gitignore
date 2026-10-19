@@ -6,6 +6,7 @@ __pycache__/
 *$py.class
 *.so
 cython_debug/
+_version.py
 
 # ---------------------------------------------------------------------------
 # Build, packaging and distribution
