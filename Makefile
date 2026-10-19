@@ -5,7 +5,8 @@ SHELL=/bin/bash
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate _uv-init inspector github-push-test init \
-	clean-sandbox-temps quick-demo-gif
+	clean-sandbox-temps quick-demo-gif \
+	windows-vm windows-tests windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop
 
 UV_GROUP?=--group dev --group test --group lint
 FUZZ_SECONDS?=20
@@ -108,6 +109,106 @@ container-tests: build-images
 INTEGRATION_TESTS ?= tests/integration_tests
 integration-tests:
 	set -a && if [ -f .env ]; then source .env; fi && unset VIRTUAL_ENV && uv run pytest $(INTEGRATION_TESTS)
+
+# The cross-os.yml steps, run in a VM: the `subprocess` provider is the only one on macOS and Windows. Three
+# processes, as in the workflow: the guard unit tests leave the socket guard armed, which breaks the integration ones.
+CROSS_OS_PYTEST = \
+	"uv run pytest tests/unit_tests/test_provider_platforms.py" \
+	"uv run pytest tests/unit_tests/guard" \
+	"uv run pytest -rs -m \"not slow\" tests/integration_tests/test_guards_with_providers.py tests/integration_tests/test_usage_with_providers.py"
+# What a VM needs of the checkout: it has no git, so the tracked and new files are streamed as a tar.
+VM_SOURCES = git ls-files -co --exclude-standard | grep -v -E '^(samples|wiki|docs)/' | tar -cf - -T -
+# hatch-vcs reads the version from git, which a VM does not have.
+VM_ENV = PYSANDBOXES_FAIL_ON_SKIP=1 SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
+
+# Keys and disk live under $HOME, out of every checkout and worktree.
+WINDOWS_VM_DIR ?= $(HOME)/.pysandboxes/windows-vm
+WINDOWS_VM_CONTAINER ?= pysandboxes-windows-vm
+WINDOWS_VM_SSH_PORT ?= 2222
+WINDOWS_VM_ADMIN ?= Docker
+WINDOWS_VM_PYTHON ?= 3.13
+WINDOWS_VM_ENGINE ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (command -v docker >/dev/null 2>&1 && echo docker))
+WINDOWS_VM_SSH = ssh -i $(WINDOWS_VM_DIR)/admin -p $(WINDOWS_VM_SSH_PORT) -o IdentitiesOnly=yes \
+	-o UserKnownHostsFile=$(WINDOWS_VM_DIR)/known_hosts -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 \
+	$(WINDOWS_VM_ADMIN)@127.0.0.1
+
+## Start the local Windows 11 VM, built with podman or docker (needs /dev/kvm); first boot takes about 30 minutes
+windows-vm:
+	@set -eu; \
+	if [ -z "$(WINDOWS_VM_ENGINE)" ]; then echo "Install Podman or Docker to run the Windows VM." >&2; exit 1; fi; \
+	if [ ! -e /dev/kvm ]; then echo "The Windows VM requires /dev/kvm." >&2; exit 1; fi; \
+	mkdir -p -m 700 "$(WINDOWS_VM_DIR)/oem" "$(WINDOWS_VM_DIR)/storage"; \
+	if [ ! -f "$(WINDOWS_VM_DIR)/admin" ]; then ssh-keygen -q -t ed25519 -N '' -f "$(WINDOWS_VM_DIR)/admin"; fi; \
+	cp scripts/windows-vm/install.bat "$(WINDOWS_VM_DIR)/oem/install.bat"; \
+	cp "$(WINDOWS_VM_DIR)/admin.pub" "$(WINDOWS_VM_DIR)/oem/admin_authorized_keys"; \
+	if $(WINDOWS_VM_ENGINE) container inspect "$(WINDOWS_VM_CONTAINER)" >/dev/null 2>&1; then \
+	  $(WINDOWS_VM_ENGINE) start "$(WINDOWS_VM_CONTAINER)" >/dev/null; \
+	else \
+	  $(WINDOWS_VM_ENGINE) run -d --name "$(WINDOWS_VM_CONTAINER)" --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN \
+	    --stop-timeout 120 -p 127.0.0.1:8006:8006 -p "127.0.0.1:$(WINDOWS_VM_SSH_PORT):22" \
+	    -e VERSION=11 -e DISK_SIZE=40G -e RAM_SIZE=4G -e CPU_CORES=4 \
+	    -v "$(WINDOWS_VM_DIR)/storage:/storage" -v "$(WINDOWS_VM_DIR)/oem:/oem" docker.io/dockurr/windows >/dev/null; \
+	fi; \
+	echo "Waiting for the Windows installation and sshd (console: http://127.0.0.1:8006)..."; \
+	for attempt in $$(seq 1 180); do \
+	  if $(WINDOWS_VM_SSH) -o BatchMode=yes exit >/dev/null 2>&1; then echo "Windows VM reachable on port $(WINDOWS_VM_SSH_PORT)"; exit 0; fi; \
+	  sleep 10; \
+	done; \
+	echo "Timed out waiting for SSH: $(WINDOWS_VM_ENGINE) logs $(WINDOWS_VM_CONTAINER)" >&2; exit 1
+
+## Run the cross-os.yml test steps in the Windows VM, with the subprocess provider
+windows-tests: windows-vm
+	@set -u; \
+	$(WINDOWS_VM_SSH) "if not exist C:\\pysandboxes mkdir C:\\pysandboxes" || exit 1; \
+	$(VM_SOURCES) | $(WINDOWS_VM_SSH) "tar -xf - -C C:/pysandboxes" || exit 1; \
+	status=0; \
+	for cmd in $(CROSS_OS_PYTEST); do \
+	  $(WINDOWS_VM_SSH) "cd /d C:\\pysandboxes && set \"PYSANDBOXES_FAIL_ON_SKIP=1\" && set \"SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0\" && uv sync --python $(WINDOWS_VM_PYTHON) --group test && $$cmd" || status=1; \
+	done; \
+	exit $$status
+
+## Stop the Windows VM, keeping its disk
+windows-vm-stop:
+	-@$(WINDOWS_VM_ENGINE) stop --time 120 "$(WINDOWS_VM_CONTAINER)" >/dev/null
+
+## Remove the Windows VM, its disk and its keys (destructive); then `make windows-vm` rebuilds it
+windows-vm-clean: windows-vm-stop
+	@$(WINDOWS_VM_ENGINE) rm -f "$(WINDOWS_VM_CONTAINER)" >/dev/null 2>&1 || true
+	rm -rf "$(WINDOWS_VM_DIR)"
+
+# The macOS VM (OSX-KVM, Sonoma) already exists: it is started, not built. Its launcher and its SSH config
+# (host `macos`, port 2223, key id_macos) live in OSX_KVM_DIR. The VM needs uv on its PATH.
+OSX_KVM_DIR ?= /mnt/extra/home/philippe-prados/OSX-KVM
+MACOS_PYTHON ?= 3.13
+MACOS_SSH = ssh -F $(OSX_KVM_DIR)/ssh_config -o ConnectTimeout=5 macos
+
+## Start the local macOS VM (OSX-KVM) and wait for SSH
+macos-vm:
+	@set -u; \
+	if $(MACOS_SSH) -o BatchMode=yes exit >/dev/null 2>&1; then echo "macOS VM already reachable"; exit 0; fi; \
+	test -x "$(OSX_KVM_DIR)/boot-ssh.sh" || { echo "No $(OSX_KVM_DIR)/boot-ssh.sh: set OSX_KVM_DIR." >&2; exit 1; }; \
+	(cd "$(OSX_KVM_DIR)" && nohup ./boot-ssh.sh >boot-ssh.log 2>&1 &); \
+	echo "Waiting for the macOS boot..."; \
+	for attempt in $$(seq 1 90); do \
+	  if $(MACOS_SSH) -o BatchMode=yes exit >/dev/null 2>&1; then echo "macOS VM reachable"; exit 0; fi; \
+	  sleep 10; \
+	done; \
+	echo "Timed out waiting for SSH: see $(OSX_KVM_DIR)/boot-ssh.log" >&2; exit 1
+
+## Run the cross-os.yml test steps in the macOS VM, with the subprocess provider
+macos-tests: macos-vm
+	@set -u; \
+	$(MACOS_SSH) "mkdir -p pysandboxes" || exit 1; \
+	$(VM_SOURCES) | $(MACOS_SSH) "tar -xf - -C pysandboxes" || exit 1; \
+	status=0; \
+	for cmd in $(CROSS_OS_PYTEST); do \
+	  $(MACOS_SSH) "export PATH=\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV); cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test && $$cmd" || status=1; \
+	done; \
+	exit $$status
+
+## Shut the macOS VM down
+macos-vm-stop:
+	-@$(MACOS_SSH) "sudo -n shutdown -h now" >/dev/null 2>&1 || true
 
 # (integration first: the unit tests leave the socket guard
 # armed with a deny-all rule set, which breaks the in-process integration tests).
