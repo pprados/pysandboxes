@@ -80,7 +80,11 @@ skip = ".git,*.pdf,*.svg,*.yaml,*.ipynb,uv.lock,./.venv"
 # is small here because the sample uses neither RAG, memory nor knowledge --
 # chromadb only arrives as a transitive import. Re-check when crewai next moves:
 # if it relaxes the pin, drop this override.
-override-dependencies = ["chromadb>=1.5"]
+#
+# Same for `mcp`: crewai pins `mcp~=1.28.1`, which is vulnerable to CVE-2026-59951
+# (fixed in 1.30.0). The sample uses no MCP server. Drop the override once crewai
+# allows mcp >= 1.30.
+override-dependencies = ["chromadb>=1.5", "mcp>=1.30.0,<2"]
 
 [tool.uv.sources]
 # Use only inside the pysandboxes git repository
