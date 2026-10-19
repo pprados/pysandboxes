@@ -8,27 +8,45 @@ renaming because OS providers do not rename directories.
 Planned work, in no committed order:
 
 - [ ] Guards
+  - [X] Control environment variables
+  - [X] Control import list
+  - [X] Control file and network access
+  - [X] Control life cycle of the daemon (restart if necessary)
+  - [X] Guard some critical methods in Python (spawn, shell, etc.)
   - [ ] Management of *Denial of Service*
   - [ ] Management of regular expressions
+  - [X] Control of `exec()`, `eval()` and `compile()` (the [`eval-*` rules](eval.md))
+    - See [here](https://huntr.com/bounties/63ab1cfe-b573-4cf5-a7d3-fb6c957e34b0)
 - [ ] OS Compatible
+  - [X] Linux
   - [ ] Windows
   - [ ] Mac OS (see https://cursor.com/fr/blog/agent-sandboxing)
 - [ ] OS-sandboxes
   - [ ] Basic
+    - [X] None
+    - [X] sub process
     - [ ] sub interpreter
+    - [X] Landlock
   - [ ] Landlock: refuse `connect()` to a named Unix socket not covered by an `expose-rw` rule, the rule every
     other provider applies. Landlock cannot filter it, so a seccomp user-notification filter sends each Unix
     `connect()` to the parent, which checks the path, connects itself and hands the descriptor back
     (`SECCOMP_IOCTL_NOTIF_ADDFD`), leaving no window to change the path after the check.
   - [ ] Sandbox utilities
+    - [X] firejail
+    - [X] unshare
+    - [X] bwrap
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: filtering by domain, not only by IP)
   - [ ] Container
+    - [X] Docker (--privileged with unshare)
+    - [X] podman (--privileged with unshare)
+    - [X] kubernetes
     - [ ] Flatpak
     - [ ] rpm-ostree unprivileged
     - [ ] bwrap-oci
     - [ ] gVisor (user space kernel simulation, without docker)
     - [ ] Firecracker
   - [ ] VM
+    - [X] Qemu
     - [ ] multipass
     - [ ] lxc
     - [ ] vagrant
@@ -46,6 +64,19 @@ Planned work, in no committed order:
   - [ ] Apple
     - [ ] App Sandbox
     - [ ] sandbox-exec
+- [X] New samples
+  - [X] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
+  - [X] [Crewai](https://www.crewai.com/)
+  - [X] [Google ADK](https://google.github.io/adk-docs/)
+  - [X] [Microsoft AutoGen](https://www.microsoft.com/en-us/research/project/autogen/)
+  - [X] MCP client
+  - [X] MCP server
+  - [X] [OpenAI Agent SDK](https://developers.openai.com/api/docs/guides/agents-sdk)
+  - [X] [Pydantic.ai](https://ai.pydantic.dev/)
+  - [X] [Smolagent](https://huggingface.co/docs/smolagents/index)
+  - [X] [Strandsagents](https://strandsagents.com)
+  - [X] [langchain](https://www.langchain.com/)
+  - [X] [langgraph](https://langchain-ai.github.io/langgraph/)
 - [ ] Features
   - [ ] Compile a part of code
   - [ ] Propagate the tracability id
