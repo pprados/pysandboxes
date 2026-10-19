@@ -254,7 +254,7 @@ async def async_start_daemon(
             assert os_provider.is_started
             _startup_counter += 1
             return os_provider
-        except Exception as e:
+        except BaseException as e:
             _current_daemon = None
             _starting_daemon = None
             _kill_unstarted_sandbox(os_provider)
@@ -389,11 +389,16 @@ def start_daemon(
             all_rules.os_sandbox,
             start_timeout,
         )
-        loop.call_soon_threadsafe(lambda: loop.create_task(_start_daemon_and_signal(), name="Start daemon"))
+        start_tasks: list[asyncio.Task[None]] = []
+        loop.call_soon_threadsafe(
+            lambda: start_tasks.append(loop.create_task(_start_daemon_and_signal(), name="Start daemon"))
+        )
         if not start_event.wait(timeout=start_timeout):
-            # The start task is still running on the sandbox loop and will keep trying
-            # past this point, so whatever it launched has to be killed here: this caller
-            # raises, the process exits, and with QEMU a whole VM was left behind.
+            # The start task is still running on the sandbox loop and would keep trying
+            # past this point, even counting a start nobody waits for: cancel it, and kill
+            # whatever it launched. This caller raises, the process exits, and with QEMU a
+            # whole VM was left behind.
+            loop.call_soon_threadsafe(lambda: [task.cancel() for task in start_tasks])
             _kill_unstarted_sandbox(_starting_daemon)
             raise RuntimeError(
                 f"Daemon failed to start within {start_timeout}s. "

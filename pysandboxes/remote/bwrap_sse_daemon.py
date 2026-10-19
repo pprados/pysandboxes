@@ -80,6 +80,7 @@ from .tools import SSE_READ_BUFSIZE, is_transient_connection_error, suggest_pack
 logger = logging.getLogger(__name__)
 
 _PROC = Path("/proc")
+_NETWORK_FILTER_TOOLS = ("slirp4netns", "nsenter", "iptables-restore")
 NETFILTER_TIMEOUT = 10.0
 
 
@@ -268,6 +269,17 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
     def unavailable_reason(cls) -> str | None:
         return None if which_command("bwrap") else "bwrap not installed"
 
+    @classmethod
+    def network_filter_unavailable_reason(cls) -> str | None:
+        """Return why a profile with ``net=`` rules cannot run under bwrap here, or None.
+
+        ``bwrap`` alone confines files and processes; filtering the network also takes ``slirp4netns`` for the
+        connectivity, ``nsenter`` to enter the namespace and ``iptables-restore`` to load the filter, all on the
+        host.
+        """
+        missing = [tool for tool in _NETWORK_FILTER_TOOLS if not which_command(tool)]
+        return f"{', '.join(missing)} not found, required for bwrap network filtering" if missing else None
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._slirp_process_holder: list[subprocess.Popen[bytes] | None] = [None]
@@ -315,14 +327,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
         before them, and a filter that cannot be loaded, or a network that never comes up, kills the sandbox instead.
         """
         netfilter_rules = self._build_netfilter_rules(all_rules, process_config.port)
-        for tool in ("slirp4netns", "nsenter", "iptables-restore"):
-            if not which_command(tool):
-                logger.error(
-                    "%s not found; required for bwrap network filtering. "
-                    "Install it or use bwrap.share-net=yes to keep host network.",
-                    tool,
-                )
-                raise SandBoxError(f"{tool} not found, required for bwrap network filtering.")
+        if reason := BWrapSSEDaemon.network_filter_unavailable_reason():
+            logger.error("%s. Install them or use bwrap.share-net=yes to keep host network.", reason)
+            raise SandBoxError(f"{reason}.")
         self._slirp_shutdown_event.clear()
         slirp_pipe_r, slirp_pipe_w = os.pipe()
         fd, api_socket = tempfile.mkstemp()
@@ -502,6 +509,9 @@ class BWrapSSEDaemon(BaseSubProcessDaemon):
             args.extend(["--share-net"])
         else:
             args.extend(["--unshare-net"])
+        # A /proc of the sandbox's own: the file guard reads /proc/self/fd to resolve a dir_fd. Without a new
+        # PID namespace it would show the host's processes, and their environment.
+        args.extend(["--unshare-pid", "--proc", "/proc"])
         # The host loads the filter by entering this user namespace, where only a uid mapped to root keeps its
         # capabilities across exec. The sandbox itself gets none: bwrap drops them all unless --cap-add.
         if self._use_network_filtering(all_rules):

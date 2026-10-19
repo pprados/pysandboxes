@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 # Weak reference to the background event loop to allow for garbage collection.
 _background_loop_ref: AbstractEventLoop | None = None
 _new_event_loop: bool = False  # True, if used a private loop
+# The loop this module created and runs in its own thread, as opposed to one given to `set_sandbox_loop`.
+_owned_loop: AbstractEventLoop | None = None
 
 # Thread-safe lock for creating and managing the background loop.
 _lock = threading.Lock()
@@ -86,8 +88,9 @@ def _ensure_background_loop(new_loop: bool = False) -> AbstractEventLoop | None:
         loop = asyncio.new_event_loop()
         loop.__pysandbox__ = True  # type: ignore[attr-defined]
         _background_loop_ref = loop
-        global _new_event_loop
+        global _new_event_loop, _owned_loop
         _new_event_loop = True
+        _owned_loop = loop
         asyncio.set_event_loop(loop)
 
         start_event = threading.Event()
@@ -146,11 +149,11 @@ def sandbox_loop(func: Callable[..., Any]) -> Callable[..., Any]:
 
         loop = get_sandbox_loop()
         asyncio.set_event_loop(loop)
-
-        result = func(*args, **kwargs)
-        if old_loop:
-            asyncio.set_event_loop(old_loop)
-        return result
+        try:
+            return func(*args, **kwargs)
+        finally:
+            if old_loop:
+                asyncio.set_event_loop(old_loop)
 
     return wrapper
 
@@ -159,12 +162,18 @@ def _reset_sandbox_loop() -> None:
     """
     Resets the global sandbox loop reference.
 
-    This clears the weak reference to the loop, allowing it and its background
-    thread to be garbage collected if no longer in use. The loop itself is
-    stopped from another part of the code.
+    This clears the reference to the loop. A loop created here is also stopped, so
+    its background thread ends instead of waiting forever: the next start creates
+    a new one. A loop given to `set_sandbox_loop` belongs to the application and is
+    left running.
     """
-    global _background_loop_ref
+    global _background_loop_ref, _owned_loop, _new_event_loop
+    loop = _background_loop_ref
     _background_loop_ref = None
+    if loop is not None and loop is _owned_loop:
+        _owned_loop = None
+        _new_event_loop = False
+        loop.call_soon_threadsafe(loop.stop)
 
 
 def get_sandbox_loop() -> AbstractEventLoop:

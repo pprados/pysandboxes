@@ -7,5 +7,4 @@ PySandboxes framework.
 """
 
 DEBUG: bool = False  # Set too True to add some traces
-OPTIMIZE: bool = False  # With True, remove some wrapper
 CONFIG_NAME = ".py-sandboxes"

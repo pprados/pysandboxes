@@ -179,12 +179,12 @@ class TestParsePythonCmdLine:
         assert config == Path(CONFIG_NAME)
 
     def test_parse_python_cmd_line_check_hash_based_pycs(self) -> None:
-        """Test parsing --check-hash-based-pycs flag."""
-        args = ["--check-hash-based-pycs", "script.py"]
+        """The option takes its value from the next argument, as CPython does; the script follows."""
+        args = ["--check-hash-based-pycs", "never", "script.py"]
 
         python_parsed, sandboxes_args, python_cmd, config = parse_python_cmd_line(args)
 
-        assert "--check-hash-based-pycs" in python_parsed
+        assert python_parsed == ["--check-hash-based-pycs", "never"]
         assert python_cmd == ["script.py"]
         assert config == Path(CONFIG_NAME)
 

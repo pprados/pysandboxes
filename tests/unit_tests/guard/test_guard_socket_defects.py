@@ -39,6 +39,8 @@ from pysandboxes.main_logger import ErrorMsg
 from pysandboxes.netfilter import rule_to_netfilter
 from pysandboxes.sb_types import ConfigLine
 
+from .._unix_sockets import requires_unix_sockets
+
 
 class _FakeSocket:
     """Stand-in for a socket object: the wrappers read ``type`` and ``family``."""
@@ -194,6 +196,7 @@ def test_listen_without_bind_passes_with_a_wildcard_rule() -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
+@requires_unix_sockets
 def test_unix_connect_needs_write_access_to_the_socket(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     path = str(tmp_path / "s")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
@@ -211,6 +214,7 @@ def test_unix_connect_needs_write_access_to_the_socket(monkeypatch: pytest.Monke
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no AF_UNIX")
+@requires_unix_sockets
 def test_unix_connect_passes_with_write_access(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     path = str(tmp_path / "s")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
@@ -225,6 +229,7 @@ def test_unix_connect_passes_with_write_access(monkeypatch: pytest.MonkeyPatch, 
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="abstract AF_UNIX addresses are a Linux-only namespace")
+@requires_unix_sockets
 def test_connect_to_an_abstract_unix_address_is_refused_not_crashed() -> None:
     # G13: an abstract address has no filesystem path, so file rules cannot judge it.
     # It must be refused with the guard's socket refusal, not crash in os.path.realpath.
@@ -235,6 +240,7 @@ def test_connect_to_an_abstract_unix_address_is_refused_not_crashed() -> None:
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="abstract AF_UNIX addresses are a Linux-only namespace")
+@requires_unix_sockets
 def test_sendto_an_abstract_unix_address_is_refused_not_crashed() -> None:
     _arm()
     with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sender:

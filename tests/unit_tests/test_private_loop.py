@@ -153,6 +153,53 @@ class TestResetSandboxLoop:
         finally:
             loop.close()
 
+    def test_reset_stops_the_loop_and_ends_the_thread_it_created(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(private_loop, "_background_loop_ref", None)
+        monkeypatch.setattr(private_loop, "_owned_loop", None)
+        monkeypatch.setattr(private_loop, "_new_event_loop", False)
+        monkeypatch.setattr(private_loop, "_thread", None)
+        loop = get_sandbox_loop()
+        thread = private_loop._thread
+        try:
+            assert thread is not None and thread.is_alive()
+
+            _reset_sandbox_loop()
+            thread.join(timeout=5)
+
+            assert not thread.is_alive()
+            assert private_loop._new_event_loop is False
+            assert private_loop._owned_loop is None
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
+
+    def test_reset_leaves_a_loop_given_by_the_application_running(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(private_loop, "_owned_loop", None)
+        loop = Mock()
+        set_sandbox_loop(loop)
+
+        _reset_sandbox_loop()
+
+        loop.call_soon_threadsafe.assert_not_called()
+
+    def test_sandbox_loop_decorator_restores_the_calling_loop_when_the_function_raises(self) -> None:
+        old_loop = Mock()
+
+        with (
+            patch("pysandboxes.private_loop.get_sandbox_loop", return_value=Mock()),
+            patch("asyncio.get_running_loop", return_value=old_loop),
+            patch("asyncio.set_event_loop") as set_event_loop,
+        ):
+
+            @sandbox_loop
+            def failing() -> None:
+                raise ValueError("boom")
+
+            with pytest.raises(ValueError):
+                failing()
+
+        assert set_event_loop.call_args_list[-1] == call(old_loop)
+
     def test_reset_sandbox_loop_multiple_calls(self) -> None:
         """Test that multiple calls to _reset_sandbox_loop don't cause issues."""
         _reset_sandbox_loop()

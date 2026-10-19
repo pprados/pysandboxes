@@ -377,6 +377,36 @@ def test_a_sync_start_that_times_out_kills_what_it_launched(monkeypatch: pytest.
     assert _os_sandbox._current_daemon is None
 
 
+def test_a_sync_start_that_timed_out_is_cancelled_and_never_counted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_os_sandbox, "TIMEOUT_FOR_START_DAEMON", 0.3)
+    _Daemon.process = _Process(returncode=None)
+    loop = _os_sandbox.get_sandbox_loop()
+    gate_ready = threading.Event()
+
+    def _make_gate() -> None:
+        _Daemon.start_gate = asyncio.Event()
+        gate_ready.set()
+
+    loop.call_soon_threadsafe(_make_gate)
+    assert gate_ready.wait(5)
+    with pytest.raises(RuntimeError, match="Daemon failed to start within 0.3s"):
+        _os_sandbox.start_daemon(_rules(), envs={}, log_level=0)
+
+    settled = threading.Event()
+
+    async def _release_and_settle() -> None:
+        assert _Daemon.start_gate is not None
+        _Daemon.start_gate.set()
+        while _os_sandbox._starting_daemon is not None:
+            await asyncio.sleep(0.01)
+        settled.set()
+
+    loop.call_soon_threadsafe(lambda: loop.create_task(_release_and_settle()))
+    assert settled.wait(5)
+    assert _os_sandbox._current_daemon is None
+    assert _os_sandbox._startup_counter == 0
+
+
 def test_a_generated_profile_names_landlock_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_os_sandbox, "unsupported_platform_reason", lambda name: None)
     monkeypatch.setattr(_os_sandbox.providers_factory["landlock"], "unavailable_reason", classmethod(lambda cls: None))

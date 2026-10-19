@@ -333,20 +333,29 @@ def _apply_netfilter(netfilter_rules: tuple[str, ...]) -> None:
             break
         except FileNotFoundError:
             continue
-    restore = next((c for c in _IPTABLES_RESTORE_PATHS if Path(c).is_file()), None)
-    if restore is None:
+    candidates = [c for c in _IPTABLES_RESTORE_PATHS if Path(c).is_file() and os.access(c, os.X_OK)]
+    if not candidates:
         raise RuntimeError(
-            f"iptables-restore not found in {', '.join(_IPTABLES_RESTORE_PATHS)}: cannot apply the network filter. "
-            "Install iptables in the guest image."
+            f"no executable iptables-restore in {', '.join(_IPTABLES_RESTORE_PATHS)}: cannot apply the network "
+            "filter. Install iptables in the guest image."
         )
-    r = subprocess.run(
-        [restore, "--noflush"],
-        input="\n".join(netfilter_rules).encode(),
-        check=False,
-        capture_output=True,
-    )
-    if r.returncode != 0:
-        raise RuntimeError(f"iptables-restore failed ({r.returncode}): {r.stderr.decode(errors='replace').strip()}")
+    failure = ""
+    for restore in candidates:
+        # iptables-restore is atomic: a candidate that fails applied nothing, so the next one can be tried.
+        try:
+            r = subprocess.run(
+                [restore, "--noflush"],
+                input="\n".join(netfilter_rules).encode(),
+                check=False,
+                capture_output=True,
+            )
+        except OSError as e:
+            failure = f"{restore}: {e}"
+            continue
+        if r.returncode == 0:
+            return
+        failure = f"{restore} ({r.returncode}): {r.stderr.decode(errors='replace').strip()}"
+    raise RuntimeError(f"iptables-restore failed, {failure}")
 
 
 def main() -> int:

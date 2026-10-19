@@ -10,6 +10,7 @@ import pytest
 import tblib
 
 from pysandboxes.e import RestrictedUnpicklingError, SandBoxProtocolError
+from pysandboxes.remote import base_sse_daemon
 from pysandboxes.remote.base_sse_daemon import _attach_remote_traceback, _rebuild_remote_exception
 from pysandboxes.remote.sse_server_daemon import SSEServerDaemon
 from pysandboxes.remote.tools import to_b85
@@ -58,13 +59,10 @@ class TestAttachRemoteTraceback:
         exception = ValueError("denied")
 
         class Empty(tblib.Traceback):
-            def __init__(self) -> None:
-                pass
-
             def as_traceback(self) -> None:  # type: ignore[override]
                 return None
 
-        empty = Empty()
+        empty = Empty(_raise_through(0).__traceback__)
 
         assert _attach_remote_traceback(exception, empty) is exception
         assert exception.__traceback__ is None
@@ -72,6 +70,49 @@ class TestAttachRemoteTraceback:
     def test_a_foreign_traceback_is_refused(self) -> None:
         with pytest.raises(RestrictedUnpicklingError, match="unexpected shape"):
             _attach_remote_traceback(ValueError("x"), "not a traceback")
+
+    def test_a_cyclic_chain_is_refused_instead_of_looping(self) -> None:
+        serial = tblib.Traceback(_raise_through(3).__traceback__)
+        serial.tb_next.tb_next = serial  # type: ignore[union-attr]
+
+        with pytest.raises(RestrictedUnpicklingError, match="unexpected shape"):
+            _attach_remote_traceback(ValueError("x"), serial)
+
+    def test_a_chain_longer_than_any_real_one_is_refused(self) -> None:
+        serial = tblib.Traceback(_raise_through(0).__traceback__)
+        node = serial
+        for _ in range(base_sse_daemon._MAX_TRACEBACK_FRAMES + 1):
+            node.tb_next = tblib.Traceback(_raise_through(0).__traceback__)
+            node = node.tb_next
+
+        with pytest.raises(RestrictedUnpicklingError, match="unexpected shape"):
+            _attach_remote_traceback(ValueError("x"), serial)
+
+    @pytest.mark.parametrize("lineno", [-1, 2**31, 2**70, 1.5, "7", True, None])
+    def test_a_line_number_out_of_range_or_of_another_type_is_refused(self, lineno: Any) -> None:
+        serial = tblib.Traceback(_raise_through(1).__traceback__)
+        serial.tb_lineno = lineno
+
+        with pytest.raises(RestrictedUnpicklingError, match="unexpected shape"):
+            _attach_remote_traceback(ValueError("x"), serial)
+
+    @pytest.mark.parametrize(
+        "damage",
+        [
+            lambda tb: setattr(tb.tb_frame, "f_locals", {"__traceback_maker": ValueError}),
+            lambda tb: setattr(tb.tb_frame, "f_globals", {"__traceback_maker": "x"}),
+            lambda tb: setattr(tb.tb_frame.f_code, "co_name", 7),
+            lambda tb: setattr(tb.tb_frame.f_code, "co_filename", b"x"),
+            lambda tb: setattr(tb, "tb_frame", object()),
+            lambda tb: delattr(tb, "tb_frame"),
+        ],
+    )
+    def test_a_frame_holding_more_than_tblib_builds_is_refused(self, damage: Any) -> None:
+        serial = tblib.Traceback(_raise_through(1).__traceback__)
+        damage(serial)
+
+        with pytest.raises(RestrictedUnpicklingError, match="unexpected shape"):
+            _attach_remote_traceback(ValueError("x"), serial)
 
 
 def _tb_payload(exc: BaseException) -> Any:

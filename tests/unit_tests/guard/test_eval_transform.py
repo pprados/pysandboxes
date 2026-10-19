@@ -43,6 +43,32 @@ def _check(source: str, **kwargs: object) -> list[Violation]:
     return list(validate(ast.parse(source), rules))
 
 
+def test_a_node_without_a_position_takes_the_one_of_its_parent() -> None:
+    violations = _check("\n[x for x in ()]", syntax=_syntax())
+
+    assert violations
+    assert all(v.lineno == 2 for v in violations)
+
+
+def test_a_refused_group_is_reported_once_for_its_node_and_the_nodes_below_it() -> None:
+    violations = _check("[x for x in ()]", syntax=_syntax())
+
+    assert [v.message for v in violations] == ["'ListComp' is not allowed"]
+
+
+def test_a_node_of_another_group_below_a_refused_one_is_still_reported() -> None:
+    violations = _check("[x + 1 for x in ()]", syntax=_syntax())
+
+    assert [v.message for v in violations] == ["'ListComp' is not allowed", "'BinOp' is not allowed"]
+
+
+def test_the_headline_is_singular_for_one_violation() -> None:
+    with pytest.raises(EvalSyntaxRejected) as caught:
+        raise_if_rejected("<eval>", "x", [Violation(1, 0, "m", "r")])
+
+    assert str(caught.value).startswith("1 rule violated in <eval>")
+
+
 def test_a_literal_needs_nothing_but_the_core() -> None:
     assert not _check("1", syntax=_syntax())
 

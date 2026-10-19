@@ -5,9 +5,8 @@
 from pysandboxes import config
 
 
-def test_debug_traces_and_optimize_are_off_by_default() -> None:
+def test_debug_traces_are_off_by_default() -> None:
     assert config.DEBUG is False
-    assert config.OPTIMIZE is False
 
 
 def test_the_profile_is_named_after_the_documented_file() -> None:

@@ -58,6 +58,55 @@ def test_unknown_attributes_are_read_and_written_on_the_original_stream() -> Non
     assert "label" not in vars(wrapper)
 
 
+def _text_stream() -> io.TextIOWrapper:
+    return io.TextIOWrapper(io.BytesIO(), encoding="latin-1", errors="replace", write_through=True)
+
+
+def test_a_wrapper_answers_for_the_original_stream_before_any_capture() -> None:
+    original = _text_stream()
+    wrapper = WrapperIO(contextvars.ContextVar("t_before", default=original))
+
+    assert wrapper.buffer is original.buffer
+    assert wrapper.line_buffering is original.line_buffering
+    assert callable(wrapper.reconfigure)
+    assert wrapper.writable() is True
+
+
+def test_a_wrapper_describes_itself_with_the_encoding_and_errors_of_the_original() -> None:
+    default = _text_stream()
+    wrapper = WrapperIO(contextvars.ContextVar("t_enc", default=default))
+    wrapper.set_context(io.StringIO())
+
+    assert (wrapper.encoding, wrapper.errors) == ("latin-1", "replace")
+
+
+def test_an_original_without_an_encoding_reads_as_utf8() -> None:
+    default = io.StringIO()
+    wrapper = WrapperIO(contextvars.ContextVar("t_utf8", default=default))
+
+    assert wrapper.encoding == "utf-8"
+    assert wrapper.errors is None
+
+
+def test_a_captured_stream_is_not_a_terminal_and_has_no_file_descriptor() -> None:
+    default = _text_stream()
+    wrapper = WrapperIO(contextvars.ContextVar("t_tty", default=default))
+    wrapper.set_context(io.StringIO())
+
+    assert wrapper.isatty() is False
+    assert wrapper.seekable() is False
+    with pytest.raises(io.UnsupportedOperation):
+        wrapper.fileno()
+
+
+def test_an_attribute_the_original_lacks_raises_attribute_error_naming_it() -> None:
+    default = io.StringIO()
+    wrapper = WrapperIO(contextvars.ContextVar("t_missing", default=default))
+
+    with pytest.raises(AttributeError, match="no_such_attribute"):
+        _ = wrapper.no_such_attribute
+
+
 def test_an_own_attribute_not_yet_set_raises_attribute_error() -> None:
     wrapper = WrapperIO.__new__(WrapperIO)
 

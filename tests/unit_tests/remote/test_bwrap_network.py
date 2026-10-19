@@ -164,3 +164,31 @@ def test_a_sandbox_never_entering_its_namespaces_times_out(tmp_path: Path) -> No
     (proc / "self").symlink_to(proc / "1000")
     with patch.object(bwrap_mod, "_PROC", proc), pytest.raises(SandBoxError, match="namespace"):
         bwrap_mod._sandbox_pid(1000, timeout=0.05)
+
+
+def test_the_network_filter_needs_slirp_nsenter_and_iptables_restore_on_the_host() -> None:
+    present = {"slirp4netns": "/usr/bin/slirp4netns", "nsenter": "/usr/bin/nsenter", "iptables-restore": None}
+    with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", side_effect=present.get):
+        reason = BWrapSSEDaemon.network_filter_unavailable_reason()
+
+    assert reason == "iptables-restore not found, required for bwrap network filtering"
+
+
+def test_every_missing_network_tool_is_named() -> None:
+    with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", return_value=None):
+        reason = BWrapSSEDaemon.network_filter_unavailable_reason()
+
+    assert reason == "slirp4netns, nsenter, iptables-restore not found, required for bwrap network filtering"
+
+
+def test_the_network_filter_is_available_when_the_three_tools_exist() -> None:
+    with patch("pysandboxes.remote.bwrap_sse_daemon.which_command", return_value="/usr/bin/tool"):
+        assert BWrapSSEDaemon.network_filter_unavailable_reason() is None
+
+
+def test_a_profile_with_net_rules_refuses_to_start_when_a_network_tool_is_missing(tmp_path: Path) -> None:
+    with patch.object(BWrapSSEDaemon, "network_filter_unavailable_reason", return_value="nsenter not found"):
+        with pytest.raises(SandBoxError, match="nsenter not found"):
+            BWrapSSEDaemon("token").get_launch_params_for_python_sb(
+                _with_socket_rule(), 0, "t", "", tmp_path / "pipe", tmp_path
+            )

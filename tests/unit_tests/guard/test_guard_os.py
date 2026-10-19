@@ -1039,9 +1039,8 @@ def test_scandir_context_manager_closes_the_underlying_scanner_on_exit(tmp_path:
     assert mgr.scanner is None
 
 
-def test_scandir_iter_does_not_use_the_optimize_fast_path_during_learning(tmp_path: Path) -> None:
-    """`OPTIMIZE` is a hard-coded `False`: learning mode alone must not switch `__iter__` onto the
-    raw-iterator fast path, which bypasses the per-entry rule filter."""
+def test_scandir_iter_does_not_use_a_raw_iterator_during_learning(tmp_path: Path) -> None:
+    """Learning mode must not switch `__iter__` onto the raw iterator, which bypasses the per-entry rule filter."""
     from pysandboxes.guard_files import _ScanDirContextManager
     from pysandboxes.learning import set_learning_mode
 

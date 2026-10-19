@@ -1,5 +1,41 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
+"""Translation of the ``net=`` rules into an ``iptables-restore`` ruleset.
+
+The Python layer judges a connection with ``guard_socket``. The providers that give the sandbox its own network
+namespace (``unshare``, ``bwrap``, ``firejail``, ``qemu``) enforce the same rules a second time, in the kernel, so
+that a native library or a child process cannot walk around the Python guard. This module only builds the text of
+that ruleset; each provider loads it with ``iptables-restore`` inside the network namespace (or the guest) it
+creates.
+
+The ruleset is a ``*filter`` table made of:
+
+1. A default policy of ``DROP`` on ``INPUT``, ``FORWARD`` and ``OUTPUT``: what no rule names is refused.
+2. Two rules accepting the packets of connections already ``ESTABLISHED`` or ``RELATED``.
+3. One rule per DNS server of the namespace, accepting new UDP packets to port 53 of that server only.
+4. One rule per ``net=`` rule, per protocol, per direction and per group of ports, in the order of the profile.
+   iptables stops at the first match, so the order of the ``net=`` lines keeps its meaning. ``ALLOW`` becomes
+   ``ACCEPT`` and ``DENY`` becomes ``REJECT``, which answers at once instead of leaving the caller to time out.
+5. ``COMMIT``.
+
+Choices that follow the Python layer, so that both layers give the same answer:
+
+- The network of an ``IN`` rule is the local address a socket binds, so it is matched as the destination of the
+  incoming packet (``-d``). The wildcard address then stands for every local address.
+- The network of an ``OUT`` rule is the destination of the packet (``-d``). An empty network matches any address.
+- An empty port field matches no port. A range covering every port matches every port.
+- ``OUT`` matches new connections only, ``IN`` also the established ones.
+- A rule whose network is not of the IP version being built is skipped: the IPv4 and the IPv6 rulesets are built by
+  two calls.
+
+Limits:
+
+- iptables matches addresses, not names: a host name is resolved beforehand, to the addresses the ruleset allows.
+- The ``multiport`` match takes at most 15 ports, so a longer list becomes several rules.
+- UDP rules do not use ``conntrack``: they match every datagram, not only the first of an exchange.
+- Only ``tcp`` and ``udp`` exist; ``Unix`` sockets are not network traffic and are judged by the file rules.
+"""
+
 from ipaddress import IPv4Address, IPv4Network, IPv6Network
 from typing import Iterable, List, Union
 

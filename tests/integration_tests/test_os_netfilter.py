@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from pysandboxes.remote.bwrap_sse_daemon import BWrapSSEDaemon
 from pysandboxes.remote.landlock_daemon import _get_landlock_abi_version
 
 from ._env import provider_skip_reason
@@ -49,6 +50,7 @@ def _params() -> list:
         for provider in _PROVIDERS
         for reason in (
             provider_skip_reason(provider)
+            or (BWrapSSEDaemon.network_filter_unavailable_reason() if provider == "bwrap" else None)
             or (
                 "Landlock default TCP deny and network rules require ABI v4 (Linux 6.7+)"
                 if provider == "landlock" and _get_landlock_abi_version() < 4

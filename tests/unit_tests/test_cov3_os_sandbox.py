@@ -3,7 +3,7 @@
 """``_os_sandbox``: shutdowns without a daemon, failing or stuck shutdowns, calls made from inside the sandbox."""
 
 import asyncio
-import threading
+import time
 from typing import Iterator
 
 import pytest  # type: ignore[import-untyped]
@@ -100,16 +100,12 @@ def test_a_stuck_sync_shutdown_times_out(monkeypatch: pytest.MonkeyPatch) -> Non
         assert daemon.shutdowns == []
     finally:
         # Let the pending shutdown end, so it never runs into a later test.
-        done = threading.Event()
-
-        async def _release_and_wait() -> None:
-            gate.set()
-            while _os_sandbox._current_daemon is not None:
-                await asyncio.sleep(0.01)
-            done.set()
-
-        loop.call_soon_threadsafe(lambda: loop.create_task(_release_and_wait()))
-        assert done.wait(5)
+        # The completed shutdown stops the private loop, so the wait runs in this thread.
+        loop.call_soon_threadsafe(gate.set)
+        deadline = time.monotonic() + 5
+        while _os_sandbox._current_daemon is not None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert _os_sandbox._current_daemon is None
     assert daemon.shutdowns == [True]
 
 

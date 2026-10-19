@@ -108,8 +108,14 @@ class _Validator(ast.NodeVisitor):
     def __init__(self, rules: EvalRules) -> None:
         self.rules = rules
         self.violations: list[Violation] = []
+        # The group of the nearest refused ancestor: its remedy already covers the nodes below it.
+        self._refused_group: str | None = None
+        # The nearest enclosing nodes that carry a position, for those that carry none (`comprehension`).
+        self._positioned: list[ast.AST] = []
 
     def _add(self, node: ast.AST, message: str, remedy: str, warning: str = "") -> None:
+        if not hasattr(node, "lineno") and self._positioned:
+            node = self._positioned[-1]
         self.violations.append(
             Violation(
                 lineno=getattr(node, "lineno", 0),
@@ -147,13 +153,23 @@ class _Validator(ast.NodeVisitor):
                         f"{name} name {identifier!r} uses the reserved prefix {RESERVED_PREFIX!r}",
                         "rename it: the prefix belongs to the guard's own helpers",
                     )
+        previous_group = self._refused_group
         if not isinstance(node, _MARKERS) and name not in _ALWAYS_AVAILABLE and not self.rules.syntax.allows(name):
             group = _GROUP_OF_NODE.get(name)
-            remedy = f"eval-syntax={group}" if group else f"eval-syntax={name}"
+            if group is None or group != previous_group:
+                remedy = f"eval-syntax={group}" if group else f"eval-syntax={name}"
+                if group:
+                    remedy += f"        (or, narrower: eval-syntax={name})"
+                self._add(node, f"{name!r} is not allowed", remedy)
             if group:
-                remedy += f"        (or, narrower: eval-syntax={name})"
-            self._add(node, f"{name!r} is not allowed", remedy)
+                self._refused_group = group
+        positioned = hasattr(node, "lineno")
+        if positioned:
+            self._positioned.append(node)
         super().generic_visit(node)
+        if positioned:
+            self._positioned.pop()
+        self._refused_group = previous_group
 
     def visit_Name(self, node: ast.Name) -> None:
         self._check_identifier(node, node.id, "identifier")
@@ -236,9 +252,14 @@ def render_violation(source: str, violation: Violation) -> str:
     return "\n".join(block)
 
 
+def _headline(source_ref: str, violations: list[Violation]) -> str:
+    """Name how many rules were violated, in the singular for one."""
+    return f"{len(violations)} {'rule' if len(violations) == 1 else 'rules'} violated in {source_ref}"
+
+
 def render_report(source_ref: str, source: str, violations: list[Violation]) -> str:
     """Render the spec's one-report-every-violation block."""
-    header = f"{len(violations)} rules violated in {source_ref}"
+    header = _headline(source_ref, violations)
     return "\n\n".join([header] + [render_violation(source, v) for v in violations])
 
 
@@ -263,7 +284,7 @@ def raise_if_rejected(source_ref: str, source: str, violations: list[Violation])
     lines = source.splitlines()
     first = violations[0]
     raise EvalSyntaxRejected(
-        f"{len(violations)} rules violated in {source_ref}",
+        _headline(source_ref, violations),
         [render_violation(source, violation) for violation in violations],
         lineno=first.lineno,
         offset=first.col,

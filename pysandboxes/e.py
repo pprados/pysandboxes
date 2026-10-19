@@ -7,6 +7,7 @@ and consistent error handling throughout the framework.
 """
 
 from pickle import UnpicklingError
+from typing import Any
 
 
 class SandBoxError(RuntimeError):
@@ -236,9 +237,14 @@ class EvalSyntaxRejected(SandBoxError, SyntaxError):
         self.offset = offset
         self.text = text
 
-    def __reduce__(self) -> tuple[type, tuple[str, list[str]]]:
-        """Rebuild the exception from its own attributes across the transport."""
-        return self.__class__, (str(self).split("\n\n", maxsplit=1)[0], self.violations)
+    def __str__(self) -> str:
+        """Return the report as is, without the `(line N)` suffix `SyntaxError` would append to its last block."""
+        return self.msg
+
+    def __reduce__(self) -> tuple[type, tuple[str, list[str]], dict[str, Any]]:
+        """Rebuild the exception from its own attributes across the transport, position included."""
+        state = {"lineno": self.lineno, "offset": self.offset, "text": self.text}
+        return self.__class__, (self.msg.split("\n\n", maxsplit=1)[0], self.violations), state
 
 
 class EvalInterrupted(BaseException):

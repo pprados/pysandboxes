@@ -183,6 +183,14 @@ class BaseDaemon(ABC):
 
 
 class FakeDaemon(BaseDaemon):
+    """Placeholder daemon for a process that is already inside a sandbox.
+
+    ``sandboxes()`` returns it instead of starting a provider when ``is_in_sandbox()`` is true, for example under
+    ``python-sb`` or in the child of a real daemon. The isolation is already in place, so nothing is launched; the
+    object only keeps the lifecycle (start, stop, shutdown) uniform for the caller. It cannot run a function:
+    ``call_in_sandbox`` raises ``NotImplementedError``.
+    """
+
     def update_rules_and_activate(
         self,
         *,

@@ -97,18 +97,48 @@ class WrapperIO(io.TextIOBase):
             assert not isinstance(self._old, WrapperIO)
         self._context.set(new_textio)
 
+    def _original(self) -> Any:
+        """The stream this wrapper replaced: what a program reads about "its" stdout, not what is captured.
+
+        Before the first ``set_context`` the context variable still holds it.
+        """
+        return self._old if self._old else self._context.get()
+
     def __getattr__(self, name: str) -> Any:
         # Called only if attribute not found the usual way
         if name in ("write", "flush", "_context", "_old"):
             return super().__getattr__(name)  # type: ignore[misc]
-        return getattr(self._old, name)
+        return getattr(self._original(), name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name in ("write", "flush", "_context", "_old"):
             # Assign _target to self, not to target
             super().__setattr__(name, value)
         else:
-            setattr(self._old, name, value)
+            setattr(self._original(), name, value)
+
+    # A captured stream is not a file: fileno() stays unsupported, as for any in-memory stream, so no child process
+    # or C library can write around the capture. What describes the stream to a program comes from the original.
+    @property
+    def encoding(self) -> str:  # type: ignore[override]
+        return getattr(self._original(), "encoding", None) or "utf-8"
+
+    @property
+    def errors(self) -> str | None:  # type: ignore[override]
+        return getattr(self._original(), "errors", None)
+
+    def writable(self) -> bool:
+        return bool(self._original().writable())
+
+    def readable(self) -> bool:
+        return bool(self._original().readable())
+
+    def seekable(self) -> bool:
+        return False
+
+    def isatty(self) -> bool:
+        """Whether the stream of the current context is a terminal: captured output never is."""
+        return bool(self._context.get().isatty())
 
     def __del__(self) -> None:
         """Restores the original stream when the wrapper is deleted."""

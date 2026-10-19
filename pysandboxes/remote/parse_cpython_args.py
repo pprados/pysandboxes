@@ -89,7 +89,7 @@ def parse_python_cmd_line(
         if arg in ("--", "-") or not arg.startswith("-"):
             split_pos = i
         elif arg.startswith("--"):
-            i += 2 if arg == "--pysandboxes-config" else 1
+            i += 2 if arg in ("--pysandboxes-config", "--check-hash-based-pycs") else 1
         else:
             for j, flag in enumerate(arg[1:], start=1):
                 if flag in "cm":
@@ -219,8 +219,7 @@ def parse_python_cmd_line(
     )
     parser.add_argument(
         "--check-hash-based-pycs",
-        action="store_true",
-        # default|always|never
+        choices=("default", "always", "never"),
         help="Control the validation behavior of hash-based .pyc files.",
     )
     parser.add_argument(

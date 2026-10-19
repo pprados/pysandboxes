@@ -905,6 +905,27 @@ class TestSaveCoverage:
 
         python_sb._save_coverage()
 
+    def test_a_module_named_coverage_without_the_api_is_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "coverage", types.SimpleNamespace())
+
+        python_sb._save_coverage()
+
+    @pytest.mark.parametrize("failing", ["current", "stop", "save"])
+    def test_a_failure_while_saving_never_escapes(self, monkeypatch: pytest.MonkeyPatch, failing: str) -> None:
+        measured = MagicMock()
+        getattr(measured, failing).side_effect = OSError("disk full")
+
+        def current() -> Any:
+            if failing == "current":
+                raise OSError("disk full")
+            return measured
+
+        monkeypatch.setitem(
+            sys.modules, "coverage", types.SimpleNamespace(Coverage=types.SimpleNamespace(current=current))
+        )
+
+        python_sb._save_coverage()
+
     def test_a_process_without_coverage_does_not_import_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delitem(sys.modules, "coverage", raising=False)
 

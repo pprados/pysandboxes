@@ -20,6 +20,9 @@ from pysandboxes.remote.parse_cpython_args import parse_python_cmd_line
         (["-W", "ignore", "s.py"], ["-W", "ignore"], ["s.py"]),
         (["-", "a"], [], ["-", "a"]),
         (["-I", "-", "a", "--b"], ["-I"], ["-", "a", "--b"]),
+        # CPython 3.14 takes the value of this long option from the next argument, not from the script position.
+        (["--check-hash-based-pycs", "always", "-c", "pass"], ["--check-hash-based-pycs", "always"], ["-c", "pass"]),
+        (["--check-hash-based-pycs", "never", "s.py", "a"], ["--check-hash-based-pycs", "never"], ["s.py", "a"]),
     ],
 )
 def test_the_split_between_cpython_options_and_the_program(

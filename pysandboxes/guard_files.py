@@ -41,7 +41,6 @@ from typing import (
 if sys.platform == "darwin":
     import fcntl
 
-from .config import OPTIMIZE
 from .e import RuleFileNotFoundError, RulePermissionError
 from .guard_envs import LearnEnviron
 from .guard_wraps import guard_wraps
@@ -1178,6 +1177,17 @@ def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
+def _opens_for_write(flags: int) -> bool:
+    """Tell whether ``os.open`` flags can change the file system.
+
+    O_TRUNC empties a file even opened O_RDONLY, and O_CREAT creates one. On Linux O_TMPFILE includes the
+    O_DIRECTORY bit, so it counts only when both bits are set: opening a directory is a read.
+    """
+    write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
+    tmpfile = getattr(os, "O_TMPFILE", 0)
+    return bool(flags & write_flags) or (tmpfile != 0 and flags & tmpfile == tmpfile)
+
+
 # %% os wrapper
 def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
@@ -1199,17 +1209,12 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
         path = cast(str, path)
         if dir_fd is not None:
             if isinstance(flags, int):
-                write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
-                write_flags |= getattr(os, "O_TMPFILE", 0)
-                need_to_write = bool(flags & write_flags)
+                need_to_write = _opens_for_write(flags)
             else:
                 need_to_write = True
             _check_dir_fd(path, dir_fd, write=need_to_write)
             return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
-        # O_TRUNC empties a file even opened O_RDONLY, and O_CREAT creates one.
-        write_flags = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
-        write_flags |= getattr(os, "O_TMPFILE", 0)
-        need_to_write = bool(flags & write_flags)
+        need_to_write = _opens_for_write(flags)
         remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
         if rule:
             _raise_ignore(path, rule)
@@ -1605,10 +1610,6 @@ class _ScanDirContextManager(Iterator[os.DirEntry[str]]):
         """h
         Make the context manager iterable.
         """
-        if is_learning_mode() and OPTIMIZE:
-            if self.scanner is None:
-                self.__enter__()
-            return cast(Any, self.scanner).__iter__()  # type: ignore[union-attr]
         return self
 
     def __next__(self) -> os.DirEntry[str]:

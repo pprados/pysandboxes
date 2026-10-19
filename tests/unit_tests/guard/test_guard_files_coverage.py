@@ -1465,3 +1465,11 @@ def test_wrap_os_unlink_records_a_dir_fd_removal_as_a_write(tmp_path: Path, monk
         os.close(dir_fd)
 
     assert LearnFileRule(Path(str(tmp_path / "f.txt")), True) in learning_mod._learning
+
+
+@pytest.mark.skipif(not hasattr(os, "O_TMPFILE"), reason="O_TMPFILE is Linux only")
+def test_opening_a_directory_is_a_read_but_an_unnamed_temporary_file_is_a_write() -> None:
+    assert not guard_files._opens_for_write(os.O_RDONLY | os.O_DIRECTORY)
+    assert guard_files._opens_for_write(os.O_TMPFILE | os.O_RDWR)
+    assert guard_files._opens_for_write(os.O_RDONLY | os.O_TRUNC)
+    assert not guard_files._opens_for_write(os.O_RDONLY)

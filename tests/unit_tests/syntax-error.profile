@@ -26,3 +26,14 @@ expose-ro=${PWD},${PWD}/tests
 py-sandbox=abc
 learn=True
 invalide-rule
+eval-syntax=
+eval-syntax=loop,DENY:Try
+eval-syntax=For*
+eval-syntax=NotANode
+eval-timeout=5s
+eval-timeout=6s
+eval-unknown=1
+eval-namespace=open
+eval-timeout:other=abc
+eval-max-nodes=abc
+eval-max-depth=DENY:3

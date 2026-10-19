@@ -6,8 +6,10 @@ This module implements network sandboxing by intercepting and controlling socket
 operations. It patches the standard socket.socket class to enforce network access
 rules defined in the configuration.
 
-IMPORTANT: This module must be imported BEFORE any other modules that use the
-standard socket library to ensure all socket operations are intercepted.
+Importing this module patches nothing. The sandbox activation installs ``patch_rules()`` on the modules already
+loaded and, through the import guard, on every module loaded afterwards; ``activate_guard()`` then loads the rules.
+The order of the imports of the application does not matter, with one exception: a name taken from ``socket`` or
+``_socket`` *before* the activation (``from socket import getaddrinfo``) keeps pointing at the original function.
 
 Security Model:
 - Default-deny: All network connections are blocked by default
@@ -16,8 +18,8 @@ Security Model:
 - Learning mode: Can automatically generate rules based on observed behavior
 
 Activation:
-The patching happens automatically when this module is imported. Import order
-is critical - this must occur before any modules that use sockets.
+The patching happens when the sandbox is activated, not when this module is imported: ``patch_rules(learn)`` returns
+the replacements and ``activate_guard(rules)`` arms the rules, once.
 
 Limitations:
 This is a Python-level protection that does NOT defend against:
@@ -30,9 +32,9 @@ For complete protection, combine with OS-level sandboxing (firejail, containers)
 
 Example:
     ```python
-    import pysandboxes.guard_socket  # Must be first
-    import requests  # Now protected
-    import urllib.request  # Now protected
+    with sandboxes():  # Activates the guards
+        import requests  # Protected, whatever the order of the imports
+        import urllib.request  # Protected
     ```
 """
 

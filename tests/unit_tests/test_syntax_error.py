@@ -63,4 +63,19 @@ def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
             "syntax-error(26): Invalid value 'abc' for py-sandbox. Use true or false.",
             "syntax-error(27): Invalid value 'True' for 'learn'. Use the filename instead.",
             "syntax-error(28): Invalid rule 'invalide-rule'",
+            "syntax-error(29): In 'eval-syntax=', empty target.",
+            "syntax-error(30): In 'eval-syntax=loop,DENY:Try', DENY: applies to a whole line; "
+            "put `eval-syntax=DENY:Try` on a line of its own.",
+            "syntax-error(31): In 'eval-syntax=For*', a pattern is not accepted on eval-syntax: "
+            "the vocabulary is finite.",
+            "syntax-error(32): In 'eval-syntax=NotANode', unknown syntax token 'NotANode'.",
+            "syntax-error(34): In 'eval-timeout=6s', eval-timeout is set twice in this profile "
+            "(already at line 33): a scalar is not a set.",
+            "syntax-error(35): In 'eval-unknown=1', unknown key 'eval-unknown'.",
+            "syntax-error(36): In 'eval-namespace=open', eval-namespace: unknown mode 'open', "
+            "expected one of ['adaptive', 'closed', 'caller'].",
+            "syntax-error(37): In 'eval-timeout:other=abc', could not convert string to float: 'abc'",
+            "syntax-error(38): In 'eval-max-nodes=abc', invalid literal for int() with base 10: 'abc'",
+            "syntax-error(39): In 'eval-max-depth=DENY:3', "
+            "eval-max-depth: `DENY:` and patterns apply to list keys only.",
         ]

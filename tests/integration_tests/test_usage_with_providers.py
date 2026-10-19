@@ -114,29 +114,14 @@ def test_usage_with_provider(os_sandbox: str) -> None:
 # path itself -- the parent it spawns from is already clean. A plain interpreter does not.
 PARTIAL_MODE_SECRET = "s3cr3t-do-not-leak"
 
-# unshare builds its namespaces, mounts and iptables rules *before* the sandbox exists, so
-# its setup stage needs the host PATH; it now narrows os.environ down to the profile's
-# whitelist just before exec'ing the daemon, which is why this row is no longer xfail.
-# QEMU partial mode used to be xfail on both rows. It failed on the configuration
-# transport, not on the timeout the reason claimed: a FIFO on the host that the guest
-# could never open. With the config on a 9p mount the KVM row passes in ~22s, and the
-# emulated one once the start delay followed the acceleration in use -- it answers at
-# ~118s, over the 90s a KVM boot is given. Every backend is expected to pass here now.
-_PARTIAL_MODE_XFAIL: dict[str, tuple[str, bool]] = {}
-
 
 def _partial_mode_params() -> list:
-    """One row per provider; the two known holes are declared xfail instead of hidden."""
+    """One row per provider of this platform; the emulated QEMU row is slow."""
     rows = []
     for os_sandbox in all_os_sandbox:
         if unsupported_platform_reason(backend_of(os_sandbox)):
             continue  # No row for a backend of another platform, as in os_sandbox_params
-        marks = []
-        if os_sandbox in _PARTIAL_MODE_XFAIL:
-            reason, run = _PARTIAL_MODE_XFAIL[os_sandbox]
-            marks.append(pytest.mark.xfail(reason=reason, run=run, strict=True))
-        if os_sandbox == "qemu-tcg":
-            marks.append(pytest.mark.slow)
+        marks = [pytest.mark.slow] if os_sandbox == "qemu-tcg" else []
         rows.append(pytest.param(os_sandbox, marks=marks))
     return rows
 

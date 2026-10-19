@@ -47,6 +47,24 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- In the sandbox, `sys.stdout` and `sys.stderr` now answer `writable()`, `encoding` and `errors` like the stream they
+  replaced, and a missing attribute names itself instead of failing on `NoneType`
+- In the QEMU guest, the network filter is loaded with the first executable `iptables-restore` that accepts it
+  (`nft`, `legacy`, then the alternatives link), instead of stopping on the first file found
+- `bwrap` names the host tools a profile with `net=` rules needs (`slirp4netns`, `nsenter`, `iptables-restore`) in
+  one message, and the network tests skip when they are missing
+- `python-sb --check-hash-based-pycs always -c ...` no longer takes `always` for the script: the option consumes its
+  value, as CPython does
+- A traceback received from the sandbox is checked in full before it is rebuilt: a cyclic or oversized chain, an
+  out-of-range line number or a frame carrying more than `tblib` builds is refused with `RestrictedUnpicklingError`
+- Under `bwrap`, a call with a relative path and `dir_fd=` (`shutil.rmtree`, `os.fwalk`) is no longer refused: the
+  sandbox now has its own `/proc`, in a PID namespace of its own
+- Opening a directory read-only (`os.open(path, os.O_RDONLY | os.O_DIRECTORY)`) is no longer refused as a write on an
+  `expose-ro` directory
+- A start of the sandbox that times out is now cancelled, so it can no longer be counted after the caller gave up, and
+  the private event loop created for the sandbox is stopped at shutdown instead of leaving its thread running
+- `EvalSyntaxRejected` keeps its line, column and source line across the transport, no longer appends `(line N)` to
+  its report, reports a refused construct once with its position instead of once per node, and says `1 rule violated`
 - A damaged or non-ASCII payload from the sandbox now always ends in `RestrictedUnpicklingError`, never in a bare
   `ValueError`, `TypeError` or `UnicodeEncodeError`
 - A profile path naming an unknown user (`~nosuchuser/x`) in `expose-*` or `include` is now a `ConfigSyntaxError`

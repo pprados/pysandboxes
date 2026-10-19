@@ -396,13 +396,17 @@ def _main(stack: ExitStack) -> int:
 def _save_coverage() -> None:
     """Save the coverage data of a measured run: ``os._exit`` skips the ``atexit`` where coverage does it.
 
-    Nothing to do unless coverage already runs in this process, so it is looked up, never imported.
+    Nothing to do unless coverage already runs in this process, so it is looked up, never imported. It never raises:
+    it runs just before ``os._exit``, and a failure to save a measure must not replace the exit status.
     """
-    coverage = sys.modules.get("coverage")
-    measured = coverage.Coverage.current() if coverage else None
-    if measured is not None:
-        measured.stop()
-        measured.save()
+    try:
+        current = getattr(getattr(sys.modules.get("coverage"), "Coverage", None), "current", None)
+        measured = current() if callable(current) else None
+        if measured is not None:
+            measured.stop()
+            measured.save()
+    except Exception:  # noqa: BLE001
+        logger.debug("The coverage data could not be saved", exc_info=True)
 
 
 if __name__ == "__main__":

@@ -15,8 +15,11 @@ import pytest  # type: ignore[import-untyped]
 
 from pysandboxes.remote import slirp4netns_common as slirp
 
+from .._unix_sockets import requires_unix_sockets
+
 
 class TestIsSocket:
+    @requires_unix_sockets
     def test_a_unix_socket_is_one(self, tmp_path: Path) -> None:
         path = str(tmp_path / "s")
         server = socket.socket(socket.AF_UNIX)
@@ -92,6 +95,7 @@ def api(tmp_path: Path) -> Any:
         server.close()
 
 
+@requires_unix_sockets
 class TestPortForwarding:
     def test_each_port_is_forwarded_from_the_loopback_to_the_guest(self, api: Any) -> None:
         server = api()

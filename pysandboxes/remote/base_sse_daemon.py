@@ -54,6 +54,56 @@ def _get_rpc_params(
     return params
 
 
+# A traceback longer than this is refused. CPython's own recursion limit keeps a real one far below it.
+_MAX_TRACEBACK_FRAMES = 2000
+# What tblib.Frame keeps of a frame's globals: the child sends no locals, and no other global.
+_FRAME_GLOBALS = frozenset({"__file__", "__name__"})
+_MAX_LINENO = 2**31 - 1
+
+
+def _check_traceback_shape(serial_traceback: Any) -> None:
+    """Refuse a traceback that is not exactly what ``tblib.Traceback`` builds in the sandbox.
+
+    The chain is walked here, with a bound and a cycle check, because a pickle can make ``tb_next`` point back at
+    an earlier node: ``as_traceback`` would then never return. Each node must hold what tblib keeps of a real
+    frame -- strings for the names, an integer in range for the line, no locals, only ``__file__`` and ``__name__``
+    as globals -- since ``as_traceback`` runs a stub code object over the frame's globals and locals.
+
+    Raises:
+        RestrictedUnpicklingError: A node, or the chain, does not have that shape.
+    """
+    seen: set[int] = set()
+    node = serial_traceback
+    while node is not None:
+        if (
+            not isinstance(node, tblib.Traceback)
+            or id(node) in seen
+            or len(seen) >= _MAX_TRACEBACK_FRAMES
+            or not _is_frame_shape(getattr(node, "tb_frame", None))
+            or not _is_lineno(getattr(node, "tb_lineno", None))
+        ):
+            raise RestrictedUnpicklingError("transport traceback has an unexpected shape.")
+        seen.add(id(node))
+        node = getattr(node, "tb_next", None)
+
+
+def _is_lineno(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= _MAX_LINENO
+
+
+def _is_frame_shape(frame: Any) -> bool:
+    if not isinstance(frame, tblib.Frame) or not isinstance(frame.f_code, tblib.Code):
+        return False
+    f_globals = getattr(frame, "f_globals", None)
+    return (
+        isinstance(frame.f_code.co_filename, str)
+        and isinstance(frame.f_code.co_name, str)
+        and getattr(frame, "f_locals", None) == {}
+        and type(f_globals) is dict
+        and all(key in _FRAME_GLOBALS and isinstance(value, (str, type(None))) for key, value in f_globals.items())
+    )
+
+
 def _attach_remote_traceback(exception: BaseException, serial_traceback: Any) -> BaseException:
     """Attach the sandbox frames to an exception rebuilt on the parent side.
 
@@ -65,14 +115,15 @@ def _attach_remote_traceback(exception: BaseException, serial_traceback: Any) ->
         The exception, with the sandbox frames attached.
 
     Raises:
-        RestrictedUnpicklingError: If the traceback does not have tblib's shape.
+        RestrictedUnpicklingError: If the traceback does not have the shape tblib builds, or cannot be rebuilt.
     """
-    # The restricted unpickler admits tblib.Traceback by class; guard its shape
-    # before as_traceback(), which rebuilds frame objects from child-controlled
-    # attributes.
-    if not isinstance(serial_traceback, tblib.Traceback):
-        raise RestrictedUnpicklingError("transport traceback has an unexpected shape.")
-    traceback = serial_traceback.as_traceback()
+    # The restricted unpickler admits tblib.Traceback by class, and a pickle sets any attribute of it: guard the
+    # whole chain before as_traceback(), which walks it and rebuilds frame objects from those attributes.
+    _check_traceback_shape(serial_traceback)
+    try:
+        traceback = serial_traceback.as_traceback()
+    except Exception as e:
+        raise RestrictedUnpicklingError("transport traceback cannot be rebuilt.") from e
     if traceback is None:
         # tblib rebuilds nothing from an empty frame list. The exception still has to
         # reach the caller: a denial without frames beats no denial at all.

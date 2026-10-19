@@ -9,17 +9,17 @@ guarded call parses the source, validates it against the sub-language the
 `eval_runtime`, and runs it in a dedicated thread under a budget and a
 timeout the caller can recover from.
 
-Two deviations from the design spec are recorded here so a later reader does
-not "restore" them:
+Two choices a later reader should not "restore":
 
-- `SENSITIVE_API["dynamic-code"]` holds three names, not the six of spec 11.
-  `builtins.__import__` belongs to `guard_import`, which has its own rules;
-  `code.compile_command` and `code.InteractiveInterpreter.runsource` reach the
-  three builtins anyway and patching them would double-count one call.
-- Spec 8.1 states that CPython's automatic 159-builtin injection is never
-  honoured in any mode, and its own table then gives `eval-namespace=caller`
-  as honouring it. The bold sentence governs `adaptive` and `closed`; `caller`
-  is the debugging escape hatch and does honour injection, warned at load.
+- `SENSITIVE_API["dynamic-code"]` holds three names: `eval`, `exec` and `compile`.
+  `builtins.__import__` is left out because `guard_import` owns it with its own
+  rules; `code.compile_command` and `code.InteractiveInterpreter.runsource` are left
+  out because they reach the three builtins anyway, so patching them would count
+  one call twice.
+- CPython's automatic injection of the 159 builtins into a namespace that lacks
+  `__builtins__` is never honoured under `eval-namespace=adaptive` or `closed`.
+  `eval-namespace=caller` is the debugging escape hatch: it does honour the
+  injection, and a warning is logged when the rule is loaded.
 
 What this guard does not cover, stated so no one reads more into it:
 
@@ -222,8 +222,11 @@ def build_namespace(
 ) -> dict[str, Any]:
     """Return the globals the evaluated code will see.
 
-    Implements the five rows of spec 8.1. The dividing line for the patched
-    builtin is `caller_globals is None`, not "arguments were passed":
+    The namespace depends on who calls and on `eval-namespace`: `guarded_eval`
+    always gets a fresh closed namespace plus `names`; the patched builtin
+    reuses the caller's own globals under `adaptive` and builds a fresh one
+    under `closed`; `caller` never reaches here. The dividing line for the
+    patched builtin is `caller_globals is None`, not "arguments were passed":
     `eval(e, None, {"x": 1})` still runs against the caller's module globals,
     so only the first parameter decides.
 

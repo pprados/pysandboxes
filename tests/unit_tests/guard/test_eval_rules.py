@@ -72,6 +72,22 @@ def test_eval_syntax_rejected_is_a_syntax_error_and_a_sandbox_error() -> None:
     assert err.text == "while True: pass"
 
 
+def test_eval_syntax_rejected_keeps_its_report_and_position_across_the_transport() -> None:
+    err = EvalSyntaxRejected(
+        "2 rules violated in <eval>",
+        ["line 3, col 4: 'While' is not allowed", "line 5, col 0: 'Try' is not allowed"],
+        lineno=3,
+        offset=4,
+        text="    while True: pass",
+    )
+    rebuilt = pickle.loads(pickle.dumps(err))
+
+    assert str(rebuilt) == str(err)
+    assert "(line" not in str(rebuilt)
+    assert rebuilt.violations == err.violations
+    assert (rebuilt.lineno, rebuilt.offset, rebuilt.text) == (3, 4, "    while True: pass")
+
+
 def test_eval_interrupted_is_not_an_exception() -> None:
     """A bare `except Exception:` inside evaluated code must not catch it."""
     err = EvalInterrupted("eval-timeout=5s exhausted")
@@ -465,6 +481,20 @@ def test_learning_never_emits_a_pattern() -> None:
 def test_learning_marks_runtime_observed_attributes() -> None:
     lines = generate_rules({LearnEvalRule("eval-attribute", "split")})
     assert any("runtime-observed" in line for line in lines)
+
+
+def test_a_generated_runtime_observed_line_loads_back_without_its_comment() -> None:
+    from pysandboxes.tools import remove_config_comments
+
+    generated = generate_rules({LearnEvalRule("eval-attribute", "split"), LearnEvalRule("eval-magic", "__name__")})
+    errors: list[ErrorMsg] = []
+
+    cleaned = remove_config_comments(_lines(*generated))
+    profiles, others = parse_rules(cleaned, errors)
+
+    assert not errors and not others
+    assert [line.rule for line in cleaned] == ["eval-attribute=split", "eval-magic=__name__"]
+    assert _profile(profiles, "").attribute.allows("split")
 
 
 @pytest.mark.parametrize("name", ["format", "format_map"])

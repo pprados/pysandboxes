@@ -34,7 +34,7 @@ from ..immutable_dict import ImmutableDict
 from ..main_logger import ErrorMsg
 from ..netfilter import rule_to_netfilter
 from ..override_compat import override
-from ..sb_types import Args, ConfigLine, ConfigLines, Envs
+from ..sb_types import Args, ConfigLines, Envs
 from ..tools import (
     Environ,
     follow_links_executable,
@@ -52,10 +52,6 @@ from .tools import (
 logger = logging.getLogger(__name__)
 
 DEBUG_NETFILTER = DEBUG or False
-
-# Replace rules to delegate the filter to firejail.
-# Exceptions differ from unshare backend
-REPLACE = False  # TODO: firejail
 
 FIREJAIL_CONFIG = Path("/etc/firejail/firejail.config")
 
@@ -263,19 +259,16 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
         envs: Envs,
         temp: Path,
     ) -> AllRules:
-        """Update rules by translating to firejail configuration.
+        """Return the rules unchanged: firejail adds its own layer, the Python guards keep every rule.
 
         Args:
             all_rules: Current security rules.
             envs: Environment variables.
-            temp: Run-time directory shared with the sandbox, holding the
-                config pipe and the generated netfilter files.
+            temp: Run-time directory shared with the sandbox.
 
         Returns:
-            Updated security rules for firejail context.
+            The same rules.
         """
-        if REPLACE:
-            _, updated_all_rules = self._firejail_args(all_rules, envs, None, temp=temp)
         return all_rules
 
     @property
@@ -445,15 +438,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
                 else:
                     args.append(f"--read-write={rule.path}")
 
-        if REPLACE:
-            from ..guard_files import parse_rules as files_parse_rules
-
-            _new_files_rules, _ = files_parse_rules([ConfigLine("expose-rw=/", Path(), 0)], [])
-            new_files_rules = cast(list[FSExposeRule], _new_files_rules)
-            selected_rules: list[Any] = []
-            selected_rules.extend(new_files_rules)
-            all_rules = all_rules._replace(file_rules=tuple(selected_rules))
-
         # Add pipe_path rule
         # with --private-tmp, need more parameters
         if pipe_path:
@@ -553,13 +537,6 @@ class FireJailSSEDaemon(BaseSubProcessDaemon):
 
                     threading.Thread(target=publish_netfilter6, daemon=True).start()
                     args.append(f"--netfilter6={netfilter6_file}")
-
-            # Remove duplicate sockets rules
-            if REPLACE:
-                from ..guard_socket import parse_rules as socket_parse_rules
-
-                new_socket_rules, *_ = socket_parse_rules([ConfigLine("net=ALLOW|*|*|*|*", Path(), 0)], [])
-                all_rules = all_rules._replace(socket_rules=tuple(new_socket_rules))
 
         else:
             # No socket rule: no network at all, loopback only. Allowed to regular
