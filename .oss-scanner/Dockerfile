@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     UV_PYTHON_PREFERENCE=only-managed \
     UV_PYTHON_INSTALL_DIR=/opt/uv-python
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl git build-essential bubblewrap firejail \
+      ca-certificates curl git build-essential bubblewrap firejail netbase \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
