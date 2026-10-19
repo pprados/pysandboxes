@@ -27,10 +27,11 @@ Planned work, in no committed order:
     - [X] sub process
     - [ ] sub interpreter
     - [X] Landlock
-  - [ ] Landlock: refuse `connect()` to a named Unix socket not covered by an `expose-rw` rule, the rule every
-    other provider applies. Landlock cannot filter it, so a seccomp user-notification filter sends each Unix
-    `connect()` to the parent, which checks the path, connects itself and hands the descriptor back
-    (`SECCOMP_IOCTL_NOTIF_ADDFD`), leaving no window to change the path after the check.
+      - [X] Refuse the abstract Unix sockets created outside the sandbox (ABI 6+)
+      - [ ] Refuse `connect()` to a named Unix socket not covered by an `expose-rw` rule, the rule every
+        other provider applies. Landlock cannot filter it, so a seccomp user-notification filter sends each Unix
+        `connect()` to the parent, which checks the path, connects itself and hands the descriptor back
+        (`SECCOMP_IOCTL_NOTIF_ADDFD`), leaving no window to change the path after the check.
   - [ ] Sandbox utilities
     - [X] firejail
     - [X] unshare
