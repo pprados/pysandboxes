@@ -33,6 +33,7 @@ nothing reported the cause. None of the three is specific to QEMU: a VM only mad
 them visible, by putting a console filter and a second interpreter in the way.
 """
 
+import os
 import subprocess
 import sys
 import sysconfig
@@ -84,8 +85,9 @@ def _run(
     profile_lines: str,
     script: str,
     tmp_path: Path,
+    cwd: Path = ROOT_DIR,
 ) -> "subprocess.CompletedProcess[str]":
-    """Run ``script`` under ``python-sb`` with ``os_sandbox`` and the given rules."""
+    """Run ``script`` under ``python-sb`` with ``os_sandbox`` and the given rules, from ``cwd``."""
     target = tmp_path / "script.py"
     target.write_text(script)
     profile = tmp_path / "guard.profile"
@@ -106,12 +108,18 @@ def _run(
         ],
         # From the project root, as test_usage_with_providers does: the package resolves
         # through the current directory, so running from tmp_path would silently test
-        # whatever `pysandboxes` the environment installed rather than this checkout.
-        cwd=ROOT_DIR,
+        # whatever `pysandboxes` the environment installed rather than this checkout. A caller that
+        # needs another directory gets the checkout back through PYTHONPATH.
+        cwd=cwd,
+        env=None if cwd == ROOT_DIR else {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT_DIR), *_pythonpath()])},
         capture_output=True,
         text=True,
         timeout=_QEMU_TIMEOUT_SECONDS if backend == "qemu" else _TIMEOUT_SECONDS,
     )
+
+
+def _pythonpath() -> list[str]:
+    return [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
 
 
 def _skip_unavailable(os_sandbox: str) -> None:
@@ -219,6 +227,41 @@ def test_a_listed_import_is_accepted_under_every_backend(os_sandbox: str, tmp_pa
     )
     assert done.returncode == 0, done.stderr
     assert "IMPORTED (1.0, 0.0, 0.0)" in done.stdout, done.stdout
+
+
+# --- guard_files --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("os_sandbox", os_sandbox_params())
+def test_realpath_of_an_exposed_file_works_with_an_unexposed_working_directory(
+    os_sandbox: str, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """``os.path.realpath`` resolves an exposed file when no rule exposes the working directory.
+
+    Before Python 3.13, ``ntpath.realpath`` asks ``os.getcwd()`` even for an absolute path, and the
+    guard refuses a working directory it does not expose: the guard lets that one answer through
+    while ``realpath`` runs. ``os.getcwd()`` called by the program stays refused, which is also what
+    proves the working directory is hidden and the call above did not pass for want of a rule.
+    """
+    _skip_unavailable(os_sandbox)
+    hidden = tmp_path_factory.mktemp("hidden-cwd")
+    target = tmp_path / "script.py"
+    script = (
+        "import os\n"
+        "import pysandboxes\n"
+        "print('PKG', pysandboxes.__file__)\n"
+        "try:\n"
+        "    os.getcwd()\n"
+        "    print('GETCWD allowed')\n"
+        "except BaseException as err:\n"
+        "    print('GETCWD', type(err).__name__)\n"
+        f"print('REAL', os.path.realpath({str(target)!r}))\n"
+    )
+    done = _run(os_sandbox, "python-import=*\n", script, tmp_path, cwd=hidden)
+    assert done.returncode == 0, done.stderr
+    assert f"PKG {ROOT_DIR}" in done.stdout, done.stdout
+    assert "GETCWD RuleFileNotFoundError" in done.stdout, done.stdout
+    assert f"REAL {os.path.realpath(target)}" in done.stdout, done.stdout
 
 
 # --- what the guards rest on --------------------------------------------------
