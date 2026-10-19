@@ -194,6 +194,7 @@ def test_relative_ignore_pattern_still_hides_matching_names_below_the_root(tree:
         open(tree / "rw" / "a" / ".secrets" / "b").close()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_unlink_with_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) -> None:
     # G18: os.unlink(name, dir_fd=fd) must judge a link exactly like the plain-path form:
     # on the directory holding it (read-only "ro"), not on the realpath-resolved target
@@ -208,6 +209,7 @@ def test_unlink_with_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) ->
     assert (tree / "ro" / "link_to_rw").is_symlink()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_remove_with_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) -> None:
     _arm(tree)
     fd = os.open(tree / "ro", os.O_RDONLY)
@@ -219,6 +221,7 @@ def test_remove_with_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) ->
     assert (tree / "ro" / "link_to_rw").is_symlink()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_rename_with_src_dir_fd_judges_a_link_on_its_holder_directory(tree: Path) -> None:
     _arm(tree)
     fd = os.open(tree / "ro", os.O_RDONLY)
@@ -230,6 +233,7 @@ def test_rename_with_src_dir_fd_judges_a_link_on_its_holder_directory(tree: Path
     assert (tree / "ro" / "link_to_rw").is_symlink()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_readlink_with_dir_fd_checks_the_holder_directory_is_exposed(tree: Path) -> None:
     # G1: os.readlink(path, dir_fd=fd) must check that the directory holding the link is
     # exposed, exactly like the plain-path form. "out" is not exposed.

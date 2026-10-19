@@ -581,6 +581,7 @@ def test_getaddrinfo_does_not_record_a_learning_rule_outside_learning_mode(monke
     assert recorded == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulated path needs a POSIX filesystem")
 def test_read_host_file_skips_a_hosts_path_that_is_not_a_regular_file(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -594,6 +595,7 @@ def test_read_host_file_skips_a_hosts_path_that_is_not_a_regular_file(
     assert "localhost" in dns  # the loopback fallback still ran; nothing crashed reading the "file"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulated path needs a POSIX filesystem")
 def test_read_host_file_skips_a_comment_line_but_parses_the_rest(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -608,6 +610,7 @@ def test_read_host_file_skips_a_comment_line_but_parses_the_rest(
     assert "after-comment.example" in dns
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulated path needs a POSIX filesystem")
 def test_read_host_file_populates_inverse_dns_from_a_hosts_line(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -622,6 +625,7 @@ def test_read_host_file_populates_inverse_dns_from_a_hosts_line(
     assert inverse_dns[ip_address("198.51.100.45")] == {"reverse.example"}
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulated path needs a POSIX filesystem")
 def test_read_host_file_detects_windows_on_a_non_interned_platform_string(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

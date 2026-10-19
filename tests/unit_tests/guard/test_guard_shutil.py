@@ -101,6 +101,7 @@ def test_shutil_copyfile(files: Dict[str, Path]) -> None:  # noqa: F811
     pathlib.Path(files["bind_to_replace"]).unlink()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows chmod only toggles the read-only flag")
 def test_shutil_copymode(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -276,11 +277,11 @@ def test_shutil_rmtree_cannot_empty_a_read_only_tree(files: Dict[str, Path]) -> 
     with pytest.raises(RulePermissionError) as caught:
         shutil.rmtree(tree)
     # rmtree sets ``filename`` on the error: the denial must still name the rule. Only from 3.12,
-    # where rmtree's fd-safe walk re-raises a per-entry failure through its own outer handler;
+    # where rmtree's fd-safe walk (not used on Windows) re-raises a per-entry failure through its own outer handler;
     # the pre-3.12 implementation never sets it.
-    if sys.version_info >= (3, 12):
+    if sys.version_info >= (3, 12) and sys.platform != "win32":
         assert caught.value.filename is not None
-    assert [f"expose-ro={files['path']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [repr(f"expose-ro={files['path']}")[1:-1] in d for d in sandbox_denials(caught.value)] == [True]
     assert (tree / "inner" / "f.txt").exists()
 
     activate_guard_files_rules([ConfigLine(f"expose-rw={files['path']}", Path(), 0)])

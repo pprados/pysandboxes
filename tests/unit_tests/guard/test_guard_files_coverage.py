@@ -101,7 +101,8 @@ def test_parse_rules_rejects_a_path_with_an_embedded_null_byte() -> None:
     file_rules, _ = parse_rules([ConfigLine("expose-ro=a\x00b", Path(), 0)], errors)
 
     assert len(errors) == 1
-    assert "path is invalid" in errors[0][0]
+    # Windows resolves such a name without raising, then finds no file by that name.
+    assert ("must exist" if sys.platform == "win32" else "path is invalid") in errors[0][0]
     assert not any(isinstance(r, FSExposeRule) and r.config.rule.startswith("expose-") for r in file_rules)
 
 
@@ -191,6 +192,7 @@ def test_generate_rules_writes_nothing_under_proc(path: str) -> None:
     assert rules == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows file names cannot contain a newline")
 def test_generate_rules_skips_a_path_containing_a_newline(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """NA2: a directory name containing a newline -- valid on POSIX, and this is a real
     directory created on disk, not a crafted string -- must not be written unescaped into
@@ -646,6 +648,7 @@ def test_wrap_os_open_passes_through_a_file_descriptor() -> None:
     assert calls[0]["path"] == 9
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 def test_wrap_os_open_denies_an_ignored_path_with_dir_fd(tmp_path: Path) -> None:
     activate_guard_files_rules(
         [
@@ -1417,9 +1420,10 @@ def test_body_two_filenames_checks_the_destination_dir_fd_even_with_a_plain_sour
 def test_wrap_os_getcwd_keeps_the_root_separator() -> None:
     """At the filesystem root, the trailing separator must stay: stripping it would return ''
     instead of '/'."""
-    wrapped = _wrap_os_getcwd(lambda: os.sep)
+    root = Path(os.getcwd()).anchor
+    wrapped = _wrap_os_getcwd(lambda: root)
 
-    assert wrapped() == os.sep
+    assert wrapped() == root
 
 
 # %% _wrap_os_readlink -- dir_fd learning write flag

@@ -1,5 +1,5 @@
 import os
-import subprocess
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Dict, Iterator, List
@@ -95,7 +95,7 @@ def files() -> Dict[str, Path]:
     global tmp_path
     if tmp_path.exists():
         # Remove, without sandboxes
-        subprocess.run(["rm", "-rf", str(tmp_path)], check=True)
+        shutil.rmtree(tmp_path)
     tmp_path.mkdir(exist_ok=False)
     (tmp_path / "visible.txt").write_text("Visible")
     (tmp_path / "ignore.log").write_text("Should be ignored")
@@ -251,7 +251,7 @@ def test_io_open_refuse_write(files: Dict[str, Path]) -> None:
     with pytest.raises(RulePermissionError) as caught:
         with io.open(target_path, "w") as f:
             f.write("sample")
-    assert [f"expose-ro={files['path']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [repr(f"expose-ro={files['path']}")[1:-1] in d for d in sandbox_denials(caught.value)] == [True]
     assert not target_path.exists()
 
 

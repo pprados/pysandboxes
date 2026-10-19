@@ -331,6 +331,7 @@ def test_pathlib_iterdir(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     assert files["bind_dest"] in rc
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows chmod only toggles the read-only flag")
 def test_pathlib_chmod_and_lchmod(files: Dict[str, opl.Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", NonePath, 0),
@@ -476,7 +477,7 @@ def test_pathlib_link_symlink_and_readlink_refused(
     new_link = pathlib.Path(files["bind_dest"] / "new_hardlink")
     with pytest.raises(RulePermissionError) as caught:
         new_link.hardlink_to(files["visible"])
-    assert [f"'expose-ro={files['path']}'" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [repr(f"expose-ro={files['path']}") in d for d in sandbox_denials(caught.value)] == [True]
     assert not new_link.exists()
 
 
@@ -512,7 +513,7 @@ def test_pathlib_touch_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F81
     before = files["bound_file"].stat().st_mtime_ns
     with pytest.raises(RulePermissionError) as caught:
         pathlib.Path(files["bound_file"]).touch()
-    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [repr(f"expose-ro={files['bind_src']}")[1:-1] in d for d in sandbox_denials(caught.value)] == [True]
     assert files["bound_file"].stat().st_mtime_ns == before
 
 
@@ -556,7 +557,7 @@ def test_pathlib_rename_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F8
 
     with pytest.raises(RulePermissionError) as caught:
         pathlib.Path(files["bound_file"]).rename(files["bind_dest"] / "new_rename")
-    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [repr(f"expose-ro={files['bind_src']}")[1:-1] in d for d in sandbox_denials(caught.value)] == [True]
     assert files["bound_file"].exists()
 
 
@@ -596,7 +597,7 @@ def test_pathlib_replace_refused(files: Dict[str, opl.Path]) -> None:  # noqa: F
 
     with pytest.raises(RulePermissionError) as caught:
         pathlib.Path(files["bound_file"]).replace(files["bind_dest"] / "new_replace")
-    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [repr(f"expose-ro={files['bind_src']}")[1:-1] in d for d in sandbox_denials(caught.value)] == [True]
     assert files["bound_file"].exists()
 
 

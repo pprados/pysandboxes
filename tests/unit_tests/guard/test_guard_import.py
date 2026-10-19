@@ -434,7 +434,7 @@ def test_a_guard_loader_answers_the_source_questions_of_the_loader_it_wraps(tmp_
     import importlib.machinery
 
     source = tmp_path / "wrapped.py"
-    source.write_text("VALUE = 1\n")
+    source.write_text("VALUE = 1\n", newline="\n")
     real_loader = importlib.machinery.SourceFileLoader("wrapped", str(source))
     loader = guard_import.GuardLoader("wrapped", importlib.machinery.ModuleSpec("wrapped", real_loader))
 

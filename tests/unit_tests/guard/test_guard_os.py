@@ -602,7 +602,7 @@ def test_os_access_read_only(files: Dict[str, Path]) -> None:  # noqa: F811
     with pytest.raises(RulePermissionError) as caught:
         with open(files["bound_file"], "a", encoding="utf-8") as f:
             f.write("x")
-    assert [f"expose-ro={files['bind_src']}" in d for d in sandbox_denials(caught.value)] == [True]
+    assert [repr(f"expose-ro={files['bind_src']}")[1:-1] in d for d in sandbox_denials(caught.value)] == [True]
     assert files["bound_file"].read_text() == "Content"
 
 
@@ -630,6 +630,7 @@ def test_os_chflags_and_lchflags(files: Dict[str, Path]) -> None:  # noqa: F811
     os.lchflags(files["bind_src"], stat.UF_NODUMP)  # type: ignore[attr-defined]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows chmod only toggles the read-only flag")
 def test_os_chmod_and_lchmod(files: Dict[str, Path]) -> None:  # noqa: F811
     rules = [
         ConfigLine("ignore=*.log", Path(), 0),
@@ -699,6 +700,7 @@ def test_os_chown_and_lchown_refused(files: Dict[str, Path]) -> None:  # noqa: F
         os.lchown(files["bound_file"], uid, gid)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no os.chown")
 def test_os_chown_judges_the_name_against_its_dir_fd(files: Dict[str, Path]) -> None:  # noqa: F811
     """With ``dir_fd``, the name is relative to that directory, not to the current one."""
     import os
