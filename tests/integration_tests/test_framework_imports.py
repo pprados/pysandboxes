@@ -85,6 +85,10 @@ FRAMEWORK_IMPORTS = frozenset("""
     threading time traceback types typing typing_extensions typing_inspection urllib uuid uvicorn weakref zoneinfo
     """.split())
 
+if sys.platform == "win32":
+    # The daemon reaches the operating system through these where it uses posix elsewhere.
+    FRAMEWORK_IMPORTS |= frozenset({"_winapi", "ctypes", "msvcrt", "nt"})
+
 DRIVER = """
 import asyncio
 import inspect

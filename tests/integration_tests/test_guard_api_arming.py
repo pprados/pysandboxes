@@ -27,6 +27,9 @@ from pathlib import Path
 
 from ._env import coverage_profile_lines
 
+# The module `os` re-exports its system calls from.
+_OS_MODULE = "nt" if sys.platform == "win32" else "posix"
+
 
 def _write_profile(tmp_path: Path, *extra_lines: str) -> Path:
     profile = tmp_path / "arming.profile"
@@ -62,24 +65,24 @@ def test_command_path_denies_os_system(tmp_path: Path) -> None:
 
 
 def test_command_path_denies_the_posix_alias(tmp_path: Path) -> None:
-    """posix.system is the same object as os.system."""
+    """posix.system (nt.system on Windows) is the same object as os.system."""
     profile = _write_profile(tmp_path)
-    result = _run(profile, "-c", "import posix; posix.system('true')")
+    result = _run(profile, "-c", f"import {_OS_MODULE}; {_OS_MODULE}.system('true')")
     assert result.returncode != 0
     assert "denied by the API guard" in result.stderr
 
 
 def test_command_path_allows_an_explicit_function(tmp_path: Path) -> None:
     # This proves ALLOW resolution, not arming: an inert (never armed)
-    # guard would also exit 0 with "0" on stdout. The two deny tests
+    # guard would also exit 0 and report the call. The two deny tests
     # above are what proves arming on this path.
     profile = _write_profile(
         tmp_path,
-        "python-api=ALLOW:os.system,posix.system",
+        f"python-api=ALLOW:os.system,{_OS_MODULE}.system",
     )
-    result = _run(profile, "-c", "import os; print(os.system('true'))")
+    result = _run(profile, "-c", "import os; print('CALLED', isinstance(os.system('true'), int))")
     assert result.returncode == 0, result.stderr
-    assert "0" in result.stdout
+    assert "CALLED True" in result.stdout
 
 
 def test_script_path_denies_os_system(tmp_path: Path) -> None:

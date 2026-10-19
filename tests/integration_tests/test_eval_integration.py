@@ -295,7 +295,7 @@ def test_a_sandbox_decorated_function_is_guarded_when_it_evals(tmp_path: Path) -
             evaluate(ESCAPE)
             print('ESCAPED')
         except BaseException as err:
-            print('REFUSED', type(err).__name__, sandbox_denials(err))
+            print('REFUSED', type(err).__name__, ascii(sandbox_denials(err)))
         """,
         tmp_path,
     )

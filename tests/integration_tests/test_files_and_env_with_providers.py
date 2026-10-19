@@ -144,6 +144,7 @@ print("LEAKS=" + ",".join(leaks))
 """
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the probe script imports posix")
 @pytest.mark.parametrize("os_sandbox", _ROWS)
 def test_a_hidden_variable_is_not_reachable_by_any_other_route_under_every_backend(
     os_sandbox: str, tmp_path: Path
@@ -173,6 +174,7 @@ print("rmtree done")
 """
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 @pytest.mark.parametrize("os_sandbox", _ROWS)
 def test_a_directory_descriptor_is_resolved_under_every_backend(os_sandbox: str, tmp_path: Path) -> None:
     """The guard resolves ``dir_fd`` through ``/proc/self/fd``: a backend that hides ``/proc`` would deny it."""
@@ -190,6 +192,7 @@ def test_a_directory_descriptor_is_resolved_under_every_backend(os_sandbox: str,
     assert not (rw / "tree").exists()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot os.open a directory")
 @pytest.mark.parametrize("os_sandbox", _ROWS)
 def test_a_directory_descriptor_does_not_write_into_a_read_only_directory_under_every_backend(
     os_sandbox: str, tmp_path: Path
