@@ -20,23 +20,17 @@ Planned work, in no committed order:
 - [ ] OS Compatible
   - [X] Linux
   - [ ] Windows
-  - [ ] Mac OS (see https://cursor.com/fr/blog/agent-sandboxing)
+  - [ ] Mac OS
 - [ ] OS-sandboxes
-  - [ ] Basic
+  - [X] Basic
     - [X] None
     - [X] sub process
-    - [ ] sub interpreter
+    - [X] ~~sub interpreter~~ (rejected: isolating one interpreter from another is not simple)
     - [X] Landlock
-      - [X] Refuse the abstract Unix sockets created outside the sandbox (ABI 6+)
-      - [ ] Refuse `connect()` to a named Unix socket not covered by an `expose-rw` rule, the rule every
-        other provider applies. Landlock cannot filter it, so a seccomp user-notification filter sends each Unix
-        `connect()` to the parent, which checks the path, connects itself and hands the descriptor back
-        (`SECCOMP_IOCTL_NOTIF_ADDFD`), leaving no window to change the path after the check.
   - [ ] Sandbox utilities
     - [X] firejail
     - [X] unshare
     - [X] bwrap
-    - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: filtering by domain, not only by IP)
   - [ ] Container
     - [X] Docker (--privileged with unshare)
     - [X] podman (--privileged with unshare)
@@ -63,8 +57,16 @@ Planned work, in no committed order:
     - [ ] [Cloud morph](https://cloud.morph.so/)
     - [ ] [Agent sandbox](https://agent-sandbox.sigs.k8s.io/docs/getting_started/)
   - [ ] Apple
-    - [ ] App Sandbox
+    - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
     - [ ] sandbox-exec
+  - [ ] Windows
+    - [ ] AppContainer
+    - [ ] Windows Sandbox
+  - [ ] Network strategies
+    - [X] local netfilter and pin DNS
+    - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
+    filtering by domain, not only by IP)
+
 - [X] New samples
   - [X] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
   - [X] [Crewai](https://www.crewai.com/)
