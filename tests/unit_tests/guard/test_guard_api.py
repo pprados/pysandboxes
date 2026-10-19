@@ -511,6 +511,17 @@ def test_ctypes_new_bypass_is_refused_end_to_end(tmp_path: Path) -> None:
     assert "bypass GUARD" in result.stdout, result.stdout + result.stderr
 
 
+def test_the_ctypes_loader_binding_is_patched() -> None:
+    """``CDLL._load_library`` calls a module-level alias bound before the guards arm: it must be patched."""
+    import ctypes
+
+    table = patch_rules(learn=False)
+    names = [name for name in ("_dlopen", "_LoadLibrary") if hasattr(ctypes, name)]
+
+    assert names
+    assert all(f"ctypes.{name}" in table for name in names)
+
+
 def test_every_patched_entry_actually_resolves() -> None:
     """A patched name must exist, or startup would raise -- except a test-capi one, moved or absent by version."""
     import importlib

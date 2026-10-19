@@ -46,6 +46,7 @@ from pysandboxes.guard_files import (
     _wrap_os_getcwdb,
     _wrap_os_listdir,
     _wrap_os_open,
+    _wrap_os_path_realpath,
     _wrap_os_readlink,
     _wrap_os_rmdir,
     _wrap_os_stat,
@@ -102,8 +103,9 @@ def test_parse_rules_rejects_a_path_with_an_embedded_null_byte() -> None:
     file_rules, _ = parse_rules([ConfigLine("expose-ro=a\x00b", Path(), 0)], errors)
 
     assert len(errors) == 1
-    # Windows resolves such a name without raising, then finds no file by that name.
-    assert ("must exist" if sys.platform == "win32" else "path is invalid") in errors[0][0]
+    # Windows resolves such a name without raising from Python 3.13, then finds no file by that name.
+    windows_resolves = sys.platform == "win32" and sys.version_info >= (3, 13)
+    assert ("must exist" if windows_resolves else "path is invalid") in errors[0][0]
     assert not any(isinstance(r, FSExposeRule) and r.config.rule.startswith("expose-") for r in file_rules)
 
 
@@ -1425,6 +1427,22 @@ def test_wrap_os_getcwd_keeps_the_root_separator() -> None:
     wrapped = _wrap_os_getcwd(lambda: root)
 
     assert wrapped() == root
+
+
+def test_wrap_os_path_realpath_lets_the_standard_library_ask_for_the_working_directory(tmp_path: Path) -> None:
+    """``ntpath.realpath`` asks for the working directory before Python 3.13, which no rule exposes."""
+    activate_guard_files_rules([ConfigLine(f"ignore={tmp_path}{os.sep}", Path(), 0)])
+    getcwd = _wrap_os_getcwd(lambda: str(tmp_path))
+    asked: list[str] = []
+
+    def realpath(path: str) -> str:
+        asked.append(getcwd())
+        return path
+
+    assert _wrap_os_path_realpath(realpath)("x") == "x"
+    assert asked == [str(tmp_path)]
+    with pytest.raises(RuleFileNotFoundError):
+        getcwd()
 
 
 # %% _link_target -- Windows extended-length prefix

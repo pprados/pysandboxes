@@ -154,6 +154,11 @@ _os_readlink = os.readlink
 # inside the check would recurse forever.
 _canonicalizing: contextvars.ContextVar[bool] = contextvars.ContextVar("_canonicalizing", default=False)
 
+# Set around ``os.path.realpath`` where the standard library asks for the working directory to resolve a path that
+# is already absolute: ``ntpath`` before Python 3.13. The answer stays inside ``realpath``; the path it returns is
+# still judged through the patched ``os.lstat`` and ``os.readlink``.
+_realpath_cwd: contextvars.ContextVar[bool] = contextvars.ContextVar("_realpath_cwd", default=False)
+
 
 def _dir_path(path: str) -> str:
     """Return ``path`` ending with the native separator, the form directory rules are stored in.
@@ -1102,7 +1107,7 @@ def _wrap_pathlib_Path_glob(func: Callable[..., Any]) -> Callable[..., Any]:
                 _raise_access(self)
 
         def filter(it: Iterator[Path]) -> Iterator[Path]:
-            abs_remapper = _os_path_realpath(remapped)
+            abs_remapper = _safe_realpath(str(remapped))
             check_alias = _check_alias.get()
             while True:
                 token = _check_alias.set(False) if check_alias else None
@@ -1275,6 +1280,8 @@ def _wrap_os_access(func: Callable[..., Any], *, write: bool) -> Callable[..., A
 def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
     @guard_wraps(func)
     def wrapper() -> str:
+        if _realpath_cwd.get():
+            return str(func())
         # Detect call from posixpath
         dir: str = func()
         new_dir = _dir_path(os.fsdecode(os.fspath(dir)))
@@ -1292,6 +1299,18 @@ def _wrap_os_getcwd(func: Callable[..., Any]) -> Callable[..., Any]:
         if remapped != os.path.dirname(remapped) and remapped.endswith(os.path.sep):
             remapped = remapped[:-1]
         return str(remapped)
+
+    return wrapper
+
+
+def _wrap_os_path_realpath(func: Callable[..., Any]) -> Callable[..., Any]:
+    @guard_wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        token = _realpath_cwd.set(True)
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _realpath_cwd.reset(token)
 
     return wrapper
 
@@ -1900,6 +1919,8 @@ def patch_rules(learn: bool) -> dict[str, Callable[..., Any]]:
             "os.chown": _f(_wrap_filename, write=True),
             "os.lchown": _f(_wrap_filename, write=True),
         }
+    elif sys.version_info < (3, 13):
+        rules["os.path.realpath"] = _f(_wrap_os_path_realpath)
     rules |= _twin_rules(rules)
     return rules
 

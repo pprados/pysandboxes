@@ -725,8 +725,11 @@ _PATCH_TARGET: dict[str, str] = {
 _ALIASES: dict[str, str] = {
     "subprocess._fork_exec": "_posixsubprocess.fork_exec",
     "ctypes._dlopen": "_ctypes.dlopen",
-    "ctypes._LoadLibrary": "_ctypes.LoadLibrary",
 }
+if sys.platform == "win32":
+    # Windows: ctypes binds LoadLibrary as ``_LoadLibrary`` from 3.13, as ``_dlopen`` before.
+    del _ALIASES["ctypes._dlopen"]
+    _ALIASES["ctypes._LoadLibrary" if sys.version_info >= (3, 13) else "ctypes._dlopen"] = "_ctypes.LoadLibrary"
 
 # guard_eval patches these three itself: the guarded path parses and rewrites
 # the source, which a binary allow/deny cannot express. Deliberately NOT
