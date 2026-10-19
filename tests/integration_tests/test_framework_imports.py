@@ -87,7 +87,7 @@ FRAMEWORK_IMPORTS = frozenset("""
 
 if sys.platform == "win32":
     # The daemon reaches the operating system through these where it uses posix elsewhere.
-    FRAMEWORK_IMPORTS |= frozenset({"_winapi", "ctypes", "msvcrt", "nt"})
+    FRAMEWORK_IMPORTS |= frozenset({"_ctypes", "_winapi", "ctypes", "msvcrt", "nt"})
 
 DRIVER = """
 import asyncio

@@ -157,6 +157,8 @@ windows-vm:
 	echo "Timed out waiting for SSH: $(WINDOWS_VM_ENGINE) logs $(WINDOWS_VM_CONTAINER)" >&2; exit 1
 
 WINDOWS_VM_PYTEST ?= $(CROSS_OS_PYTEST)
+# As in cross-os.yml, a skipped integration test fails the run; the whole suite skips what Windows cannot run.
+WINDOWS_VM_FAIL_ON_SKIP ?= 1
 
 ## Run the cross-os.yml test steps in the Windows VM, with the subprocess provider
 windows-tests: windows-vm
@@ -165,13 +167,13 @@ windows-tests: windows-vm
 	$(VM_SOURCES) | $(WINDOWS_VM_SSH) "tar -xf - -C C:/pysandboxes" || exit 1; \
 	status=0; \
 	for cmd in $(WINDOWS_VM_PYTEST); do \
-	  $(WINDOWS_VM_SSH) "cd /d C:\\pysandboxes && set \"PYSANDBOXES_FAIL_ON_SKIP=1\" && set \"SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0\" && uv sync --python $(WINDOWS_VM_PYTHON) --group test && $$cmd" || status=1; \
+	  $(WINDOWS_VM_SSH) "cd /d C:\\pysandboxes && set \"PYSANDBOXES_FAIL_ON_SKIP=$(WINDOWS_VM_FAIL_ON_SKIP)\" && set \"SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0\" && uv sync --python $(WINDOWS_VM_PYTHON) --group test && $$cmd" || status=1; \
 	done; \
 	exit $$status
 
 ## Run the whole unit and integration suites in the Windows VM, not only the cross-os.yml steps
 windows-tests-all:
-	@$(MAKE) windows-tests WINDOWS_VM_PYTEST='"uv run pytest tests/unit_tests" "uv run pytest tests/integration_tests"'
+	@$(MAKE) windows-tests WINDOWS_VM_FAIL_ON_SKIP=0 WINDOWS_VM_PYTEST='"uv run pytest tests/unit_tests" "uv run pytest tests/integration_tests"'
 
 ## Stop the Windows VM, keeping its disk
 windows-vm-stop:
