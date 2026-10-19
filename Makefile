@@ -180,6 +180,11 @@ windows-vm-clean: windows-vm-stop
 # (host `macos`, port 2223, key id_macos) live in OSX_KVM_DIR. The VM needs uv on its PATH.
 OSX_KVM_DIR ?= /mnt/extra/home/philippe-prados/OSX-KVM
 MACOS_PYTHON ?= 3.13
+# speckit (test group) pulls numba and llvmlite, which have no macOS x86_64 wheel and fail to build there: nothing
+# imports them, so the Intel VM leaves them out. The arm64 runners of cross-os.yml install them.
+MACOS_SYNC_SKIP = --no-install-package numba --no-install-package llvmlite
+# `uv run` would sync the test group again, with them: it runs against the environment `uv sync` built.
+MACOS_UV_RUN = UV_NO_SYNC=1
 MACOS_SSH = ssh -F $(OSX_KVM_DIR)/ssh_config -o ConnectTimeout=5 macos
 
 ## Start the local macOS VM (OSX-KVM) and wait for SSH
@@ -202,7 +207,7 @@ macos-tests: macos-vm
 	$(VM_SOURCES) | $(MACOS_SSH) "tar -xf - -C pysandboxes" || exit 1; \
 	status=0; \
 	for cmd in $(CROSS_OS_PYTEST); do \
-	  $(MACOS_SSH) "export PATH=\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV); cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test && $$cmd" || status=1; \
+	  $(MACOS_SSH) "export PATH=\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV) $(MACOS_UV_RUN); cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test $(MACOS_SYNC_SKIP) && $$cmd" || status=1; \
 	done; \
 	exit $$status
 
