@@ -17,8 +17,9 @@ _FAULTS = [
     socket.EAI_AGAIN,
     socket.EAI_FAIL,
     socket.EAI_SERVICE,
-    socket.EAI_SYSTEM,
 ]
+if hasattr(socket, "EAI_SYSTEM"):  # POSIX only
+    _FAULTS.append(socket.EAI_SYSTEM)
 
 
 def _allow_everything() -> Any:

@@ -6,7 +6,7 @@ SHELL=/bin/bash
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
 	minikube-ready minikube-build-images lock validate _uv-init inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
-	windows-vm windows-tests windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop
+	windows-vm windows-tests windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop
 
 UV_GROUP?=--group dev --group test --group lint
 FUZZ_SECONDS?=20
@@ -156,16 +156,22 @@ windows-vm:
 	done; \
 	echo "Timed out waiting for SSH: $(WINDOWS_VM_ENGINE) logs $(WINDOWS_VM_CONTAINER)" >&2; exit 1
 
+WINDOWS_VM_PYTEST ?= $(CROSS_OS_PYTEST)
+
 ## Run the cross-os.yml test steps in the Windows VM, with the subprocess provider
 windows-tests: windows-vm
 	@set -u; \
 	$(WINDOWS_VM_SSH) "if not exist C:\\pysandboxes mkdir C:\\pysandboxes" || exit 1; \
 	$(VM_SOURCES) | $(WINDOWS_VM_SSH) "tar -xf - -C C:/pysandboxes" || exit 1; \
 	status=0; \
-	for cmd in $(CROSS_OS_PYTEST); do \
+	for cmd in $(WINDOWS_VM_PYTEST); do \
 	  $(WINDOWS_VM_SSH) "cd /d C:\\pysandboxes && set \"PYSANDBOXES_FAIL_ON_SKIP=1\" && set \"SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0\" && uv sync --python $(WINDOWS_VM_PYTHON) --group test && $$cmd" || status=1; \
 	done; \
 	exit $$status
+
+## Run the whole unit and integration suites in the Windows VM, not only the cross-os.yml steps
+windows-tests-all:
+	@$(MAKE) windows-tests WINDOWS_VM_PYTEST='"uv run pytest tests/unit_tests" "uv run pytest tests/integration_tests"'
 
 ## Stop the Windows VM, keeping its disk
 windows-vm-stop:
