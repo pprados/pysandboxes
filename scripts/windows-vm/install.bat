@@ -30,6 +30,11 @@ if errorlevel 1 exit /b 1
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Environment]::SetEnvironmentVariable('UV_PYTHON_INSTALL_DIR','C:\uv-python','Machine'); $p=[Environment]::GetEnvironmentVariable('Path','Machine'); if (($p -split ';') -notcontains 'C:\uv') { [Environment]::SetEnvironmentVariable('Path',($p.TrimEnd(';')+';C:\uv'),'Machine') }"
 if errorlevel 1 exit /b 1
 
+rem Windows loads its root certificates on demand, when a Schannel client first validates a chain; Python reads the
+rem store without triggering that, so a fresh VM fails the TLS tests until one request has been made.
+C:\Windows\System32\curl.exe -sS -o NUL https://github.com
+C:\Windows\System32\curl.exe -sS -o NUL https://pypi.org
+
 net stop sshd >nul 2>&1
 net start sshd >nul
 if errorlevel 1 exit /b 1
