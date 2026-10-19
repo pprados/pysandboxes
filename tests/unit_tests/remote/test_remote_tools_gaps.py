@@ -4,11 +4,11 @@
 
 import builtins
 import io
-import pickle
-import sys
 import ipaddress
+import pickle
 import platform
 import subprocess
+import sys
 import uuid
 import zoneinfo
 from typing import Any
@@ -19,6 +19,7 @@ import pytest
 from pysandboxes.remote import tools
 from pysandboxes.remote.tools import (
     RestrictedUnpicklingError,
+    _get_default_interface_via_ip,
     _prescan,
     _value_getattr,
     _ValueUnpickler,
@@ -29,7 +30,6 @@ from pysandboxes.remote.tools import (
     get_dns_servers,
     get_upstream_dns,
     get_venv,
-    _get_default_interface_via_ip,
     result_predicate,
     suggest_package_installation,
     unshare_user_namespace_available,
@@ -211,6 +211,7 @@ class TestDefaultInterface:
 
 
 class TestResolvConf:
+    @pytest.mark.skipif(sys.platform == "win32", reason="Windows reads its DNS servers elsewhere than /etc/resolv.conf")
     def test_a_nameserver_line_without_an_address_is_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _files(monkeypatch, {"/etc/resolv.conf": "nameserver\nnameserver 1.1.1.1\nnameserver 2606:4700::1111\n"})
 

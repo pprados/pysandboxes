@@ -30,7 +30,7 @@ def test_banner_accepts_a_config_outside_the_working_directory(tmp_path: Path) -
     ):
         assert python_in_sb._python_interactive(rules, True) == 0
 
-    assert str(rules.learning_path) in banners[0]
+    assert repr(str(rules.learning_path))[1:-1] in banners[0]
 
 
 class _Tty(io.StringIO):

@@ -1,9 +1,12 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 
+import sys
 from collections import namedtuple
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 from pysandboxes.guard_provider import parse_rules
 from pysandboxes.main_logger import ErrorMsg
@@ -106,6 +109,7 @@ def test_os_sandbox_valid(mocker: MagicMock) -> None:
     assert errors == []
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="bwrap does not run on Windows")
 def test_os_sandbox_bwrap_valid(mocker: MagicMock) -> None:
     mock_path_class = mocker.patch("pysandboxes.guard_provider.Path", autospec=True)
 
@@ -237,6 +241,7 @@ def test_port_negative(mocker: MagicMock) -> None:
     assert "Port must be a positive value" in errors[0][0]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the mocked paths are POSIX spellings")
 def test_learn_path(mocker: MagicMock) -> None:
     mock_path_class = mocker.patch("pysandboxes.guard_provider.Path", autospec=True)
 

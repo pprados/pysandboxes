@@ -218,7 +218,7 @@ class TestParsePythonCmdLine:
     def test_a_bare_learn_writes_to_the_named_rule_file(self, config_args: list[str]) -> None:
         _, sandboxes_args, _, config = parse_python_cmd_line([*config_args, "--learn", "script.py"])
 
-        assert sandboxes_args == ["--learn=skill/.py-sandboxes"]
+        assert sandboxes_args == [f"--learn={Path('skill/.py-sandboxes')}"]
         assert config == Path("skill/.py-sandboxes")
 
     def test_a_script_uses_the_rule_file_next_to_it(self, tmp_path: Path) -> None:

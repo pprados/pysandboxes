@@ -42,6 +42,9 @@ class TestCallerConfig:
     def test_a_named_caller_keeps_its_own_package_whatever_its_spec_says(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caller: str
     ) -> None:
+        (tmp_path / "CaseProbe").mkdir()
+        if (tmp_path / "caseprobe").exists():
+            pytest.skip("the file system ignores case")
         site = tmp_path / "site"
         for package in ("namedpkg", "Namedpkg", "decoypkg"):
             (site / package).mkdir(parents=True)

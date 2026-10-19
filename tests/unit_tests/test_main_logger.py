@@ -3,6 +3,7 @@
 """Unit tests for how main_logger shows a path."""
 
 import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ def _isolated_root_logger(monkeypatch: pytest.MonkeyPatch) -> logging.Logger:
     return root
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="an absolute POSIX path gets a drive letter on Windows")
 def test_a_path_outside_cwd_is_shown_even_without_a_home_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -108,6 +110,7 @@ def test_the_default_format_names_the_process_and_the_logger(_isolated_root_logg
     assert formatter._fmt == "%(levelname)-5s [%(process)d] %(name)s: %(message)s"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="rich is not used on Windows: it reaches kernel32 through ctypes")
 def test_a_rich_handler_replaces_the_plain_one_when_asked(_isolated_root_logger: logging.Logger) -> None:
     from rich.logging import RichHandler
 

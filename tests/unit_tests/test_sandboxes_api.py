@@ -256,6 +256,7 @@ def test_importing_the_api_loads_multiprocessing_before_any_sandbox() -> None:
 LOCKED_RULES = "py-sandbox=true\nos-sandbox=none\nlearn=false\n"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the profile exposes /etc, which does not exist on Windows")
 @patch("pysandboxes._os_sandbox.start_daemon")
 def test_a_locked_rule_file_refuses_the_rules_of_the_api(mock_start: Mock, tmp_path: Path) -> None:
     config = tmp_path / ".py-sandboxes"
@@ -309,6 +310,7 @@ with patch("pysandboxes._os_sandbox.start_daemon", return_value=Mock()):
 """
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no SIGTERM delivery to a process")
 def test_sigterm_inside_sandboxes_stops_the_daemon_then_kills_the_process() -> None:
     result = subprocess.run([sys.executable, "-c", _SIGTERM_INSIDE_SANDBOXES], capture_output=True, text=True)
 

@@ -306,7 +306,7 @@ class TestRestartCmd:
         restart.run(daemon, init_fn=os.getcwd)
 
         ((args, kwargs),) = restart.launches
-        assert args == ["prog", "a b", "--_named-pipe", "/run/pipe"]
+        assert args == ["prog", "a b", "--_named-pipe", str(Path("/run/pipe"))]
         assert kwargs["pipe_path"] == Path("/run/pipe")
         config = kwargs["process_config"]
         assert config.token == "secret"
