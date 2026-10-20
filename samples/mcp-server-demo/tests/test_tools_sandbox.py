@@ -16,9 +16,11 @@ Scenarios B and C run armed, against the real network. No mock: a mocked
 transport proves the mock, not the rule.
 """
 
+import asyncio
 import subprocess
 import sys
 from pathlib import Path
+from typing import Awaitable, Callable
 
 import pytest
 from pysandboxes import sandbox_denials, sandboxes
@@ -76,11 +78,26 @@ def test_scenario_a_the_escape_succeeds_without_the_sandbox() -> None:
     assert "Popen" in result.stdout, result.stdout
 
 
+_ATTEMPTS = 3
+
+
+async def _tolerating_network_errors(fetch: Callable[[], Awaitable[str]]) -> str:
+    """Call ``fetch`` up to three times: the allowed host drops a connection now and then. A denial is not retried."""
+    for attempt in range(1, _ATTEMPTS):
+        try:
+            return await fetch()
+        except Exception as exc:
+            if sandbox_denials(exc):
+                raise
+            await asyncio.sleep(attempt)
+    return await fetch()
+
+
 @pytest.mark.asyncio
 async def test_scenario_b2_an_allowed_host_is_reached() -> None:
     """The host listed in net=ALLOW answers, so the rule is a whitelist and not a wall."""
     async with sandboxes(**armed_kwargs()):
-        page = await _fetch_webpage(ALLOWED_URL)
+        page = await _tolerating_network_errors(lambda: _fetch_webpage(ALLOWED_URL))
 
     assert page.strip(), "the allowed host returned nothing"
 

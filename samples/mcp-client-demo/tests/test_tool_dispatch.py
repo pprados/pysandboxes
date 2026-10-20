@@ -18,6 +18,7 @@ server isolate its own tools, ``stdio_sandboxes_complete`` runs the whole
 server under ``python-sb``.
 """
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -100,7 +101,12 @@ async def test_an_allowed_host_is_reached_through_the_client(
     client, mode = chat
     async with client:
         session = ChatSession(client, llm_client=None)  # type: ignore[arg-type]
-        answer = await session.process_llm_response(_tool_call("fetch_webpage", url=ALLOWED_URL))
+        # The allowed host drops a connection now and then: three attempts, as the answer carries the error.
+        for attempt in range(1, 4):
+            answer = await session.process_llm_response(_tool_call("fetch_webpage", url=ALLOWED_URL))
+            if "Error executing tool" not in answer:
+                break
+            await asyncio.sleep(attempt)
 
     assert "Error executing tool" not in answer, f"[{mode}] {answer}"
     assert answer.strip()

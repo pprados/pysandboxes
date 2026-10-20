@@ -23,8 +23,9 @@ mocked transport proves the mock, not the rule.
 
 import subprocess
 import sys
+import time
 from pathlib import Path
-from typing import Any, Coroutine
+from typing import Any, Callable, Coroutine
 
 import pysandboxes
 import pytest
@@ -88,8 +89,23 @@ def test_scenario_a_the_escape_succeeds_without_the_sandbox() -> None:
     assert "Popen" in result.stdout, result.stdout
 
 
+_ATTEMPTS = 3
+
+
+def _tolerating_network_errors(fetch: Callable[[], str]) -> str:
+    """Call ``fetch`` up to three times: the allowed host drops a connection now and then. A denial is not retried."""
+    for attempt in range(1, _ATTEMPTS):
+        try:
+            return fetch()
+        except Exception as exc:
+            if sandbox_denials(exc):
+                raise
+            time.sleep(attempt)
+    return fetch()
+
+
 def test_scenario_b2_an_allowed_host_is_reached() -> None:
-    page = armed(_fetch_webpage(ALLOWED_URL))
+    page = _tolerating_network_errors(lambda: armed(_fetch_webpage(ALLOWED_URL)))
 
     assert page.strip(), "the allowed host returned nothing"
 

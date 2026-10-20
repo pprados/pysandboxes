@@ -17,6 +17,7 @@ The tools name the rule themselves, which is why asserting on it here is not
 asserting on a generic error path.
 """
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -80,7 +81,12 @@ async def test_the_tools_answer_under_python_sb(sandboxed_server: Client) -> Non
 @pytest.mark.asyncio
 async def test_an_allowed_host_is_reached_under_python_sb(sandboxed_server: Client) -> None:
     async with sandboxed_server as client:
-        answer = await _call(client, "fetch_webpage", url=ALLOWED_URL)
+        # The allowed host drops a connection now and then: three attempts, as the answer carries the error.
+        for attempt in range(1, 4):
+            answer = await _call(client, "fetch_webpage", url=ALLOWED_URL)
+            if not answer.startswith("ERROR"):
+                break
+            await asyncio.sleep(attempt)
 
     assert not answer.startswith("ERROR"), answer
     assert answer.strip()
