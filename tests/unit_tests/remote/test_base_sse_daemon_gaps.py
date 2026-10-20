@@ -80,7 +80,7 @@ class TestAttachRemoteTraceback:
 
     def test_a_chain_longer_than_any_real_one_is_refused(self) -> None:
         serial = tblib.Traceback(_raise_through(0).__traceback__)
-        node = serial
+        node: Any = serial
         for _ in range(base_sse_daemon._MAX_TRACEBACK_FRAMES + 1):
             node.tb_next = tblib.Traceback(_raise_through(0).__traceback__)
             node = node.tb_next
