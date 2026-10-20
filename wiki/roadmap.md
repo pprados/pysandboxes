@@ -25,7 +25,7 @@ Planned work, in no committed order:
   - [X] Basic
     - [X] None
     - [X] sub process
-    - [X] ~~sub interpreter~~ (rejected: isolating one interpreter from another is not simple)
+    - [X] ~~sub interpreter~~ (rejected: isolating one interpreter from another is not possible)
     - [X] Landlock
   - [ ] Sandbox utilities
     - [X] firejail
@@ -59,6 +59,7 @@ Planned work, in no committed order:
   - [ ] Apple
     - [X] ~~App Sandbox~~ (rejected: not compatible with the approach)
     - [ ] sandbox-exec
+    - [ ] Collima
   - [ ] Windows
     - [ ] AppContainer
     - [ ] Windows Sandbox
@@ -67,7 +68,7 @@ Planned work, in no committed order:
     - [ ] Proxy (SOCKS/HTTP over a Unix socket bound into the sandbox, relayed by socat: 
     filtering by domain, not only by IP)
 
-- [X] New samples
+- [X] Samples
   - [X] [Agnos](https://www.agno.com/docs/guides/agents-sdk)
   - [X] [Crewai](https://www.crewai.com/)
   - [X] [Google ADK](https://google.github.io/adk-docs/)
