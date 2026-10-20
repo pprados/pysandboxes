@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026, Philippe PRADOS
+# License: Apache V2
+# Runs inside the macOS VM, over SSH (make init-macos-vm): installs what the suites of cross-os.yml need there.
+# Idempotent. Uses bash 3.2, the one macOS ships.
+set -eu
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
+openssl_version="${OPENSSL_VERSION:-3.5.9}"
+
+if ! xcode-select -p >/dev/null 2>&1 || ! command -v cc >/dev/null 2>&1; then
+  echo "The command line tools are missing in the VM: run 'xcode-select --install' in its Terminal, then run this again." >&2
+  exit 1
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+uv --version
+
+# cryptography has no wheel for this Intel macOS on Python 3.11 and 3.12, and builds from source: it needs an OpenSSL
+# that the system does not provide.
+if [ ! -x "$HOME/openssl/bin/openssl" ]; then
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+  curl -fsSL -o "$work/openssl.tar.gz" "https://github.com/openssl/openssl/releases/download/openssl-$openssl_version/openssl-$openssl_version.tar.gz"
+  tar -xzf "$work/openssl.tar.gz" -C "$work"
+  (cd "$work/openssl-$openssl_version" && ./Configure --prefix="$HOME/openssl" --openssldir="$HOME/openssl" no-tests >/dev/null && make -j"$(sysctl -n hw.ncpu)" >/dev/null && make install_sw >/dev/null)
+fi
+"$HOME/openssl/bin/openssl" version
+
+mkdir -p "$HOME/pysandboxes"
+echo "VM ready: uv, a compiler and OpenSSL are in place."

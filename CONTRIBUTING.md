@@ -15,17 +15,65 @@ does not count as a vulnerability, such as the known Python-layer weaknesses in
 
 ## Getting started
 
-The project runs on Linux or WSL (every OS provider is a Linux technology), with Python 3.11 to 3.14, and uses
-[uv](https://docs.astral.sh/uv/) exclusively.
+Python 3.11.5 to 3.14, with [uv](https://docs.astral.sh/uv/) exclusively. Every OS provider is a Linux technology, so
+what you can run depends on your system:
+
+| Your system | What runs | Needs |
+|---|---|---|
+| Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` | the packages and kernel settings below |
+| macOS | the Python layer over `subprocess`, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv |
+| native Windows | the Python layer over `subprocess` | uv, git, GNU make, a bash (Git Bash) |
+
+On macOS and Windows, a change that touches a kernel-backed provider is tested in a Linux VM (Lima, Colima, Multipass
+or UTM on a Mac) or in WSL2 (`wsl --install -d Ubuntu-24.04` on Windows). Prefer WSL2 on Windows: the Makefile is
+written for bash, and WSL2 gives you the providers too. Landlock is reported to work under WSL2; `make doctor`
+tells you whether your kernel has it. A VM on an Apple Silicon Mac or in WSL2 has no nested KVM in the general
+case, so `qemu` falls back to the slow TCG row there.
 
 ```bash
 git clone https://github.com/pprados/pysandboxes.git
 cd pysandboxes
 git checkout develop
-make init        # uv sync --group dev --group test --group lint, plus the gh act extension
+make init        # on a bare system without make: scripts/setup/init.sh
 ```
 
+`make init` detects the system (Linux, WSL2, macOS, Git Bash), installs what it lacks after asking you, runs
+`uv sync --python-preference only-managed --group dev --group test --group lint`, and ends with `make doctor`.
+The `uv`-managed Python is deliberate: a distribution Python, such as Ubuntu 24.04's 3.12.3 that `uv` would pick
+otherwise, fails 4 unit tests and 29 provider tests of this repository. On Linux and WSL2 it installs these
+packages with `apt-get` or `dnf`: `git`, `make`, `curl`, a C compiler, `bubblewrap`, `firejail`, `slirp4netns`,
+`iptables`, `iproute2`, `qemu-system-x86`, `qemu-utils` and `genisoimage`, then `uv` if it is missing. `YES=1 make init`
+accepts every question except the one on AppArmor.
+
+Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, and `bwrap` and `unshare` need them. `make init`
+offers `kernel.apparmor_restrict_unprivileged_userns=0`, now and at every boot (`/etc/sysctl.d/60-pysandboxes.conf`).
+That widens the kernel attack surface of your workstation (see [`wiki/unshare.md`](wiki/unshare.md)), so it is
+asked separately, and only `RELAX_APPARMOR=1` accepts it without a terminal. Declining leaves the `bwrap` and
+`unshare` rows skipped or failing.
+
+`make doctor` changes nothing. It lists each tool and kernel setting, `[ok]` or `[missing]`, and what a missing
+one costs: a provider whose tool is absent skips its tests, and a skipped test proves nothing about it. To run
+only one step, `make setup-linux`, `make setup-macos` or `make setup-windows`.
+
 A plain `uv sync` installs the `dev` group only and removes the linters. `make help` lists every target.
+
+### Containers and the Windows and macOS VMs
+
+These are the maintainer's means to prove the whole matrix from a Linux workstation. A pull request does not need
+them: CI runs lint and the unit tests, and `cross-os.yml` runs macOS and Windows.
+
+- `make container-tests` needs Docker or Podman, and minikube for the Kubernetes rows (`make minikube-ready`).
+- `make windows-vm` starts a Windows 11 VM in Podman or Docker (`dockurr/windows`). It needs `/dev/kvm` and takes
+  about 30 minutes the first time. `make windows-tests` then runs the `cross-os.yml` steps in it.
+- `make init-macos-vm` builds an Intel macOS VM with [OSX-KVM](https://github.com/kholia/OSX-KVM) on a Linux x86_64
+  host with KVM. Read what it prints and answer `yes` before it downloads anything: Apple's licence allows macOS in a
+  virtual machine on Apple-branded hardware only, the guest is an Intel macOS (it says nothing about Apple
+  Silicon), and the installation of macOS itself is interactive, through a VNC viewer. The script prints each manual
+  step, and you run `make init-macos-vm` again after them: it then installs uv, checks the compiler and builds an
+  OpenSSL inside the VM, which `cryptography` needs on Python 3.11 and 3.12. The files live under
+  `~/.pysandboxes/macos-vm`; set `OSX_KVM_DIR` to use another place. `make macos-vm` boots it and
+  `make macos-tests` runs the `cross-os.yml` steps in it. If you own a Mac, you do not need this VM: run the suites
+  on the Mac.
 
 ### Where things are
 

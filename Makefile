@@ -4,9 +4,10 @@ SHELL=/bin/bash
 	spell_check spell_fix pip-audit pip-audit-all clean extra-clean help \
 	api_docs_build api_docs_clean api_docs_linkcheck \
 	build-images build-image-base build-image-landlock build-image-unshare build-image-bwrap build-image-qemu build-image-docker build-image-podman build-image-clean \
-	minikube-ready minikube-build-images lock validate _uv-init inspector github-push-test init \
+	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
-	windows-vm windows-tests windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop
+	windows-vm windows-tests windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop \
+	doctor setup-linux setup-macos setup-windows init-macos-vm
 
 UV_GROUP?=--group dev --group test --group lint
 FUZZ_SECONDS?=20
@@ -184,9 +185,9 @@ windows-vm-clean: windows-vm-stop
 	@$(WINDOWS_VM_ENGINE) rm -f "$(WINDOWS_VM_CONTAINER)" >/dev/null 2>&1 || true
 	rm -rf "$(WINDOWS_VM_DIR)"
 
-# The macOS VM (OSX-KVM, Sonoma) already exists: it is started, not built. Its launcher and its SSH config
-# (host `macos`, port 2223, key id_macos) live in OSX_KVM_DIR. The VM needs uv on its PATH.
-OSX_KVM_DIR ?= /mnt/extra/home/philippe-prados/OSX-KVM
+# The macOS VM (OSX-KVM, Sonoma, Intel) is built once by `make init-macos-vm` and started by `make macos-vm`. Its
+# launcher and its SSH config (host `macos`, port 2223, key id_macos) live in OSX_KVM_DIR. The VM needs uv on its PATH.
+OSX_KVM_DIR ?= $(HOME)/.pysandboxes/macos-vm/OSX-KVM
 MACOS_PYTHON ?= 3.13
 # speckit (test group) pulls numba and llvmlite, which have no macOS x86_64 wheel and fail to build there: nothing
 # imports them, so the Intel VM leaves them out. The arm64 runners of cross-os.yml install them.
@@ -215,7 +216,7 @@ macos-tests: macos-vm
 	$(VM_SOURCES) | $(MACOS_SSH) "tar -xf - -C pysandboxes" || exit 1; \
 	status=0; \
 	for cmd in $(CROSS_OS_PYTEST); do \
-	  $(MACOS_SSH) "export PATH=\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV) $(MACOS_UV_RUN); cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test $(MACOS_SYNC_SKIP) && $$cmd" || status=1; \
+	  $(MACOS_SSH) "export PATH=\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV) $(MACOS_UV_RUN) OPENSSL_DIR=\$$HOME/openssl OPENSSL_STATIC=1; cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test $(MACOS_SYNC_SKIP) && $$cmd" || status=1; \
 	done; \
 	exit $$status
 
@@ -758,10 +759,6 @@ quick-demo-gif:
 	fi
 
 
-_uv-init:
-	@uv sync $(UV_GROUP)
-
-
 ## Start MCP inspector
 inspector:
 	npx @modelcontextprotocol/inspector
@@ -769,10 +766,29 @@ inspector:
 github-push-test:
 	gh act push
 
-init: _uv-init
-#	@pre-commit install
-	gh extension install https://github.com/nektos/gh-act
-	@git lfs install 2>/dev/null || true
+## Detect the system, install what it lacks (asks first), sync the environments, then report what is missing
+init:
+	@UV_GROUP="$(UV_GROUP)" scripts/setup/init.sh
+
+## Report the tools and kernel settings a contributor needs, and what each missing one costs (changes nothing)
+doctor:
+	@scripts/setup/doctor.sh
+
+## Install the system packages, uv and the AppArmor setting of a Linux or WSL2 workstation (asks first)
+setup-linux:
+	@scripts/setup/setup-linux.sh
+
+## Install the command line tools, Homebrew packages and uv of a Mac (asks first)
+setup-macos:
+	@scripts/setup/setup-macos.sh
+
+## Install uv, git and make on native Windows with winget (asks first); WSL2 is recommended
+setup-windows:
+	@scripts/setup/setup-windows.sh
+
+## Build and provision the local Intel macOS VM with OSX-KVM, after an explicit licence validation (Linux, KVM)
+init-macos-vm:
+	@scripts/macos-vm/init.sh
 
 
 
