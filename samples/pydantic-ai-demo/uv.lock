@@ -2029,6 +2029,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "rich", specifier = ">=14.0" },
 ]
+fuzz = [{ name = "atheris", marker = "python_full_version >= '3.12' and implementation_name == 'cpython' and platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = ">=3.1.0" }]
 lint = [
     { name = "mypy", specifier = ">=1.8" },
     { name = "pyright", specifier = ">=1.1" },
@@ -2041,6 +2042,7 @@ test = [
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-dotenv", specifier = ">=0.5.2" },
     { name = "pytest-mock", specifier = ">=3.10.0" },
+    { name = "pytestarch", specifier = ">=4.0.1" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.33.0" },
     { name = "speckit", specifier = ">=1.0.1" },

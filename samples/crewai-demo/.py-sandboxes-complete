@@ -4,6 +4,11 @@
 # `learn.py`; see its docstring.
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
+include-platform=darwin "../macos-standard-imports.profile"
+include-platform=darwin "macos.profile"
+include-platform=win32 "../windows-standard-imports.profile"
+include-platform=win32 "windows.profile"
+include-platform=linux "linux.profile"
 
 # A library calling load_dotenv() at import (litellm, crewai, smolagents...) finds the
 # nearest .env above it and copies every name into os.environ, past the env= rules.
@@ -162,8 +167,6 @@ python-import=typing_inspection
 python-import=urllib3
 python-import=yaml
 
-expose-rw=~/.local/share/crewai-demo
-expose-rw=~/.local/share/crewai/credentials
 
 # Add rules (2026/10/07 at 17:32)
 # Standard Python
