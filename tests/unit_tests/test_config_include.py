@@ -19,7 +19,7 @@ class TestConfigInclude:
     """A bare name is looked up next to the profile, a path with a separator from the CWD."""
 
     @pytest.mark.skipif(
-        sys.platform == "win32", reason="the profile names a Linux provider, which does not run on Windows"
+        sys.platform != "linux", reason="the profile names a Linux provider, which does not run on Windows or macOS"
     )
     def test_relative_to_current_dir_include_is_loaded(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """`include "./x"` reads x from the current directory, not from the profile's.
@@ -39,7 +39,7 @@ class TestConfigInclude:
         assert rules.os_sandbox_params.get("show_boot_console") == "true"
 
     @pytest.mark.skipif(
-        sys.platform == "win32", reason="the profile names a Linux provider, which does not run on Windows"
+        sys.platform != "linux", reason="the profile names a Linux provider, which does not run on Windows or macOS"
     )
     def test_bare_name_include_is_read_next_to_the_profile(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -56,7 +56,7 @@ class TestConfigInclude:
         assert rules.os_sandbox_params.get("show_boot_console") == "true"
 
     @pytest.mark.skipif(
-        sys.platform == "win32", reason="the profile names a Linux provider, which does not run on Windows"
+        sys.platform != "linux", reason="the profile names a Linux provider, which does not run on Windows or macOS"
     )
     def test_missing_include_is_ignored(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """An absent optional override leaves the rest of the profile usable."""
@@ -252,7 +252,9 @@ def test_a_skipped_platform_include_does_not_drop_the_lines_after_it(
     assert {"python-import=other_dependency", "python-import=after_dependency"} <= rule_texts
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="the profile names a Linux provider, which does not run on Windows")
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="the profile names a Linux provider, which does not run on Windows or macOS"
+)
 def test_provider_parameters_are_kept_for_any_provider_name(tmp_path: Path) -> None:
     """`bwrap.*` lines are parsed by the bwrap provider, whatever the provider name sorts like."""
     profile = _write(tmp_path / "test.profile", "os-sandbox=bwrap\nbwrap.share-net=yes\n")
@@ -266,7 +268,9 @@ def test_provider_parameters_are_kept_for_any_provider_name(tmp_path: Path) -> N
     ("extra", "provider"),
     [("learn=out.profile\n", "subprocess"), ("", "bwrap")],
 )
-@pytest.mark.skipif(sys.platform == "win32", reason="the profile names a Linux provider, which does not run on Windows")
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="the profile names a Linux provider, which does not run on Windows or macOS"
+)
 def test_only_a_learning_run_is_forced_to_the_subprocess_provider(tmp_path: Path, extra: str, provider: str) -> None:
     profile = _write(tmp_path / "test.profile", f"os-sandbox=bwrap\n{extra}")
 

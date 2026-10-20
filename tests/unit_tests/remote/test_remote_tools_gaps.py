@@ -211,7 +211,7 @@ class TestDefaultInterface:
 
 
 class TestResolvConf:
-    @pytest.mark.skipif(sys.platform == "win32", reason="Windows reads its DNS servers elsewhere than /etc/resolv.conf")
+    @pytest.mark.skipif(sys.platform != "linux", reason="Only Linux reads its DNS servers from /etc/resolv.conf")
     def test_a_nameserver_line_without_an_address_is_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _files(monkeypatch, {"/etc/resolv.conf": "nameserver\nnameserver 1.1.1.1\nnameserver 2606:4700::1111\n"})
 

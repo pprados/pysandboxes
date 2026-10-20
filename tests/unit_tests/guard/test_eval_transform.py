@@ -260,7 +260,7 @@ def test_the_report_is_exhaustive_actionable_and_honest() -> None:
     assert "eval-import=os" in report
     assert "eval-magic=__class__" in report
     assert "^" in report
-    assert "⚠" in report
+    assert "WARNING:" in report
 
 
 def test_raise_if_rejected_carries_the_syntax_error_fields() -> None:
@@ -422,8 +422,8 @@ def test_the_warning_suffix_is_scoped_to_the_violation_that_has_one() -> None:
     imp = next(v for v in violations if "os" in v.remedy)
     assert not arith.warning
     assert imp.warning
-    assert "⚠" not in render_violation(source, arith)
-    assert "⚠" in render_violation(source, imp)
+    assert "WARNING:" not in render_violation(source, arith)
+    assert "WARNING:" in render_violation(source, imp)
 
 
 def test_an_augmented_assignment_on_an_attribute_is_left_untouched() -> None:

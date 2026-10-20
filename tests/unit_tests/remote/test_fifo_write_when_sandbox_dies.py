@@ -25,7 +25,7 @@ async def test_dead_sandbox_reports_its_exit_code(tmp_path: Path) -> None:
     """No reader will ever come, so the write must fail with the exit code, not block."""
     pipe_path = tmp_path / "config.fifo"
     os.mkfifo(pipe_path)
-    process = await asyncio.create_subprocess_exec("/bin/false")
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", "raise SystemExit(1)")
     await process.wait()
 
     with pytest.raises(SandBoxError, match="exited with code 1"):

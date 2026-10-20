@@ -230,4 +230,3 @@ def parse_rules(
         remote_result_data_only,
         other_rules,
     )
-

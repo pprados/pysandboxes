@@ -684,12 +684,12 @@ EvalSyntaxRejected: 3 rules violated in <eval:llm>
   line 3, col 8: import 'os' is not allowed
           import os
           ^^^^^^^^^
-    add: eval-import=os          ⚠ os exposes the process environment
+    add: eval-import=os          WARNING: os exposes the process environment
 
   line 5, col 12: attribute '__class__' is not allowed
           return x.__class__
           ^^^^^^^^^^^^^^^^^^
-    add: eval-magic=__class__    ⚠ opens the whole type hierarchy
+    add: eval-magic=__class__    WARNING: opens the whole type hierarchy
 ```
 
 Three properties:

@@ -11,7 +11,7 @@ from pysandboxes.py_sandbox import load_and_parse_config
 
 
 @pytest.mark.skipif(
-    sys.platform == "win32", reason="the profile names Linux providers, which the platform check refuses first"
+    sys.platform != "linux", reason="the profile names Linux providers, which the platform check refuses first"
 )
 def test_syntax_error(caplog: Generator[LogCaptureFixture, None, None]) -> None:
     """Check all possible syntax errors."""
