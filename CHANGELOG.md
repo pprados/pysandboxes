@@ -25,6 +25,9 @@ kernel boundary is a Linux technology.
 ### Added
 - Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
   in separate files
+- `unshare.proc=none` runs the `unshare` sandbox without a `/proc`, and `unshare` warns, when a container refuses
+  to mount `/proc`, with the settings to change or this option. `shutil.rmtree`, `os.fwalk` and `dir_fd=` calls
+  on a directory opened by `os.open` keep working without `/proc`
 
 ### Changed
 - `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
@@ -47,6 +50,8 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- The explanation of a rejected `eval-*` rule marks its warning with `WARNING:` instead of a non-ASCII sign, which
+  broke the report on a Windows console
 - Profiles are read and written as UTF-8: on Windows, a learning run no longer fails writing the `⚠` of its
   comments, and a path with an accent is read back as written
 - On Windows, `os.readlink` on an exposed link no longer refuses its target (the `\\?\` prefix Windows adds is

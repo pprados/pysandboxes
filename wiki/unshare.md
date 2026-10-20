@@ -210,6 +210,41 @@ kubectl delete pod pysandboxes-test
 
 You can add unshare-specific options in `.py-sandboxes`. Any line of the form `unshare.<option>=<value>` is appended to the `unshare` invocation after the template flags: non-empty values become `--<option>=<value>`, empty values become `--<option>`. See `pysandboxes/templates/unshare.template` and `unshare_sse_daemon.py` for the default flag set and how they combine with overrides.
 
+One parameter is read by pysandboxes and not passed to `unshare`:
+
+| Parameter | Values | Effect |
+|---|---|---|
+| `unshare.proc` | `mount` (default), `none` | `none` runs the sandbox without a `/proc`. Code that reads `/proc` itself, such as `/proc/self/fd`, then fails. |
+
+## Containers without `--privileged`
+
+`unshare` mounts a new `/proc` for the sandbox. A container masks parts of `/proc`, and the kernel then refuses the
+mount: `unshare: mount .../proc failed: Operation not permitted`. When it happens, the setup stage logs a warning that
+names the two ways out:
+
+- **Keep `/proc`**: unmask it. Docker and Podman: `--security-opt systempaths=unconfined`, with
+  `--security-opt seccomp=unconfined --security-opt apparmor=unconfined`. Kubernetes: `procMount: Unmasked`, which needs
+  `hostUsers: false` and a runtime with user namespaces (minikube's does not), or a privileged pod.
+- **Drop `/proc`**: set `unshare.proc=none`. This confines more, at the price of the APIs above.
+
+Without `/proc`, the container still needs what `slirp4netns` and the namespaces ask for. The least that worked in
+the container tests, with `unshare.proc=none`:
+
+- **Podman**: `--cap-add NET_ADMIN --device /dev/net/tun`.
+- **Docker**: the same, plus `--cap-add SYS_ADMIN --security-opt apparmor=unconfined`. Without them the mount of the
+  root fails (`cannot change root filesystem propagation: Permission denied`).
+- **Kubernetes**: `SYS_ADMIN` and `NET_ADMIN` capabilities, `seccompProfile` and `appArmorProfile` `Unconfined`.
+
+The file guard reads `/proc/self/fd/N` to know which directory a `dir_fd` names. Without a `/proc`, it keeps the path
+of every directory opened by `os.open` in the sandbox, with its inode, and resolves a descriptor from that record, so
+`shutil.rmtree`, `os.fwalk` and `os.open(..., dir_fd=fd)` keep working and stay confined by the same rules. Two limits:
+
+- A descriptor that did not come from `os.open` in the sandbox, such as one made by `os.dup`, is denied with a message
+  naming `unshare.proc`: call with a path instead, or mount `/proc`.
+- The recorded path is the one at open time. A directory renamed afterwards is judged under its old name, which is why
+  the guard reads `/proc` whenever it is there.
+
+
 ## Recommendations
 
 - Make sure `kernel.unprivileged_userns_clone` is `1` and that AppArmor does not restrict unprivileged user namespaces before using this provider.

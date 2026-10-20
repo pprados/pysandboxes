@@ -75,6 +75,21 @@ def _prepare(
             daemon._remove_chroot_dirs()
 
 
+class TestProcMount:
+    def test_the_proc_is_mounted_by_default(self, tmp_path: Path) -> None:
+        config, _ = _prepare(_rules(), tmp_path)
+
+        assert config.mount_proc is True
+
+    @pytest.mark.parametrize(("value", "mounted"), [("none", False), ("mount", True)])
+    def test_the_proc_parameter_chooses(self, tmp_path: Path, value: str, mounted: bool) -> None:
+        rules = _rules()._replace(os_sandbox_params={"proc": value})
+
+        config, _ = _prepare(rules, tmp_path)
+
+        assert config.mount_proc is mounted
+
+
 class TestRequirements:
     @pytest.mark.parametrize("missing", ["unshare", "iptables"])
     def test_a_missing_tool_is_an_error_naming_it(self, tmp_path: Path, missing: str) -> None:

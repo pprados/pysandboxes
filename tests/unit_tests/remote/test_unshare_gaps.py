@@ -67,6 +67,14 @@ class TestUnshareDaemon:
         assert flags[-2:] == ["--with-value=1", "--bare"]
         assert len(flags) > 2
 
+    def test_the_proc_parameter_is_read_by_pysandboxes_not_passed_to_unshare(self) -> None:
+        rules = EmptyRules._replace(os_sandbox_params={"proc": "none", "bare": ""})  # type: ignore[arg-type]
+
+        flags = UnshareSSEDaemon("tok")._get_unshare_flags(rules, dict(os.environ))
+
+        assert flags[-1] == "--bare"
+        assert not any("proc" in flag for flag in flags)
+
     def test_killing_slirp_stops_its_process_and_forgets_it(self) -> None:
         daemon = UnshareSSEDaemon("tok")
         process = Mock()

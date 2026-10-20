@@ -2,6 +2,7 @@ include "./.local.py-sandboxes"  # May be add to .gitignore
 
 py-sandbox=true
 os-sandbox=${OS_SANDBOX:-subprocess}
+unshare.proc=${UNSHARE_PROC:-mount}  # `none` where a container cannot unmask /proc: the sandbox then has no /proc
 bwrap.share-net=yes  # The container suite runs this profile; bwrap's filtered network is unverified in a container. remote/test_bwrap*.py cover it on the host
 env=TERM=${TERM}
 env=My_ENV=${My_ENV}

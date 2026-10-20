@@ -363,6 +363,7 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
             # it narrows down to before exec'ing into the sandbox.
             sandbox_envs={k: str(v) if v is not None else "" for k, v in dict(all_rules.envs).items()},
             chroot_dir=chroot_dir,
+            mount_proc=all_rules.os_sandbox_params.get("proc", "mount") != "none",
         )
         return config, dns_servers
 
@@ -390,6 +391,8 @@ class UnshareSSEDaemon(BaseSubProcessDaemon):
         for line in template_conf:
             flags.extend(line.split())
         for k, v in all_rules.os_sandbox_params.items():
+            if k == "proc":
+                continue
             if v:
                 flags.append(f"--{k}={v}")
             else:

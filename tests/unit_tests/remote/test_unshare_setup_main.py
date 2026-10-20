@@ -174,6 +174,50 @@ def test_the_sandbox_runs_in_its_own_pid_namespace_with_no_capability(
     assert harness.chdir == [root]
 
 
+def test_without_a_proc_the_sandbox_gets_no_mount_proc_and_no_probe(
+    harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config = _config(harness.root, current_dir="/work", mount_proc=False)
+
+    _main(harness, monkeypatch, tmp_path, config, "prog")
+
+    assert not any(arg.startswith("--mount-proc") for arg in harness.exec_args)
+    assert harness.exec_args[:3] == ["/usr/bin/unshare", "-p", "-f"]
+    assert not any("--mount-proc" in " ".join(sub) for sub in harness.subs)
+
+
+def test_a_proc_that_cannot_be_mounted_is_reported_with_what_to_change(
+    harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    def refuse(cmd: list[str], **kwargs: Any) -> Any:
+        harness.subs.append(list(cmd))
+        failing = any(arg.startswith("--mount-proc") for arg in cmd)
+        return SimpleNamespace(
+            returncode=1 if failing else 0, stdout="", stderr="unshare: mount /x/proc failed" if failing else ""
+        )
+
+    monkeypatch.setattr(unshare_setup.subprocess, "run", refuse)
+
+    _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
+
+    assert "systempaths=unconfined" in caplog.text
+    assert "unshare.proc=none" in caplog.text
+    assert f"--mount-proc={harness.root}/proc" in harness.exec_args
+
+
+def test_a_proc_that_can_be_mounted_is_not_reported(
+    harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    _main(harness, monkeypatch, tmp_path, _config(harness.root), "prog")
+
+    assert "unshare.proc=none" not in caplog.text
+
+
+def test_the_proc_choice_survives_the_json_trip(tmp_path: Path) -> None:
+    assert UnshareSetupConfig.from_json(_config(tmp_path, mount_proc=False).to_json()).mount_proc is False
+    assert UnshareSetupConfig.from_json(_config(tmp_path).to_json()).mount_proc is True
+
+
 def test_the_sandbox_inherits_only_the_profile_environment_and_pythonpath(
     harness: _Run, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

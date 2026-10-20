@@ -79,28 +79,41 @@ all_os_sandbox_provider: list[str] = [
     "qemu",
 ]
 
-# Providers that cannot run in an unprivileged container: they create their own namespaces
-# (unshare) or need mount privileges the default container does not grant (bwrap).
-needs_privileged: frozenset[str] = frozenset({"unshare", "bwrap"})
+# Providers that create their own namespaces and mounts. The default container confinement refuses them, but they
+# do not need --privileged: lowering what stops them is enough. The least that works differs by engine, measured
+# with `bwrap` and with `unshare` run with `unshare.proc=none` (see `reduced_privilege_env`). Docker's default
+# AppArmor profile and seccomp filter block what they do; Podman's default confinement lets CAP_SYS_ADMIN through.
+_NO_APPARMOR = ["--security-opt", "apparmor=unconfined"]
+_NO_SECCOMP = ["--security-opt", "seccomp=unconfined"]
+_SYS_ADMIN = ["--cap-add", "SYS_ADMIN"]
+_SLIRP = ["--cap-add", "NET_ADMIN", "--device", "/dev/net/tun"]
+reduced_privilege_flags: dict[str, dict[str, list[str]]] = {
+    "docker": {"bwrap": [*_SYS_ADMIN, *_NO_SECCOMP, *_NO_APPARMOR], "unshare": [*_SLIRP, *_SYS_ADMIN, *_NO_APPARMOR]},
+    "podman": {"bwrap": _SYS_ADMIN, "unshare": _SLIRP},
+}
+# Set in the environment of the row: unshare runs without a /proc, as a container cannot unmask the paths it needs.
+reduced_privilege_env: dict[str, str] = {"unshare": "UNSHARE_PROC=none"}
 
 
 # os_sandbox,py_sandbox,privileged (pytest.param tuples for parametrize)
 # QEMU in Podman: nested VM + tst_usage may need a higher CONTAINER_RUN_TIMEOUT (see wiki/qemu.md).
 # Run on host: pytest tests/integration_tests/test_usage_with_providers.py -k qemu
+def _row_env(os_sandbox: str, privileged: bool) -> str:
+    """The environment a row adds to the command: what the reduced privileges of the container call for."""
+    return "" if privileged or os_sandbox not in reduced_privilege_env else f"{reduced_privilege_env[os_sandbox]} "
+
+
 def _all_os_sandbox_params() -> list:
-    """Full os_sandbox x py_sandbox x privileged matrix; unviable rows are declared xfail, not run."""
+    """Full os_sandbox x py_sandbox x privileged matrix.
+
+    Without `privileged`, unshare and bwrap run with the reduced flags of `reduced_privilege_flags` on each
+    engine, and with `reduced_privilege_security_context` in a pod.
+    """
     rows = []
     for os_sandbox in all_os_sandbox_provider:
         for py_sandbox in (True, False):
             for privileged in (True, False):
-                marks = []
-                if not privileged and os_sandbox in needs_privileged:
-                    marks.append(
-                        pytest.mark.xfail(
-                            reason=f"{os_sandbox} needs a privileged container (namespaces, mounts)",
-                            run=False,
-                        )
-                    )
+                marks: list = []
                 rows.append(pytest.param(os_sandbox, py_sandbox, privileged, marks=marks))
     return rows
 
@@ -426,11 +439,11 @@ def _run_container_runtime(
     # py-sandbox-test.profile uses qemu.show_boot_console=true (VM serial + verbose NoCloud seed).
     inner_cmd = (
         f"{prefix}"
-        f"PYTHONPATH=/app TERM={term} OS_SANDBOX={os_sandbox_env} My_ENV=1 "
+        f"PYTHONPATH=/app TERM={term} OS_SANDBOX={os_sandbox_env} My_ENV=1 {_row_env(os_sandbox, privileged)}"
         f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
     )
 
-    privileged_flag = ["--privileged"] if privileged else []
+    privileged_flag = ["--privileged"] if privileged else reduced_privilege_flags[runtime].get(os_sandbox, [])
     # Nested QEMU needs host KVM in the container; otherwise TCG exceeds typical timeouts.
     kvm_flags = _qemu_kvm_run_extra_flags() if os_sandbox.lower() == "qemu" else []
     # Use host/platform DNS so config parsing can resolve hostname
@@ -608,13 +621,29 @@ DNS_WAIT = int(os.environ.get("DNS_WAIT", "60"))
 _SECURITY_CONTEXT_RE = re.compile(r"^      securityContext:\n(?:^ {8,}.*\n)*", re.MULTILINE)
 
 
-def _kube_manifest_text(image_name: str, privileged: bool) -> str:
+_KUBE_UNCONFINED = """      securityContext:
+        capabilities:
+          add:
+{capabilities}
+        seccompProfile:
+          type: Unconfined
+        appArmorProfile:
+          type: Unconfined
+"""
+# The pod counterpart of `reduced_privilege_flags`, with what a pod can express.
+reduced_privilege_security_context: dict[str, str] = {
+    "bwrap": _KUBE_UNCONFINED.format(capabilities="            - SYS_ADMIN"),
+    "unshare": _KUBE_UNCONFINED.format(capabilities="            - SYS_ADMIN\n            - NET_ADMIN"),
+}
+
+
+def _kube_manifest_text(image_name: str, privileged: bool, os_sandbox: str = "") -> str:
     """Return the pod manifest for one matrix row: image substituted, privileges applied."""
     text = KUBE_MANIFEST.read_text(encoding="utf-8")
     text, count = re.subn(r"image:\s*[\w/:.-]+", f"image: {image_name}", text, count=1)
     assert count == 1, f"no image line to substitute in {KUBE_MANIFEST}"
     if not privileged:
-        text, count = _SECURITY_CONTEXT_RE.subn("", text)
+        text, count = _SECURITY_CONTEXT_RE.subn(reduced_privilege_security_context.get(os_sandbox, ""), text)
         assert count == 1, f"no securityContext block to remove in {KUBE_MANIFEST}"
     return text
 
@@ -791,7 +820,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
         time.sleep(3)
 
         image_name = _image_for_os_provider(os_sandbox)
-        manifest_text = _kube_manifest_text(image_name, privileged)
+        manifest_text = _kube_manifest_text(image_name, privileged, os_sandbox)
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".yaml",
@@ -868,7 +897,7 @@ def _run_kubernetes_test(os_sandbox: str, py_sandbox: bool, privileged: bool) ->
                 exec_timeout = _k8s_exec_timeout_seconds(os_sandbox)
                 exec_cmd = (
                     "pip install --no-cache-dir -e . && "
-                    f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} "
+                    f"PYTHONUNBUFFERED=1 TERM={term} OS_SANDBOX={os_sandbox_env} {_row_env(os_sandbox, privileged)}"
                     f"python-sb {py_sandbox_args} {PYTHON_SB_ARGS} -m tests.integration_tests.tst_usage"
                 )
 

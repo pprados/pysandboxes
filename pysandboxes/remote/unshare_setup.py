@@ -64,6 +64,8 @@ class UnshareSetupConfig:
     # sandbox and never returns, so it cannot remove it. Only the daemon outlives the
     # namespace and can, once the tmpfs mounted over it has gone with it.
     chroot_dir: str
+    # False when the profile sets `unshare.proc=none`: the sandbox then runs without a /proc.
+    mount_proc: bool = True
 
     def to_json(self) -> str:
         return json.dumps(
@@ -78,6 +80,7 @@ class UnshareSetupConfig:
                 "ignore_paths": self.ignore_paths,
                 "sandbox_envs": self.sandbox_envs,
                 "chroot_dir": self.chroot_dir,
+                "mount_proc": self.mount_proc,
             }
         )
 
@@ -95,6 +98,7 @@ class UnshareSetupConfig:
             ignore_paths=d.get("ignore_paths", []),
             sandbox_envs=d.get("sandbox_envs", {}),
             chroot_dir=d["chroot_dir"],
+            mount_proc=d.get("mount_proc", True),
         )
 
 
@@ -159,6 +163,23 @@ def _ensure_mount_target(target: str, new_root: str) -> None:
     elif not os.path.exists(target):
         os.makedirs(os.path.dirname(target), exist_ok=True)
         Path(target).touch()
+
+
+_PROC_NOT_MOUNTABLE = (
+    "unshare cannot mount a new /proc here: the container masks parts of /proc. Either lift that restriction "
+    "(Docker or Podman: --security-opt systempaths=unconfined, with seccomp and apparmor unconfined; Kubernetes: "
+    "procMount: Unmasked with hostUsers: false, or a privileged pod), or add `unshare.proc=none` to the profile "
+    "to run without a /proc. Code that reads /proc itself, such as /proc/self/fd, then fails."
+)
+
+
+def _warn_if_proc_is_not_mountable(unshare_cmd: list[str], proc_path: str) -> None:
+    """Probe the mount the sandbox is about to need, so that a refusal comes with what to do about it."""
+    probe = subprocess.run(
+        [*unshare_cmd, f"--mount-proc={proc_path}", "true"], capture_output=True, text=True, check=False
+    )
+    if probe.returncode != 0 and "proc" in probe.stderr:
+        logger.warning(_PROC_NOT_MOUNTABLE)
 
 
 def main() -> None:
@@ -431,11 +452,12 @@ def main() -> None:
     os.environ.update(preserved)
 
     logger.debug("Enter in sandbox...")
+    unshare_cmd = ["/usr/bin/unshare", "-p", "-f"]
+    if config.mount_proc:
+        _warn_if_proc_is_not_mountable(unshare_cmd, proc_path)
+        unshare_cmd.append(f"--mount-proc={proc_path}")
     exec_args = [
-        "/usr/bin/unshare",
-        "-p",
-        "-f",
-        f"--mount-proc={proc_path}",
+        *unshare_cmd,
         chroot_cmd,
         new_root,
         "/usr/bin/env",

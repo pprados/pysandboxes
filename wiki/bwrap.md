@@ -82,6 +82,20 @@ Use the **provider image** `python-sb-bwrap:latest` (built with `make build-imag
 
 Example Pod: same structure as for unshare (see [unshare.md](unshare.md#using-with-kubernetes)), with `image: python-sb-bwrap:latest` and the same volume mount for `/app`. Network and capabilities depend on whether you use socket rules (slirp + netns), no socket rule (netns with loopback only) or `bwrap.share-net=yes` (shared network); adjust `securityContext` (e.g. `privileged: true` or capabilities `SYS_ADMIN`, `NET_ADMIN`) as required by your cluster.
 
+## Containers without `--privileged`
+
+`bwrap` does not need `--privileged`, but it needs privileges: in a container the default confinement refuses the
+namespaces and mounts it creates (`bwrap: Creating new namespace failed: Operation not permitted`). The least that
+worked in the container tests:
+
+- **Podman**: `--cap-add SYS_ADMIN`.
+- **Docker**: `--cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined`; leaving
+  either filter on fails (`Failed to make / slave`, `pivot_root: Operation not permitted`).
+- **Kubernetes**: the `SYS_ADMIN` capability with `seccompProfile` and `appArmorProfile` set to `Unconfined`.
+
+`CAP_SYS_ADMIN` is a broad capability, and lifting seccomp or AppArmor leaves the container much less confined than
+the default one. It is still less than `--privileged`, which adds every capability and every device.
+
 ## Configuration parameters
 
 You can add bwrap-specific options in `.py-sandboxes`. Any line of the form `bwrap.<option>=<value>` is interpreted as follows:

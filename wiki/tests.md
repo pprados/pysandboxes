@@ -10,9 +10,8 @@ it does not mean the row ran successfully on every host.
   distinct OS providers. QEMU has two rows: KVM and forced TCG emulation.
 - Container scenarios exercise file, socket, and environment behavior. They do
   not exercise `guard_eval`, `guard_api`, or `guard_import`.
-- Twelve unprivileged `unshare`/`bwrap` container cases are declared
-  `xfail(run=False)`. They are not executed. This is 25% of the 48 real-provider
-  rows, or 20% of all 60 rows including `none`.
+- `unshare` and `bwrap` are not run with `--privileged` in the unprivileged rows: they get reduced privileges, and
+  all twelve rows run, on Docker, Podman and Kubernetes (see [Container conditions](#c-container-conditions)).
 - Test counts below are approximate collected-case counts. Provider availability,
   workflow filters, and sample environments change how many cases actually run.
 
@@ -24,7 +23,7 @@ See [Gaps](#gaps) for behaviors not represented by these matrices.
 - [Guard family coverage](#a-guard-families)
 - [Provider matrix](#b-os_sandbox-backends)
 - [Container conditions](#c-container-conditions)
-- [Coverage model and limitations](#d-counting-the-scenarios)
+- [Synthesis of the validated scenarios](#d-synthesis-of-the-validated-scenarios)
 - [Gaps](#gaps)
 
 The tables are derived from [unit tests](../tests/unit_tests/),
@@ -48,8 +47,8 @@ workflows. See [test workflow](../.github/workflows/test.yml),
 
 ## Orders of magnitude
 
-How many tests that represents, in collected rows rather than in the coverage
-cells of [section D](#d-counting-the-scenarios). The figures are approximate; the point is
+How many tests that represents, in collected rows. The per-scenario view is
+[section D](#d-synthesis-of-the-validated-scenarios). The figures are approximate; the point is
 the shape of the effort:
 
 | Suite | Target | Tests |
@@ -231,12 +230,29 @@ interpreter.
 |---|---|---|
 | `landlock`, `qemu` — privileged and unprivileged | 24 | run |
 | `unshare`, `bwrap` — privileged | 12 | run |
-| `unshare`, `bwrap` — **unprivileged** | 12 | **`xfail(run=False)`** |
+| `unshare`, `bwrap` — unprivileged, reduced privileges | 12 | run |
 
-Those twelve cases are declared but not executed. Both backends build their own
-namespaces and mounts, which an unprivileged container does not grant. They are
-not coverage: they are 25% of real-provider rows and 20% of all rows when `none`
-is included.
+Both backends build their own namespaces and mounts, which the default container
+confinement refuses. Neither needs `--privileged`: the unprivileged rows add the
+least that worked, measured per engine with the real `tst_usage` scenario.
+
+| Backend | Docker | Podman | Kubernetes pod |
+|---|---|---|---|
+| `bwrap` | `--cap-add SYS_ADMIN`, `seccomp=unconfined` and `apparmor=unconfined` (each is needed) | `--cap-add SYS_ADMIN` | `SYS_ADMIN`, `seccompProfile` and `appArmorProfile` `Unconfined` |
+| `unshare`, with `UNSHARE_PROC=none` | `--cap-add NET_ADMIN --device /dev/net/tun --cap-add SYS_ADMIN --security-opt apparmor=unconfined` | `--cap-add NET_ADMIN --device /dev/net/tun` | `SYS_ADMIN` and `NET_ADMIN`, `seccompProfile` and `appArmorProfile` `Unconfined` |
+
+Docker's default AppArmor profile and seccomp filter block what these providers
+do; Podman's default confinement lets `CAP_SYS_ADMIN` through. The Kubernetes
+column is the set the rows use, not a measured minimum.
+
+`UNSHARE_PROC=none` sets `unshare.proc=none` in the test profile: `unshare` runs
+without a `/proc`. Mounting a new `/proc` needs the masked paths unmasked
+(`--security-opt systempaths=unconfined`, or `procMount: Unmasked`, which needs
+`hostUsers: false`, and the minikube runtime refuses it). Without a `/proc`, the
+file guard resolves a `dir_fd` from the path it recorded when `os.open` returned
+the descriptor, instead of reading `/proc/self/fd/N`. `tst_usage` does not use
+`dir_fd`; the unit tests of `test_guard_files_no_proc.py` and the `unshare`
+integration test of `rmtree` cover it.
 
 The host has none: every partial-mode row of `test_usage_with_providers.py`
 runs (`_PARTIAL_MODE_XFAIL` is empty).
@@ -244,81 +260,49 @@ runs (`_PARTIAL_MODE_XFAIL` is empty).
 Kubernetes rows need minikube and the per-backend images
 (`make minikube-ready`, `make minikube-build-images`); they skip otherwise.
 
-## D. Counting the scenarios
+## D. Synthesis of the validated scenarios
 
-A single product over every axis would be wrong twice over: one row of
-`tst_usage` arms three families at once, and a `py_sandbox=false` row cannot arm
-the three Python-level families at all. The count is therefore a sum over
-conditions, expressed in *cells* — one cell is a (Python version, backend, guard
-family, condition) tuple — rather than in pytest rows.
+Where each scenario runs, by operating system. The kernel-backed providers are Linux
+technology, so macOS and Windows run the Python layer over `subprocess`; the
+[cross-os workflow](../.github/workflows/cross-os.yml) is what proves those two rows.
 
-| Symbol | Meaning | Value | Source |
-|---|---|---|---|
-| `V_host` | Python versions the host grid runs | 4 | the `integration.yml` matrix, `3.11` to `3.14`, matching `requires-python = ">=3.11,<3.15"` |
-| `V_ctn` | Python versions the container grid runs | 1 | `_image_name()` returns `:latest`; `ARG PYTHON_VERSION` is a build knob, not a test axis |
-| `P_host` | backends on the host | 6 | `ALL_OS_SANDBOX` in `tests/integration_tests/_env.py`, `qemu-tcg` counted with `qemu` |
-| `P_ctn` | backends in containers, `none` excluded | 4 | `all_os_sandbox_provider` minus `none` |
-| `G` | armable guard families | 6 | section A; `guard_provider` is excluded — it parses configuration, it does not guard a call |
-| `G_os` | families still enforced without the Python layer | 3 | files, socket, envs — empirically, the 24 `py_sandbox=false` container rows run `tst_usage` and pass, which is what makes those three OS-enforced rather than guard-enforced |
-| `M` | host modes | 2 | complete, partial (`test_partial_mode_hides_the_parent_environment`) |
-| `R` | container runtimes | 3 | docker, podman, kubernetes |
-| `K` | privilege conditions | 2 | `privileged` {true, false} |
+| Scenario | Linux | macOS | Windows | Interpreters |
+|---|---|---|---|---|
+| Unit | whole suite | whole suite, Linux-only modules skipped | whole suite, Linux-only modules skipped | 3.11 to 3.14 |
+| Integration, per provider | `subprocess`, `firejail`, `bwrap`, `unshare`, `landlock`, `qemu` (KVM and TCG) | `subprocess` | `subprocess` | 3.11 to 3.14 |
+| OS-only network filter | `bwrap`, `unshare`, `qemu`, `landlock` (ABI v4), `firejail` | — | — | 3.11 to 3.14 |
+| Containers: Docker, Podman, Kubernetes | 48 rows on a real backend, 12 on `none` | — | — | 3.13 |
+| Samples (12 demos) | every provider | `subprocess` | `subprocess` | 3.11 to 3.14 |
 
-**What full coverage would demand**
-
-```
-N_ideal = V_host x P_host x M x G                    (host)
-        + V_ctn  x P_ctn  x R x K x (G + G_os)       (containers)
-
-        = 4 x 6 x 2 x 6   +   1 x 4 x 3 x 2 x (6 + 3)
-        = 288 + 216
-        = 504
-```
-
-This cell model counts QEMU as one provider; the KVM and TCG execution rows are
-both tested, but TCG is not counted as a separate OS technology. The
-`(G + G_os)` term is the `py_sandbox` axis written honestly. The
-`py_sandbox=true` half of the container grid can arm all six families; the
-`py_sandbox=false` half removes the Python layer, so it can only arm the three
-the OS enforces on its own. The 72 cells that difference removes are not a gap —
-they are inapplicable, and counting them would inflate the denominator.
-
-**What the suites cover**
-
-```
-N_covered = V_host x P_host x 3   (tst_usage on the host: files, socket, envs)    =  72
-          + V_host x P_host x 3   (test_guards_with_providers: eval, api, import) =  72
-          + V_host x P_host x 1   (partial mode: environment variables only)      =  24
-          + 48 x 3       (every real-backend container row runs tst_usage)        = 144
-          = 312
-```
-
-**What actually executes** — subtract the `xfail(run=False)` cells: the twelve
-unprivileged `unshare`/`bwrap` container rows (12 x 3 = 36 cells).
-
-```
-N_run = 312 - 36 = 276
-```
-
-| | Cells | Of 504 |
-|---|---|---|
-| Declared | 312 | 62 % |
-| Executed | 276 | 55 % |
+- **Guards.** Every integration row arms the six families described in
+  [section A](#a-guard-families): `tst_usage` for files, sockets and environment,
+  `test_guards_with_providers` for eval, API and imports. The container rows run
+  `tst_usage` only, with and without the Python layer (`py_sandbox`), so they show
+  that files, sockets and environment are enforced by the OS layer alone.
+- **Providers in containers.** `landlock` and `qemu` run privileged and not.
+  `unshare` and `bwrap` run privileged, and with the reduced privileges of
+  [section C](#c-container-conditions). `firejail` is excluded.
+- **Containers on macOS and Windows.** Not run: the providers under test need a
+  Linux kernel, and Docker there runs a Linux VM, which adds nothing to the proof.
+- **Samples.** `langgraph-demo` needs Python 3.13, so its suite is skipped on 3.11
+  and 3.12 on every OS. On Linux, `make sample-tests-matrix` runs every sample
+  on every interpreter and every provider.
 
 Row counts, to cross-check against the sections above: 84 host rows per
-interpreter and 60 container rows, 48 of them on a real backend. Both are reproducible with
-`pytest --collect-only -q`. Unit tests sit outside this grid entirely — ~1790
-collected, none parametrized by backend or container condition — so they scale
-with the Python version alone.
+interpreter and 60 container rows, 48 of them on a real backend. Both are
+reproducible with `pytest --collect-only -q`. Unit tests sit outside these grids
+entirely, with about 1790 collected and none parametrized by backend or
+container condition, so they scale with the Python version alone.
 
-Two facts fall out of the arithmetic that the tables above do not show. Partial
-mode arms one family of six: the mode is parametrized over every backend, but
-the only assertion is about environment variables. And `V_ctn` is 1 against a
-`requires-python` that claims four interpreters: raising it means building and
-tagging the per-version images, since the grid asks for `:latest`. That is not a
-code change: the five `Dockerfile*` already take `ARG PYTHON_VERSION`, and the
-Makefile derives it from the venv's interpreter. What holds it back is runtime — the container job is already budgeted at 300
-minutes for a single version, most of it QEMU booting under emulation.
+Two facts follow from the tables. Partial mode arms one family of six: the mode is
+parametrized over every backend, but the only assertion is about environment
+variables. And the container grid runs one interpreter against a
+`requires-python` that claims four: raising it means building and tagging the
+per-version images, since the grid asks for `:latest`. That is not a code change:
+the five `Dockerfile*` already take `ARG PYTHON_VERSION`, and the Makefile
+derives it from the venv's interpreter. What holds it back is runtime, since the
+container job is already budgeted at 300 minutes for a single version, most of it
+QEMU booting under emulation.
 
 ## Gaps
 
@@ -331,7 +315,8 @@ minutes for a single version, most of it QEMU booting under emulation.
 - **Split (partial) mode is untested in containers** — `test_containers.py`
   carries an explicit `# TODO: test with split mode`. It is covered on the host
   by `test_partial_mode_hides_the_parent_environment`.
-- **Twelve unprivileged `unshare`/`bwrap` container rows never run.**
+- **The unprivileged `unshare` rows run without a `/proc`.** They prove the confinement without the APIs that
+  need `/proc`; the rows with a mounted `/proc` need `--privileged`.
 - **Partial mode arms one guard family of six.** The mode is parametrized over
   every backend, but the only assertion is about environment variables — see
   section D.

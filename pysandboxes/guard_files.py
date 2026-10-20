@@ -19,6 +19,7 @@ import logging
 import ntpath
 import os
 import re
+import stat
 import sys
 from collections import OrderedDict
 from errno import ENOENT
@@ -148,6 +149,8 @@ _protected_config_paths: frozenset[str] = frozenset()
 _os_path_realpath = os.path.realpath
 _os_path_abspath = os.path.abspath
 _os_readlink = os.readlink
+_os_stat = os.stat
+_os_fstat = os.fstat
 
 # Set while the guard canonicalizes a path for itself. ``os.path.realpath``
 # calls ``os.lstat``/``os.readlink``, which are patched, so canonicalizing
@@ -753,6 +756,62 @@ def _raise_access(file: str) -> NoReturn:
     raise ex
 
 
+# Directory descriptors opened through ``os.open`` while ``/proc`` is not mounted (``unshare.proc=none``):
+# ``dir_fd`` -> (st_dev, st_ino, absolute path at open time). Keyed by descriptor number, so it never grows past
+# the descriptor table; an entry is used only while ``fstat`` still reports the inode recorded with it, which
+# rejects a number the kernel gave to something else. The path is the one at open time: a directory renamed since
+# is still judged by its old name, which is why ``/proc`` stays the first choice.
+_tracked_dir_fds: dict[int, tuple[int, int, str]] = {}
+_proc_fd_usable: bool | None = None
+
+
+def _proc_fd_available() -> bool:
+    """Tell whether ``/proc/self/fd`` can resolve a descriptor to its path (probed once)."""
+    global _proc_fd_usable
+    if _proc_fd_usable is None:
+        try:
+            _os_stat("/proc/self/fd")
+            _proc_fd_usable = True
+        except OSError:
+            _proc_fd_usable = False
+    return _proc_fd_usable
+
+
+def _tracked_dir_fd_path(dir_fd: int) -> str | None:
+    """Return the path recorded for ``dir_fd``, or None when it was not opened through the guard."""
+    tracked = _tracked_dir_fds.get(dir_fd)
+    if tracked is None:
+        return None
+    st = _os_fstat(dir_fd)
+    if (st.st_dev, st.st_ino) != tracked[:2]:
+        return None
+    return tracked[2]
+
+
+def _remember_dir_fd(fd: int, path: str, dir_fd: int | None) -> int:
+    """Record the directory ``fd`` just opened, when ``/proc`` cannot tell later where it points; return ``fd``."""
+    if sys.platform != "linux" or _proc_fd_available():
+        return fd
+    try:
+        st = _os_fstat(fd)
+        if stat.S_ISDIR(st.st_mode):
+            target = _os_path_abspath(path) if dir_fd is None else _dir_fd_path(path, dir_fd)
+            _tracked_dir_fds[fd] = (st.st_dev, st.st_ino, target)
+    except (OSError, RuleFileNotFoundError):
+        _tracked_dir_fds.pop(fd, None)
+    return fd
+
+
+def _raise_no_proc(path: str, dir_fd: int) -> NoReturn:
+    ex = RuleFileNotFoundError(
+        f"Cannot tell which directory descriptor {dir_fd} is, to check {path!r}: /proc is not mounted "
+        "(unshare.proc=none) and the descriptor was not opened by os.open in this process. "
+        "Mount /proc (unshare.proc=mount) or call with a path instead of dir_fd."
+    )
+    ex.errno = ENOENT
+    raise ex
+
+
 def _dir_fd_path(path: str, dir_fd: int) -> str:
     """Return the path the kernel resolves ``path`` to, relative to the directory open as ``dir_fd``.
 
@@ -761,13 +820,18 @@ def _dir_fd_path(path: str, dir_fd: int) -> str:
     """
     if os.path.isabs(path):
         return path
+    directory: str | None
     try:
         if sys.platform == "darwin":
             directory = os.fsdecode(fcntl.fcntl(dir_fd, fcntl.F_GETPATH, bytes(1024)).rstrip(b"\0"))
-        else:
+        elif _proc_fd_available():
             directory = _os_readlink(f"/proc/self/fd/{dir_fd}")
+        else:
+            directory = _tracked_dir_fd_path(dir_fd)
     except OSError:
         _raise_access(path)
+    if directory is None:
+        _raise_no_proc(path, dir_fd)
     return os.path.join(directory, path)
 
 
@@ -1194,7 +1258,7 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
             else:
                 need_to_write = True
             _check_dir_fd(path, dir_fd, write=need_to_write)
-            return func(path=path, flags=flags, mode=mode, dir_fd=dir_fd)
+            return _remember_dir_fd(func(path=path, flags=flags, mode=mode, dir_fd=dir_fd), path, dir_fd)
         need_to_write = _opens_for_write(flags)
         remapped, rule = _apply_dest_to_src_rules(path, write=need_to_write)
         if rule:
@@ -1205,7 +1269,7 @@ def _wrap_os_open(func: Callable[..., Any]) -> Callable[..., Any]:
                 remapped = path
             else:
                 _raise_access(path)
-        return func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd)
+        return _remember_dir_fd(func(path=remapped, flags=flags, mode=mode, dir_fd=dir_fd), str(remapped), None)
 
     return wrapper
 
