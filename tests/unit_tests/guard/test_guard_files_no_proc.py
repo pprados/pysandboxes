@@ -6,6 +6,7 @@ The guard then resolves a descriptor from the path recorded when ``os.open`` ret
 reading ``/proc/self/fd/N``.
 """
 
+from collections.abc import Iterator
 import os
 import shutil
 import sys
@@ -23,7 +24,7 @@ pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="resolves descri
 
 
 @pytest.fixture(autouse=True)
-def no_proc(monkeypatch: pytest.MonkeyPatch) -> None:
+def no_proc(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(guard_files, "_proc_fd_usable", False)
     monkeypatch.setattr(guard_files, "_tracked_dir_fds", {})
     yield
