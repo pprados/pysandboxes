@@ -40,6 +40,11 @@ Two result modes are implemented:
 - `remote-result-mode=data-only` uses a closed set of supported value classes and validates that the reconstructed graph contains only supported exact container/value types. This is the narrower result profile. It is separate from exception handling.
 - `remote-result-mode=objects` allows application and library classes, subject to a denylist of known dangerous module roots and builtins. The denylist is intentionally fail-open: a dangerous gadget from an unlisted module may pass. The code lists the roots it currently covers in [`tools.py`](../pysandboxes/remote/tools.py); it does not establish coverage of every alias, C twin, or future gadget.
 
+Python 3.11.5 is the oldest supported version for a reason that lives here. Before it, an enum member pickles as
+`getattr(Class, 'NAME')`, a call the restricted unpickler refuses in both modes (`data-only` answers `getattr` for the
+`ZoneInfo` constructor only), so a sandboxed function returning an enum member, or an object holding one, failed on its way
+back. From 3.11.5 an enum member pickles by a reduce call on its class, which the unpickler accepts.
+
 `remote-result-guard=false` disables the result denylist in objects mode. The opcode prescan and its budgets still run, but globals then load through the standard pickle loader. This setting therefore removes the name-level gadget check; it must not be described as retaining equivalent protection against reconstruction gadgets.
 
 Tests for value mode, object mode, memo handling, and the switch are in [`test_restricted_unpickle.py`](../tests/unit_tests/remote/test_restricted_unpickle.py). They exercise selected cases; they are not a proof that the fail-open denylist is exhaustive.

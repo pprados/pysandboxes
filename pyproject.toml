@@ -9,7 +9,7 @@ name = "pysandboxes"
 # tag, a build carries the fallback below rather than a number nobody chose.
 dynamic = ["version"]
 description = "Lite sandbox for python code execution"
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.11.5,<3.15"
 authors = [{ name = "Philippe PRADOS", email = "github@prados.fr" }]
 license = "Apache-2.0"
 readme = "README.md"

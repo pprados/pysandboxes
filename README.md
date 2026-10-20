@@ -49,7 +49,7 @@ The [quick demo](https://github.com/pprados/pysandboxes/tree/master/samples/quic
 
 # Quick start
 
-Linux, Python 3.11 to 3.14. Replace `python` with `python-sb` in the command that starts your application:
+Linux, Python 3.11.5 to 3.14. Replace `python` with `python-sb` in the command that starts your application:
 
 ```bash
 uvx python-sb -m my_module          # without installing anything

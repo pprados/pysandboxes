@@ -103,7 +103,7 @@ Rules in `.py-sandboxes` files, whitelist-based:
 
 ## Development Environment
 
-- **Python**: 3.11–3.14 (`requires-python = ">=3.11,<3.15"`), each in lint/test/sample/integration CI matrices; container + API-doc workflows 3.13 only
+- **Python**: 3.11–3.14 (`requires-python = ">=3.11.5,<3.15"`), each in lint/test/sample/integration CI matrices; container + API-doc workflows 3.13 only
 - **Pkg mgr**: uv
 - **Venv**: `.venv/`
 - **Entry points**: `python-sb` CLI → sandboxed Python exec

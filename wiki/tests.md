@@ -321,7 +321,7 @@ QEMU booting under emulation.
   every backend, but the only assertion is about environment variables — see
   section D.
 - **The container grid runs one interpreter against a four-version support
-  claim.** `requires-python = ">=3.11,<3.15"`, while `containers.yml` pins
+  claim.** `requires-python = ">=3.11.5,<3.15"`, while `containers.yml` pins
   `3.13` and the grid asks for `:latest`. The unit, integration and sample
   suites cover the four — see section D.
 - `call_llm()` in `tst_usage.py` is defined but never invoked — dead code, not a
