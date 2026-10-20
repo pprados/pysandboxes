@@ -276,10 +276,10 @@ def test_shutil_rmtree_cannot_empty_a_read_only_tree(files: Dict[str, Path]) -> 
     assert shutil._use_fd_functions or sys.platform == "win32"  # type: ignore[attr-defined]
     with pytest.raises(RulePermissionError) as caught:
         shutil.rmtree(tree)
-    # rmtree sets ``filename`` on the error: the denial must still name the rule. Only from 3.12,
+    # rmtree sets ``filename`` on the error: the denial must still name the rule. Only from 3.12.4,
     # where rmtree's fd-safe walk (not used on Windows) re-raises a per-entry failure through its own outer handler;
-    # the pre-3.12 implementation never sets it.
-    if sys.version_info >= (3, 12) and sys.platform != "win32":
+    # the earlier implementation never sets it.
+    if sys.version_info >= (3, 12, 4) and sys.platform != "win32":
         assert caught.value.filename is not None
     assert [repr(f"expose-ro={files['path']}")[1:-1] in d for d in sandbox_denials(caught.value)] == [True]
     assert (tree / "inner" / "f.txt").exists()

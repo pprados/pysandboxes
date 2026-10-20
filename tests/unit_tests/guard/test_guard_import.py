@@ -462,3 +462,29 @@ def test_a_guard_loader_has_no_other_made_up_attribute() -> None:
 
     with pytest.raises(AttributeError, match="no_such_thing"):
         loader.no_such_thing  # type: ignore[attr-defined]  # noqa: B018
+
+
+def _activation_probe(before: str) -> str:
+    """Run an activation with an allow-list that omits ntpath, after ``before``; report what is loaded."""
+    import subprocess
+
+    code = (
+        "import sys\n"
+        "from pysandboxes import guard_import\n"
+        f"{before}\n"
+        "guard_import.activate_guard_import({}, ('json',))\n"
+        "print('ntpath' in sys.modules and sys.modules['ntpath'] is not None)\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def test_ntpath_stays_loaded_for_the_pathlib_of_an_old_python_3_12() -> None:
+    """Before 3.12.4 pathlib imports ntpath on each Path built from a Path: an evicted module would be refused."""
+    assert _activation_probe("sys.modules.pop('ntpath', None)") == "True"
+    assert _activation_probe("import ntpath") == "True"
+
+
+def test_an_interpreter_without_ntpath_still_activates() -> None:
+    assert _activation_probe("sys.modules['ntpath'] = None") == "False"

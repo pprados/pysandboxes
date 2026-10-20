@@ -30,6 +30,8 @@ kernel boundary is a Linux technology.
   on a directory opened by `os.open` keep working without `/proc`
 
 ### Changed
+- The minimum Python is 3.11.5. Before it, an enum member pickles as a `getattr` call that the restricted result
+  channel refuses, so a sandboxed function could not return one
 - `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
   object the application passed in, as it already could not set its attributes
 - Clarify platform support, security limits, and provider test coverage in the README and wiki
@@ -50,6 +52,8 @@ kernel boundary is a Linux technology.
   order; two patterns as specific that give it different values are a configuration error
 
 ### Fixed
+- The import guard no longer refuses `ntpath` on Python 3.12.0 to 3.12.3, where `pathlib` imports it each time it builds
+  a `Path` from a `Path`: a profile that lists its modules one by one failed to start
 - The explanation of a rejected `eval-*` rule marks its warning with `WARNING:` instead of a non-ASCII sign, which
   broke the report on a Windows console
 - Profiles are read and written as UTF-8: on Windows, a learning run no longer fails writing the `⚠` of its

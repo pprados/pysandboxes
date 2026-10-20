@@ -815,6 +815,13 @@ def activate_guard_import(
         logger.debug("Guard_import was already activated.")
         return
 
+    # The pathlib of CPython 3.12 up to 3.12.3 imports ntpath each time it builds a Path from a Path. Loaded and
+    # kept now, that is no import for the guard to refuse. A build without ntpath is left alone.
+    try:
+        import ntpath  # noqa: F401
+    except ImportError:
+        pass
+
     # Save the current modules BEFORE patching
     global _pending_modules
     _pending_modules = copy(sys.modules)
@@ -825,7 +832,7 @@ def activate_guard_import(
         for module in sys.modules.copy():
             if module in patch_rules:
                 _apply_patch(sys.modules[module], module)
-    keep = list(_KEPT_MODULES)
+    keep = [*_KEPT_MODULES, "ntpath"]
     # Whatever the framework pre-imported for itself must outlive the eviction:
     # those modules are its own, never the user's to allow.
     keep.extend(_framework_modules)
