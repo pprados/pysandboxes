@@ -52,6 +52,19 @@ def test_stopping_a_started_daemon_shuts_it_down_and_succeeds() -> None:
     assert manager._daemon is None
 
 
+def test_stopping_a_daemon_that_is_being_restarted_still_shuts_it_down() -> None:
+    """A restart clears is_started until the new sandbox is ready, and a call may be answered before that."""
+    manager = sandboxes()
+    manager._daemon = Mock(is_started=False)
+    shutdown = AsyncMock()
+
+    with patch("pysandboxes.sandboxes_api.async_shutdown_daemon", shutdown):
+        assert asyncio.run(manager._stop_daemon()) is True
+
+    shutdown.assert_awaited_once()
+    assert manager._daemon is None
+
+
 def test_signal_handlers_are_restored_from_the_main_thread() -> None:
     manager = sandboxes()
     manager._signals = {signal.SIGTERM: signal.SIG_DFL}

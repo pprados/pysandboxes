@@ -387,11 +387,12 @@ class sandboxes:
         return
 
     async def _stop_daemon(self) -> bool:
-        if self._daemon and self._daemon.is_started:
-            if self._daemon:
-                self._daemon = None
-                await async_shutdown_daemon(self.graceful_shutdown)
-                logger.debug("daemon stopped")
+        # Not guarded by is_started: a restart clears it until the new sandbox is ready, and leaving then would
+        # leave that sandbox running.
+        if self._daemon:
+            self._daemon = None
+            await async_shutdown_daemon(self.graceful_shutdown)
+            logger.debug("daemon stopped")
         return True
 
     # ── asynchronous API ───────────────────────────────
