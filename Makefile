@@ -7,6 +7,7 @@ SHELL=/bin/bash
 	minikube-ready minikube-build-images lock validate inspector github-push-test init \
 	clean-sandbox-temps quick-demo-gif \
 	windows-vm windows-tests windows-tests-all windows-vm-stop windows-vm-clean macos-vm macos-tests macos-vm-stop \
+	linux-vm linux-tests linux-vm-stop linux-vm-clean \
 	doctor setup-linux setup-macos setup-windows init-macos-vm
 
 UV_GROUP?=--group dev --group test --group lint
@@ -223,6 +224,49 @@ macos-tests: macos-vm
 ## Shut the macOS VM down
 macos-vm-stop:
 	-@$(MACOS_SSH) "sudo -n shutdown -h now" >/dev/null 2>&1 || true
+
+# A clean Ubuntu LTS VM (Multipass) to run the suites as a contributor on a stock Linux does: `make init` installs what
+# the checkout needs, from nothing. The cores are not a detail: with fewer, the daemons of the integration suite time
+# out at startup (slirp4netns API socket not ready). The sources travel as a file under $HOME: the snap of Multipass
+# reads no /tmp, and `multipass exec` cuts a long standard input short (about 2 MB arrive).
+LINUX_VM_NAME ?= pysandboxes-linux-vm
+LINUX_VM_CPUS ?= 4
+LINUX_VM_MEMORY ?= 6G
+LINUX_VM_DISK ?= 30G
+LINUX_VM_IMAGE ?= 24.04
+LINUX_VM_EXEC = multipass exec $(LINUX_VM_NAME) --
+# hatch-vcs reads the version from git, which the VM does not have.
+LINUX_VM_ENV = SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
+
+## Start the local Ubuntu VM, creating it with Multipass on the first run (LINUX_VM_CPUS, LINUX_VM_MEMORY, LINUX_VM_DISK)
+linux-vm:
+	@set -eu; \
+	if ! command -v multipass >/dev/null 2>&1; then echo "Install Multipass to run the Ubuntu VM: sudo snap install multipass" >&2; exit 1; fi; \
+	if multipass info "$(LINUX_VM_NAME)" >/dev/null 2>&1; then multipass start "$(LINUX_VM_NAME)"; \
+	else multipass launch $(LINUX_VM_IMAGE) --name "$(LINUX_VM_NAME)" --cpus $(LINUX_VM_CPUS) --memory $(LINUX_VM_MEMORY) --disk $(LINUX_VM_DISK); fi; \
+	echo "Ubuntu VM $(LINUX_VM_NAME) is running"
+
+## Send the checkout to the Ubuntu VM, install what it needs with `make init`, then run the unit and integration suites
+linux-tests: linux-vm
+	@set -u; \
+	archive=$$(mktemp "$$HOME/pysandboxes-sources.XXXXXX"); trap 'rm -f "$$archive"' EXIT; \
+	$(VM_SOURCES) > "$$archive" && multipass transfer "$$archive" "$(LINUX_VM_NAME):pysandboxes-sources.tar" || exit 1; \
+	$(LINUX_VM_EXEC) bash -c 'mkdir -p "$$HOME/pysandboxes" && tar -xf "$$HOME/pysandboxes-sources.tar" -C "$$HOME/pysandboxes"' || exit 1; \
+	$(LINUX_VM_EXEC) bash -c 'command -v make >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq make; }' || exit 1; \
+	$(LINUX_VM_EXEC) bash -lc 'cd pysandboxes && $(LINUX_VM_ENV) YES=1 make init' || exit 1; \
+	status=0; \
+	for target in unit-tests integration-tests; do \
+	  $(LINUX_VM_EXEC) bash -lc "cd pysandboxes && $(LINUX_VM_ENV) make $$target" || status=1; \
+	done; \
+	exit $$status
+
+## Stop the Ubuntu VM, keeping its disk
+linux-vm-stop:
+	-@multipass stop "$(LINUX_VM_NAME)"
+
+## Delete the Ubuntu VM and its disk (destructive); then `make linux-vm` rebuilds it
+linux-vm-clean:
+	-@multipass delete --purge "$(LINUX_VM_NAME)"
 
 # (integration first: the unit tests leave the socket guard
 # armed with a deny-all rule set, which breaks the in-process integration tests).

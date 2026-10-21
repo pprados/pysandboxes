@@ -75,6 +75,12 @@ them: CI runs lint and the unit tests, and `cross-os.yml` runs macOS and Windows
   `make macos-tests` runs the `cross-os.yml` steps in it. If you own a Mac, you do not need this VM: run the suites
   on the Mac.
 
+- `make linux-vm` creates a clean Ubuntu 24.04 VM with [Multipass](https://multipass.run) (4 CPUs, 6 GB, 30 GB; set
+  `LINUX_VM_CPUS`, `LINUX_VM_MEMORY`, `LINUX_VM_DISK`), and `make linux-tests` sends the checkout to it, runs
+  `make init` there, then the unit and integration suites: the setup of a contributor on a stock Linux. Fewer than 4
+  CPUs make the daemons of the integration suite time out at startup. `make linux-vm-stop` keeps the disk,
+  `make linux-vm-clean` deletes it.
+
 ### Where things are
 
 | Path | What it holds |
