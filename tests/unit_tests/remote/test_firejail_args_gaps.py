@@ -204,11 +204,14 @@ class TestFirejailArgs:
 
     def test_the_interpreter_is_whitelisted_read_only(self, tmp_path: Path) -> None:
         args = _args(tmp_path)
+        interpreter_root = Path(sys.executable).resolve().parent.parent.as_posix()
 
-        assert any(
-            arg.startswith("--whitelist=") and Path(sys.executable).resolve().parent.parent.as_posix() in arg
-            for arg in args
-        )
+        whitelisted = [arg for arg in args if arg.startswith("--whitelist=") and interpreter_root in arg]
+        if interpreter_root == "/usr":
+            # firejail already shows /usr: a system interpreter has nothing to whitelist
+            assert not whitelisted
+        else:
+            assert whitelisted
 
     def test_an_ignored_file_is_blacklisted(self, tmp_path: Path) -> None:
         args = _args(tmp_path, EmptyRules._replace(file_rules=(IgnoreRule(".env", _CONFIG),)))

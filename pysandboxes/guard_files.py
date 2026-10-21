@@ -360,6 +360,16 @@ def parse_rules(
                     config=ConfigLine("<python>", Path(), 0),
                 )
             )
+    # A system interpreter (/usr/bin/python3) sits apart from its standard library
+    # (/usr/lib/python3.12): the chain above records the first and never the second, so
+    # `zipfile` could not open `encodings.cp437` nor `import _xxsubinterpreters` reach lib-dynload.
+    # `os.__file__`, not `sysconfig`: importing it, or asking it for a path, reads HOME and would
+    # record a use of it in learning mode.
+    stdlib = Path(os.__file__).parent
+    for rp in dict.fromkeys((stdlib, stdlib.resolve())):
+        p_str = _dir_path(str(rp))
+        if not any(r.path == p_str for r in rules_expose):
+            rules_expose.append(FSExposeRule(path=p_str, write=False, config=ConfigLine("<python>", Path(), 0)))
     # OpenSSL reads the CA store from C: the Python guards never see it, the OS
     # providers do, and HTTPS then fails with "certificate verify failed". Where it
     # lives depends on the distribution, and exposing a missing path is an error.

@@ -1040,6 +1040,22 @@ def test_parse_rules_marks_a_directory_interpreter_path_with_a_trailing_separato
     assert all(r.path.endswith(os.sep) for r in directory_rules)
 
 
+def test_parse_rules_exposes_the_standard_library_read_only_when_it_is_apart_from_the_interpreter(
+    tmp_path: Path,
+) -> None:
+    """A system interpreter (`/usr/bin/python3`) is not under its standard library (`/usr/lib/python3.12`): without
+    its own rule, `zipfile` cannot read `encodings.cp437` and lib-dynload stays out of reach."""
+    stdlib = tmp_path / "lib" / "python3.12"
+    stdlib.mkdir(parents=True)
+    errors: list[ErrorMsg] = []
+
+    with patch.object(os, "__file__", str(stdlib / "os.py")):
+        file_rules, _ = parse_rules([], errors)
+
+    rules = [r for r in file_rules if isinstance(r, FSExposeRule) and r.path == str(stdlib.resolve()) + os.sep]
+    assert [(r.write, r.config.rule) for r in rules] == [(False, "<python>")]
+
+
 # %% _check_is_in_rules
 
 
