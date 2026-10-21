@@ -4,7 +4,7 @@
 
 **Philippe PRADOS** — [github.com/pprados/pysandboxes](https://github.com/pprados/pysandboxes)
 
-September 2026
+October 2026
 
 ---
 

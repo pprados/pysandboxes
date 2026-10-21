@@ -636,8 +636,8 @@ def yaml_header(meta: Metadata) -> str:
     if meta.subtitle:
         lines.append(f"subtitle: {quote(meta.subtitle)}")
     if meta.author:
-        # No `\\` here: pandoc escapes it to \textbackslash{} inside metadata.
-        author = f"{meta.author} (\\url{{{meta.url}}})" if meta.url else meta.author
+        # A bare `\\` would be escaped to \textbackslash{} inside metadata, so the line break is a raw LaTeX span.
+        author = f"{meta.author} `\\\\`{{=latex}} \\url{{{meta.url}}}" if meta.url else meta.author
         if meta.orcid:
             author += f" --- ORCID \\href{{https://orcid.org/{meta.orcid}}}{{{meta.orcid}}}"
         lines.append(f"author: {quote(author)}")
