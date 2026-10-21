@@ -102,7 +102,7 @@ Read these before relying on it. They are documented positions, not hidden ones.
 - **Not a defense against a malicious dependency** that you installed yourself.
 - **The Python layer alone is friction, not isolation.** For untrusted or hostile code, pick a kernel provider (see [choosing a provider](#choosing-a-provider)).
 - **Learning is trust.** It records what the code does, including what it should not do. Learn from a trusted run, then review the diff of `.py-sandboxes`.
-- **A missing rule file means learning mode, which allows everything.** The effective rights also depend on `include` lines, the environment (`OS_SANDBOX`) and the command line. To lock a policy, see [what the rule file does not show](https://github.com/pprados/pysandboxes/wiki/use-cases#what-the-rule-file-does-not-show) and [Lock the rules](https://github.com/pprados/pysandboxes/wiki/configuration#lock-the-rules).
+- **A missing rule file means learning mode, which allows everything.** The effective rights also depend on `include` lines, the environment (`OS_SANDBOX`) and the command line. To lock a policy, see [what the rule file does not show](https://github.com/pprados/pysandboxes/wiki/use-cases#what-the-rule-file-does-not-show) and [Lock the rules](https://github.com/pprados/pysandboxes/wiki/configuration#lock-the-rules). In production, also make the `.py-sandboxes` files read-only for the user running the program ([details](https://github.com/pprados/pysandboxes/wiki/configuration#make-the-rule-files-read-only-in-production)).
 - **Controls apply to supported APIs.** They are not unconditional guarantees. Secrets already in process memory are not hidden from native code.
 - **Linux only for kernel isolation.** See [platform support](#platform-support).
 
