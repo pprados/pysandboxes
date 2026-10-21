@@ -124,6 +124,12 @@ case "$os" in
     echo "== Scope"
     echo "macOS runs the Python layer over the subprocess provider only: the kernel-backed providers are Linux technology."
     echo "To run them, work in a Linux VM (Lima, Colima, Multipass, UTM): see CONTRIBUTING.md."
+    echo
+    echo "== Release-script tests (left out of the suites when one is missing)"
+    sed --version 2>/dev/null | grep -q GNU ||
+      missing_optional "GNU sed" "brew install gnu-sed, then put \$(brew --prefix gnu-sed)/libexec/gnubin first in the PATH"
+    check_command optional jq "brew install jq"
+    check_command optional sha256sum "brew install coreutils, then put \$(brew --prefix coreutils)/libexec/gnubin first in the PATH"
     if [ "$(uname -m)" = x86_64 ]; then
       echo "Intel Mac: cryptography may build from source on Python 3.11 and 3.12 and then needs OpenSSL:"
       echo "  brew install openssl@3 && export OPENSSL_DIR=\$(brew --prefix openssl@3)"

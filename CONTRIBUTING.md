@@ -21,7 +21,7 @@ what you can run depends on your system:
 | Your system | What runs | Needs |
 |---|---|---|
 | Linux, or WSL2 | everything: the Python layer and the providers `landlock`, `bwrap`, `firejail`, `unshare`, `qemu` | the packages and kernel settings below |
-| macOS | the Python layer over `subprocess`, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv |
+| macOS | the Python layer over `subprocess`, which is what `cross-os.yml` proves on macOS | Xcode command line tools, uv; GNU sed, jq and coreutils (`make setup-macos`) for the release-script tests, which are left out without them |
 | native Windows | the Python layer over `subprocess` | uv, git, GNU make, a bash (Git Bash) |
 
 On macOS and Windows, a change that touches a kernel-backed provider is tested in a Linux VM (Lima, Colima, Multipass
@@ -69,7 +69,7 @@ them: CI runs lint and the unit tests, and `cross-os.yml` runs macOS and Windows
   host with KVM. Read what it prints and answer `yes` before it downloads anything: Apple's licence allows macOS in a
   virtual machine on Apple-branded hardware only, the guest is an Intel macOS (it says nothing about Apple
   Silicon), and the installation of macOS itself is interactive, through a VNC viewer. The script prints each manual
-  step, and you run `make init-macos-vm` again after them: it then installs uv, checks the compiler and builds an
+  step, and you run `make init-macos-vm` again after them: it then installs uv, GNU sed and jq, checks the compiler and builds an
   OpenSSL inside the VM, which `cryptography` needs on Python 3.11 and 3.12. The files live under
   `~/.pysandboxes/macos-vm`; set `OSX_KVM_DIR` to use another place. `make macos-vm` boots it and
   `make macos-tests` runs the `cross-os.yml` steps in it. If you own a Mac, you do not need this VM: run the suites

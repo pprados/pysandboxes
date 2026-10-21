@@ -28,5 +28,27 @@ if [ ! -x "$HOME/openssl/bin/openssl" ]; then
 fi
 "$HOME/openssl/bin/openssl" version
 
+# The release-script tests need GNU sed, jq and sha256sum, which macOS lacks and brew cannot install here without
+# a sudo password: they go under $HOME/gnu/bin, which `make macos-tests` puts first in the PATH.
+gnu="$HOME/gnu/bin"
+mkdir -p "$gnu"
+if ! "$gnu/sed" --version >/dev/null 2>&1; then
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+  curl -fsSL -o "$work/sed.tar.xz" https://ftp.gnu.org/gnu/sed/sed-4.9.tar.xz
+  echo "6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181  $work/sed.tar.xz" | shasum -a 256 -c - >/dev/null
+  tar -xJf "$work/sed.tar.xz" -C "$work"
+  (cd "$work/sed-4.9" && ./configure --prefix="$HOME/gnu" --disable-nls >/dev/null && make -j"$(sysctl -n hw.ncpu)" >/dev/null && make install >/dev/null)
+fi
+if [ ! -x "$gnu/jq" ]; then
+  curl -fsSL -o "$gnu/jq" https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-macos-amd64
+  echo "4155822bbf5ea90f5c79cf254665975eb4274d426d0709770c21774de5407443  $gnu/jq" | shasum -a 256 -c - >/dev/null
+  chmod 755 "$gnu/jq"
+fi
+printf '#!/bin/sh\nexec shasum -a 256 "$@"\n' > "$gnu/sha256sum"
+chmod 755 "$gnu/sha256sum"
+"$gnu/sed" --version | head -n 1
+"$gnu/jq" --version
+
 mkdir -p "$HOME/pysandboxes"
 echo "VM ready: uv, a compiler and OpenSSL are in place."

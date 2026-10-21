@@ -27,6 +27,10 @@ formulae=()
 command -v uv >/dev/null 2>&1 || formulae+=(uv)
 command -v git-lfs >/dev/null 2>&1 || formulae+=(git-lfs)
 command -v gh >/dev/null 2>&1 || formulae+=(gh)
+# The release-script tests (tag-release, changelog-draft, ...) need GNU sed, jq and sha256sum, which macOS lacks.
+sed --version 2>/dev/null | grep -q GNU || brew list gnu-sed >/dev/null 2>&1 || formulae+=(gnu-sed)
+command -v jq >/dev/null 2>&1 || formulae+=(jq)
+command -v sha256sum >/dev/null 2>&1 || brew list coreutils >/dev/null 2>&1 || formulae+=(coreutils)
 if [ "$(uname -m)" = x86_64 ] && ! brew list openssl@3 >/dev/null 2>&1; then formulae+=(openssl@3); fi
 
 if [ "${#formulae[@]}" -gt 0 ]; then
@@ -35,6 +39,9 @@ if [ "${#formulae[@]}" -gt 0 ]; then
     brew install "${formulae[@]}"
   fi
 fi
+echo
+echo "To run the release-script tests, put the GNU tools first in the PATH (the suites leave those tests out without them):"
+echo "  export PATH=\"\$(brew --prefix gnu-sed)/libexec/gnubin:\$(brew --prefix coreutils)/libexec/gnubin:\$PATH\""
 if [ "$(uname -m)" = x86_64 ]; then
   echo
   echo "Intel Mac: if uv sync builds cryptography from source and cannot find OpenSSL, run first:"

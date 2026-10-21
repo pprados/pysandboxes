@@ -9,6 +9,8 @@ it. Removing them belongs to the harness, which runs outside the sandbox.
 """
 
 import os
+import shutil
+import subprocess
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -53,9 +55,30 @@ _NOT_ON_WINDOWS_TESTS = [
     "unit_tests/test_tag_release.py",
     "unit_tests/test_verify_published.py",
 ]
+# Release scripts written for GNU sed (`sed -i`, `\U`), jq and sha256sum, which the CI's Linux runners have and macOS
+# lacks. Left out on a Mac without them: `make init-macos-vm` installs them, brew's gnu-sed, jq and coreutils do too.
+_NOT_ON_MACOS_TESTS = [
+    "unit_tests/test_changelog_draft.py",
+    "unit_tests/test_nightly_gate_reuse.py",
+    "unit_tests/test_tag_release.py",
+    "unit_tests/test_verify_published.py",
+]
+
+
+def _has_gnu_release_tools() -> bool:
+    if not (shutil.which("jq") and shutil.which("sha256sum")):
+        return False
+    try:
+        return "GNU" in subprocess.run(["sed", "--version"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 collect_ignore_glob = [] if sys.platform == "linux" else _LINUX_ONLY_TESTS
 if sys.platform == "win32":
     collect_ignore_glob = [*collect_ignore_glob, *_NOT_ON_WINDOWS_TESTS]
+if sys.platform == "darwin" and not _has_gnu_release_tools():
+    collect_ignore_glob = [*collect_ignore_glob, *_NOT_ON_MACOS_TESTS]
 
 # A script that calls an LLM (scripts/changelog-draft.sh) gets a command that fails, so no test spends tokens by
 # omission. Only the tests marked `llm` call the model, and only with RUN_LLM_TESTS=1.

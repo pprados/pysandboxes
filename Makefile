@@ -216,7 +216,7 @@ macos-tests: macos-vm
 	$(VM_SOURCES) | $(MACOS_SSH) "tar -xf - -C pysandboxes" || exit 1; \
 	status=0; \
 	for cmd in $(CROSS_OS_PYTEST); do \
-	  $(MACOS_SSH) "export PATH=\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV) $(MACOS_UV_RUN) OPENSSL_DIR=\$$HOME/openssl OPENSSL_STATIC=1; cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test $(MACOS_SYNC_SKIP) && $$cmd" || status=1; \
+	  $(MACOS_SSH) "export PATH=\$$HOME/gnu/bin:\$$HOME/.local/bin:\$$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$$PATH $(VM_ENV) $(MACOS_UV_RUN) OPENSSL_DIR=\$$HOME/openssl OPENSSL_STATIC=1; cd pysandboxes && uv sync --python $(MACOS_PYTHON) --group test $(MACOS_SYNC_SKIP) && $$cmd" || status=1; \
 	done; \
 	exit $$status
 
