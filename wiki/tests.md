@@ -53,11 +53,11 @@ the shape of the effort:
 
 | Suite | Target | Tests |
 |---|---|---|
-| Unit | `make unit-tests` | ~1790 |
-| Integration | `make integration-tests` | ~165 |
+| Unit | `make unit-tests` | ~3790 |
+| Integration | `make integration-tests` | ~330 |
 | Containers | `make container-tests` | ~60 |
-| Samples (12 demos) | `make sample-tests` | ~170 |
-| **Total, one interpreter** | `make all-tests` | **~2185** |
+| Samples (12 demos) | `make sample-tests` | ~230 |
+| **Total, one interpreter** | `make all-tests` | **~4410** |
 
 The samples figure is the softest of the four: each sample has its own
 `pyproject.toml`, its own lock file and its own virtual environment, so the
@@ -68,11 +68,11 @@ of it:
 
 | Workflow | Suite | Versions | Executions | Fires on |
 |---|---|---|---|---|
-| [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~5640 | every push and pull request |
-| [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~556 | `full-gate.yml` (nightly, release tag) or dispatch |
+| [`test.yml`](../.github/workflows/test.yml) | Unit | 3.11, 3.12, 3.13, 3.14 | ~15160 | every push and pull request |
+| [`integration.yml`](../.github/workflows/integration.yml) | Integration | 3.11, 3.12, 3.13, 3.14 | ~1310 | `full-gate.yml` (nightly, release tag) or dispatch |
 | [`containers.yml`](../.github/workflows/containers.yml) | Containers | 3.13 | ~60 | `full-gate.yml` (nightly, release tag) or dispatch |
-| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare | ~3250 | `full-gate.yml` (nightly, release tag) or dispatch |
-| **Total** | | | **~9506** | |
+| [`samples.yml`](../.github/workflows/samples.yml) | Samples | 3.11, 3.12, 3.13, 3.14 × subprocess, landlock, bwrap, firejail, unshare | ~4460 | `full-gate.yml` (nightly, release tag) or dispatch |
+| **Total** | | | **~20990** | |
 
 The samples row is not a clean multiplication: a sample whose `requires-python`
 excludes the matrix interpreter is *skipped*, not failed. `langgraph-demo` is
@@ -291,7 +291,7 @@ technology, so macOS and Windows run the Python layer over `subprocess`; the
 Row counts, to cross-check against the sections above: 84 host rows per
 interpreter and 60 container rows, 48 of them on a real backend. Both are
 reproducible with `pytest --collect-only -q`. Unit tests sit outside these grids
-entirely, with about 1790 collected and none parametrized by backend or
+entirely, with about 3790 collected and none parametrized by backend or
 container condition, so they scale with the Python version alone.
 
 Two facts follow from the tables. Partial mode arms one family of six: the mode is

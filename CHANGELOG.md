@@ -22,222 +22,7 @@ kernel boundary is a Linux technology.
 
 ## [0.0.0] - 202X-XX-XX
 
-### Added
-- Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
-  in separate files
-- `unshare.proc=none` runs the `unshare` sandbox without a `/proc`, and `unshare` warns, when a container refuses
-  to mount `/proc`, with the settings to change or this option. `shutil.rmtree`, `os.fwalk` and `dir_fd=` calls
-  on a directory opened by `os.open` keep working without `/proc`
-
-### Changed
-- The minimum Python is 3.11.5. Before it, an enum member pickles as a `getattr` call that the restricted result
-  channel refuses, so a sandboxed function could not return one
-- `eval-*`: the evaluated code can no longer write or delete by subscript (`obj[k] = v`, `del obj[k]`) in an
-  object the application passed in, as it already could not set its attributes
-- Clarify platform support, security limits, and provider test coverage in the README and wiki
-- The README and wiki no longer imply `OS_SANDBOX` selects the provider on its own: it only takes effect where the
-  config's `os-sandbox` line reads it, and `learn=false` does not prevent an environment downgrade
-- A new rule file no longer includes `./.local.py-sandboxes` by default: the line is commented out, and accepting
-  local rules from the current directory is the user's decision
-- The samples' documentation no longer claims that learning mode cannot produce `net=` rules: it does, and each one
-  needs review
-- A profile whose `python-api` rules grant `eval`, `exec` or `compile` while it also carries `eval-*` rules is
-  refused at load, with each `eval-*` line to comment out: the grant ran the code unguarded and left them unused
-- Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
-  (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
-- A generated `.py-sandboxes` names `landlock` as its default provider (`os-sandbox=${OS_SANDBOX:-landlock}`) on
-  Linux when the kernel supports it, and `subprocess` otherwise, with a warning when Linux lacks Landlock; learning
-  itself still always runs under `subprocess`
-- When two `env=` patterns match the same variable, the one with more fixed characters wins, whatever the line
-  order; two patterns as specific that give it different values are a configuration error
-
-### Fixed
-- The import guard no longer refuses `ntpath` on Python 3.12.0 to 3.12.3, where `pathlib` imports it each time it builds
-  a `Path` from a `Path`: a profile that lists its modules one by one failed to start
-- The explanation of a rejected `eval-*` rule marks its warning with `WARNING:` instead of a non-ASCII sign, which
-  broke the report on a Windows console
-- Profiles are read and written as UTF-8: on Windows, a learning run no longer fails writing the `⚠` of its
-  comments, and a path with an accent is read back as written
-- On Windows, `os.readlink` on an exposed link no longer refuses its target (the `\\?\` prefix Windows adds is
-  dropped before the rules are applied), and `os.getcwd` keeps the drive root `C:\`
-- On Windows with Python 3.11 and 3.12, `os.path.realpath`, `Path.resolve()` and `Path.glob()` no longer refuse an
-  exposed path because the working directory is not exposed
-- On Windows with Python 3.11 and 3.12, the `native` guard covers the `ctypes._dlopen` loader, which stayed open
-  while only `ctypes._LoadLibrary`, absent there, was guarded
-- In the sandbox, `sys.stdout` and `sys.stderr` now answer `writable()`, `encoding` and `errors` like the stream they
-  replaced, and a missing attribute names itself instead of failing on `NoneType`
-- In the QEMU guest, the network filter is loaded with the first executable `iptables-restore` that accepts it
-  (`nft`, `legacy`, then the alternatives link), instead of stopping on the first file found
-- `bwrap` names the host tools a profile with `net=` rules needs (`slirp4netns`, `nsenter`, `iptables-restore`) in
-  one message, and the network tests skip when they are missing
-- `python-sb --check-hash-based-pycs always -c ...` no longer takes `always` for the script: the option consumes its
-  value, as CPython does
-- A traceback received from the sandbox is checked in full before it is rebuilt: a cyclic or oversized chain, an
-  out-of-range line number or a frame carrying more than `tblib` builds is refused with `RestrictedUnpicklingError`
-- Under `bwrap`, a call with a relative path and `dir_fd=` (`shutil.rmtree`, `os.fwalk`) is no longer refused: the
-  sandbox now has its own `/proc`, in a PID namespace of its own
-- Opening a directory read-only (`os.open(path, os.O_RDONLY | os.O_DIRECTORY)`) is no longer refused as a write on an
-  `expose-ro` directory
-- A start of the sandbox that times out is now cancelled, so it can no longer be counted after the caller gave up, and
-  the private event loop created for the sandbox is stopped at shutdown instead of leaving its thread running
-- `EvalSyntaxRejected` keeps its line, column and source line across the transport, no longer appends `(line N)` to
-  its report, reports a refused construct once with its position instead of once per node, and says `1 rule violated`
-- A damaged or non-ASCII payload from the sandbox now always ends in `RestrictedUnpicklingError`, never in a bare
-  `ValueError`, `TypeError` or `UnicodeEncodeError`
-- A profile path naming an unknown user (`~nosuchuser/x`) in `expose-*` or `include` is now a `ConfigSyntaxError`
-  pointing at the line, not a bare `RuntimeError`
-- Under `landlock`, the current working directory no longer receives implicit write access; writes require
-  an explicit file rule
-- An `os-sandbox` the host cannot run (a missing `bwrap`, `firejail` or QEMU, a kernel without Landlock or user
-  namespaces) is refused when the sandbox starts, with the reason, before anything is launched
-- Under `landlock`, on a kernel with Landlock ABI 6 or later, the sandbox can no longer reach an abstract Unix
-  socket created outside it; named Unix sockets of the host remain reachable from native code, as documented
-- `ImmutableDict` is no longer equal to the tuple it stores its keys and values in.
-- A module run with `python -m pkg.mod` finds the `.py-sandboxes` of its package, as when it is imported.
-- Learning writes its rule file through a temporary file with an unpredictable name, which another local user
-  can no longer plant as a link to overwrite one of the user's files.
-- A kernel where Landlock is disabled at boot is detected as such, instead of being reported available.
-- `qemu` forwards its port on the host loopback only, no longer on every host interface.
-- The `python-sb` REPL starts when the configuration file lies outside the working directory.
-- `with sandboxes()` and `async with sandboxes()` work from a thread other than the main one.
-- Learning mode no longer writes a rule under `/proc`: a library reading `/proc/stat` at import produced
-  `expose-ro=/proc`, which exposed every process's environment and command line
-- Under `bwrap`, a project reached through a symbolic link runs in its own directory, not silently in `$HOME`
-- The sandbox's own server logs go to stderr: on stdout they corrupted an MCP server on a stdio transport
-- A host name that no `net=` rule can allow is refused at resolution, with the sandbox's message, under every
-  provider: under `bwrap` it failed with a bare "Name or service not known", and no DNS query leaves for it
-- Under `bwrap`, a package installed in editable mode, such as a project synced by uv, can be imported
-- Under `firejail`, a profile with an `expose-ro=/proc...` rule, which learning mode writes, no longer aborts the launch
-- A profile no longer has to allow the sandbox daemon's own modules (uvicorn, fastapi, and the standard library
-  they use): learning records only the application's imports
-- In partial mode, an import made by the application is judged on its rules even when the module is already
-  loaded, by the daemon or by an earlier import
-- Learning no longer proposes `python-api=ALLOW:builtins.eval` or `exec` for a source string: that line sent the
-  code to the raw builtin, past the `eval-*` rules learning proposes for it
-- Learning no longer turns a variable the code sets or removes itself into an `env=` rule, which brought the host's
-  value into the sandbox: `load_dotenv()` no longer adds every name of the `.env`
-- Learning writes a path under `TRANSFORMERS_CACHE` or `TORCH_HOME` as `${TRANSFORMERS_CACHE}/...` or
-  `${TORCH_HOME}/...`, as for the other tool directories, instead of a path of the learning machine
-- Under a learned profile, a host name outside the rules is refused by the network rule, not by the import of
-  `encodings.idna` the profile never carries
-- Learning into a profile that includes another one no longer adds a second `remote-result-mode` rule, which made
-  the profile invalid on the next run
-- The `.py-sandboxes` shipped inside the calling package is found wherever the current directory is: only a same-named
-  directory under the current directory was searched
-- On Python 3.11, a plain top-level module calling the API no longer freezes the search for its rule file
-- A `${...}` the syntax does not cover, such as `${A:B}`, is a configuration error with its file and line instead of
-  freezing the start, and a variable's value is never expanded again
-- A sandboxed function raising `SystemExit`, `KeyboardInterrupt` or another `BaseException` fails that call with
-  `SandBoxBaseExceptionError`: it no longer kills the sandbox, nor after repeated crashes the application itself
-- A sandbox that keeps crashing refuses further calls with an error instead of exiting the application
-- `SIGTERM` or `SIGQUIT` inside `with sandboxes()` stops the sandbox then ends the process, instead of being ignored,
-  and a failed start leaves the signal handlers untouched
-- `uvx python-sb` returns the script's exit code
-- `ipython-sb` gives IPython a private, temporary profile directory: `~/.ipython`, whose startup scripts run outside
-  the sandbox, is no longer writable from it
-- A reply up to the documented 512 KiB crosses the transport: above 128 KiB it failed with a bare `LineTooLong`
-- The source distribution ships only the package and its top-level documents, not the whole repository
-- `netifaces`, unused, is no longer a dependency: installing no longer compiles a C extension
-- The output a sandboxed function prints is captured on every call, not only the first one of the sandbox
-- `python-sb` reads its command line as CPython does: `-mjson.tool`, `-cprint(1)`, `-Im json.tool` and a script
-  without the `.py` suffix run, and a `--pysandboxes-config` without its value is a usage error
-- `python-sb -m <module>` finds the module's rule file in a fresh interpreter
-- A refused extra shutdown no longer makes a later shutdown stop a sandbox still in use
-- A missing `bwrap`, `firejail`, `unshare`, `slirp4netns` or `iptables` raises a `SandBoxError` instead of exiting
-  the application, and an exception in the sandbox's event loop no longer ends the process
-- An application that opens `sandboxes()` many times no longer ends in a `RecursionError` on an import
-- A refusal raised through `shutil.rmtree` still names the rule that refused it
-- Under a `learn=false` profile, `ipython-sb` adds no private profile directory and runs the standard Python REPL,
-  unless the profile names its own with `expose-rw=<dir>` and `env=IPYTHONDIR=<dir>`
-- A builtin named by both `eval-call=ALLOW:` and `eval-call=DENY:` (or a `DENY` pattern) is refused to the evaluated
-  code: `DENY` already won in the rules, but the name was still handed to the code
-- Creating a subinterpreter is a `process-exec` call, denied by default: code run in a new interpreter escaped every
-  Python guard, `python-import` alone allowing it
-- `os.readlink`, `Path.glob` and `os.scandir` no longer reveal a link target or a name outside the exposed directories
-- A hard link to a read-only file, a fifo or a device node in a read-only directory, and removing or moving a link out
-  of a read-only directory are refused
-- A relative `ignore=` pattern, such as `ignore=.secrets`, also hides the files under a directory of that name
-- `Path.glob(case_sensitive=...)` is honoured on Python 3.13 and later, and `os.open` with flags that are not an
-  integer raises CPython's `TypeError`
-- `sendmsg()` with an address, and `sendto()` on a TCP socket (TCP Fast Open), are checked against the `net=` rules
-- An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) is judged by the IPv4 `net=` rules
-- `listen()` on a socket that was never bound needs an IN rule for the wildcard address, like `bind(("", 0))`
-- Connecting or sending to a Unix socket needs write access to its path, as the kernel requires
-- A connection to a host name is allowed only if every address the name resolves to is allowed, and goes to an
-  address that was checked
-- An IN rule opens its port at the OS layer as it does in the Python layer; an empty port field allows no port in
-  either layer; long port lists and IPv4 DNS servers no longer break the iptables rules
-- Learning a `bind(("", port))` no longer crashes rule generation, and pinned name resolution accepts service names
-  such as `"http"`
-- `os.setresuid`, `os.setresgid`, `os.initgroups`, `os.unshare`, `os.setns`, `threading.settrace_all_threads`,
-  `threading.setprofile_all_threads`, `sys.monitoring`, `sys.remote_exec`, `ctypes.wstring_at`, `pickle._loads`,
-  `pickle._Unpickler`, `subprocess._fork_exec` and the `multiprocessing.get_context(...).Process` classes are refused
-  unless `python-api` allows them; a function-level `ALLOW:subprocess.Popen` now also needs
-  `ALLOW:_posixsubprocess.fork_exec`
-- `os.readlink`, `os.unlink`, `os.remove`, `os.rename` and `os.replace` with `dir_fd=` judge a link as the path form
-  does, on the directory holding it
-- A relative `ignore=` pattern no longer hides a whole exposed directory that lies under a directory of that name
-- The `ignore=` and `copy_function=` callbacks of `shutil.copytree` run under the file rules
-- `--port` on the command line wins over any number of `port=` lines in the profile and its includes
-- A connection to an abstract Unix socket is refused with the sandbox's error instead of a `ValueError`
-- `python-sb -m <package>` finds the rule file of a namespace package
-- A function called from a sub-package finds the rule file of the nearest package that holds one, not only its top
-  package's
-- `python-sb` exits with `128 + signal` when the script is killed by a signal (137 for `SIGKILL`), as a shell reports
-  it
-- `sys.exit("message")` in a script run by `python-sb` prints the message and exits with 1, as CPython does
-- CPython's test modules (`_testinternalcapi`, `_testcapi`) no longer create a subinterpreter unless `python-api`
-  allows it
-- The samples no longer compile `netifaces`
-- `eval-max-alloc` also bounds `<<` and the width or precision of a format (`%`, f-string, `format`, `str.format`):
-  `'%0100000000d' % 1` allocated 100 MB whatever the budget
-- An `eval-max-depth` above what the interpreter's stack can walk refuses the source instead of raising
-  `RecursionError`
-- `delattr` and `hasattr` handed to the evaluated code in a context are graded as strong capabilities, as
-  `eval-call` already reported them
-- A relative import, and the import of a submodule of a module the sandbox always keeps (such as `asyncio.subprocess`),
-  are checked against the `python-import` rules
-- Imports from other threads or tasks are no longer let through while the sandbox loads its own modules
-- Under `python -O`, the guards are no longer applied twice when the sandbox is activated again
-- A dotted `python-import=` rule such as `os.path`, which never matches, logs a warning
-- `unenv=` accepts the same `*` patterns as `env=` and removes variables wherever it is written in the profile, and an
-  exact `env=` beats a wildcard one whatever their order
-- A wildcard `env=*_KEY=value` sets the given value on every matching variable instead of forwarding the host value
-- `--port=` on the command line takes precedence over `port=` in the profile
-- Learning writes the rule file atomically, names its backup after the full file name, does not add a rule the
-  target file already holds when run again, and no longer grants environment variables only probed internally
-- `@sandbox` refuses generator and async generator functions when decorating; a sandboxed call outside a
-  `sandboxes()` session raises `SandBoxError`; a decorated function keeps its signature for type checkers, and
-  `sandboxes(expose_ro=[...])` accepts a list or a tuple
-- `async with sandboxes()` reads its rule files off the event loop
-- An include that exists but cannot be read is a configuration error instead of being skipped; a bare-name include
-  inside an included file is resolved next to that file, and a profile including itself is loaded once
-- The error raised when the Python executable's symlink chain cannot be resolved names the broken path
-- Evaluated code can no longer define, import, catch or bind a name starting with `__sb_`, which replaced the guard's
-  own helpers and lifted the budgets
-- `x *= n`, `x += y` and `x **= n` in evaluated code are bounded by `eval-max-alloc`, like `x * n`
-- A worker thread that finally stops no longer counts against `eval-max-leaked-threads`, which refused every later
-  evaluation for the life of the process
-- Two evaluations starting at once no longer leave the thread guard disabled
-- `exec` or `eval` of a code object accepts only one that guarded `compile` produced, whatever its file name, and runs
-  it under the budgets and the timeout; a tree from `compile(..., ast.PyCF_ONLY_AST)` compiles again
-- On Python 3.13 and later, `exec()` without a namespace no longer rewrites the caller's local variables
-- A source nested deeper than the recursion limit is refused by `eval-max-depth` instead of raising `RecursionError`
-- `eval-syntax` accepts only AST node names, not `parse` or `NodeVisitor`, nor the deprecated `Num`
-- Under `bwrap`, the sandbox no longer has read access to the whole of `/run`, which exposed `/run/docker.sock`
-  and every user's session sockets, including the D-Bus bus
-- A `net=` rule written against an IPv4 address now also judges the IPv4-translated, IPv4-compatible and NAT64
-  encodings of that same address, not only the plain and IPv4-mapped forms
-- A sandboxed function raising `GeneratorExit` fails that call with `SandBoxBaseExceptionError`, instead of an
-  opaque "No result received from the sandbox"
-- `ctypes.CDLL.__new__` followed by a hand-built `_handle` no longer skips the native-code guard: `_ctypes.dlopen`,
-  `_ctypes.dlsym` and the Windows `_ctypes.LoadLibrary` are refused unless `python-api` allows them
-- A deeply nested source no longer crashes `eval`, `exec` or `compile` with a raw `RecursionError` or `MemoryError`
-  from the parser itself: it is refused by `eval-max-depth`, like a source whose parsed tree is too deep
-- Sandboxed code can no longer widen its own permissions by writing to, renaming, or removing the active
-  `.py-sandboxes`, a file it `include`s, or the learning output file, even from a directory exposed read-write
-- Learning mode no longer writes a path or an imported module name containing a newline, a `#`, or another
-  character that would break the rule file's line format into the generated profile
+First public release.
 
 ### Added
 - A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
@@ -300,6 +85,23 @@ kernel boundary is a Linux technology.
   `langgraph-demo`, `mcp-client-demo`, `mcp-server-demo`,
   `openai-agents-sdk-demo`, `pydantic-ai-demo`, `smolagents-demo` and
   `strands-agents-demo`
+- Python 3.11.5 to 3.14
+- Configuration profiles can be included only when `sys.platform` matches, so OS-specific permissions can be kept
+  in separate files
+- `unshare.proc=none` runs the `unshare` sandbox without a `/proc`, and `unshare` warns, when a container refuses
+  to mount `/proc`, with the settings to change or this option. `shutil.rmtree`, `os.fwalk` and `dir_fd=` calls
+  on a directory opened by `os.open` keep working without `/proc`
+- Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
+  (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
+- A generated `.py-sandboxes` names `landlock` as its default provider (`os-sandbox=${OS_SANDBOX:-landlock}`) on
+  Linux when the kernel supports it, and `subprocess` otherwise, with a warning when Linux lacks Landlock; learning
+  itself still always runs under `subprocess`
+- When two `env=` patterns match the same variable, the one with more fixed characters wins, whatever the line
+  order; two patterns as specific that give it different values are a configuration error
+- A profile whose `python-api` rules grant `eval`, `exec` or `compile` while it also carries `eval-*` rules is
+  refused at load, with each `eval-*` line to comment out
+- A new rule file does not include `./.local.py-sandboxes` by default: the line is commented out, and accepting
+  local rules from the current directory is the user's decision
 
 ### Security
 - `posix.chroot` goes through the same path check as `os.chroot`
