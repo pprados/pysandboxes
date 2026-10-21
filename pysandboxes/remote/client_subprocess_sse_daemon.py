@@ -738,6 +738,11 @@ class BaseSubProcessDaemon(BaseSSESandbox):
                         "Remote daemon_shutdown did not answer within %.0fs; killing the daemon",
                         TIMEOUT_FOR_STOP_DAEMON,
                     )
+                except (OSError, RuntimeError) as error:
+                    # The sandbox closes the connection while it shuts down, which can happen before it
+                    # answers. Leaving here would skip the wait for its process, and the host would exit
+                    # with the sandbox still alive, holding the stdout and stderr pipes of whoever started it.
+                    logger.debug("Remote daemon_shutdown ended without an answer: %r", error)
             if graceful_shutdown:
                 if self._process:
                     try:

@@ -643,6 +643,29 @@ class TestShutdown:
 
         assert process.killed == 1 and daemon._process is None
 
+    @pytest.mark.parametrize("error", [OSError("gone"), RuntimeError("No result received from the sandbox")])
+    def test_a_remote_shutdown_that_loses_the_connection_still_waits_for_the_process(self, error: Exception) -> None:
+        """The sandbox may close the connection before answering: its process is still the one to wait for."""
+        process = _Proc()
+        daemon = self._daemon(process)
+
+        self._shutdown(daemon, graceful=True, call=AsyncMock(side_effect=error))
+
+        assert process.wait_calls == 1 and process.killed == 0
+
+    def test_a_remote_shutdown_that_loses_the_connection_ends_in_the_kill_of_a_process_that_stays(self) -> None:
+        async def never() -> int:
+            await asyncio.sleep(30)
+            return 0
+
+        process = _Proc(wait=never)
+        daemon = self._daemon(process)
+
+        with patch.object(csd, "TIMEOUT_FOR_STOP_DAEMON", 0.05):
+            self._shutdown(daemon, graceful=True, call=AsyncMock(side_effect=RuntimeError("closed")))
+
+        assert process.killed == 1 and daemon._process is None
+
     def test_a_forced_shutdown_kills_without_waiting(self) -> None:
         process = _Proc()
         daemon = self._daemon(process)
