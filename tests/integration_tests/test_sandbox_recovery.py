@@ -18,6 +18,9 @@ import pytest  # type: ignore[import-untyped]
 from ._env import backend_of, os_sandbox_params, provider_skip_reason
 from .test_guards_with_providers import ROOT_DIR
 
+# The slowest backend (firejail) takes 35 s, and the script waits 30 s at most for the sandbox to come back.
+_TIMEOUT_SECONDS = 120
+
 _ROWS = [row for row in os_sandbox_params() if not str(row.values[0]).startswith("qemu")]
 
 
@@ -38,7 +41,7 @@ def _report_pipe_holders(child: "subprocess.Popen[str]", stdout_pipe: str) -> st
     child.kill()
     out, err = child.communicate()
     return (
-        f"tst_recovery returncode={child.returncode} did not release its stdout within 300s.\n"
+        f"tst_recovery returncode={child.returncode} did not release its stdout within {_TIMEOUT_SECONDS}s.\n"
         f"holders of {stdout_pipe}: {holders or 'none found'}\nstdout: {out}\nstderr: {err}"
     )
 
@@ -59,7 +62,7 @@ def test_a_killed_sandbox_is_started_again_and_answers(os_sandbox: str) -> None:
     )
     stdout_pipe = os.readlink(f"/proc/{child.pid}/fd/1")
     try:
-        out, err = child.communicate(timeout=300)
+        out, err = child.communicate(timeout=_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         pytest.fail(_report_pipe_holders(child, stdout_pipe))
     done = subprocess.CompletedProcess(child.args, child.returncode, out, err)
