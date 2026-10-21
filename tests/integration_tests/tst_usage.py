@@ -6,10 +6,13 @@ import signal
 import sys
 import tempfile
 import threading
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
-from socket import AF_INET, AF_INET6, SOCK_DGRAM, SOCK_STREAM, gaierror
+from socket import AF_INET, AF_INET6, EAI_AGAIN, SOCK_DGRAM, SOCK_STREAM, gaierror
 from types import FrameType
-from typing import Any, List, Mapping, cast
+from typing import Any, Callable, List, Mapping, TypeVar, cast
 
 from pysandboxes import SandBoxError, is_in_sandbox, sandbox, sandboxes
 from pysandboxes.config import DEBUG
@@ -17,6 +20,7 @@ from pysandboxes.learning import is_learning_mode
 from pysandboxes.remote.python_in_sb import convert_extra_rules
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 OK: str = "\u2705\ufe0f "
 KO: str = "\u274c\ufe0f "
@@ -212,6 +216,20 @@ def _test_envs() -> int:
     return rc
 
 
+def _retrying_name_resolution(call: Callable[[], T], attempts: int = 3) -> T:
+    """Run ``call``, trying again when the resolver answers "temporary failure" (EAI_AGAIN), as a cluster DNS does."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return call()
+        except (gaierror, urllib.error.URLError) as e:
+            cause = e.reason if isinstance(e, urllib.error.URLError) else e
+            if attempt == attempts or not (isinstance(cause, gaierror) and cause.errno == EAI_AGAIN):
+                raise
+            logger.warning(f"name resolution failed ({cause}), attempt {attempt} of {attempts}")
+            time.sleep(attempt)
+    raise AssertionError("unreachable")
+
+
 def _test_network() -> int:
     # tcp connection
     import socket
@@ -223,7 +241,7 @@ def _test_network() -> int:
     # Learn a direct connection to github
     remote_ip = "?"
     try:
-        remote_ip = socket.gethostbyname("github.com")
+        remote_ip = _retrying_name_resolution(lambda: socket.gethostbyname("github.com"))
         socket.gethostbyname_ex("github.com")
         socket.getaddrinfo("github.com", None, family=socket.AF_UNSPEC)
         for attempt in (1, 2):
@@ -275,12 +293,8 @@ def _test_network() -> int:
     # web connection (timeout to avoid hanging in containers with slow/no network).
     # urllib, not requests: the container images carry the wheel and its runtime
     # dependencies only, so a third-party client is not importable in the sandbox.
-    import urllib.error
-    import urllib.request
-
     try:
-        with urllib.request.urlopen("https://github.com/", timeout=10):
-            pass
+        _retrying_name_resolution(lambda: urllib.request.urlopen("https://github.com/", timeout=10).close())
         logger.info(f"{OK} get https://github.com")
     except SandBoxError:
         logger.error(f"{KO} get https://github.com")
