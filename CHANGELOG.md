@@ -25,13 +25,9 @@ kernel boundary is a Linux technology.
 First public release.
 
 ### Added
-- A profile can raise one of firejail's limits for itself, e.g. `firejail.rlimit-as=600m` for a framework that maps
-  more than 300 MB at import
 - Two coding-agent skills: one learns the rules a new feature needs from its tests and asks before granting them,
   the other lists the rights a change adds to the `.py-sandboxes` files, graded by risk, with the code that needs
   each; and a GitHub workflow to copy into a project, which comments that list on a pull request
-- `python-sb script.py` reads the `.py-sandboxes` next to the script before the one of the current directory
-- Learning mode advises an f-string in place of `str.format()` when it generates an `eval-attribute=format` rule
 - `python-sb` runs a Python script, a module or an interactive session
   under the rules of a `.py-sandboxes` file, in place of `python`
 - *complete* mode, which sandboxes the whole application, and *partial*
@@ -62,8 +58,6 @@ First public release.
   addresses, and rebuilds no other class. `remote-result-mode=objects` rebuilds any object, and refuses the
   classes and functions that would act in the calling process: processes, files, signals, nested pickles, code
   objects
-- The sandbox daemon listens on the loopback when the sandbox shares the host network, and is reached only with
-  a per-run token, compared in constant time
 - Learning mode (`--learn`), which records what an application really
   uses and writes the matching rules
 - Control of the life cycle of the sandbox daemon, restarted when needed
@@ -91,30 +85,11 @@ First public release.
 - `unshare.proc=none` runs the `unshare` sandbox without a `/proc`, and `unshare` warns, when a container refuses
   to mount `/proc`, with the settings to change or this option. `shutil.rmtree`, `os.fwalk` and `dir_fd=` calls
   on a directory opened by `os.open` keep working without `/proc`
-- Docker images tag the pysandboxes version with an `sb` prefix (`3.13-sb0.5.0`), add the exact Python patch
-  (`3.13.2-sb0.5.0`), and are rebuilt daily when Python publishes a new patch
 - A generated `.py-sandboxes` names `landlock` as its default provider (`os-sandbox=${OS_SANDBOX:-landlock}`) on
   Linux when the kernel supports it, and `subprocess` otherwise, with a warning when Linux lacks Landlock; learning
   itself still always runs under `subprocess`
-- When two `env=` patterns match the same variable, the one with more fixed characters wins, whatever the line
-  order; two patterns as specific that give it different values are a configuration error
 - A profile whose `python-api` rules grant `eval`, `exec` or `compile` while it also carries `eval-*` rules is
   refused at load, with each `eval-*` line to comment out
-- A new rule file does not include `./.local.py-sandboxes` by default: the line is commented out, and accepting
-  local rules from the current directory is the user's decision
-
-### Security
-- `posix.chroot` goes through the same path check as `os.chroot`
-- `pickle.loads` and `pickle.load`, with their `_pickle` twins, belong to
-  the `deserialization` category: a pickle stream names a callable and
-  calls it, so it reaches `os.system` without an import and without a
-  source string the `eval-*` rules could parse. `pickle.Unpickler` is not
-  guarded: it is an immutable C type, so neither `__init__` nor `load`
-  can be patched. See `wiki/audit-python-security.md`
-- The parent process accepts only an allowlist of classes and pickle
-  opcodes when it reads what a sandboxed child returns, so a hostile
-  object cannot run code in the parent on the way back. See
-  `wiki/transport-unpickle-guard.md`
 
 ### Notes
 - `native` and `introspection` are detection and friction, not a
