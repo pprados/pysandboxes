@@ -48,8 +48,6 @@ from pathlib import Path
 #: Stem of every generated file, taken from the paper's title rather than a
 #: generic "paper", so a downloaded PDF still says what it is.
 DOCUMENT_NAME = "confining-python-by-observation"
-#: Author address printed in the generated paper; the markdown keeps its own.
-ARXIV_EMAIL = "arxiv@prados.fr"
 
 # --------------------------------------------------------------------------- #
 # Bibliography
@@ -403,7 +401,7 @@ class Metadata:
     title: str = ""
     subtitle: str = ""
     author: str = ""
-    email: str = ""
+    url: str = ""
     orcid: str = ""
     date: str = ""
     version: str = ""
@@ -425,14 +423,14 @@ def extract_metadata(markdown: str) -> tuple[str, Metadata]:
         markdown = markdown.replace(subtitle.group(0) + "\n", "", 1)
 
     author = re.search(
-        r"^\*\*([^*]+)\*\* — \[([^\]]+)\]\(mailto:([^)]+)\)"
+        r"^\*\*([^*]+)\*\* — \[([^\]]+)\]\((https?://[^)]+)\)"
         r"(?: · ORCID \[([^\]]+)\]\(https://orcid\.org/[^)]+\))?\s*$",
         markdown,
         re.M,
     )
     if author:
         meta.author = author.group(1).strip()
-        meta.email = author.group(3).strip()
+        meta.url = author.group(3).strip()
         meta.orcid = (author.group(4) or "").strip()
         markdown = markdown.replace(author.group(0) + "\n", "", 1)
 
@@ -639,7 +637,7 @@ def yaml_header(meta: Metadata) -> str:
         lines.append(f"subtitle: {quote(meta.subtitle)}")
     if meta.author:
         # No `\\` here: pandoc escapes it to \textbackslash{} inside metadata.
-        author = f"{meta.author} (\\texttt{{{meta.email}}})" if meta.email else meta.author
+        author = f"{meta.author} (\\url{{{meta.url}}})" if meta.url else meta.author
         if meta.orcid:
             author += f" --- ORCID \\href{{https://orcid.org/{meta.orcid}}}{{{meta.orcid}}}"
         lines.append(f"author: {quote(author)}")
@@ -888,9 +886,6 @@ def main() -> int:
     parser.add_argument(
         "--name", default=DOCUMENT_NAME, help=f"stem for the generated files (default: {DOCUMENT_NAME})"
     )
-    parser.add_argument(
-        "--email", default=ARXIV_EMAIL, help=f"author email printed in the paper (default: {ARXIV_EMAIL})"
-    )
     args = parser.parse_args()
 
     if not args.input.exists():
@@ -915,7 +910,6 @@ def main() -> int:
         return 0
 
     markdown, meta = extract_metadata(markdown)
-    meta.email = args.email
     markdown = strip_toc(markdown)
     markdown = strip_references(markdown)
     markdown = break_page_before_appendices(markdown)

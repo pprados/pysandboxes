@@ -2,7 +2,7 @@
 
 ### Policy Inference Across Three Layers
 
-**Philippe PRADOS** — [github@prados.fr](mailto:github@prados.fr)
+**Philippe PRADOS** — [github.com/pprados/pysandboxes](https://github.com/pprados/pysandboxes)
 
 September 2026
 
@@ -24,7 +24,7 @@ still required when code may bypass Python-level checks.
 
 Reference implementation:
 [`py-sandboxes`](https://github.com/pprados/pysandboxes) (Apache-2.0). Paper
-licensed CC BY-NC-SA 4.0.
+licensed CC BY-NC-SA 4.0. Contact through the project site.
 
 The implementation and its tests are evidence for feasibility and specific
 behaviors, not a measurement of policy quality or a proof against hostile code.
