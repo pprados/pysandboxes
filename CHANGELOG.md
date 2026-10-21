@@ -36,7 +36,7 @@ First public release.
 - Control of environment variables, imports, files and network access,
   denied by default and granted by whitelist
 - Control of sensitive API calls, independent of import rights: an
-  import right is not a call right. A registry of 145 sensitive
+  import right is not a call right. A registry of 152 sensitive
   functions in eight categories (`process-exec`, `process-control`,
   `privileges`, `threads`, `native`, `introspection`, `dynamic-code`,
   `deserialization`) is denied by default, and permissions are granted

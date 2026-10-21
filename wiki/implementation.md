@@ -6,7 +6,7 @@
 - Wrapped functions validate arguments and apply configured transformations.
 - File wrappers check paths against access and expose rules. Denied paths raise an exception.
 - Socket wrappers check connection settings. `DENY` rules override `ALLOW`, so a broad network range can exclude selected hosts.
-- Import rights and call rights are two distinct notions. A module may legitimately be importable while some of its functions must stay out of reach. A registry of 149 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, `ctypes.CDLL`, ...) is therefore denied by default, whatever `python-import=` allows, and a call right is never derived from a module being present in `python-import=`.
+- Import rights and call rights are two distinct notions. A module may legitimately be importable while some of its functions must stay out of reach. A registry of 152 sensitive functions (`os.system`, `subprocess.Popen`, `os.kill`, `ctypes.CDLL`, ...) is therefore denied by default, whatever `python-import=` allows, and a call right is never derived from a module being present in `python-import=`.
 - Environment variables are filtered before launch. The sandbox receives only allowed variables.
 
 

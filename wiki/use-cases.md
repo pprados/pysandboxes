@@ -146,8 +146,6 @@ from tabulate import tabulate
 ```
 
 - Under `uvx`, declare every third-party import with `--with`. Document host requirements and imports in comments.
-- Until release on PyPI, add the TestPyPI options from [Releasing](release.md#publishing-a-pre-release) before
-  `python-sb` in the shebang.
 
 Launched through this shebang from another directory, with `os-sandbox=bwrap`, the script prints its report; a
 script of the same skill that tries `import socket` is stopped by the rule file, and a `.py-sandboxes` or a
