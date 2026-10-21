@@ -1,10 +1,11 @@
 # Copyright (c) 2026, Carbon-It, Philippe Prados (pprados)
 # License: Apache V2
 #
-# The full test gate: the integration suite (3.11-3.14), the samples (3.11-3.14) and the container suites.
+# The full test gate: the integration suite (3.11-3.14), the samples (3.11-3.14), the container suites and the
+# macOS and Windows provider suites (3.11-3.14).
 # Nightly on develop, TCG included; called by release.yml, TCG left out, for a tag whose commit no nightly proved.
 # .github/scripts/find-nightly-gate.sh reuses a nightly by reading the names of these jobs: keep the ids
-# integration, samples and containers.
+# integration, samples, containers and cross-os.
 name: Full Gate
 
 on:
@@ -79,3 +80,8 @@ jobs:
     needs: changes
     if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
     uses: ./.github/workflows/containers.yml
+
+  cross-os:
+    needs: changes
+    if: github.event_name != 'schedule' || needs.changes.outputs.changed == 'true'
+    uses: ./.github/workflows/cross-os.yml

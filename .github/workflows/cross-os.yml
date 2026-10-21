@@ -13,12 +13,13 @@ name: Cross-OS Provider Tests
 # Both runners exercise the one provider they have (`subprocess`), and run the
 # guards' own unit tests: they are what the Python layer rests on there.
 #
-# On demand only, until both runners are green: `gh act` cannot run macOS or
+# Called by full-gate.yml, so the nightly proves macOS and Windows too, plus on demand: `gh act` cannot run macOS or
 # Windows runners, and `make gh-tests` only replays the push workflows.
 # There is no `make` on Windows either, so pytest is called directly.
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   providers:

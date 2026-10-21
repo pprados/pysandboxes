@@ -35,9 +35,9 @@ It takes the highest version found on pypi.org and on these two test.pypi.org pa
 test.pypi.org to the two packages: every dependency still comes from pypi.org, where nobody can squat its name.
 
 Tag a commit the nightly already proved, when you can. The nightly (`full-gate.yml`, 03:17 UTC on `develop`) runs the
-integration, sample and container suites; a tag on the same code reuses that run instead of repeating it. The lookup
-walks back over the release commit and over commits that touch only documentation, so a final version tagged right
-after a green nightly reuses it. A tag on any other code runs the suites itself, without the `qemu-tcg` rows, which
+integration, sample, container and macOS and Windows provider suites; a tag on the same code reuses that run instead
+of repeating it. The lookup walks back over the release commit and over commits that touch only documentation, so a
+final version tagged right after a green nightly reuses it. A tag on any other code runs the suites itself, without the `qemu-tcg` rows, which
 takes about twenty minutes more.
 
 A published tag is never moved nor deleted. If a release fails after the upload, fix `develop` and publish the next
@@ -77,7 +77,7 @@ yanking only hides it.
 | `validate` | `make validate` on Python 3.13, `pip-audit` included |
 | `build` | `uv build`; the wheel version must equal the tag; `twine check`. Also builds `python-sb` when it changed (below) |
 | `reuse-lookup` | Looks for a green `schedule` run of `full-gate.yml` on the same code, walking back over release and documentation-only commits (a manual run never counts) |
-| `full-gate` | The integration, sample and container suites, skipped when `reuse-lookup` found a nightly to reuse |
+| `full-gate` | The integration, sample, container and macOS and Windows provider suites, skipped when `reuse-lookup` found a nightly to reuse |
 | `wheel-tests` | The unit tests against the built wheel, installed in a clean venv, on Python 3.11 to 3.14 |
 | `publish-testpypi` | Waits for the approval, then uploads with Trusted Publishing and PEP 740 attestations |
 | `publish-pypi` | Final tags only: waits for the `pypi` approval, then uploads `pysandboxes` and, when due, `python-sb` |

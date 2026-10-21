@@ -38,6 +38,8 @@ def _jobs(conclusion: str = "success", **overrides: str) -> list[dict[str, str]]
         "integration / integration (3.14)",
         "samples / samples (3.11)",
         "containers / containers (docker)",
+        "cross-os / providers (macos-latest, 3.11)",
+        "cross-os / providers (windows-latest, 3.11)",
     ]
     return [{"name": "changes", "conclusion": "success"}] + [
         {"name": n, "conclusion": overrides.get(n, conclusion)} for n in names
@@ -111,6 +113,16 @@ def test_one_failed_suite_job_prevents_reuse(fake: Path) -> None:
 
 def test_a_nightly_missing_a_whole_suite_is_not_reused(fake: Path) -> None:
     _pages(fake, 7, [j for j in _jobs() if not j["name"].startswith("containers")])
+    assert _lookup(fake, [_run(7)]) == {"reuse": "false"}
+
+
+def test_a_nightly_missing_the_macos_and_windows_suites_is_not_reused(fake: Path) -> None:
+    _pages(fake, 7, [j for j in _jobs() if not j["name"].startswith("cross-os")])
+    assert _lookup(fake, [_run(7)]) == {"reuse": "false"}
+
+
+def test_one_failed_windows_job_prevents_reuse(fake: Path) -> None:
+    _pages(fake, 7, _jobs(**{"cross-os / providers (windows-latest, 3.11)": "failure"}))
     assert _lookup(fake, [_run(7)]) == {"reuse": "false"}
 
 

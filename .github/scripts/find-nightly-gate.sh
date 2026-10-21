@@ -16,7 +16,7 @@ runs=$(gh run list --workflow full-gate.yml --event schedule --branch develop --
 nightly='.[] | select(.headSha == $sha and .event == "schedule" and .status == "completed") | .databaseId'
 for id in $(jq -r --arg sha "$sha" "$nightly" <<<"$runs"); do
     jobs=$(gh api --paginate "repos/$GH_REPO/actions/runs/$id/jobs?per_page=100")
-    if jq -se '[.[].jobs[]] as $jobs | all("integration", "samples", "containers"; . as $suite
+    if jq -se '[.[].jobs[]] as $jobs | all("integration", "samples", "containers", "cross-os"; . as $suite
             | [$jobs[] | select(.name | startswith($suite + " / "))] | length > 0 and all(.conclusion == "success"))' \
             <<<"$jobs" >/dev/null; then
         echo "reuse=true"
