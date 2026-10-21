@@ -249,3 +249,4 @@ _tasks/*
 # lessons.md is the one versioned exception: it carries repo-level rules, not
 # session workspace. Must stay last, after every _tasks pattern above.
 !_tasks/lessons.md
+/video/
