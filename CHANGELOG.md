@@ -26,6 +26,10 @@ the Python layer with `subprocess`; kernel-backed providers are Linux technologi
 ### Added
 - Add the macOS Seatbelt `sandbox-exec` provider, with documented host-filtering and DNS limitations.
 
+### Changed
+- `landlock` gives the sandbox a temporary directory of its own, removed when the daemon stops, instead of the host's
+  whole `/tmp`: `tempfile` works as before, but a hard-coded `/tmp/...` path is now refused.
+
 ### Fixed
 
 - `python-sb app/script.py` runs again under a profile that exposes only `./app`, such as a learned one.

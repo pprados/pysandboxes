@@ -363,6 +363,9 @@ def _main(stack: ExitStack) -> int:
                     kill_slirp = getattr(os_provider, "_kill_slirp", None)
                     if callable(kill_slirp):
                         kill_slirp()
+                    release_sandbox_temp = getattr(os_provider, "release_sandbox_temp", None)
+                    if callable(release_sandbox_temp):
+                        release_sandbox_temp()
 
         logger.debug("Launching sandbox (waiting for guest to finish)...")
         qemu_wait_rc = asyncio.run(launch_and_wait())

@@ -309,6 +309,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         "_is_started",
         "_token",
         "_process",
+        "_sandbox_temp",
         "_watchdog",
         "_attempts",
         "_base_delay",
@@ -363,6 +364,7 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         super().__init__(token, max_connect_retry=max_connect_retry)
         self._python_args = python_args or []
         self._process: Process | None = None
+        self._sandbox_temp: tempfile.TemporaryDirectory[str] | None = None
         self._watchdog: Task | None = None
         self._attempts = 0
         self._base_delay = base_delay
@@ -768,6 +770,23 @@ class BaseSubProcessDaemon(BaseSSESandbox):
         finally:
             self._process = None
             self._is_started = False
+            self.release_sandbox_temp()
+
+    def sandbox_temp(self) -> Path:
+        """Return a temporary directory for the sandbox to write in, private to this daemon.
+
+        The run directory is gone as soon as the daemon has started, so the scratch space the sandbox is given
+        instead of the host's shared ``/tmp`` has to live as long as the daemon does.
+        """
+        if self._sandbox_temp is None:
+            self._sandbox_temp = tempfile.TemporaryDirectory(prefix="pysandboxes-tmp-")
+        return Path(self._sandbox_temp.name)
+
+    def release_sandbox_temp(self) -> None:
+        """Remove the directory handed out by :meth:`sandbox_temp`, if any."""
+        if self._sandbox_temp is not None:
+            self._sandbox_temp.cleanup()
+            self._sandbox_temp = None
 
     def on_process_launched(self, process_pid: int) -> None:
         pass

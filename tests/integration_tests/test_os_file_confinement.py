@@ -5,6 +5,9 @@
 ``py-sandbox=false`` removes every Python guard, so a refused read or write can only come from the provider. Each row
 runs in both launch modes, `python-sb` and the daemon, and starts from a control: the same operations succeed here,
 outside any sandbox, so a refusal in the sandbox is not a permission of the host.
+
+The sandbox is also given a temporary directory of its own: a host file in ``/tmp`` stays out of its reach, and
+``tempfile`` still works.
 """
 
 import json
@@ -26,6 +29,8 @@ _EXPECTED = {
     "ro_write": "DENIED",
     "outside_read": "DENIED",
     "rw_write": "ALLOWED",
+    "host_tmp_read": "DENIED",
+    "own_tmp_write": "ALLOWED",
 }
 
 
@@ -41,24 +46,28 @@ def _params() -> list:
 
 
 @pytest.fixture
-def files_dir() -> Iterator[Path]:
-    """A directory outside the system temporary directory, which Landlock opens whole to the sandbox."""
-    with tempfile.TemporaryDirectory(dir=Path.home()) as directory:
-        yield Path(directory).resolve()
+def host_tmp_file() -> Iterator[Path]:
+    """A file in the host's shared ``/tmp``, which no rule exposes."""
+    with tempfile.NamedTemporaryFile(dir="/tmp", prefix="host-secret-", suffix=".txt", delete=False) as handle:
+        handle.write(b"host secret")
+    path = Path(handle.name)
+    yield path
+    path.unlink(missing_ok=True)
 
 
-def _run(tmp_path: Path, files_dir: Path, row: str, mode: str) -> tuple[dict[str, str], Path]:
-    ro_dir, rw_dir, outside_dir = files_dir / "ro", files_dir / "rw", files_dir / "outside"
+def _run(tmp_path: Path, host_tmp_file: Path, row: str, mode: str) -> tuple[dict[str, str], Path]:
+    ro_dir, rw_dir, outside_dir = tmp_path / "ro", tmp_path / "rw", tmp_path / "outside"
     for directory in (ro_dir, rw_dir, outside_dir):
         directory.mkdir()
     ro_file, outside_file = ro_dir / "readable.txt", outside_dir / "secret.txt"
     ro_file.write_text("readable")
     outside_file.write_text("secret")
-    paths = [str(ro_file), str(ro_dir), str(outside_file), str(rw_dir)]
+    paths = [str(ro_file), str(ro_dir), str(outside_file), str(rw_dir), str(host_tmp_file)]
 
     # The control: the host lets the same operations through.
     assert ro_file.read_text() == "readable"
     assert outside_file.read_text() == "secret"
+    assert host_tmp_file.read_text() == "host secret"
     (ro_dir / "control.txt").write_text("written")
 
     profile = tmp_path / "files.profile"
@@ -91,8 +100,8 @@ def _run(tmp_path: Path, files_dir: Path, row: str, mode: str) -> tuple[dict[str
 
 
 @pytest.mark.parametrize(("row", "mode"), _params())
-def test_the_provider_alone_confines_the_files(tmp_path: Path, files_dir: Path, row: str, mode: str) -> None:
-    outcomes, rw_dir = _run(tmp_path, files_dir, row, mode)
+def test_the_provider_alone_confines_the_files(tmp_path: Path, host_tmp_file: Path, row: str, mode: str) -> None:
+    outcomes, rw_dir = _run(tmp_path, host_tmp_file, row, mode)
 
     assert {name: outcome.split()[0] for name, outcome in outcomes.items()} == _EXPECTED, outcomes
     assert (rw_dir / "created.txt").read_text() == "written"

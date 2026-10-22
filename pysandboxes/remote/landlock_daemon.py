@@ -35,7 +35,8 @@ from ..all_rules import AllRules
 from ..guard_files import FSExposeRule, IgnoreRule
 from ..guard_socket import Action, Direction, Kind, SocketRules
 from ..override_compat import override
-from ..sb_types import Envs
+from ..sb_types import Args, Envs
+from ..tools import Environ
 from .client_subprocess_sse_daemon import SubProcessDaemon
 
 logger = logging.getLogger(__name__)
@@ -464,6 +465,22 @@ class LandlockSSEDaemon(SubProcessDaemon):
             if landlock_user_available()
             else "Landlock requires Linux with filesystem support and network ABI v4 (kernel 6.7+) for default TCP deny"
         )
+
+    @override
+    def subprocess_cmd(
+        self,
+        all_rules: AllRules,
+        envs: Environ,
+        pipe_path: Path,
+        temp: Path,
+    ) -> tuple[Args, Environ]:
+        """Point the sandbox's temporary directory at one private to the daemon.
+
+        The child sees no TMPDIR a rule did not grant, so ``tempfile.gettempdir()`` would answer ``/tmp``, which
+        Landlock then opens whole: the host's shared temporary files, readable and writable.
+        """
+        cmd, extra_envs = super().subprocess_cmd(all_rules, envs, pipe_path, temp)
+        return cmd, {**extra_envs, "TMPDIR": str(self.sandbox_temp())}
 
     @override
     def update_rules_and_activate(

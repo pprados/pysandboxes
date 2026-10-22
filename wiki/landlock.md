@@ -23,6 +23,14 @@ Unlike the other providers, nothing is set up on the host: the sandbox process r
 
 There is no useful **write-only** mode. In effect, a directory needs `READ_DIR` to be listed and `READ_FILE` to be read, so `rw` always includes `ro`, and writable paths behave like ordinary writable directories.
 
+## Temporary directory
+
+The sandbox is not given the host's `/tmp`, which other users and processes share. The daemon creates a directory of its own, removes it when it stops, and sets `TMPDIR` to it: `tempfile` works as usual, and the directory is the only temporary location the sandbox may write to. A child process inherits `TMPDIR`, with or without the Python layer.
+
+Code that writes to a hard-coded `/tmp/...` path is refused (a `PermissionError`, or a `RuleFileNotFoundError` from the Python layer). Use `tempfile`, or grant the path with `expose-rw`.
+
+`/dev` is still granted read-write, and so is `/dev/shm`, a tmpfs the host shares: a file written there is visible outside the sandbox.
+
 ## Kernel ABI and degraded modes
 
 The provider reads the kernel ABI at startup and masks filesystem rights the running kernel does not know. It requires ABI v4 for its default TCP deny policy; on older kernels, it reports unavailable and does not start.
