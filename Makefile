@@ -468,6 +468,7 @@ EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annota
 # samples/crewai-demo/uv.lock are dismissed as "tolerable risk" for the same reason.
 # CrewAI pins mcp~=1.28.1, before the CVE-2026-59951 fix. The sample does not run
 # a stateful Streamable HTTP MCP server, which is the affected configuration.
+# crewai-cli pins uv<0.12, before the PYSEC-2026-4321 fix (0.13.4). The sample never runs uv.
 #
 # To reactivate, once chromadb publishes a fix:
 #   1. drop PIP_AUDIT_IGNORE_crewai below, then relock the sample:
@@ -480,7 +481,7 @@ EXPORT_AUDIT=--format requirements-txt --no-emit-project --no-hashes --no-annota
 #   3. run `make pip-audit`: it must pass without the ignore.
 PIP_AUDIT_IGNORE_crewai = --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 \
 	--ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815 \
-	--ignore-vuln CVE-2026-59951
+	--ignore-vuln CVE-2026-59951 --ignore-vuln PYSEC-2026-4321
 ## Report the runtime dependencies with a known security vulnerability, samples included
 pip-audit:
 	@unset VIRTUAL_ENV; status=0; \
