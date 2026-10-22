@@ -20,7 +20,7 @@
 ² The Python layer only, with the `subprocess` provider: every
 kernel boundary is a Linux technology.
 
-## [0.0.0] - 202X-XX-XX
+## [0.7.0] - 2026-10-22
 
 First public release.
 
